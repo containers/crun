@@ -59,6 +59,10 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
   if (UNLIKELY (chroot (def->root->path) < 0))
     return crun_static_error (err, errno, "chroot");
 
+  if (def->process->cwd)
+    if (UNLIKELY (chdir (def->process->cwd) < 0))
+    return crun_static_error (err, errno, "chdir");
+
   execvpe (def->process->args[0], def->process->args, def->process->env);
   return 0;
 }
