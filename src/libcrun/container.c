@@ -20,6 +20,7 @@
 #include <config.h>
 #include "container.h"
 #include "utils.h"
+#include "linux.h"
 #include <argp.h>
 #include <unistd.h>
 
@@ -43,12 +44,19 @@ int
 crun_container_run (crun_container *container, struct crun_run_options *opts, char **err)
 {
   oci_container *def = container->container_def;
+  int ret;
   if (UNLIKELY (def->root == NULL))
-    return crun_static_error (err, 0, "invalid config file, no root block specified");
+    return crun_static_error (err, 0, "invalid config file, no 'root' block specified");
   if (UNLIKELY (def->process == NULL))
-    return crun_static_error (err, 0, "invalid config file, no process block specified");
+    return crun_static_error (err, 0, "invalid config file, no 'process' block specified");
+  if (UNLIKELY (def->linux == NULL))
+    return crun_static_error (err, 0, "invalid config file, no 'linux' block specified");
 
-  if (chroot (def->root->path) < 0)
+  ret = libcrun_set_namespaces (def, err);
+  if (ret < 0)
+    return ret;
+
+  if (UNLIKELY (chroot (def->root->path) < 0))
     return crun_static_error (err, errno, "chroot");
 
   execvpe (def->process->args[0], def->process->args, def->process->env);
