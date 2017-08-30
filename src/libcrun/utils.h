@@ -24,6 +24,10 @@
 # include <errno.h>
 # include <argp.h>
 
+void cleanup_freep (void *p);
+
+#define cleanup_free __attribute__((cleanup (cleanup_freep)))
+
 # define LIKELY(x) __builtin_expect((x),1)
 # define UNLIKELY(x) __builtin_expect((x),0)
 
@@ -34,5 +38,7 @@ void *xmalloc (size_t size);
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
 int crun_static_error (char **err, int status, const char *msg, ...);
+
+int crun_path_exists (const char *path, int readonly, char **err);
 
 #endif

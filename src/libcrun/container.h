@@ -30,6 +30,7 @@ struct crun_container_s
 
 struct crun_run_options
 {
+  char *state_root;
   char *id;
   char *console_socket;
   char *pid_file;

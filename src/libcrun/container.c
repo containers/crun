@@ -23,6 +23,8 @@
 #include "linux.h"
 #include <argp.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 crun_container *
 crun_container_load (const char *path, char **error)
@@ -40,23 +42,103 @@ crun_container_load (const char *path, char **error)
   return container;
 }
 
+static const char *
+get_run_directory (struct crun_run_options *opts)
+{
+  const char *root = opts->state_root;
+  if (root == NULL)
+    root = "/run/crun";
+
+  return root;
+}
+
+static char *
+get_state_directory (struct crun_run_options *opts, const char *id)
+{
+  char *ret;
+  const char *root = get_run_directory (opts);
+  if (UNLIKELY (asprintf (&ret, "%s/%s", root, id) < 0))
+    OOM ();
+  return ret;
+}
+
+static char *
+get_rootfs_directory (struct crun_run_options *opts, const char *id)
+{
+  char *ret;
+  const char *root = get_run_directory (opts);
+  if (UNLIKELY (asprintf (&ret, "%s/%s/rootfs", root, id) < 0))
+    OOM ();
+  return ret;
+}
+
+static int
+check_directories (char **rootfs, struct crun_run_options *opts, const char *id, char **err)
+{
+  cleanup_free char *dir = NULL;
+  const char *run_directory = get_run_directory (opts);
+  int ret;
+
+  *rootfs = NULL;
+  ret = crun_path_exists (run_directory, 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret == 0 && UNLIKELY (mkdir (run_directory, 0700) < 0))
+    return crun_static_error (err, 0, "cannot create directory '%s'", run_directory);
+
+  dir = get_state_directory (opts, id);
+  if (UNLIKELY (dir == NULL))
+        return crun_static_error (err, 0, "cannot get state directory");
+
+  ret = crun_path_exists (dir, 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret)
+    return crun_static_error (err, 0, "container '%s' already exists", id);
+
+  if (UNLIKELY (mkdir (dir, 0700) < 0))
+    return crun_static_error (err, 0, "cannot create state directory for '%s'", id);
+
+  *rootfs = get_rootfs_directory (opts, id);
+  if (UNLIKELY (mkdir (*rootfs, 0700) < 0))
+    {
+      free (*rootfs);
+      *rootfs = NULL;
+      return crun_static_error (err, 0, "cannot create rootfs directory for '%s'", id);
+    }
+  return 0;
+}
+
 int
 crun_container_run (crun_container *container, struct crun_run_options *opts, char **err)
 {
   oci_container *def = container->container_def;
   int ret;
+  cleanup_free char *rootfs = NULL;
   if (UNLIKELY (def->root == NULL))
     return crun_static_error (err, 0, "invalid config file, no 'root' block specified");
   if (UNLIKELY (def->process == NULL))
     return crun_static_error (err, 0, "invalid config file, no 'process' block specified");
   if (UNLIKELY (def->linux == NULL))
     return crun_static_error (err, 0, "invalid config file, no 'linux' block specified");
+  if (UNLIKELY (def->mounts == NULL))
+    return crun_static_error (err, 0, "invalid config file, no 'mounts' block specified");
 
   ret = libcrun_set_namespaces (def, err);
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     return ret;
 
-  if (UNLIKELY (chroot (def->root->path) < 0))
+  ret = check_directories (&rootfs, opts, opts->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_set_mounts (def, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (UNLIKELY (chroot (rootfs) < 0))
     return crun_static_error (err, errno, "chroot");
 
   if (def->process->cwd)

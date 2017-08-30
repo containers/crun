@@ -26,5 +26,6 @@
 # include <oci_runtime_spec.h>
 
 int libcrun_set_namespaces (oci_container *container, char **err);
+int libcrun_set_mounts (oci_container *container, const char *rootfs, char **err);
 
 #endif

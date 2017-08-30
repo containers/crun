@@ -20,6 +20,14 @@
 #include <config.h>
 #include "utils.h"
 #include <stdarg.h>
+#include <unistd.h>
+
+void
+cleanup_freep (void *p)
+{
+  void **pp = (void **) p;
+  free (*pp);
+}
 
 void *
 xmalloc (size_t size)
@@ -49,4 +57,13 @@ crun_static_error (char **err, int status, const char *msg, ...)
 
   va_end (args_list);
   return status - 1;
+}
+
+int
+crun_path_exists (const char *path, int readonly, char **err)
+{
+  int ret = access (path, readonly ? R_OK : W_OK);
+  if (ret < 0 && errno != ENOENT)
+    return crun_static_error (err, errno, "accessing file '%s'", path);
+  return !ret;
 }

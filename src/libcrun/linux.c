@@ -25,6 +25,7 @@
 #include <sched.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/mount.h>
 
 struct linux_namespace_s
 {
@@ -89,9 +90,33 @@ libcrun_set_namespaces (oci_container *def, char **err)
         }
 
       close (fd);
-
-
     }
 
+  return 0;
+}
+
+int
+libcrun_set_mounts (oci_container *container, const char *rootfs, char **err)
+{
+  size_t i;
+  int ret;
+
+  ret = mount (container->root->path, rootfs, "", MS_BIND | MS_PRIVATE, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "mount rootfs '%s'", container->mounts[i]->destination);
+
+  for (i = 0; i < container->mounts_len; i++)
+    {
+      cleanup_free char *target = NULL;
+      int flags = 0;
+      void *data = NULL;
+
+      if (UNLIKELY (asprintf (&target, "%s/%s", rootfs, container->mounts[i]->destination + 1) < 0))
+        OOM ();
+
+      ret = mount (container->mounts[i]->source, target, container->mounts[i]->type, flags, data);
+      if (UNLIKELY (ret < 0))
+        return crun_static_error (err, errno, "mount '%s'", container->mounts[i]->destination);
+    }
   return 0;
 }

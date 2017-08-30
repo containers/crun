@@ -41,6 +41,7 @@ enum
   };
 
 static char *bundle = NULL;
+
 static struct crun_run_options run_options;
 
 static struct argp_option options[] =
@@ -108,6 +109,7 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   int first_arg;
   crun_container *container;
 
+  run_options.state_root = global_args->root;
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &run_options);
 
   if (bundle != NULL)
