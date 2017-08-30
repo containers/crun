@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
+#define _GNU_SOURCE
 
 #include <config.h>
 #include "container.h"
@@ -50,6 +51,6 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
   if (chroot (def->root->path) < 0)
     return crun_static_error (err, errno, "chroot");
 
-  execvp (def->process->args[0], def->process->args);
+  execvpe (def->process->args[0], def->process->args, def->process->env);
   return 0;
 }
