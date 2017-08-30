@@ -1,0 +1,3 @@
+[submodule "libocispec"]
+	path = libocispec
+	url = git@github.com:giuseppe/libocispec.git
