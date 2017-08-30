@@ -26,8 +26,8 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "container.h"
-#include "utils.h"
+#include "libcrun/container.h"
+#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
 

@@ -23,7 +23,7 @@
 #include <string.h>
 
 #include "crun.h"
-#include "utils.h"
+#include "libcrun/utils.h"
 
 /* Commands.  */
 #include "run.h"
