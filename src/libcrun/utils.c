@@ -17,7 +17,9 @@
  */
 
 #define _GNU_SOURCE
+#include <config.h>
 #include "utils.h"
+#include <stdarg.h>
 
 void *
 xmalloc (size_t size)
@@ -37,10 +39,14 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
 }
 
 int
-crun_static_error (char **err, int status, const char *msg)
+crun_static_error (char **err, int status, const char *msg, ...)
 {
-  if (asprintf (err, "%s", msg) < 0)
+  va_list args_list;
+  va_start (args_list, msg);
+
+  if (vasprintf (err, msg, args_list) < 0)
     OOM ();
 
-  return status;
+  va_end (args_list);
+  return status - 1;
 }

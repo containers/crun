@@ -33,6 +33,6 @@ void *xmalloc (size_t size);
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
-int crun_static_error (char **err, int status, const char *msg);
+int crun_static_error (char **err, int status, const char *msg, ...);
 
 #endif
