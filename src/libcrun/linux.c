@@ -120,6 +120,7 @@ static struct propagation_flags_s propagation_flags[] =
     {"noatime", MS_NOATIME},
     {"ro", MS_RDONLY},
     {"relatime", MS_RELATIME},
+    {"strictatime", MS_STRICTATIME},
     {"synchronous", MS_SYNCHRONOUS},
     {NULL, 0}
   };
@@ -132,6 +133,23 @@ get_mount_flags (const char *name)
   for (it = propagation_flags; it->name; it++)
     if (strcmp (it->name, name) == 0)
       return it->flags;
+  return 0;
+}
+
+static unsigned long
+get_mount_flags_or_option (const char *name, char **option)
+{
+  unsigned long flags = get_mount_flags (name);
+  cleanup_free char *prev = NULL;
+  if (flags)
+    return flags;
+
+  prev = *option;
+  if (*option)
+    xasprintf (option, "%s,%s", *option, name);
+  else
+    *option = xstrdup (name);
+
   return 0;
 }
 
@@ -185,9 +203,7 @@ get_default_flags (crun_container *container, const char *destination, char **da
 {
   int userflags = container->host_uid == 0 ? 0 : MS_PRIVATE | MS_REC;
   if (strcmp (destination, "/proc") == 0)
-    {
       return 0;
-    }
   if (strcmp (destination, "/dev/cgroup") == 0
       || strcmp (destination, "/sys/fs/cgroup") == 0)
     {
@@ -205,9 +221,7 @@ get_default_flags (crun_container *container, const char *destination, char **da
       return MS_NOEXEC | MS_NOSUID | MS_NODEV;
     }
   if (strcmp (destination, "/dev/mqueue") == 0)
-    {
       return MS_NOEXEC | MS_NOSUID | MS_NODEV;
-    }
   if (strcmp (destination, "/dev/pts") == 0)
     {
       if (container->host_uid == 0)
@@ -217,9 +231,7 @@ get_default_flags (crun_container *container, const char *destination, char **da
       return MS_NOEXEC | MS_NOSUID;
     }
   if (strcmp (destination, "/sys") == 0)
-    {
       return MS_NOEXEC | MS_NOSUID | MS_NODEV;
-    }
 
   return 0;
 }
@@ -236,7 +248,7 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
       cleanup_free char *data = NULL;
       char *type;
       char *source;
-      int flags = get_default_flags (container, def->mounts[i]->destination, &data);
+      int flags = 0;
 
       if (rootfs)
         xasprintf (&target, "%s/%s", rootfs, def->mounts[i]->destination + 1);
@@ -247,11 +259,13 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (def->mounts[i]->options != NULL)
+      if (def->mounts[i]->options == NULL)
+        flags = get_default_flags (container, def->mounts[i]->destination, &data);
+      else
         {
           size_t j;
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            flags |= get_mount_flags (def->mounts[i]->options[j]);
+            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], &data);
         }
 
       type = def->mounts[i]->type;
