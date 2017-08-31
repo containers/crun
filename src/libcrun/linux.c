@@ -101,10 +101,13 @@ libcrun_set_mounts (oci_container *container, const char *rootfs, char **err)
   size_t i;
   int ret;
 
-  ret = mount (container->root->path, rootfs, "", MS_BIND | MS_PRIVATE, NULL);
+  ret = mount ("none", "/", NULL, MS_REC | MS_SLAVE, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "remount root");
+
+  ret = mount (container->root->path, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, NULL);
   if (UNLIKELY (ret < 0))
     return crun_static_error (err, errno, "mount rootfs '%s'", container->mounts[i]->destination);
-
   for (i = 0; i < container->mounts_len; i++)
     {
       cleanup_free char *target = NULL;
