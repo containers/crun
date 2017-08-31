@@ -14,6 +14,10 @@ AM_SILENT_RULES([yes])
 AC_PROG_RANLIB
 AC_PROG_CC
 
+AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers not found])])
+
+AC_CHECK_LIB(cap, cap_from_name)
+
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 
 AC_CONFIG_FILES([Makefile])

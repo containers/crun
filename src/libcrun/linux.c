@@ -28,6 +28,7 @@
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #include <sys/prctl.h>
+#include <sys/capability.h>
 
 struct linux_namespace_s
 {
@@ -296,7 +297,6 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
   int ret;
   unsigned long rootfsPropagation = 0;
 
-
   if (def->linux->rootfs_propagation)
     rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation);
   else
@@ -353,4 +353,131 @@ libcrun_set_usernamespace (crun_container *container, char **err)
   ret = write_file ("/proc/self/uid_map", uid_map, uid_map_len, err);
   if (UNLIKELY (ret < 0))
     return ret;
+}
+
+#define CAP_TO_MASK_0(x) (1L << ((x) & 31))
+#define CAP_TO_MASK_1(x) CAP_TO_MASK_0(x - 32)
+
+struct all_caps_s
+{
+  unsigned long effective[2];
+  unsigned long permitted[2];
+  unsigned long inheritable[2];
+  unsigned long ambient[2];
+  unsigned long bounding[2];
+};
+
+static int
+set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
+{
+  unsigned long cap;
+  int ret;
+  struct __user_cap_header_struct hdr = { _LINUX_CAPABILITY_VERSION_3, 0 };
+  struct __user_cap_data_struct data[2] = { { 0 } };
+
+  ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
+  if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
+    return crun_static_error (err, errno, "prctl reset ambient");
+
+  for (cap = 0; cap <= CAP_LAST_CAP; cap++)
+    if ((cap < 32 && CAP_TO_MASK_0 (cap) & caps->ambient[0])
+        || (cap >= 32 && CAP_TO_MASK_1 (cap) & caps->ambient[1]))
+      {
+        ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, cap, 0, 0);
+        if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
+          return crun_static_error (err, errno, "prctl ambient raise");
+      }
+
+  for (cap = 0; cap <= CAP_LAST_CAP; cap++)
+    if ((cap < 32 && ((CAP_TO_MASK_0 (cap) & caps->bounding[0]) == 0))
+        || (cap >= 32 && ((CAP_TO_MASK_1 (cap) & caps->bounding[1]) == 0)))
+      {
+        ret = prctl (PR_CAPBSET_DROP, cap, 0, 0, 0);
+        if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
+          return crun_static_error (err, errno, "prctl drop bounding");
+      }
+
+  data[0].effective = caps->effective[0];
+  data[1].effective = caps->effective[1];
+  data[0].inheritable = caps->inheritable[0];
+  data[1].inheritable = caps->inheritable[1];
+  data[0].permitted = caps->permitted[0];
+  data[1].permitted = caps->permitted[1];
+
+  ret = capset (&hdr, data) < 0;
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "capset");
+
+  if (no_new_privs)
+    if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
+      return crun_static_error (err, errno, "no new privs");
+
+  return 0;
+}
+
+static int
+read_caps (unsigned long caps[2], char **values, size_t len, char **err)
+{
+  size_t i;
+  for (i = 0; i < len; i++)
+    {
+      cap_value_t cap;
+      if (cap_from_name (values[i], &cap) < 0)
+        {
+          xasprintf (err, "unknown cap: %s", values[i]);
+          return -1;
+        }
+      if (cap < 32)
+          caps[0] |= CAP_TO_MASK_0 (cap);
+      else
+          caps[1] |= CAP_TO_MASK_1 (cap);
+    }
+  return 0;
+}
+
+int
+libcrun_set_caps (crun_container *container, char **err)
+{
+  int ret;
+  struct all_caps_s caps;
+  oci_container *def = container->container_def;
+  memset (&caps, 0, sizeof (caps));
+  if (def->process->capabilities)
+    {
+      ret = read_caps (caps.effective,
+                       def->process->capabilities->effective,
+                       def->process->capabilities->effective_len,
+                       err);
+      if (ret < 0)
+        return ret;
+
+      ret = read_caps (caps.inheritable,
+                       def->process->capabilities->inheritable,
+                       def->process->capabilities->inheritable_len,
+                       err);
+      if (ret < 0)
+        return ret;
+
+      ret = read_caps (caps.ambient,
+                       def->process->capabilities->ambient,
+                       def->process->capabilities->ambient_len,
+                       err);
+      if (ret < 0)
+        return ret;
+
+      ret = read_caps (caps.bounding,
+                       def->process->capabilities->bounding,
+                       def->process->capabilities->bounding_len,
+                       err);
+      if (ret < 0)
+        return ret;
+
+      ret = read_caps (caps.permitted,
+                       def->process->capabilities->permitted,
+                       def->process->capabilities->permitted_len,
+                       err);
+      if (ret < 0)
+        return ret;
+    }
+  return set_required_caps (&caps, def->process->no_new_privileges, err);
 }
