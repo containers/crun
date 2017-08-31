@@ -26,6 +26,13 @@ struct crun_container_s
 {
   /* Container parsed from the runtime json file.  */
   oci_container *container_def;
+
+  /* Filled by libcrun_set_namespaces().  Useful to query what
+     namespaces are available.  */
+  int unshare_flags;
+
+  uid_t host_uid;
+  gid_t host_gid;
 };
 
 struct crun_run_options

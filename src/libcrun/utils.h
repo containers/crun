@@ -25,8 +25,10 @@
 # include <argp.h>
 
 void cleanup_freep (void *p);
+void cleanup_closep (void *p);
 
 #define cleanup_free __attribute__((cleanup (cleanup_freep)))
+#define cleanup_close __attribute__((cleanup (cleanup_closep)))
 
 # define LIKELY(x) __builtin_expect((x),1)
 # define UNLIKELY(x) __builtin_expect((x),0)
@@ -35,10 +37,18 @@ void cleanup_freep (void *p);
 
 void *xmalloc (size_t size);
 
+char *xstrdup (const char *str);
+
+int xasprintf (char **str, const char *fmt, ...);
+
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
 int crun_static_error (char **err, int status, const char *msg, ...);
 
 int crun_path_exists (const char *path, int readonly, char **err);
+
+int write_file (const char *name, const void *data, size_t len, char **err);
+
+int crun_ensure_directory (const char *path, int mode, char **err);
 
 #endif

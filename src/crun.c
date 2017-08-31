@@ -151,6 +151,6 @@ main (int argc, char **argv)
 
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
   if (ret || err != NULL)
-    error (EXIT_FAILURE, ret + 1, "%s", err);
+    error (EXIT_FAILURE, -(ret + 1), "%s", err);
   return ret;
 }

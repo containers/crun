@@ -24,8 +24,10 @@
 # include <errno.h>
 # include <argp.h>
 # include <oci_runtime_spec.h>
+# include "container.h"
 
-int libcrun_set_namespaces (oci_container *container, char **err);
-int libcrun_set_mounts (oci_container *container, const char *rootfs, char **err);
+int libcrun_set_namespaces (crun_container *container, char **err);
+int libcrun_set_mounts (crun_container *container, const char *rootfs, char **err);
+int libcrun_set_usernamespace (crun_container *container, char **err);
 
 #endif

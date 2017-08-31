@@ -26,6 +26,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mount.h>
+#include <sys/syscall.h>
+#include <sys/prctl.h>
 
 struct linux_namespace_s
 {
@@ -57,8 +59,9 @@ find_namespace (const char *name)
 
 
 int
-libcrun_set_namespaces (oci_container *def, char **err)
+libcrun_set_namespaces (crun_container *container, char **err)
 {
+  oci_container *def = container->container_def;
   size_t i;
   int flags = 0;
   for (i = 0; i < def->linux->namespaces_len; i++)
@@ -69,12 +72,15 @@ libcrun_set_namespaces (oci_container *def, char **err)
       flags |= value;
     }
 
+  container->unshare_flags = flags;
+
   if (UNLIKELY (unshare (flags) < 0))
     return crun_static_error (err, errno, "unshare");
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
-      int value, fd;
+      int value;
+      cleanup_close int fd = -1;
       if (def->linux->namespaces[i]->path == NULL)
         continue;
 
@@ -83,43 +89,264 @@ libcrun_set_namespaces (oci_container *def, char **err)
       if (UNLIKELY (fd < 0))
         return crun_static_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
 
-      if (setns (fd, value) < 0)
-        {
-          close (fd);
-          return crun_static_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
-        }
+      if (UNLIKELY (setns (fd, value) < 0))
+        return crun_static_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
+    }
 
-      close (fd);
+  if (flags & CLONE_NEWPID)
+    {
+      /* We need to fork to join the new PID namespace.  */
+      int ret = fork ();
+      if (ret < 0)
+        return crun_static_error (err, errno, "fork to new PID namespace");
+      if (ret)
+        _exit (0);
     }
 
   return 0;
 }
 
+struct propagation_flags_s
+  {
+    const char *name;
+    int flags;
+  };
+
+static struct propagation_flags_s propagation_flags[] =
+  {
+    {"rshared", MS_REC | MS_SHARED},
+    {"rslave", MS_REC | MS_SLAVE},
+    {"rprivate", MS_REC | MS_PRIVATE},
+    {"shared", MS_SHARED},
+    {"slave", MS_SLAVE},
+    {"private", MS_PRIVATE},
+    {"unbindable", MS_UNBINDABLE},
+    {"nosuid", MS_NOSUID},
+    {"noexec", MS_NOEXEC},
+    {"nodev", MS_NODEV},
+    {"dirsync", MS_DIRSYNC},
+    {"lazytime", MS_LAZYTIME},
+    {"nodiratime", MS_NODIRATIME},
+    {"noatime", MS_NOATIME},
+    {"ro", MS_RDONLY},
+    {"relatime", MS_RELATIME},
+    {"synchronous", MS_SYNCHRONOUS},
+    {NULL, 0}
+  };
+
+static unsigned long
+get_mount_flags (const char *name)
+{
+  struct propagation_flags_s *it;
+
+  for (it = propagation_flags; it->name; it++)
+    if (strcmp (it->name, name) == 0)
+      return it->flags;
+  return 0;
+}
+
 int
-libcrun_set_mounts (oci_container *container, const char *rootfs, char **err)
+pivot_root (const char * new_root, const char * put_old)
+{
+  return syscall (__NR_pivot_root, new_root, put_old);
+}
+
+static int
+do_pivot (crun_container *container, const char *rootfs, char **err)
+{
+  int ret;
+  cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_RDONLY);
+  cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY);
+
+  if (UNLIKELY (oldrootfd < 0))
+    return crun_static_error (err, errno, "open '/'");
+  if (UNLIKELY (newrootfd < 0))
+    return crun_static_error (err, errno, "open '%s'", rootfs);
+
+  ret = fchdir (newrootfd);
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "fchdir '%s'", rootfs);
+
+  ret = pivot_root (".", ".");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "pivot_root");
+
+  ret = fchdir (oldrootfd);
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "fchdir '%s'", rootfs);
+
+  ret = mount ("", ".", "", MS_PRIVATE | MS_REC, "");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "mount oldroot rprivate '%s'", rootfs);
+
+  ret = umount2 (".", MNT_DETACH);
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "umount oldroot");
+
+  ret = chdir ("/");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "chdir to newroot");
+
+  return 0;
+}
+
+static int
+get_default_flags (crun_container *container, const char *destination, char **data)
+{
+  int userflags = container->host_uid == 0 ? 0 : MS_PRIVATE | MS_REC;
+  if (strcmp (destination, "/proc") == 0)
+    {
+      return 0;
+    }
+  if (strcmp (destination, "/dev/cgroup") == 0
+      || strcmp (destination, "/sys/fs/cgroup") == 0)
+    {
+      *data = xstrdup ("none,name=");
+      return MS_NOEXEC | MS_NOSUID | MS_STRICTATIME;
+    }
+  if (strcmp (destination, "/dev") == 0)
+    {
+      *data = xstrdup ("mode=755");
+      return MS_NOEXEC | MS_STRICTATIME;
+    }
+  if (strcmp (destination, "/dev/shm") == 0)
+    {
+      *data = xstrdup ("mode=1777,size=65536k");
+      return MS_NOEXEC | MS_NOSUID | MS_NODEV;
+    }
+  if (strcmp (destination, "/dev/mqueue") == 0)
+    {
+      return MS_NOEXEC | MS_NOSUID | MS_NODEV;
+    }
+  if (strcmp (destination, "/dev/pts") == 0)
+    {
+      if (container->host_uid == 0)
+        *data = xstrdup ("newinstance,ptmxmode=0666,mode=620,gid=5");
+      else
+        *data = xstrdup ("newinstance,ptmxmode=0666,mode=620");
+      return MS_NOEXEC | MS_NOSUID;
+    }
+  if (strcmp (destination, "/sys") == 0)
+    {
+      return MS_NOEXEC | MS_NOSUID | MS_NODEV;
+    }
+
+  return 0;
+}
+
+static int
+do_mounts (crun_container *container, const char *rootfs, char **err)
 {
   size_t i;
   int ret;
+  oci_container *def = container->container_def;
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      cleanup_free char *target = NULL;
+      cleanup_free char *data = NULL;
+      char *type;
+      char *source;
+      int flags = get_default_flags (container, def->mounts[i]->destination, &data);
 
-  ret = mount ("none", "/", NULL, MS_REC | MS_SLAVE, NULL);
+      if (rootfs)
+        xasprintf (&target, "%s/%s", rootfs, def->mounts[i]->destination + 1);
+      else
+        target = xstrdup (def->mounts[i]->destination);
+
+      ret = crun_ensure_directory (target, 0755, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if (def->mounts[i]->options != NULL)
+        {
+          size_t j;
+          for (j = 0; j < def->mounts[i]->options_len; j++)
+            flags |= get_mount_flags (def->mounts[i]->options[j]);
+        }
+
+      type = def->mounts[i]->type;
+
+      if (strcmp (type, "bind") == 0)
+        flags |= MS_BIND;
+
+      flags &= ~MS_RDONLY;
+
+      source = def->mounts[i]->source ? def->mounts[i]->source : type;
+
+      if (strcmp (type, "cgroup") == 0)
+        {
+          /* TODO */
+          continue;
+        }
+
+      ret = mount (source, target, def->mounts[i]->type, flags, data);
+      if (UNLIKELY (ret < 0))
+        return crun_static_error (err, errno, "mount '%s'", def->mounts[i]->destination);
+    }
+}
+
+int
+libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
+{
+  oci_container *def = container->container_def;
+  int ret;
+  unsigned long rootfsPropagation = 0;
+
+
+  if (def->linux->rootfs_propagation)
+    rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation);
+  else
+    rootfsPropagation = MS_REC | MS_SLAVE;
+
+  ret = mount ("", "/", "", MS_REC | rootfsPropagation, NULL);
   if (UNLIKELY (ret < 0))
     return crun_static_error (err, errno, "remount root");
 
-  ret = mount (container->root->path, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, NULL);
+  ret = mount (def->root->path, rootfs, "", MS_BIND | MS_REC | rootfsPropagation, NULL);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "mount rootfs '%s'", container->mounts[i]->destination);
-  for (i = 0; i < container->mounts_len; i++)
-    {
-      cleanup_free char *target = NULL;
-      int flags = 0;
-      void *data = NULL;
+    return crun_static_error (err, errno, "mount rootfs");
 
-      if (UNLIKELY (asprintf (&target, "%s/%s", rootfs, container->mounts[i]->destination + 1) < 0))
-        OOM ();
+  ret = do_mounts (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
-      ret = mount (container->mounts[i]->source, target, container->mounts[i]->type, flags, data);
-      if (UNLIKELY (ret < 0))
-        return crun_static_error (err, errno, "mount '%s'", container->mounts[i]->destination);
-    }
+  ret = do_pivot (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   return 0;
+}
+
+int
+libcrun_set_usernamespace (crun_container *container, char **err)
+{
+  cleanup_free char *uid_map = NULL;
+  cleanup_free char *gid_map = NULL;
+  int uid_map_len, gid_map_len;
+  int ret;
+
+  if (container->host_uid == 0)
+    {
+      uid_map_len = xasprintf (&uid_map, "0 0 65536");
+      gid_map_len = xasprintf (&gid_map, "0 0 65536");
+    }
+  else
+    {
+      uid_map_len = xasprintf (&uid_map, "0 %d 1", container->host_uid);
+      gid_map_len = xasprintf (&gid_map, "0 %d 1", container->host_gid);
+    }
+  ret = write_file ("/proc/self/setgroups", "deny", 4, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (container->host_uid)
+    {
+      ret = write_file ("/proc/self/gid_map", gid_map, gid_map_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = write_file ("/proc/self/uid_map", uid_map, uid_map_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 }
