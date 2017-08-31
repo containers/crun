@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sched.h>
+#include <sys/wait.h>
 
 crun_container *
 crun_container_load (const char *path, char **error)
@@ -102,12 +103,51 @@ check_directories (struct crun_run_options *opts, const char *id, char **err)
   return 0;
 }
 
+static void
+container_load (crun_container *container, struct crun_run_options *opts)
+{
+  char *err = NULL;
+  int ret;
+  oci_container *def = container->container_def;
+  cleanup_free char *rootfs = NULL;
+
+  if (container->unshare_flags & CLONE_NEWUSER)
+    {
+      ret = libcrun_set_usernamespace (container, &err);
+      if (UNLIKELY (ret < 0))
+        goto out;
+    }
+
+  rootfs = realpath (def->root->path, NULL);
+  if (UNLIKELY (rootfs == NULL))
+    {
+      ret = crun_static_error (&err, errno, "realpath");
+      goto out;
+    }
+
+  ret = libcrun_set_mounts (container, rootfs, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
+
+  if (def->process->cwd)
+    if (UNLIKELY (chdir (def->process->cwd) < 0))
+      {
+        ret = crun_static_error (&err, errno, "chdir");
+        goto out;
+      }
+
+  execvpe (def->process->args[0], def->process->args, def->process->env);
+ out:
+  error (EXIT_FAILURE, -(ret + 1), "%s", err);
+}
+
 int
 crun_container_run (crun_container *container, struct crun_run_options *opts, char **err)
 {
   oci_container *def = container->container_def;
   int ret;
-  cleanup_free char *rootfs = NULL;
+  int detach = opts->detach;
+
   if (UNLIKELY (def->root == NULL))
     return crun_static_error (err, 0, "invalid config file, no 'root' block specified");
   if (UNLIKELY (def->process == NULL))
@@ -117,33 +157,48 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
   if (UNLIKELY (def->mounts == NULL))
     return crun_static_error (err, 0, "invalid config file, no 'mounts' block specified");
 
-  ret = libcrun_set_namespaces (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (container->unshare_flags & CLONE_NEWUSER)
-    {
-      ret = libcrun_set_usernamespace (container, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
   ret = check_directories (opts, opts->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  rootfs = realpath (def->root->path, NULL);
-  if (UNLIKELY (rootfs == NULL))
-      return crun_static_error (err, errno, "realpath");
+  if (detach)
+    {
+      ret = fork ();
+      if (ret < 0)
+        return crun_static_error (err, 0, "fork");
+      if (ret)
+        return 0;
 
-  ret = libcrun_set_mounts (container, rootfs, err);
+      detach_process ();
+    }
+
+  ret = libcrun_set_namespaces (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->process->cwd)
-    if (UNLIKELY (chdir (def->process->cwd) < 0))
-    return crun_static_error (err, errno, "chdir");
+  /* We need to fork to join the new PID namespace.  */
+  ret = fork ();
+  if (ret < 0)
+    return crun_static_error (err, errno, "fork to new PID namespace");
+  if (ret == 0)
+    {
+      container_load (container, opts);
+      _exit (1);
+    }
 
-  execvpe (def->process->args[0], def->process->args, def->process->env);
+  while (1)
+    {
+      int status;
+      int r = waitpid (ret, &status, 0);
+      if (r < 0)
+        {
+          if (errno == EINTR)
+            continue;
+          return crun_static_error (err, errno, "waitpid");
+        }
+      if (WIFEXITED (status) || WIFSIGNALED (status))
+        return WEXITSTATUS (status);
+    }
+
   return 0;
 }

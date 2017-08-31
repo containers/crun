@@ -161,3 +161,11 @@ crun_ensure_directory (const char *path, int mode, char **err)
   cleanup_free char *tmp = xstrdup (path);
   return ensure_directory_internal (tmp, strlen (tmp), mode, err);
 }
+
+void
+detach_process ()
+{
+  setsid ();
+  if (fork () != 0)
+    _exit (EXIT_SUCCESS);
+}

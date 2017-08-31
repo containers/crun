@@ -93,16 +93,6 @@ libcrun_set_namespaces (crun_container *container, char **err)
         return crun_static_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
     }
 
-  if (flags & CLONE_NEWPID)
-    {
-      /* We need to fork to join the new PID namespace.  */
-      int ret = fork ();
-      if (ret < 0)
-        return crun_static_error (err, errno, "fork to new PID namespace");
-      if (ret)
-        _exit (0);
-    }
-
   return 0;
 }
 
