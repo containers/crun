@@ -30,5 +30,6 @@ int libcrun_set_namespaces (crun_container *container, char **err);
 int libcrun_set_mounts (crun_container *container, const char *rootfs, char **err);
 int libcrun_set_usernamespace (crun_container *container, char **err);
 int libcrun_set_caps (crun_container *container, char **err);
+int libcrun_set_rlimits (crun_container *container, char **err);
 
 #endif

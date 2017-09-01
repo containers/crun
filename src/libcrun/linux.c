@@ -29,6 +29,8 @@
 #include <sys/syscall.h>
 #include <sys/prctl.h>
 #include <sys/capability.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 struct linux_namespace_s
 {
@@ -480,4 +482,62 @@ libcrun_set_caps (crun_container *container, char **err)
         return ret;
     }
   return set_required_caps (&caps, def->process->no_new_privileges, err);
+}
+
+struct rlimit_s
+{
+  const char *name;
+  int value;
+};
+
+struct rlimit_s rlimits[] =
+  {
+    {"RLIMIT_AS", RLIMIT_AS},
+    {"RLIMIT_CORE", RLIMIT_CORE},
+    {"RLIMIT_CPU", RLIMIT_CPU},
+    {"RLIMIT_DATA", RLIMIT_DATA},
+    {"RLIMIT_FSIZE", RLIMIT_FSIZE},
+    {"RLIMIT_LOCKS", RLIMIT_LOCKS},
+    {"RLIMIT_MEMLOCK", RLIMIT_MEMLOCK},
+    {"RLIMIT_MSGQUEUE", RLIMIT_MSGQUEUE},
+    {"RLIMIT_NICE", RLIMIT_NICE},
+    {"RLIMIT_NOFILE", RLIMIT_NOFILE},
+    {"RLIMIT_NPROC", RLIMIT_NPROC},
+    {"RLIMIT_RSS", RLIMIT_RSS},
+    {"RLIMIT_RTPRIO", RLIMIT_RTPRIO},
+    {"RLIMIT_RTTIME", RLIMIT_RTTIME},
+    {"RLIMIT_SIGPENDING", RLIMIT_SIGPENDING},
+    {"RLIMIT_STACK", RLIMIT_STACK},
+    {NULL, 0}
+  };
+
+static int
+get_rlimit_resource (const char *name)
+{
+  struct rlimit_s *it;
+  for (it = rlimits; it->name; it++)
+    if (strcmp (it->name, name) == 0)
+      return it->value;
+  return -1;
+}
+
+int
+libcrun_set_rlimits (crun_container *container, char **err)
+{
+    oci_container *def = container->container_def;
+    size_t i;
+    if (def->process->rlimits == NULL)
+      return 0;
+    for (i = 0; i < def->process->rlimits_len; i++)
+      {
+        struct rlimit limit;
+        char *type = def->process->rlimits[i]->type;
+        int resource = get_rlimit_resource (type);
+        if (UNLIKELY (resource < 0))
+          return crun_static_error (err, 0, "invalid rlimit '%s'", type);
+        limit.rlim_cur = def->process->rlimits[i]->soft;
+        limit.rlim_max = def->process->rlimits[i]->hard;
+        if (UNLIKELY (setrlimit (resource, &limit) < 0))
+          return crun_static_error (err, errno, "setrlimit '%s'", type);
+      }
 }

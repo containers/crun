@@ -133,6 +133,10 @@ container_load (crun_container *container, struct crun_run_options *opts)
   if (UNLIKELY (ret < 0))
     goto out;
 
+  ret = libcrun_set_rlimits (container, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
+
   if (def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       {
