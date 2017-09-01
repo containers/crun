@@ -35,6 +35,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
+
 struct linux_namespace_s
 {
   const char *name;
@@ -186,9 +188,17 @@ do_mount (crun_container *container,
         return ret;
       data = data_with_label;
     }
-  ret = mount (source, target, filesystemtype, mountflags, data);
+   ret = mount (source, target, filesystemtype, mountflags, data);
   if (UNLIKELY (ret < 0))
     return crun_static_error (err, errno, "mount '%s' to '%s'", source, target);
+
+  if (mountflags & ALL_PROPAGATIONS)
+    {
+      ret = mount ("none", target, "", mountflags & ALL_PROPAGATIONS, "");
+      if (UNLIKELY (ret < 0))
+        return crun_static_error (err, errno, "mount '%s' to '%s'", source, target);
+    }
+
   return ret;
 }
 
@@ -390,6 +400,46 @@ get_default_flags (crun_container *container, const char *destination, char **da
   return 0;
 }
 
+static void
+free_remount (struct remount_s *r)
+{
+  free (r->data);
+  free (r->target);
+  free (r);
+}
+
+static struct remount_s *
+make_remount (char *target, unsigned long flags, char *data, struct remount_s *next)
+{
+  struct remount_s *ret = xmalloc (sizeof (*ret));
+  ret->target = xstrdup (target);
+  ret->flags = flags;
+  ret->data = xstrdup (data);
+  ret->next = next;
+  return ret;
+}
+
+static int
+finalize_mounts (crun_container *container, const char *rootfs, int is_user_ns, char **err)
+{
+  size_t i;
+  int ret;
+  struct remount_s *r;
+  for (r = container->remounts; r;)
+    {
+      struct remount_s *next = r->next;
+      ret = do_mount (container, "none", r->target, "", r->flags, r->data, 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      free_remount (r);
+
+      r = next;
+    }
+  container->remounts = NULL;
+  return 0;
+}
+
 static int
 do_mounts (crun_container *container, const char *rootfs, char **err)
 {
@@ -402,7 +452,7 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
       cleanup_free char *data = NULL;
       char *type;
       char *source;
-      int flags = 0;
+      unsigned long flags = 0;
       int skip_labelling;
 
       if (rootfs)
@@ -428,8 +478,6 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
       if (strcmp (type, "bind") == 0)
         flags |= MS_BIND;
 
-      flags &= ~MS_RDONLY;
-
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
       skip_labelling = strcmp (type, "sysfs") == 0
@@ -442,9 +490,16 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
           continue;
         }
 
-      ret = do_mount (container, source, target, type, flags, data, skip_labelling, err);
+      ret = do_mount (container, source, target, type, flags & ~MS_RDONLY, data, skip_labelling, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (flags & MS_RDONLY)
+        {
+          unsigned long remount_flags = (flags & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
+          struct remount_s *r = make_remount (target, remount_flags, data, container->remounts);
+          container->remounts = r;
+        }
     }
 }
 
@@ -468,6 +523,12 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
   ret = do_mount (container, def->root->path, rootfs, "", MS_BIND | MS_REC | rootfsPropagation, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
+  if (def->root->readonly)
+    {
+      unsigned long remount_flags = (rootfsPropagation & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
+      struct remount_s *r = make_remount (def->root->path, remount_flags, "", container->remounts);
+      container->remounts = r;
+    }
 
   ret = do_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
@@ -482,6 +543,10 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
     }
 
   ret = create_missing_devs (container, rootfs, is_user_ns, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = finalize_mounts (container, rootfs, is_user_ns, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

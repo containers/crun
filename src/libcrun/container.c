@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sched.h>
 #include <sys/wait.h>
+#include <string.h>
 
 crun_container *
 crun_container_load (const char *path, char **error)
@@ -39,6 +40,7 @@ crun_container_load (const char *path, char **error)
     return NULL;
 
   container = xmalloc (sizeof (*container));
+  memset (container, 0, sizeof (*container));
   container->container_def = container_def;
 
   container->host_uid = getuid ();
