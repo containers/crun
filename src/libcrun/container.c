@@ -110,6 +110,7 @@ container_load (crun_container *container, struct crun_run_options *opts)
 {
   char *err = NULL;
   int ret;
+  size_t i;
   oci_container *def = container->container_def;
   cleanup_free char *rootfs = NULL;
 
@@ -150,7 +151,25 @@ container_load (crun_container *container, struct crun_run_options *opts)
         goto out;
       }
 
-  execvpe (def->process->args[0], def->process->args, def->process->env);
+  if (clearenv ())
+    {
+      ret = crun_static_error (&err, 0, "clearenv");
+      goto out;
+    }
+
+  for (i = 0; i < def->process->env_len; i++)
+    if (putenv (def->process->env[i]) < 0)
+      {
+        ret = crun_static_error (&err, 0, "putenv '%s'", def->process->env[i]);
+        goto out;
+      }
+
+  if (UNLIKELY (execvp (def->process->args[0], def->process->args) < 0))
+    {
+      ret = crun_static_error (&err, errno, "exec the container process");
+      goto out;
+    }
+
  out:
   error (EXIT_FAILURE, -(ret + 1), "%s", err);
 }
