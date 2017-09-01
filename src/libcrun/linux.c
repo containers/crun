@@ -571,8 +571,8 @@ libcrun_set_usernamespace (crun_container *container, char **err)
 
   if (container->host_uid == 0)
     {
-      uid_map_len = xasprintf (&uid_map, "0 0 65536");
-      gid_map_len = xasprintf (&gid_map, "0 0 65536");
+      uid_map_len = xasprintf (&uid_map, "0 0 1\n");
+      gid_map_len = xasprintf (&gid_map, "0 0 1\n");
     }
   else
     {
