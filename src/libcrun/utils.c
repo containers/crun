@@ -162,10 +162,15 @@ crun_ensure_directory (const char *path, int mode, char **err)
   return ensure_directory_internal (tmp, strlen (tmp), mode, err);
 }
 
-void
+int
 detach_process ()
 {
-  setsid ();
-  if (fork () != 0)
+  pid_t pid;
+  if (setsid () < 0)
+    return -1;
+  pid = fork ();
+  if (pid < 0)
+    return -1;
+  if (pid != 0)
     _exit (EXIT_SUCCESS);
 }

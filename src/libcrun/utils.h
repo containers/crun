@@ -51,6 +51,6 @@ int write_file (const char *name, const void *data, size_t len, char **err);
 
 int crun_ensure_directory (const char *path, int mode, char **err);
 
-void detach_process ();
+int detach_process ();
 
 #endif

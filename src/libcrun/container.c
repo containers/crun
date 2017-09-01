@@ -177,7 +177,9 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
       if (ret)
         return 0;
 
-      detach_process ();
+      ret = detach_process ();
+      if (ret < 0)
+        return crun_static_error (err, errno, "detach process");
     }
 
   ret = libcrun_set_namespaces (container, err);
