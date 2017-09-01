@@ -151,7 +151,7 @@ get_mount_flags_or_option (const char *name, char **option)
     return flags;
 
   prev = *option;
-  if (*option)
+  if (*option && **option)
     xasprintf (option, "%s,%s", *option, name);
   else
     *option = xstrdup (name);
@@ -163,6 +163,33 @@ int
 pivot_root (const char * new_root, const char * put_old)
 {
   return syscall (__NR_pivot_root, new_root, put_old);
+}
+
+static int
+do_mount (crun_container *container,
+          const char *source,
+          const char *target,
+          const char *filesystemtype,
+          unsigned long mountflags,
+          const void *data,
+          int skip_labelling,
+          char **err)
+{
+  int ret;
+  cleanup_free char *data_with_label = NULL;
+  const char *label = container->container_def->linux->mount_label;
+
+  if (!skip_labelling)
+    {
+      ret = add_selinux_mount_label (&data_with_label, data, label, err);
+      if  (ret < 0)
+        return ret;
+      data = data_with_label;
+    }
+  ret = mount (source, target, filesystemtype, mountflags, data);
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "mount '%s' to '%s'", source, target);
+  return ret;
 }
 
 struct needed_devs_s
@@ -216,9 +243,9 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = mount (fullname, path_to_container, "", MS_BIND | MS_PRIVATE, "");
+          ret = do_mount (container, fullname, path_to_container, "", MS_BIND | MS_PRIVATE, "", 0, err);
           if (UNLIKELY (ret < 0))
-            return crun_static_error (err, errno, "mount device from host '%s'", fullname);
+            return ret;
         }
       else
         {
@@ -267,9 +294,9 @@ do_masked_and_readonly_paths (crun_container *container, char **err)
     {
       char *path = def->linux->masked_paths[i];
 
-      ret = mount ("/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "");
+      ret = do_mount (container, "/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
-        return crun_static_error (err, errno, "mount masked path '%s'", path);
+        return ret;
     }
   for (i = 0; i < def->linux->readonly_paths_len; i++)
     {
@@ -279,9 +306,9 @@ do_masked_and_readonly_paths (crun_container *container, char **err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = mount (path, path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_RDONLY | MS_REC, "");
+      ret = do_mount (container, path, path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_RDONLY | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
-        return crun_static_error (err, errno, "mount readonly path '%s'", path);
+        return ret;
     }
   return 0;
 }
@@ -310,9 +337,9 @@ do_pivot (crun_container *container, const char *rootfs, char **err)
   if (UNLIKELY (ret < 0))
     return crun_static_error (err, errno, "fchdir '%s'", rootfs);
 
-  ret = mount ("", ".", "", MS_PRIVATE | MS_REC, "");
+  ret = do_mount (container, "", ".", "", MS_PRIVATE | MS_REC, "", 0, err);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "mount oldroot rprivate '%s'", rootfs);
+    return ret;
 
   ret = umount2 (".", MNT_DETACH);
   if (UNLIKELY (ret < 0))
@@ -376,6 +403,7 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
       char *type;
       char *source;
       int flags = 0;
+      int skip_labelling;
 
       if (rootfs)
         xasprintf (&target, "%s/%s", rootfs, def->mounts[i]->destination + 1);
@@ -404,15 +432,19 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
+      skip_labelling = strcmp (type, "sysfs") == 0
+        || strcmp (type, "proc") == 0
+        || strcmp (type, "mqueue") == 0;
+
       if (strcmp (type, "cgroup") == 0)
         {
           /* TODO */
           continue;
         }
 
-      ret = mount (source, target, type, flags, data);
+      ret = do_mount (container, source, target, type, flags, data, skip_labelling, err);
       if (UNLIKELY (ret < 0))
-        return crun_static_error (err, errno, "mount '%s'", def->mounts[i]->destination);
+        return ret;
     }
 }
 
@@ -429,13 +461,13 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
   else
     rootfsPropagation = MS_REC | MS_SLAVE;
 
-  ret = mount ("", "/", "", MS_REC | rootfsPropagation, NULL);
+  ret = do_mount (container, "", "/", "", MS_REC | rootfsPropagation, "", 0, err);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "remount root");
+    return ret;
 
-  ret = mount (def->root->path, rootfs, "", MS_BIND | MS_REC | rootfsPropagation, NULL);
+  ret = do_mount (container, def->root->path, rootfs, "", MS_BIND | MS_REC | rootfsPropagation, "", 0, err);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "mount rootfs");
+    return ret;
 
   ret = do_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))

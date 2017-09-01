@@ -215,6 +215,24 @@ check_running_in_user_namespace (char **err)
 }
 
 int
+add_selinux_mount_label (char **ret, const char *data, const char *label, char **err)
+{
+#ifdef HAVE_SELINUX
+  if (label && is_selinux_enabled () > 0)
+    {
+      if (data && *data)
+        xasprintf (ret, "%s,context=\"%s\"", data, label);
+      else
+        xasprintf (ret, "context=\"%s\"", label);
+      return 0;
+    }
+#endif
+  *ret = xstrdup (data);
+  return 0;
+
+}
+
+int
 set_selinux_exec_label (const char *label, char **err)
 {
 #ifdef HAVE_SELINUX

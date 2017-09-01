@@ -59,4 +59,6 @@ int check_running_in_user_namespace (char **err);
 
 int set_selinux_exec_label (const char *label, char **err);
 
+int add_selinux_mount_label (char **ret, const char *data, const char *label, char **err);
+
 #endif
