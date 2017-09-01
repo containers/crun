@@ -579,6 +579,15 @@ read_caps (unsigned long caps[2], char **values, size_t len, char **err)
 }
 
 int
+libcrun_set_selinux_exec_label (crun_container *container, char **err)
+{
+  char *label = container->container_def->process->selinux_label;
+  if (label == NULL)
+    return 0;
+  return set_selinux_exec_label (label, err);
+}
+
+int
 libcrun_set_caps (crun_container *container, char **err)
 {
   int ret;

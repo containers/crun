@@ -31,5 +31,6 @@ int libcrun_set_mounts (crun_container *container, const char *rootfs, char **er
 int libcrun_set_usernamespace (crun_container *container, char **err);
 int libcrun_set_caps (crun_container *container, char **err);
 int libcrun_set_rlimits (crun_container *container, char **err);
+int libcrun_set_selinux_exec_label (crun_container *container, char **err);
 
 #endif

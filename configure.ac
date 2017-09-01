@@ -19,6 +19,7 @@ AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers n
 AC_CHECK_LIB(cap, cap_from_name)
 
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
+PKG_CHECK_MODULES([SELINUX], [libselinux >= 2.1.9], [AC_DEFINE(HAVE_SELINUX, 1, [Define if SELinux is available])], [])
 
 AC_CONFIG_FILES([Makefile])
 

@@ -26,6 +26,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifdef HAVE_SELINUX
+# include <selinux/selinux.h>
+#endif
+
 void
 cleanup_freep (void *p)
 {
@@ -208,4 +212,18 @@ check_running_in_user_namespace (char **err)
     return crun_static_error (err, errno, "error reading from /proc/self/uid_map");
   buffer[len] = '\0';
   return strstr (buffer, "4294967295") ? 1 : 0;
+}
+
+int
+set_selinux_exec_label (const char *label, char **err)
+{
+#ifdef HAVE_SELINUX
+  if (is_selinux_enabled () > 0)
+    if (UNLIKELY (setexeccon (label) < 0))
+      {
+        xasprintf (err, "error setting SELinux exec label");
+        return -1;
+      }
+#endif
+  return 0;
 }

@@ -57,4 +57,6 @@ int create_file_if_missing_at (int dirfd, const char *file, char **err);
 
 int check_running_in_user_namespace (char **err);
 
+int set_selinux_exec_label (const char *label, char **err);
+
 #endif
