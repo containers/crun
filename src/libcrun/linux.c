@@ -232,6 +232,27 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
             return crun_static_error (err, errno, "mknod '%s'", basename);
         }
     }
+
+  ret = symlinkat ("/proc/self/fd", devfd, "fd");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "creating symlink for /dev/fd");
+
+  ret = symlinkat ("/proc/self/fd/0", devfd, "stdin");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "creating symlink for /dev/stdin");
+
+  ret = symlinkat ("/proc/self/fd/1", devfd, "stdout");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "creating symlink for /dev/stdout");
+
+  ret = symlinkat ("/proc/self/fd/2", devfd, "stderr");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "creating symlink for /dev/stderr");
+
+  ret = symlinkat ("/proc/kcore", devfd, "core");
+  if (UNLIKELY (ret < 0))
+    return crun_static_error (err, errno, "creating symlink for /dev/core");
+
   return 0;
 }
 
