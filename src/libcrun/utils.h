@@ -53,4 +53,6 @@ int crun_ensure_directory (const char *path, int mode, char **err);
 
 int detach_process ();
 
+int create_file_if_missing_at (int dirfd, const char *file, char **err);
+
 #endif

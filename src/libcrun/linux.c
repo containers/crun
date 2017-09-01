@@ -31,6 +31,9 @@
 #include <sys/capability.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/sysmacros.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 struct linux_namespace_s
 {
@@ -162,6 +165,76 @@ pivot_root (const char * new_root, const char * put_old)
   return syscall (__NR_pivot_root, new_root, put_old);
 }
 
+struct needed_devs_s
+{
+  const char *name;
+  char type;
+  int major;
+  int minor;
+  int mode;
+};
+
+struct needed_devs_s needed_devs[] =
+  {
+    {"/dev/null", 'c', 1, 3, 0666},
+    {"/dev/zero", 'c', 1, 5, 0666},
+    {"/dev/full", 'c', 1, 7, 0666},
+    {"/dev/tty", 'c', 5, 0, 0666},
+    {"/dev/random", 'c', 1, 8, 0666},
+    {"/dev/urandom", 'c', 1, 9, 0666},
+    {NULL, '\0', 0, 0, 0}
+  };
+
+static int
+create_missing_devs (crun_container *container, const char *rootfs, int binds, char **err)
+{
+  int ret;
+  struct needed_devs_s *it;
+  cleanup_close int dirfd = open (rootfs, O_DIRECTORY | O_RDONLY);
+  cleanup_close int devfd = -1;
+
+  if (UNLIKELY (dirfd < 0))
+    return crun_static_error (err, errno, "open rootfs directory '%s'", rootfs);
+
+  devfd = openat (dirfd, "dev", O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (devfd < 0))
+    return crun_static_error (err, errno, "open /dev directory in '%s'", rootfs);
+
+  for (it = needed_devs; it->name; it++)
+    {
+      dev_t dev;
+      mode_t type = (it->type == 'c') ? S_IFCHR : S_IFBLK;
+      const char *fullname = it->name;
+      /* Skip the common prefix /dev.  */
+      const char *basename = it->name + 5;
+      if (binds)
+        {
+          cleanup_free char *path_to_container = NULL;
+          xasprintf (&path_to_container, "%s/dev/%s", rootfs, basename);
+
+          ret = create_file_if_missing_at (devfd, basename, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = mount (fullname, path_to_container, "", MS_BIND | MS_PRIVATE, "");
+          if (UNLIKELY (ret < 0))
+            return crun_static_error (err, errno, "mount device from host '%s'", fullname);
+        }
+      else
+        {
+
+          dev = makedev (it->major, it->minor);
+          ret = mknodat (devfd, basename, it->mode | type, dev);
+          /* We don't fail when the file already exists.  */
+          if (UNLIKELY (ret < 0 && errno == EEXIST))
+            continue;
+          if (UNLIKELY (ret < 0))
+            return crun_static_error (err, errno, "mknod '%s'", basename);
+        }
+    }
+  return 0;
+}
+
 static int
 do_pivot (crun_container *container, const char *rootfs, char **err)
 {
@@ -286,7 +359,7 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
           continue;
         }
 
-      ret = mount (source, target, def->mounts[i]->type, flags, data);
+      ret = mount (source, target, type, flags, data);
       if (UNLIKELY (ret < 0))
         return crun_static_error (err, errno, "mount '%s'", def->mounts[i]->destination);
     }
@@ -313,6 +386,10 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
     return crun_static_error (err, errno, "mount rootfs");
 
   ret = do_mounts (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = create_missing_devs (container, rootfs, 1, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

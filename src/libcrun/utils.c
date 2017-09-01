@@ -173,4 +173,21 @@ detach_process ()
     return -1;
   if (pid != 0)
     _exit (EXIT_SUCCESS);
+  return 0;
+}
+
+int
+create_file_if_missing_at (int dirfd, const char *file, char **err)
+{
+  int ret = faccessat (dirfd, file, R_OK, 0);
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
+    return crun_static_error (err, errno, "accessing file '%s'", file);
+
+  if (ret)
+    {
+      cleanup_close int fd_write = openat (dirfd, file, O_CREAT | O_WRONLY, 0700);
+      if (fd_write < 0)
+        return crun_static_error (err, errno, "creating file '%s'", file);
+    }
+  return 0;
 }
