@@ -191,3 +191,21 @@ create_file_if_missing_at (int dirfd, const char *file, char **err)
     }
   return 0;
 }
+
+int
+check_running_in_user_namespace (char **err)
+{
+  char buffer[512];
+  ssize_t len;
+  cleanup_close int fd = open ("/proc/self/uid_map", O_RDONLY);
+  if (UNLIKELY (fd < 0) && errno == ENOENT)
+    return 0;
+  if (UNLIKELY (fd < 0))
+    return crun_static_error (err, errno, "open file /proc/self/uid_map");
+
+  len = read (fd, buffer, sizeof (buffer) - 1);
+  if (len < 0)
+    return crun_static_error (err, errno, "error reading from /proc/self/uid_map");
+  buffer[len] = '\0';
+  return strstr (buffer, "4294967295") ? 1 : 0;
+}

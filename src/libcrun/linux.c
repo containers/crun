@@ -400,6 +400,7 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
 {
   oci_container *def = container->container_def;
   int ret;
+  int is_user_ns;
   unsigned long rootfsPropagation = 0;
 
   if (def->linux->rootfs_propagation)
@@ -419,7 +420,15 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = create_missing_devs (container, rootfs, 1, err);
+  is_user_ns = (container->unshare_flags & CLONE_NEWUSER);
+  if (!is_user_ns)
+    {
+      is_user_ns = check_running_in_user_namespace (err);
+      if (UNLIKELY (is_user_ns < 0))
+        return is_user_ns;
+    }
+
+  ret = create_missing_devs (container, rootfs, is_user_ns, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
