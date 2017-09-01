@@ -236,6 +236,36 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
 }
 
 static int
+do_masked_and_readonly_paths (crun_container *container, char **err)
+{
+  size_t i;
+  int ret;
+  oci_container *def = container->container_def;
+  return 0;
+  for (i = 0; i < def->linux->masked_paths_len; i++)
+    {
+      char *path = def->linux->masked_paths[i];
+
+      ret = mount ("/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "");
+      if (UNLIKELY (ret < 0))
+        return crun_static_error (err, errno, "mount masked path '%s'", path);
+    }
+  for (i = 0; i < def->linux->readonly_paths_len; i++)
+    {
+      char *path = def->linux->readonly_paths[i];
+
+      ret = crun_ensure_directory (path, 0755, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = mount (path, path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_RDONLY | MS_REC, "");
+      if (UNLIKELY (ret < 0))
+        return crun_static_error (err, errno, "mount readonly path '%s'", path);
+    }
+  return 0;
+}
+
+static int
 do_pivot (crun_container *container, const char *rootfs, char **err)
 {
   int ret;
@@ -394,6 +424,10 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
     return ret;
 
   ret = do_pivot (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = do_masked_and_readonly_paths (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
