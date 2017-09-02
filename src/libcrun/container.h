@@ -42,6 +42,9 @@ struct crun_container_s
   uid_t host_uid;
   gid_t host_gid;
 
+  uid_t container_uid;
+  gid_t container_gid;
+
   struct remount_s *remounts;
 };
 

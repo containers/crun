@@ -569,26 +569,15 @@ libcrun_set_usernamespace (crun_container *container, char **err)
   int uid_map_len, gid_map_len;
   int ret;
 
-  if (container->host_uid == 0)
-    {
-      uid_map_len = xasprintf (&uid_map, "0 0 1\n");
-      gid_map_len = xasprintf (&gid_map, "0 0 1\n");
-    }
-  else
-    {
-      uid_map_len = xasprintf (&uid_map, "0 %d 1", container->host_uid);
-      gid_map_len = xasprintf (&gid_map, "0 %d 1", container->host_gid);
-    }
+  uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->host_uid);
+  gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
   ret = write_file ("/proc/self/setgroups", "deny", 4, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (container->host_uid)
-    {
-      ret = write_file ("/proc/self/gid_map", gid_map, gid_map_len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  ret = write_file ("/proc/self/gid_map", gid_map, gid_map_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = write_file ("/proc/self/uid_map", uid_map, uid_map_len, err);
   if (UNLIKELY (ret < 0))

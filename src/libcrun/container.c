@@ -28,6 +28,7 @@
 #include <sched.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <grp.h>
 
 crun_container *
 crun_container_load (const char *path, char **error)
@@ -106,6 +107,35 @@ check_directories (struct crun_run_options *opts, const char *id, char **err)
 }
 
 static void
+get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
+{
+  *uid = 0;
+  *gid = 0;
+
+  if (def->process->user)
+    {
+      if (def->process->user->uid)
+        *uid = def->process->user->uid;
+      if (def->process->user->gid)
+        *gid = def->process->user->gid;
+    }
+}
+
+static int
+set_uid_gid (crun_container *container, char **err)
+{
+  uid_t uid = container->container_uid;
+  gid_t gid = container->container_gid;
+
+  if (gid && setgid (gid) < 0)
+    return crun_static_error (err, errno, "setgid");
+  if (uid && setuid (uid) < 0)
+    return crun_static_error (err, errno, "setuid");
+  return 0;
+}
+
+
+static void
 container_load (crun_container *container, struct crun_run_options *opts)
 {
   char *err = NULL;
@@ -113,6 +143,10 @@ container_load (crun_container *container, struct crun_run_options *opts)
   size_t i;
   oci_container *def = container->container_def;
   cleanup_free char *rootfs = NULL;
+
+  get_uid_gid_from_def (container->container_def,
+                        &container->container_uid,
+                        &container->container_gid);
 
   if (container->unshare_flags & CLONE_NEWUSER)
     {
@@ -141,6 +175,10 @@ container_load (crun_container *container, struct crun_run_options *opts)
     goto out;
 
   ret = libcrun_set_rlimits (container, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
+
+  ret = set_uid_gid (container, &err);
   if (UNLIKELY (ret < 0))
     goto out;
 
@@ -193,6 +231,10 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
   ret = check_directories (opts, opts->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (container->host_uid == 0)
+    if (UNLIKELY (setgroups (0, NULL) < 0))
+      return crun_static_error (err, errno, "setgroups");
 
   if (detach)
     {
