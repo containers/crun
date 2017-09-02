@@ -228,6 +228,21 @@ container_run (void *args)
   error (EXIT_FAILURE, err->status, "%s", err->msg);
 }
 
+static int
+delete_container (crun_container *container, struct crun_run_options *opts, int force, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *dir = get_state_directory (opts, opts->id);
+  if (UNLIKELY (dir == NULL))
+        return crun_make_error (err, 0, "cannot get state directory");
+
+  ret = rmdir (dir);
+  if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "cannot rm state directory");
+
+  return 0;
+}
+
 int
 crun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *err)
 {
@@ -280,7 +295,10 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, li
           return crun_make_error (err, errno, "waitpid");
         }
       if (WIFEXITED (status) || WIFSIGNALED (status))
-        return WEXITSTATUS (status);
+        {
+          delete_container (container, opts, 1, err);
+          return WEXITSTATUS (status);
+        }
     }
 
   return 0;
