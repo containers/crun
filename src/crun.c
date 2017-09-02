@@ -34,11 +34,11 @@ struct commands_s
 {
   int value;
   const char *name;
-  int (*handler) (struct crun_global_arguments *, int, char **, char **);
+  int (*handler) (struct crun_global_arguments *, int, char **, libcrun_error_t *);
 };
 
 static int
-crun_command_not_implemented (struct crun_global_arguments *global_args, int argc, char **arg, char **error)
+crun_command_not_implemented (struct crun_global_arguments *global_args, int argc, char **arg, libcrun_error_t *error)
 {
   return crun_make_error (error, 0, "sadly, this wasn't implemented yet");
 }
@@ -139,7 +139,7 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 int
 main (int argc, char **argv)
 {
-  char *err = NULL;
+  libcrun_error_t err = NULL;
   struct commands_s *command;
   int ret, first_argument;
 
@@ -150,7 +150,7 @@ main (int argc, char **argv)
     error (EXIT_FAILURE, 0, "unknown command %s", argv[first_argument]);
 
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
-  if (ret || err != NULL)
-    error (EXIT_FAILURE, -(ret + 1), "%s", err);
+  if (ret)
+    error (EXIT_FAILURE, err->status, "%s", err->msg);
   return ret;
 }

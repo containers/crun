@@ -15,22 +15,23 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef LINUX_H
-# define LINUX_H
+#ifndef ERROR_H
+# define ERROR_H
 # include <config.h>
-# include <stdio.h>
-# include <stdlib.h>
 # include <error.h>
-# include <errno.h>
-# include <argp.h>
-# include <oci_runtime_spec.h>
-# include "container.h"
+# include <stdlib.h>
 
-int libcrun_set_namespaces (crun_container *container, libcrun_error_t *err);
-int libcrun_set_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err);
-int libcrun_set_usernamespace (crun_container *container, libcrun_error_t *err);
-int libcrun_set_caps (crun_container *container, libcrun_error_t *err);
-int libcrun_set_rlimits (crun_container *container, libcrun_error_t *err);
-int libcrun_set_selinux_exec_label (crun_container *container, libcrun_error_t *err);
+struct libcrun_error_s
+{
+  int status;
+  char *msg;
+};
+typedef struct libcrun_error_s *libcrun_error_t;
+
+# define OOM() do {error (EXIT_FAILURE, 0, "OOM");} while (0)
+
+int crun_make_error (libcrun_error_t *err, int status, const char *msg, ...);
+
+int crun_error_release (libcrun_error_t *err);
 
 #endif

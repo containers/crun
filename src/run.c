@@ -104,7 +104,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
 static struct argp run_argp = { options, parse_opt, args_doc, doc };
 
 int
-crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, char **err)
+crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
   crun_container *container;

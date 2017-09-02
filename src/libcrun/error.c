@@ -15,22 +15,45 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef LINUX_H
-# define LINUX_H
-# include <config.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <error.h>
-# include <errno.h>
-# include <argp.h>
-# include <oci_runtime_spec.h>
-# include "container.h"
 
-int libcrun_set_namespaces (crun_container *container, libcrun_error_t *err);
-int libcrun_set_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err);
-int libcrun_set_usernamespace (crun_container *container, libcrun_error_t *err);
-int libcrun_set_caps (crun_container *container, libcrun_error_t *err);
-int libcrun_set_rlimits (crun_container *container, libcrun_error_t *err);
-int libcrun_set_selinux_exec_label (crun_container *container, libcrun_error_t *err);
+#define _GNU_SOURCE
+#include <config.h>
+#include "error.h"
+#include <stdarg.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdio.h>
+#include "utils.h"
 
-#endif
+int
+crun_make_error (libcrun_error_t *err, int status, const char *msg, ...)
+{
+  va_list args_list;
+  libcrun_error_t ptr;
+  va_start (args_list, msg);
+  *err = xmalloc (sizeof (struct libcrun_error_s));
+  ptr = *err;
+  ptr->status = status;
+  if (vasprintf (&(ptr->msg), msg, args_list) < 0)
+    OOM ();
+
+  va_end (args_list);
+  return -status - 1;
+}
+
+int
+crun_error_release (libcrun_error_t *err)
+{
+  libcrun_error_t ptr;
+  if (err == NULL)
+    return 0;
+
+  ptr = *err;
+  if (ptr == NULL)
+    return 0;
+
+  free (ptr->msg);
+  free (ptr);
+  *err = NULL;
+  return 0;
+}

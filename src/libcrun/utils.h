@@ -23,6 +23,7 @@
 # include <error.h>
 # include <errno.h>
 # include <argp.h>
+# include "error.h"
 
 void cleanup_freep (void *p);
 void cleanup_closep (void *p);
@@ -33,8 +34,6 @@ void cleanup_closep (void *p);
 # define LIKELY(x) __builtin_expect((x),1)
 # define UNLIKELY(x) __builtin_expect((x),0)
 
-# define OOM() do {error (EXIT_FAILURE, 0, "OOM");} while (0)
-
 void *xmalloc (size_t size);
 
 char *xstrdup (const char *str);
@@ -43,22 +42,20 @@ int xasprintf (char **str, const char *fmt, ...);
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
-int crun_make_error (char **err, int status, const char *msg, ...);
+int crun_path_exists (const char *path, int readonly, libcrun_error_t *err);
 
-int crun_path_exists (const char *path, int readonly, char **err);
+int write_file (const char *name, const void *data, size_t len, libcrun_error_t *err);
 
-int write_file (const char *name, const void *data, size_t len, char **err);
-
-int crun_ensure_directory (const char *path, int mode, char **err);
+int crun_ensure_directory (const char *path, int mode, libcrun_error_t *err);
 
 int detach_process ();
 
-int create_file_if_missing_at (int dirfd, const char *file, char **err);
+int create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err);
 
-int check_running_in_user_namespace (char **err);
+int check_running_in_user_namespace (libcrun_error_t *err);
 
-int set_selinux_exec_label (const char *label, char **err);
+int set_selinux_exec_label (const char *label, libcrun_error_t *err);
 
-int add_selinux_mount_label (char **ret, const char *data, const char *label, char **err);
+int add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err);
 
 #endif

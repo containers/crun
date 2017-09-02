@@ -38,7 +38,7 @@
 #include <seccomp.h>
 
 unsigned long
-get_seccomp_operator (const char *name, char **err)
+get_seccomp_operator (const char *name, libcrun_error_t *err)
 {
   if (strcmp (name, "SCMP_CMP_NE") == 0)
     return SCMP_CMP_NE;
@@ -60,7 +60,7 @@ get_seccomp_operator (const char *name, char **err)
 }
 
 unsigned long long
-get_seccomp_action (const char *name, char **err)
+get_seccomp_action (const char *name, libcrun_error_t *err)
 {
   if (strcmp (name, "SCMP_ACT_KILL") == 0)
     return SCMP_ACT_KILL;
@@ -104,7 +104,7 @@ cleanup_seccompp (void *p)
 
 
 int
-libcrun_set_seccomp (crun_container *container, char **err)
+libcrun_set_seccomp (crun_container *container, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;

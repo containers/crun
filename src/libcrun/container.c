@@ -32,14 +32,17 @@
 #include <grp.h>
 
 crun_container *
-crun_container_load (const char *path, char **error)
+crun_container_load (const char *path, libcrun_error_t *error)
 {
   crun_container *container;
   oci_container *container_def;
-
-  container_def = oci_container_parse_file (path, 0, error);
+  cleanup_free char *oci_error = NULL;
+  container_def = oci_container_parse_file (path, 0, &oci_error);
   if (container_def == NULL)
-    return NULL;
+    {
+      crun_make_error (error, 0, "cannot parse configuration file: '%s'", oci_error);
+      return NULL;
+    }
 
   container = xmalloc (sizeof (*container));
   memset (container, 0, sizeof (*container));
@@ -80,7 +83,7 @@ get_state_directory (struct crun_run_options *opts, const char *id)
 }
 
 static int
-check_directories (struct crun_run_options *opts, const char *id, char **err)
+check_directories (struct crun_run_options *opts, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *dir = NULL;
   const char *run_directory = get_run_directory (opts);
@@ -123,7 +126,7 @@ get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
 }
 
 static int
-set_uid_gid (crun_container *container, char **err)
+set_uid_gid (crun_container *container, libcrun_error_t *err)
 {
   uid_t uid = container->container_uid;
   gid_t gid = container->container_gid;
@@ -135,11 +138,10 @@ set_uid_gid (crun_container *container, char **err)
   return 0;
 }
 
-
 static void
 container_load (crun_container *container, struct crun_run_options *opts)
 {
-  char *err = NULL;
+  libcrun_error_t err = NULL;
   int ret;
   size_t i;
   oci_container *def = container->container_def;
@@ -214,11 +216,11 @@ container_load (crun_container *container, struct crun_run_options *opts)
     }
 
  out:
-  error (EXIT_FAILURE, -(ret + 1), "%s", err);
+  error (EXIT_FAILURE, err->status, "%s", err->msg);
 }
 
 int
-crun_container_run (crun_container *container, struct crun_run_options *opts, char **err)
+crun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;

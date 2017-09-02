@@ -21,6 +21,7 @@
 
 # include <config.h>
 # include <oci_runtime_spec.h>
+# include "error.h"
 
 struct remount_s
 {
@@ -63,8 +64,8 @@ struct crun_run_options
 
 typedef struct crun_container_s crun_container;
 
-crun_container *crun_container_load (const char *path, char **error);
+crun_container *crun_container_load (const char *path, libcrun_error_t *error);
 
-int crun_container_run (crun_container *container, struct crun_run_options *opts, char **error);
+int crun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *error);
 
 #endif

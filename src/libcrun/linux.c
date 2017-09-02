@@ -67,7 +67,7 @@ find_namespace (const char *name)
 
 
 int
-libcrun_set_namespaces (crun_container *container, char **err)
+libcrun_set_namespaces (crun_container *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   size_t i;
@@ -175,7 +175,7 @@ do_mount (crun_container *container,
           unsigned long mountflags,
           const void *data,
           int skip_labelling,
-          char **err)
+          libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *data_with_label = NULL;
@@ -223,7 +223,7 @@ struct device_s needed_devs[] =
   };
 
 static int
-create_dev (crun_container *container, int devfd, struct device_s *device, const char *rootfs, int binds, char **err)
+create_dev (crun_container *container, int devfd, struct device_s *device, const char *rootfs, int binds, libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
@@ -258,7 +258,7 @@ create_dev (crun_container *container, int devfd, struct device_s *device, const
 }
 
 static int
-create_missing_devs (crun_container *container, const char *rootfs, int binds, char **err)
+create_missing_devs (crun_container *container, const char *rootfs, int binds, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -317,7 +317,7 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
 }
 
 static int
-do_masked_and_readonly_paths (crun_container *container, char **err)
+do_masked_and_readonly_paths (crun_container *container, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -347,7 +347,7 @@ do_masked_and_readonly_paths (crun_container *container, char **err)
 }
 
 static int
-do_pivot (crun_container *container, const char *rootfs, char **err)
+do_pivot (crun_container *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
   cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_RDONLY);
@@ -443,7 +443,7 @@ make_remount (char *target, unsigned long flags, char *data, struct remount_s *n
 }
 
 static int
-finalize_mounts (crun_container *container, const char *rootfs, int is_user_ns, char **err)
+finalize_mounts (crun_container *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -464,7 +464,7 @@ finalize_mounts (crun_container *container, const char *rootfs, int is_user_ns, 
 }
 
 static int
-do_mounts (crun_container *container, const char *rootfs, char **err)
+do_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -527,7 +527,7 @@ do_mounts (crun_container *container, const char *rootfs, char **err)
 }
 
 int
-libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
+libcrun_set_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -585,7 +585,7 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, char **err)
 }
 
 int
-libcrun_set_usernamespace (crun_container *container, char **err)
+libcrun_set_usernamespace (crun_container *container, libcrun_error_t *err)
 {
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
@@ -620,7 +620,7 @@ struct all_caps_s
 };
 
 static int
-set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
+set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *err)
 {
   unsigned long cap;
   int ret;
@@ -668,17 +668,14 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
 }
 
 static int
-read_caps (unsigned long caps[2], char **values, size_t len, char **err)
+read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *err)
 {
   size_t i;
   for (i = 0; i < len; i++)
     {
       cap_value_t cap;
       if (cap_from_name (values[i], &cap) < 0)
-        {
-          xasprintf (err, "unknown cap: %s", values[i]);
-          return -1;
-        }
+        return crun_make_error (err, 0, "unknown cap: %s", values[i]);
       if (cap < 32)
           caps[0] |= CAP_TO_MASK_0 (cap);
       else
@@ -688,7 +685,7 @@ read_caps (unsigned long caps[2], char **values, size_t len, char **err)
 }
 
 int
-libcrun_set_selinux_exec_label (crun_container *container, char **err)
+libcrun_set_selinux_exec_label (crun_container *container, libcrun_error_t *err)
 {
   char *label = container->container_def->process->selinux_label;
   if (label == NULL)
@@ -697,7 +694,7 @@ libcrun_set_selinux_exec_label (crun_container *container, char **err)
 }
 
 int
-libcrun_set_caps (crun_container *container, char **err)
+libcrun_set_caps (crun_container *container, libcrun_error_t *err)
 {
   int ret;
   struct all_caps_s caps;
@@ -781,7 +778,7 @@ get_rlimit_resource (const char *name)
 }
 
 int
-libcrun_set_rlimits (crun_container *container, char **err)
+libcrun_set_rlimits (crun_container *container, libcrun_error_t *err)
 {
     oci_container *def = container->container_def;
     size_t i;

@@ -63,20 +63,7 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
 }
 
 int
-crun_make_error (char **err, int status, const char *msg, ...)
-{
-  va_list args_list;
-  va_start (args_list, msg);
-
-  if (vasprintf (err, msg, args_list) < 0)
-    OOM ();
-
-  va_end (args_list);
-  return -status - 1;
-}
-
-int
-crun_path_exists (const char *path, int readonly, char **err)
+crun_path_exists (const char *path, int readonly, libcrun_error_t *err)
 {
   int ret = access (path, readonly ? R_OK : W_OK);
   if (UNLIKELY (ret < 0 && errno != ENOENT))
@@ -115,7 +102,7 @@ xstrdup (const char *str)
 }
 
 int
-write_file (const char *name, const void *data, size_t len, char **err)
+write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
   cleanup_close int fd = open (name, O_WRONLY);
   int ret;
@@ -130,7 +117,7 @@ write_file (const char *name, const void *data, size_t len, char **err)
 }
 
 static int
-ensure_directory_internal (char *path, size_t len, int mode, char **err)
+ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *err)
 {
   char *it = path + len;
   int ret;
@@ -160,7 +147,7 @@ ensure_directory_internal (char *path, size_t len, int mode, char **err)
 }
 
 int
-crun_ensure_directory (const char *path, int mode, char **err)
+crun_ensure_directory (const char *path, int mode, libcrun_error_t *err)
 {
   cleanup_free char *tmp = xstrdup (path);
   return ensure_directory_internal (tmp, strlen (tmp), mode, err);
@@ -181,7 +168,7 @@ detach_process ()
 }
 
 int
-create_file_if_missing_at (int dirfd, const char *file, char **err)
+create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 {
   int ret = faccessat (dirfd, file, R_OK, 0);
   if (UNLIKELY (ret < 0 && errno != ENOENT))
@@ -197,7 +184,7 @@ create_file_if_missing_at (int dirfd, const char *file, char **err)
 }
 
 int
-check_running_in_user_namespace (char **err)
+check_running_in_user_namespace (libcrun_error_t *err)
 {
   char buffer[512];
   ssize_t len;
@@ -215,7 +202,7 @@ check_running_in_user_namespace (char **err)
 }
 
 int
-add_selinux_mount_label (char **ret, const char *data, const char *label, char **err)
+add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err)
 {
 #ifdef HAVE_SELINUX
   if (label && is_selinux_enabled () > 0)
@@ -233,13 +220,13 @@ add_selinux_mount_label (char **ret, const char *data, const char *label, char *
 }
 
 int
-set_selinux_exec_label (const char *label, char **err)
+set_selinux_exec_label (const char *label, libcrun_error_t *err)
 {
 #ifdef HAVE_SELINUX
   if (is_selinux_enabled () > 0)
     if (UNLIKELY (setexeccon (label) < 0))
       {
-        xasprintf (err, "error setting SELinux exec label");
+        crun_make_error (err, 0, "error setting SELinux exec label");
         return -1;
       }
 #endif

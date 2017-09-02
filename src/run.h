@@ -20,6 +20,6 @@
 
 # include "crun.h"
 
-int crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, char **error);
+int crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *error);
 
 #endif
