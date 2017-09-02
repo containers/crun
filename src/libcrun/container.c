@@ -21,6 +21,7 @@
 #include "container.h"
 #include "utils.h"
 #include "linux.h"
+#include "seccomp.h"
 #include <argp.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -188,6 +189,10 @@ container_load (crun_container *container, struct crun_run_options *opts)
         ret = crun_static_error (&err, errno, "chdir");
         goto out;
       }
+
+  ret = libcrun_set_seccomp (container, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
 
   if (clearenv ())
     {
