@@ -160,12 +160,10 @@ container_run (void *args)
                         &container->container_uid,
                         &container->container_gid);
 
-  if (container->unshare_flags & CLONE_NEWUSER)
-    {
-      ret = libcrun_set_usernamespace (container, &err);
-      if (UNLIKELY (ret < 0))
-        goto out;
-    }
+
+  ret = libcrun_set_usernamespace (container, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))

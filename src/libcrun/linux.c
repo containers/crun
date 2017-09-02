@@ -39,11 +39,40 @@
 
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
+struct remount_s
+{
+  struct remount_s *next;
+  char *target;
+  unsigned long flags;
+  char *data;
+};
+
+struct private_data_s
+{
+  struct remount_s *remounts;
+
+  /* Filled by libcrun_set_namespaces().  Useful to query what
+     namespaces are available.  */
+  int unshare_flags;
+};
+
 struct linux_namespace_s
 {
   const char *name;
   int value;
 };
+
+static struct private_data_s *
+get_private_data (struct crun_container_s *container)
+{
+  if (container->private_data == NULL)
+    {
+      struct private_data_s *p = xmalloc (sizeof (*p));
+      memset (p, 0, sizeof (*p));
+      container->private_data = p;
+    }
+  return container->private_data;
+}
 
 static struct linux_namespace_s namespaces[] =
   {
@@ -88,18 +117,18 @@ libcrun_run_container (crun_container *container, int detach, container_entrypoi
       flags |= value;
     }
 
-  container->unshare_flags = flags;
+  get_private_data (container)->unshare_flags = flags;
 
   pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "unshare");
+    return crun_make_error (err, errno, "clone");
 
   if (pid > 0)
     return pid;
 
   if (detach && setsid () < 0)
     {
-      crun_make_error (err, errno, "unshare");
+      crun_make_error (err, errno, "setsid");
       goto out;
     }
 
@@ -484,7 +513,7 @@ finalize_mounts (crun_container *container, const char *rootfs, int is_user_ns, 
   size_t i;
   int ret;
   struct remount_s *r;
-  for (r = container->remounts; r;)
+  for (r = get_private_data (container)->remounts; r;)
     {
       struct remount_s *next = r->next;
       ret = do_mount (container, "none", r->target, "", r->flags, r->data, 1, err);
@@ -495,7 +524,7 @@ finalize_mounts (crun_container *container, const char *rootfs, int is_user_ns, 
 
       r = next;
     }
-  container->remounts = NULL;
+  get_private_data (container)->remounts = NULL;
   return 0;
 }
 
@@ -556,8 +585,8 @@ do_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err)
       if (flags & MS_RDONLY)
         {
           unsigned long remount_flags = (flags & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
-          struct remount_s *r = make_remount (target, remount_flags, data, container->remounts);
-          container->remounts = r;
+          struct remount_s *r = make_remount (target, remount_flags, data, get_private_data (container)->remounts);
+          get_private_data (container)->remounts = r;
         }
     }
 }
@@ -585,15 +614,15 @@ libcrun_set_mounts (crun_container *container, const char *rootfs, libcrun_error
   if (def->root->readonly)
     {
       unsigned long remount_flags = (rootfsPropagation & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
-      struct remount_s *r = make_remount (def->root->path, remount_flags, "", container->remounts);
-      container->remounts = r;
+      struct remount_s *r = make_remount (def->root->path, remount_flags, "", get_private_data (container)->remounts);
+      get_private_data (container)->remounts = r;
     }
 
   ret = do_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  is_user_ns = (container->unshare_flags & CLONE_NEWUSER);
+  is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER);
   if (!is_user_ns)
     {
       is_user_ns = check_running_in_user_namespace (err);
@@ -627,6 +656,9 @@ libcrun_set_usernamespace (crun_container *container, libcrun_error_t *err)
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
   int ret;
+
+  if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
+    return 0;
 
   uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->host_uid);
   gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);

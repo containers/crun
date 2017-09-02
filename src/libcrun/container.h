@@ -23,22 +23,10 @@
 # include <oci_runtime_spec.h>
 # include "error.h"
 
-struct remount_s
-{
-  struct remount_s *next;
-  char *target;
-  unsigned long flags;
-  char *data;
-};
-
 struct crun_container_s
 {
   /* Container parsed from the runtime json file.  */
   oci_container *container_def;
-
-  /* Filled by libcrun_set_namespaces().  Useful to query what
-     namespaces are available.  */
-  int unshare_flags;
 
   uid_t host_uid;
   gid_t host_gid;
@@ -46,7 +34,7 @@ struct crun_container_s
   uid_t container_uid;
   gid_t container_gid;
 
-  struct remount_s *remounts;
+  void *private_data;
 };
 
 struct crun_run_options
