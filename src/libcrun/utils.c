@@ -194,7 +194,11 @@ check_running_in_user_namespace (libcrun_error_t *err)
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open file /proc/self/uid_map");
 
-  len = read (fd, buffer, sizeof (buffer) - 1);
+  do
+    {
+      len = read (fd, buffer, sizeof (buffer) - 1);
+    }
+  while (len < 0 && errno == EINTR);
   if (len < 0)
     return crun_make_error (err, errno, "error reading from /proc/self/uid_map");
   buffer[len] = '\0';
