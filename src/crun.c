@@ -40,7 +40,7 @@ struct commands_s
 static int
 crun_command_not_implemented (struct crun_global_arguments *global_args, int argc, char **arg, char **error)
 {
-  return crun_static_error (error, 0, "sadly, this wasn't implemented yet");
+  return crun_make_error (error, 0, "sadly, this wasn't implemented yet");
 }
 
 enum

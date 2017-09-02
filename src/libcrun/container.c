@@ -92,17 +92,17 @@ check_directories (struct crun_run_options *opts, const char *id, char **err)
 
   dir = get_state_directory (opts, id);
   if (UNLIKELY (dir == NULL))
-        return crun_static_error (err, 0, "cannot get state directory");
+        return crun_make_error (err, 0, "cannot get state directory");
 
   ret = crun_path_exists (dir, 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (ret)
-    return crun_static_error (err, 0, "container '%s' already exists", id);
+    return crun_make_error (err, 0, "container '%s' already exists", id);
 
   if (UNLIKELY (mkdir (dir, 0700) < 0))
-    return crun_static_error (err, 0, "cannot create state directory for '%s'", id);
+    return crun_make_error (err, 0, "cannot create state directory for '%s'", id);
 
   return 0;
 }
@@ -129,9 +129,9 @@ set_uid_gid (crun_container *container, char **err)
   gid_t gid = container->container_gid;
 
   if (gid && setgid (gid) < 0)
-    return crun_static_error (err, errno, "setgid");
+    return crun_make_error (err, errno, "setgid");
   if (uid && setuid (uid) < 0)
-    return crun_static_error (err, errno, "setuid");
+    return crun_make_error (err, errno, "setuid");
   return 0;
 }
 
@@ -159,7 +159,7 @@ container_load (crun_container *container, struct crun_run_options *opts)
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
     {
-      ret = crun_static_error (&err, errno, "realpath");
+      ret = crun_make_error (&err, errno, "realpath");
       goto out;
     }
 
@@ -186,7 +186,7 @@ container_load (crun_container *container, struct crun_run_options *opts)
   if (def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       {
-        ret = crun_static_error (&err, errno, "chdir");
+        ret = crun_make_error (&err, errno, "chdir");
         goto out;
       }
 
@@ -196,20 +196,20 @@ container_load (crun_container *container, struct crun_run_options *opts)
 
   if (clearenv ())
     {
-      ret = crun_static_error (&err, 0, "clearenv");
+      ret = crun_make_error (&err, 0, "clearenv");
       goto out;
     }
 
   for (i = 0; i < def->process->env_len; i++)
     if (putenv (def->process->env[i]) < 0)
       {
-        ret = crun_static_error (&err, 0, "putenv '%s'", def->process->env[i]);
+        ret = crun_make_error (&err, 0, "putenv '%s'", def->process->env[i]);
         goto out;
       }
 
   if (UNLIKELY (execvp (def->process->args[0], def->process->args) < 0))
     {
-      ret = crun_static_error (&err, errno, "exec the container process");
+      ret = crun_make_error (&err, errno, "exec the container process");
       goto out;
     }
 
@@ -225,13 +225,13 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
   int detach = opts->detach;
 
   if (UNLIKELY (def->root == NULL))
-    return crun_static_error (err, 0, "invalid config file, no 'root' block specified");
+    return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
   if (UNLIKELY (def->process == NULL))
-    return crun_static_error (err, 0, "invalid config file, no 'process' block specified");
+    return crun_make_error (err, 0, "invalid config file, no 'process' block specified");
   if (UNLIKELY (def->linux == NULL))
-    return crun_static_error (err, 0, "invalid config file, no 'linux' block specified");
+    return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
   if (UNLIKELY (def->mounts == NULL))
-    return crun_static_error (err, 0, "invalid config file, no 'mounts' block specified");
+    return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
 
   ret = check_directories (opts, opts->id, err);
   if (UNLIKELY (ret < 0))
@@ -239,19 +239,19 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
 
   if (container->host_uid == 0)
     if (UNLIKELY (setgroups (0, NULL) < 0))
-      return crun_static_error (err, errno, "setgroups");
+      return crun_make_error (err, errno, "setgroups");
 
   if (detach)
     {
       ret = fork ();
       if (ret < 0)
-        return crun_static_error (err, 0, "fork");
+        return crun_make_error (err, 0, "fork");
       if (ret)
         return 0;
 
       ret = detach_process ();
       if (ret < 0)
-        return crun_static_error (err, errno, "detach process");
+        return crun_make_error (err, errno, "detach process");
     }
 
   ret = libcrun_set_namespaces (container, err);
@@ -261,7 +261,7 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
   /* We need to fork to join the new PID namespace.  */
   ret = fork ();
   if (ret < 0)
-    return crun_static_error (err, errno, "fork to new PID namespace");
+    return crun_make_error (err, errno, "fork to new PID namespace");
   if (ret == 0)
     {
       container_load (container, opts);
@@ -276,7 +276,7 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, ch
         {
           if (errno == EINTR)
             continue;
-          return crun_static_error (err, errno, "waitpid");
+          return crun_make_error (err, errno, "waitpid");
         }
       if (WIFEXITED (status) || WIFSIGNALED (status))
         return WEXITSTATUS (status);

@@ -63,7 +63,7 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
 }
 
 int
-crun_static_error (char **err, int status, const char *msg, ...)
+crun_make_error (char **err, int status, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
@@ -80,7 +80,7 @@ crun_path_exists (const char *path, int readonly, char **err)
 {
   int ret = access (path, readonly ? R_OK : W_OK);
   if (UNLIKELY (ret < 0 && errno != ENOENT))
-    return crun_static_error (err, errno, "accessing file '%s'", path);
+    return crun_make_error (err, errno, "accessing file '%s'", path);
   return !ret;
 }
 
@@ -120,11 +120,11 @@ write_file (const char *name, const void *data, size_t len, char **err)
   cleanup_close int fd = open (name, O_WRONLY);
   int ret;
   if (UNLIKELY (fd < 0))
-    return crun_static_error (err, errno, "writing file '%s'", name);
+    return crun_make_error (err, errno, "writing file '%s'", name);
 
   ret = write (fd, data, len);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "writing file '%s'", name);
+    return crun_make_error (err, errno, "writing file '%s'", name);
 
   return ret;
 }
@@ -155,7 +155,7 @@ ensure_directory_internal (char *path, size_t len, int mode, char **err)
 
   ret = mkdir (path, mode);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "creating file '%s'", path);
+    return crun_make_error (err, errno, "creating file '%s'", path);
   return 0;
 }
 
@@ -185,13 +185,13 @@ create_file_if_missing_at (int dirfd, const char *file, char **err)
 {
   int ret = faccessat (dirfd, file, R_OK, 0);
   if (UNLIKELY (ret < 0 && errno != ENOENT))
-    return crun_static_error (err, errno, "accessing file '%s'", file);
+    return crun_make_error (err, errno, "accessing file '%s'", file);
 
   if (ret)
     {
       cleanup_close int fd_write = openat (dirfd, file, O_CREAT | O_WRONLY, 0700);
       if (fd_write < 0)
-        return crun_static_error (err, errno, "creating file '%s'", file);
+        return crun_make_error (err, errno, "creating file '%s'", file);
     }
   return 0;
 }
@@ -205,11 +205,11 @@ check_running_in_user_namespace (char **err)
   if (UNLIKELY (fd < 0) && errno == ENOENT)
     return 0;
   if (UNLIKELY (fd < 0))
-    return crun_static_error (err, errno, "open file /proc/self/uid_map");
+    return crun_make_error (err, errno, "open file /proc/self/uid_map");
 
   len = read (fd, buffer, sizeof (buffer) - 1);
   if (len < 0)
-    return crun_static_error (err, errno, "error reading from /proc/self/uid_map");
+    return crun_make_error (err, errno, "error reading from /proc/self/uid_map");
   buffer[len] = '\0';
   return strstr (buffer, "4294967295") ? 1 : 0;
 }

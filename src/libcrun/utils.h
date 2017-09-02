@@ -43,7 +43,7 @@ int xasprintf (char **str, const char *fmt, ...);
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
-int crun_static_error (char **err, int status, const char *msg, ...);
+int crun_make_error (char **err, int status, const char *msg, ...);
 
 int crun_path_exists (const char *path, int readonly, char **err);
 

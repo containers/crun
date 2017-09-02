@@ -76,14 +76,14 @@ libcrun_set_namespaces (crun_container *container, char **err)
     {
       int value = find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_static_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
+        return crun_make_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
       flags |= value;
     }
 
   container->unshare_flags = flags;
 
   if (UNLIKELY (unshare (flags) < 0))
-    return crun_static_error (err, errno, "unshare");
+    return crun_make_error (err, errno, "unshare");
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -95,10 +95,10 @@ libcrun_set_namespaces (crun_container *container, char **err)
       value = find_namespace (def->linux->namespaces[i]->type);
       fd = open (def->linux->namespaces[i]->path, O_RDONLY);
       if (UNLIKELY (fd < 0))
-        return crun_static_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+        return crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
 
       if (UNLIKELY (setns (fd, value) < 0))
-        return crun_static_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
+        return crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
     }
 
   return 0;
@@ -190,13 +190,13 @@ do_mount (crun_container *container,
     }
    ret = mount (source, target, filesystemtype, mountflags, data);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "mount '%s' to '%s'", source, target);
+    return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
 
   if (mountflags & ALL_PROPAGATIONS)
     {
       ret = mount ("none", target, "", mountflags & ALL_PROPAGATIONS, "");
       if (UNLIKELY (ret < 0))
-        return crun_static_error (err, errno, "mount '%s' to '%s'", source, target);
+        return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
     }
 
   return ret;
@@ -252,7 +252,7 @@ create_dev (crun_container *container, int devfd, struct device_s *device, const
       if (UNLIKELY (ret < 0 && errno == EEXIST))
         return 0;
       if (UNLIKELY (ret < 0))
-        return crun_static_error (err, errno, "mknod '%s'", basename);
+        return crun_make_error (err, errno, "mknod '%s'", basename);
     }
   return 0;
 }
@@ -268,11 +268,11 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
   oci_container *def = container->container_def;
 
   if (UNLIKELY (dirfd < 0))
-    return crun_static_error (err, errno, "open rootfs directory '%s'", rootfs);
+    return crun_make_error (err, errno, "open rootfs directory '%s'", rootfs);
 
   devfd = openat (dirfd, "dev", O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (devfd < 0))
-    return crun_static_error (err, errno, "open /dev directory in '%s'", rootfs);
+    return crun_make_error (err, errno, "open /dev directory in '%s'", rootfs);
 
   for (i = 0; i < def->linux->devices_len; i++)
     {
@@ -295,23 +295,23 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
 
   ret = symlinkat ("/proc/self/fd", devfd, "fd");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "creating symlink for /dev/fd");
+    return crun_make_error (err, errno, "creating symlink for /dev/fd");
 
   ret = symlinkat ("/proc/self/fd/0", devfd, "stdin");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "creating symlink for /dev/stdin");
+    return crun_make_error (err, errno, "creating symlink for /dev/stdin");
 
   ret = symlinkat ("/proc/self/fd/1", devfd, "stdout");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "creating symlink for /dev/stdout");
+    return crun_make_error (err, errno, "creating symlink for /dev/stdout");
 
   ret = symlinkat ("/proc/self/fd/2", devfd, "stderr");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "creating symlink for /dev/stderr");
+    return crun_make_error (err, errno, "creating symlink for /dev/stderr");
 
   ret = symlinkat ("/proc/kcore", devfd, "core");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "creating symlink for /dev/core");
+    return crun_make_error (err, errno, "creating symlink for /dev/core");
 
   return 0;
 }
@@ -354,21 +354,21 @@ do_pivot (crun_container *container, const char *rootfs, char **err)
   cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY);
 
   if (UNLIKELY (oldrootfd < 0))
-    return crun_static_error (err, errno, "open '/'");
+    return crun_make_error (err, errno, "open '/'");
   if (UNLIKELY (newrootfd < 0))
-    return crun_static_error (err, errno, "open '%s'", rootfs);
+    return crun_make_error (err, errno, "open '%s'", rootfs);
 
   ret = fchdir (newrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "fchdir '%s'", rootfs);
+    return crun_make_error (err, errno, "fchdir '%s'", rootfs);
 
   ret = pivot_root (".", ".");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "pivot_root");
+    return crun_make_error (err, errno, "pivot_root");
 
   ret = fchdir (oldrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "fchdir '%s'", rootfs);
+    return crun_make_error (err, errno, "fchdir '%s'", rootfs);
 
   ret = do_mount (container, "", ".", "", MS_PRIVATE | MS_REC, "", 0, err);
   if (UNLIKELY (ret < 0))
@@ -376,11 +376,11 @@ do_pivot (crun_container *container, const char *rootfs, char **err)
 
   ret = umount2 (".", MNT_DETACH);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "umount oldroot");
+    return crun_make_error (err, errno, "umount oldroot");
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "chdir to newroot");
+    return crun_make_error (err, errno, "chdir to newroot");
 
   return 0;
 }
@@ -629,7 +629,7 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
 
   ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
   if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
-    return crun_static_error (err, errno, "prctl reset ambient");
+    return crun_make_error (err, errno, "prctl reset ambient");
 
   for (cap = 0; cap <= CAP_LAST_CAP; cap++)
     if ((cap < 32 && CAP_TO_MASK_0 (cap) & caps->ambient[0])
@@ -637,7 +637,7 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
       {
         ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, cap, 0, 0);
         if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
-          return crun_static_error (err, errno, "prctl ambient raise");
+          return crun_make_error (err, errno, "prctl ambient raise");
       }
 
   for (cap = 0; cap <= CAP_LAST_CAP; cap++)
@@ -646,7 +646,7 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
       {
         ret = prctl (PR_CAPBSET_DROP, cap, 0, 0, 0);
         if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
-          return crun_static_error (err, errno, "prctl drop bounding");
+          return crun_make_error (err, errno, "prctl drop bounding");
       }
 
   data[0].effective = caps->effective[0];
@@ -658,11 +658,11 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, char **err)
 
   ret = capset (&hdr, data) < 0;
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, errno, "capset");
+    return crun_make_error (err, errno, "capset");
 
   if (no_new_privs)
     if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
-      return crun_static_error (err, errno, "no new privs");
+      return crun_make_error (err, errno, "no new privs");
 
   return 0;
 }
@@ -793,10 +793,10 @@ libcrun_set_rlimits (crun_container *container, char **err)
         char *type = def->process->rlimits[i]->type;
         int resource = get_rlimit_resource (type);
         if (UNLIKELY (resource < 0))
-          return crun_static_error (err, 0, "invalid rlimit '%s'", type);
+          return crun_make_error (err, 0, "invalid rlimit '%s'", type);
         limit.rlim_cur = def->process->rlimits[i]->soft;
         limit.rlim_max = def->process->rlimits[i]->hard;
         if (UNLIKELY (setrlimit (resource, &limit) < 0))
-          return crun_static_error (err, errno, "setrlimit '%s'", type);
+          return crun_make_error (err, errno, "setrlimit '%s'", type);
       }
 }

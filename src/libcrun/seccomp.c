@@ -55,7 +55,7 @@ get_seccomp_operator (const char *name, char **err)
   if (strcmp (name, "SCMP_CMP_MASKED_EQ") == 0)
     return SCMP_CMP_MASKED_EQ;
 
-  crun_static_error (err, 0, "seccomp get operator", name);
+  crun_make_error (err, 0, "seccomp get operator", name);
   return 0;
 }
 
@@ -73,7 +73,7 @@ get_seccomp_action (const char *name, char **err)
   if (strcmp (name, "SCMP_ACT_TRACE") == 0)
     return SCMP_ACT_TRACE (EPERM);
 
-  crun_static_error (err, 0, "seccomp get action", name);
+  crun_make_error (err, 0, "seccomp get action", name);
   return 0;
 }
 
@@ -127,7 +127,7 @@ libcrun_set_seccomp (crun_container *container, char **err)
 
   ctx = seccomp_init (action);
   if (ctx == NULL)
-    return crun_static_error (err, 0, "error seccomp_init");
+    return crun_make_error (err, 0, "error seccomp_init");
 
   for (i = 0; i < seccomp->architectures_len; i++)
     {
@@ -141,11 +141,11 @@ libcrun_set_seccomp (crun_container *container, char **err)
       make_lowercase (lowercase_arch);
       arch_token = seccomp_arch_resolve_name (lowercase_arch);
       if (arch_token == 0)
-        return crun_static_error (err, 0, "seccomp unknown architecture %s", arch);
+        return crun_make_error (err, 0, "seccomp unknown architecture %s", arch);
 
       ret = seccomp_arch_add (ctx, arch_token);
       if (ret < 0 && ret != -EEXIST)
-        return crun_static_error (err, 0, "seccomp adding architecture");
+        return crun_make_error (err, 0, "seccomp adding architecture");
     }
 
   for (i = 0; i < seccomp->syscalls_len; i++)
@@ -162,7 +162,7 @@ libcrun_set_seccomp (crun_container *container, char **err)
             {
               ret = seccomp_rule_add (ctx, action, syscall, 0);
               if (UNLIKELY (ret < 0))
-                return crun_static_error (err, 0, "seccomp_rule_add");
+                return crun_make_error (err, 0, "seccomp_rule_add");
             }
           else
             {
@@ -185,14 +185,14 @@ libcrun_set_seccomp (crun_container *container, char **err)
                                             k,
                                             arg_cmp);
               if (UNLIKELY (ret < 0))
-                return crun_static_error (err, 0, "seccomp_rule_add_array");
+                return crun_make_error (err, 0, "seccomp_rule_add_array");
             }
         }
     }
 
   ret = seccomp_load (ctx);
   if (UNLIKELY (ret < 0))
-    return crun_static_error (err, 0, "seccomp load");
+    return crun_make_error (err, 0, "seccomp load");
 
   return 0;
 }
