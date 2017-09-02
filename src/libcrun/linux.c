@@ -202,33 +202,70 @@ do_mount (crun_container *container,
   return ret;
 }
 
-struct needed_devs_s
+struct device_s
 {
-  const char *name;
-  char type;
+  const char *path;
+  char *type;
   int major;
   int minor;
   int mode;
 };
 
-struct needed_devs_s needed_devs[] =
+struct device_s needed_devs[] =
   {
-    {"/dev/null", 'c', 1, 3, 0666},
-    {"/dev/zero", 'c', 1, 5, 0666},
-    {"/dev/full", 'c', 1, 7, 0666},
-    {"/dev/tty", 'c', 5, 0, 0666},
-    {"/dev/random", 'c', 1, 8, 0666},
-    {"/dev/urandom", 'c', 1, 9, 0666},
+    {"/dev/null", "c", 1, 3, 0666},
+    {"/dev/zero", "c", 1, 5, 0666},
+    {"/dev/full", "c", 1, 7, 0666},
+    {"/dev/tty", "c", 5, 0, 0666},
+    {"/dev/random", "c", 1, 8, 0666},
+    {"/dev/urandom", "c", 1, 9, 0666},
     {NULL, '\0', 0, 0, 0}
   };
+
+static int
+create_dev (crun_container *container, int devfd, struct device_s *device, const char *rootfs, int binds, char **err)
+{
+  int ret;
+  dev_t dev;
+  mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
+  const char *fullname = device->path;
+  /* Skip the common prefix /dev.  */
+  const char *basename = device->path + 5;
+  if (binds)
+    {
+      cleanup_free char *path_to_container = NULL;
+      xasprintf (&path_to_container, "%s/dev/%s", rootfs, basename);
+
+      ret = create_file_if_missing_at (devfd, basename, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = do_mount (container, fullname, path_to_container, "", MS_BIND | MS_PRIVATE, "", 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      dev = makedev (device->major, device->minor);
+      ret = mknodat (devfd, basename, device->mode | type, dev);
+      /* We don't fail when the file already exists.  */
+      if (UNLIKELY (ret < 0 && errno == EEXIST))
+        return 0;
+      if (UNLIKELY (ret < 0))
+        return crun_static_error (err, errno, "mknod '%s'", basename);
+    }
+  return 0;
+}
 
 static int
 create_missing_devs (crun_container *container, const char *rootfs, int binds, char **err)
 {
   int ret;
-  struct needed_devs_s *it;
+  size_t i;
+  struct device_s *it;
   cleanup_close int dirfd = open (rootfs, O_DIRECTORY | O_RDONLY);
   cleanup_close int devfd = -1;
+  oci_container *def = container->container_def;
 
   if (UNLIKELY (dirfd < 0))
     return crun_static_error (err, errno, "open rootfs directory '%s'", rootfs);
@@ -237,37 +274,23 @@ create_missing_devs (crun_container *container, const char *rootfs, int binds, c
   if (UNLIKELY (devfd < 0))
     return crun_static_error (err, errno, "open /dev directory in '%s'", rootfs);
 
-  for (it = needed_devs; it->name; it++)
+  for (i = 0; i < def->linux->devices_len; i++)
     {
-      dev_t dev;
-      mode_t type = (it->type == 'c') ? S_IFCHR : S_IFBLK;
-      const char *fullname = it->name;
-      /* Skip the common prefix /dev.  */
-      const char *basename = it->name + 5;
-      if (binds)
-        {
-          cleanup_free char *path_to_container = NULL;
-          xasprintf (&path_to_container, "%s/dev/%s", rootfs, basename);
+      struct device_s device = {def->linux->devices[i]->path,
+                                     def->linux->devices[i]->type,
+                                     def->linux->devices[i]->major,
+                                     def->linux->devices[i]->minor,
+                                     def->linux->devices[i]->file_mode};
+      ret = create_dev (container, devfd, it, rootfs, binds, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
-          ret = create_file_if_missing_at (devfd, basename, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = do_mount (container, fullname, path_to_container, "", MS_BIND | MS_PRIVATE, "", 0, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else
-        {
-
-          dev = makedev (it->major, it->minor);
-          ret = mknodat (devfd, basename, it->mode | type, dev);
-          /* We don't fail when the file already exists.  */
-          if (UNLIKELY (ret < 0 && errno == EEXIST))
-            continue;
-          if (UNLIKELY (ret < 0))
-            return crun_static_error (err, errno, "mknod '%s'", basename);
-        }
+  for (it = needed_devs; it->path; it++)
+    {
+      ret = create_dev (container, devfd, it, rootfs, binds, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = symlinkat ("/proc/self/fd", devfd, "fd");
