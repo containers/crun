@@ -34,6 +34,8 @@
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <grp.h>
+#include <signal.h>
 
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
@@ -65,13 +67,19 @@ find_namespace (const char *name)
   return -1;
 }
 
+static int
+syscall_clone (unsigned long flags, void *child_stack)
+{
+  return (int) syscall (__NR_clone, flags, child_stack);
+}
 
-int
-libcrun_set_namespaces (crun_container *container, libcrun_error_t *err)
+pid_t
+libcrun_run_container (crun_container *container, int detach, container_entrypoint entrypoint, void *args, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   size_t i;
   int flags = 0;
+  pid_t pid;
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
       int value = find_namespace (def->linux->namespaces[i]->type);
@@ -82,8 +90,26 @@ libcrun_set_namespaces (crun_container *container, libcrun_error_t *err)
 
   container->unshare_flags = flags;
 
-  if (UNLIKELY (unshare (flags) < 0))
+  pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
+  if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "unshare");
+
+  if (pid > 0)
+    return pid;
+
+  if (detach && setsid () < 0)
+    {
+      crun_make_error (err, errno, "unshare");
+      goto out;
+    }
+
+  /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
+  if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
+    if (UNLIKELY (setgroups (0, NULL) < 0))
+      {
+        crun_make_error (err, errno, "setgroups");
+        goto out;
+      }
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -95,13 +121,23 @@ libcrun_set_namespaces (crun_container *container, libcrun_error_t *err)
       value = find_namespace (def->linux->namespaces[i]->type);
       fd = open (def->linux->namespaces[i]->path, O_RDONLY);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+        {
+          crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+          goto out;
+        }
 
       if (UNLIKELY (setns (fd, value) < 0))
-        return crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
+        {
+          crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
+          goto out;
+        }
     }
 
-  return 0;
+  entrypoint (args);
+  _exit (1);
+ out:
+  error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);
+  return 1;
 }
 
 struct propagation_flags_s

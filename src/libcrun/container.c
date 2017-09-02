@@ -29,7 +29,6 @@
 #include <sched.h>
 #include <sys/wait.h>
 #include <string.h>
-#include <grp.h>
 
 crun_container *
 crun_container_load (const char *path, libcrun_error_t *error)
@@ -138,9 +137,19 @@ set_uid_gid (crun_container *container, libcrun_error_t *err)
   return 0;
 }
 
-static void
-container_load (crun_container *container, struct crun_run_options *opts)
+struct container_entrypoint_s
 {
+  crun_container *container;
+  struct crun_run_options *opts;
+};
+
+/* Entrypoint to the container.  */
+static void
+container_run (void *args)
+{
+  struct container_entrypoint_s *entrypoint_args = args;
+  crun_container *container = entrypoint_args->container;
+  struct crun_run_options *opts = entrypoint_args->opts;
   libcrun_error_t err = NULL;
   int ret;
   size_t i;
@@ -225,6 +234,7 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, li
   oci_container *def = container->container_def;
   int ret;
   int detach = opts->detach;
+  struct container_entrypoint_s container_args = {.container = container, .opts = opts};
 
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
@@ -239,10 +249,6 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, li
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (container->host_uid == 0)
-    if (UNLIKELY (setgroups (0, NULL) < 0))
-      return crun_make_error (err, errno, "setgroups");
-
   if (detach)
     {
       ret = fork ();
@@ -256,19 +262,12 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, li
         return crun_make_error (err, errno, "detach process");
     }
 
-  ret = libcrun_set_namespaces (container, err);
+  ret = libcrun_run_container (container, opts->detach, container_run, &container_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  /* We need to fork to join the new PID namespace.  */
-  ret = fork ();
-  if (ret < 0)
-    return crun_make_error (err, errno, "fork to new PID namespace");
-  if (ret == 0)
-    {
-      container_load (container, opts);
-      _exit (1);
-    }
+  if (opts->detach)
+    return ret;
 
   while (1)
     {

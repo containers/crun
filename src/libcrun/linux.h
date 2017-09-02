@@ -26,7 +26,13 @@
 # include <oci_runtime_spec.h>
 # include "container.h"
 
-int libcrun_set_namespaces (crun_container *container, libcrun_error_t *err);
+typedef void (*container_entrypoint) (void *args);
+
+pid_t libcrun_run_container (crun_container *container,
+                             int detach,
+                             container_entrypoint entrypoint,
+                             void *args,
+                             libcrun_error_t *err);
 int libcrun_set_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err);
 int libcrun_set_usernamespace (crun_container *container, libcrun_error_t *err);
 int libcrun_set_caps (crun_container *container, libcrun_error_t *err);

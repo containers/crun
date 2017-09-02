@@ -150,7 +150,7 @@ main (int argc, char **argv)
     error (EXIT_FAILURE, 0, "unknown command %s", argv[first_argument]);
 
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
-  if (ret)
+  if (ret && err)
     error (EXIT_FAILURE, err->status, "%s", err->msg);
   return ret;
 }
