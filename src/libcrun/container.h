@@ -58,4 +58,7 @@ int libcrun_container_run (crun_container *container, struct crun_run_options *o
 
 int libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err);
 
+int
+libcrun_kill_container (const char *state_root, const char *id, int signal, libcrun_error_t *err);
+
 #endif

@@ -322,6 +322,21 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
 }
 
 int
+libcrun_kill_container (const char *state_root, const char *id, int signal, libcrun_error_t *err)
+{
+  int ret;
+  struct container_status_s status;
+  ret = read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = kill (status.pid, signal);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "kill container");
+  return 0;
+}
+
+int
 libcrun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
