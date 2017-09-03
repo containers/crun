@@ -116,10 +116,10 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
     if (chdir (bundle) < 0)
       error (EXIT_FAILURE, errno, "chdir '%s' failed", bundle);
     
-  container = crun_container_load ("config.json", err);
+  container = libcrun_container_load ("config.json", err);
   if (container == NULL)
     error (EXIT_FAILURE, 0, "error loading config.json: %s", err);
 
   run_options.id = argv[first_arg];
-  return crun_container_run (container, &run_options, err);
+  return libcrun_container_run (container, &run_options, err);
 }

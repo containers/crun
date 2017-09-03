@@ -31,7 +31,7 @@
 #include <string.h>
 
 crun_container *
-crun_container_load (const char *path, libcrun_error_t *error)
+libcrun_container_load (const char *path, libcrun_error_t *error)
 {
   crun_container *container;
   oci_container *container_def;
@@ -54,12 +54,12 @@ crun_container_load (const char *path, libcrun_error_t *error)
 }
 
 static char *
-get_run_directory (struct crun_run_options *opts)
+get_run_directory (const char *state_root)
 {
   char *root = NULL;
 
-  if (opts->state_root)
-    root = xstrdup (opts->state_root);
+  if (state_root)
+    root = xstrdup (state_root);
   if (root == NULL)
     {
       const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
@@ -73,10 +73,10 @@ get_run_directory (struct crun_run_options *opts)
 }
 
 static char *
-get_state_directory (struct crun_run_options *opts, const char *id)
+get_state_directory (const char *state_root, const char *id)
 {
   char *ret;
-  cleanup_free char *root = get_run_directory (opts);
+  cleanup_free char *root = get_run_directory (state_root);
   xasprintf (&ret, "%s/%s", root, id);
   return ret;
 }
@@ -85,14 +85,14 @@ static int
 check_directories (struct crun_run_options *opts, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *dir = NULL;
-  const char *run_directory = get_run_directory (opts);
+  const char *run_directory = get_run_directory (opts->state_root);
   int ret;
 
   ret = ret = crun_ensure_directory (run_directory, 0700, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  dir = get_state_directory (opts, id);
+  dir = get_state_directory (opts->state_root, id);
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
@@ -226,11 +226,11 @@ container_run (void *args)
   error (EXIT_FAILURE, err->status, "%s", err->msg);
 }
 
-static int
-delete_container (crun_container *container, struct crun_run_options *opts, int force, libcrun_error_t *err)
+int
+libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
-  cleanup_free char *dir = get_state_directory (opts, opts->id);
+  cleanup_free char *dir = get_state_directory (state_root, id);
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
@@ -242,7 +242,7 @@ delete_container (crun_container *container, struct crun_run_options *opts, int 
 }
 
 int
-crun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *err)
+libcrun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -294,7 +294,7 @@ crun_container_run (crun_container *container, struct crun_run_options *opts, li
         }
       if (WIFEXITED (status) || WIFSIGNALED (status))
         {
-          delete_container (container, opts, 1, err);
+          libcrun_delete_container (opts->state_root, opts->id, 1, err);
           return WEXITSTATUS (status);
         }
     }

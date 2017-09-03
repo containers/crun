@@ -52,8 +52,10 @@ struct crun_run_options
 
 typedef struct crun_container_s crun_container;
 
-crun_container *crun_container_load (const char *path, libcrun_error_t *error);
+crun_container *libcrun_container_load (const char *path, libcrun_error_t *error);
 
-int crun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *error);
+int libcrun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *error);
+
+int libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err);
 
 #endif
