@@ -259,9 +259,18 @@ do_mount (crun_container *container,
 
   if (mountflags & ALL_PROPAGATIONS)
     {
-      ret = mount ("none", target, "", mountflags & ALL_PROPAGATIONS, "");
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
+      unsigned long rec = mountflags & MS_REC;
+      unsigned long propagations = mountflags & (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE);
+      unsigned long all_propagations[] = {MS_SHARED, MS_PRIVATE, MS_SLAVE, MS_UNBINDABLE, 0};
+      size_t s;
+      for (s = 0; all_propagations[s]; s++)
+        {
+          if (!(propagations & all_propagations[s]))
+            continue;
+          ret = mount ("none", target, "", rec | all_propagations[s], "");
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "set propagation for '%s'", target);
+        }
     }
 
   return ret;
