@@ -48,29 +48,43 @@ crun_command_not_implemented (struct crun_global_arguments *global_args, int arg
 enum
   {
     COMMAND_CREATE = 1000,
-    COMMAND_RUN,
-    COMMAND_EXEC,
-    COMMAND_KILL,
-    COMMAND_LIST,
-    COMMAND_STATE,
-    COMMAND_START,
     COMMAND_DELETE,
-    COMMAND_SPEC
+    COMMAND_EXEC,
+    COMMAND_LIST,
+    COMMAND_KILL,
+    COMMAND_RUN,
+    COMMAND_SPEC,
+    COMMAND_START,
+    COMMAND_STATE
   };
 
 struct commands_s commands[] =
   {
     { COMMAND_CREATE, "create", crun_command_not_implemented},
-    { COMMAND_RUN, "run", crun_command_run},
-    { COMMAND_EXEC, "exec", crun_command_not_implemented},
-    { COMMAND_KILL, "kill", crun_command_kill},
-    { COMMAND_LIST, "list", crun_command_not_implemented},
-    { COMMAND_STATE, "state", crun_command_not_implemented},
-    { COMMAND_START, "start", crun_command_not_implemented},
     { COMMAND_DELETE, "delete", crun_command_delete},
+    { COMMAND_EXEC, "exec", crun_command_not_implemented},
+    { COMMAND_LIST, "list", crun_command_not_implemented},
+    { COMMAND_KILL, "kill", crun_command_kill},
+    { COMMAND_RUN, "run", crun_command_run},
     { COMMAND_SPEC, "spec", crun_command_not_implemented},
+    { COMMAND_START, "start", crun_command_not_implemented},
+    { COMMAND_STATE, "state", crun_command_not_implemented},
     { 0, 0}
   };
+
+static char doc[] =                                                  \
+  "\nCOMMANDS:\n"                                                    \
+  "\tcreate - create a container\n"                                  \
+  "\tdelete - remove definition for a container\n"                   \
+  "\texec   - exec a command in a running container\n"               \
+  "\tlist   - list known containers\n"                               \
+  "\tkill   - send a signal to the container init process\n"         \
+  "\trun    - run a container\n"                                     \
+  "\tspec   - generate a configuration file\n"                       \
+  "\tstart  - start a container\n"                                   \
+  "\tstate  - output the state of a container\n"                     \
+  ;
+static char args_doc[] = "COMMAND [OPTION...]";
 
 static struct commands_s *
 get_command (const char *arg)
@@ -94,8 +108,6 @@ enum
 const char *argp_program_version = PACKAGE_STRING;
 const char *argp_program_bug_address = PACKAGE_BUGREPORT;
 
-static char doc[] = "OCI runtime";
-
 static struct argp_option options[] =
   {
     {"debug", OPTION_DEBUG, 0, 0, "produce verbose output" },
@@ -104,8 +116,6 @@ static struct argp_option options[] =
     {"root", OPTION_ROOT, "DIR",  0},
     { 0 }
   };
-
-static char args_doc[] = "COMMAND [OPTION]...";
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
