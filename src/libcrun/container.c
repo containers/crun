@@ -95,7 +95,6 @@ container_run (void *args)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container *container = entrypoint_args->container;
-  struct libcrun_run_options *opts = entrypoint_args->opts;
   libcrun_error_t err = NULL;
   int ret;
   size_t i;

@@ -40,8 +40,6 @@ enum
     OPTION_PRESERVE_FDS
   };
 
-static char *bundle = NULL;
-
 struct delete_options_s
 {
   int force;
@@ -82,7 +80,6 @@ int
 crun_command_delete (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  libcrun_container *container;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &delete_options);
 

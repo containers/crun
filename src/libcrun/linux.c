@@ -364,7 +364,7 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
                                      def->linux->devices[i]->major,
                                      def->linux->devices[i]->minor,
                                      def->linux->devices[i]->file_mode};
-      ret = create_dev (container, devfd, it, rootfs, binds, err);
+      ret = create_dev (container, devfd, &device, rootfs, binds, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -471,7 +471,6 @@ do_pivot (libcrun_container *container, const char *rootfs, libcrun_error_t *err
 static int
 get_default_flags (libcrun_container *container, const char *destination, char **data)
 {
-  int userflags = container->host_uid == 0 ? 0 : MS_PRIVATE | MS_REC;
   if (strcmp (destination, "/proc") == 0)
       return 0;
   if (strcmp (destination, "/dev/cgroup") == 0
@@ -528,7 +527,6 @@ make_remount (char *target, unsigned long flags, char *data, struct remount_s *n
 static int
 finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
 {
-  size_t i;
   int ret;
   struct remount_s *r;
   for (r = get_private_data (container)->remounts; r;)
@@ -607,6 +605,7 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
           get_private_data (container)->remounts = r;
         }
     }
+  return 0;
 }
 
 int
@@ -691,6 +690,7 @@ libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *err)
   ret = write_file ("/proc/self/uid_map", uid_map, uid_map_len, err);
   if (UNLIKELY (ret < 0))
     return ret;
+  return 0;
 }
 
 #define CAP_TO_MASK_0(x) (1L << ((x) & 31))
@@ -866,20 +866,21 @@ get_rlimit_resource (const char *name)
 int
 libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err)
 {
-    oci_container *def = container->container_def;
-    size_t i;
-    if (def->process->rlimits == NULL)
-      return 0;
-    for (i = 0; i < def->process->rlimits_len; i++)
-      {
-        struct rlimit limit;
-        char *type = def->process->rlimits[i]->type;
-        int resource = get_rlimit_resource (type);
-        if (UNLIKELY (resource < 0))
-          return crun_make_error (err, 0, "invalid rlimit '%s'", type);
-        limit.rlim_cur = def->process->rlimits[i]->soft;
-        limit.rlim_max = def->process->rlimits[i]->hard;
-        if (UNLIKELY (setrlimit (resource, &limit) < 0))
-          return crun_make_error (err, errno, "setrlimit '%s'", type);
-      }
+  oci_container *def = container->container_def;
+  size_t i;
+  if (def->process->rlimits == NULL)
+    return 0;
+  for (i = 0; i < def->process->rlimits_len; i++)
+    {
+      struct rlimit limit;
+      char *type = def->process->rlimits[i]->type;
+      int resource = get_rlimit_resource (type);
+      if (UNLIKELY (resource < 0))
+        return crun_make_error (err, 0, "invalid rlimit '%s'", type);
+      limit.rlim_cur = def->process->rlimits[i]->soft;
+      limit.rlim_max = def->process->rlimits[i]->hard;
+      if (UNLIKELY (setrlimit (resource, &limit) < 0))
+        return crun_make_error (err, errno, "setrlimit '%s'", type);
+    }
+  return 0;
 }

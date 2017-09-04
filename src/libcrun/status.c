@@ -81,20 +81,15 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
 int
 libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
 {
-  char buffer[1024];
+  cleanup_free char *buffer;
   char err_buffer[256];
-  int len;
+  int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
-  cleanup_close int fd = open (file, O_RDONLY);
   yajl_val tree;
 
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, 0, "cannot open status file");
-
-  len = read (fd, buffer, sizeof (buffer) - 1);
-  if (UNLIKELY (len < 0))
-    return crun_make_error (err, 0, "cannot read from the status file");
-  buffer[len] = '\0';
+  ret = read_all_file (file, &buffer, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
   if (UNLIKELY (tree == NULL))
@@ -105,6 +100,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     status->pid = strtoull (YAJL_GET_NUMBER (yajl_tree_get (tree, pid_path, yajl_t_number)), NULL, 10);
   }
   yajl_tree_free (tree);
+  return 0;
 }
 
 int
@@ -114,7 +110,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
   const char *run_directory = get_run_directory (state_root);
   int ret;
 
-  ret = ret = crun_ensure_directory (run_directory, 0700, err);
+  ret = crun_ensure_directory (run_directory, 0700, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
