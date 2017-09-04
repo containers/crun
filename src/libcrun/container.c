@@ -291,6 +291,7 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
   int ret;
   cleanup_close int dirfd = -1;
   cleanup_free char *dir = get_state_directory (state_root, id);
+  struct container_status_s status;
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
@@ -298,16 +299,23 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "cannot open directory '%s'", dir);
 
-  if (!force)
+  ret = read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (force)
     {
-      struct container_status_s status;
-      ret = read_container_status (&status, state_root, id, err);
-      if (UNLIKELY (ret < 0))
-          return ret;
+      /* When --force is used, kill the container.  */
+      kill (status.pid, 9);
+    }
+  else
+    {
 
       ret = kill (status.pid, 0);
       if (ret == 0)
-        return crun_make_error (err, errno, "the container '%s' is still running", id);
+        return crun_make_error (err, 0, "the container '%s' is still running", id);
+      if (UNLIKELY (ret < 0 && errno != ESRCH))
+        return crun_make_error (err, errno, "signaling the container");
     }
 
   ret = unlinkat (dirfd, "status", 0);
