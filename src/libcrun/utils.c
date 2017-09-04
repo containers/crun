@@ -186,22 +186,11 @@ create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 int
 check_running_in_user_namespace (libcrun_error_t *err)
 {
-  char buffer[512];
-  ssize_t len;
-  cleanup_close int fd = open ("/proc/self/uid_map", O_RDONLY);
-  if (UNLIKELY (fd < 0) && errno == ENOENT)
-    return 0;
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open file /proc/self/uid_map");
-
-  do
-    {
-      len = read (fd, buffer, sizeof (buffer) - 1);
-    }
-  while (len < 0 && errno == EINTR);
-  if (len < 0)
-    return crun_make_error (err, errno, "error reading from /proc/self/uid_map");
-  buffer[len] = '\0';
+  cleanup_free char *buffer = NULL;
+  size_t len;
+  int ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
   return strstr (buffer, "4294967295") ? 1 : 0;
 }
 
@@ -234,5 +223,54 @@ set_selinux_exec_label (const char *label, libcrun_error_t *err)
         return -1;
       }
 #endif
+  return 0;
+}
+
+int
+read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
+{
+  cleanup_close int fd;
+  int ret;
+  cleanup_free char *buf = NULL;
+  struct stat stat;
+  size_t nread, left;
+
+  do
+    fd = open (path, O_RDONLY);
+  while (fd < 0 && errno == EINTR);
+
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, 0, "error opening file '%s'", path);
+
+  ret = fstat (fd, &stat);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "error stat'ing file '%s'", path);
+
+  /* NUL terminate the buffer.  */
+  buf = xmalloc (stat.st_size + 1);
+  buf[stat.st_size] = '\0';
+  nread = 0;
+  left = stat.st_size;
+  while (left)
+    {
+      do
+        ret = read (fd, buf + nread, left);
+      while (ret < 0 && errno == EINTR);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "error reading from file '%s'", path);
+
+      left -= ret;
+      nread += ret;
+
+      /* File probably changed its size, so return earlier.
+         We don't handle the case when the file grows between the stat
+         and the read here.  */
+      if (ret < left)
+        break;
+    }
+  *out = buf;
+  buf = NULL;
+  if (len)
+    *len = nread;
   return 0;
 }

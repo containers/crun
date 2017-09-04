@@ -58,4 +58,6 @@ int set_selinux_exec_label (const char *label, libcrun_error_t *err);
 
 int add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err);
 
+int read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err);
+
 #endif
