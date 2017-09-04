@@ -104,7 +104,7 @@ cleanup_seccompp (void *p)
 
 
 int
-libcrun_set_seccomp (crun_container *container, libcrun_error_t *err)
+libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;

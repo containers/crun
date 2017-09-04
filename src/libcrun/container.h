@@ -23,7 +23,7 @@
 # include <oci_runtime_spec.h>
 # include "error.h"
 
-struct crun_container_s
+struct libcrun_container_s
 {
   /* Container parsed from the runtime json file.  */
   oci_container *container_def;
@@ -37,7 +37,7 @@ struct crun_container_s
   void *private_data;
 };
 
-struct crun_run_options
+struct libcrun_run_options
 {
   char *state_root;
   char *id;
@@ -50,11 +50,11 @@ struct crun_run_options
   int no_new_keyring : 1;
 };
 
-typedef struct crun_container_s crun_container;
+typedef struct libcrun_container_s libcrun_container;
 
-crun_container *libcrun_container_load (const char *path, libcrun_error_t *error);
+libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *error);
 
-int libcrun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *error);
+int libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *error);
 
 int libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err);
 

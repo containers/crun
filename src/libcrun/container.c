@@ -32,10 +32,10 @@
 #include <fcntl.h>
 #include "status.h"
 
-crun_container *
+libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *error)
 {
-  crun_container *container;
+  libcrun_container *container;
   oci_container *container_def;
   cleanup_free char *oci_error = NULL;
   container_def = oci_container_parse_file (path, 0, &oci_error);
@@ -71,7 +71,7 @@ get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
 }
 
 static int
-set_uid_gid (crun_container *container, libcrun_error_t *err)
+set_uid_gid (libcrun_container *container, libcrun_error_t *err)
 {
   uid_t uid = container->container_uid;
   gid_t gid = container->container_gid;
@@ -85,8 +85,8 @@ set_uid_gid (crun_container *container, libcrun_error_t *err)
 
 struct container_entrypoint_s
 {
-  crun_container *container;
-  struct crun_run_options *opts;
+  libcrun_container *container;
+  struct libcrun_run_options *opts;
 };
 
 /* Entrypoint to the container.  */
@@ -94,8 +94,8 @@ static void
 container_run (void *args)
 {
   struct container_entrypoint_s *entrypoint_args = args;
-  crun_container *container = entrypoint_args->container;
-  struct crun_run_options *opts = entrypoint_args->opts;
+  libcrun_container *container = entrypoint_args->container;
+  struct libcrun_run_options *opts = entrypoint_args->opts;
   libcrun_error_t err = NULL;
   int ret;
   size_t i;
@@ -216,14 +216,14 @@ libcrun_kill_container (const char *state_root, const char *id, int signal, libc
 }
 
 static int
-write_container_status (crun_container *container, struct crun_run_options *opts, pid_t pid, libcrun_error_t *err)
+write_container_status (libcrun_container *container, struct libcrun_run_options *opts, pid_t pid, libcrun_error_t *err)
 {
   libcrun_container_status_t status = {.pid = pid};
   return libcrun_write_container_status (opts->state_root, opts->id, &status, err);
 }
 
 int
-libcrun_container_run (crun_container *container, struct crun_run_options *opts, libcrun_error_t *err)
+libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;

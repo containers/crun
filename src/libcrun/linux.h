@@ -28,15 +28,15 @@
 
 typedef void (*container_entrypoint) (void *args);
 
-pid_t libcrun_run_container (crun_container *container,
+pid_t libcrun_run_container (libcrun_container *container,
                              int detach,
                              container_entrypoint entrypoint,
                              void *args,
                              libcrun_error_t *err);
-int libcrun_set_mounts (crun_container *container, const char *rootfs, libcrun_error_t *err);
-int libcrun_set_usernamespace (crun_container *container, libcrun_error_t *err);
-int libcrun_set_caps (crun_container *container, libcrun_error_t *err);
-int libcrun_set_rlimits (crun_container *container, libcrun_error_t *err);
-int libcrun_set_selinux_exec_label (crun_container *container, libcrun_error_t *err);
+int libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err);
+int libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *err);
+int libcrun_set_caps (libcrun_container *container, libcrun_error_t *err);
+int libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err);
+int libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *err);
 
 #endif
