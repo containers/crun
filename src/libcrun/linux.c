@@ -134,11 +134,20 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
 
   /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
   if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
-    if (UNLIKELY (setgroups (0, NULL) < 0))
-      {
-        crun_make_error (err, errno, "setgroups");
-        goto out;
-      }
+    {
+      gid_t *additional_gids = NULL;
+      size_t additional_gids_len = 0;
+      if (def->process->user)
+        {
+          additional_gids = def->process->user->additional_gids;
+          additional_gids_len = def->process->user->additional_gids_len;
+        }
+      if (UNLIKELY (setgroups (additional_gids_len, additional_gids) < 0))
+        {
+          crun_make_error (err, errno, "setgroups");
+          goto out;
+        }
+    }
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
