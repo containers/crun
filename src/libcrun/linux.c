@@ -201,6 +201,7 @@ static struct propagation_flags_s propagation_flags[] =
     {"nodiratime", MS_NODIRATIME},
     {"noatime", MS_NOATIME},
     {"ro", MS_RDONLY},
+    {"rw", 0},
     {"relatime", MS_RELATIME},
     {"strictatime", MS_STRICTATIME},
     {"synchronous", MS_SYNCHRONOUS},
@@ -208,22 +209,28 @@ static struct propagation_flags_s propagation_flags[] =
   };
 
 static unsigned long
-get_mount_flags (const char *name)
+get_mount_flags (const char *name, int *found)
 {
   struct propagation_flags_s *it;
-
+  if (found)
+    *found = 0;
   for (it = propagation_flags; it->name; it++)
     if (strcmp (it->name, name) == 0)
-      return it->flags;
+      {
+        if (found)
+          *found = 1;
+        return it->flags;
+      }
   return 0;
 }
 
 static unsigned long
 get_mount_flags_or_option (const char *name, char **option)
 {
-  unsigned long flags = get_mount_flags (name);
+  int found;
+  unsigned long flags = get_mount_flags (name, &found);
   cleanup_free char *prev = NULL;
-  if (flags)
+  if (found)
     return flags;
 
   prev = *option;
@@ -283,6 +290,34 @@ do_mount (libcrun_container *container,
     }
 
   return ret;
+}
+
+static int
+do_mount_cgroup (libcrun_container *container,
+                 const char *source,
+                 const char *target,
+                 const char *filesystemtype,
+                 unsigned long mountflags,
+                 const void *data,
+                 libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *cgroup_unified;
+  xasprintf (&cgroup_unified, "%s/unified", target);
+
+  ret = do_mount (container, source, target, "tmpfs", mountflags, "size=1024k", 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = mkdir (cgroup_unified, 0755);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mkdir for '%s' failed", cgroup_unified);
+
+  ret = do_mount (container, source, cgroup_unified, "cgroup2", mountflags, data, 1, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
 }
 
 struct device_s
@@ -590,13 +625,16 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
 
       if (strcmp (type, "cgroup") == 0)
         {
-          /* TODO */
-          continue;
+          ret = do_mount_cgroup (container, source, target, type, flags & ~MS_RDONLY, data, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
         }
-
-      ret = do_mount (container, source, target, type, flags & ~MS_RDONLY, data, skip_labelling, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      else
+        {
+          ret = do_mount (container, source, target, type, flags & ~MS_RDONLY, data, skip_labelling, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       if (flags & MS_RDONLY)
         {
@@ -617,7 +655,7 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   unsigned long rootfsPropagation = 0;
 
   if (def->linux->rootfs_propagation)
-    rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation);
+    rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation, NULL);
   else
     rootfsPropagation = MS_REC | MS_SLAVE;
 
