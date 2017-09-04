@@ -30,7 +30,7 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <fcntl.h>
-#include <yajl/yajl_tree.h>
+#include "status.h"
 
 crun_container *
 libcrun_container_load (const char *path, libcrun_error_t *error)
@@ -53,71 +53,6 @@ libcrun_container_load (const char *path, libcrun_error_t *error)
   container->host_gid = getgid ();
 
   return container;
-}
-
-static char *
-get_run_directory (const char *state_root)
-{
-  char *root = NULL;
-
-  if (state_root)
-    root = xstrdup (state_root);
-  if (root == NULL)
-    {
-      const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
-      if (runtime_dir)
-        xasprintf (&root, "%s/crun", runtime_dir);
-    }
-  if (root == NULL)
-    root = xstrdup ("/run/crun");
-
-  return root;
-}
-
-static char *
-get_state_directory (const char *state_root, const char *id)
-{
-  char *ret;
-  cleanup_free char *root = get_run_directory (state_root);
-  xasprintf (&ret, "%s/%s", root, id);
-  return ret;
-}
-
-static char *
-get_state_directory_status_file (const char *state_root, const char *id)
-{
-  char *ret;
-  cleanup_free char *root = get_run_directory (state_root);
-  xasprintf (&ret, "%s/%s/status", root, id);
-  return ret;
-}
-
-static int
-check_directories (struct crun_run_options *opts, const char *id, libcrun_error_t *err)
-{
-  cleanup_free char *dir = NULL;
-  const char *run_directory = get_run_directory (opts->state_root);
-  int ret;
-
-  ret = ret = crun_ensure_directory (run_directory, 0700, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  dir = get_state_directory (opts->state_root, id);
-  if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
-
-  ret = crun_path_exists (dir, 0, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (ret)
-    return crun_make_error (err, 0, "container '%s' already exists", id);
-
-  if (UNLIKELY (mkdir (dir, 0700) < 0))
-    return crun_make_error (err, 0, "cannot create state directory for '%s'", id);
-
-  return 0;
 }
 
 static void
@@ -237,69 +172,13 @@ container_run (void *args)
   error (EXIT_FAILURE, err->status, "%s", err->msg);
 }
 
-struct container_status_s
-{
-  pid_t pid;
-};
-
-static int
-write_container_status (crun_container *container, struct crun_run_options *opts, pid_t pid, libcrun_error_t *err)
-{
-  cleanup_free char *file = get_state_directory_status_file (opts->state_root, opts->id);
-  cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
-  cleanup_free char *data;
-  size_t len = xasprintf (&data, "{\n    \"pid\" : %d\n}\n", pid);
-  if (UNLIKELY (fd_write < 0))
-    return crun_make_error (err, 0, "cannot open status file");
-  if (UNLIKELY (write (fd_write, data, len) < 0))
-    return crun_make_error (err, 0, "cannot write status file");
-  return 0;
-}
-
-static int
-read_container_status (struct container_status_s *status, const char *state_root, const char *id, libcrun_error_t *err)
-{
-  char buffer[1024];
-  char err_buffer[256];
-  int len;
-  cleanup_free char *file = get_state_directory_status_file (state_root, id);
-  cleanup_close int fd = open (file, O_RDONLY);
-  yajl_val tree;
-
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, 0, "cannot open status file");
-
-  len = read (fd, buffer, sizeof (buffer) - 1);
-  if (UNLIKELY (len < 0))
-    return crun_make_error (err, 0, "cannot read from the status file");
-  buffer[len] = '\0';
-
-  tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
-  if (UNLIKELY (tree == NULL))
-    return crun_make_error (err, 0, "cannot parse status file");
-
-  {
-    const char *pid_path[] = { "pid", NULL };
-    status->pid = strtoull (YAJL_GET_NUMBER (yajl_tree_get (tree, pid_path, yajl_t_number)), NULL, 10);
-  }
-  yajl_tree_free (tree);
-}
-
 int
 libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
-  cleanup_close int dirfd = -1;
-  cleanup_free char *dir = get_state_directory (state_root, id);
-  struct container_status_s status;
-  if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
+  libcrun_container_status_t status;
 
-  dirfd = open (dir, O_DIRECTORY | O_RDONLY);
-  if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "cannot open directory '%s'", dir);
-
-  ret = read_container_status (&status, state_root, id, err);
+  ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -318,23 +197,15 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
         return crun_make_error (err, errno, "signaling the container");
     }
 
-  ret = unlinkat (dirfd, "status", 0);
-  if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "cannot rm status file");
-
-  ret = rmdir (dir);
-  if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "cannot rm state directory");
-
-  return 0;
+  return libcrun_delete_container_status (state_root, id, err);
 }
 
 int
 libcrun_kill_container (const char *state_root, const char *id, int signal, libcrun_error_t *err)
 {
   int ret;
-  struct container_status_s status;
-  ret = read_container_status (&status, state_root, id, err);
+  libcrun_container_status_t status;
+  ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -342,6 +213,13 @@ libcrun_kill_container (const char *state_root, const char *id, int signal, libc
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "kill container");
   return 0;
+}
+
+static int
+write_container_status (crun_container *container, struct crun_run_options *opts, pid_t pid, libcrun_error_t *err)
+{
+  libcrun_container_status_t status = {.pid = pid};
+  return libcrun_write_container_status (opts->state_root, opts->id, &status, err);
 }
 
 int
@@ -361,7 +239,7 @@ libcrun_container_run (crun_container *container, struct crun_run_options *opts,
   if (UNLIKELY (def->mounts == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
 
-  ret = check_directories (opts, opts->id, err);
+  ret = libcrun_status_check_directories (opts->state_root, opts->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
