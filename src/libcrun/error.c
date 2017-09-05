@@ -57,3 +57,9 @@ crun_error_release (libcrun_error_t *err)
   *err = NULL;
   return 0;
 }
+
+void
+oom_handler ()
+{
+  error (EXIT_FAILURE, 0, "OOM");
+}

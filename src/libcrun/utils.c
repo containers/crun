@@ -54,6 +54,16 @@ xmalloc (size_t size)
   return res;
 }
 
+void *
+xrealloc (void *ptr, size_t size)
+{
+  void *res = realloc (ptr, size);
+  if (UNLIKELY (res == NULL))
+    OOM ();
+  return res;
+}
+
+
 char *
 argp_mandatory_argument (char *arg, struct argp_state *state)
 {
@@ -233,7 +243,7 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   int ret;
   cleanup_free char *buf = NULL;
   struct stat stat;
-  size_t nread, left;
+  size_t nread, allocated;
 
   do
     fd = open (path, O_RDONLY);
@@ -247,26 +257,28 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
     return crun_make_error (err, 0, "error stat'ing file '%s'", path);
 
   /* NUL terminate the buffer.  */
-  buf = xmalloc (stat.st_size + 1);
+  allocated = stat.st_size;
+  if (stat.st_size)
+    allocated = 256;
+  buf = xmalloc (allocated + 1);
   buf[stat.st_size] = '\0';
   nread = 0;
-  left = stat.st_size;
-  while (left)
+  while ((stat.st_size && nread < stat.st_size) || 1)
     {
       do
-        ret = read (fd, buf + nread, left);
+        ret = read (fd, buf + nread, allocated - nread);
       while (ret < 0 && errno == EINTR);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, 0, "error reading from file '%s'", path);
 
-      left -= ret;
       nread += ret;
 
-      /* File probably changed its size, so return earlier.
-         We don't handle the case when the file grows between the stat
-         and the read here.  */
-      if (ret < left)
+      if (nread < allocated)
         break;
+
+      allocated += 256;
+      buf = xrealloc (buf, allocated + 1);
+      buf[allocated] = '\0';
     }
   *out = buf;
   buf = NULL;

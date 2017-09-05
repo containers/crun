@@ -15,25 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef ERROR_H
-# define ERROR_H
-# include <config.h>
-# include <error.h>
-# include <stdlib.h>
+#ifndef CGROUP_H
+# define CGROUP_H
 
-struct libcrun_error_s
-{
-  int status;
-  char *msg;
-};
-typedef struct libcrun_error_s *libcrun_error_t;
+# include "container.h"
+# include <unistd.h>
 
-void oom_handler ();
-
-# define OOM() do {oom_handler ();} while (0)
-
-int crun_make_error (libcrun_error_t *err, int status, const char *msg, ...);
-
-int crun_error_release (libcrun_error_t *err);
+int libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
+int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
+int libcrun_cgroup_destroy (char *path, libcrun_error_t *err);
 
 #endif
