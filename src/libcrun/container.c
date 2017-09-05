@@ -130,6 +130,10 @@ container_run (void *args)
   if (UNLIKELY (ret < 0))
     goto out;
 
+  ret = libcrun_set_oom (container, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
+
   ret = libcrun_set_caps (container, &err);
   if (UNLIKELY (ret < 0))
     goto out;

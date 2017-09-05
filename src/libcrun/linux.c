@@ -938,3 +938,22 @@ libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err)
     return crun_make_error (err, errno, "sethostname");
   return 0;
 }
+
+int
+libcrun_set_oom (libcrun_container *container, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  cleanup_close int fd = -1;
+  int ret;
+  char oom_buffer[16];
+  if (def->process->oom_score_adj == 0)
+    return 0;
+  sprintf (oom_buffer, "%i", def->process->oom_score_adj);
+  fd = open ("/proc/self/oom_score_adj", O_WRONLY);
+  if (fd < 0)
+    return crun_make_error (err, errno, "read /proc/self/oom_score_adj");
+  ret = write (fd, oom_buffer, strlen (oom_buffer));
+  if (ret < 0)
+    return crun_make_error (err, errno, "write to /proc/self/oom_score_adj");
+  return 0;
+}
