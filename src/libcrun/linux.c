@@ -302,7 +302,11 @@ do_mount_cgroup (libcrun_container *container,
                  libcrun_error_t *err)
 {
   int ret;
-  cleanup_free char *cgroup_unified;
+  size_t i;
+  const char *subsystems[] = {"devices", "cpuset", "pids", "memory", "net_cls,net_prio",
+                              "freezer", "blkio", "hugetlb", "cpu,cpuacct", "perf_event", NULL};
+  cleanup_free char *cgroup_unified = NULL;
+
   xasprintf (&cgroup_unified, "%s/unified", target);
 
   ret = do_mount (container, source, target, "tmpfs", mountflags, "size=1024k", 0, err);
@@ -316,6 +320,20 @@ do_mount_cgroup (libcrun_container *container,
   ret = do_mount (container, source, cgroup_unified, "cgroup2", mountflags, NULL, 1, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  for (i = 0; subsystems[i]; i++)
+    {
+      cleanup_free char *subsystem_path = NULL;
+      xasprintf (&subsystem_path, "%s/%s", target, subsystems[i]);
+
+      ret = mkdir (subsystem_path, 0755);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "mkdir for '%s' failed", cgroup_unified);
+
+      ret = do_mount (container, source, subsystem_path, "cgroup", mountflags, subsystems[i], 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   return 0;
 }

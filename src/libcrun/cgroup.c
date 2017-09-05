@@ -25,35 +25,59 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
+static const char *subsystems[] = { "cpuset", "devices", "pids", "memory", "net_cls,net_prio",
+                                    "freezer", "blkio", "hugetlb", "cpu,cpuacct", "perf_event", "unified",
+                                    NULL};
+
 static int
 enter_cgroup (pid_t pid, const char *path, libcrun_error_t *err)
 {
-  cleanup_free char *cgroup_path;
-  cleanup_free char *cgroup_path_procs;
-  cleanup_close int fd = -1;
   char pid_str[16];
   int ret;
-
-  xasprintf (&cgroup_path, "/sys/fs/cgroup/unified/%s", path);
-
-  ret = mkdir (cgroup_path, 0755);
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating cgroup '%s'", path);
-
-  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/unified/%s/cgroup.procs", path);
-
-  fd = open (cgroup_path_procs, O_WRONLY);
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "opening '%s'", cgroup_path_procs);
+  size_t i;
 
   sprintf (pid_str, "%d", pid);
 
-  do
-    ret = write (fd, pid_str, strlen (pid_str));
-  while (ret < 0 && errno == EINTR);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot write to '%s'", cgroup_path_procs);
+  for (i = 0; subsystems[i]; i++)
+    {
+      cleanup_free char *cgroup_path = NULL;
+      cleanup_free char *cgroup_path_procs = NULL;
 
+
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
+      ret = crun_ensure_directory (cgroup_path, 0755, err);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+
+      if (strcmp (subsystems[i], "cpuset") == 0)
+        {
+          cleanup_free char *cpuset_mems = NULL;
+          cleanup_free char *cpuset_cpus = NULL;
+          xasprintf (&cpuset_mems, "/sys/fs/cgroup/%s/%s/cpuset.mems", subsystems[i], path);
+          ret = write_file (cpuset_mems, "0", 1, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          xasprintf (&cpuset_cpus, "/sys/fs/cgroup/%s/%s/cpuset.cpus", subsystems[i], path);
+          ret = write_file (cpuset_cpus, "0", 1, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+        }
+
+      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/%s/cgroup.procs", subsystems[i], path);
+      ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
+static
+int get_system_path (char **path, const char *suffix, libcrun_error_t *err)
+{
+  xasprintf (path, "/system.slice/libcrun-%s", suffix);
   return 0;
 }
 
@@ -98,7 +122,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
   uint32_t id;
   int ret;
   struct systemd_job_removed_s *p = userdata;
-  
+
   ret = sd_bus_message_read (m, "uoss", &id, &path, &unit, &result);
   if (ret < 0)
     return -1;
@@ -154,7 +178,7 @@ int enter_system_cgroup_scope (char **path, const char *scope, pid_t pid, libcru
       ret = crun_make_error (err, 0, "sd-bus message append");
       goto exit;
     }
-  
+
   if (UNLIKELY (sd_bus_message_open_container (m, 'a', "(sv)") < 0))
     {
       ret = crun_make_error (err, 0, "sd-bus open container");
@@ -227,7 +251,7 @@ int enter_system_cgroup_scope (char **path, const char *scope, pid_t pid, libcru
           break;
         }
     }
-  
+
 exit:
   if (bus)
     sd_bus_unref (bus);
@@ -246,7 +270,7 @@ libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcr
   cleanup_free char *scope;
   xasprintf (&scope, "%s.scope", id);
 
-  if (systemd)
+  if (systemd || getuid ())
     {
       ret = enter_system_cgroup_scope (path, scope, pid, err);
       if (UNLIKELY (ret < 0))
@@ -255,9 +279,10 @@ libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcr
     }
   else
     {
-      ret = get_current_path (path, scope, err);
+      ret = get_system_path (path, scope, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
       return enter_cgroup (pid, *path, err);
     }
   return 0;
@@ -273,14 +298,18 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
 int
 libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
 {
-  cleanup_free char *cgroup_path;
   int ret;
+  size_t i;
 
-  xasprintf (&cgroup_path, "/sys/fs/cgroup/unified/%s", path);
+  for (i = 0; subsystems[i]; i++)
+    {
+      cleanup_free char *cgroup_path;
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
 
-  ret = rmdir (cgroup_path);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "deleting cgroup '%s'", path);
+      ret = rmdir (cgroup_path);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "deleting cgroup '%s'", path);
+    }
 
   return 0;
 }
