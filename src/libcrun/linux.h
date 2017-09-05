@@ -38,5 +38,6 @@ int libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *er
 int libcrun_set_caps (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *err);
+int libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err);
 
 #endif

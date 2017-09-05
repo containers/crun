@@ -922,3 +922,19 @@ libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err)
     }
   return 0;
 }
+
+int
+libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  int has_uts = get_private_data (container)->unshare_flags & CLONE_NEWUTS;
+  int ret;
+  if (def->hostname == NULL || def->hostname[0] == '\0')
+    return 0;
+  if (!has_uts)
+    return crun_make_error (err, 0, "hostname requires the UTS namespace");
+  ret = sethostname (def->hostname, strlen (def->hostname));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sethostname");
+  return 0;
+}
