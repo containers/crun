@@ -20,7 +20,6 @@
 #include <config.h>
 #include "container.h"
 #include "utils.h"
-#include "linux.h"
 #include "seccomp.h"
 #include <argp.h>
 #include <unistd.h>
@@ -31,6 +30,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include "status.h"
+#include "linux.h"
+#include "cgroup.h"
 
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *error)
@@ -196,6 +197,15 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
         return crun_make_error (err, errno, "signaling the container");
     }
 
+  if (status.cgroup_path)
+    {
+      ret = libcrun_cgroup_destroy (status.cgroup_path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  libcrun_free_container_status (&status);
+
   return libcrun_delete_container_status (state_root, id, err);
 }
 
@@ -209,15 +219,18 @@ libcrun_kill_container (const char *state_root, const char *id, int signal, libc
     return ret;
 
   ret = kill (status.pid, signal);
+
+  libcrun_free_container_status (&status);
+
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "kill container");
   return 0;
 }
 
 static int
-write_container_status (libcrun_container *container, struct libcrun_run_options *opts, pid_t pid, libcrun_error_t *err)
+write_container_status (libcrun_container *container, struct libcrun_run_options *opts, pid_t pid, char *cgroup_path, libcrun_error_t *err)
 {
-  libcrun_container_status_t status = {.pid = pid};
+  libcrun_container_status_t status = {.pid = pid, .cgroup_path = cgroup_path};
   return libcrun_write_container_status (opts->state_root, opts->id, &status, err);
 }
 
@@ -226,7 +239,9 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
 {
   oci_container *def = container->container_def;
   int ret;
+  pid_t pid;
   int detach = opts->detach;
+  cleanup_free char *cgroup_path = NULL;
   struct container_entrypoint_s container_args = {.container = container, .opts = opts};
 
   if (UNLIKELY (def->root == NULL))
@@ -255,11 +270,15 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
         return crun_make_error (err, errno, "detach process");
     }
 
-  ret = libcrun_run_container (container, opts->detach, container_run, &container_args, err);
+  pid = libcrun_run_container (container, opts->detach, container_run, &container_args, err);
+  if (UNLIKELY (pid < 0))
+    return pid;
+
+  ret = libcrun_cgroup_enter (&cgroup_path, opts->systemd_cgroup, pid, opts->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_container_status (container, opts, ret, err);
+  ret = write_container_status (container, opts, pid, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

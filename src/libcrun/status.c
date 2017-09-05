@@ -70,7 +70,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
   cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
   cleanup_free char *data;
-  size_t len = xasprintf (&data, "{\n    \"pid\" : %d\n}\n", status->pid);
+  size_t len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"cgroup-path\" : \"%s\"\n}\n", status->pid, status->cgroup_path);
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, 0, "cannot open status file");
   if (UNLIKELY (write (fd_write, data, len) < 0))
@@ -81,7 +81,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
 int
 libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *buffer;
+  cleanup_free char *buffer = NULL;
   char err_buffer[256];
   int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
@@ -98,6 +98,10 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   {
     const char *pid_path[] = { "pid", NULL };
     status->pid = strtoull (YAJL_GET_NUMBER (yajl_tree_get (tree, pid_path, yajl_t_number)), NULL, 10);
+  }
+  {
+    const char *cgroup_path[] = { "cgroup-path", NULL };
+    status->cgroup_path = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, cgroup_path, yajl_t_string)));
   }
   yajl_tree_free (tree);
   return 0;
@@ -151,4 +155,11 @@ libcrun_delete_container_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (ret < 0))
         return crun_make_error (err, 0, "cannot rm state directory");
   return ret;
+}
+
+void
+libcrun_free_container_status (libcrun_container_status_t *status)
+{
+  if (status->cgroup_path)
+    free (status->cgroup_path);
 }

@@ -45,6 +45,7 @@ struct libcrun_run_options
   char *pid_file;
   int preserve_fds;
 
+  int systemd_cgroup : 1;
   int detach : 1;
   int no_subreaper: 1;
   int no_new_keyring : 1;

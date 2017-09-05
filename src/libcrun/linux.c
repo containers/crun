@@ -123,7 +123,7 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
 
-  if (pid > 0)
+  if (pid)
     return pid;
 
   if (detach && setsid () < 0)
@@ -313,7 +313,7 @@ do_mount_cgroup (libcrun_container *container,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mkdir for '%s' failed", cgroup_unified);
 
-  ret = do_mount (container, source, cgroup_unified, "cgroup2", mountflags, data, 1, err);
+  ret = do_mount (container, source, cgroup_unified, "cgroup2", mountflags, NULL, 1, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

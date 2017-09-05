@@ -27,9 +27,11 @@
 struct libcrun_container_status_s
 {
   pid_t pid;
+  char *cgroup_path;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
+void libcrun_free_container_status (libcrun_container_status_t *status);
 int libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
