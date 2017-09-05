@@ -70,7 +70,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
   cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
   cleanup_free char *data;
-  size_t len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"cgroup-path\" : \"%s\"\n}\n", status->pid, status->cgroup_path);
+  size_t len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"cgroup-path\" : \"%s\"\n}\n", status->pid, status->cgroup_path ? status->cgroup_path : "");
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, 0, "cannot open status file");
   if (UNLIKELY (write (fd_write, data, len) < 0))
@@ -147,9 +147,7 @@ libcrun_delete_container_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "cannot open directory '%s'", dir);
 
-  ret = unlinkat (dirfd, "status", 0);
-  if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "cannot rm status file");
+  unlinkat (dirfd, "status", 0);
 
   ret = rmdir (dir);
   if (UNLIKELY (ret < 0))

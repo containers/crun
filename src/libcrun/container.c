@@ -180,7 +180,7 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    goto exit;
 
   if (force)
     {
@@ -203,9 +203,9 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
       if (UNLIKELY (ret < 0))
         return ret;
     }
-
   libcrun_free_container_status (&status);
 
+ exit:
   return libcrun_delete_container_status (state_root, id, err);
 }
 
