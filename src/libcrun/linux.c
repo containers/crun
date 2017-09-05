@@ -957,3 +957,38 @@ libcrun_set_oom (libcrun_container *container, libcrun_error_t *err)
     return crun_make_error (err, errno, "write to /proc/self/oom_score_adj");
   return 0;
 }
+
+int
+libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  size_t i;
+  cleanup_close int dirfd = -1;
+
+  if (!def->linux || !def->linux->sysctl)
+    return 0;
+
+  dirfd = open ("/sys/fs", O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open /sys/fs");
+
+  for (i = 0; i < def->linux->sysctl->len; i++)
+    {
+      cleanup_free char *name = xstrdup (def->linux->sysctl->keys[i]);
+      cleanup_close int fd = -1;
+      int ret;
+      char *it;
+      for (it = name; *it; it++)
+        if (*it == '.')
+          *it = '/';
+
+      fd = openat (dirfd, name, O_WRONLY);
+      if (UNLIKELY (fd < 0))
+        return crun_make_error (err, errno, "open /sys/fs/%s", name);
+
+      ret = write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i]));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "write to /sys/fs/%s", name);
+    }
+  return 0;
+}
