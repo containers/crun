@@ -449,6 +449,10 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "creating symlink for /dev/core");
 
+  ret = symlinkat ("/dev/pts/ptmx", devfd, "ptmx");
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "creating symlink for /dev/ptmx");
+
   return 0;
 }
 
