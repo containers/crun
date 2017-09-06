@@ -62,7 +62,6 @@ enter_cgroup (pid_t pid, const char *path, libcrun_error_t *err)
           ret = write_file (cpuset_cpus, "0", 1, err);
           if (UNLIKELY (ret < 0))
             return ret;
-
         }
 
       xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/%s/cgroup.procs", subsystems[i], path);
@@ -607,6 +606,22 @@ write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory,
   return 0;
 }
 
+
+static int
+write_pids_resources (int dirfd, oci_container_linux_resources_pids *pids, libcrun_error_t *err)
+{
+  size_t len;
+  int ret;
+  char fmt_buf[32];
+
+  len = sprintf (fmt_buf, "%lu", pids->limit);
+  ret = write_file_at (dirfd, "pids.max", fmt_buf, len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
 int
 libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
@@ -699,6 +714,22 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
                                     err);
       if (UNLIKELY (ret < 0))
         return ret;
+    }
+
+  if (def->linux->resources->pids)
+    {
+      cleanup_free char *path_to_pid = NULL;
+      cleanup_close int dirfd_pid = -1;
+
+      xasprintf (&path_to_pid, "/sys/fs/cgroup/pids%s/", path);
+      dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
+
+      ret = write_pids_resources (dirfd_pid,
+                                  def->linux->resources->pids,
+                                  err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
     }
 
   return 0;
