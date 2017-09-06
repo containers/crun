@@ -291,6 +291,29 @@ libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcr
 int
 libcrun_cgroup_killall (char *path, libcrun_error_t *err)
 {
+  cleanup_free char *cgroup_path_procs = NULL;
+  cleanup_free char *buffer = NULL;
+  int ret;
+  size_t len;
+  char *it;
+  char *saveptr = NULL;
+
+  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/unified/%s/cgroup.procs", path);
+  ret = read_all_file (cgroup_path_procs, &buffer, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
+    {
+      pid_t pid = strtoul (it, NULL, 10);
+      if (pid)
+        {
+          ret = kill (pid, 9);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "kill process %d", pid);
+        }
+    }
+
   return 0;
 }
 
