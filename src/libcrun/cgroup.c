@@ -606,7 +606,6 @@ write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory,
   return 0;
 }
 
-
 static int
 write_pids_resources (int dirfd, oci_container_linux_resources_pids *pids, libcrun_error_t *err)
 {
@@ -619,6 +618,63 @@ write_pids_resources (int dirfd, oci_container_linux_resources_pids *pids, libcr
   if (UNLIKELY (ret < 0))
     return ret;
 
+  return 0;
+}
+
+static int
+write_cpu_resources (int dirfd_cpu, int dirfd_cpuset, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
+{
+  size_t len;
+  int ret;
+  char fmt_buf[32];
+
+  if (cpu->shares)
+    {
+      len = sprintf (fmt_buf, "%lu", cpu->shares);
+      ret = write_file_at (dirfd_cpu, "cpu.shares", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (cpu->period)
+    {
+      len = sprintf (fmt_buf, "%lu", cpu->period);
+      ret = write_file_at (dirfd_cpu, "cpu.cfs_period_us", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (cpu->quota)
+    {
+      len = sprintf (fmt_buf, "%lu", cpu->quota);
+      ret = write_file_at (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (cpu->realtime_period)
+    {
+      len = sprintf (fmt_buf, "%lu", cpu->realtime_period);
+      ret = write_file_at (dirfd_cpu, "cpu.rt_period_us", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (cpu->realtime_runtime)
+    {
+      len = sprintf (fmt_buf, "%lu", cpu->realtime_runtime);
+      ret = write_file_at (dirfd_cpu, "cpu.rt_runtime_us", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (cpu->cpus)
+    {
+      ret = write_file_at (dirfd_cpuset, "cpuset.cpus", cpu->cpus, strlen (cpu->cpus), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (cpu->mems)
+    {
+      ret = write_file_at (dirfd_cpuset, "cpuset.mems", cpu->mems, strlen (cpu->mems), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
   return 0;
 }
 
@@ -727,6 +783,28 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
       ret = write_pids_resources (dirfd_pid,
                                   def->linux->resources->pids,
                                   err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+    }
+
+  if (def->linux->resources->cpu)
+    {
+      cleanup_free char *path_to_cpu = NULL;
+      cleanup_close int dirfd_cpu = -1;
+      cleanup_free char *path_to_cpuset = NULL;
+      cleanup_close int dirfd_cpuset = -1;
+
+      xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpu%s/", path);
+      dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
+
+      xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpuset%s/", path);
+      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
+
+      ret = write_cpu_resources (dirfd_cpu,
+                                 dirfd_cpuset,
+                                 def->linux->resources->cpu,
+                                 err);
       if (UNLIKELY (ret < 0))
         return ret;
 
