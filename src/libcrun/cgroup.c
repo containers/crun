@@ -442,6 +442,40 @@ write_blkio_resources (int dirfd, oci_container_linux_resources_block_io *blkio,
   return 0;
 }
 
+static int
+write_network_resources (int dirfd, oci_container_linux_resources_network *net, libcrun_error_t *err)
+{
+  char fmt_buf[128];
+  size_t len;
+  int ret;
+  if (net->class_id)
+    {
+      len = sprintf (fmt_buf, "%d", net->class_id);
+      ret = write_file_at (dirfd, "net_cls.classid", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (net->priorities_len)
+    {
+      size_t i;
+      cleanup_close int fd = -1;
+      fd = openat (dirfd, "net_prio.ifpriomap", O_WRONLY);
+      if (UNLIKELY (fd < 0))
+        return crun_make_error (err, errno, "open net_prio.ifpriomap");
+
+      for (i = 0; i < net->priorities_len; i++)
+        {
+          sprintf (fmt_buf, "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
+          ret = write (fd, fmt_buf, len);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write net_prio.ifpriomap");
+        }
+
+    }
+
+  return 0;
+}
+
 int
 libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
@@ -465,7 +499,22 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
       ret = write_blkio_resources (dirfd_blkio, blkio, err);
       if (UNLIKELY (ret < 0))
         return ret;
+    }
 
+  if (def->linux->resources->network)
+    {
+      cleanup_free char *path_to_network = NULL;
+      cleanup_close int dirfd_network = -1;
+      oci_container_linux_resources_network *network = def->linux->resources->network;
+
+      xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
+      dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_network < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/net_cls,net_prio%s", path);
+
+      ret = write_network_resources (dirfd_network, network, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
   return 0;
 }
