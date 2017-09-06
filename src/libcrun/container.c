@@ -290,6 +290,10 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = write_container_status (container, opts, pid, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;

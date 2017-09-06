@@ -48,6 +48,8 @@ int crun_path_exists (const char *path, int readonly, libcrun_error_t *err);
 
 int write_file (const char *name, const void *data, size_t len, libcrun_error_t *err);
 
+int write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err);
+
 int crun_ensure_directory (const char *path, int mode, libcrun_error_t *err);
 
 int detach_process ();

@@ -112,6 +112,21 @@ xstrdup (const char *str)
 }
 
 int
+write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  cleanup_close int fd = openat (dirfd, name, O_WRONLY);
+  int ret;
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "writing file '%s'", name);
+
+  ret = write (fd, data, len);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "writing file '%s'", name);
+
+  return ret;
+}
+
+int
 write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
   cleanup_close int fd = open (name, O_WRONLY);

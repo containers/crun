@@ -313,3 +313,159 @@ libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
 
   return 0;
 }
+
+/* The parser generates different structs but they are really all the same.  */
+struct throttling_s
+{
+    int64_t major;
+    int64_t minor;
+    uint64_t rate;
+};
+
+static int
+write_blkio_resources_throttling (int dirfd, const char *name, struct throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
+{
+  char fmt_buf[128];
+  size_t i;
+  cleanup_close int fd = -1;
+
+  fd = openat (dirfd, name, O_WRONLY);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open %s", name);
+
+  for (i = 0; i < throttling_len; i++)
+    {
+      int ret;
+      size_t len;
+      len = sprintf (fmt_buf, "%lu:%lu %lu\n",
+                     throttling[i]->major,
+                     throttling[i]->minor,
+                     throttling[i]->rate);
+
+      ret = write (fd, fmt_buf, len);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "write %s", name);
+    }
+  return 0;
+}
+
+static int
+write_blkio_resources (int dirfd, oci_container_linux_resources_block_io *blkio, libcrun_error_t *err)
+{
+  char fmt_buf[128];
+  size_t len;
+  int ret;
+  size_t i;
+
+  if (blkio->weight)
+    {
+      len = sprintf (fmt_buf, "%d", blkio->weight);
+      ret = write_file_at (dirfd, "blkio.weight", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (blkio->leaf_weight)
+    {
+      len = sprintf (fmt_buf, "%d", blkio->leaf_weight);
+      ret = write_file_at (dirfd, "blkio.leaf_weight", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (blkio->weight_device_len)
+    {
+      cleanup_close int w_device_fd = -1;
+      cleanup_close int w_leafdevice_fd = -1;
+
+      w_device_fd = openat (dirfd, "blkio.weight_device", O_WRONLY);
+      if (UNLIKELY (w_device_fd < 0))
+        return crun_make_error (err, errno, "open blkio.weight_device");
+
+      w_leafdevice_fd = openat (dirfd, "blkio.leaf_weight_device", O_WRONLY);
+      if (UNLIKELY (w_leafdevice_fd < 0))
+        return crun_make_error (err, errno, "open blkio.leaf_weight_device");
+
+      for (i = 0; i < blkio->weight_device_len; i++)
+        {
+          len = sprintf (fmt_buf, "%lu:%lu %i\n",
+                         blkio->weight_device[i]->major,
+                         blkio->weight_device[i]->minor,
+                         blkio->weight_device[i]->weight);
+          ret = write (w_device_fd, fmt_buf, len);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write blkio.weight_device");
+
+          len = sprintf (fmt_buf, "%lu:%lu %i\n",
+                         blkio->weight_device[i]->major,
+                         blkio->weight_device[i]->minor,
+                         blkio->weight_device[i]->leaf_weight);
+          ret = write (w_leafdevice_fd, fmt_buf, len);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write blkio.leaf_weight_device");
+        }
+    }
+  if (blkio->throttle_read_bps_device_len)
+    {
+      ret = write_blkio_resources_throttling (dirfd, "blkio.throttle.read_bps_device",
+                                              (struct throttling_s **) blkio->throttle_read_bps_device,
+                                              blkio->throttle_read_bps_device_len,
+                                              err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (blkio->throttle_write_bps_device_len)
+    {
+      ret = write_blkio_resources_throttling (dirfd, "blkio.throttle.write_bps_device",
+                                              (struct throttling_s **) blkio->throttle_write_bps_device,
+                                              blkio->throttle_write_bps_device_len,
+                                              err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (blkio->throttle_read_iops_device_len)
+    {
+      ret = write_blkio_resources_throttling (dirfd, "blkio.throttle.read_iops_device",
+                                              (struct throttling_s **) blkio->throttle_read_iops_device,
+                                              blkio->throttle_read_iops_device_len,
+                                              err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (blkio->throttle_write_iops_device_len)
+    {
+      ret = write_blkio_resources_throttling (dirfd, "blkio.throttle.write_iops_device",
+                                              (struct throttling_s **) blkio->throttle_write_iops_device,
+                                              blkio->throttle_write_iops_device_len,
+                                              err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+int
+libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  int ret;
+
+  if (!def->linux || !def->linux->resources)
+    return 0;
+
+  if (def->linux->resources->block_io)
+    {
+      cleanup_free char *path_to_blkio = NULL;
+      cleanup_close int dirfd_blkio = -1;
+      oci_container_linux_resources_block_io *blkio = def->linux->resources->block_io;
+
+      xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
+      dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_blkio < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/blkio%s", path);
+
+      ret = write_blkio_resources (dirfd_blkio, blkio, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+    }
+  return 0;
+}
