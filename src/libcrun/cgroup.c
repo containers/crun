@@ -476,6 +476,25 @@ write_network_resources (int dirfd, oci_container_linux_resources_network *net, 
   return 0;
 }
 
+static int
+write_hugetlb_resources (int dirfd, oci_container_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
+{
+  char fmt_buf[128];
+  size_t i, len;
+  int ret;
+  for (i = 0; i < htlb_len; i++)
+    {
+      cleanup_free char *filename;
+      xasprintf (&filename, "hugetlb.%s.limit_in_bytes", htlb[i]->page_size);
+
+      len = sprintf (fmt_buf, "%lu", htlb[i]->limit);
+      ret = write_file_at (dirfd, filename, fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
 int
 libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
@@ -516,5 +535,24 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  if (def->linux->resources->hugepage_limits_len)
+    {
+      cleanup_free char *path_to_htlb = NULL;
+      cleanup_close int dirfd_htlb = -1;
+
+      xasprintf (&path_to_htlb, "/sys/fs/cgroup/hugetlb%s/", path);
+      dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_htlb < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
+
+      ret = write_hugetlb_resources (dirfd_htlb,
+                                     def->linux->resources->hugepage_limits,
+                                     def->linux->resources->hugepage_limits_len,
+                                     err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   return 0;
 }
