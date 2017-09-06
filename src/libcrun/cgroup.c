@@ -495,6 +495,27 @@ write_hugetlb_resources (int dirfd, oci_container_linux_resources_hugepage_limit
   return 0;
 }
 
+static int
+write_devices_resources (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+{
+  size_t i, len;
+  int ret;
+  for (i = 0; i < devs_len; i++)
+    {
+      cleanup_free char *fmt_buf;
+      const char *file = devs[i]->allow ? "devices.allow" : "devices.deny";
+
+      if (devs[i]->type == NULL || devs[i]->type[0] == 'a')
+        len = xasprintf (&fmt_buf, "a");
+      else
+        len = xasprintf (&fmt_buf, "%s %lu:%lu %s", devs[i]->type, devs[i]->major, devs[i]->minor, devs[i]->access);
+      ret = write_file_at (dirfd, file, fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
 int
 libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
@@ -549,6 +570,24 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
       ret = write_hugetlb_resources (dirfd_htlb,
                                      def->linux->resources->hugepage_limits,
                                      def->linux->resources->hugepage_limits_len,
+                                     err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (def->linux->resources->devices_len)
+    {
+      cleanup_free char *path_to_devs = NULL;
+      cleanup_close int dirfd_devs = -1;
+
+      xasprintf (&path_to_devs, "/sys/fs/cgroup/devices%s/", path);
+      dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_devs < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
+
+      ret = write_devices_resources (dirfd_devs,
+                                     def->linux->resources->devices,
+                                     def->linux->resources->devices_len,
                                      err);
       if (UNLIKELY (ret < 0))
         return ret;
