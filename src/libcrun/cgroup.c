@@ -516,6 +516,97 @@ write_devices_resources (int dirfd, oci_container_linux_resources_devices_elemen
   return 0;
 }
 
+static int
+write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory, libcrun_error_t *err)
+{
+  size_t len;
+  int ret;
+  char fmt_buf[32];
+  char swap_buf[32];
+  char limit_buf[32];
+  size_t swap_buf_len, limit_buf_len;
+  swap_buf_len = sprintf (swap_buf, "%lu", memory->swap);
+  limit_buf_len = sprintf (limit_buf, "%lu", memory->limit);
+
+  if (memory->limit && memory->swap)
+    {
+      if (memory->limit < memory->swap)
+        {
+          ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+  else
+    {
+      if (memory->swap)
+        {
+          ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      if (memory->limit)
+        {
+          ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+    }
+
+  if (memory->kernel)
+    {
+      len = sprintf (fmt_buf, "%lu", memory->swappiness);
+      ret = write_file_at (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (memory->reservation)
+    {
+      len = sprintf (fmt_buf, "%lu", memory->reservation);
+      ret = write_file_at (dirfd, "memory.soft_limit_in_bytes", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (memory->disable_oom_killer)
+    {
+      ret = write_file_at (dirfd, "memory.oom_control", "1", 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (memory->kernel_tcp)
+    {
+      len = sprintf (fmt_buf, "%lu", memory->kernel_tcp);
+      ret = write_file_at (dirfd, "memory.kmem.tcp.limit_in_bytes", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  if (memory->swappiness)
+    {
+      len = sprintf (fmt_buf, "%lu", memory->swappiness);
+      ret = write_file_at (dirfd, "memory.swappiness", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
 int
 libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
@@ -589,6 +680,23 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
                                      def->linux->resources->devices,
                                      def->linux->resources->devices_len,
                                      err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (def->linux->resources->memory)
+    {
+      cleanup_free char *path_to_mem = NULL;
+      cleanup_close int dirfd_mem = -1;
+
+      xasprintf (&path_to_mem, "/sys/fs/cgroup/memory%s/", path);
+      dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_mem < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
+
+      ret = write_memory_resources (dirfd_mem,
+                                    def->linux->resources->memory,
+                                    err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
