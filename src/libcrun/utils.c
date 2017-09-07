@@ -31,6 +31,8 @@
 #include <sys/epoll.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
+#include <pwd.h>
+#include <grp.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -41,6 +43,14 @@ cleanup_freep (void *p)
 {
   void **pp = (void **) p;
   free (*pp);
+}
+
+void
+cleanup_filep (FILE **f)
+{
+  FILE *file = *f;
+  if (file)
+    (void) fclose (file);
 }
 
 void
@@ -511,4 +521,58 @@ run_process (char **args, libcrun_error_t *err)
 
   execvp (args[0], args);
   _exit (EXIT_FAILURE);
+}
+
+/*if subuid or subgid exist, take the first range for the user */
+int
+getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
+{
+  cleanup_file FILE *input = NULL;
+  cleanup_free char *lineptr = NULL;
+  size_t lenlineptr = 0, len_name;
+  const char *name;
+
+  if (is_uid)
+    {
+      struct passwd *pwd = getpwuid (id);
+      if (pwd == NULL)
+        return -1;
+      name = pwd->pw_name;
+    }
+  else
+    {
+      struct group *grp = getgrgid (id);
+      if (grp == NULL)
+        return -1;
+      name = grp->gr_name;
+    }
+
+  len_name = strlen (name);
+
+  input = fopen (is_uid ? "/etc/subuid" : "/etc/subgid", "r");
+  if (input == NULL)
+    return -1;
+
+  for (;;)
+    {
+      char *endptr;
+      int read = getline (&lineptr, &lenlineptr, input);
+      if (read < 0)
+        return -1;
+
+      if (read < len_name + 2)
+        continue;
+
+      if (memcmp (lineptr, name, len_name) || lineptr[len_name] != ':')
+        continue;
+
+      *from = strtoull (&lineptr[len_name + 1], &endptr, 10);
+
+      if (endptr >= &lineptr[read])
+        return -1;
+
+      *len = strtoull (&endptr[1], &endptr, 10);
+
+      return 0;
+    }
 }

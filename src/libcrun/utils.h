@@ -25,9 +25,11 @@
 # include <argp.h>
 # include "error.h"
 
+void cleanup_filep (FILE **f);
 void cleanup_freep (void *p);
 void cleanup_closep (void *p);
 
+#define cleanup_file __attribute__((cleanup (cleanup_filep)))
 #define cleanup_free __attribute__((cleanup (cleanup_freep)))
 #define cleanup_close __attribute__((cleanup (cleanup_closep)))
 
