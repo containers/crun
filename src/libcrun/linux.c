@@ -730,16 +730,56 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
 int
 libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *err)
 {
+#define MAX_MAPPINGS 5
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
   int ret;
+  oci_container *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
     return 0;
 
-  uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->host_uid);
-  gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
+  if (!def->linux->uid_mappings_len)
+    uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->host_uid);
+  else
+    {
+      size_t written = 0, len, s;
+      char buffer[128];
+      uid_map = xmalloc (sizeof (buffer) * MAX_MAPPINGS + 1);
+      for (s = 0; s < def->linux->uid_mappings_len && s < MAX_MAPPINGS; s++)
+        {
+          len = sprintf (buffer, "%d %d %d\n",
+                         def->linux->uid_mappings[s]->container_id,
+                         def->linux->uid_mappings[s]->host_id,
+                         def->linux->uid_mappings[s]->size);
+          memcpy (uid_map + written, buffer, len);
+          written += len;
+        }
+      uid_map[written] = '\0';
+      uid_map_len = written;
+    }
+
+  if (!def->linux->gid_mappings_len)
+    gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
+  else
+    {
+      size_t written = 0, len, s;
+      char buffer[128];
+      gid_map = xmalloc (sizeof (buffer) * MAX_MAPPINGS + 1);
+      for (s = 0; s < def->linux->gid_mappings_len && s < MAX_MAPPINGS; s++)
+        {
+          len = sprintf (buffer, "%d %d %d\n",
+                         def->linux->gid_mappings[s]->container_id,
+                         def->linux->gid_mappings[s]->host_id,
+                         def->linux->gid_mappings[s]->size);
+          memcpy (gid_map + written, buffer, len);
+          written += len;
+        }
+      gid_map[written] = '\0';
+      gid_map_len = written;
+    }
+
   ret = write_file ("/proc/self/setgroups", "deny", 4, err);
   if (UNLIKELY (ret < 0))
     return ret;
