@@ -785,6 +785,42 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   return 0;
 }
 
+static int
+uidgidmap_helper (char *helper, pid_t pid, char *map_file, libcrun_error_t *err)
+{
+#define MAX_ARGS 20
+  char pid_fmt[16];
+  char *args[MAX_ARGS + 1];
+  char *next;
+  size_t nargs = 0;
+  args[nargs++] = helper;
+  sprintf (pid_fmt, "%d", pid);
+  args[nargs++] = pid_fmt;
+  next = map_file;
+  while (nargs < MAX_ARGS)
+    {
+      char *p = strsep (&next, " \n");
+      if (next == NULL)
+        break;
+      args[nargs++] = p;
+    }
+  args[nargs++] = NULL;
+
+  return run_process (args, err);
+}
+
+static int
+newgidmap (pid_t pid, char *map_file, libcrun_error_t *err)
+{
+  return uidgidmap_helper ("/usr/bin/newgidmap", pid, map_file, err);
+}
+
+static int
+newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
+{
+  return uidgidmap_helper ("/usr/bin/newuidmap", pid, map_file, err);
+}
+
 int
 libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err)
 {
@@ -848,11 +884,21 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
 
   xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
   ret = write_file (gid_map_file, gid_map, gid_map_len, err);
+  if (ret < 1 && errno == EPERM && container->host_uid)
+    {
+      crun_error_release (err);
+      ret = newgidmap (pid, gid_map, err);
+    }
   if (UNLIKELY (ret < 0))
     return ret;
 
   xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
   ret = write_file (uid_map_file, uid_map, uid_map_len, err);
+  if (ret < 1 && errno == EPERM && container->host_uid)
+    {
+      crun_error_release (err);
+      ret = newuidmap (pid, uid_map, err);
+    }
   if (UNLIKELY (ret < 0))
     return ret;
   return 0;

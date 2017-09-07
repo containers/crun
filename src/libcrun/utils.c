@@ -30,6 +30,7 @@
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -488,4 +489,26 @@ copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err)
 
   return 0;
 #endif
+}
+
+int
+run_process (char **args, libcrun_error_t *err)
+{
+  pid_t pid = fork ();
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "fork");
+  if (pid)
+    {
+      int r, status;
+      do
+        r = waitpid (pid, &status, 0);
+      while (r < 0 && errno == EINTR);
+      if (r < 0)
+        return crun_make_error (err, errno, "waitpid");
+      if (WIFEXITED (status) || WIFSIGNALED (status))
+        return WEXITSTATUS (status);
+    }
+
+  execvp (args[0], args);
+  _exit (EXIT_FAILURE);
 }
