@@ -60,21 +60,6 @@ libcrun_container_load (const char *path, libcrun_error_t *error)
   return container;
 }
 
-static void
-get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
-{
-  *uid = 0;
-  *gid = 0;
-
-  if (def->process->user)
-    {
-      if (def->process->user->uid)
-        *uid = def->process->user->uid;
-      if (def->process->user->gid)
-        *gid = def->process->user->gid;
-    }
-}
-
 static int
 set_uid_gid (libcrun_container *container, libcrun_error_t *err)
 {
@@ -110,15 +95,6 @@ container_run (void *args)
   cleanup_close int terminal_fd = -1;
   oci_container *def = container->container_def;
   cleanup_free char *rootfs = NULL;
-
-  get_uid_gid_from_def (container->container_def,
-                        &container->container_uid,
-                        &container->container_gid);
-
-
-  ret = libcrun_set_usernamespace (container, &err);
-  if (UNLIKELY (ret < 0))
-    goto out;
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))

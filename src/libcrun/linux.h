@@ -34,7 +34,7 @@ pid_t libcrun_run_container (libcrun_container *container,
                              void *args,
                              libcrun_error_t *err);
 int libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err);
-int libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *err);
+int libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err);
 int libcrun_set_caps (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *err);

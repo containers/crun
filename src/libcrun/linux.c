@@ -103,13 +103,33 @@ syscall_clone (unsigned long flags, void *child_stack)
   return (int) syscall (__NR_clone, flags, child_stack);
 }
 
+static void
+get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
+{
+  *uid = 0;
+  *gid = 0;
+
+  if (def->process->user)
+    {
+      if (def->process->user->uid)
+        *uid = def->process->user->uid;
+      if (def->process->user->gid)
+        *gid = def->process->user->gid;
+    }
+}
+
 pid_t
 libcrun_run_container (libcrun_container *container, int detach, container_entrypoint entrypoint, void *args, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   size_t i;
+  int ret;
   int flags = 0;
   pid_t pid;
+  cleanup_close int userns_pipe_read = -1;
+  cleanup_close int userns_pipe_write = -1;
+  int userns_sync_pipe[2];
+
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
       int value = find_namespace (def->linux->namespaces[i]->type);
@@ -120,12 +140,40 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
 
   get_private_data (container)->unshare_flags = flags;
 
+  if (flags & CLONE_NEWUSER)
+    {
+      ret = pipe (userns_sync_pipe);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "pipe");
+      userns_pipe_read = userns_sync_pipe[0];
+      userns_pipe_write = userns_sync_pipe[1];
+    }
+
   pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
 
+  get_uid_gid_from_def (container->container_def,
+                        &container->container_uid,
+                        &container->container_gid);
+
   if (pid)
-    return pid;
+    {
+      if (flags & CLONE_NEWUSER)
+        {
+          ret = libcrun_set_usernamespace (container, pid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          do
+            ret = write (userns_pipe_write, "1", 1);
+          while (ret < 0 && errno == EINTR);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, 0, "write to sync pipe");
+        }
+
+      return pid;
+    }
 
   if (detach && setsid () < 0)
     {
@@ -170,6 +218,16 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
           crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
           goto out;
         }
+    }
+
+  if (flags & CLONE_NEWUSER)
+    {
+      char tmp;
+      do
+        ret = read (userns_pipe_read, &tmp, 1);
+      while (ret < 0 && errno == EINTR);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "read from sync pipe");
     }
 
   entrypoint (args);
@@ -728,9 +786,12 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
 }
 
 int
-libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err)
 {
 #define MAX_MAPPINGS 5
+  cleanup_free char *groups_file = NULL;
+  cleanup_free char *uid_map_file = NULL;
+  cleanup_free char *gid_map_file = NULL;
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
@@ -780,15 +841,18 @@ libcrun_set_usernamespace (libcrun_container *container, libcrun_error_t *err)
       gid_map_len = written;
     }
 
-  ret = write_file ("/proc/self/setgroups", "deny", 4, err);
+  xasprintf (&groups_file, "/proc/%d/setgroups", pid);
+  ret = write_file (groups_file, "deny", 4, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file ("/proc/self/gid_map", gid_map, gid_map_len, err);
+  xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
+  ret = write_file (gid_map_file, gid_map, gid_map_len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file ("/proc/self/uid_map", uid_map, uid_map_len, err);
+  xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
+  ret = write_file (uid_map_file, uid_map, uid_map_len, err);
   if (UNLIKELY (ret < 0))
     return ret;
   return 0;
