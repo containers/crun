@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include <grp.h>
 #include <signal.h>
+#include "terminal.h"
 
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
@@ -1013,4 +1014,36 @@ libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err)
         return crun_make_error (err, errno, "write to /sys/fs/%s", name);
     }
   return 0;
+}
+
+int
+libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_close int fd = -1;
+  cleanup_free char *slave = NULL;
+  oci_container *def = container->container_def;
+  if (!def->process->terminal)
+    return 0;
+
+  fd = libcrun_new_terminal (&slave, err);
+  if (UNLIKELY (fd < 0))
+    return fd;
+
+  ret = libcrun_set_stdio (slave, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = write_file ("/dev/console", "1", 1, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = do_mount (container, slave, "/dev/console", "devpts", MS_BIND, NULL, 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = fd;
+  fd = -1;
+
+  return ret;
 }

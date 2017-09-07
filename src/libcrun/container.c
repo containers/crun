@@ -32,6 +32,7 @@
 #include "status.h"
 #include "linux.h"
 #include "cgroup.h"
+#include <sys/prctl.h>
 
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *error)
@@ -88,6 +89,8 @@ struct container_entrypoint_s
 {
   libcrun_container *container;
   struct libcrun_run_options *opts;
+  int has_terminal_socket_pair;
+  int terminal_socketpair[2];
 };
 
 /* Entrypoint to the container.  */
@@ -99,6 +102,9 @@ container_run (void *args)
   libcrun_error_t err = NULL;
   int ret;
   size_t i;
+  int has_terminal;
+  cleanup_close int console_socket = -1;
+  cleanup_close int terminal_fd = -1;
   oci_container *def = container->container_def;
   cleanup_free char *rootfs = NULL;
 
@@ -118,9 +124,45 @@ container_run (void *args)
       goto out;
     }
 
+  has_terminal = container->container_def->process->terminal;
+  if (has_terminal && entrypoint_args->opts->console_socket)
+    {
+      console_socket = open_unix_domain_socket (entrypoint_args->opts->console_socket, &err);
+      if (UNLIKELY (console_socket < 0))
+        goto out;
+    }
+
   ret = libcrun_set_mounts (container, rootfs, &err);
   if (UNLIKELY (ret < 0))
     goto out;
+
+  ret = setsid ();
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (&err, errno, "setsid");
+      goto out;
+    }
+
+  if (has_terminal)
+    {
+      terminal_fd = libcrun_set_terminal (container, &err);
+      if (UNLIKELY (terminal_fd < 0))
+        goto out;
+      if (console_socket >= 0)
+        {
+          ret = send_fd_to_socket (console_socket, terminal_fd, &err);
+          if (UNLIKELY (ret < 0))
+            goto out;
+        }
+      else if (entrypoint_args->has_terminal_socket_pair)
+        {
+          ret = send_fd_to_socket (entrypoint_args->terminal_socketpair[1], terminal_fd, &err);
+          if (UNLIKELY (ret < 0))
+            goto out;
+          close (entrypoint_args->terminal_socketpair[0]);
+          close (entrypoint_args->terminal_socketpair[1]);
+        }
+    }
 
   ret = libcrun_set_selinux_exec_label (container, &err);
   if (UNLIKELY (ret < 0))
@@ -254,6 +296,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   pid_t pid;
   int detach = opts->detach;
   cleanup_free char *cgroup_path = NULL;
+  cleanup_close int terminal_fd = -1;
   struct container_entrypoint_s container_args = {.container = container, .opts = opts};
 
   if (UNLIKELY (def->root == NULL))
@@ -282,9 +325,30 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
         return crun_make_error (err, errno, "detach process");
     }
 
+  ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "set child subreaper");
+
+  if (def->process->terminal && !detach)
+    {
+      container_args.has_terminal_socket_pair = 1;
+      ret = create_socket_pair (container_args.terminal_socketpair, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   pid = libcrun_run_container (container, opts->detach, container_run, &container_args, err);
   if (UNLIKELY (pid < 0))
     return pid;
+
+  if (def->process->terminal && !detach)
+    {
+      terminal_fd = receive_fd_from_socket (container_args.terminal_socketpair[0], err);
+      if (UNLIKELY (terminal_fd < 0))
+        return terminal_fd;
+      close (container_args.terminal_socketpair[0]);
+      close (container_args.terminal_socketpair[1]);
+    }
 
   ret = libcrun_cgroup_enter (&cgroup_path, opts->systemd_cgroup, pid, opts->id, err);
   if (UNLIKELY (ret < 0))
@@ -304,13 +368,20 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   while (1)
     {
       int status;
-      int r = waitpid (ret, &status, 0);
+      int r = waitpid (-1, &status, 0);
       if (r < 0)
         {
           if (errno == EINTR)
             continue;
+          if (errno == ECHILD)
+            {
+              libcrun_delete_container (opts->state_root, opts->id, 1, err);
+              break;
+            }
           return crun_make_error (err, errno, "waitpid");
         }
+      if (r != ret)
+        continue;
       if (WIFEXITED (status) || WIFSIGNALED (status))
         {
           libcrun_delete_container (opts->state_root, opts->id, 1, err);

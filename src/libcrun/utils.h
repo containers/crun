@@ -64,4 +64,12 @@ int add_selinux_mount_label (char **ret, const char *data, const char *label, li
 
 int read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err);
 
+int open_unix_domain_socket (const char *path, libcrun_error_t *err);
+
+int send_fd_to_socket (int server, int fd, libcrun_error_t *err);
+
+int create_socket_pair (int *pair, libcrun_error_t *err);
+
+int receive_fd_from_socket (int from, libcrun_error_t *err);
+
 #endif

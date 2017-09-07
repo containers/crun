@@ -25,6 +25,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/un.h>
+#include <sys/socket.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -114,7 +116,7 @@ xstrdup (const char *str)
 int
 write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  cleanup_close int fd = openat (dirfd, name, O_WRONLY);
+  cleanup_close int fd = openat (dirfd, name, O_WRONLY | O_CREAT, 0700);
   int ret;
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "writing file '%s'", name);
@@ -129,7 +131,7 @@ write_file_at (int dirfd, const char *name, const void *data, size_t len, libcru
 int
 write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  cleanup_close int fd = open (name, O_WRONLY);
+  cleanup_close int fd = open (name, O_WRONLY | O_CREAT, 0700);
   int ret;
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "writing file '%s'", name);
@@ -299,5 +301,117 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   buf = NULL;
   if (len)
     *len = nread;
+  return 0;
+}
+
+int
+open_unix_domain_socket (const char *path, libcrun_error_t *err)
+{
+  struct sockaddr_un addr;
+  int ret;
+  cleanup_close int fd = socket (AF_UNIX, SOCK_STREAM, 0);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, 0, "error creating UNIX socket");
+
+  memset (&addr, 0, sizeof (addr));
+  strcpy (&addr.sun_path[1], path);
+  addr.sun_family = AF_UNIX;
+  ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "bind socket to '%s'", path);
+
+  ret = listen (fd, 1);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "listen on socket");
+
+  ret = fd;
+  fd = -1;
+
+  return ret;
+}
+
+int
+send_fd_to_socket (int server, int fd, libcrun_error_t *err)
+{
+  int ret;
+  struct cmsghdr *cmsg = NULL;
+  struct iovec iov[1];
+  struct msghdr msg;
+  char ctrl_buf[CMSG_SPACE (sizeof (int))];
+  char data[1];
+
+  memset (&msg, 0, sizeof (struct msghdr));
+  memset (ctrl_buf, 0, CMSG_SPACE (sizeof (int)));
+
+  data[0] = ' ';
+  iov[0].iov_base = data;
+  iov[0].iov_len = sizeof (data);
+
+  msg.msg_name = NULL;
+  msg.msg_namelen = 0;
+  msg.msg_iov = iov;
+  msg.msg_iovlen = 1;
+  msg.msg_controllen = CMSG_SPACE (sizeof (int));
+  msg.msg_control = ctrl_buf;
+
+  cmsg = CMSG_FIRSTHDR (&msg);
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+
+  *((int *) CMSG_DATA(cmsg)) = fd;
+
+  do
+    ret = sendmsg (server, &msg, 0);
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "sendmsg");
+  return 0;
+}
+
+int
+receive_fd_from_socket (int from, libcrun_error_t *err)
+{
+  cleanup_close int fd = -1;
+  int ret;
+  struct iovec iov[1];
+  struct msghdr msg;
+  char ctrl_buf[CMSG_SPACE (sizeof (int))];
+  char data[1];
+  struct cmsghdr *cmsg;
+  memset (&msg, 0, sizeof (struct msghdr));
+  memset (ctrl_buf, 0, CMSG_SPACE (sizeof (int)));
+
+  data[0] = ' ';
+  iov[0].iov_base = data;
+  iov[0].iov_len = sizeof (data);
+
+  msg.msg_name = NULL;
+  msg.msg_namelen = 0;
+  msg.msg_iov = iov;
+  msg.msg_iovlen = 1;
+  msg.msg_controllen = CMSG_SPACE (sizeof (int));
+  msg.msg_control = ctrl_buf;
+
+  do
+    ret = recvmsg (from, &msg, 0);
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "recvmsg");
+
+  cmsg = CMSG_FIRSTHDR (&msg);
+  memcpy (&fd, CMSG_DATA(cmsg), sizeof(fd));
+
+  ret = fd;
+  fd = -1;
+  return ret;
+}
+
+int
+create_socket_pair (int *pair, libcrun_error_t *err)
+{
+  int ret = socketpair (AF_UNIX, SOCK_DGRAM, 0, pair);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "socketpair");
   return 0;
 }
