@@ -1034,7 +1034,7 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file ("/dev/console", "1", 1, err);
+  ret = write_file ("/dev/console", NULL, 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

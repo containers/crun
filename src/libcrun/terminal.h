@@ -20,9 +20,15 @@
 # include <config.h>
 
 # include "container.h"
+# include <termios.h>
+
+void cleanup_terminalp (void *p);
+#define cleanup_terminal __attribute__((cleanup (cleanup_terminalp)))
 
 int libcrun_new_terminal (char **slave, libcrun_error_t *err);
 
 int libcrun_set_stdio (char *slave, libcrun_error_t *err);
+
+int libcrun_setup_terminal_master (int fd, void **current_status, libcrun_error_t *err);
 
 #endif

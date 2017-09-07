@@ -124,9 +124,12 @@ write_file_at (int dirfd, const char *name, const void *data, size_t len, libcru
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "writing file '%s'", name);
 
-  ret = write (fd, data, len);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "writing file '%s'", name);
+  if (len)
+    {
+      ret = write (fd, data, len);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "writing file '%s'", name);
+    }
 
   return ret;
 }

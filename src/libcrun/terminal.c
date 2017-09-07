@@ -28,6 +28,14 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <termios.h>
+
+struct terminal_status_s
+{
+  int fd;
+  struct termios termios;
+};
+
 
 int
 libcrun_new_terminal (char **slave, libcrun_error_t *err)
@@ -54,6 +62,26 @@ libcrun_new_terminal (char **slave, libcrun_error_t *err)
   return ret;
 }
 
+static int
+set_raw (int fd, libcrun_error_t *err)
+{
+  int ret;
+  struct termios termios;
+
+  ret = tcgetattr (fd, &termios);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "tcgetattr");
+
+  cfmakeraw (&termios);
+  termios.c_oflag |= OPOST;
+
+  ret = tcsetattr (fd, TCSANOW, &termios);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "tcsetattr");
+
+  return 0;
+}
+
 int
 libcrun_set_stdio (char *slave, libcrun_error_t *err)
 {
@@ -73,5 +101,44 @@ libcrun_set_stdio (char *slave, libcrun_error_t *err)
   ret = ioctl (0, TIOCSCTTY, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "ioctl TIOCSCTTY");
+
   return 0;
+}
+
+int
+libcrun_setup_terminal_master (int fd, void **current_status, libcrun_error_t *err)
+{
+  int ret;
+  struct termios termios;
+
+  ret = tcgetattr (fd, &termios);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "tcgetattr");
+
+  if (current_status)
+    {
+      struct terminal_status_s *s = xmalloc (sizeof (*s));
+      s->fd = 0;
+      memcpy (&(s->termios), &termios, sizeof (termios));
+      *current_status = s;
+    }
+
+  termios.c_oflag |= OPOST;
+
+  ret = tcsetattr (fd, TCSANOW, &termios);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "tcsetattr");
+
+  return set_raw (0, err);
+}
+
+void
+cleanup_terminalp (void *p)
+{
+  struct terminal_status_s **s = (struct terminal_status_s **) p;
+  if (*s)
+    {
+      tcsetattr ((*s)->fd, TCSANOW, &(*s)->termios);
+      free (*s);
+    }
 }

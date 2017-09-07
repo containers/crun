@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include "status.h"
 #include "linux.h"
+#include "terminal.h"
 #include "cgroup.h"
 #include <sys/prctl.h>
 #include <sys/signalfd.h>
@@ -333,6 +334,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   int fds[10];
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
+  cleanup_terminal void *orig_terminal = NULL;
 
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
@@ -381,6 +383,11 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
       terminal_fd = receive_fd_from_socket (container_args.terminal_socketpair[0], err);
       if (UNLIKELY (terminal_fd < 0))
         return terminal_fd;
+
+      ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       close (container_args.terminal_socketpair[0]);
       close (container_args.terminal_socketpair[1]);
     }
