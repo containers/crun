@@ -1034,6 +1034,15 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (def->process->console_size)
+    {
+      ret = libcrun_terminal_setup_size (0, def->process->console_size->height,
+                                         def->process->console_size->width,
+                                         err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = write_file ("/dev/console", NULL, 0, err);
   if (UNLIKELY (ret < 0))
     return ret;

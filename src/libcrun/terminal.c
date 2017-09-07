@@ -142,3 +142,13 @@ cleanup_terminalp (void *p)
       free (*s);
     }
 }
+
+int
+libcrun_terminal_setup_size (int fd, unsigned short rows, unsigned short cols, libcrun_error_t *err)
+{
+  struct winsize ws = {.ws_row = rows, .ws_col = cols};
+  int ret = ioctl (0, TIOCSWINSZ, &ws);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "ioctl TIOCSWINSZ");
+  return 0;
+}

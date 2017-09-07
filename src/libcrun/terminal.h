@@ -31,4 +31,6 @@ int libcrun_set_stdio (char *slave, libcrun_error_t *err);
 
 int libcrun_setup_terminal_master (int fd, void **current_status, libcrun_error_t *err);
 
+int libcrun_terminal_setup_size (int fd, unsigned short rows, unsigned short cols, libcrun_error_t *err);
+
 #endif
