@@ -74,4 +74,6 @@ int receive_fd_from_socket (int from, libcrun_error_t *err);
 
 int create_signalfd (sigset_t *mask, libcrun_error_t *err);
 
+int epoll_helper (int *fds, libcrun_error_t *err);
+
 #endif

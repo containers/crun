@@ -28,6 +28,7 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <sys/signalfd.h>
+#include <sys/epoll.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -423,5 +424,31 @@ create_signalfd (sigset_t *mask, libcrun_error_t *err)
   int ret = signalfd (-1, mask, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "signalfd");
+  return ret;
+}
+
+int
+epoll_helper (int *fds, libcrun_error_t *err)
+{
+  struct epoll_event ev;
+  cleanup_close int epollfd = -1;
+  int ret;
+
+  int *it;
+  epollfd = epoll_create1 (0);
+  if (UNLIKELY (epollfd < 0))
+    return crun_make_error (err, 0, "epoll_create1");
+
+  for (it = fds; *it >= 0; it++)
+    {
+      ev.events = EPOLLIN;
+      ev.data.fd = *it;
+      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "epoll_create1");
+    }
+
+  ret = epollfd;
+  epollfd = -1;
   return ret;
 }

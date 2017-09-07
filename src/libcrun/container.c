@@ -34,6 +34,7 @@
 #include "cgroup.h"
 #include <sys/prctl.h>
 #include <sys/signalfd.h>
+#include <sys/epoll.h>
 
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *error)
@@ -329,6 +330,8 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   cleanup_close int terminal_fd = -1;
   struct container_entrypoint_s container_args = {.container = container, .opts = opts};
   sigset_t mask;
+  int fds[10];
+  cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
 
   if (UNLIKELY (def->root == NULL))
@@ -417,24 +420,44 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
       return container_exit_code;
     }
 
+  fds[0] = signalfd;
+  fds[1] = -1;
+  epollfd = epoll_helper (fds, err);
+  if (UNLIKELY (epollfd < 0))
+    return epollfd;
   while (1)
     {
       struct signalfd_siginfo si;
       ssize_t res;
-      do
-        res = read (signalfd, &si, sizeof(si));
-      while (res < 0 && errno == EINTR);
-      if (UNLIKELY (res < 0))
-        return crun_make_error (err, errno, "read from signalfd");
-      if (si.ssi_signo == SIGCHLD)
+      struct epoll_event events[10];
+      int i, nr_events = epoll_wait (epollfd, events, 10, -1);
+      if (UNLIKELY (nr_events < 0))
+        return crun_make_error (err, errno, "epoll_wait");
+
+      for (i = 0; i < nr_events; i++)
         {
-          ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          if (last_process)
+          if (events[i].data.fd == signalfd)
             {
-              libcrun_delete_container (opts->state_root, opts->id, 1, err);
-              return container_exit_code;
+              do
+                res = read (signalfd, &si, sizeof(si));
+              while (res < 0 && errno == EINTR);
+              if (UNLIKELY (res < 0))
+                return crun_make_error (err, errno, "read from signalfd");
+              if (si.ssi_signo == SIGCHLD)
+                {
+                  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+                  if (last_process)
+                    {
+                      libcrun_delete_container (opts->state_root, opts->id, 1, err);
+                      return container_exit_code;
+                    }
+                }
+            }
+          else
+            {
+              return crun_make_error (err, 0, "unknown fd from epoll_wait");
             }
         }
     }
