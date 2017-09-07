@@ -72,4 +72,6 @@ int create_socket_pair (int *pair, libcrun_error_t *err);
 
 int receive_fd_from_socket (int from, libcrun_error_t *err);
 
+int create_signalfd (sigset_t *mask, libcrun_error_t *err);
+
 #endif

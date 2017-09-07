@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <sys/signalfd.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -414,4 +415,13 @@ create_socket_pair (int *pair, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "socketpair");
   return 0;
+}
+
+int
+create_signalfd (sigset_t *mask, libcrun_error_t *err)
+{
+  int ret = signalfd (-1, mask, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "signalfd");
+  return ret;
 }

@@ -33,6 +33,7 @@
 #include "linux.h"
 #include "cgroup.h"
 #include <sys/prctl.h>
+#include <sys/signalfd.h>
 
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *error)
@@ -288,16 +289,47 @@ write_container_status (libcrun_container *container, struct libcrun_run_options
   return libcrun_write_container_status (opts->state_root, opts->id, &status, err);
 }
 
+static int
+reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process, libcrun_error_t *err)
+{
+  *last_process = 0;
+  while (1)
+    {
+      int status;
+      int r = waitpid (-1, &status, WNOHANG);
+      if (r < 0)
+        {
+          if (errno == EINTR)
+            continue;
+          if (errno == ECHILD)
+            {
+              *last_process = 1;
+              return 0;
+            }
+          return crun_make_error (err, errno, "waitpid");
+        }
+      if (r == 0)
+        break;
+      if (r != main_process)
+        continue;
+      if (WIFEXITED (status) || WIFSIGNALED (status))
+        *main_process_exit = WEXITSTATUS (status);
+    }
+  return 0;
+}
+
 int
 libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
-  int ret;
+  int ret, container_exit_code, last_process;
   pid_t pid;
   int detach = opts->detach;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
   struct container_entrypoint_s container_args = {.container = container, .opts = opts};
+  sigset_t mask;
+  cleanup_close int signalfd = -1;
 
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
@@ -365,27 +397,45 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   if (opts->detach)
     return ret;
 
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+  signalfd = create_signalfd (&mask, err);
+  if (UNLIKELY (signalfd < 0))
+    return signalfd;
+
+  ret = sigprocmask (SIG_BLOCK, &mask, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
+
+  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (last_process)
+    {
+      libcrun_delete_container (opts->state_root, opts->id, 1, err);
+      return container_exit_code;
+    }
+
   while (1)
     {
-      int status;
-      int r = waitpid (-1, &status, 0);
-      if (r < 0)
+      struct signalfd_siginfo si;
+      ssize_t res;
+      do
+        res = read (signalfd, &si, sizeof(si));
+      while (res < 0 && errno == EINTR);
+      if (UNLIKELY (res < 0))
+        return crun_make_error (err, errno, "read from signalfd");
+      if (si.ssi_signo == SIGCHLD)
         {
-          if (errno == EINTR)
-            continue;
-          if (errno == ECHILD)
+          ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          if (last_process)
             {
               libcrun_delete_container (opts->state_root, opts->id, 1, err);
-              break;
+              return container_exit_code;
             }
-          return crun_make_error (err, errno, "waitpid");
-        }
-      if (r != ret)
-        continue;
-      if (WIFEXITED (status) || WIFSIGNALED (status))
-        {
-          libcrun_delete_container (opts->state_root, opts->id, 1, err);
-          return WEXITSTATUS (status);
         }
     }
 
