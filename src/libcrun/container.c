@@ -421,7 +421,14 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
     }
 
   fds[0] = signalfd;
-  fds[1] = -1;
+  if (terminal_fd < 0)
+      fds[1] = -1;
+  else
+    {
+      fds[1] = 0;
+      fds[2] = terminal_fd;
+      fds[3] = -1;
+    }
   epollfd = epoll_helper (fds, err);
   if (UNLIKELY (epollfd < 0))
     return epollfd;
@@ -436,7 +443,19 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
 
       for (i = 0; i < nr_events; i++)
         {
-          if (events[i].data.fd == signalfd)
+          if (events[i].data.fd == 0)
+            {
+              ret = copy_from_fd_to_fd (0, terminal_fd, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else if (events[i].data.fd == terminal_fd)
+            {
+              ret = copy_from_fd_to_fd (terminal_fd, 0, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else if (events[i].data.fd == signalfd)
             {
               do
                 res = read (signalfd, &si, sizeof(si));

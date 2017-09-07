@@ -76,4 +76,6 @@ int create_signalfd (sigset_t *mask, libcrun_error_t *err);
 
 int epoll_helper (int *fds, libcrun_error_t *err);
 
+int copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err);
+
 #endif

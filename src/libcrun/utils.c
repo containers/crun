@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
+#include <sys/syscall.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -451,4 +452,37 @@ epoll_helper (int *fds, libcrun_error_t *err)
   ret = epollfd;
   epollfd = -1;
   return ret;
+}
+
+int
+copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err)
+{
+#ifdef HAVE_COPY_FILE_RANGE
+  ret = copy_file_range (0, NULL, terminal_fd, NULL, 4096, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "copy_file_range");
+  return 0;
+#else
+  cleanup_free char *buffer = xmalloc (8192);
+  int ret, nread;
+  do
+    nread = read (src, buffer, sizeof (buffer));
+  while (nread < 0 && errno == EINTR);
+  if (errno == EIO)
+    return 0;
+  if (UNLIKELY (nread < 0))
+    return crun_make_error (err, errno, "read");
+
+  while (nread)
+    {
+      do
+        ret = write (dst, buffer, nread);
+      while (ret < 0 && errno == EINTR);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "write");
+      nread -= ret;
+    }
+
+  return 0;
+#endif
 }
