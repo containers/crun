@@ -115,11 +115,14 @@ container_run (void *args, int sync_socket)
   if (UNLIKELY (ret < 0))
     goto out;
 
-  ret = setsid ();
-  if (UNLIKELY (ret < 0))
+  if (has_terminal)
     {
-      ret = crun_make_error (&err, errno, "setsid");
-      goto out;
+      ret = setsid ();
+      if (UNLIKELY (ret < 0))
+        {
+          ret = crun_make_error (&err, errno, "setsid");
+          goto out;
+        }
     }
 
   if (has_terminal)
