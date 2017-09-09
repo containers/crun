@@ -229,6 +229,22 @@ create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 }
 
 int
+create_file_if_missing (const char *file, libcrun_error_t *err)
+{
+  int ret = access (file, R_OK);
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
+    return crun_make_error (err, errno, "accessing file '%s'", file);
+
+  if (ret)
+    {
+      cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
+      if (fd_write < 0)
+        return crun_make_error (err, errno, "creating file '%s'", file);
+    }
+  return 0;
+}
+
+int
 check_running_in_user_namespace (libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
@@ -323,24 +339,27 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 }
 
 int
-open_unix_domain_socket (const char *path, libcrun_error_t *err)
+open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
 {
   struct sockaddr_un addr;
   int ret;
-  cleanup_close int fd = socket (AF_UNIX, SOCK_STREAM, 0);
+  cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, 0, "error creating UNIX socket");
+    return crun_make_error (err, errno, "error creating UNIX socket");
 
   memset (&addr, 0, sizeof (addr));
   strcpy (&addr.sun_path[1], path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "bind socket to '%s'", path);
+    return crun_make_error (err, errno, "bind socket to '%s'", path);
 
-  ret = listen (fd, 1);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "listen on socket");
+  if (!dgram)
+    {
+      ret = listen (fd, 1);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "listen on socket");
+    }
 
   ret = fd;
   fd = -1;

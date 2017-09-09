@@ -106,7 +106,7 @@ container_run (void *args, int sync_socket)
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->opts->console_socket)
     {
-      console_socket = open_unix_domain_socket (entrypoint_args->opts->console_socket, &err);
+      console_socket = open_unix_domain_socket (entrypoint_args->opts->console_socket, 0, &err);
       if (UNLIKELY (console_socket < 0))
         goto out;
     }
