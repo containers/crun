@@ -172,6 +172,7 @@ int enter_system_cgroup_scope (char **path, const char *scope, pid_t pid, libcru
       ret = crun_make_error (err, 0, "set up dbus message");
       goto exit;
     }
+
   if (UNLIKELY (sd_bus_message_append (m, "ss", scope, "fail") < 0))
     {
       ret = crun_make_error (err, 0, "sd-bus message append");

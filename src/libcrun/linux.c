@@ -37,6 +37,7 @@
 #include <grp.h>
 #include <signal.h>
 #include "terminal.h"
+#include <sys/socket.h>
 
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
@@ -119,16 +120,17 @@ get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
 }
 
 pid_t
-libcrun_run_container (libcrun_container *container, int detach, container_entrypoint entrypoint, void *args, libcrun_error_t *err)
+libcrun_run_container (libcrun_container *container, int detach, container_entrypoint entrypoint,
+                       void *args, int *sync_socket_out, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   size_t i;
   int ret;
   int flags = 0;
   pid_t pid;
-  cleanup_close int userns_pipe_read = -1;
-  cleanup_close int userns_pipe_write = -1;
-  int userns_sync_pipe[2];
+  cleanup_close int sync_socket_host = -1;
+  cleanup_close int sync_socket_container = -1;
+  int sync_socket[2];
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -140,14 +142,12 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
 
   get_private_data (container)->unshare_flags = flags;
 
-  if (flags & CLONE_NEWUSER)
-    {
-      ret = pipe (userns_sync_pipe);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "pipe");
-      userns_pipe_read = userns_sync_pipe[0];
-      userns_pipe_write = userns_sync_pipe[1];
-    }
+  ret = socketpair (AF_UNIX, SOCK_STREAM, 0, sync_socket);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "socketpair");
+
+  sync_socket_host = sync_socket[0];
+  sync_socket_container = sync_socket[1];
 
   pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
@@ -159,6 +159,11 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
 
   if (pid)
     {
+      ret = close (sync_socket_container);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "close");
+      sync_socket_container = -1;
+
       if (flags & CLONE_NEWUSER)
         {
           ret = libcrun_set_usernamespace (container, pid, err);
@@ -166,14 +171,25 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
             return ret;
 
           do
-            ret = write (userns_pipe_write, "1", 1);
+            ret = write (sync_socket_host, "1", 1);
           while (ret < 0 && errno == EINTR);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, 0, "write to sync pipe");
+            return crun_make_error (err, errno, "write to sync socket");
         }
+
+      *sync_socket_out = sync_socket_host;
+      sync_socket_host = -1;
 
       return pid;
     }
+
+  ret = close (sync_socket_host);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_make_error (err, errno, "close");
+      goto out;
+    }
+  sync_socket_host = -1;
 
   if (detach && setsid () < 0)
     {
@@ -191,7 +207,8 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
           additional_gids = def->process->user->additional_gids;
           additional_gids_len = def->process->user->additional_gids_len;
         }
-      if (UNLIKELY (setgroups (additional_gids_len, additional_gids) < 0))
+      ret = setgroups (additional_gids_len, additional_gids);
+      if (UNLIKELY (ret < 0))
         {
           crun_make_error (err, errno, "setgroups");
           goto out;
@@ -224,13 +241,13 @@ libcrun_run_container (libcrun_container *container, int detach, container_entry
     {
       char tmp;
       do
-        ret = read (userns_pipe_read, &tmp, 1);
+        ret = read (sync_socket_container, &tmp, 1);
       while (ret < 0 && errno == EINTR);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "read from sync pipe");
+        return crun_make_error (err, 0, "read from sync socket");
     }
 
-  entrypoint (args);
+  entrypoint (args, sync_socket_container);
   _exit (1);
  out:
   error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);

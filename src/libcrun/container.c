@@ -83,7 +83,7 @@ struct container_entrypoint_s
 
 /* Entrypoint to the container.  */
 static void
-container_run (void *args)
+container_run (void *args, int sync_socket)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container *container = entrypoint_args->container;
@@ -194,6 +194,30 @@ container_run (void *args)
         ret = crun_make_error (&err, 0, "putenv '%s'", def->process->env[i]);
         goto out;
       }
+
+  do
+    {
+      char c;
+      ret = write (sync_socket, &c, 1);
+    }
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (&err, errno, "write to the sync socket");
+      goto out;
+    }
+
+  do
+    {
+      char c;
+      ret = read (sync_socket, &c, 1);
+    }
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (&err, errno, "read from the sync socket");
+      goto out;
+    }
 
   if (UNLIKELY (execvp (def->process->args[0], def->process->args) < 0))
     {
@@ -311,6 +335,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
   cleanup_terminal void *orig_terminal = NULL;
+  cleanup_close int sync_socket = -1;
 
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
@@ -350,7 +375,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
         return ret;
     }
 
-  pid = libcrun_run_container (container, opts->detach, container_run, &container_args, err);
+  pid = libcrun_run_container (container, opts->detach, container_run, &container_args, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
 
@@ -375,6 +400,25 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  do
+    {
+      char c;
+      ret = read (sync_socket, &c, 1);
+    }
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "read from the sync socket");
+  do
+    ret = write (sync_socket, "1", 1);
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "write to sync socket");
+
+  ret = close (sync_socket);
+  sync_socket = -1;
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "close the sync socket");
 
   ret = write_container_status (container, opts, pid, cgroup_path, err);
   if (UNLIKELY (ret < 0))
