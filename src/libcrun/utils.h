@@ -82,4 +82,6 @@ int copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err);
 
 int run_process (char **args, libcrun_error_t *err);
 
+size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is_uid);
+
 #endif

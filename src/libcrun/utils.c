@@ -524,7 +524,7 @@ run_process (char **args, libcrun_error_t *err)
 }
 
 /*if subuid or subgid exist, take the first range for the user */
-int
+static int
 getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 {
   cleanup_file FILE *input = NULL;
@@ -575,4 +575,41 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 
       return 0;
     }
+}
+
+#define MIN(x,y) ((x)<(y)?(x):(y))
+
+size_t
+format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is_uid)
+{
+  uint32_t from, available;
+  cleanup_free char *buffer = NULL;
+  size_t written = 0;
+
+  *ret = NULL;
+
+  if (getsubidrange (host_id, is_uid, &from, &available) < 0)
+    return 0;
+
+  /* More than enough space for all the mappings.  */
+  buffer = xmalloc (15 * 5 * 3);
+
+  if (container_id > 0)
+    {
+      uint32_t used = MIN (container_id, available);
+      written += sprintf (buffer + written, "%d %d %d\n", 0, from, used);
+      from += used;
+      available -= used;
+    }
+
+  /* Host ID -> Container ID.  */
+  written += sprintf (buffer + written, "%d %d 1\n", container_id, host_id);
+
+  /* Last mapping: use any id that is left.  */
+  if (available)
+    written += sprintf (buffer + written, "%d %d %d\n", container_id + 1, from, available);
+
+  *ret = buffer;
+  buffer = NULL;
+  return written;
 }
