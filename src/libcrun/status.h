@@ -27,6 +27,8 @@
 struct libcrun_container_status_s
 {
   pid_t pid;
+  char *bundle;
+  char *rootfs;
   char *cgroup_path;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;

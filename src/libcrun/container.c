@@ -229,6 +229,64 @@ container_run (void *args, int sync_socket)
   error (EXIT_FAILURE, err->status, "%s", err->msg);
 }
 
+struct hook_s
+{
+    char *path;
+    char **args;
+    size_t args_len;
+
+    int timeout;
+    char **env;
+    size_t env_len;
+
+};
+
+static int
+do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks, size_t hooks_len, libcrun_error_t *err)
+{
+  size_t i, stdin_len;
+  int ret;
+  cleanup_free char *stdin = NULL;
+  cleanup_free char *cwd = get_current_dir_name ();
+  if (cwd == NULL)
+    OOM ();
+
+  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\"}", id, pid, rootfs, cwd);
+
+  for (i = 0; i < hooks_len; i++)
+    {
+      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+static int
+run_poststop_hooks (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
+{
+  libcrun_container *container;
+  cleanup_free char *config_file = NULL;
+  int ret;
+  oci_container *def;
+
+  asprintf (&config_file, "%s/config.json", status->bundle);
+  container = libcrun_container_load (config_file, err);
+  if (container == NULL)
+    error (EXIT_FAILURE, 0, "error loading config.json");
+
+  def = container->container_def;
+  if (def->hooks && def->hooks->poststop_len)
+    {
+      ret = do_hooks (0, id, def->root->path,
+                      (struct hook_s **) def->hooks->poststop,
+                      def->hooks->poststop_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
 int
 libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err)
 {
@@ -241,18 +299,22 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
 
   if (force)
     {
-      /* When --force is used, kill the container.  */
-      kill (status.pid, 9);
+      ret = kill (status.pid, 9);
+      if (UNLIKELY (ret < 0) && errno != ESRCH)
+        return crun_make_error (err, errno, "kill");
     }
   else
     {
-
       ret = kill (status.pid, 0);
       if (ret == 0)
         return crun_make_error (err, 0, "the container '%s' is still running", id);
       if (UNLIKELY (ret < 0 && errno != ESRCH))
         return crun_make_error (err, errno, "signaling the container");
     }
+
+  ret = run_poststop_hooks (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (status.cgroup_path)
     {
@@ -287,7 +349,10 @@ libcrun_kill_container (const char *state_root, const char *id, int signal, libc
 static int
 write_container_status (libcrun_container *container, struct libcrun_run_options *opts, pid_t pid, char *cgroup_path, libcrun_error_t *err)
 {
-  libcrun_container_status_t status = {.pid = pid, .cgroup_path = cgroup_path};
+  cleanup_free char *cwd = get_current_dir_name ();
+  libcrun_container_status_t status = {.pid = pid, .cgroup_path = cgroup_path, .rootfs = container->container_def->root->path, .bundle = cwd};
+  if (cwd == NULL)
+    OOM ();
   return libcrun_write_container_status (opts->state_root, opts->id, &status, err);
 }
 
@@ -409,6 +474,18 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "read from the sync socket");
+
+    /* The container is waiting that we write back.  In this phase we can launch the
+       prestart hooks.  */
+  if (def->hooks && def->hooks->prestart_len)
+    {
+      ret = do_hooks (pid, opts->id, def->root->path,
+                      (struct hook_s **) def->hooks->prestart,
+                      def->hooks->prestart_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   do
     ret = write (sync_socket, "1", 1);
   while (ret < 0 && errno == EINTR);
@@ -459,6 +536,16 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   epollfd = epoll_helper (fds, err);
   if (UNLIKELY (epollfd < 0))
     return epollfd;
+
+  if (def->hooks && def->hooks->poststart_len)
+    {
+      ret = do_hooks (pid, opts->id, def->root->path,
+                      (struct hook_s **) def->hooks->poststart,
+                      def->hooks->poststart_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   while (1)
     {
       struct signalfd_siginfo si;
