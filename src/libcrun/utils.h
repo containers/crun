@@ -84,4 +84,7 @@ int run_process (char **args, libcrun_error_t *err);
 
 size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is_uid);
 
+int run_process_with_stdin_timeout_envp (char *path, char **args, int timeout, char **envp, char *stdin, size_t stdin_len, libcrun_error_t *err);
+
+
 #endif

@@ -33,6 +33,7 @@
 #include <sys/wait.h>
 #include <pwd.h>
 #include <grp.h>
+#include <time.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -612,4 +613,92 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
   *ret = buffer;
   buffer = NULL;
   return written;
+}
+
+/* will leave SIGCHLD blocked if TIMEOUT is used.  */
+int
+run_process_with_stdin_timeout_envp (char *path,
+                                     char **args,
+                                     int timeout,
+                                     char **envp,
+                                     char *stdin,
+                                     size_t stdin_len,
+                                     libcrun_error_t *err)
+{
+  int stdin_pipe[2];
+  pid_t pid;
+  int ret;
+  cleanup_close int pipe_r = -1;
+  cleanup_close int pipe_w = -1;
+  sigset_t mask;
+
+  ret = pipe (stdin_pipe);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "pipe");
+  pipe_r = stdin_pipe[0];
+  pipe_w = stdin_pipe[1];
+
+  if (timeout > 0)
+    {
+      sigaddset (&mask, SIGCHLD);
+      ret = sigprocmask (SIG_BLOCK, &mask, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "sigprocmask");
+    }
+
+  pid = fork ();
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "fork");
+
+  if (pid)
+    {
+      int r, status;
+
+      close (pipe_r);
+      pipe_r = -1;
+
+      ret = write (pipe_w, stdin, stdin_len);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "writing to pipe");
+
+      if (timeout)
+        {
+          time_t start = time (NULL);
+          time_t now;
+          for (now = start; now - start < timeout; now = time (NULL))
+            {
+              siginfo_t info;
+              int elapsed = now - start;
+              struct timespec ts_timeout = { .tv_sec = timeout - elapsed, .tv_nsec = 0 };
+
+              ret = sigtimedwait (&mask, &info, &ts_timeout);
+              if (UNLIKELY (ret < 0 && errno != EAGAIN))
+                return crun_make_error (err, errno, "sigtimedwait");
+
+              if (info.si_signo == SIGCHLD && info.si_pid == pid)
+                goto read_waitpid;
+
+              if (ret < 0 && errno == EAGAIN)
+                goto timeout;
+            }
+ timeout:
+          kill (pid, SIGKILL);
+          return crun_make_error (err, 0, "timeout expired for '%s'", path);
+        }
+
+ read_waitpid:
+      do
+        r = waitpid (pid, &status, 0);
+      while (r < 0 && errno == EINTR);
+      if (r < 0)
+        return crun_make_error (err, errno, "waitpid");
+      if (WIFEXITED (status) || WIFSIGNALED (status))
+        return WEXITSTATUS (status);
+    }
+
+  close (pipe_w);
+  dup2 (pipe_r, 0);
+  close (pipe_r);
+  execvpe (path, args, envp);
+  _exit (1);
 }
