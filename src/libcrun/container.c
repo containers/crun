@@ -303,10 +303,11 @@ run_poststop_hooks (libcrun_container_status_t *status, const char *state_root, 
 }
 
 int
-libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err)
+libcrun_delete_container (struct libcrun_run_options *run_options, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
+  const char *state_root = run_options->state_root;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -333,9 +334,15 @@ libcrun_delete_container (const char *state_root, const char *id, int force, lib
 
   if (status.cgroup_path)
     {
-      ret = libcrun_cgroup_destroy (status.cgroup_path, err);
+      ret = crun_path_exists (status.cgroup_path, 1, err);
       if (UNLIKELY (ret < 0))
         return ret;
+      if (ret > 0)
+        {
+          ret = libcrun_cgroup_destroy (status.cgroup_path, err);
+          if (UNLIKELY (ret < 0))
+            crun_error_write_warning_and_release (run_options->stderr, err);
+        }
     }
   libcrun_free_container_status (&status);
 
@@ -517,7 +524,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_run
 
   if (last_process)
     {
-      libcrun_delete_container (opts->state_root, opts->id, 1, err);
+      libcrun_delete_container (opts, opts->id, 1, err);
       return container_exit_code;
     }
 
@@ -597,7 +604,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_run
                     return ret;
                   if (last_process)
                     {
-                      libcrun_delete_container (opts->state_root, opts->id, 1, err);
+                      libcrun_delete_container (opts, opts->id, 1, err);
                       return container_exit_code;
                     }
                 }

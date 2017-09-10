@@ -31,6 +31,7 @@ struct libcrun_run_options
   char *pid_file;
   char *notify_socket;
   int preserve_fds;
+  FILE *stderr;
 
   int systemd_cgroup : 1;
   int detach : 1;
@@ -59,7 +60,7 @@ libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *er
 
 int libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *error);
 
-int libcrun_delete_container (const char *state_root, const char *id, int force, libcrun_error_t *err);
+int libcrun_delete_container (struct libcrun_run_options *run_options, const char *id, int force, libcrun_error_t *err);
 
 int
 libcrun_kill_container (const char *state_root, const char *id, int signal, libcrun_error_t *err);

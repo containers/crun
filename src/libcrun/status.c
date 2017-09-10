@@ -165,6 +165,7 @@ libcrun_delete_container_status (const char *state_root, const char *id, libcrun
     return crun_make_error (err, errno, "cannot open directory '%s'", dir);
 
   unlinkat (dirfd, "status", 0);
+  unlinkat (dirfd, "notify", 0);
 
   ret = rmdir (dir);
   if (UNLIKELY (ret < 0))

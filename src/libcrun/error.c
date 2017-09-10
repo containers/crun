@@ -63,3 +63,21 @@ oom_handler ()
 {
   error (EXIT_FAILURE, 0, "OOM");
 }
+
+void
+crun_error_write_warning_and_release (FILE *out, libcrun_error_t *err)
+{
+  libcrun_error_t ref;
+
+  if (out == NULL)
+    out = stderr;
+  if (err == NULL)
+    return;
+
+  ref = *err;
+  if (ref->status)
+    fprintf (out, "%s: %s\n", ref->msg, strerror (ref->status));
+  else
+    fprintf (out, "%s\n", ref->msg);
+  crun_error_release (err);
+}

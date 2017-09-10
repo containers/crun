@@ -81,7 +81,15 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
 {
   int first_arg;
 
+  struct libcrun_run_options run_options;
+  run_options.state_root = global_args->root;
+  run_options.systemd_cgroup = global_args->option_systemd_cgroup;
+
+  run_options.stderr = stderr;
+
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &delete_options);
 
-  return libcrun_delete_container (global_args->root, argv[first_arg], delete_options.force, err);
+  run_options.id = argv[first_arg];
+
+  return libcrun_delete_container (&run_options, argv[first_arg], delete_options.force, err);
 }
