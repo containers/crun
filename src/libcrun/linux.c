@@ -1178,7 +1178,7 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
 pid_t
 libcrun_run_container (libcrun_container *container,
                        int detach,
-                       container_entrypoint entrypoint,
+                       container_entrypoint_t entrypoint,
                        void *args,
                        int *notify_socket_out,
                        int *sync_socket_out,
@@ -1312,8 +1312,10 @@ libcrun_run_container (libcrun_container *container,
         return crun_make_error (err, errno, "read from sync socket");
     }
 
-  entrypoint (args, container->context->notify_socket, sync_socket_container);
-  _exit (1);
+  entrypoint (args, container->context->notify_socket, sync_socket_container, err);
+
+  /* ENTRYPOINT returns only on an error, fallback here: */
+
  out:
   error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);
   return 1;

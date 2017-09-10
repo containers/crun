@@ -84,12 +84,12 @@ struct container_entrypoint_s
 };
 
 /* Entrypoint to the container.  */
-static void
-container_run (void *args, const char *notify_socket, int sync_socket)
+static int
+container_entrypoint (void *args, const char *notify_socket,
+                      int sync_socket, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container *container = entrypoint_args->container;
-  libcrun_error_t err = NULL;
   int ret;
   size_t i;
   int has_terminal;
@@ -100,114 +100,96 @@ container_run (void *args, const char *notify_socket, int sync_socket)
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
-    {
-      ret = crun_make_error (&err, errno, "realpath");
-      goto out;
-    }
+    return crun_make_error (err, errno, "realpath");
 
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
     {
-      console_socket = open_unix_domain_socket (entrypoint_args->context->console_socket, 0, &err);
+      console_socket = open_unix_domain_socket (entrypoint_args->context->console_socket, 0, err);
       if (UNLIKELY (console_socket < 0))
-        goto out;
+        return console_socket;
     }
 
-  ret = libcrun_set_mounts (container, rootfs, &err);
+  ret = libcrun_set_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
   if (has_terminal)
     {
       ret = setsid ();
       if (UNLIKELY (ret < 0))
-        {
-          ret = crun_make_error (&err, errno, "setsid");
-          goto out;
-        }
+        return crun_make_error (err, errno, "setsid");
     }
 
   if (has_terminal)
     {
-      terminal_fd = libcrun_set_terminal (container, &err);
+      terminal_fd = libcrun_set_terminal (container, err);
       if (UNLIKELY (terminal_fd < 0))
-        goto out;
+        return ret;
       if (console_socket >= 0)
         {
-          ret = send_fd_to_socket (console_socket, terminal_fd, &err);
+          ret = send_fd_to_socket (console_socket, terminal_fd, err);
           if (UNLIKELY (ret < 0))
-            goto out;
+            return ret;
         }
       else if (entrypoint_args->has_terminal_socket_pair)
         {
-          ret = send_fd_to_socket (entrypoint_args->terminal_socketpair[1], terminal_fd, &err);
+          ret = send_fd_to_socket (entrypoint_args->terminal_socketpair[1], terminal_fd, err);
           if (UNLIKELY (ret < 0))
-            goto out;
+            return ret;
           close (entrypoint_args->terminal_socketpair[0]);
           close (entrypoint_args->terminal_socketpair[1]);
         }
     }
 
-  ret = libcrun_set_selinux_exec_label (container, &err);
+  ret = libcrun_set_selinux_exec_label (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
-  ret = libcrun_set_hostname (container, &err);
+  ret = libcrun_set_hostname (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
-  ret = libcrun_set_oom (container, &err);
+  ret = libcrun_set_oom (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
-  ret = libcrun_set_sysctl (container, &err);
+  ret = libcrun_set_sysctl (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
-  ret = libcrun_set_caps (container, &err);
+  ret = libcrun_set_caps (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
-  ret = libcrun_set_rlimits (container, &err);
+  ret = libcrun_set_rlimits (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
-  ret = set_uid_gid (container, &err);
+  ret = set_uid_gid (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
   if (def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
-      {
-        ret = crun_make_error (&err, errno, "chdir");
-        goto out;
-      }
+      return crun_make_error (err, errno, "chdir");
 
-  ret = libcrun_set_seccomp (container, &err);
+  ret = libcrun_set_seccomp (container, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
   if (clearenv ())
-    {
-      ret = crun_make_error (&err, errno, "clearenv");
-      goto out;
-    }
+    return crun_make_error (err, errno, "clearenv");
 
   for (i = 0; i < def->process->env_len; i++)
     if (putenv (def->process->env[i]) < 0)
-      {
-        ret = crun_make_error (&err, errno, "putenv '%s'", def->process->env[i]);
-        goto out;
-      }
+      return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
   if (notify_socket)
     {
       char *notify_socket_env;
       xasprintf (&notify_socket_env, "NOTIFY_SOCKET=%s", notify_socket);
       if (putenv (notify_socket_env) < 0)
-        {
-          ret = crun_make_error (&err, errno, "putenv '%s'", notify_socket_env);
-          goto out;
-        }
+        return crun_make_error (err, errno, "putenv '%s'", notify_socket_env);
     }
 
   do
@@ -217,10 +199,7 @@ container_run (void *args, const char *notify_socket, int sync_socket)
     }
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
-    {
-      ret = crun_make_error (&err, errno, "write to the sync socket");
-      goto out;
-    }
+    return crun_make_error (err, errno, "write to the sync socket");
 
   do
     {
@@ -229,24 +208,15 @@ container_run (void *args, const char *notify_socket, int sync_socket)
     }
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
-    {
-      ret = crun_make_error (&err, errno, "read from the sync socket");
-      goto out;
-    }
+    return crun_make_error (err, errno, "read from the sync socket");
 
-  ret = close_fds_ge_n (entrypoint_args->context->preserve_fds + 3, &err);
+  ret = close_fds_ge_n (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
-    goto out;
+    return ret;
 
 
-  if (UNLIKELY (execvp (def->process->args[0], def->process->args) < 0))
-    {
-      ret = crun_make_error (&err, errno, "exec the container process");
-      goto out;
-    }
-
- out:
-  error (EXIT_FAILURE, err->status, "%s", err->msg);
+  execvp (def->process->args[0], def->process->args);
+  return crun_make_error (err, errno, "exec the container process");
 }
 
 struct hook_s
@@ -450,7 +420,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
 
-  pid = libcrun_run_container (container, context->detach, container_run, &container_args, &notify_socket, &sync_socket, err);
+  pid = libcrun_run_container (container, context->detach, container_entrypoint, &container_args, &notify_socket, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
 
