@@ -365,7 +365,11 @@ static int
 write_container_status (libcrun_container *container, struct libcrun_run_options *opts, pid_t pid, char *cgroup_path, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
-  libcrun_container_status_t status = {.pid = pid, .cgroup_path = cgroup_path, .rootfs = container->container_def->root->path, .bundle = cwd};
+  libcrun_container_status_t status = {.pid = pid,
+                                       .cgroup_path = cgroup_path,
+                                       .rootfs = container->container_def->root->path,
+                                       .bundle = cwd,
+                                       .systemd_cgroup = opts->systemd_cgroup};
   if (cwd == NULL)
     OOM ();
   return libcrun_write_container_status (opts->state_root, opts->id, &status, err);

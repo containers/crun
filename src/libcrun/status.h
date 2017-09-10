@@ -30,6 +30,7 @@ struct libcrun_container_status_s
   char *bundle;
   char *rootfs;
   char *cgroup_path;
+  int systemd_cgroup;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
