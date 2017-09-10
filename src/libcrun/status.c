@@ -26,6 +26,7 @@
 #include <yajl/yajl_tree.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
 
 static char *
 get_run_directory (const char *state_root)
@@ -178,4 +179,46 @@ libcrun_free_container_status (libcrun_container_status_t *status)
 {
   if (status->cgroup_path)
     free (status->cgroup_path);
+}
+
+int
+libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err)
+{
+  struct dirent *next;
+  libcrun_container_list_t *tmp = NULL;
+  cleanup_free char *path = get_run_directory (state_root);
+  cleanup_dir DIR *dir;
+
+  *ret = NULL;
+  dir = opendir (path);
+  if (UNLIKELY (dir == NULL))
+      return crun_make_error (err, errno, "cannot opendir '%s'", path);
+
+  for (next = readdir (dir); next; next = readdir (dir))
+    {
+      libcrun_container_list_t *next_container;
+
+      if (next->d_name[0] == '.')
+        continue;
+
+      next_container = xmalloc (sizeof (libcrun_container_list_t));
+      next_container->name = xstrdup (next->d_name);
+      next_container->next = tmp;
+      tmp = next_container;
+    }
+  *ret = tmp;
+  return 0;
+}
+
+void
+libcrun_free_containers_list (libcrun_container_list_t *list)
+{
+  libcrun_container_list_t *next;
+  while (list)
+    {
+      next = list->next;
+      free (list->name);
+      free (list);
+      list = next;
+    }
 }

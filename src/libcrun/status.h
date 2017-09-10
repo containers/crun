@@ -24,6 +24,13 @@
 # include "error.h"
 # include "container.h"
 
+struct libcrun_container_list_s
+{
+  struct libcrun_container_list_s *next;
+  char *name;
+};
+typedef struct libcrun_container_list_s libcrun_container_list_t;
+
 struct libcrun_container_status_s
 {
   pid_t pid;
@@ -40,5 +47,7 @@ int libcrun_read_container_status (libcrun_container_status_t *status, const cha
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_delete_container_status (const char *state_root, const char *id, libcrun_error_t *err);
 char *libcrun_get_state_directory (const char *state_root, const char *id);
+int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err);
+void libcrun_free_containers_list (libcrun_container_list_t *list);
 
 #endif

@@ -28,6 +28,7 @@
 #include "crun.h"
 #include "libcrun/container.h"
 #include "libcrun/utils.h"
+#include "libcrun/status.h"
 
 static char doc[] = "OCI runtime";
 
@@ -40,33 +41,26 @@ enum
     OPTION_PRESERVE_FDS
   };
 
-struct delete_options_s
+struct list_options_s
 {
   int force;
 };
 
-static struct delete_options_s delete_options;
+static struct list_options_s list_options;
 
 static struct argp_option options[] =
   {
-    {"force", 'f', 0, 0, "delete the container even if it is still running" },
+    {"force", 'f', 0, 0, "list the container even if it is still running" },
     { 0 }
   };
 
-static char args_doc[] = "delete CONTAINER";
+static char args_doc[] = "list";
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {
-    case 'f':
-      delete_options.force = 1;
-      break;
-
-    case ARGP_KEY_NO_ARGS:
-      error (EXIT_FAILURE, 0, "please specify a ID for the container");
-
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -77,15 +71,35 @@ parse_opt (int key, char *arg, struct argp_state *state)
 static struct argp run_argp = { options, parse_opt, args_doc, doc };
 
 int
-crun_command_delete (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
+crun_command_list (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-
+  int ret;
   struct libcrun_context_s crun_context;
+  libcrun_container_list_t *list, *it;
 
-  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &delete_options);
+  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &list_options);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
-  return libcrun_delete_container (&crun_context, argv[first_arg], delete_options.force, err);
+  ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  printf ("NAME\tPID\tBUNDLE PATH\n");
+  for (it = list; it; it = it->next)
+    {
+      libcrun_container_status_t status;
+      ret = libcrun_read_container_status (&status, crun_context.state_root, it->name, err);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_error_write_warning_and_release (stderr, err);
+          continue;
+        }
+      printf ("%s\t%d\t%s\n", it->name, status.pid, status.bundle);
+
+      libcrun_free_container_status (&status);
+    }
+  libcrun_free_containers_list (list);
+  return 0;
 }

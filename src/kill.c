@@ -53,7 +53,7 @@ static struct argp_option options[] =
     { 0 }
   };
 
-static char args_doc[] = "run [OPTION]... CONTAINER";
+static char args_doc[] = "kill CONTAINER SIGNAL";
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
