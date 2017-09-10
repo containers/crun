@@ -126,35 +126,48 @@ get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
 struct propagation_flags_s
   {
     const char *name;
+    int clear;
     int flags;
   };
 
 static struct propagation_flags_s propagation_flags[] =
   {
-    {"rshared", MS_REC | MS_SHARED},
-    {"rslave", MS_REC | MS_SLAVE},
-    {"rprivate", MS_REC | MS_PRIVATE},
-    {"shared", MS_SHARED},
-    {"slave", MS_SLAVE},
-    {"private", MS_PRIVATE},
-    {"unbindable", MS_UNBINDABLE},
-    {"nosuid", MS_NOSUID},
-    {"noexec", MS_NOEXEC},
-    {"nodev", MS_NODEV},
-    {"dirsync", MS_DIRSYNC},
-    {"lazytime", MS_LAZYTIME},
-    {"nodiratime", MS_NODIRATIME},
-    {"noatime", MS_NOATIME},
-    {"ro", MS_RDONLY},
-    {"rw", 0},
-    {"relatime", MS_RELATIME},
-    {"strictatime", MS_STRICTATIME},
-    {"synchronous", MS_SYNCHRONOUS},
+    {"defaults", 0, 0},
+    {"ro", 0, MS_RDONLY},
+    {"rw", 1, MS_RDONLY},
+    {"suid", 1, MS_NOSUID},
+    {"nosuid", 0, MS_NOSUID},
+    {"dev", 1, MS_NODEV},
+    {"nodev", 0, MS_NODEV},
+    {"exec", 1, MS_NOEXEC},
+    {"noexec", 0, MS_NOEXEC},
+    {"sync", 0, MS_SYNCHRONOUS},
+    {"async", 1, MS_SYNCHRONOUS},
+    {"dirsync", 0, MS_DIRSYNC},
+    {"remount", 0, MS_REMOUNT},
+    {"mand", 0, MS_MANDLOCK},
+    {"nomand", 1, MS_MANDLOCK},
+    {"atime", 1, MS_NOATIME},
+    {"noatime", 0, MS_NOATIME},
+    {"diratime", 1, MS_NODIRATIME},
+    {"nodiratime", 0, MS_NODIRATIME},
+    {"relatime", 0, MS_RELATIME},
+    {"norelatime", 1, MS_RELATIME},
+    {"strictatime", 0, MS_STRICTATIME},
+    {"nostrictatime", 1, MS_STRICTATIME},
+    {"shared", 0, MS_SHARED},
+    {"rshared", 0, MS_REC | MS_SHARED},
+    {"slave", 0, MS_SLAVE},
+    {"rslave", 0, MS_REC | MS_SLAVE},
+    {"private", 0, MS_PRIVATE},
+    {"rprivate", 0, MS_REC | MS_PRIVATE},
+    {"unbindable", 0, MS_UNBINDABLE},
+    {"runbindable", 0, MS_REC | MS_UNBINDABLE},
     {NULL, 0}
   };
 
 static unsigned long
-get_mount_flags (const char *name, int *found)
+get_mount_flags (const char *name, int current_flags, int *found)
 {
   struct propagation_flags_s *it;
   if (found)
@@ -164,17 +177,21 @@ get_mount_flags (const char *name, int *found)
       {
         if (found)
           *found = 1;
-        return it->flags;
+
+        if (it->clear)
+          return current_flags & ~it->flags;
+
+        return current_flags | it->flags;
       }
   return 0;
 }
 
 static unsigned long
-get_mount_flags_or_option (const char *name, char **option)
+get_mount_flags_or_option (const char *name, int current_flags, char **option)
 {
   int found;
-  unsigned long flags = get_mount_flags (name, &found);
   cleanup_free char *prev = NULL;
+  unsigned long flags = get_mount_flags (name, current_flags, &found);
   if (found)
     return flags;
 
@@ -576,7 +593,7 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
         {
           size_t j;
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], &data);
+            flags = get_mount_flags_or_option (def->mounts[i]->options[j], flags, &data);
         }
 
       type = def->mounts[i]->type;
@@ -677,7 +694,7 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   unsigned long rootfsPropagation = 0;
 
   if (def->linux->rootfs_propagation)
-    rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation, NULL);
+    rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL);
   else
     rootfsPropagation = MS_REC | MS_SLAVE;
 
