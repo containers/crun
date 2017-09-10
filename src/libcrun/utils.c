@@ -279,7 +279,7 @@ set_selinux_exec_label (const char *label, libcrun_error_t *err)
   if (is_selinux_enabled () > 0)
     if (UNLIKELY (setexeccon (label) < 0))
       {
-        crun_make_error (err, 0, "error setting SELinux exec label");
+        crun_make_error (err, errno, "error setting SELinux exec label");
         return -1;
       }
 #endif
@@ -300,11 +300,11 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   while (fd < 0 && errno == EINTR);
 
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, 0, "error opening file '%s'", path);
+    return crun_make_error (err, errno, "error opening file '%s'", path);
 
   ret = fstat (fd, &stat);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "error stat'ing file '%s'", path);
+    return crun_make_error (err, errno, "error stat'ing file '%s'", path);
 
   /* NUL terminate the buffer.  */
   allocated = stat.st_size;
@@ -319,7 +319,7 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
         ret = read (fd, buf + nread, allocated - nread);
       while (ret < 0 && errno == EINTR);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "error reading from file '%s'", path);
+        return crun_make_error (err, errno, "error reading from file '%s'", path);
 
       nread += ret;
 
@@ -401,7 +401,7 @@ send_fd_to_socket (int server, int fd, libcrun_error_t *err)
     ret = sendmsg (server, &msg, 0);
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "sendmsg");
+    return crun_make_error (err, errno, "sendmsg");
   return 0;
 }
 
@@ -433,7 +433,7 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
     ret = recvmsg (from, &msg, 0);
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "recvmsg");
+    return crun_make_error (err, errno, "recvmsg");
 
   cmsg = CMSG_FIRSTHDR (&msg);
   memcpy (&fd, CMSG_DATA(cmsg), sizeof(fd));
@@ -448,7 +448,7 @@ create_socket_pair (int *pair, libcrun_error_t *err)
 {
   int ret = socketpair (AF_UNIX, SOCK_DGRAM, 0, pair);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "socketpair");
+    return crun_make_error (err, errno, "socketpair");
   return 0;
 }
 
@@ -457,7 +457,7 @@ create_signalfd (sigset_t *mask, libcrun_error_t *err)
 {
   int ret = signalfd (-1, mask, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "signalfd");
+    return crun_make_error (err, errno, "signalfd");
   return ret;
 }
 
@@ -471,7 +471,7 @@ epoll_helper (int *fds, libcrun_error_t *err)
   int *it;
   epollfd = epoll_create1 (0);
   if (UNLIKELY (epollfd < 0))
-    return crun_make_error (err, 0, "epoll_create1");
+    return crun_make_error (err, errno, "epoll_create1");
 
   for (it = fds; *it >= 0; it++)
     {
@@ -479,7 +479,7 @@ epoll_helper (int *fds, libcrun_error_t *err)
       ev.data.fd = *it;
       ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "epoll_create1");
+        return crun_make_error (err, errno, "epoll_create1");
     }
 
   ret = epollfd;

@@ -1038,7 +1038,7 @@ libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err)
       char *type = def->process->rlimits[i]->type;
       int resource = get_rlimit_resource (type);
       if (UNLIKELY (resource < 0))
-        return crun_make_error (err, 0, "invalid rlimit '%s'", type);
+        return crun_make_error (err, errno, "invalid rlimit '%s'", type);
       limit.rlim_cur = def->process->rlimits[i]->soft;
       limit.rlim_max = def->process->rlimits[i]->hard;
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
@@ -1292,7 +1292,7 @@ libcrun_run_container (libcrun_container *container,
         ret = read (sync_socket_container, &tmp, 1);
       while (ret < 0 && errno == EINTR);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "read from sync socket");
+        return crun_make_error (err, errno, "read from sync socket");
     }
 
   entrypoint (args, container->context->notify_socket, sync_socket_container);

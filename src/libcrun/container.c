@@ -189,14 +189,14 @@ container_run (void *args, const char *notify_socket, int sync_socket)
 
   if (clearenv ())
     {
-      ret = crun_make_error (&err, 0, "clearenv");
+      ret = crun_make_error (&err, errno, "clearenv");
       goto out;
     }
 
   for (i = 0; i < def->process->env_len; i++)
     if (putenv (def->process->env[i]) < 0)
       {
-        ret = crun_make_error (&err, 0, "putenv '%s'", def->process->env[i]);
+        ret = crun_make_error (&err, errno, "putenv '%s'", def->process->env[i]);
         goto out;
       }
   if (notify_socket)
@@ -205,7 +205,7 @@ container_run (void *args, const char *notify_socket, int sync_socket)
       xasprintf (&notify_socket_env, "NOTIFY_SOCKET=%s", notify_socket);
       if (putenv (notify_socket_env) < 0)
         {
-          ret = crun_make_error (&err, 0, "putenv '%s'", notify_socket_env);
+          ret = crun_make_error (&err, errno, "putenv '%s'", notify_socket_env);
           goto out;
         }
     }
@@ -365,7 +365,7 @@ libcrun_kill_container (struct libcrun_context_s *context, const char *id, int s
   libcrun_free_container_status (&status);
 
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "kill container");
+    return crun_make_error (err, errno, "kill container");
   return 0;
 }
 
@@ -435,7 +435,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "set child subreaper");
+    return crun_make_error (err, errno, "set child subreaper");
 
   if (def->process->terminal && !detach)
     {
@@ -478,7 +478,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     }
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "read from the sync socket");
+    return crun_make_error (err, errno, "read from the sync socket");
 
     /* The container is waiting that we write back.  In this phase we can launch the
        prestart hooks.  */
@@ -495,12 +495,12 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     ret = write (sync_socket, "1", 1);
   while (ret < 0 && errno == EINTR);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "write to sync socket");
+    return crun_make_error (err, errno, "write to sync socket");
 
   ret = close (sync_socket);
   sync_socket = -1;
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "close the sync socket");
+    return crun_make_error (err, errno, "close the sync socket");
 
   ret = write_container_status (container, context, pid, cgroup_path, err);
   if (UNLIKELY (ret < 0))
@@ -647,7 +647,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
 
   ret = fork ();
   if (ret < 0)
-    return crun_make_error (err, 0, "fork");
+    return crun_make_error (err, errno, "fork");
   if (ret)
     return 0;
 
