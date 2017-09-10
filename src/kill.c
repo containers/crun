@@ -81,12 +81,15 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
 {
   int first_arg, signal;
 
+  struct libcrun_context_s crun_context;
+
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &kill_options);
   if (argc - first_arg < 2)
     error (EXIT_FAILURE, 0, "please specify ID SIGNAL");
 
-  
+  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+
   signal = strtoull (argv[first_arg + 1], NULL, 10);
-  
-  return libcrun_kill_container (global_args->root, argv[first_arg], signal, err);
+
+  return libcrun_kill_container (&crun_context, argv[first_arg], signal, err);
 }

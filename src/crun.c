@@ -39,6 +39,16 @@ struct commands_s
   int (*handler) (struct crun_global_arguments *, int, char **, libcrun_error_t *);
 };
 
+void
+init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob)
+{
+  con->id = id;
+  con->state_root = glob->root;
+  con->systemd_cgroup = glob->option_systemd_cgroup;
+  con->notify_socket = getenv ("NOTIFY_SOCKET");
+  con->stderr = stderr;
+}
+
 static int
 crun_command_not_implemented (struct crun_global_arguments *global_args, int argc, char **arg, libcrun_error_t *error)
 {

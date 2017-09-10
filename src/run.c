@@ -109,21 +109,17 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   int first_arg;
   libcrun_container *container;
 
-  crun_context.state_root = global_args->root;
-  crun_context.systemd_cgroup = global_args->option_systemd_cgroup;
-  crun_context.notify_socket = getenv ("NOTIFY_SOCKET");
-  crun_context.stderr = stderr;
-
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
 
   if (bundle != NULL)
     if (chdir (bundle) < 0)
       error (EXIT_FAILURE, errno, "chdir '%s' failed", bundle);
-    
+
   container = libcrun_container_load ("config.json", err);
   if (container == NULL)
     error (EXIT_FAILURE, 0, "error loading config.json");
 
-  crun_context.id = argv[first_arg];
+  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+
   return libcrun_container_run (container, &crun_context, err);
 }

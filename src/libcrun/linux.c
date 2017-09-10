@@ -616,10 +616,10 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
 static int
 do_notify_socket (libcrun_container *container, int *notify_socket_out, const char *rootfs, libcrun_error_t *err)
 {
-  const char *notify_socket = container->run_options->notify_socket;
+  const char *notify_socket = container->context->notify_socket;
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
-  cleanup_free char *state_dir = libcrun_get_state_directory (container->run_options->state_root, container->run_options->id);
+  cleanup_free char *state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
   cleanup_close int notify_fd = -1;
   int ret;
 
@@ -1295,7 +1295,7 @@ libcrun_run_container (libcrun_container *container,
         return crun_make_error (err, 0, "read from sync socket");
     }
 
-  entrypoint (args, container->run_options->notify_socket, sync_socket_container);
+  entrypoint (args, container->context->notify_socket, sync_socket_container);
   _exit (1);
  out:
   error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);

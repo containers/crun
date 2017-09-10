@@ -26,7 +26,7 @@
 struct libcrun_context_s
 {
   char *state_root;
-  char *id;
+  const char *id;
   char *console_socket;
   char *pid_file;
   char *notify_socket;
@@ -51,18 +51,17 @@ struct libcrun_container_s
   gid_t container_gid;
 
   void *private_data;
-  struct libcrun_context_s *run_options;
+  struct libcrun_context_s *context;
 };
 
 typedef struct libcrun_container_s libcrun_container;
 
 libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *error);
 
-int libcrun_container_run (libcrun_container *container, struct libcrun_context_s *opts, libcrun_error_t *error);
+int libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *error);
 
-int libcrun_delete_container (struct libcrun_context_s *run_options, const char *id, int force, libcrun_error_t *err);
+int libcrun_delete_container (struct libcrun_context_s *context, const char *id, int force, libcrun_error_t *err);
 
-int
-libcrun_kill_container (const char *state_root, const char *id, int signal, libcrun_error_t *err);
+int libcrun_kill_container (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err);
 
 #endif

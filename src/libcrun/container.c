@@ -78,7 +78,7 @@ set_uid_gid (libcrun_container *container, libcrun_error_t *err)
 struct container_entrypoint_s
 {
   libcrun_container *container;
-  struct libcrun_context_s *opts;
+  struct libcrun_context_s *context;
   int has_terminal_socket_pair;
   int terminal_socketpair[2];
 };
@@ -106,9 +106,9 @@ container_run (void *args, const char *notify_socket, int sync_socket)
     }
 
   has_terminal = container->container_def->process->terminal;
-  if (has_terminal && entrypoint_args->opts->console_socket)
+  if (has_terminal && entrypoint_args->context->console_socket)
     {
-      console_socket = open_unix_domain_socket (entrypoint_args->opts->console_socket, 0, &err);
+      console_socket = open_unix_domain_socket (entrypoint_args->context->console_socket, 0, &err);
       if (UNLIKELY (console_socket < 0))
         goto out;
     }
@@ -303,11 +303,11 @@ run_poststop_hooks (libcrun_container_status_t *status, const char *state_root, 
 }
 
 int
-libcrun_delete_container (struct libcrun_context_s *run_options, const char *id, int force, libcrun_error_t *err)
+libcrun_delete_container (struct libcrun_context_s *context, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
-  const char *state_root = run_options->state_root;
+  const char *state_root = context->state_root;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -341,7 +341,7 @@ libcrun_delete_container (struct libcrun_context_s *run_options, const char *id,
         {
           ret = libcrun_cgroup_destroy (status.cgroup_path, err);
           if (UNLIKELY (ret < 0))
-            crun_error_write_warning_and_release (run_options->stderr, err);
+            crun_error_write_warning_and_release (context->stderr, err);
         }
     }
   libcrun_free_container_status (&status);
@@ -351,9 +351,10 @@ libcrun_delete_container (struct libcrun_context_s *run_options, const char *id,
 }
 
 int
-libcrun_kill_container (const char *state_root, const char *id, int signal, libcrun_error_t *err)
+libcrun_kill_container (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err)
 {
   int ret;
+  const char *state_root = context->state_root;
   libcrun_container_status_t status;
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -369,17 +370,17 @@ libcrun_kill_container (const char *state_root, const char *id, int signal, libc
 }
 
 static int
-write_container_status (libcrun_container *container, struct libcrun_context_s *opts, pid_t pid, char *cgroup_path, libcrun_error_t *err)
+write_container_status (libcrun_container *container, struct libcrun_context_s *context, pid_t pid, char *cgroup_path, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
   libcrun_container_status_t status = {.pid = pid,
                                        .cgroup_path = cgroup_path,
                                        .rootfs = container->container_def->root->path,
                                        .bundle = cwd,
-                                       .systemd_cgroup = opts->systemd_cgroup};
+                                       .systemd_cgroup = context->systemd_cgroup};
   if (cwd == NULL)
     OOM ();
-  return libcrun_write_container_status (opts->state_root, opts->id, &status, err);
+  return libcrun_write_container_status (context->state_root, context->id, &status, err);
 }
 
 static int
@@ -412,15 +413,15 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
-libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *opts, libcrun_error_t *err)
+libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret, container_exit_code, last_process;
   pid_t pid;
-  int detach = opts->detach;
+  int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
-  struct container_entrypoint_s container_args = {.container = container, .opts = opts};
+  struct container_entrypoint_s container_args = {.container = container, .context = context};
   sigset_t mask;
   int fds[10];
   int fds_len = 0;
@@ -430,7 +431,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   cleanup_close int sync_socket = -1;
   cleanup_close int notify_socket = -1;
 
-  container->run_options = opts;
+  container->context = context;
 
   ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
   if (UNLIKELY (ret < 0))
@@ -444,7 +445,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
 
-  pid = libcrun_run_container (container, opts->detach, container_run, &container_args, &notify_socket, &sync_socket, err);
+  pid = libcrun_run_container (container, context->detach, container_run, &container_args, &notify_socket, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
 
@@ -462,7 +463,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       close (container_args.terminal_socketpair[1]);
     }
 
-  ret = libcrun_cgroup_enter (&cgroup_path, opts->systemd_cgroup, pid, opts->id, err);
+  ret = libcrun_cgroup_enter (&cgroup_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -483,7 +484,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
        prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
-      ret = do_hooks (pid, opts->id, def->root->path,
+      ret = do_hooks (pid, context->id, def->root->path,
                       (struct hook_s **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret < 0))
@@ -501,11 +502,11 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "close the sync socket");
 
-  ret = write_container_status (container, opts, pid, cgroup_path, err);
+  ret = write_container_status (container, context, pid, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (opts->detach && notify_socket < 0)
+  if (context->detach && notify_socket < 0)
     return 0;
 
   sigemptyset (&mask);
@@ -524,7 +525,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   if (last_process)
     {
-      libcrun_delete_container (opts, opts->id, 1, err);
+      libcrun_delete_container (context, context->id, 1, err);
       return container_exit_code;
     }
 
@@ -544,7 +545,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   if (def->hooks && def->hooks->poststart_len)
     {
-      ret = do_hooks (pid, opts->id, def->root->path,
+      ret = do_hooks (pid, context->id, def->root->path,
                       (struct hook_s **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
@@ -586,7 +587,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                   ret = sd_notify (0, "READY=1");
                   if (UNLIKELY (ret < 0))
                     return crun_make_error (err, errno, "sd_notify");
-                  if (opts->detach)
+                  if (context->detach)
                     return 0;
                 }
             }
@@ -604,7 +605,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                     return ret;
                   if (last_process)
                     {
-                      libcrun_delete_container (opts, opts->id, 1, err);
+                      libcrun_delete_container (context, context->id, 1, err);
                       return container_exit_code;
                     }
                 }
@@ -620,13 +621,13 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 }
 
 int
-libcrun_container_run (libcrun_container *container, struct libcrun_context_s *opts, libcrun_error_t *err)
+libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
-  int detach = opts->detach;
+  int detach = context->detach;
 
-  container->run_options = opts;
+  container->context = context;
 
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
@@ -637,12 +638,12 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *o
   if (UNLIKELY (def->mounts == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
 
-  ret = libcrun_status_check_directories (opts->state_root, opts->id, err);
+  ret = libcrun_status_check_directories (context->state_root, context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (!detach)
-    return libcrun_container_run_internal (container, opts, err);
+    return libcrun_container_run_internal (container, context, err);
 
   ret = fork ();
   if (ret < 0)
@@ -654,6 +655,6 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *o
   ret = detach_process ();
   if (ret < 0)
     error (EXIT_FAILURE, errno, "detach process");
-  libcrun_container_run_internal (container, opts, err);
+  libcrun_container_run_internal (container, context, err);
   _exit (0);
 }

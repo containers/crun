@@ -18,6 +18,8 @@
 #ifndef CRUN_H
 # define CRUN_H
 
+# include "libcrun/container.h"
+
 struct crun_global_arguments
 {
   char *root;
@@ -27,5 +29,7 @@ struct crun_global_arguments
   int debug : 1;
   int option_systemd_cgroup : 1;
 };
+
+void init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob);
 
 #endif
