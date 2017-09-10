@@ -42,7 +42,7 @@ enum
 
 static char *bundle = NULL;
 
-static struct libcrun_run_options run_options;
+static struct libcrun_context_s crun_context;
 
 static struct argp_option options[] =
   {
@@ -64,7 +64,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'd':
-      run_options.detach = 1;
+      crun_context.detach = 1;
       break;
 
     case 'b':
@@ -72,23 +72,23 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_CONSOLE_SOCKET:
-      run_options.console_socket = argp_mandatory_argument (arg, state);
+      crun_context.console_socket = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_PRESERVE_FDS:
-      run_options.preserve_fds = atoi (argp_mandatory_argument (arg, state));
+      crun_context.preserve_fds = atoi (argp_mandatory_argument (arg, state));
       break;
 
     case OPTION_NO_SUBREAPER:
-      run_options.no_subreaper = 1;
+      crun_context.no_subreaper = 1;
       break;
 
     case OPTION_NO_NEW_KEYRING:
-      run_options.no_new_keyring = 1;
+      crun_context.no_new_keyring = 1;
       break;
 
     case OPTION_PID_FILE:
-      run_options.pid_file = argp_mandatory_argument (arg, state);
+      crun_context.pid_file = argp_mandatory_argument (arg, state);
       break;
 
     case ARGP_KEY_NO_ARGS:
@@ -109,12 +109,12 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   int first_arg;
   libcrun_container *container;
 
-  run_options.state_root = global_args->root;
-  run_options.systemd_cgroup = global_args->option_systemd_cgroup;
-  run_options.notify_socket = getenv ("NOTIFY_SOCKET");
-  run_options.stderr = stderr;
+  crun_context.state_root = global_args->root;
+  crun_context.systemd_cgroup = global_args->option_systemd_cgroup;
+  crun_context.notify_socket = getenv ("NOTIFY_SOCKET");
+  crun_context.stderr = stderr;
 
-  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &run_options);
+  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
 
   if (bundle != NULL)
     if (chdir (bundle) < 0)
@@ -124,6 +124,6 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   if (container == NULL)
     error (EXIT_FAILURE, 0, "error loading config.json");
 
-  run_options.id = argv[first_arg];
-  return libcrun_container_run (container, &run_options, err);
+  crun_context.id = argv[first_arg];
+  return libcrun_container_run (container, &crun_context, err);
 }

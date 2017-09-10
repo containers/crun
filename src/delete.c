@@ -81,7 +81,7 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
 {
   int first_arg;
 
-  struct libcrun_run_options run_options;
+  struct libcrun_context_s run_options;
   run_options.state_root = global_args->root;
   run_options.systemd_cgroup = global_args->option_systemd_cgroup;
 

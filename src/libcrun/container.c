@@ -78,7 +78,7 @@ set_uid_gid (libcrun_container *container, libcrun_error_t *err)
 struct container_entrypoint_s
 {
   libcrun_container *container;
-  struct libcrun_run_options *opts;
+  struct libcrun_context_s *opts;
   int has_terminal_socket_pair;
   int terminal_socketpair[2];
 };
@@ -303,7 +303,7 @@ run_poststop_hooks (libcrun_container_status_t *status, const char *state_root, 
 }
 
 int
-libcrun_delete_container (struct libcrun_run_options *run_options, const char *id, int force, libcrun_error_t *err)
+libcrun_delete_container (struct libcrun_context_s *run_options, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
@@ -369,7 +369,7 @@ libcrun_kill_container (const char *state_root, const char *id, int signal, libc
 }
 
 static int
-write_container_status (libcrun_container *container, struct libcrun_run_options *opts, pid_t pid, char *cgroup_path, libcrun_error_t *err)
+write_container_status (libcrun_container *container, struct libcrun_context_s *opts, pid_t pid, char *cgroup_path, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
   libcrun_container_status_t status = {.pid = pid,
@@ -412,7 +412,7 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
-libcrun_container_run_internal (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
+libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret, container_exit_code, last_process;
@@ -620,7 +620,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_run
 }
 
 int
-libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
+libcrun_container_run (libcrun_container *container, struct libcrun_context_s *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
