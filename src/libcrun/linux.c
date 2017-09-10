@@ -885,6 +885,14 @@ struct all_caps_s
 };
 
 static int
+has_cap_on (int cap, long unsigned *caps)
+{
+  if (cap < 32)
+    return CAP_TO_MASK_0 (cap) & caps[0];
+  return (CAP_TO_MASK_1 (cap) & caps[1]);
+}
+
+static int
 set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *err)
 {
   unsigned long cap;
@@ -892,22 +900,8 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *e
   struct __user_cap_header_struct hdr = { _LINUX_CAPABILITY_VERSION_3, 0 };
   struct __user_cap_data_struct data[2] = { { 0 } };
 
-  ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
-  if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
-    return crun_make_error (err, errno, "prctl reset ambient");
-
   for (cap = 0; cap <= CAP_LAST_CAP; cap++)
-    if ((cap < 32 && CAP_TO_MASK_0 (cap) & caps->ambient[0])
-        || (cap >= 32 && CAP_TO_MASK_1 (cap) & caps->ambient[1]))
-      {
-        ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, cap, 0, 0);
-        if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
-          return crun_make_error (err, errno, "prctl ambient raise");
-      }
-
-  for (cap = 0; cap <= CAP_LAST_CAP; cap++)
-    if ((cap < 32 && ((CAP_TO_MASK_0 (cap) & caps->bounding[0]) == 0))
-        || (cap >= 32 && ((CAP_TO_MASK_1 (cap) & caps->bounding[1]) == 0)))
+    if (! has_cap_on (cap, caps->bounding))
       {
         ret = prctl (PR_CAPBSET_DROP, cap, 0, 0, 0);
         if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
@@ -924,6 +918,18 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *e
   ret = capset (&hdr, data) < 0;
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "capset");
+
+  ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
+  if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
+    return crun_make_error (err, errno, "prctl reset ambient");
+
+  for (cap = 0; cap <= CAP_LAST_CAP; cap++)
+    if (has_cap_on (cap, caps->ambient))
+      {
+        ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, cap, 0, 0);
+        if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
+          return crun_make_error (err, errno, "prctl ambient raise");
+      }
 
   if (no_new_privs)
     if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
