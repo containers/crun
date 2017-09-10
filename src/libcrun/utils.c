@@ -62,6 +62,14 @@ cleanup_closep (void *p)
     close (*pp);
 }
 
+void
+cleanup_dirp (DIR **p)
+{
+  DIR *dir = *p;
+  if (dir)
+    closedir (dir);
+}
+
 void *
 xmalloc (size_t size)
 {
@@ -719,4 +727,35 @@ run_process_with_stdin_timeout_envp (char *path,
   close (pipe_r);
   execvpe (path, args, envp);
   _exit (1);
+}
+
+int
+close_fds_ge_n (int n, libcrun_error_t *err)
+{
+  int fd;
+  cleanup_dir DIR *dir = NULL;
+  int ret;
+  struct dirent *next;
+
+  dir = opendir ("/proc/self/fd");
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, errno, "cannot fdopendir /proc/self/fd");
+
+  fd = dirfd (dir);
+
+  for (next = readdir (dir); next; next = readdir (dir))
+    {
+      int val;
+      const char *name = next->d_name;
+      if (name[0] == '.')
+        continue;
+
+      val = atoi (name);
+      if (val < n || val == fd)
+        continue;
+      ret = close (val);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "cannot close fd for '/proc/self/fd/%s'", name);
+    }
+  return 0;
 }

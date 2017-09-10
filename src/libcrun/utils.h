@@ -24,14 +24,17 @@
 # include <errno.h>
 # include <argp.h>
 # include "error.h"
+# include <dirent.h>
 
 void cleanup_filep (FILE **f);
 void cleanup_freep (void *p);
 void cleanup_closep (void *p);
+void cleanup_dirp (DIR **p);
 
 #define cleanup_file __attribute__((cleanup (cleanup_filep)))
 #define cleanup_free __attribute__((cleanup (cleanup_freep)))
 #define cleanup_close __attribute__((cleanup (cleanup_closep)))
+#define cleanup_dir __attribute__((cleanup (cleanup_dirp)))
 
 # define LIKELY(x) __builtin_expect((x),1)
 # define UNLIKELY(x) __builtin_expect((x),0)
@@ -87,5 +90,7 @@ int run_process (char **args, libcrun_error_t *err);
 size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is_uid);
 
 int run_process_with_stdin_timeout_envp (char *path, char **args, int timeout, char **envp, char *stdin, size_t stdin_len, libcrun_error_t *err);
+
+int close_fds_ge_n (int n, libcrun_error_t *err);
 
 #endif

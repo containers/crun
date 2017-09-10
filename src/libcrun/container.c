@@ -234,6 +234,11 @@ container_run (void *args, const char *notify_socket, int sync_socket)
       goto out;
     }
 
+  ret = close_fds_ge_n (entrypoint_args->context->preserve_fds + 3, &err);
+  if (UNLIKELY (ret < 0))
+    goto out;
+
+
   if (UNLIKELY (execvp (def->process->args[0], def->process->args) < 0))
     {
       ret = crun_make_error (&err, errno, "exec the container process");
