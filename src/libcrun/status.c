@@ -46,8 +46,8 @@ get_run_directory (const char *state_root)
   return root;
 }
 
-static char *
-get_state_directory (const char *state_root, const char *id)
+char *
+libcrun_get_state_directory (const char *state_root, const char *id)
 {
   char *ret;
   cleanup_free char *root = get_run_directory (state_root);
@@ -130,7 +130,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
   if (UNLIKELY (ret < 0))
     return ret;
 
-  dir = get_state_directory (state_root, id);
+  dir = libcrun_get_state_directory (state_root, id);
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
@@ -151,7 +151,7 @@ int
 libcrun_delete_container_status (const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
-  cleanup_free char *dir = get_state_directory (state_root, id);
+  cleanup_free char *dir = libcrun_get_state_directory (state_root, id);
   cleanup_close int dirfd = -1;
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");

@@ -38,5 +38,6 @@ int libcrun_write_container_status (const char *state_root, const char *id, libc
 int libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_delete_container_status (const char *state_root, const char *id, libcrun_error_t *err);
+char *libcrun_get_state_directory (const char *state_root, const char *id);
 
 #endif

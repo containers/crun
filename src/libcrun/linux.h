@@ -26,12 +26,13 @@
 # include <oci_runtime_spec.h>
 # include "container.h"
 
-typedef void (*container_entrypoint) (void *args, int sync_socket);
+typedef void (*container_entrypoint) (void *args, const char *notify_socket, int sync_socket);
 
 pid_t libcrun_run_container (libcrun_container *container,
                              int detach,
                              container_entrypoint entrypoint,
                              void *args,
+                             int *notify_socket_out,
                              int *sync_socket_out,
                              libcrun_error_t *err);
 int libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err);

@@ -37,6 +37,7 @@
 #include <grp.h>
 #include <signal.h>
 #include "terminal.h"
+#include "status.h"
 #include <sys/socket.h>
 
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
@@ -56,6 +57,9 @@ struct private_data_s
   /* Filled by libcrun_set_namespaces().  Useful to query what
      namespaces are available.  */
   int unshare_flags;
+
+  char *host_notify_socket_path;
+  char *container_notify_socket_path;
 };
 
 struct linux_namespace_s
@@ -117,141 +121,6 @@ get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
       if (def->process->user->gid)
         *gid = def->process->user->gid;
     }
-}
-
-pid_t
-libcrun_run_container (libcrun_container *container, int detach, container_entrypoint entrypoint,
-                       void *args, int *sync_socket_out, libcrun_error_t *err)
-{
-  oci_container *def = container->container_def;
-  size_t i;
-  int ret;
-  int flags = 0;
-  pid_t pid;
-  cleanup_close int sync_socket_host = -1;
-  cleanup_close int sync_socket_container = -1;
-  int sync_socket[2];
-
-  for (i = 0; i < def->linux->namespaces_len; i++)
-    {
-      int value = find_namespace (def->linux->namespaces[i]->type);
-      if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
-      flags |= value;
-    }
-
-  get_private_data (container)->unshare_flags = flags;
-
-  ret = socketpair (AF_UNIX, SOCK_STREAM, 0, sync_socket);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "socketpair");
-
-  sync_socket_host = sync_socket[0];
-  sync_socket_container = sync_socket[1];
-
-  pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
-  if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "clone");
-
-  get_uid_gid_from_def (container->container_def,
-                        &container->container_uid,
-                        &container->container_gid);
-
-  if (pid)
-    {
-      ret = close (sync_socket_container);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "close");
-      sync_socket_container = -1;
-
-      if (flags & CLONE_NEWUSER)
-        {
-          ret = libcrun_set_usernamespace (container, pid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          do
-            ret = write (sync_socket_host, "1", 1);
-          while (ret < 0 && errno == EINTR);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to sync socket");
-        }
-
-      *sync_socket_out = sync_socket_host;
-      sync_socket_host = -1;
-
-      return pid;
-    }
-
-  ret = close (sync_socket_host);
-  if (UNLIKELY (ret < 0))
-    {
-      crun_make_error (err, errno, "close");
-      goto out;
-    }
-  sync_socket_host = -1;
-
-  if (detach && setsid () < 0)
-    {
-      crun_make_error (err, errno, "setsid");
-      goto out;
-    }
-
-  /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
-  if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
-    {
-      gid_t *additional_gids = NULL;
-      size_t additional_gids_len = 0;
-      if (def->process->user)
-        {
-          additional_gids = def->process->user->additional_gids;
-          additional_gids_len = def->process->user->additional_gids_len;
-        }
-      ret = setgroups (additional_gids_len, additional_gids);
-      if (UNLIKELY (ret < 0))
-        {
-          crun_make_error (err, errno, "setgroups");
-          goto out;
-        }
-    }
-
-  for (i = 0; i < def->linux->namespaces_len; i++)
-    {
-      int value;
-      cleanup_close int fd = -1;
-      if (def->linux->namespaces[i]->path == NULL)
-        continue;
-
-      value = find_namespace (def->linux->namespaces[i]->type);
-      fd = open (def->linux->namespaces[i]->path, O_RDONLY);
-      if (UNLIKELY (fd < 0))
-        {
-          crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
-          goto out;
-        }
-
-      if (UNLIKELY (setns (fd, value) < 0))
-        {
-          crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
-          goto out;
-        }
-    }
-
-  if (flags & CLONE_NEWUSER)
-    {
-      char tmp;
-      do
-        ret = read (sync_socket_container, &tmp, 1);
-      while (ret < 0 && errno == EINTR);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "read from sync socket");
-    }
-
-  entrypoint (args, sync_socket_container);
-  _exit (1);
- out:
-  error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);
-  return 1;
 }
 
 struct propagation_flags_s
@@ -744,6 +613,61 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
   return 0;
 }
 
+static int
+do_notify_socket (libcrun_container *container, int *notify_socket_out, const char *rootfs, libcrun_error_t *err)
+{
+  const char *notify_socket = container->run_options->notify_socket;
+  cleanup_free char *host_notify_socket_path = NULL;
+  cleanup_free char *container_notify_socket_path = NULL;
+  cleanup_free char *state_dir = libcrun_get_state_directory (container->run_options->state_root, container->run_options->id);
+  cleanup_close int notify_fd = -1;
+  int ret;
+
+  *notify_socket_out = -1;
+  if (notify_socket == NULL)
+    return 0;
+
+  xasprintf (&container_notify_socket_path, "%s%s", rootfs, notify_socket);
+  xasprintf (&host_notify_socket_path, "%s/notify", state_dir);
+
+  notify_fd = open_unix_domain_socket (host_notify_socket_path, 1, err);
+  if (UNLIKELY (notify_fd < 0))
+    return notify_fd;
+
+  ret = chmod (container_notify_socket_path, 0777);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chmod");
+
+  get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
+  get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
+  host_notify_socket_path = container_notify_socket_path = NULL;
+  *notify_socket_out = notify_fd;
+  notify_fd = -1;
+  return 0;
+}
+
+static int
+do_finalize_notify_socket (libcrun_container *container, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
+  cleanup_free char *container_notify_socket_path = get_private_data (container)->container_notify_socket_path;
+  get_private_data (container)->host_notify_socket_path = get_private_data (container)->container_notify_socket_path = NULL;
+
+  if (host_notify_socket_path == NULL || container_notify_socket_path == NULL)
+    return 0;
+
+  ret = create_file_if_missing (container_notify_socket_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = do_mount (container, host_notify_socket_path, container_notify_socket_path, "", MS_BIND | MS_PRIVATE, "", 0, err);
+  if (UNLIKELY (ret < 0))
+   return ret;
+
+  return 0;
+}
+
 int
 libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
 {
@@ -786,6 +710,8 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   ret = create_missing_devs (container, rootfs, is_user_ns, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  ret = do_finalize_notify_socket (container, err);
 
   ret = finalize_mounts (container, rootfs, is_user_ns, err);
   if (UNLIKELY (ret < 0))
@@ -1230,4 +1156,148 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   fd = -1;
 
   return ret;
+}
+
+pid_t
+libcrun_run_container (libcrun_container *container,
+                       int detach,
+                       container_entrypoint entrypoint,
+                       void *args,
+                       int *notify_socket_out,
+                       int *sync_socket_out,
+                       libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  size_t i;
+  int ret;
+  int flags = 0;
+  pid_t pid;
+  cleanup_close int sync_socket_host = -1;
+  cleanup_close int sync_socket_container = -1;
+  int sync_socket[2];
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value = find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0))
+        return crun_make_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
+      flags |= value;
+    }
+
+  get_private_data (container)->unshare_flags = flags;
+
+  ret = socketpair (AF_UNIX, SOCK_STREAM, 0, sync_socket);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "socketpair");
+
+  sync_socket_host = sync_socket[0];
+  sync_socket_container = sync_socket[1];
+
+  ret = do_notify_socket (container, notify_socket_out, def->root->path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "clone");
+
+  get_uid_gid_from_def (container->container_def,
+                        &container->container_uid,
+                        &container->container_gid);
+
+  if (pid)
+    {
+      ret = close (sync_socket_container);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "close");
+      sync_socket_container = -1;
+
+      if (flags & CLONE_NEWUSER)
+        {
+          ret = libcrun_set_usernamespace (container, pid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          do
+            ret = write (sync_socket_host, "1", 1);
+          while (ret < 0 && errno == EINTR);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to sync socket");
+        }
+
+      *sync_socket_out = sync_socket_host;
+      sync_socket_host = -1;
+
+      return pid;
+    }
+
+  ret = close (sync_socket_host);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_make_error (err, errno, "close");
+      goto out;
+    }
+  sync_socket_host = -1;
+
+  if (detach && setsid () < 0)
+    {
+      crun_make_error (err, errno, "setsid");
+      goto out;
+    }
+
+  /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
+  if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
+    {
+      gid_t *additional_gids = NULL;
+      size_t additional_gids_len = 0;
+      if (def->process->user)
+        {
+          additional_gids = def->process->user->additional_gids;
+          additional_gids_len = def->process->user->additional_gids_len;
+        }
+      ret = setgroups (additional_gids_len, additional_gids);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_make_error (err, errno, "setgroups");
+          goto out;
+        }
+    }
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value;
+      cleanup_close int fd = -1;
+      if (def->linux->namespaces[i]->path == NULL)
+        continue;
+
+      value = find_namespace (def->linux->namespaces[i]->type);
+      fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+      if (UNLIKELY (fd < 0))
+        {
+          crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+          goto out;
+        }
+
+      if (UNLIKELY (setns (fd, value) < 0))
+        {
+          crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
+          goto out;
+        }
+    }
+
+  if (flags & CLONE_NEWUSER)
+    {
+      char tmp;
+      do
+        ret = read (sync_socket_container, &tmp, 1);
+      while (ret < 0 && errno == EINTR);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "read from sync socket");
+    }
+
+  entrypoint (args, container->run_options->notify_socket, sync_socket_container);
+  _exit (1);
+ out:
+  error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);
+  return 1;
 }

@@ -111,6 +111,8 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
 
   run_options.state_root = global_args->root;
   run_options.systemd_cgroup = global_args->option_systemd_cgroup;
+  run_options.notify_socket = getenv ("NOTIFY_SOCKET");
+
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &run_options);
 
   if (bundle != NULL)

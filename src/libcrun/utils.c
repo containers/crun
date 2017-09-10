@@ -348,7 +348,7 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
     return crun_make_error (err, errno, "error creating UNIX socket");
 
   memset (&addr, 0, sizeof (addr));
-  strcpy (&addr.sun_path[1], path);
+  strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))

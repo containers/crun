@@ -23,6 +23,21 @@
 # include <oci_runtime_spec.h>
 # include "error.h"
 
+struct libcrun_run_options
+{
+  char *state_root;
+  char *id;
+  char *console_socket;
+  char *pid_file;
+  char *notify_socket;
+  int preserve_fds;
+
+  int systemd_cgroup : 1;
+  int detach : 1;
+  int no_subreaper: 1;
+  int no_new_keyring : 1;
+};
+
 struct libcrun_container_s
 {
   /* Container parsed from the runtime json file.  */
@@ -35,20 +50,7 @@ struct libcrun_container_s
   gid_t container_gid;
 
   void *private_data;
-};
-
-struct libcrun_run_options
-{
-  char *state_root;
-  char *id;
-  char *console_socket;
-  char *pid_file;
-  int preserve_fds;
-
-  int systemd_cgroup : 1;
-  int detach : 1;
-  int no_subreaper: 1;
-  int no_new_keyring : 1;
+  struct libcrun_run_options *run_options;
 };
 
 typedef struct libcrun_container_s libcrun_container;
