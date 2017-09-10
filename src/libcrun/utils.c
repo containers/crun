@@ -80,7 +80,6 @@ xrealloc (void *ptr, size_t size)
   return res;
 }
 
-
 char *
 argp_mandatory_argument (char *arg, struct argp_state *state)
 {

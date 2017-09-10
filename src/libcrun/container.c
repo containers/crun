@@ -400,8 +400,8 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
   return 0;
 }
 
-int
-libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
+static int
+libcrun_container_run_internal (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret, container_exit_code, last_process;
@@ -420,32 +420,6 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
   cleanup_close int notify_socket = -1;
 
   container->run_options = opts;
-
-  if (UNLIKELY (def->root == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
-  if (UNLIKELY (def->process == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'process' block specified");
-  if (UNLIKELY (def->linux == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
-  if (UNLIKELY (def->mounts == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
-
-  ret = libcrun_status_check_directories (opts->state_root, opts->id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (detach)
-    {
-      ret = fork ();
-      if (ret < 0)
-        return crun_make_error (err, 0, "fork");
-      if (ret)
-        return 0;
-
-      ret = detach_process ();
-      if (ret < 0)
-        return crun_make_error (err, errno, "detach process");
-    }
 
   ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
   if (UNLIKELY (ret < 0))
@@ -632,4 +606,43 @@ libcrun_container_run (libcrun_container *container, struct libcrun_run_options 
     }
 
   return 0;
+}
+
+int
+libcrun_container_run (libcrun_container *container, struct libcrun_run_options *opts, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  int ret;
+  int detach = opts->detach;
+
+  container->run_options = opts;
+
+  if (UNLIKELY (def->root == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
+  if (UNLIKELY (def->process == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'process' block specified");
+  if (UNLIKELY (def->linux == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
+  if (UNLIKELY (def->mounts == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
+
+  ret = libcrun_status_check_directories (opts->state_root, opts->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (!detach)
+    return libcrun_container_run_internal (container, opts, err);
+
+  ret = fork ();
+  if (ret < 0)
+    return crun_make_error (err, 0, "fork");
+  if (ret)
+    return 0;
+
+  /* forked process.  */
+  ret = detach_process ();
+  if (ret < 0)
+    error (EXIT_FAILURE, errno, "detach process");
+  libcrun_container_run_internal (container, opts, err);
+  _exit (0);
 }
