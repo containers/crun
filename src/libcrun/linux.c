@@ -1182,13 +1182,13 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
 }
 
 pid_t
-libcrun_run_container (libcrun_container *container,
-                       int detach,
-                       container_entrypoint_t entrypoint,
-                       void *args,
-                       int *notify_socket_out,
-                       int *sync_socket_out,
-                       libcrun_error_t *err)
+libcrun_run_linux_container (libcrun_container *container,
+                             int detach,
+                             container_entrypoint_t entrypoint,
+                             void *args,
+                             int *notify_socket_out,
+                             int *sync_socket_out,
+                             libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   size_t i;

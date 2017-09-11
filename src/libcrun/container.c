@@ -432,7 +432,9 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
 
-  pid = libcrun_run_container (container, context->detach, container_entrypoint, &container_args, &notify_socket, &sync_socket, err);
+  pid = libcrun_run_linux_container (container, context->detach,
+                                     container_entrypoint, &container_args,
+                                     &notify_socket, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
 
