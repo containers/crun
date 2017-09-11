@@ -178,6 +178,8 @@ libcrun_delete_container_status (const char *state_root, const char *id, libcrun
 void
 libcrun_free_container_status (libcrun_container_status_t *status)
 {
+  if (status == NULL)
+    return;
   if (status->cgroup_path)
     free (status->cgroup_path);
 }
