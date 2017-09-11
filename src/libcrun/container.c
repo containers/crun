@@ -131,6 +131,7 @@ container_entrypoint (void *args, const char *notify_socket,
           ret = send_fd_to_socket (console_socket, terminal_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
+          close (console_socket);
         }
       else if (entrypoint_args->has_terminal_socket_pair)
         {
