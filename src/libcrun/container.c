@@ -456,6 +456,15 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (pid < 0))
     return pid;
 
+  if (context->pid_file)
+    {
+      char buf[12];
+      size_t buf_len = sprintf (buf, "%d", pid);
+      ret = write_file (context->pid_file, buf, buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (def->process->terminal && !detach && context->console_socket == NULL)
     {
       terminal_fd = receive_fd_from_socket (container_args.terminal_socketpair[0], err);
