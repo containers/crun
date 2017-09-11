@@ -730,7 +730,7 @@ run_process_with_stdin_timeout_envp (char *path,
 }
 
 int
-close_fds_ge_n (int n, libcrun_error_t *err)
+close_fds_ge_than (int n, libcrun_error_t *err)
 {
   int fd;
   cleanup_dir DIR *dir = NULL;

@@ -210,7 +210,7 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from the sync socket");
 
-  ret = close_fds_ge_n (entrypoint_args->context->preserve_fds + 3, err);
+  ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
