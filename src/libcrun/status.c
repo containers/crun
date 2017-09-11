@@ -168,6 +168,7 @@ libcrun_delete_container_status (const char *state_root, const char *id, libcrun
 
   unlinkat (dirfd, "status", 0);
   unlinkat (dirfd, "notify", 0);
+  unlinkat (dirfd, "exec.fifo", 0);
 
   ret = rmdir (dir);
   if (UNLIKELY (ret < 0))
@@ -238,7 +239,6 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
       ret = crun_path_exists (cgroup, 1, err);
       if (ret <= 0)
         return ret;
-
     }
 
   ret = kill (status->pid, 0);
@@ -249,4 +249,39 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
     return 1;
 
   return 0;
+}
+
+int
+libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
+  cleanup_free char *fifo_path;
+  int ret, fd = -1;
+  xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
+  ret = mkfifo (fifo_path, 0600);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mkfifo");
+
+  fd = open (state_dir, O_DIRECTORY);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "cannot open directory '%s'", state_dir);
+
+  return fd;
+}
+
+int
+libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
+  cleanup_free char *fifo_path;
+  cleanup_free char *buffer = NULL;
+  int ret;
+
+  xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
+
+  ret = read_all_file (fifo_path, &buffer, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return atoi (buffer);
 }

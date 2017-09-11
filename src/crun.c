@@ -30,6 +30,8 @@
 #include "delete.h"
 #include "kill.h"
 #include "list.h"
+#include "start.h"
+#include "create.h"
 
 static struct crun_global_arguments arguments;
 
@@ -71,14 +73,14 @@ enum
 
 struct commands_s commands[] =
   {
-    { COMMAND_CREATE, "create", crun_command_not_implemented},
+    { COMMAND_CREATE, "create", crun_command_create},
     { COMMAND_DELETE, "delete", crun_command_delete},
     { COMMAND_EXEC, "exec", crun_command_not_implemented},
     { COMMAND_LIST, "list", crun_command_list},
     { COMMAND_KILL, "kill", crun_command_kill},
     { COMMAND_RUN, "run", crun_command_run},
     { COMMAND_SPEC, "spec", crun_command_not_implemented},
-    { COMMAND_START, "start", crun_command_not_implemented},
+    { COMMAND_START, "start", crun_command_start},
     { COMMAND_STATE, "state", crun_command_not_implemented},
     { 0, 0}
   };

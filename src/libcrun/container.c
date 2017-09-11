@@ -40,7 +40,7 @@
 #include <systemd/sd-daemon.h>
 
 libcrun_container *
-libcrun_container_load (const char *path, libcrun_error_t *error)
+libcrun_container_load (const char *path, libcrun_error_t *err)
 {
   libcrun_container *container;
   oci_container *container_def;
@@ -48,7 +48,7 @@ libcrun_container_load (const char *path, libcrun_error_t *error)
   container_def = oci_container_parse_file (path, 0, &oci_error);
   if (container_def == NULL)
     {
-      crun_make_error (error, 0, "cannot parse configuration file: '%s'", oci_error);
+      crun_make_error (err, 0, "cannot parse configuration file: '%s'", oci_error);
       return NULL;
     }
 
@@ -208,10 +208,24 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from the sync socket");
 
+  if (entrypoint_args->context->has_fifo_exec_wait)
+    {
+      cleanup_close int fifo_fd = openat (entrypoint_args->context->fifo_exec_wait_dirfd, "exec.fifo", O_WRONLY);
+      do
+        ret = write (fifo_fd, "0", 1);
+      while (ret < 0 && errno == EINTR);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "write to the exec fifo");
+      close (entrypoint_args->context->fifo_exec_wait_dirfd);
+      entrypoint_args->context->fifo_exec_wait_dirfd = -1;
+    }
+
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
-    return ret;
-
+    {
+      crun_make_error (err, errno, "read from the sync socket");
+      crun_error_write_warning_and_release (stderr, err);
+    }
 
   execvp (def->process->args[0], def->process->args);
   return crun_make_error (err, errno, "exec the container process");
@@ -230,7 +244,8 @@ struct hook_s
 };
 
 static int
-do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks, size_t hooks_len, libcrun_error_t *err)
+do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks,
+          size_t hooks_len, libcrun_error_t *err)
 {
   size_t i, stdin_len;
   int ret;
@@ -251,7 +266,8 @@ do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks, 
 }
 
 static int
-run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
+run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_t *status,
+                    const char *state_root, const char *id, libcrun_error_t *err)
 {
   libcrun_container *container;
   cleanup_free char *config_file = NULL;
@@ -358,7 +374,8 @@ libcrun_kill_container (struct libcrun_context_s *context, const char *id, int s
 }
 
 static int
-write_container_status (libcrun_container *container, struct libcrun_context_s *context, pid_t pid, char *cgroup_path, libcrun_error_t *err)
+write_container_status (libcrun_container *container, struct libcrun_context_s *context, pid_t pid,
+                        char *cgroup_path, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
   libcrun_container_status_t status = {.pid = pid,
@@ -610,6 +627,20 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   return 0;
 }
 
+static
+int check_config_file (oci_container *def, libcrun_error_t *err)
+{
+  if (UNLIKELY (def->root == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
+  if (UNLIKELY (def->process == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'process' block specified");
+  if (UNLIKELY (def->linux == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
+  if (UNLIKELY (def->mounts == NULL))
+    return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
+  return 0;
+}
+
 int
 libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
@@ -619,14 +650,9 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
 
   container->context = context;
 
-  if (UNLIKELY (def->root == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
-  if (UNLIKELY (def->process == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'process' block specified");
-  if (UNLIKELY (def->linux == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
-  if (UNLIKELY (def->mounts == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
+  ret = check_config_file (def, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_status_check_directories (context->state_root, context->id, err);
   if (UNLIKELY (ret < 0))
@@ -647,4 +673,48 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
     error (EXIT_FAILURE, errno, "detach process");
   libcrun_container_run_internal (container, context, err);
   _exit (0);
+}
+
+int
+libcrun_container_create (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  int ret;
+  cleanup_close int dirfd = -1;
+  context->detach = 1;
+  container->context = context;
+
+  ret = check_config_file (def, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_status_check_directories (context->state_root, context->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  dirfd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
+  if (UNLIKELY (dirfd < 0))
+    return dirfd;
+
+  ret = fork ();
+  if (ret < 0)
+    return crun_make_error (err, errno, "fork");
+  if (ret)
+    return 0;
+
+  context->has_fifo_exec_wait = 1;
+  context->fifo_exec_wait_dirfd = dirfd;
+  dirfd = -1;
+
+  /* forked process.  */
+  ret = detach_process ();
+  if (ret < 0)
+    error (EXIT_FAILURE, errno, "detach process");
+  libcrun_container_run_internal (container, context, err);
+  _exit (0);
+}
+
+int
+libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
+{
 }
