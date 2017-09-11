@@ -283,5 +283,20 @@ libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_e
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = unlink (fifo_path);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "unlink '%s'", fifo_path);
+
   return atoi (buffer);
+}
+
+int
+libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
+  cleanup_free char *fifo_path;
+
+  xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
+
+  return crun_path_exists (fifo_path, 1, err);
 }

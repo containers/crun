@@ -32,6 +32,7 @@
 #include "list.h"
 #include "start.h"
 #include "create.h"
+#include "state.h"
 
 static struct crun_global_arguments arguments;
 
@@ -81,7 +82,7 @@ struct commands_s commands[] =
     { COMMAND_RUN, "run", crun_command_run},
     { COMMAND_SPEC, "spec", crun_command_not_implemented},
     { COMMAND_START, "start", crun_command_start},
-    { COMMAND_STATE, "state", crun_command_not_implemented},
+    { COMMAND_STATE, "state", crun_command_state},
     { 0, 0}
   };
 

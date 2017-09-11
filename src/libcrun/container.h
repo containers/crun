@@ -71,4 +71,6 @@ int libcrun_container_create (libcrun_container *container, struct libcrun_conte
 
 int libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
 
+int libcrun_container_state (struct libcrun_context_s *context, const char *id, char **state, libcrun_error_t *err);
+
 #endif

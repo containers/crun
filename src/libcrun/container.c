@@ -726,4 +726,44 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
 int
 libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
 {
+  return libcrun_status_read_exec_fifo (context->state_root, id, err);
+}
+
+int
+libcrun_container_state (struct libcrun_context_s *context, const char *id, char **state, libcrun_error_t *err)
+{
+  int ret, running, has_fifo = 0;
+  libcrun_container_status_t status;
+  const char *state_root = context->state_root;
+
+  memset (&status, 0, sizeof (status));
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_is_container_running (&status, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+  running = ret;
+
+  if (running)
+    {
+      ret = libcrun_status_has_read_exec_fifo (state_root, id, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+      has_fifo = ret;
+    }
+
+  if (! running)
+    *state = xstrdup ("Stopped");
+  else if (has_fifo)
+    *state = xstrdup ("Created");
+  else
+    *state = xstrdup ("Started");
+
+  ret = 0;
+
+ exit:
+  libcrun_free_container_status (&status);
+  return ret;
 }
