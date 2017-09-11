@@ -425,7 +425,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "set child subreaper");
 
-  if (def->process->terminal && !detach)
+  if (def->process->terminal && !detach && context->console_socket == NULL)
     {
       container_args.has_terminal_socket_pair = 1;
       ret = create_socket_pair (container_args.terminal_socketpair, err);
@@ -439,7 +439,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (pid < 0))
     return pid;
 
-  if (def->process->terminal && !detach)
+  if (def->process->terminal && !detach && context->console_socket == NULL)
     {
       terminal_fd = receive_fd_from_socket (container_args.terminal_socketpair[0], err);
       if (UNLIKELY (terminal_fd < 0))
