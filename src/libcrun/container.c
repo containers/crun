@@ -119,10 +119,7 @@ container_entrypoint (void *args, const char *notify_socket,
       ret = setsid ();
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setsid");
-    }
 
-  if (has_terminal)
-    {
       terminal_fd = libcrun_set_terminal (container, err);
       if (UNLIKELY (terminal_fd < 0))
         return ret;
@@ -293,15 +290,26 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
     {
       ret = kill (status.pid, 9);
       if (UNLIKELY (ret < 0) && errno != ESRCH)
-        return crun_make_error (err, errno, "kill");
+        {
+          crun_make_error (err, errno, "kill");
+          goto error;
+        }
     }
   else
     {
-      ret = kill (status.pid, 0);
-      if (ret == 0)
-        return crun_make_error (err, 0, "the container '%s' is still running", id);
+      ret = libcrun_is_container_running (&status, err);
+      if (UNLIKELY (ret < 0))
+        goto error;
+      if (ret == 1)
+        {
+          crun_make_error (err, 0, "the container '%s' is still running", id);
+          goto error;
+        }
       if (UNLIKELY (ret < 0 && errno != ESRCH))
-        return crun_make_error (err, errno, "signaling the container");
+        {
+          crun_make_error (err, errno, "signaling the container");
+          goto error;
+        }
     }
 
   ret = run_poststop_hooks (&status, state_root, id, err);
@@ -320,10 +328,13 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
             crun_error_write_warning_and_release (context->stderr, err);
         }
     }
-  libcrun_free_container_status (&status);
 
  exit:
-  return libcrun_delete_container_status (state_root, id, err);
+  ret = libcrun_delete_container_status (state_root, id, err);
+
+ error:
+  libcrun_free_container_status (&status);
+  return ret;
 }
 
 int

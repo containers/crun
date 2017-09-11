@@ -49,5 +49,6 @@ int libcrun_delete_container_status (const char *state_root, const char *id, lib
 char *libcrun_get_state_directory (const char *state_root, const char *id);
 int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err);
 void libcrun_free_containers_list (libcrun_container_list_t *list);
+int libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_t *err);
 
 #endif

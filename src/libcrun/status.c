@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <signal.h>
 
 static char *
 get_run_directory (const char *state_root)
@@ -221,4 +222,29 @@ libcrun_free_containers_list (libcrun_container_list_t *list)
       free (list);
       list = next;
     }
+}
+
+int
+libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_t *err)
+{
+  int ret;
+  if (status->cgroup_path)
+    {
+      cleanup_free char *cgroup;
+      xasprintf (&cgroup, "/sys/fs/cgroup/unified%s", status->cgroup_path);
+
+      ret = crun_path_exists (cgroup, 1, err);
+      if (ret <= 0)
+        return ret;
+
+    }
+
+  ret = kill (status->pid, 0);
+  if (UNLIKELY (ret < 0) && errno != ESRCH)
+    return crun_make_error (err, errno, "kill");
+
+  if (ret == 0)
+    return 1;
+
+  return 0;
 }
