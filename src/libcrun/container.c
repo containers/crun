@@ -251,7 +251,7 @@ do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks, 
 }
 
 static int
-run_poststop_hooks (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
+run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
 {
   libcrun_container *container;
   cleanup_free char *config_file = NULL;
@@ -270,7 +270,7 @@ run_poststop_hooks (libcrun_container_status_t *status, const char *state_root, 
                       (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        crun_error_write_warning_and_release (context->stderr, err);
     }
   return 0;
 }
@@ -312,7 +312,7 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
         }
     }
 
-  ret = run_poststop_hooks (&status, state_root, id, err);
+  ret = run_poststop_hooks (context, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
