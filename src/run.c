@@ -76,7 +76,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_PRESERVE_FDS:
-      crun_context.preserve_fds = atoi (argp_mandatory_argument (arg, state));
+      crun_context.preserve_fds = strtoll (argp_mandatory_argument (arg, state), NULL, 10);
       break;
 
     case OPTION_NO_SUBREAPER:

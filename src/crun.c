@@ -113,7 +113,7 @@ enum
     OPTION_LOG,
     OPTION_ROOT
   };
-  
+
 
 const char *argp_program_version = PACKAGE_STRING;
 const char *argp_program_bug_address = PACKAGE_BUGREPORT;

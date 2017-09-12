@@ -482,13 +482,14 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminate, i
           else if (events[i].data.fd == notify_socket)
             {
               char buf[256];
+              const char *ready_str = "READY=1";
               ret = recvfrom (notify_socket, buf, sizeof (buf) - 1, 0, NULL, NULL);
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "recvfrom");
               buf[ret] = '\0';
-              if (strstr (buf, "READY=1"))
+              if (strstr (buf, ready_str))
                 {
-                  ret = sd_notify (0, "READY=1");
+                  ret = sd_notify (0, ready_str);
                   if (UNLIKELY (ret < 0))
                     return crun_make_error (err, errno, "sd_notify");
                   if (context->detach)

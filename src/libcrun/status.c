@@ -181,8 +181,7 @@ libcrun_free_container_status (libcrun_container_status_t *status)
 {
   if (status == NULL)
     return;
-  if (status->cgroup_path)
-    free (status->cgroup_path);
+  free (status->cgroup_path);
 }
 
 int
@@ -287,7 +286,7 @@ libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_e
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "unlink '%s'", fifo_path);
 
-  return atoi (buffer);
+  return strtoll (buffer, NULL, 10);
 }
 
 int

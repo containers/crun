@@ -215,7 +215,7 @@ static int
 do_mount (libcrun_container *container,
           const char *source,
           const char *target,
-          const char *filesystemtype,
+          const char *fstype,
           unsigned long mountflags,
           const void *data,
           int skip_labelling,
@@ -232,7 +232,7 @@ do_mount (libcrun_container *container,
         return ret;
       data = data_with_label;
     }
-   ret = mount (source, target, filesystemtype, mountflags, data);
+   ret = mount (source, target, fstype, mountflags, data);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
 
@@ -259,7 +259,7 @@ static int
 do_mount_cgroup (libcrun_container *container,
                  const char *source,
                  const char *target,
-                 const char *filesystemtype,
+                 const char *fstype,
                  unsigned long mountflags,
                  const void *data,
                  libcrun_error_t *err)

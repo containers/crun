@@ -12,6 +12,7 @@ AM_MAINTAINER_MODE([enable])
 AM_SILENT_RULES([yes])
 
 AC_PROG_RANLIB
+AC_PROG_SED
 AC_PROG_CC
 
 AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers not found])])
@@ -23,7 +24,7 @@ AC_CHECK_LIB(seccomp, seccomp_rule_add)
 AC_CHECK_LIB(systemd, sd_bus_open)
 
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
-PKG_CHECK_MODULES([SELINUX], [libselinux >= 2.1.9], [AC_DEFINE(HAVE_SELINUX, 1, [Define if SELinux is available])], [])
+PKG_CHECK_MODULES([SELINUX], [libselinux >= 2.1.9], [AC_DEFINE([HAVE_SELINUX], 1, [Define if SELinux is available])], [])
 
 AC_CONFIG_FILES([Makefile])
 

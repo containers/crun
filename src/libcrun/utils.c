@@ -736,7 +736,7 @@ close_fds_ge_than (int n, libcrun_error_t *err)
       if (name[0] == '.')
         continue;
 
-      val = atoi (name);
+      val = strtoll (name, NULL, 10);
       if (val < n || val == fd)
         continue;
       ret = close (val);

@@ -61,7 +61,7 @@ crun_error_release (libcrun_error_t *err)
 void
 oom_handler ()
 {
-  error (EXIT_FAILURE, 0, "OOM");
+  error (EXIT_FAILURE, 0, "out of memory");
 }
 
 void
