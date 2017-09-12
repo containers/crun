@@ -117,7 +117,7 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
 
   container = libcrun_container_load ("config.json", err);
   if (container == NULL)
-    error (EXIT_FAILURE, 0, "error loading config.json");
+    return -1;
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 

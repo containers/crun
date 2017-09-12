@@ -48,7 +48,7 @@ libcrun_container_load (const char *path, libcrun_error_t *err)
   container_def = oci_container_parse_file (path, 0, &oci_error);
   if (container_def == NULL)
     {
-      crun_make_error (err, 0, "cannot parse configuration file: '%s'", oci_error);
+      crun_make_error (err, 0, "load '%s': %s", path, oci_error);
       return NULL;
     }
 
