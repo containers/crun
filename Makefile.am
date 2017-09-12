@@ -16,14 +16,14 @@ libcrun_a_SOURCES = src/libcrun/utils.c \
 libcrun_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src
 
-crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c \
+crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c
 
 crun_LDADD = libcrun.a libocispec/libocispec.a $(SELINUX_LIBS) $(YAJL_LIBS)
 
 EXTRA_DIST = COPYING.libcrun \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
-	src/create.h src/start.h src/state.h src/exec.h \
+	src/create.h src/start.h src/state.h src/exec.h src/spec.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
 	src/libcrun/status.h src/libcrun/terminal.h

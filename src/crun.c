@@ -34,6 +34,7 @@
 #include "create.h"
 #include "exec.h"
 #include "state.h"
+#include "spec.h"
 
 static struct crun_global_arguments arguments;
 
@@ -52,12 +53,6 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
   con->systemd_cgroup = glob->option_systemd_cgroup;
   con->notify_socket = getenv ("NOTIFY_SOCKET");
   con->stderr = stderr;
-}
-
-static int
-crun_command_not_implemented (struct crun_global_arguments *global_args, int argc, char **arg, libcrun_error_t *error)
-{
-  return crun_make_error (error, 0, "sadly, this wasn't implemented yet");
 }
 
 enum
@@ -81,7 +76,7 @@ struct commands_s commands[] =
     { COMMAND_LIST, "list", crun_command_list},
     { COMMAND_KILL, "kill", crun_command_kill},
     { COMMAND_RUN, "run", crun_command_run},
-    { COMMAND_SPEC, "spec", crun_command_not_implemented},
+    { COMMAND_SPEC, "spec", crun_command_spec},
     { COMMAND_START, "start", crun_command_start},
     { COMMAND_STATE, "state", crun_command_state},
     { 0, 0}
