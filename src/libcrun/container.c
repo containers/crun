@@ -92,6 +92,7 @@ container_entrypoint (void *args, const char *notify_socket,
   libcrun_container *container = entrypoint_args->container;
   int ret;
   size_t i;
+  char c;
   int has_terminal;
   cleanup_close int console_socket = -1;
   cleanup_close int terminal_fd = -1;
@@ -190,30 +191,19 @@ container_entrypoint (void *args, const char *notify_socket,
         return crun_make_error (err, errno, "putenv '%s'", notify_socket_env);
     }
 
-  do
-    {
-      char c;
-      ret = write (sync_socket, &c, 1);
-    }
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (write (sync_socket, &c, 1));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to the sync socket");
 
-  do
-    {
-      char c;
-      ret = read (sync_socket, &c, 1);
-    }
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (read (sync_socket, &c, 1));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from the sync socket");
 
   if (entrypoint_args->context->has_fifo_exec_wait)
     {
       cleanup_close int fifo_fd = openat (entrypoint_args->context->fifo_exec_wait_dirfd, "exec.fifo", O_WRONLY);
-      do
-        ret = write (fifo_fd, "0", 1);
-      while (ret < 0 && errno == EINTR);
+
+      ret = TEMP_FAILURE_RETRY (write (fifo_fd, "0", 1));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write to the exec fifo");
       close (entrypoint_args->context->fifo_exec_wait_dirfd);
@@ -507,9 +497,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminate, i
             }
           else if (events[i].data.fd == signalfd)
             {
-              do
-                res = read (signalfd, &si, sizeof(si));
-              while (res < 0 && errno == EINTR);
+              res = TEMP_FAILURE_RETRY (read (signalfd, &si, sizeof (si)));
               if (UNLIKELY (res < 0))
                 return crun_make_error (err, errno, "read from signalfd");
               if (si.ssi_signo == SIGCHLD)
@@ -541,6 +529,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   oci_container *def = container->container_def;
   int ret;
   pid_t pid;
+  char c;
   int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
@@ -600,12 +589,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return ret;
 
-  do
-    {
-      char c;
-      ret = read (sync_socket, &c, 1);
-    }
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (read (sync_socket, &c, 1));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from the sync socket");
 
@@ -620,9 +604,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
 
-  do
-    ret = write (sync_socket, "1", 1);
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (write (sync_socket, "1", 1));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to sync socket");
 

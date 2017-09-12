@@ -303,9 +303,7 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   struct stat stat;
   size_t nread, allocated;
 
-  do
-    fd = open (path, O_RDONLY);
-  while (fd < 0 && errno == EINTR);
+  fd = TEMP_FAILURE_RETRY (open (path, O_RDONLY));
 
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error opening file '%s'", path);
@@ -323,9 +321,7 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   nread = 0;
   while ((stat.st_size && nread < stat.st_size) || 1)
     {
-      do
-        ret = read (fd, buf + nread, allocated - nread);
-      while (ret < 0 && errno == EINTR);
+      ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "error reading from file '%s'", path);
 
@@ -405,9 +401,7 @@ send_fd_to_socket (int server, int fd, libcrun_error_t *err)
 
   *((int *) CMSG_DATA (cmsg)) = fd;
 
-  do
-    ret = sendmsg (server, &msg, 0);
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (sendmsg (server, &msg, 0));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sendmsg");
   return 0;
@@ -437,9 +431,7 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
   msg.msg_controllen = CMSG_SPACE (sizeof (int));
   msg.msg_control = ctrl_buf;
 
-  do
-    ret = recvmsg (from, &msg, 0);
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (recvmsg (from, &msg, 0));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "recvmsg");
 
@@ -508,9 +500,7 @@ copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err)
 #else
   cleanup_free char *buffer = xmalloc (8192);
   int ret, nread;
-  do
-    nread = read (src, buffer, sizeof (buffer));
-  while (nread < 0 && errno == EINTR);
+  nread = TEMP_FAILURE_RETRY (read (src, buffer, sizeof (buffer)));
   if (errno == EIO)
     return 0;
   if (UNLIKELY (nread < 0))
@@ -518,9 +508,7 @@ copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err)
 
   while (nread)
     {
-      do
-        ret = write (dst, buffer, nread);
-      while (ret < 0 && errno == EINTR);
+      ret = TEMP_FAILURE_RETRY (write (dst, buffer, nread));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write");
       nread -= ret;
@@ -539,9 +527,7 @@ run_process (char **args, libcrun_error_t *err)
   if (pid)
     {
       int r, status;
-      do
-        r = waitpid (pid, &status, 0);
-      while (r < 0 && errno == EINTR);
+      r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
       if (r < 0)
         return crun_make_error (err, errno, "waitpid");
       if (WIFEXITED (status) || WIFSIGNALED (status))
@@ -715,9 +701,7 @@ run_process_with_stdin_timeout_envp (char *path,
         }
 
  read_waitpid:
-      do
-        r = waitpid (pid, &status, 0);
-      while (r < 0 && errno == EINTR);
+      r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
       if (r < 0)
         return crun_make_error (err, errno, "waitpid");
       if (WIFEXITED (status) || WIFSIGNALED (status))

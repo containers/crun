@@ -1273,9 +1273,7 @@ libcrun_run_linux_container (libcrun_container *container,
           if (UNLIKELY (ret < 0))
             return ret;
 
-          do
-            ret = write (sync_socket_host, "1", 1);
-          while (ret < 0 && errno == EINTR);
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_host, "1", 1));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write to sync socket");
         }
@@ -1343,9 +1341,7 @@ libcrun_run_linux_container (libcrun_container *container,
   if (flags & CLONE_NEWUSER)
     {
       char tmp;
-      do
-        ret = read (sync_socket_container, &tmp, 1);
-      while (ret < 0 && errno == EINTR);
+      ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "read from sync socket");
     }
@@ -1374,27 +1370,21 @@ join_process_parent_helper (int sync_socket_fd,
     *terminal_fd = -1;
 
   /* Read the status and the PID from the child process.  */
-  do
-    ret = read (sync_fd, &res, 1);
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (read (sync_fd, &res, 1));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from sync socket");
 
   if (res != '0')
     return crun_make_error (err, 0, "fail startup");
 
-  do
-    ret = read (sync_fd, &pid, sizeof (pid));
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (read (sync_fd, &pid, sizeof (pid)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from sync socket");
 
   ret = libcrun_move_process_to_cgroup (pid, status->cgroup_path, err);
   /* The write unblocks the grandchild process so it can run once we setup
      the cgroups.  */
-  do
-    ret = write (sync_fd, &ret, sizeof (ret));
-  while (ret < 0 && errno == EINTR);
+  ret = TEMP_FAILURE_RETRY (write (sync_fd, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to sync socket");
 
@@ -1491,9 +1481,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   pid = fork ();
   if (UNLIKELY (pid < 0))
     {
-      do
-        ret = write (sync_fd, "1", 1);
-      while (ret < 0 && errno == EINTR);
+      ret = TEMP_FAILURE_RETRY (write (sync_fd, "1", 1));
       crun_make_error (err, errno, "fork");
       goto exit;
     }
@@ -1501,12 +1489,8 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   if (pid)
     {
       /* Just return the PID to the parent helper and exit.  */
-      do
-        ret = write (sync_fd, "0", 1);
-      while (ret < 0 && errno == EINTR);
-      do
-        ret = write (sync_fd, &pid, sizeof (pid));
-      while (ret < 0 && errno == EINTR);
+      ret = TEMP_FAILURE_RETRY (write (sync_fd, "0", 1));
+      ret = TEMP_FAILURE_RETRY (write (sync_fd, &pid, sizeof (pid)));
       _exit (0);
     }
   else
@@ -1516,9 +1500,8 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
       int r = -1;
       cleanup_free char *slave = NULL;
       cleanup_close int master_fd = -1;
-      do
-        ret = read (sync_fd, &r, sizeof (r));
-      while (ret < 0 && errno == EINTR);
+
+      ret = TEMP_FAILURE_RETRY (read (sync_fd, &r, sizeof (r)));
 
       if (terminal_fd)
         {
