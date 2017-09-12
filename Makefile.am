@@ -21,7 +21,7 @@ crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 
 crun_LDADD = libcrun.a libocispec/libocispec.a $(SELINUX_LIBS) $(YAJL_LIBS)
 
-EXTRA_DIST = COPYING.libcrun \
+EXTRA_DIST = COPYING COPYING.libcrun README.md \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
