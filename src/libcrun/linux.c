@@ -1236,6 +1236,9 @@ libcrun_run_linux_container (libcrun_container *container,
       flags |= value;
     }
 
+  if (container->host_uid && (flags & CLONE_NEWUSER) == 0)
+    return crun_make_error (err, 0, "non root user need to have an 'user' namespace");
+
   get_private_data (container)->unshare_flags = flags;
 
   ret = socketpair (AF_UNIX, SOCK_STREAM, 0, sync_socket);
