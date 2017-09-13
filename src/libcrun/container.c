@@ -103,6 +103,9 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (rootfs == NULL))
     return crun_make_error (err, errno, "realpath");
 
+  if (entrypoint_args->terminal_socketpair[0] >= 0)
+    close (entrypoint_args->terminal_socketpair[0]);
+
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
     {
@@ -136,7 +139,6 @@ container_entrypoint (void *args, const char *notify_socket,
           ret = send_fd_to_socket (entrypoint_args->terminal_socketpair[1], terminal_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
-          close (entrypoint_args->terminal_socketpair[0]);
           close (entrypoint_args->terminal_socketpair[1]);
         }
     }
@@ -534,10 +536,17 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
-  struct container_entrypoint_s container_args = {.container = container, .context = context};
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_close int sync_socket = -1;
   cleanup_close int notify_socket = -1;
+  cleanup_close int socket_pair_0 = -1;
+  cleanup_close int socket_pair_1 = -1;
+  struct container_entrypoint_s container_args =
+    {
+      .container = container,
+      .context = context,
+      .terminal_socketpair = {-1, -1}
+    };
 
   container->context = context;
 
@@ -551,6 +560,8 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       ret = create_socket_pair (container_args.terminal_socketpair, err);
       if (UNLIKELY (ret < 0))
         return ret;
+      socket_pair_0 = container_args.terminal_socketpair[0];
+      socket_pair_1 = container_args.terminal_socketpair[1];
     }
 
   pid = libcrun_run_linux_container (container, context->detach,
@@ -558,6 +569,12 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                                      &notify_socket, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
+
+  if (container_args.terminal_socketpair[1] >= 0)
+    {
+      ret = close (container_args.terminal_socketpair[1]);
+      socket_pair_1 = -1;
+    }
 
   if (context->pid_file)
     {
@@ -579,7 +596,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
 
       close (container_args.terminal_socketpair[0]);
-      close (container_args.terminal_socketpair[1]);
     }
 
   ret = libcrun_cgroup_enter (&cgroup_path, context->systemd_cgroup, pid, context->id, err);
