@@ -526,6 +526,31 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminate, i
   return 0;
 }
 
+static void
+flush_fd_to_err (int terminal_fd, FILE *stderr)
+{
+  char buf[256];
+  int flags;
+  if (terminal_fd < 0 || stderr == NULL)
+    return;
+
+  flags = fcntl (terminal_fd, F_GETFL, 0);
+  if (flags == -1)
+    return;
+  if (fcntl (terminal_fd, F_SETFL, flags & ~O_NONBLOCK) < 0)
+    return;
+
+  for (;;)
+    {
+      int ret = read (terminal_fd, buf, sizeof (buf));
+      if (ret <= 0)
+        break;
+      fwrite (buf, ret, 1, stderr);
+    }
+  fcntl (terminal_fd, F_SETFL, flags);
+}
+
+
 static int
 libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
@@ -600,15 +625,24 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   ret = libcrun_cgroup_enter (&cgroup_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      flush_fd_to_err (terminal_fd, context->stderr);
+      return ret;
+    }
 
   ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      flush_fd_to_err (terminal_fd, context->stderr);
+      return ret;
+    }
 
   ret = TEMP_FAILURE_RETRY (read (sync_socket, &c, 1));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from the sync socket");
+    {
+      flush_fd_to_err (terminal_fd, context->stderr);
+      return crun_make_error (err, errno, "read from the sync socket");
+    }
 
     /* The container is waiting that we write back.  In this phase we can launch the
        prestart hooks.  */
@@ -618,21 +652,33 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                       (struct hook_s **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          flush_fd_to_err (terminal_fd, context->stderr);
+          return ret;
+        }
     }
 
   ret = TEMP_FAILURE_RETRY (write (sync_socket, "1", 1));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to sync socket");
+    {
+      flush_fd_to_err (terminal_fd, context->stderr);
+      return crun_make_error (err, errno, "write to sync socket");
+    }
 
   ret = close (sync_socket);
   sync_socket = -1;
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "close the sync socket");
+    {
+      flush_fd_to_err (terminal_fd, context->stderr);
+      return crun_make_error (err, errno, "close the sync socket");
+    }
 
   ret = write_container_status (container, context, pid, cgroup_path, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      flush_fd_to_err (terminal_fd, context->stderr);
+      return ret;
+    }
 
   if (def->hooks && def->hooks->poststart_len)
     {
@@ -640,10 +686,15 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                       (struct hook_s **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          flush_fd_to_err (terminal_fd, context->stderr);
+          return ret;
+        }
     }
 
-  return wait_for_process (pid, context, 1, terminal_fd, notify_socket, err);
+  ret = wait_for_process (pid, context, 1, terminal_fd, notify_socket, err);
+  flush_fd_to_err (terminal_fd, context->stderr);
+  return ret;
 }
 
 static
@@ -657,6 +708,20 @@ int check_config_file (oci_container *def, libcrun_error_t *err)
     return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
   if (UNLIKELY (def->mounts == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
+  return 0;
+}
+
+static
+int block_signals (libcrun_error_t *err)
+{
+  int ret;
+  sigset_t mask;
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+  sigaddset (&mask, SIGPIPE);
+  ret = sigprocmask (SIG_BLOCK, &mask, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
   return 0;
 }
 
@@ -678,7 +743,13 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
     return ret;
 
   if (!detach)
-    return libcrun_container_run_internal (container, context, err);
+    {
+      ret = block_signals (err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      return libcrun_container_run_internal (container, context, err);
+    }
 
   ret = fork ();
   if (ret < 0)
@@ -798,6 +869,13 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, int a
   if (ret == 0)
     return crun_make_error (err, 0, "the container '%s' is not running.", id);
 
+  if (!context->detach)
+    {
+      ret = block_signals (err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = libcrun_join_process (status.pid, &status, context->detach, context->tty ? &terminal_fd : NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -830,9 +908,14 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, int a
         {
           ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
           if (UNLIKELY (ret < 0))
-            return ret;
+            {
+              flush_fd_to_err (terminal_fd, context->stderr);
+              return ret;
+            }
         }
     }
 
-  return wait_for_process (ret, context, 0, terminal_fd, -1, err);
+  ret = wait_for_process (ret, context, 0, terminal_fd, -1, err);
+  flush_fd_to_err (terminal_fd, context->stderr);
+  return ret;
 }
