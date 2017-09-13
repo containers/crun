@@ -13,8 +13,8 @@ libcrun_a_SOURCES = src/libcrun/utils.c \
 		src/libcrun/status.c \
 		src/libcrun/terminal.c
 
-libcrun_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src
-crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src
+libcrun_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c
