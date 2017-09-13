@@ -62,6 +62,30 @@ libcrun_container_load (const char *path, libcrun_error_t *err)
   return container;
 }
 
+static
+int block_signals (libcrun_error_t *err)
+{
+  int ret;
+  sigset_t mask;
+  sigfillset (&mask);
+  ret = sigprocmask (SIG_BLOCK, &mask, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
+  return 0;
+}
+
+static
+int unblock_signals (libcrun_error_t *err)
+{
+  int ret;
+  sigset_t mask;
+  sigfillset (&mask);
+  ret = sigprocmask (SIG_UNBLOCK, &mask, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
+  return 0;
+}
+
 static int
 set_uid_gid (libcrun_container *container, libcrun_error_t *err)
 {
@@ -218,6 +242,10 @@ container_entrypoint (void *args, const char *notify_socket,
       crun_make_error (err, errno, "read from the sync socket");
       crun_error_write_warning_and_release (stderr, err);
     }
+
+  ret = unblock_signals (err);
+  if (ret < 0)
+    return ret;
 
   execvp (def->process->args[0], def->process->args);
   return crun_make_error (err, errno, "exec the container process");
@@ -712,18 +740,6 @@ int check_config_file (oci_container *def, libcrun_error_t *err)
     return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
   if (UNLIKELY (def->mounts == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
-  return 0;
-}
-
-static
-int block_signals (libcrun_error_t *err)
-{
-  int ret;
-  sigset_t mask;
-  sigfillset (&mask);
-  ret = sigprocmask (SIG_BLOCK, &mask, NULL);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "sigprocmask");
   return 0;
 }
 
