@@ -15,6 +15,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#define _GNU_SOURCE
+
 #include <config.h>
 #include "cgroup.h"
 #include "utils.h"
@@ -24,11 +27,65 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <libgen.h>
 
 static const char *subsystems[] = { "cpuset", "devices", "pids", "memory",
                                     "net_cls,net_prio", "freezer", "blkio",
                                     "hugetlb", "cpu,cpuacct", "perf_event",
                                     "unified", NULL};
+
+static int
+initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
+{
+  int ret;
+  size_t i;
+  cleanup_free char *parentdir_path_buf = NULL;
+  char *parent_dir_path = NULL;
+  cleanup_close int dirfd = -1;
+  cleanup_close int parent_dirfd = -1;
+  const char *files[2] = {"cpuset.cpus", "cpuset.mems"};
+
+  parentdir_path_buf = xstrdup (path);
+  parent_dir_path = dirname (parentdir_path_buf);
+
+  dirfd = open (path, O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open '%s'", path);
+
+  parent_dirfd = open (parent_dir_path, O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open '%s'", parent_dir_path);
+
+  for (i = 0; i < 2; i++)
+    {
+      char b[256];
+      ssize_t b_len;
+      cleanup_close int fd = openat (parent_dirfd, files[i], O_RDWR);
+      if (UNLIKELY (fd < 0))
+        return crun_make_error (err, errno, "open '%s/%s'", parent_dir_path, files[i]);
+
+      b_len = TEMP_FAILURE_RETRY (read (fd, b, sizeof (b)));
+      if (UNLIKELY (b_len < 0))
+        return crun_make_error (err, errno, "read from '%s/%s'", parent_dir_path, files[i]);
+
+      /* Write to the parent only if not already configured.  */
+      if (b_len == 0)
+        {
+          strcpy (b, "0");
+          b_len = 1;
+          ret = TEMP_FAILURE_RETRY (write (fd, b, b_len));
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+        }
+
+      ret = write_file_at (dirfd, files[i], b, b_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
 
 static int
 enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *err)
@@ -51,6 +108,13 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
           ret = crun_ensure_directory (cgroup_path, 0755, err);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+
+          if (strcmp (subsystems[i], "cpuset") == 0)
+            {
+              ret = initialize_cpuset_subsystem (cgroup_path, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
         }
       else
         {
@@ -59,21 +123,6 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
             return ret;
           if (ret == 0)
             continue;
-        }
-
-      if (strcmp (subsystems[i], "cpuset") == 0)
-        {
-          cleanup_free char *cpuset_mems = NULL;
-          cleanup_free char *cpuset_cpus = NULL;
-          xasprintf (&cpuset_mems, "/sys/fs/cgroup/%s/%s/cpuset.mems", subsystems[i], path);
-          ret = write_file (cpuset_mems, "0", 1, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          xasprintf (&cpuset_cpus, "/sys/fs/cgroup/%s/%s/cpuset.cpus", subsystems[i], path);
-          ret = write_file (cpuset_cpus, "0", 1, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
         }
 
       xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/%s/cgroup.procs", subsystems[i], path);
