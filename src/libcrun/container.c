@@ -422,8 +422,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminate, i
   if (context->detach && notify_socket < 0)
     return 0;
 
-  sigemptyset (&mask);
-  sigaddset (&mask, SIGCHLD);
+  sigfillset (&mask);
   signalfd = create_signalfd (&mask, err);
   if (UNLIKELY (signalfd < 0))
     return signalfd;
@@ -514,6 +513,11 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminate, i
                         libcrun_delete_container (context, context->id, 1, err);
                       return container_exit_code;
                     }
+                }
+              else
+                {
+                  /* Send any other signal to the child process.  */
+                  ret = kill (pid, si.ssi_signo);
                 }
             }
           else
@@ -716,9 +720,7 @@ int block_signals (libcrun_error_t *err)
 {
   int ret;
   sigset_t mask;
-  sigemptyset (&mask);
-  sigaddset (&mask, SIGCHLD);
-  sigaddset (&mask, SIGPIPE);
+  sigfillset (&mask);
   ret = sigprocmask (SIG_BLOCK, &mask, NULL);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
