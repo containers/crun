@@ -27,14 +27,17 @@ struct libcrun_context_s
 {
   char *state_root;
   const char *id;
-  char *console_socket;
+  const char *console_socket;
   char *pid_file;
   char *notify_socket;
   int preserve_fds;
   FILE *stderr;
 
+  const char *cwd;
+
   int fifo_exec_wait_dirfd;
 
+  int tty : 1;
   int has_fifo_exec_wait : 1;
   int systemd_cgroup : 1;
   int detach : 1;
@@ -72,5 +75,7 @@ int libcrun_container_create (libcrun_container *container, struct libcrun_conte
 int libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
 
 int libcrun_container_state (struct libcrun_context_s *context, const char *id, char **state, libcrun_error_t *err);
+
+int libcrun_exec_container (struct libcrun_context_s *context, const char *id, int argc, char **argv, libcrun_error_t *err);
 
 #endif

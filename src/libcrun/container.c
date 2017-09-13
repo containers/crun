@@ -418,20 +418,133 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
+wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminate, int terminal_fd, int notify_socket, libcrun_error_t *err)
+{
+  cleanup_close int epollfd = -1;
+  cleanup_close int signalfd = -1;
+  int ret, container_exit_code, last_process;
+  sigset_t mask;
+  int fds[10];
+  int fds_len = 0;
+
+  if (context->detach && notify_socket < 0)
+    return 0;
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGCHLD);
+  signalfd = create_signalfd (&mask, err);
+  if (UNLIKELY (signalfd < 0))
+    return signalfd;
+
+  ret = sigprocmask (SIG_BLOCK, &mask, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
+
+  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (last_process)
+    {
+      if (terminate)
+        libcrun_delete_container (context, context->id, 1, err);
+      return container_exit_code;
+    }
+
+  fds[fds_len++] = signalfd;
+  if (notify_socket >= 0)
+    fds[fds_len++] = notify_socket;
+  if (terminal_fd >= 0)
+    {
+      fds[fds_len++] = 0;
+      fds[fds_len++] = terminal_fd;
+    }
+  fds[fds_len++] = -1;
+
+  epollfd = epoll_helper (fds, err);
+  if (UNLIKELY (epollfd < 0))
+    return epollfd;
+
+
+  while (1)
+    {
+      struct signalfd_siginfo si;
+      ssize_t res;
+      struct epoll_event events[10];
+      int i, nr_events = epoll_wait (epollfd, events, 10, -1);
+      if (UNLIKELY (nr_events < 0))
+        return crun_make_error (err, errno, "epoll_wait");
+
+      for (i = 0; i < nr_events; i++)
+        {
+          if (events[i].data.fd == 0)
+            {
+              ret = copy_from_fd_to_fd (0, terminal_fd, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else if (events[i].data.fd == terminal_fd)
+            {
+              ret = copy_from_fd_to_fd (terminal_fd, 0, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else if (events[i].data.fd == notify_socket)
+            {
+              char buf[256];
+              ret = recvfrom (notify_socket, buf, sizeof (buf) - 1, 0, NULL, NULL);
+              if (UNLIKELY (ret < 0))
+                return crun_make_error (err, errno, "recvfrom");
+              buf[ret] = '\0';
+              if (strstr (buf, "READY=1"))
+                {
+                  ret = sd_notify (0, "READY=1");
+                  if (UNLIKELY (ret < 0))
+                    return crun_make_error (err, errno, "sd_notify");
+                  if (context->detach)
+                    return 0;
+                }
+            }
+          else if (events[i].data.fd == signalfd)
+            {
+              do
+                res = read (signalfd, &si, sizeof(si));
+              while (res < 0 && errno == EINTR);
+              if (UNLIKELY (res < 0))
+                return crun_make_error (err, errno, "read from signalfd");
+              if (si.ssi_signo == SIGCHLD)
+                {
+                  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+                  if (last_process)
+                    {
+                      if (terminate)
+                        libcrun_delete_container (context, context->id, 1, err);
+                      return container_exit_code;
+                    }
+                }
+            }
+          else
+            {
+              return crun_make_error (err, 0, "unknown fd from epoll_wait");
+            }
+        }
+    }
+
+  return 0;
+}
+
+static int
 libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
-  int ret, container_exit_code, last_process;
+  int ret;
   pid_t pid;
   int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
   struct container_entrypoint_s container_args = {.container = container, .context = context};
-  sigset_t mask;
-  int fds[10];
-  int fds_len = 0;
-  cleanup_close int epollfd = -1;
-  cleanup_close int signalfd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_close int sync_socket = -1;
   cleanup_close int notify_socket = -1;
@@ -522,43 +635,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (context->detach && notify_socket < 0)
-    return 0;
-
-  sigemptyset (&mask);
-  sigaddset (&mask, SIGCHLD);
-  signalfd = create_signalfd (&mask, err);
-  if (UNLIKELY (signalfd < 0))
-    return signalfd;
-
-  ret = sigprocmask (SIG_BLOCK, &mask, NULL);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "sigprocmask");
-
-  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (last_process)
-    {
-      libcrun_delete_container (context, context->id, 1, err);
-      return container_exit_code;
-    }
-
-  fds[fds_len++] = signalfd;
-  if (notify_socket >= 0)
-    fds[fds_len++] = notify_socket;
-  if (terminal_fd >= 0)
-    {
-      fds[fds_len++] = 0;
-      fds[fds_len++] = terminal_fd;
-    }
-  fds[fds_len++] = -1;
-
-  epollfd = epoll_helper (fds, err);
-  if (UNLIKELY (epollfd < 0))
-    return epollfd;
-
   if (def->hooks && def->hooks->poststart_len)
     {
       ret = do_hooks (pid, context->id, def->root->path,
@@ -568,72 +644,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
 
-  while (1)
-    {
-      struct signalfd_siginfo si;
-      ssize_t res;
-      struct epoll_event events[10];
-      int i, nr_events = epoll_wait (epollfd, events, 10, -1);
-      if (UNLIKELY (nr_events < 0))
-        return crun_make_error (err, errno, "epoll_wait");
-
-      for (i = 0; i < nr_events; i++)
-        {
-          if (events[i].data.fd == 0)
-            {
-              ret = copy_from_fd_to_fd (0, terminal_fd, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-          else if (events[i].data.fd == terminal_fd)
-            {
-              ret = copy_from_fd_to_fd (terminal_fd, 0, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-          else if (events[i].data.fd == notify_socket)
-            {
-              char buf[256];
-              ret = recvfrom (notify_socket, buf, sizeof (buf) - 1, 0, NULL, NULL);
-              if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "recvfrom");
-              buf[ret] = '\0';
-              if (strstr (buf, "READY=1"))
-                {
-                  ret = sd_notify (0, "READY=1");
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "sd_notify");
-                  if (context->detach)
-                    return 0;
-                }
-            }
-          else if (events[i].data.fd == signalfd)
-            {
-              do
-                res = read (signalfd, &si, sizeof(si));
-              while (res < 0 && errno == EINTR);
-              if (UNLIKELY (res < 0))
-                return crun_make_error (err, errno, "read from signalfd");
-              if (si.ssi_signo == SIGCHLD)
-                {
-                  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-                  if (last_process)
-                    {
-                      libcrun_delete_container (context, context->id, 1, err);
-                      return container_exit_code;
-                    }
-                }
-            }
-          else
-            {
-              return crun_make_error (err, 0, "unknown fd from epoll_wait");
-            }
-        }
-    }
-
-  return 0;
+  return wait_for_process (pid, context, 1, terminal_fd, notify_socket, err);
 }
 
 static
@@ -766,4 +777,63 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, char
  exit:
   libcrun_free_container_status (&status);
   return ret;
+}
+
+int
+libcrun_exec_container (struct libcrun_context_s *context, const char *id, int argc, char **argv, libcrun_error_t *err)
+{
+  int ret;
+  libcrun_container_status_t status;
+  const char *state_root = context->state_root;
+  cleanup_close int terminal_fd = -1;
+  cleanup_terminal void *orig_terminal = NULL;
+  memset (&status, 0, sizeof (status));
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_is_container_running (&status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret == 0)
+    return crun_make_error (err, 0, "the container '%s' is not running.", id);
+
+  ret = libcrun_join_process (status.pid, &status, context->detach, context->tty ? &terminal_fd : NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Process to exec.  */
+  if (ret == 0)
+    {
+      const char *cwd = context->cwd ? context->cwd : "/";
+      if (chdir (cwd) < 0)
+        error (EXIT_FAILURE, errno, "chdir");
+      execv (argv[0], argv);
+      _exit (1);
+    }
+
+  if (terminal_fd >= 0)
+    {
+      if (context->console_socket)
+        {
+          int ret;
+          cleanup_close int console_socket_fd = open_unix_domain_socket (context->console_socket, 0, err);
+          if (UNLIKELY (console_socket_fd < 0))
+            return console_socket_fd;
+          ret = send_fd_to_socket (console_socket_fd, terminal_fd, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          close (terminal_fd);
+          terminal_fd = -1;
+        }
+      else
+        {
+          ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
+  return wait_for_process (ret, context, 0, terminal_fd, -1, err);
 }

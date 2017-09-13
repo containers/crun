@@ -37,6 +37,7 @@
 #include <grp.h>
 #include <signal.h>
 #include "terminal.h"
+#include "cgroup.h"
 #include "status.h"
 #include <sys/socket.h>
 
@@ -1140,6 +1141,25 @@ libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err)
   return 0;
 }
 
+static int
+open_terminal (char **slave, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_close int fd = -1;
+
+  fd = libcrun_new_terminal (slave, err);
+  if (UNLIKELY (fd < 0))
+    return fd;
+
+  ret = libcrun_set_stdio (*slave, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = fd;
+  fd = -1;
+  return ret;
+}
+
 int
 libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
 {
@@ -1150,13 +1170,22 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   if (!def->process->terminal)
     return 0;
 
-  fd = libcrun_new_terminal (&slave, err);
+  fd = open_terminal (&slave, err);
   if (UNLIKELY (fd < 0))
     return fd;
 
   ret = libcrun_set_stdio (slave, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (def->process->console_size)
+    {
+      ret = libcrun_terminal_setup_size (0, def->process->console_size->height,
+                                         def->process->console_size->width,
+                                         err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (def->process->console_size)
     {
@@ -1325,4 +1354,202 @@ libcrun_run_linux_container (libcrun_container *container,
  out:
   error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);
   return 1;
+}
+
+static int
+join_process_parent_helper (int sync_socket_fd,
+                            libcrun_container_status_t *status,
+                            int *terminal_fd,
+                            libcrun_error_t *err)
+{
+  int ret;
+  char res;
+  pid_t pid;
+  cleanup_close int sync_fd = sync_socket_fd;
+
+  if (terminal_fd)
+    *terminal_fd = -1;
+
+  /* Read the status and the PID from the child process.  */
+  do
+    ret = read (sync_fd, &res, 1);
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from sync socket");
+
+  if (res != '0')
+    return crun_make_error (err, 0, "fail startup");
+
+  do
+    ret = read (sync_fd, &pid, sizeof (pid));
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from sync socket");
+
+  ret = libcrun_move_process_to_cgroup (pid, status->cgroup_path, err);
+  /* The write unblocks the grandchild process so it can run once we setup
+     the cgroups.  */
+  do
+    ret = write (sync_fd, &ret, sizeof (ret));
+  while (ret < 0 && errno == EINTR);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  if (terminal_fd)
+    {
+      ret = receive_fd_from_socket (sync_fd, err);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "receive fd");
+      *terminal_fd = ret;
+    }
+
+  return pid;
+}
+
+int
+libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
+{
+  pid_t pid;
+  int ret;
+  int sync_socket_fd[2];
+  int fds[10] = {-1, };
+  int namespaces_id[] = {CLONE_NEWCGROUP, CLONE_NEWIPC, CLONE_NEWNS, CLONE_NEWNET, CLONE_NEWPID, CLONE_NEWUTS, CLONE_NEWUSER, 0};
+  const char *namespaces[] = {"cgroup", "ipc", "mnt",  "net", "pid", "uts", "user", NULL};
+  size_t i;
+  cleanup_close int sync_fd = -1;
+
+  ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "set child subreaper");
+
+  ret = socketpair (AF_UNIX, SOCK_STREAM, 0, sync_socket_fd);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "socketpair");
+
+  pid = fork ();
+  if (UNLIKELY (pid < 0))
+    {
+      crun_make_error (err, errno, "fork");
+      goto exit;
+    }
+  if (pid)
+    {
+      close (sync_socket_fd[1]);
+      return join_process_parent_helper (sync_socket_fd[0], status, terminal_fd, err);
+    }
+
+  close (sync_socket_fd[0]);
+  sync_fd = sync_socket_fd[1];
+
+  for (i = 0; namespaces[i]; i++)
+    {
+      cleanup_close int fd = -1;
+      cleanup_free char *ns_join;
+      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i]);
+      fds[i] = open (ns_join, O_RDONLY);
+      if (UNLIKELY (fds[i] < 0))
+        {
+          ret = crun_make_error (err, errno, "open '%s'", ns_join);
+          goto exit;
+        }
+    }
+
+  for (i = 0; namespaces[i]; i++)
+    {
+      ret = setns (fds[i], namespaces_id[i]);
+      if (ret > 0)
+        fds[i] = -1;
+    }
+  for (i = 0; namespaces[i]; i++)
+    {
+      if (fds[i] < 0)
+        continue;
+      ret = setns (fds[i], namespaces_id[i]);
+      if (UNLIKELY (ret < 0 && errno != EINVAL))
+        {
+          crun_make_error (err, errno, "setns '%s'", namespaces[i]);
+          goto exit;
+        }
+      fds[i] = -1;
+    }
+  for (i = 0; namespaces[i]; i++)
+    {
+      close (fds[i]);
+      fds[i] = -1;
+    }
+
+  if (detach && setsid () < 0)
+    {
+      crun_make_error (err, errno, "setsid");
+      goto exit;
+    }
+
+  /* We need to fork once again to join the PID namespace.  */
+  pid = fork ();
+  if (UNLIKELY (pid < 0))
+    {
+      do
+        ret = write (sync_fd, "1", 1);
+      while (ret < 0 && errno == EINTR);
+      crun_make_error (err, errno, "fork");
+      goto exit;
+    }
+
+  if (pid)
+    {
+      /* Just return the PID to the parent helper and exit.  */
+      do
+        ret = write (sync_fd, "0", 1);
+      while (ret < 0 && errno == EINTR);
+      do
+        ret = write (sync_fd, &pid, sizeof (pid));
+      while (ret < 0 && errno == EINTR);
+      _exit (0);
+    }
+  else
+    {
+      /* Inside the grandchild process.  The real process
+         used for the container.  */
+      int r = -1;
+      cleanup_free char *slave = NULL;
+      cleanup_close int master_fd = -1;
+      do
+        ret = read (sync_fd, &r, sizeof (r));
+      while (ret < 0 && errno == EINTR);
+
+      if (terminal_fd)
+        {
+          if (setsid () < 0)
+            error (EXIT_FAILURE, errno, "setsid");
+
+          master_fd = open_terminal (&slave, err);
+          if (UNLIKELY (master_fd < 0))
+            {
+              crun_error_write_warning_and_release (stderr, err);
+              _exit (1);
+            }
+
+          ret = send_fd_to_socket (sync_fd, master_fd, err);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_error_write_warning_and_release (stderr, err);
+              _exit (1);
+            }
+        }
+
+      if (r != 0)
+        _exit (1);
+    }
+
+  return pid;
+
+ exit:
+  if (sync_socket_fd[0] >= 0)
+    close (sync_socket_fd[0]);
+  if (sync_socket_fd[1] >= 0)
+    close (sync_socket_fd[1]);
+  for (i = 0; namespaces[i]; i++)
+    if (fds[i] >= 0)
+      close (fds[i]);
+  return ret;
 }

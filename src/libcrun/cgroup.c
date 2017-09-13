@@ -25,12 +25,13 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
-static const char *subsystems[] = { "cpuset", "devices", "pids", "memory", "net_cls,net_prio",
-                                    "freezer", "blkio", "hugetlb", "cpu,cpuacct", "perf_event", "unified",
-                                    NULL};
+static const char *subsystems[] = { "cpuset", "devices", "pids", "memory",
+                                    "net_cls,net_prio", "freezer", "blkio",
+                                    "hugetlb", "cpu,cpuacct", "perf_event",
+                                    "unified", NULL};
 
 static int
-enter_cgroup (pid_t pid, const char *path, libcrun_error_t *err)
+enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *err)
 {
   char pid_str[16];
   int ret;
@@ -43,11 +44,22 @@ enter_cgroup (pid_t pid, const char *path, libcrun_error_t *err)
       cleanup_free char *cgroup_path = NULL;
       cleanup_free char *cgroup_path_procs = NULL;
 
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystems[i], path);
 
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
-      ret = crun_ensure_directory (cgroup_path, 0755, err);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+      if (ensure_missing)
+        {
+          ret = crun_ensure_directory (cgroup_path, 0755, err);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+        }
+      else
+        {
+          ret = crun_path_exists (cgroup_path, 0, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          if (ret == 0)
+            continue;
+        }
 
       if (strcmp (subsystems[i], "cpuset") == 0)
         {
@@ -71,6 +83,12 @@ enter_cgroup (pid_t pid, const char *path, libcrun_error_t *err)
     }
 
   return 0;
+}
+
+int
+libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
+{
+  return enter_cgroup (pid, path, 0, err);
 }
 
 static
@@ -283,7 +301,7 @@ libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcr
       if (UNLIKELY (ret < 0))
         return ret;
 
-      return enter_cgroup (pid, *path, err);
+      return enter_cgroup (pid, *path, 1, err);
     }
   return 0;
 }

@@ -403,7 +403,7 @@ send_fd_to_socket (int server, int fd, libcrun_error_t *err)
   cmsg->cmsg_type = SCM_RIGHTS;
   cmsg->cmsg_len = CMSG_LEN (sizeof (int));
 
-  *((int *) CMSG_DATA(cmsg)) = fd;
+  *((int *) CMSG_DATA (cmsg)) = fd;
 
   do
     ret = sendmsg (server, &msg, 0);
@@ -444,7 +444,9 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
     return crun_make_error (err, errno, "recvmsg");
 
   cmsg = CMSG_FIRSTHDR (&msg);
-  memcpy (&fd, CMSG_DATA(cmsg), sizeof(fd));
+  if (cmsg == NULL)
+    return crun_make_error (err, 0, "no msg received");
+  memcpy (&fd, CMSG_DATA (cmsg), sizeof (fd));
 
   ret = fd;
   fd = -1;
@@ -487,7 +489,7 @@ epoll_helper (int *fds, libcrun_error_t *err)
       ev.data.fd = *it;
       ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_create1");
+        return crun_make_error (err, errno, "epoll_ctl add '%d'", *it);
     }
 
   ret = epollfd;

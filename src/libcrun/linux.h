@@ -25,6 +25,7 @@
 # include <argp.h>
 # include <oci_runtime_spec.h>
 # include "container.h"
+# include "status.h"
 
 typedef int (*container_entrypoint_t) (void *args, const char *notify_socket,
                                        int sync_socket,
@@ -46,5 +47,6 @@ int libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err);
+int libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err);
 
 #endif
