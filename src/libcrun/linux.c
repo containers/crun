@@ -61,6 +61,7 @@ struct private_data_s
 
   char *host_notify_socket_path;
   char *container_notify_socket_path;
+  int mount_etc_from_host;
 };
 
 struct linux_namespace_s
@@ -134,6 +135,7 @@ struct propagation_flags_s
 static struct propagation_flags_s propagation_flags[] =
   {
     {"defaults", 0, 0},
+    {"rbind", 0, MS_REC | MS_BIND},
     {"ro", 0, MS_RDONLY},
     {"rw", 1, MS_RDONLY},
     {"suid", 1, MS_NOSUID},
@@ -232,7 +234,8 @@ do_mount (libcrun_container *container,
         return ret;
       data = data_with_label;
     }
-   ret = mount (source, target, fstype, mountflags, data);
+
+  ret = mount (source, target, fstype, mountflags, data);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
 
@@ -369,7 +372,7 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open rootfs directory '%s'", rootfs);
 
-  devfd = openat (dirfd, "dev", O_DIRECTORY | O_RDONLY);
+  devfd = openat (dirfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in '%s'", rootfs);
 
@@ -393,27 +396,27 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
     }
 
   ret = symlinkat ("/proc/self/fd", devfd, "fd");
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "creating symlink for /dev/fd");
 
   ret = symlinkat ("/proc/self/fd/0", devfd, "stdin");
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "creating symlink for /dev/stdin");
 
   ret = symlinkat ("/proc/self/fd/1", devfd, "stdout");
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "creating symlink for /dev/stdout");
 
   ret = symlinkat ("/proc/self/fd/2", devfd, "stderr");
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "creating symlink for /dev/stderr");
 
   ret = symlinkat ("/proc/kcore", devfd, "core");
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "creating symlink for /dev/core");
 
   ret = symlinkat ("/dev/pts/ptmx", devfd, "ptmx");
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "creating symlink for /dev/ptmx");
 
   return 0;
@@ -594,13 +597,19 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
         {
           size_t j;
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            flags = get_mount_flags_or_option (def->mounts[i]->options[j], flags, &data);
+            {
+              flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &data);
+            }
         }
 
       type = def->mounts[i]->type;
 
       if (strcmp (type, "bind") == 0)
-        flags |= MS_BIND;
+        {
+          if (strcmp (def->mounts[i]->destination, "/dev") == 0)
+            get_private_data (container)->mount_etc_from_host = 1;
+          flags |= MS_BIND;
+        }
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
@@ -697,15 +706,16 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   if (def->linux->rootfs_propagation)
     rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL);
   else
-    rootfsPropagation = MS_REC | MS_SLAVE;
+    rootfsPropagation = MS_REC | MS_PRIVATE;
 
   ret = do_mount (container, "", "/", "", MS_REC | rootfsPropagation, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mount (container, def->root->path, rootfs, "", MS_BIND | MS_REC | rootfsPropagation, "", 0, err);
+  ret = do_mount (container, def->root->path, rootfs, "", MS_BIND | MS_REC, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
   if (def->root->readonly)
     {
       unsigned long remount_flags = (rootfsPropagation & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
@@ -725,11 +735,16 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
         return is_user_ns;
     }
 
-  ret = create_missing_devs (container, rootfs, is_user_ns, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (get_private_data (container)->mount_etc_from_host == 0)
+    {
+      ret = create_missing_devs (container, rootfs, is_user_ns, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = do_finalize_notify_socket (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = finalize_mounts (container, rootfs, is_user_ns, err);
   if (UNLIKELY (ret < 0))
@@ -1308,6 +1323,7 @@ libcrun_run_linux_container (libcrun_container *container,
           additional_gids = def->process->user->additional_gids;
           additional_gids_len = def->process->user->additional_gids_len;
         }
+
       ret = setgroups (additional_gids_len, additional_gids);
       if (UNLIKELY (ret < 0))
         {
