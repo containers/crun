@@ -19,9 +19,9 @@ AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers n
 
 AC_CHECK_FUNCS(copy_file_range)
 
-AC_CHECK_LIB(cap, cap_from_name)
-AC_CHECK_LIB(seccomp, seccomp_rule_add)
-AC_CHECK_LIB(systemd, sd_bus_open)
+AC_CHECK_LIB(cap, cap_from_name, [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])])
+AC_CHECK_LIB(seccomp, seccomp_rule_add, [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])])
+AC_CHECK_LIB(systemd, sd_bus_open, [AC_DEFINE([HAVE_SYSTEMD], 1, [Define if systemd is available])])
 
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 PKG_CHECK_MODULES([SELINUX], [libselinux >= 2.1.9], [AC_DEFINE([HAVE_SELINUX], 1, [Define if SELinux is available])], [])

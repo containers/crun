@@ -19,7 +19,7 @@ crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocis
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c
 
-crun_LDADD = libcrun.a libocispec/libocispec.a $(SELINUX_LIBS) $(YAJL_LIBS)
+crun_LDADD = libcrun.a libocispec/libocispec.a $(SELINUX_LIBS) $(YAJL_LIBS) -lcap -lseccomp -lsystemd
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
