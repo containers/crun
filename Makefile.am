@@ -2,7 +2,7 @@ SUBDIRS = libocispec
 
 noinst_LIBRARIES = libcrun.a
 
-bin_PROGRAMS = crun
+bin_PROGRAMS = crun tests/init
 
 libcrun_a_SOURCES = src/libcrun/utils.c \
 		src/libcrun/container.c \
@@ -27,3 +27,11 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
 	src/libcrun/status.h src/libcrun/terminal.h
+
+tests_init_LDFLAGS = -static-libgcc -static
+tests_init_SOURCES = tests/init.c
+
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
+TESTS = tests/runtests.py
+
+EXTRA_DIST += $(TESTS)
