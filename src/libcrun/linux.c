@@ -423,7 +423,7 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
 }
 
 static int
-do_masked_and_readonly_paths (libcrun_container *container, libcrun_error_t *err)
+do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -431,7 +431,13 @@ do_masked_and_readonly_paths (libcrun_container *container, libcrun_error_t *err
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
-      char *path = def->linux->masked_paths[i];
+      cleanup_free char *path = NULL;
+
+      xasprintf (&path, "%s%s", rootfs, def->linux->masked_paths[i]);
+
+      ret = crun_ensure_file (path, 0755, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = do_mount (container, "/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
@@ -439,9 +445,11 @@ do_masked_and_readonly_paths (libcrun_container *container, libcrun_error_t *err
     }
   for (i = 0; i < def->linux->readonly_paths_len; i++)
     {
-      char *path = def->linux->readonly_paths[i];
+      cleanup_free char *path = NULL;
 
-      ret = crun_ensure_directory (path, 0755, err);
+      xasprintf (&path, "%s%s", rootfs, def->linux->readonly_paths[i]);
+
+      ret = crun_ensure_file (path, 0755, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
