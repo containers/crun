@@ -238,6 +238,20 @@ def test_uid():
             return -1
     return 0
 
+def test_gid():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    add_all_namespaces(conf)
+    conf['process']['user']['gid'] = 1000
+    out = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    ids = proc_status['Gid'].split()
+    for i in ids:
+        if i != "1000":
+            return -1
+    return 0
+
 def helper_test_some_caps(captypes, proc_name):
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
@@ -272,6 +286,7 @@ all_tests = {"pid" : test_pid,
 	     "pid-user" : test_pid_user,
              "no-caps" : test_no_caps,
              "uid" : test_uid,
+             "gid" : test_gid,
              "some-caps-effective" : test_some_caps_effective,
              "some-caps-bounding" : test_some_caps_bounding,
              "some-caps-inheritable" : test_some_caps_inheritable,
