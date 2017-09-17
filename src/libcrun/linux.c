@@ -435,9 +435,16 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
 
       xasprintf (&path, "%s%s", rootfs, def->linux->masked_paths[i]);
 
-      ret = crun_ensure_file (path, 0755, err);
+      ret = crun_path_exists (path, 1, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (ret == 0)
+        {
+          ret = crun_ensure_file (path, 0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = do_mount (container, "/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
@@ -449,9 +456,16 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
 
       xasprintf (&path, "%s%s", rootfs, def->linux->readonly_paths[i]);
 
-      ret = crun_ensure_file (path, 0755, err);
+      ret = crun_path_exists (path, 1, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (ret == 0)
+        {
+          ret = crun_ensure_file (path, 0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = do_mount (container, path, path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_RDONLY | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
@@ -589,15 +603,12 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
       char *source;
       unsigned long flags = 0;
       int skip_labelling;
+      int is_dir = 1;
 
       if (rootfs)
         xasprintf (&target, "%s/%s", rootfs, def->mounts[i]->destination + 1);
       else
         target = xstrdup (def->mounts[i]->destination);
-
-      ret = crun_ensure_directory (target, 0755, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
 
       if (def->mounts[i]->options == NULL)
         flags = get_default_flags (container, def->mounts[i]->destination, &data);
@@ -617,6 +628,27 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
           if (strcmp (def->mounts[i]->destination, "/dev") == 0)
             get_private_data (container)->mount_etc_from_host = 1;
           flags |= MS_BIND;
+        }
+
+      if (def->mounts[i]->source && (flags & MS_BIND))
+        {
+          is_dir = crun_dir_p (def->mounts[i]->source, err);
+          if (UNLIKELY (is_dir < 0))
+            return ret;
+          is_dir = 1;
+        }
+
+      if (is_dir)
+        {
+          ret = crun_ensure_directory (target, 0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = crun_ensure_file (target, 0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
         }
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
@@ -754,15 +786,15 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = do_masked_and_readonly_paths (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = finalize_mounts (container, rootfs, is_user_ns, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   ret = do_pivot (container, rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = do_masked_and_readonly_paths (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
