@@ -37,7 +37,6 @@ base_conf = """
             "/init"
 	],
 	"env": [
-            "FOO=BAR",
 	    "PATH=/bin",
 	    "TERM=xterm"
 	],
@@ -133,6 +132,15 @@ base_conf = """
 }
 """
 
+def parse_proc_status(content):
+    r = {}
+    for i in content.split("\n"):
+        if ':\t' not in i:
+            continue
+        k, v = i.split(':\t', 1)
+        r[k] = v.strip()
+    return r
+
 def base_config():
     return json.loads(base_conf)
 
@@ -163,10 +171,10 @@ def test_pid():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     conf['linux']['namespaces'].append({"type" : "pid"})
     out = run_and_get_output(conf)
-    if "Pid:\t1\n" in out:
+    pid = parse_proc_status(out)['Pid']
+    if pid == "1":
         return 0
     return -1
-
 
 def test_pid_user():
     conf = base_config()
@@ -178,12 +186,34 @@ def test_pid_user():
     conf['linux']['namespaces'].append({"type" : "uts"})
     conf['linux']['namespaces'].append({"type" : "network"})
     out = run_and_get_output(conf)
-    if "Pid:\t1\n" in out:
+    pid = parse_proc_status(out)['Pid']
+    if pid == "1":
         return 0
     return -1
 
+def test_no_caps():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    conf['linux']['namespaces'].append({"type" : "pid"})
+    conf['linux']['namespaces'].append({"type" : "user"})
+    conf['linux']['namespaces'].append({"type" : "cgroup"})
+    conf['linux']['namespaces'].append({"type" : "ipc"})
+    conf['linux']['namespaces'].append({"type" : "uts"})
+    conf['linux']['namespaces'].append({"type" : "network"})
+    conf['process']['capabilities'] = {}
+    for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
+        conf['process']['capabilities'][i] = []
+    out = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
+        if proc_status[i] != "0000000000000000":
+            return -1
+    return 0
+
 all_tests = {"pid" : test_pid,
-	     "pid-user" : test_pid_user}
+	     "pid-user" : test_pid_user,
+             "no-caps" : test_no_caps}
 
 def run_all_tests():
     print("1..%d" % len(all_tests.keys()))
