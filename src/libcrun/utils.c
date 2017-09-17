@@ -258,7 +258,7 @@ crun_ensure_file (const char *path, int mode, libcrun_error_t *err)
   size_t len = strlen (tmp);
   char *it = tmp + len - 1;
   int ret;
-  
+
   while (*it != '/' && it > tmp)
     it--;
   if (it > tmp)
@@ -272,6 +272,17 @@ crun_ensure_file (const char *path, int mode, libcrun_error_t *err)
       return create_file_if_missing (tmp, err);
     }
   return 0;
+}
+
+int
+crun_dir_p (const char *path, libcrun_error_t *err)
+{
+  struct stat st;
+  int ret = stat (path, &st);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "error stat'ing file '%s'", path);
+
+  return S_ISDIR (st.st_mode);
 }
 
 int
