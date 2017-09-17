@@ -192,11 +192,12 @@ def run_and_get_output(config):
 
         shutil.copy2("tests/init", os.path.join(rootfs, "init"))
         crun = os.path.join(cwd, "crun")
-        return subprocess.check_output([crun, 'run', id_container], cwd=temp_dir)
+        return subprocess.check_output([crun, 'run', id_container], cwd=temp_dir, stderr=subprocess.STDOUT)
     finally:
         shutil.rmtree(temp_dir)
 
 def tests_main(all_tests):
+    os.environ["LANG"] = "C"
     tests_root = get_tests_root()
     try:
         os.makedirs(tests_root)

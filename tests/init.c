@@ -46,6 +46,22 @@ cat (char *file)
     }
 }
 
+static int
+write_to (const char *path, const char *str)
+{
+  FILE *f = fopen (path, "wb");
+  int ret;
+  if (f == NULL)
+    error (EXIT_FAILURE, errno, "fopen");
+  ret = fprintf (f, str);
+  if (ret < 0)
+    error (EXIT_FAILURE, errno, "fprintf");
+  ret = fclose (f);
+  if (ret)
+    error (EXIT_FAILURE, errno, "fclose");
+  return 0;
+}
+
 int main (int argc, char **argv)
 {
   if (argc < 2)
@@ -86,6 +102,14 @@ int main (int argc, char **argv)
         error (EXIT_FAILURE, errno, "printf");
       return 0;
     }
+
+  if (strcmp (argv[1], "write") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'write' requires two arguments");
+      return write_to (argv[2], argv[3]);
+    }
+
 
   error (EXIT_FAILURE, 0, "unknown command '%s' specified", argv[1]);
   return 0;
