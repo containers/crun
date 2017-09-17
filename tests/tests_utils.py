@@ -170,6 +170,8 @@ def run_all_tests(all_tests, allowed_tests):
             else:
                 print("not ok %d - %s" % (cur, k))
         except Exception as e:
+            if hasattr(e, 'output'):
+                sys.stderr.write(str(e.output) + "\n")
             sys.stderr.write(str(e) + "\n")
             ret = -1
             print("not ok %d - %s" % (cur, k))
