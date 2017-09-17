@@ -57,6 +57,8 @@ int write_file_at (int dirfd, const char *name, const void *data, size_t len, li
 
 int crun_ensure_directory (const char *path, int mode, libcrun_error_t *err);
 
+int crun_ensure_file (const char *path, int mode, libcrun_error_t *err);
+
 int detach_process ();
 
 int create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err);

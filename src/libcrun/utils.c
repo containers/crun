@@ -168,43 +168,6 @@ write_file (const char *name, const void *data, size_t len, libcrun_error_t *err
   return ret;
 }
 
-static int
-ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *err)
-{
-  char *it = path + len;
-  int ret;
-  ret = crun_path_exists (path, 1, err);
-  if (ret > 0)
-    return 0;
-
-  while (it > path && *it != '/')
-    {
-      it--;
-      len--;
-    }
-  if (it == path)
-    return 0;
-
-  *it = '\0';
-
-  ret = ensure_directory_internal (path, len - 1, mode, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  *it = '/';
-
-  ret = mkdir (path, mode);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "creating file '%s'", path);
-  return 0;
-}
-
-int
-crun_ensure_directory (const char *path, int mode, libcrun_error_t *err)
-{
-  cleanup_free char *tmp = xstrdup (path);
-  return ensure_directory_internal (tmp, strlen (tmp), mode, err);
-}
-
 int
 detach_process ()
 {
@@ -247,6 +210,66 @@ create_file_if_missing (const char *file, libcrun_error_t *err)
       cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
       if (fd_write < 0)
         return crun_make_error (err, errno, "creating file '%s'", file);
+    }
+  return 0;
+}
+
+static int
+ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *err)
+{
+  char *it = path + len;
+  int ret;
+  ret = crun_path_exists (path, 1, err);
+  if (ret > 0)
+    return 0;
+
+  while (it > path && *it != '/')
+    {
+      it--;
+      len--;
+    }
+  if (it == path)
+    return 0;
+
+  *it = '\0';
+
+  ret = ensure_directory_internal (path, len - 1, mode, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  *it = '/';
+
+  ret = mkdir (path, mode);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "creating file '%s'", path);
+  return 0;
+}
+
+int
+crun_ensure_directory (const char *path, int mode, libcrun_error_t *err)
+{
+  cleanup_free char *tmp = xstrdup (path);
+  return ensure_directory_internal (tmp, strlen (tmp), mode, err);
+}
+
+int
+crun_ensure_file (const char *path, int mode, libcrun_error_t *err)
+{
+  cleanup_free char *tmp = xstrdup (path);
+  size_t len = strlen (tmp);
+  char *it = tmp + len - 1;
+  int ret;
+  
+  while (*it != '/' && it > tmp)
+    it--;
+  if (it > tmp)
+    {
+      *it = '\0';
+      ret = crun_ensure_directory (tmp, mode, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      *it = '/';
+
+      return create_file_if_missing (tmp, err);
     }
   return 0;
 }
