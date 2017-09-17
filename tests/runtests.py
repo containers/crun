@@ -295,9 +295,14 @@ all_tests = {"pid" : test_pid,
 }
 
 def run_all_tests():
-    print("1..%d" % len(all_tests.keys()))
+    tests = all_tests
+    if os.getenv("RUN_TESTS"):
+        allowed_tests = set(os.getenv("RUN_TESTS").split())
+        tests = {k: v for k, v in tests.items() if k in allowed_tests}
+
+    print("1..%d" % len(tests))
     cur = 0
-    for k, v in all_tests.items():
+    for k, v in tests.items():
         cur = cur + 1
         ret = -1
         try:
