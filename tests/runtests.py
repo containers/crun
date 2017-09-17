@@ -132,6 +132,14 @@ base_conf = """
 }
 """
 
+def add_all_namespaces(conf):
+    has = {}
+    for i in conf['linux']['namespaces']:
+        has[i['type']] = i['type']
+    for i in ['pid', 'user', 'cgroup', 'ipc', 'uts', 'network']:
+        if i not in has:
+            conf['linux']['namespaces'].append({"type" : i})
+
 def parse_proc_status(content):
     r = {}
     for i in content.split("\n"):
@@ -179,12 +187,7 @@ def test_pid():
 def test_pid_user():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
-    conf['linux']['namespaces'].append({"type" : "pid"})
-    conf['linux']['namespaces'].append({"type" : "user"})
-    conf['linux']['namespaces'].append({"type" : "cgroup"})
-    conf['linux']['namespaces'].append({"type" : "ipc"})
-    conf['linux']['namespaces'].append({"type" : "uts"})
-    conf['linux']['namespaces'].append({"type" : "network"})
+    add_all_namespaces(conf)
     out = run_and_get_output(conf)
     pid = parse_proc_status(out)['Pid']
     if pid == "1":
@@ -194,12 +197,7 @@ def test_pid_user():
 def test_no_caps():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
-    conf['linux']['namespaces'].append({"type" : "pid"})
-    conf['linux']['namespaces'].append({"type" : "user"})
-    conf['linux']['namespaces'].append({"type" : "cgroup"})
-    conf['linux']['namespaces'].append({"type" : "ipc"})
-    conf['linux']['namespaces'].append({"type" : "uts"})
-    conf['linux']['namespaces'].append({"type" : "network"})
+    add_all_namespaces(conf)
     conf['process']['capabilities'] = {}
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = []
@@ -211,9 +209,60 @@ def test_no_caps():
             return -1
     return 0
 
+def test_some_caps():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
+        conf['process']['capabilities'][i] = []
+    out = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
+        if proc_status[i] != "0000000000000000":
+            return -1
+    return 0
+
+def helper_test_some_caps(captypes, proc_name):
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    for i in captypes + ['bounding']:
+        conf['process']['capabilities'][i] = ["CAP_SYS_ADMIN"]
+    out = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    if proc_status[proc_name] == "0000000000000000":
+        return -1
+    return 0
+
+def test_some_caps_effective():
+    return helper_test_some_caps(["effective"], 'CapEff')
+
+def test_some_caps_bounding():
+    return helper_test_some_caps(["bounding"], 'CapBnd')
+
+def test_some_caps_inheritable():
+    return helper_test_some_caps(["inheritable"], 'CapInh')
+
+def test_some_caps_ambient():
+    return helper_test_some_caps(["ambient", "permitted", "inheritable"], 'CapAmb')
+
+def test_some_caps_permitted():
+    return helper_test_some_caps(["permitted"], 'CapPrm')
+
+
 all_tests = {"pid" : test_pid,
 	     "pid-user" : test_pid_user,
-             "no-caps" : test_no_caps}
+             "no-caps" : test_no_caps,
+             "some-caps-effective" : test_some_caps_effective,
+             "some-caps-bounding" : test_some_caps_bounding,
+             "some-caps-inheritable" : test_some_caps_inheritable,
+             "some-caps-ambient" : test_some_caps_ambient,
+             "some-caps-permitted" : test_some_caps_permitted
+}
 
 def run_all_tests():
     print("1..%d" % len(all_tests.keys()))
