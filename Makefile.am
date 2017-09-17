@@ -32,6 +32,9 @@ tests_init_LDFLAGS = -static-libgcc -static
 tests_init_SOURCES = tests/init.c
 
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
-TESTS = tests/test_capabilities.py tests/test_pid.py tests/test_uid_gid.py
+TESTS = tests/test_capabilities.py \
+	tests/test_pid.py \
+	tests/test_uid_gid.py \
+	tests/test_rlimits.py
 
 EXTRA_DIST += $(TESTS) tests/tests_utils.py
