@@ -33,6 +33,7 @@ tests_init_SOURCES = tests/init.c
 
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 TESTS = tests/test_capabilities.py \
+	tests/test_cwd.py \
 	tests/test_pid.py \
 	tests/test_uid_gid.py \
 	tests/test_rlimits.py

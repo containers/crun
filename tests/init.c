@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
+#define _GNU_SOURCE
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -55,6 +56,18 @@ int main (int argc, char **argv)
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'cat' requires an argument");
       return cat (argv[2]);
+    }
+
+  if (strcmp (argv[1], "cwd") == 0)
+    {
+      int ret;
+      char *wd = get_current_dir_name ();
+      ret = printf ("%s\n", wd);
+      if (wd == NULL)
+        error (EXIT_FAILURE, 0, "OOM");
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "printf");
+      return 0;
     }
 
   error (EXIT_FAILURE, 0, "unknown command '%s' specified", argv[1]);

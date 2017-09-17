@@ -182,6 +182,8 @@ def run_and_get_output(config):
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
     os.makedirs(rootfs)
+    for i in ["usr/bin", "etc", "var", "lib", "lib64"]:
+        os.makedirs(os.path.join(rootfs, i))
     id_container = 'test-%s' % os.path.basename(temp_dir)
     try:
         with open(os.path.join(temp_dir, "config.json"), "w") as config_file:
