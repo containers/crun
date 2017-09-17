@@ -27,7 +27,7 @@ def parse_proc_limits(content):
     lines = content.split("\n")
     r = {}
     mappings = {'Max open files' : "RLIMIT_NOFILE",
-                'Max processes' : "RLIMIT_PROC",
+                'Max processes' : "RLIMIT_NPROC",
                 'Max cpu time' : "RLIMIT_CPU",
                 'Max pending signals' : "RLIMIT_SIGPENDING"}
     for i in lines[1:-1]:
@@ -42,7 +42,7 @@ def test_rlimits():
         {"type" : "RLIMIT_SIGPENDING",
          "soft" : 1000,
          "hard" : 2000},
-        {"type" : "RLIMIT_PROC",
+        {"type" : "RLIMIT_NPROC",
          "soft" : 50,
          "hard" : 100},
         {"type" : "RLIMIT_NOFILE",
