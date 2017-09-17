@@ -62,9 +62,26 @@ int main (int argc, char **argv)
     {
       int ret;
       char *wd = get_current_dir_name ();
-      ret = printf ("%s\n", wd);
       if (wd == NULL)
         error (EXIT_FAILURE, 0, "OOM");
+
+      ret = printf ("%s\n", wd);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "printf");
+      return 0;
+    }
+
+  if (strcmp (argv[1], "gethostname") == 0)
+    {
+      char buffer[64];
+      int ret;
+
+      memset (buffer, 0, sizeof (buffer));
+      ret = gethostname (buffer, sizeof (buffer) - 1);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "gethostname");
+
+      ret = printf ("%s\n", buffer);
       if (ret < 0)
         error (EXIT_FAILURE, errno, "printf");
       return 0;
