@@ -213,6 +213,25 @@ pivot_root (const char * new_root, const char * put_old)
   return syscall (__NR_pivot_root, new_root, put_old);
 }
 
+static void
+free_remount (struct remount_s *r)
+{
+  free (r->data);
+  free (r->target);
+  free (r);
+}
+
+static struct remount_s *
+make_remount (const char *target, unsigned long flags, const char *data, struct remount_s *next)
+{
+  struct remount_s *ret = xmalloc (sizeof (*ret));
+  ret->target = xstrdup (target);
+  ret->flags = flags;
+  ret->data = data ? xstrdup (data) : NULL;
+  ret->next = next;
+  return ret;
+}
+
 static int
 do_mount (libcrun_container *container,
           const char *source,
@@ -235,7 +254,7 @@ do_mount (libcrun_container *container,
       data = data_with_label;
     }
 
-  ret = mount (source, target, fstype, mountflags, data);
+  ret = mount (source, target, fstype, mountflags & ~MS_RDONLY, data);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
 
@@ -253,6 +272,13 @@ do_mount (libcrun_container *container,
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "set propagation for '%s'", target);
         }
+    }
+
+  if (mountflags & MS_RDONLY)
+    {
+      unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
+      struct remount_s *r = make_remount (target, remount_flags, NULL, get_private_data (container)->remounts);
+      get_private_data (container)->remounts = r;
     }
 
   return ret;
@@ -550,25 +576,6 @@ get_default_flags (libcrun_container *container, const char *destination, char *
   return 0;
 }
 
-static void
-free_remount (struct remount_s *r)
-{
-  free (r->data);
-  free (r->target);
-  free (r);
-}
-
-static struct remount_s *
-make_remount (char *target, unsigned long flags, char *data, struct remount_s *next)
-{
-  struct remount_s *ret = xmalloc (sizeof (*ret));
-  ret->target = xstrdup (target);
-  ret->flags = flags;
-  ret->data = xstrdup (data);
-  ret->next = next;
-  return ret;
-}
-
 static int
 finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
 {
@@ -577,9 +584,9 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
   for (r = get_private_data (container)->remounts; r;)
     {
       struct remount_s *next = r->next;
-      ret = do_mount (container, "none", r->target, "", r->flags, r->data, 1, err);
+      ret = mount ("none", r->target, "", r->flags, r->data);
       if (UNLIKELY (ret < 0))
-        return ret;
+        return crun_make_error (err, errno, "remount '%s'", r->target);
 
       free_remount (r);
 
@@ -659,22 +666,15 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
 
       if (strcmp (type, "cgroup") == 0)
         {
-          ret = do_mount_cgroup (container, source, target, type, flags & ~MS_RDONLY, data, err);
+          ret = do_mount_cgroup (container, source, target, type, flags, data, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
-          ret = do_mount (container, source, target, type, flags & ~MS_RDONLY, data, skip_labelling, err);
+          ret = do_mount (container, source, target, type, flags, data, skip_labelling, err);
           if (UNLIKELY (ret < 0))
             return ret;
-        }
-
-      if (flags & MS_RDONLY)
-        {
-          unsigned long remount_flags = (flags & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
-          struct remount_s *r = make_remount (target, remount_flags, data, get_private_data (container)->remounts);
-          get_private_data (container)->remounts = r;
         }
     }
   return 0;
@@ -758,7 +758,7 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
 
   if (def->root->readonly)
     {
-      unsigned long remount_flags = (rootfsPropagation & ~ALL_PROPAGATIONS) | MS_REMOUNT | MS_BIND | MS_RDONLY;
+      unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
       struct remount_s *r = make_remount (def->root->path, remount_flags, "", get_private_data (container)->remounts);
       get_private_data (container)->remounts = r;
     }
