@@ -428,7 +428,7 @@ do_masked_and_readonly_paths (libcrun_container *container, libcrun_error_t *err
   size_t i;
   int ret;
   oci_container *def = container->container_def;
-  return 0;
+
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
       char *path = def->linux->masked_paths[i];
