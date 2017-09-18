@@ -331,7 +331,7 @@ exit:
 }
 
 int
-libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *scope;
@@ -346,9 +346,14 @@ libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcr
     }
   else
     {
-      ret = get_system_path (path, scope, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (cgroup_path != NULL)
+        *path = xstrdup (cgroup_path);
+      else
+        {
+          ret = get_system_path (path, scope, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       return enter_cgroup (pid, *path, 1, err);
     }

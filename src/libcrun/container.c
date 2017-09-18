@@ -656,7 +656,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       close (container_args.terminal_socketpair[0]);
     }
 
-  ret = libcrun_cgroup_enter (&cgroup_path, context->systemd_cgroup, pid, context->id, err);
+  ret = libcrun_cgroup_enter (&cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);

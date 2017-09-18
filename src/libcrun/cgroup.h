@@ -21,7 +21,7 @@
 # include "container.h"
 # include <unistd.h>
 
-int libcrun_cgroup_enter (char **path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
+int libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
 int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
 int libcrun_cgroup_destroy (char *path, libcrun_error_t *err);
 int libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err);
