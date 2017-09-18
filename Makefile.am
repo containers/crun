@@ -1,3 +1,4 @@
+DIST_SUBDIRS = libocispec
 SUBDIRS = libocispec
 
 noinst_LIBRARIES = libcrun.a
