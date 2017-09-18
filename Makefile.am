@@ -1,10 +1,6 @@
 DIST_SUBDIRS = libocispec
 SUBDIRS = libocispec
 
-noinst_LIBRARIES = libcrun.a
-
-bin_PROGRAMS = crun tests/init
-
 libcrun_a_SOURCES = src/libcrun/utils.c \
 		src/libcrun/container.c \
 		src/libcrun/cgroup.c \
@@ -29,8 +25,18 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
 	src/libcrun/status.h src/libcrun/terminal.h
 
+noinst_LIBRARIES = libcrun.a
+
+UNIT_TESTS = tests/tests_libcrun_utils
+
+bin_PROGRAMS = crun tests/init $(UNIT_TESTS)
+
 tests_init_LDFLAGS = -static-libgcc -static
-tests_init_SOURCES = tests/init.c
+tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
+
+tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
+tests_tests_libcrun_utils_LDADD = $(crun_LDADD)
 
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 TESTS = tests/test_capabilities.py \
@@ -39,6 +45,7 @@ TESTS = tests/test_capabilities.py \
 	tests/test_paths.py \
 	tests/test_pid.py \
 	tests/test_uid_gid.py \
-	tests/test_rlimits.py
+	tests/test_rlimits.py \
+	$(UNIT_TESTS)
 
 EXTRA_DIST += $(TESTS) tests/tests_utils.py
