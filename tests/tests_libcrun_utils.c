@@ -60,6 +60,75 @@ test_socket_pair ()
 }
 
 static int
+test_send_receive_fd ()
+{
+  libcrun_error_t err = NULL;
+  int fds[2], pipes[2];
+  cleanup_close int fd0 = -1;
+  cleanup_close int fd1 = -1;
+  pid_t pid;
+  int ret = create_socket_pair (fds, &err);
+  if (ret < 0)
+    return -1;
+
+  fd0 = fds[0];
+  fd1 = fds[1];
+
+  if (err != NULL)
+    return -1;
+
+  pid = fork ();
+  if (pid < 0)
+    return -1;
+
+  if (pid)
+    {
+      cleanup_close int pipefd0 = -1;
+      cleanup_close int pipefd1 = -1;
+      char buffer[256];
+      const char *test_string = "TEST STRING";
+      pipe (pipes);
+
+      pipefd0 = pipes[0];
+      pipefd1 = pipes[1];
+
+      close (fd0);
+      fd0 = -1;
+
+      if (send_fd_to_socket (fd1, pipefd0, &err) < 0)
+        return -1;
+
+      if (write (pipefd1, test_string, strlen (test_string) + 1) < 0)
+        return -1;
+
+      ret = read (fd1, buffer, sizeof (buffer));
+      if (ret < 0)
+        return -1;
+
+      if (ret != strlen (test_string) + 1)
+        return -1;
+
+      return strcmp (buffer, test_string);
+    }
+  else
+    {
+      char buffer[256];
+      int ret, fd = receive_fd_from_socket (fd0, &err);
+      if (fd < 0)
+        _exit (1);
+
+      close (fd1);
+      fd1 = -1;
+
+      ret = read (fd, buffer, sizeof (buffer));
+      write (fd0, buffer, ret);
+
+      _exit (0);
+    }
+  return 0;
+}
+
+static int
 test_run_process ()
 {
   libcrun_error_t err = NULL;
@@ -128,7 +197,7 @@ test_write_read_file ()
           failed = 1;
           break;
         }
-        
+
       ret = read_all_file (name, &read_buf, &len, &err);
       if (ret < 0)
         {
@@ -183,11 +252,12 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..5\n");
+  printf ("1..6\n");
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
   RUN_TEST (test_run_process);
   RUN_TEST (test_dir_p);
   RUN_TEST (test_socket_pair);
+  RUN_TEST (test_send_receive_fd);
   return 0;
 }
