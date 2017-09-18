@@ -25,6 +25,41 @@
 typedef int (*test)();
 
 static int
+test_socket_pair ()
+{
+  libcrun_error_t err = NULL;
+  int fds[2];
+  cleanup_close int fd0 = -1;
+  cleanup_close int fd1 = -1;
+  char buffer[256];
+  int ret = create_socket_pair (fds, &err);
+  if (ret < 0)
+    return -1;
+
+  fd0 = fds[0];
+  fd1 = fds[1];
+
+  if (err != NULL)
+    return -1;
+
+  write (fds[0], "HELLO", 6);
+  ret = read (fds[1], buffer, sizeof (buffer));
+  if (ret != 6)
+    return -1;
+  if (strcmp (buffer, "HELLO") != 0)
+    return -1;
+
+  write (fds[1], "WORLD", 6);
+  ret = read (fds[0], buffer, sizeof (buffer));
+  if (ret != 6)
+    return -1;
+  if (strcmp (buffer, "WORLD") != 0)
+    return -1;
+
+  return 0;
+}
+
+static int
 test_run_process ()
 {
   libcrun_error_t err = NULL;
@@ -70,7 +105,7 @@ test_dir_p ()
 static int
 test_write_read_file ()
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   cleanup_free char *name = NULL;
   size_t len;
   int i;
@@ -122,7 +157,7 @@ static int
 test_crun_path_exists ()
 {
 
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   if (crun_path_exists ("/usr/bin/ls", 1, &err) <= 0)
     return -1;
   if (crun_path_exists ("/usr/foo/bin/ls", 1, &err) != 0)
@@ -148,10 +183,11 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..4\n");
+  printf ("1..5\n");
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
   RUN_TEST (test_run_process);
   RUN_TEST (test_dir_p);
+  RUN_TEST (test_socket_pair);
   return 0;
 }
