@@ -37,7 +37,6 @@ def test_readonly_paths():
     return -1
 
 def test_masked_paths():
-    return 0
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/foo/bar/baz']
     conf['linux']['maskedPaths'] = ['/foo/bar/baz']

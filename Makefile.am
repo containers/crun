@@ -45,6 +45,7 @@ tests_tests_libcrun_errors_LDADD = $(crun_LDADD)
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 TESTS = tests/test_capabilities.py \
 	tests/test_cwd.py \
+	tests/test_devices.py \
 	tests/test_hostname.py \
 	tests/test_paths.py \
 	tests/test_pid.py \
