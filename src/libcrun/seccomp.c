@@ -111,7 +111,7 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
   int action;
-  const char *defAction;
+  const char *defAction = "SCMP_ACT_ALLOW";
 
   if (seccomp == NULL)
     return 0;
@@ -120,7 +120,9 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
   if (prctl (PR_GET_SECCOMP, 0, 0, 0, 0) < 0)
     return crun_make_error (err, errno, "prctl");
 
-  defAction = seccomp->default_action ? seccomp->default_action : "SCMP_ACT_ALLOW";
+  if (seccomp->default_action != NULL)
+    defAction = seccomp->default_action;
+
   action = get_seccomp_action (defAction, err);
   if (UNLIKELY (action == 0))
     return crun_make_error (err, 0, "invalid seccomp action '%s'", seccomp->default_action);
