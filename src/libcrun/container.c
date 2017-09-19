@@ -762,7 +762,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
     return ret;
 
   if (def->process->terminal && detach && context->console_socket == NULL)
-    return crun_make_error (err, 0, "Use --console-socket with --detach when a terminal is used");
+    return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
 
   if (!detach)
     {

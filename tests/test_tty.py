@@ -50,7 +50,7 @@ def test_tty_and_detach():
     try:
         out = run_and_get_output(conf, detach=True)
     except Exception as e:
-        if "Use --console-socket" in e.output:
+        if "use --console-socket" in e.output:
             return 0
     return -1
     
