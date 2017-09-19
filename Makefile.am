@@ -48,6 +48,7 @@ TESTS = tests/test_capabilities.py \
 	tests/test_cwd.py \
 	tests/test_devices.py \
 	tests/test_hostname.py \
+	tests/test_limits.py \
 	tests/test_paths.py \
 	tests/test_pid.py \
 	tests/test_uid_gid.py \

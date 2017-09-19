@@ -120,6 +120,24 @@ int main (int argc, char **argv)
       return write_to (argv[2], argv[3]);
     }
 
+  if (strcmp (argv[1], "forkbomb") == 0)
+    {
+      int i, n;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'forkbomb' requires two arguments");
+      n = atoi (argv[2]);
+      for (i = 0; i < n; i++)
+        {
+          pid_t pid = fork ();
+          if (pid < 0)
+            error (EXIT_FAILURE, errno, "fork");
+          if (pid == 0)
+            sleep (100);
+        }
+
+      return 0;
+    }
+
 
   error (EXIT_FAILURE, 0, "unknown command '%s' specified", argv[1]);
   return 0;
