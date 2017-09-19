@@ -709,10 +709,13 @@ write_pids_resources (int dirfd, oci_container_linux_resources_pids *pids, libcr
   int ret;
   char fmt_buf[32];
 
-  len = sprintf (fmt_buf, "%lu", pids->limit);
-  ret = write_file_at (dirfd, "pids.max", fmt_buf, len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (pids->limit)
+    {
+      len = sprintf (fmt_buf, "%lu", pids->limit);
+      ret = write_file_at (dirfd, "pids.max", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   return 0;
 }
