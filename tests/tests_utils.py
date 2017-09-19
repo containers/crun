@@ -186,6 +186,8 @@ def run_and_get_output(config, detach=False):
     os.makedirs(rootfs)
     for i in ["usr/bin", "etc", "var", "lib", "lib64"]:
         os.makedirs(os.path.join(rootfs, i))
+    with open(os.path.join(rootfs, "var", "file"), "w+") as f:
+        f.write("file")
     id_container = 'test-%s' % os.path.basename(temp_dir)
     try:
         with open(os.path.join(temp_dir, "config.json"), "w") as config_file:

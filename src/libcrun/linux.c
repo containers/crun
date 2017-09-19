@@ -458,7 +458,7 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
       cleanup_free char *path = NULL;
-
+      int dir;
       xasprintf (&path, "%s%s", rootfs, def->linux->masked_paths[i]);
 
       ret = crun_path_exists (path, 1, err);
@@ -466,13 +466,16 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
         return ret;
 
       if (ret == 0)
-        {
-          ret = crun_ensure_file (path, 0755, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+        continue;
 
-      ret = do_mount (container, "/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "", 0, err);
+      dir = crun_dir_p (path, err);
+      if (UNLIKELY (dir < 0))
+        return ret;
+
+      if (dir)
+        ret = do_mount (container, "tmpfs", path, "tmpfs", MS_RDONLY, "size=0k", 0, err);
+      else
+        ret = do_mount (container, "/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -487,11 +490,7 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
         return ret;
 
       if (ret == 0)
-        {
-          ret = crun_ensure_file (path, 0755, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+        continue;
 
       ret = do_mount (container, path, path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_RDONLY | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))

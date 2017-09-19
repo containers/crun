@@ -26,8 +26,8 @@ from tests_utils import *
 def test_readonly_paths():
     conf = base_config()
     conf['root']['readonly'] = False
-    conf['process']['args'] = ['/init', 'write', '/foo', 'hello']
-    conf['linux']['readonlyPaths'] = ['/foo']
+    conf['process']['args'] = ['/init', 'write', '/var/file', 'hello']
+    conf['linux']['readonlyPaths'] = ['/var/file']
     add_all_namespaces(conf)
     try:
         run_and_get_output(conf)
@@ -38,8 +38,8 @@ def test_readonly_paths():
 
 def test_masked_paths():
     conf = base_config()
-    conf['process']['args'] = ['/init', 'cat', '/foo/bar/baz']
-    conf['linux']['maskedPaths'] = ['/foo/bar/baz']
+    conf['process']['args'] = ['/init', 'cat', '/var/file']
+    conf['linux']['maskedPaths'] = ['/var/file']
     add_all_namespaces(conf)
     out = run_and_get_output(conf)
     if len(out) > 0:
