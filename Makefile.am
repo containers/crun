@@ -29,7 +29,8 @@ noinst_LIBRARIES = libcrun.a
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
-bin_PROGRAMS = crun tests/init $(UNIT_TESTS)
+bin_PROGRAMS = crun
+noinst_PROGRAMS = tests/init $(UNIT_TESTS)
 
 tests_init_LDFLAGS = -static-libgcc -static
 tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
