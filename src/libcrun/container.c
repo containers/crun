@@ -500,7 +500,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
             }
           else if (events[i].data.fd == terminal_fd)
             {
-              ret = copy_from_fd_to_fd (terminal_fd, 0, err);
+              ret = copy_from_fd_to_fd (terminal_fd, 1, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
