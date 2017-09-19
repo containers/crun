@@ -81,3 +81,11 @@ crun_error_write_warning_and_release (FILE *out, libcrun_error_t *err)
     fprintf (out, "%s\n", ref->msg);
   crun_error_release (err);
 }
+
+int
+crun_error_get_errno (libcrun_error_t *err)
+{
+  if (err == NULL)
+    return 0;
+  return (*err)->status;
+}

@@ -35,6 +35,8 @@ void oom_handler ();
 
 int crun_make_error (libcrun_error_t *err, int status, const char *msg, ...);
 
+int crun_error_get_errno (libcrun_error_t *err);
+
 int crun_error_release (libcrun_error_t *err);
 
 void crun_error_write_warning_and_release (FILE *out, libcrun_error_t *err);
