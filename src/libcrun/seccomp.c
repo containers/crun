@@ -118,12 +118,12 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
 
   /* seccomp not available.  */
   if (prctl (PR_GET_SECCOMP, 0, 0, 0, 0) < 0)
-    return 0;
+    return crun_make_error (err, errno, "prctl");
 
   defAction = seccomp->default_action ? seccomp->default_action : "SCMP_ACT_ALLOW";
   action = get_seccomp_action (defAction, err);
   if (UNLIKELY (action == 0))
-    return -1;
+    return crun_make_error (err, 0, "invalid seccomp action '%s'", seccomp->default_action);
 
   ctx = seccomp_init (action);
   if (ctx == NULL)
@@ -153,7 +153,7 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
       size_t j;
       action = get_seccomp_action (seccomp->syscalls[i]->action, err);
       if (UNLIKELY (action == 0))
-        return -1;
+        return crun_make_error (err, 0, "invalid seccomp action '%s'", seccomp->syscalls[i]->action);
 
       for (j = 0; j < seccomp->syscalls[i]->names_len; j++)
         {
@@ -175,7 +175,7 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
                   arg_cmp[k].arg = k;
                   arg_cmp[k].op = get_seccomp_operator (op, err);
                   if (arg_cmp[k].op == 0)
-                    return -1;
+                    return crun_make_error (err, 0, "get_seccomp_operator");
                   arg_cmp[k].datum_a = seccomp->syscalls[i]->args[k]->value;
                   arg_cmp[k].datum_b = seccomp->syscalls[i]->args[k]->value_two;
                 }
