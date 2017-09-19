@@ -878,6 +878,8 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_pid, "/sys/fs/cgroup/pids%s/", path);
       dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_pid < 0))
+        return crun_make_error (err, errno, "open %s", path);
 
       ret = write_pids_resources (dirfd_pid,
                                   def->linux->resources->pids,
