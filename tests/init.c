@@ -103,6 +103,16 @@ int main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "isatty") == 0)
+    {
+      int fd;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'isatty' requires two arguments");
+      fd = atoi (argv[2]);
+      printf (isatty (fd) ? "true" : "false");
+      return 0;
+    }
+
   if (strcmp (argv[1], "write") == 0)
     {
       if (argc < 3)
