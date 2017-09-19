@@ -41,11 +41,24 @@ def test_stdout_tty():
 
 def test_stderr_tty():
     return tty_helper("2")
+
+def test_tty_and_detach():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'isatty', 0]
+    conf['process']['terminal'] = True
+    add_all_namespaces(conf)
+    try:
+        out = run_and_get_output(conf, detach=True)
+    except Exception as e:
+        if "Use --console-socket" in e.output:
+            return 0
+    return -1
     
 all_tests = {
     "test-stdin-tty" : test_stdin_tty,
     "test-stdout-tty" : test_stdout_tty,
     "test-stderr-tty" : test_stderr_tty,
+    "test-detach-tty" : test_tty_and_detach,
 }
 
 if __name__ == "__main__":
