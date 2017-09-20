@@ -36,7 +36,7 @@ get_run_directory (const char *state_root)
 
   if (state_root)
     root = xstrdup (state_root);
-  if (root == NULL)
+  if (root == NULL && getuid () != 0)
     {
       const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
       if (runtime_dir)
