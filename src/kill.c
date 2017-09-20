@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "crun.h"
 #include "libcrun/container.h"
@@ -53,7 +54,7 @@ static struct argp_option options[] =
     { 0 }
   };
 
-static char args_doc[] = "kill CONTAINER SIGNAL";
+static char args_doc[] = "kill CONTAINER [SIGNAL]";
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
@@ -84,12 +85,14 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
   struct libcrun_context_s crun_context;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &kill_options);
-  if (argc - first_arg < 2)
-    error (EXIT_FAILURE, 0, "please specify ID SIGNAL");
+  if (argc - first_arg < 1)
+    error (EXIT_FAILURE, 0, "please specify container ID");
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
-  signal = strtoull (argv[first_arg + 1], NULL, 10);
+  signal = SIGTERM;
+  if (argc - first_arg > 1)
+    signal = strtoull (argv[first_arg + 1], NULL, 10);
 
   return libcrun_kill_container (&crun_context, argv[first_arg], signal, err);
 }
