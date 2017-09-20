@@ -700,7 +700,7 @@ do_notify_socket (libcrun_container *container, int *notify_socket_out, const ch
   if (UNLIKELY (notify_fd < 0))
     return notify_fd;
 
-  ret = chmod (container_notify_socket_path, 0777);
+  ret = chmod (host_notify_socket_path, 0777);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chmod");
 
