@@ -179,7 +179,7 @@ def run_all_tests(all_tests, allowed_tests):
 def get_tests_root():
     return '%s/.testsuite-run-%d' % (os.getcwd(), os.getpid())
 
-def run_and_get_output(config, detach=False):
+def run_and_get_output(config, detach=False, preserve_fds=None):
     cwd = os.getcwd()
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
@@ -197,7 +197,9 @@ def run_and_get_output(config, detach=False):
         shutil.copy2("tests/init", os.path.join(rootfs, "init"))
         crun = os.path.join(cwd, "crun")
         detach_arg = ['--detach'] if detach else []
-        args = [crun, 'run'] + detach_arg + [id_container]
+        preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
+        
+        args = [crun, 'run'] + preserve_fds_arg + detach_arg + [id_container]
         return subprocess.check_output(args, cwd=temp_dir, stderr=subprocess.STDOUT)
     finally:
         shutil.rmtree(temp_dir)

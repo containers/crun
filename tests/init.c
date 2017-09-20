@@ -23,6 +23,9 @@
 #include <string.h>
 #include <error.h>
 #include <errno.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 static int
 cat (char *file)
@@ -59,6 +62,27 @@ write_to (const char *path, const char *str)
   ret = fclose (f);
   if (ret)
     error (EXIT_FAILURE, errno, "fclose");
+  return 0;
+}
+
+static int
+ls (char *path)
+{
+  DIR *dir = opendir (path);
+  if (dir == NULL)
+    error (EXIT_FAILURE, errno, "opendir");
+
+  for (;;)
+    {
+      struct dirent *de;
+      errno = 0;
+      de = readdir (dir);
+      if (de == NULL && errno)
+        error (EXIT_FAILURE, errno, "readdir");
+      if (de == NULL)
+        return 0;
+      printf ("%s\n", de->d_name);
+    }
   return 0;
 }
 
@@ -136,6 +160,24 @@ int main (int argc, char **argv)
         }
 
       return 0;
+    }
+
+  if (strcmp (argv[1], "ls") == 0)
+    {
+      /* Fork so that ls /proc/1/fd doesn't show more fd's.  */
+      pid_t pid;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'ls' requires two arguments");
+      pid = fork ();
+      if (pid < 0)
+        error (EXIT_FAILURE, errno, "fork");
+      if (pid)
+        {
+          int status;
+          waitpid (pid, &status, 0);
+          return status;
+        }
+      return ls (argv[2]);
     }
 
 

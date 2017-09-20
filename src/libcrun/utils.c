@@ -762,7 +762,6 @@ close_fds_ge_than (int n, libcrun_error_t *err)
     return crun_make_error (err, errno, "cannot fdopendir /proc/self/fd");
 
   fd = dirfd (dir);
-
   for (next = readdir (dir); next; next = readdir (dir))
     {
       int val;
