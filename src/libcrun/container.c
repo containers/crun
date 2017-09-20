@@ -244,7 +244,7 @@ container_entrypoint (void *args, const char *notify_socket,
     }
 
   ret = unblock_signals (err);
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     return ret;
 
   execvp (def->process->args[0], def->process->args);
@@ -774,14 +774,14 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
     }
 
   ret = fork ();
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fork");
   if (ret)
     return 0;
 
   /* forked process.  */
   ret = detach_process ();
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, errno, "detach process");
   libcrun_container_run_internal (container, context, err);
   _exit (0);
@@ -809,7 +809,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
     return dirfd;
 
   ret = fork ();
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fork");
   if (ret)
     return 0;
@@ -820,7 +820,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
 
   /* forked process.  */
   ret = detach_process ();
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, errno, "detach process");
   libcrun_container_run_internal (container, context, err);
   _exit (0);
