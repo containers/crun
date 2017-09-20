@@ -40,8 +40,8 @@ def test_rlimits():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/limits']
     rlimits = [
         {"type" : "RLIMIT_SIGPENDING",
-         "soft" : 1000,
-         "hard" : 2000},
+         "soft" : 100,
+         "hard" : 200},
         {"type" : "RLIMIT_NPROC",
          "soft" : 50,
          "hard" : 100},
