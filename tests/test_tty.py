@@ -1,4 +1,4 @@
-#!/bin/python -Es
+#!/bin/env $PYTHON
 # crun - OCI runtime written in C
 #
 # Copyright (C) 2017 Giuseppe Scrivano <giuseppe@scrivano.org>
@@ -50,7 +50,7 @@ def test_tty_and_detach():
     try:
         out = run_and_get_output(conf, detach=True)
     except Exception as e:
-        if "use --console-socket" in e.output:
+        if "use --console-socket" in e.output.decode():
             return 0
     return -1
     

@@ -15,6 +15,7 @@ AC_PROG_AWK
 AC_PROG_RANLIB
 AC_PROG_SED
 AC_PROG_CC
+AM_PATH_PYTHON
 
 AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers not found])])
 

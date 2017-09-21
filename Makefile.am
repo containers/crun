@@ -43,12 +43,17 @@ tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(a
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(crun_LDADD)
 
+TEST_EXTENSIONS = .py
+PY_LOG_COMPILER = $(PYTHON)
+PY_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
+
 TESTS = tests/test_capabilities.py \
 	tests/test_cwd.py \
 	tests/test_devices.py \
 	tests/test_hostname.py \
 	tests/test_limits.py \
+	tests/test_mounts.py \
 	tests/test_paths.py \
 	tests/test_pid.py \
 	tests/test_pid_file.py \

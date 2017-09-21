@@ -32,7 +32,7 @@ def test_readonly_paths():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        if "Read-only file system" in e.output:
+        if "Read-only file system" in e.output.decode():
             return 0
     return -1
 
