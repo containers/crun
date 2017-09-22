@@ -561,7 +561,7 @@ flush_fd_to_err (int terminal_fd, FILE *stderr)
   flags = fcntl (terminal_fd, F_GETFL, 0);
   if (flags == -1)
     return;
-  if (fcntl (terminal_fd, F_SETFL, flags & ~O_NONBLOCK) < 0)
+  if (fcntl (terminal_fd, F_SETFL, flags | O_NONBLOCK) < 0)
     return;
 
   for (;;)
