@@ -15,7 +15,7 @@ BUILD
 
 On Fedora you will need these dependencies:
 ```
-$ dnf install -y python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel libselinux-devel glibc-static
+$ dnf install -y python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel libselinux-devel glibc-static python3-libmount
 
 ```
 
