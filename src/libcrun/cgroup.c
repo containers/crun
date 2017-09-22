@@ -69,10 +69,10 @@ initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
         return crun_make_error (err, errno, "read from '%s/%s'", parent_dir_path, files[i]);
 
       /* Write to the parent only if not already configured.  */
-      if (b_len == 0)
+      if (b_len == 0 || (b_len == 1 && b[0] == '\n'))
         {
-          strcpy (b, "0");
-          b_len = 1;
+          strcpy (b, "0\n");
+          b_len = 2;
           ret = TEMP_FAILURE_RETRY (write (fd, b, b_len));
           if (UNLIKELY (ret < 0))
             return ret;
