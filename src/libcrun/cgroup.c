@@ -390,6 +390,33 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
   return 0;
 }
 
+static void
+kill_all_processes (char *cgroup_path)
+{
+  libcrun_error_t err = NULL;
+  cleanup_free char *buffer = NULL;
+  size_t len;
+  int ret;
+  cleanup_free char *cgroup_procs_path = NULL;
+  char *it;
+  char *saveptr = NULL;
+
+  xasprintf (&cgroup_procs_path, "%s/%s", cgroup_path, "cgroup.procs");
+
+  ret = read_all_file (cgroup_procs_path, &buffer, &len, &err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&err);
+      return;
+    }
+
+  for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
+    {
+      pid_t pid = atoi (it);
+      kill (pid, 9);
+    }
+}
+
 int
 libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
 {
@@ -406,6 +433,8 @@ libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
         return ret;
       if (ret == 0)
         continue;
+
+      kill_all_processes (cgroup_path);
 
       ret = rmdir (cgroup_path);
       if (UNLIKELY (ret < 0))
