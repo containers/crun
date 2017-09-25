@@ -839,6 +839,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
         return ret;
     }
 
+#define SKIP(ret, errno)(ret < 0 && errno == ENOENT && getuid ())
   if (def->linux->resources->network)
     {
       cleanup_free char *path_to_network = NULL;
@@ -847,12 +848,15 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
       dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_network < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/net_cls,net_prio%s", path);
+      if (!SKIP (dirfd_network, errno))
+        {
+          if (UNLIKELY (dirfd_network < 0))
+            return crun_make_error (err, errno, "open /sys/fs/cgroup/net_cls,net_prio%s", path);
 
-      ret = write_network_resources (dirfd_network, network, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = write_network_resources (dirfd_network, network, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (def->linux->resources->hugepage_limits_len)
@@ -862,15 +866,18 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_htlb, "/sys/fs/cgroup/hugetlb%s/", path);
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_htlb < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
+      if (!SKIP (dirfd_htlb, errno))
+        {
+          if (UNLIKELY (dirfd_htlb < 0))
+            return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
 
-      ret = write_hugetlb_resources (dirfd_htlb,
-                                     def->linux->resources->hugepage_limits,
-                                     def->linux->resources->hugepage_limits_len,
-                                     err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = write_hugetlb_resources (dirfd_htlb,
+                                         def->linux->resources->hugepage_limits,
+                                         def->linux->resources->hugepage_limits_len,
+                                         err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (def->linux->resources->devices_len)
@@ -880,15 +887,18 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_devs, "/sys/fs/cgroup/devices%s/", path);
       dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_devs < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
+      if (!SKIP (dirfd_devs, errno))
+        {
+          if (UNLIKELY (dirfd_devs < 0))
+            return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
 
-      ret = write_devices_resources (dirfd_devs,
-                                     def->linux->resources->devices,
-                                     def->linux->resources->devices_len,
-                                     err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = write_devices_resources (dirfd_devs,
+                                         def->linux->resources->devices,
+                                         def->linux->resources->devices_len,
+                                         err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (def->linux->resources->memory)
@@ -898,14 +908,17 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_mem, "/sys/fs/cgroup/memory%s/", path);
       dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_mem < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
+      if (!SKIP (dirfd_mem, errno))
+        {
+          if (UNLIKELY (dirfd_mem < 0))
+            return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
 
-      ret = write_memory_resources (dirfd_mem,
-                                    def->linux->resources->memory,
-                                    err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = write_memory_resources (dirfd_mem,
+                                        def->linux->resources->memory,
+                                        err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (def->linux->resources->pids)
@@ -915,15 +928,17 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_pid, "/sys/fs/cgroup/pids%s/", path);
       dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_pid < 0))
-        return crun_make_error (err, errno, "open %s", path);
+      if (!SKIP (dirfd_pid, errno))
+        {
+          if (UNLIKELY (dirfd_pid < 0))
+            return crun_make_error (err, errno, "open %s", path);
 
-      ret = write_pids_resources (dirfd_pid,
-                                  def->linux->resources->pids,
-                                  err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
+          ret = write_pids_resources (dirfd_pid,
+                                      def->linux->resources->pids,
+                                      err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (def->linux->resources->cpu)
@@ -935,17 +950,21 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpu%s/", path);
       dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
+      if (!SKIP (dirfd_cpu, errno))
+        {
+          xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpuset%s/", path);
+          dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
+          if (!SKIP (dirfd_cpuset, errno))
+            {
+              ret = write_cpu_resources (dirfd_cpu,
+                                         dirfd_cpuset,
+                                         def->linux->resources->cpu,
+                                         err);
 
-      xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpuset%s/", path);
-      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
-
-      ret = write_cpu_resources (dirfd_cpu,
-                                 dirfd_cpuset,
-                                 def->linux->resources->cpu,
-                                 err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+        }
     }
 
   return 0;
