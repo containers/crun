@@ -414,7 +414,7 @@ kill_all_processes (char *cgroup_path)
 
   for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
     {
-      pid_t pid = atoi (it);
+      pid_t pid = strtoull (it, NULL, 10);
       kill (pid, 9);
     }
 }
