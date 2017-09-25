@@ -148,13 +148,15 @@ int get_system_path (char **path, const char *suffix, libcrun_error_t *err)
 }
 
 static
-int get_current_path (char **path, const char *suffix, libcrun_error_t *err)
+int get_current_path (char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int ret;
   char *from, *to;
+  cleanup_free char *cgroup_path = NULL;
 
-  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
+  ret = read_all_file (cgroup_path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
   from = strstr (content, "0::");
@@ -199,7 +201,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
 }
 
 static
-int enter_system_cgroup_scope (char **path, const char *scope, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -339,10 +341,10 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
 
   if (systemd || getuid ())
     {
-      ret = enter_system_cgroup_scope (path, scope, pid, err);
+      ret = enter_systemd_cgroup_scope (path, scope, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
-      return get_current_path (path, NULL, err);
+      return get_current_path (path, pid, NULL, err);
     }
   else
     {
