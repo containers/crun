@@ -349,15 +349,11 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
         }
     }
 
-  ret = run_poststop_hooks (context, &status, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   if (status.cgroup_path)
     {
       ret = crun_path_exists (status.cgroup_path, 1, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto error;
       if (ret > 0)
         {
           ret = libcrun_cgroup_destroy (status.cgroup_path, err);
@@ -365,6 +361,10 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
             crun_error_write_warning_and_release (context->stderr, err);
         }
     }
+
+  ret = run_poststop_hooks (context, &status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    goto error;
 
  exit:
   ret = libcrun_delete_container_status (state_root, id, err);
