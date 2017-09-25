@@ -823,6 +823,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
   if (!def->linux || !def->linux->resources)
     return 0;
 
+#define SKIP(ret, errno)(ret < 0 && errno == ENOENT && getuid ())
   if (def->linux->resources->block_io)
     {
       cleanup_free char *path_to_blkio = NULL;
@@ -831,15 +832,17 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
 
       xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_blkio < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/blkio%s", path);
+      if (!SKIP (dirfd_blkio, errno))
+        {
+          if (UNLIKELY (dirfd_blkio < 0))
+            return crun_make_error (err, errno, "open /sys/fs/cgroup/blkio%s", path);
 
-      ret = write_blkio_resources (dirfd_blkio, blkio, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = write_blkio_resources (dirfd_blkio, blkio, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
-#define SKIP(ret, errno)(ret < 0 && errno == ENOENT && getuid ())
   if (def->linux->resources->network)
     {
       cleanup_free char *path_to_network = NULL;
