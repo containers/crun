@@ -657,7 +657,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
+  ret = libcrun_set_cgroup_resources (container, cgroup_path, stderr, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
