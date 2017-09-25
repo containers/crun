@@ -401,6 +401,12 @@ libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
       cleanup_free char *cgroup_path;
       xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
 
+      ret = crun_path_exists (cgroup_path, 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (ret == 0)
+        continue;
+
       ret = rmdir (cgroup_path);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "deleting cgroup '%s'", path);
