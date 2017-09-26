@@ -199,9 +199,20 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
 
   for (next = readdir (dir); next; next = readdir (dir))
     {
+      int exists;
+      cleanup_free char *status_file = NULL;
+
       libcrun_container_list_t *next_container;
 
       if (next->d_name[0] == '.')
+        continue;
+
+      xasprintf (&status_file, "%s/%s", state_root, next->d_name);
+      exists = crun_path_exists (status_file, 1, err);
+      if (exists < 0)
+        return exists;
+
+      if (!exists)
         continue;
 
       next_container = xmalloc (sizeof (libcrun_container_list_t));
