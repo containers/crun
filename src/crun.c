@@ -127,9 +127,9 @@ const char *argp_program_bug_address = PACKAGE_BUGREPORT;
 
 static struct argp_option options[] =
   {
-    {"debug", OPTION_DEBUG, 0, 0, "produce verbose output" },
-    {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0,"use systemd cgroups" },
-    {"log", OPTION_LOG, 0, 0, "log file" },
+    {"debug", OPTION_DEBUG, 0, 0, "produce verbose output"},
+    {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0,"use systemd cgroups"},
+    {"log", OPTION_LOG, "FILE", 0},
     {"root", OPTION_ROOT, "DIR",  0},
     { 0 }
   };
