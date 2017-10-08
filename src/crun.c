@@ -58,7 +58,7 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
     {
       con->stderr = fopen (glob->log, "w");
       if (con->stderr == NULL)
-        error (EXIT_FAILURE, errno, "open log file %s\n", glob->log);
+        libcrun_fail_with_error (errno, "open log file %s\n", glob->log);
     }
 }
 
@@ -156,7 +156,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case ARGP_KEY_NO_ARGS:
-      error (EXIT_FAILURE, 0, "please specify a command");
+      libcrun_fail_with_error (0, "please specify a command");
 
     default:
       return ARGP_ERR_UNKNOWN;
@@ -178,10 +178,10 @@ main (int argc, char **argv)
 
   command = get_command (argv[first_argument]);
   if (command == NULL)
-    error (EXIT_FAILURE, 0, "unknown command %s", argv[first_argument]);
+    libcrun_fail_with_error (0, "unknown command %s", argv[first_argument]);
 
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
   if (ret && err)
-    error (EXIT_FAILURE, err->status, "%s", err->msg);
+    libcrun_fail_with_error (err->status, "%s", err->msg);
   return ret;
 }

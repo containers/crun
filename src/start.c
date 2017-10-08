@@ -53,7 +53,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case ARGP_KEY_NO_ARGS:
-      error (EXIT_FAILURE, 0, "please specify a ID for the container");
+      libcrun_fail_with_error (0, "please specify a ID for the container");
 
     default:
       return ARGP_ERR_UNKNOWN;

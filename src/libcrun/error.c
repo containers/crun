@@ -22,6 +22,8 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include <stdio.h>
 #include "utils.h"
 
@@ -61,7 +63,8 @@ crun_error_release (libcrun_error_t *err)
 void
 oom_handler ()
 {
-  error (EXIT_FAILURE, 0, "out of memory");
+  fprintf (stderr, "out of memory");
+  exit (EXIT_FAILURE);
 }
 
 void
@@ -88,4 +91,54 @@ crun_error_get_errno (libcrun_error_t *err)
   if (err == NULL)
     return 0;
   return (*err)->status;
+}
+
+static void
+write_log (FILE *out, int errno_, int color, const char *msg, va_list args_list)
+{
+  int ret;
+  cleanup_free char *warning = NULL;
+  struct timeval tv;
+  struct tm now;
+  char timestamp[64];
+  int can_color = isatty (fileno (out));
+  char color_begin[32];
+  const char *color_end = can_color ? "\x1b[0m" : "";
+
+  if (can_color)
+    sprintf (color_begin, "\x1b[1;%dm", color);
+  else
+    color_begin[0] = '\0';
+
+  gettimeofday (&tv, NULL);
+  localtime_r (&tv.tv_sec, &now);
+  strftime (timestamp, sizeof (timestamp), "%Y-%m-%d %H:%M:%S", &now);
+
+  ret = vasprintf (&warning, msg, args_list);
+  if (UNLIKELY (ret < 0))
+    OOM ();
+
+  if (errno_)
+    fprintf (out, "%s%s.%06ld: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, strerror (errno_), warning, color_end);
+  else
+    fprintf (out, "%s%s.%06ld: %s%s\n", color_begin, timestamp, tv.tv_usec, warning, color_end);
+}
+
+void
+libcrun_warning (FILE *out, const char *msg, ...)
+{
+  va_list args_list;
+  va_start (args_list, msg);
+  write_log (out ? out : stderr, 0, 33, msg, args_list);
+  va_end (args_list);
+}
+
+void __attribute__ ((noreturn))
+libcrun_fail_with_error (int errno_, const char *msg, ...)
+{
+  va_list args_list;
+  va_start (args_list, msg);
+  write_log (stderr, errno_, 31, msg, args_list);
+  va_end (args_list);
+  exit (EXIT_FAILURE);
 }

@@ -297,7 +297,7 @@ run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_
   asprintf (&config_file, "%s/config.json", status->bundle);
   container = libcrun_container_load (config_file, err);
   if (container == NULL)
-    error (EXIT_FAILURE, 0, "error loading config.json");
+    libcrun_fail_with_error (0, "error loading config.json");
 
   def = container->container_def;
   if (def->hooks && def->hooks->poststop_len)
@@ -776,7 +776,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
   /* forked process.  */
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, errno, "detach process");
+    libcrun_fail_with_error (errno, "detach process");
   libcrun_container_run_internal (container, context, err);
   _exit (0);
 }
@@ -815,7 +815,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   /* forked process.  */
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, errno, "detach process");
+    libcrun_fail_with_error (errno, "detach process");
   libcrun_container_run_internal (container, context, err);
   _exit (0);
 }
@@ -901,7 +901,7 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, int a
     {
       const char *cwd = context->cwd ? context->cwd : "/";
       if (chdir (cwd) < 0)
-        error (EXIT_FAILURE, errno, "chdir");
+        libcrun_fail_with_error (errno, "chdir");
       execv (argv[0], argv);
       _exit (1);
     }

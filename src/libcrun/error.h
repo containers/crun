@@ -41,4 +41,8 @@ int crun_error_release (libcrun_error_t *err);
 
 void crun_error_write_warning_and_release (FILE *out, libcrun_error_t *err);
 
+void libcrun_warning (FILE *out, const char *msg, ...);
+
+void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
+
 #endif

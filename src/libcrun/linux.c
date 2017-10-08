@@ -1405,7 +1405,7 @@ libcrun_run_linux_container (libcrun_container *container,
   /* ENTRYPOINT returns only on an error, fallback here: */
 
  out:
-  error (EXIT_FAILURE, (*err)->status, "%s", (*err)->msg);
+  libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
   return 1;
 }
 
@@ -1560,7 +1560,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
       if (terminal_fd)
         {
           if (setsid () < 0)
-            error (EXIT_FAILURE, errno, "setsid");
+            libcrun_fail_with_error (errno, "setsid");
 
           master_fd = open_terminal (&slave, err);
           if (UNLIKELY (master_fd < 0))

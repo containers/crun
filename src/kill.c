@@ -66,7 +66,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case ARGP_KEY_NO_ARGS:
-      error (EXIT_FAILURE, 0, "please specify a ID for the container");
+      libcrun_fail_with_error (0, "please specify a ID for the container");
 
     default:
       return ARGP_ERR_UNKNOWN;
@@ -86,7 +86,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &kill_options);
   if (argc - first_arg < 1)
-    error (EXIT_FAILURE, 0, "please specify container ID");
+    libcrun_fail_with_error (0, "please specify container ID");
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
