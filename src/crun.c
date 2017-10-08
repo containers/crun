@@ -52,7 +52,14 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
   con->state_root = glob->root;
   con->systemd_cgroup = glob->option_systemd_cgroup;
   con->notify_socket = getenv ("NOTIFY_SOCKET");
-  con->stderr = stderr;
+  if (glob->log == NULL)
+    con->stderr = stderr;
+  else
+    {
+      con->stderr = fopen (glob->log, "w");
+      if (con->stderr == NULL)
+        error (EXIT_FAILURE, errno, "open log file %s\n", glob->log);
+    }
 }
 
 enum

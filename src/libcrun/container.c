@@ -240,7 +240,7 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     {
       crun_make_error (err, errno, "read from the sync socket");
-      crun_error_write_warning_and_release (stderr, err);
+      crun_error_write_warning_and_release (entrypoint_args->context->stderr, err);
     }
 
   ret = unblock_signals (err);
@@ -657,7 +657,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = libcrun_set_cgroup_resources (container, cgroup_path, stderr, err);
+  ret = libcrun_set_cgroup_resources (container, cgroup_path, context->stderr, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
