@@ -41,8 +41,6 @@
 #include "status.h"
 #include <sys/socket.h>
 
-#define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
-
 struct remount_s
 {
   struct remount_s *next;
@@ -254,9 +252,17 @@ do_mount (libcrun_container *container,
       data = data_with_label;
     }
 
-  ret = mount (source, target, fstype, mountflags & ~MS_RDONLY, data);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
+#define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
+
+  if ((fstype && fstype[0]) || (mountflags & MS_BIND))
+    {
+      unsigned long flags = mountflags & ~MS_RDONLY;
+      if ((mountflags & MS_BIND) == 0)
+        flags &= ~ALL_PROPAGATIONS;
+      ret = mount (source, target, fstype, flags, data);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
+    }
 
   if (mountflags & ALL_PROPAGATIONS)
     {
