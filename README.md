@@ -10,6 +10,33 @@ risk.
 If you find it useful though, and fix any of the issue that might be
 present, feel free to open a PR.
 
+Why another implementation?
+==========
+
+While most of the tools used in the Linux containers ecosystem are
+written in Go, I believe C is a better fit for such a lower level
+tool.  runC, the most used implementation of the OCI runtime specs and
+that is written in Go, forks itself and use a module written in C for
+setting up the environment before the container process starts.
+
+Crun aims to be usable as a library, that can be easily included in
+programs without requiring an external process for managing OCI
+containers.
+
+Performance
+===========
+
+crun is slightly faster than runC.
+
+On my machine, this is the (elapsed time) for running sequentially 100
+containers that execs `/bin/true`:
+
+|                                      | crun | runC | % |
+| ------------- |-------------:| -----:| -----:|
+| 100 /bin/true (no network namespace) | 0m4.449s | 0m7.514s | 40.7% |
+| 100 /bin/true (new network namespace) | 0m15.850s | 0m18.986s | 16.5% |
+
+
 BUILD
 ==========
 
