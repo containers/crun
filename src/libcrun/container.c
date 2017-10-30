@@ -228,6 +228,8 @@ container_entrypoint (void *args, const char *notify_socket,
   if (entrypoint_args->context->has_fifo_exec_wait)
     {
       cleanup_close int fifo_fd = openat (entrypoint_args->context->fifo_exec_wait_dirfd, "exec.fifo", O_WRONLY);
+      if (UNLIKELY (fifo_fd < 0))
+        return crun_make_error (err, errno, "opening exec.fifo");
 
       ret = TEMP_FAILURE_RETRY (write (fifo_fd, "0", 1));
       if (UNLIKELY (ret < 0))
