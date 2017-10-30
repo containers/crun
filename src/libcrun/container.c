@@ -38,6 +38,8 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <systemd/sd-daemon.h>
+#include <yajl/yajl_tree.h>
+#include <yajl/yajl_gen.h>
 
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *err)
@@ -830,11 +832,15 @@ libcrun_container_start (struct libcrun_context_s *context, const char *id, libc
 }
 
 int
-libcrun_container_state (struct libcrun_context_s *context, const char *id, char **state, libcrun_error_t *err)
+libcrun_container_state (FILE *out, struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
 {
   int ret, running, has_fifo = 0;
   libcrun_container_status_t status;
   const char *state_root = context->state_root;
+  const char *container_status;
+  yajl_gen gen;
+  const unsigned char *buf;
+  size_t len;
 
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -855,15 +861,78 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, char
     }
 
   if (! running)
-    *state = xstrdup ("Stopped");
+    container_status = "stopped";
   else if (has_fifo)
-    *state = xstrdup ("Created");
+    container_status = "created";
   else
-    *state = xstrdup ("Started");
+    container_status = "running";
 
   ret = 0;
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+
+  yajl_gen_config (gen, yajl_gen_beautify, 1);
+  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+
+  yajl_gen_map_open (gen);
+
+  yajl_gen_string (gen, "ociVersion", strlen ("ociVersion"));
+  yajl_gen_string (gen, "1.0.0", strlen ("1.0.0"));
+
+  yajl_gen_string (gen, "pid", strlen ("pid"));
+  yajl_gen_integer (gen, status.pid);
+
+  yajl_gen_string (gen, "status", strlen ("status"));
+  yajl_gen_string (gen, container_status, strlen (container_status));
+
+  yajl_gen_string (gen, "bundle", strlen ("bundle"));
+  yajl_gen_string (gen, status.bundle, strlen (status.bundle));
+
+  yajl_gen_string (gen, "rootfs", strlen ("rootfs"));
+  yajl_gen_string (gen, status.rootfs, strlen (status.rootfs));
+
+  /* FIXME: store the date and owner.  */
+  yajl_gen_string (gen, "created", strlen ("created"));
+  yajl_gen_string (gen, "", strlen (""));
+
+  yajl_gen_string (gen, "owner", strlen ("owner"));
+  yajl_gen_string (gen, "", strlen (""));
+
+  {
+    size_t i;
+    cleanup_free char *config_file;
+    libcrun_container *container;
+
+    xasprintf (&config_file, "%s/config.json", status.bundle);
+    container = libcrun_container_load (config_file, err);
+    if (UNLIKELY (container == NULL))
+      return -1;
+
+    if (container->container_def->annotations->len)
+      {
+        yajl_gen_string (gen, "annotations", strlen ("annotations"));
+        yajl_gen_map_open (gen);
+        for (i = 0; i < container->container_def->annotations->len; i++)
+          {
+            const char *key = container->container_def->annotations->keys[i];
+            const char *val = container->container_def->annotations->values[i];
+            yajl_gen_string (gen, key, strlen (key));
+            yajl_gen_string (gen, val, strlen (val));
+          }
+        yajl_gen_map_close (gen);
+      }
+   free_oci_container (container->container_def);
+  }
+
+  yajl_gen_map_close (gen);
+
+  yajl_gen_get_buf (gen, &buf, &len);
+
+  fprintf (out, "%s\n", buf);
 
  exit:
+  yajl_gen_free (gen);
   libcrun_free_container_status (&status);
   return ret;
 }

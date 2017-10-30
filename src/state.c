@@ -81,16 +81,11 @@ crun_command_state (struct crun_global_arguments *global_args, int argc, char **
 {
   int first_arg;
   int ret;
-  cleanup_free char *state = NULL;
   struct libcrun_context_s crun_context;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &state_options);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
-  ret = libcrun_container_state (&crun_context, argv[first_arg], &state, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  printf ("%s\n", state);
-  return 0;
+  return libcrun_container_state (stdout, &crun_context, argv[first_arg], err);
 }
