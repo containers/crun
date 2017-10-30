@@ -159,7 +159,7 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
 
       for (j = 0; j < seccomp->syscalls[i]->names_len; j++)
         {
-          int syscall = seccomp_syscall_resolve_name (seccomp->syscalls[i]->names[i]);
+          int syscall = seccomp_syscall_resolve_name (seccomp->syscalls[i]->names[j]);
           if (seccomp->syscalls[i]->args == NULL)
             {
               ret = seccomp_rule_add (ctx, action, syscall, 0);
