@@ -720,7 +720,8 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     }
 
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, err);
-  cleanup_watch (context, context->id, terminal_fd, context->stderr);
+  if (! context->has_fifo_exec_wait)
+    cleanup_watch (context, context->id, terminal_fd, context->stderr);
   return ret;
 }
 
