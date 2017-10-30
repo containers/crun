@@ -138,7 +138,7 @@ static struct argp_option options[] =
 static void
 print_version_and_exit ()
 {
-  printf ("%s\n", argp_program_version);
+  printf ("%s\nspec: 1.0.0\n", argp_program_version);
   exit (EXIT_SUCCESS);
 }
 
