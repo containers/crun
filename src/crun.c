@@ -128,11 +128,19 @@ const char *argp_program_bug_address = PACKAGE_BUGREPORT;
 static struct argp_option options[] =
   {
     {"debug", OPTION_DEBUG, 0, 0, "produce verbose output"},
-    {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0,"use systemd cgroups"},
+    {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups"},
     {"log", OPTION_LOG, "FILE", 0},
     {"root", OPTION_ROOT, "DIR",  0},
+    {"version", 'v', 0, 0 },
     { 0 }
   };
+
+static void
+print_version_and_exit ()
+{
+  printf ("%s\n", argp_program_version);
+  exit (EXIT_SUCCESS);
+}
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
@@ -153,6 +161,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_ROOT:
       arguments.root = argp_mandatory_argument (arg, state);
+      break;
+
+    case 'v':
+      print_version_and_exit ();
       break;
 
     case ARGP_KEY_NO_ARGS:
