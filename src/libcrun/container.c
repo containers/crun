@@ -584,7 +584,7 @@ cleanup_watch (struct libcrun_context_s *context, const char *id, int terminal_f
 }
 
 static int
-libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
+libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, int container_ready_fd, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -726,6 +726,12 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         }
     }
 
+  if (container_ready_fd >= 0)
+    {
+      TEMP_FAILURE_RETRY (write (container_ready_fd, "1", 1));
+      close (container_ready_fd);
+    }
+
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, err);
   if (! context->has_fifo_exec_wait)
     cleanup_watch (context, context->id, terminal_fd, context->stderr);
@@ -772,7 +778,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
       if (UNLIKELY (ret < 0))
         return ret;
 
-      return libcrun_container_run_internal (container, context, err);
+      return libcrun_container_run_internal (container, context, -1, err);
     }
 
   ret = fork ();
@@ -785,7 +791,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
-  libcrun_container_run_internal (container, context, err);
+  libcrun_container_run_internal (container, context, -1, err);
   _exit (0);
 }
 
@@ -794,6 +800,10 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
 {
   oci_container *def = container->container_def;
   int ret;
+  int tmp;
+  int container_ready_pipe[2];
+  cleanup_close int pipefd0 = -1;
+  cleanup_close int pipefd1 = -1;
   cleanup_close int dirfd = -1;
   context->detach = 1;
   container->context = context;
@@ -810,11 +820,27 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   if (UNLIKELY (dirfd < 0))
     return dirfd;
 
+  ret = pipe (container_ready_pipe);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "pipe");
+  pipefd0 = container_ready_pipe[0];
+  pipefd1 = container_ready_pipe[1];
+
   ret = fork ();
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fork");
   if (ret)
-    return 0;
+    {
+      char c;
+      close (pipefd1);
+      pipefd1 = -1;
+
+      ret = TEMP_FAILURE_RETRY (read (pipefd0, &c, 1));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "waiting for container to be ready");
+
+      return 0;
+    }
 
   context->has_fifo_exec_wait = 1;
   context->fifo_exec_wait_dirfd = dirfd;
@@ -824,7 +850,9 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
-  libcrun_container_run_internal (container, context, err);
+  tmp = pipefd1;
+  pipefd1 = -1;
+  libcrun_container_run_internal (container, context, tmp, err);
   _exit (0);
 }
 
