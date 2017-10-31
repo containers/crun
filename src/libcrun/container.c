@@ -355,7 +355,7 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
 
   if (status.cgroup_path)
     {
-      ret = libcrun_cgroup_destroy (status.cgroup_path, err);
+      ret = libcrun_cgroup_destroy (id, status.cgroup_path, status.systemd_cgroup, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->stderr, err);
     }

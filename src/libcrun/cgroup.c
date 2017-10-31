@@ -242,7 +242,7 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_append (m, "ss", scope, "fail") < 0))
+  if (UNLIKELY (sd_bus_message_append (m, "ss", scope, "replace") < 0))
     {
       ret = crun_make_error (err, 0, "sd-bus message append");
       goto exit;
@@ -321,6 +321,106 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
         }
     }
 
+exit:
+  if (bus)
+    sd_bus_unref (bus);
+  if (m)
+    sd_bus_message_unref (m);
+  if (reply)
+    sd_bus_message_unref (reply);
+  sd_bus_error_free (&error);
+  return ret;
+}
+
+static
+int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
+{
+  sd_bus *bus = NULL;
+  sd_bus_message *m = NULL;
+  sd_bus_message *reply = NULL;
+  int ret = 0;
+  sd_bus_error error = SD_BUS_ERROR_NULL;
+  const char *object;
+  int terminated = 0;
+  struct systemd_job_removed_s userdata;
+
+  if (sd_bus_default (&bus) < 0)
+    {
+      ret = crun_make_error (err, 0, "cannot open sd-bus");
+      goto exit;
+    }
+
+  ret = sd_bus_add_match (bus,
+                          NULL,
+                          "type='signal',"
+                          "sender='org.freedesktop.systemd1',"
+                          "interface='org.freedesktop.systemd1.Manager',"
+                          "member='JobRemoved',"
+                          "path='/org/freedesktop/systemd1'",
+                          systemd_job_removed, &userdata);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, 0, "sd-bus message read");
+      goto exit;
+    }
+
+  if (UNLIKELY (sd_bus_message_new_method_call (bus, &m,
+                                                "org.freedesktop.systemd1",
+                                                "/org/freedesktop/systemd1",
+                                                "org.freedesktop.systemd1.Manager",
+                                                "StopUnit") < 0))
+    {
+      ret = crun_make_error (err, 0, "set up dbus message");
+      goto exit;
+    }
+
+  if (UNLIKELY (sd_bus_message_append (m, "ss", scope, "replace") < 0))
+    {
+      ret = crun_make_error (err, 0, "sd-bus message append");
+      goto exit;
+    }
+
+  ret = sd_bus_call (bus, m, 0, &error, &reply);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      goto exit;
+    }
+  ret = sd_bus_message_read (reply, "o", &object);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, 0, "sd-bus message read");
+      goto exit;
+    }
+
+  userdata.path = object;
+  userdata.terminated = &terminated;
+  while (!terminated)
+    {
+      ret = sd_bus_process (bus, NULL);
+      if (UNLIKELY (ret < 0))
+        {
+          ret = crun_make_error (err, 0, "sd-bus process");
+          break;
+        }
+
+      if (ret == 0)
+        {
+          ret = sd_bus_wait (bus, (uint64_t) -1);
+          if (UNLIKELY (ret < 0))
+            {
+              ret = crun_make_error (err, 0, "sd-bus wait");
+              break;
+            }
+          continue;
+        }
+
+      if (UNLIKELY (ret < 0))
+        {
+          ret = crun_make_error (err, 0, "sd-bus wait");
+          break;
+        }
+    }
 exit:
   if (bus)
     sd_bus_unref (bus);
@@ -420,7 +520,7 @@ kill_all_processes (char *cgroup_path)
 }
 
 int
-libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
+libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -441,6 +541,12 @@ libcrun_cgroup_destroy (char *path, libcrun_error_t *err)
       ret = rmdir (cgroup_path);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "deleting cgroup '%s'", path);
+    }
+
+  if (systemd_cgroup)
+    {
+      ret = destroy_systemd_cgroup_scope (id, err);
+      crun_error_release (err);
     }
 
   return 0;
