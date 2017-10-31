@@ -525,6 +525,12 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   int ret;
   size_t i;
 
+  if (systemd_cgroup)
+    {
+      ret = destroy_systemd_cgroup_scope (id, err);
+      crun_error_release (err);
+    }
+
   for (i = 0; subsystems[i]; i++)
     {
       cleanup_free char *cgroup_path;
@@ -538,15 +544,7 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
 
       kill_all_processes (cgroup_path);
 
-      ret = rmdir (cgroup_path);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "deleting cgroup '%s'", path);
-    }
-
-  if (systemd_cgroup)
-    {
-      ret = destroy_systemd_cgroup_scope (id, err);
-      crun_error_release (err);
+      rmdir (cgroup_path);
     }
 
   return 0;
