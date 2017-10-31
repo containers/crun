@@ -483,9 +483,12 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
       pid_t pid = strtoul (it, NULL, 10);
       if (pid)
         {
-          ret = kill (pid, 9);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "kill process %d", pid);
+          if (pid > 0)
+            {
+              ret = kill (pid, SIGKILL);
+              if (UNLIKELY (ret < 0))
+                return crun_make_error (err, errno, "kill process %d", pid);
+            }
         }
     }
 
@@ -515,7 +518,8 @@ kill_all_processes (char *cgroup_path)
   for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
     {
       pid_t pid = strtoull (it, NULL, 10);
-      kill (pid, 9);
+      if (pid > 0)
+        kill (pid, SIGKILL);
     }
 }
 
