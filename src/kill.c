@@ -29,6 +29,7 @@
 #include "crun.h"
 #include "libcrun/container.h"
 #include "libcrun/utils.h"
+#include "libcrun/sig2str.h"
 
 static char doc[] = "OCI runtime";
 
@@ -92,7 +93,11 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
 
   signal = SIGTERM;
   if (argc - first_arg > 1)
-    signal = strtoull (argv[first_arg + 1], NULL, 10);
+    {
+      int res = str2sig (argv[first_arg + 1], &signal);
+      if (UNLIKELY (res < 0))
+        libcrun_fail_with_error (0, "unknown signal %s", argv[first_arg + 1]);
+    }
 
   return libcrun_kill_container (&crun_context, argv[first_arg], signal, err);
 }

@@ -8,7 +8,8 @@ libcrun_a_SOURCES = src/libcrun/utils.c \
 		src/libcrun/seccomp.c \
 		src/libcrun/error.c \
 		src/libcrun/status.c \
-		src/libcrun/terminal.c
+		src/libcrun/terminal.c \
+		src/libcrun/sig2str.c
 
 libcrun_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
@@ -23,7 +24,8 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
-	src/libcrun/status.h src/libcrun/terminal.h
+	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/sig2str.h \
+	src/libcrun/intprops.h
 
 noinst_LIBRARIES = libcrun.a
 
