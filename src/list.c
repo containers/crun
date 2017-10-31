@@ -42,14 +42,12 @@ enum
 
 struct list_options_s
 {
-  int force;
 };
 
 static struct list_options_s list_options;
 
 static struct argp_option options[] =
   {
-    {"force", 'f', 0, 0, "list the container even if it is still running" },
     { 0 }
   };
 
