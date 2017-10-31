@@ -393,13 +393,14 @@ libcrun_kill_container (struct libcrun_context_s *context, const char *id, int s
 
 static int
 write_container_status (libcrun_container *container, struct libcrun_context_s *context, pid_t pid,
-                        char *cgroup_path, libcrun_error_t *err)
+                        char *cgroup_path, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
   libcrun_container_status_t status = {.pid = pid,
                                        .cgroup_path = cgroup_path,
                                        .rootfs = container->container_def->root->path,
                                        .bundle = cwd,
+                                       .created = created,
                                        .systemd_cgroup = context->systemd_cgroup};
   if (cwd == NULL)
     OOM ();
@@ -597,6 +598,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   cleanup_close int notify_socket = -1;
   cleanup_close int socket_pair_0 = -1;
   cleanup_close int socket_pair_1 = -1;
+  char created[35];
   struct container_entrypoint_s container_args =
     {
       .container = container,
@@ -704,7 +706,8 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return crun_make_error (err, errno, "close the sync socket");
     }
 
-  ret = write_container_status (container, context, pid, cgroup_path, err);
+  get_current_timestamp (created);
+  ret = write_container_status (container, context, pid, cgroup_path, created, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
@@ -892,10 +895,10 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
   yajl_gen_string (gen, "rootfs", strlen ("rootfs"));
   yajl_gen_string (gen, status.rootfs, strlen (status.rootfs));
 
-  /* FIXME: store the date and owner.  */
   yajl_gen_string (gen, "created", strlen ("created"));
-  yajl_gen_string (gen, "", strlen (""));
+  yajl_gen_string (gen, status.created, strlen (status.created));
 
+  /* FIXME: store the owner.  */
   yajl_gen_string (gen, "owner", strlen ("owner"));
   yajl_gen_string (gen, "", strlen (""));
 

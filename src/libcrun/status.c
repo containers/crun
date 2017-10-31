@@ -72,12 +72,13 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
   cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
   cleanup_free char *data;
-  size_t len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : \"%s\",\n    \"bundle\" : \"%s\"\n}\n",
+  size_t len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : \"%s\",\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\"\n}\n",
                           status->pid,
                           status->cgroup_path ? status->cgroup_path : "",
                           status->rootfs,
                           status->systemd_cgroup ? "true" : "false",
-                          status->bundle);
+                          status->bundle,
+                          status->created);
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, 0, "cannot open status file");
   if (UNLIKELY (write (fd_write, data, len) < 0))
@@ -121,6 +122,10 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   {
     const char *bundle[] = { "bundle", NULL };
     status->bundle = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, bundle, yajl_t_string)));
+  }
+  {
+    const char *created[] = { "created", NULL };
+    status->created = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, created, yajl_t_string)));
   }
   yajl_tree_free (tree);
   return 0;
