@@ -830,7 +830,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
   if (!def->linux || !def->linux->resources)
     return 0;
 
-#define SKIP(ret, errno)(ret < 0 && errno == ENOENT && getuid ())
+#define SKIP(ret, errno)(ret < 0 && errno == ENOENT)
   if (def->linux->resources->block_io)
     {
       cleanup_free char *path_to_blkio = NULL;
