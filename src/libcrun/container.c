@@ -325,7 +325,11 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    goto exit;
+    {
+      if (force && crun_error_get_errno (err) == ENOENT)
+        return 0;
+      goto exit;
+    }
 
   if (force)
     {
