@@ -18,7 +18,6 @@
 
 #include <config.h>
 #include <stdlib.h>
-#include <error.h>
 #include <argp.h>
 #include <string.h>
 
