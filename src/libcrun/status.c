@@ -290,18 +290,23 @@ libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_e
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
   cleanup_free char *fifo_path;
-  cleanup_free char *buffer = NULL;
+  char buffer[1];
   int ret;
+  cleanup_close int fd = -1;
 
   xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
 
-  ret = read_all_file (fifo_path, &buffer, NULL, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  fd = open (fifo_path, O_RDONLY);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "cannot open '%s'", fifo_path);
 
   ret = unlink (fifo_path);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "unlink '%s'", fifo_path);
+
+  ret = read (fd, buffer, 1);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from exec.fifo");
 
   return strtoll (buffer, NULL, 10);
 }
