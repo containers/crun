@@ -185,7 +185,7 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_caps (container, err);
+  ret = libcrun_set_caps (container, container->container_uid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -196,6 +196,13 @@ container_entrypoint (void *args, const char *notify_socket,
   ret = set_uid_gid (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (container->container_uid)
+    {
+      ret = libcrun_set_caps (container, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))

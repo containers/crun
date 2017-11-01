@@ -1025,7 +1025,7 @@ libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *e
 }
 
 int
-libcrun_set_caps (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_caps (libcrun_container *container, int keep_setuid, libcrun_error_t *err)
 {
   int ret;
   struct all_caps_s caps;
@@ -1067,6 +1067,15 @@ libcrun_set_caps (libcrun_container *container, libcrun_error_t *err)
                        err);
       if (ret < 0)
         return ret;
+    }
+  if (keep_setuid)
+    {
+      unsigned int mask = CAP_TO_MASK_0 (CAP_SETUID) | CAP_TO_MASK_0 (CAP_SETGID);
+      caps.effective[0] |= mask;
+      caps.inheritable[0] |= mask;
+      caps.ambient[0] |= mask;
+      caps.bounding[0] |= mask;
+      caps.permitted[0] |= mask;
     }
   return set_required_caps (&caps, def->process->no_new_privileges, err);
 }
