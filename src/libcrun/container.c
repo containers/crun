@@ -948,6 +948,9 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
   yajl_gen_string (gen, "ociVersion", strlen ("ociVersion"));
   yajl_gen_string (gen, "1.0.0", strlen ("1.0.0"));
 
+  yajl_gen_string (gen, "id", strlen ("id"));
+  yajl_gen_string (gen, id, strlen (id));
+
   yajl_gen_string (gen, "pid", strlen ("pid"));
   yajl_gen_integer (gen, running ? status.pid : 0);
 
