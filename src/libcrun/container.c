@@ -871,6 +871,21 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
 int
 libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
 {
+  int ret;
+  const char *state_root = context->state_root;
+  libcrun_container_status_t status;
+  memset (&status, 0, sizeof (status));
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_is_container_running (&status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (!ret)
+    return crun_make_error (err, errno, "container '%s' is not running", id);
+
   return libcrun_status_read_exec_fifo (context->state_root, id, err);
 }
 
