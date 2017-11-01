@@ -789,8 +789,8 @@ get_current_timestamp (char *out)
   char timestamp[64];
 
   gettimeofday (&tv, NULL);
-  localtime_r (&tv.tv_sec, &now);
+  gmtime_r (&tv.tv_sec, &now);
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
-  sprintf (out, "%s.%06ld", timestamp, tv.tv_usec);
+  sprintf (out, "%s.%09ldZ", timestamp, tv.tv_usec);
 }

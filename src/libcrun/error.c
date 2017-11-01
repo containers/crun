@@ -111,17 +111,17 @@ write_log (FILE *out, int errno_, int color, const char *msg, va_list args_list)
     color_begin[0] = '\0';
 
   gettimeofday (&tv, NULL);
-  localtime_r (&tv.tv_sec, &now);
-  strftime (timestamp, sizeof (timestamp), "%Y-%m-%d %H:%M:%S", &now);
+  gmtime_r (&tv.tv_sec, &now);
+  strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
   ret = vasprintf (&warning, msg, args_list);
   if (UNLIKELY (ret < 0))
     OOM ();
 
   if (errno_)
-    fprintf (out, "%s%s.%06ld: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, strerror (errno_), warning, color_end);
+    fprintf (out, "%s%s.%09ldZ: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, strerror (errno_), warning, color_end);
   else
-    fprintf (out, "%s%s.%06ld: %s%s\n", color_begin, timestamp, tv.tv_usec, warning, color_end);
+    fprintf (out, "%s%s.%09ldZ: %s%s\n", color_begin, timestamp, tv.tv_usec, warning, color_end);
 }
 
 void
