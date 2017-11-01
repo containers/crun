@@ -278,15 +278,15 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mkfifo");
 
-  fd = open (state_dir, O_DIRECTORY);
+  fd = open (fifo_path, O_NONBLOCK);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "cannot open directory '%s'", state_dir);
+    return crun_make_error (err, errno, "cannot open pipe '%s'", fifo_path);
 
   return fd;
 }
 
 int
-libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
   cleanup_free char *fifo_path;
@@ -296,7 +296,7 @@ libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_e
 
   xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
 
-  fd = open (fifo_path, O_RDONLY);
+  fd = open (fifo_path, O_WRONLY);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "cannot open '%s'", fifo_path);
 
@@ -304,7 +304,7 @@ libcrun_status_read_exec_fifo (const char *state_root, const char *id, libcrun_e
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "unlink '%s'", fifo_path);
 
-  ret = read (fd, buffer, 1);
+  ret = write (fd, buffer, 1);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from exec.fifo");
 

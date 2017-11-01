@@ -35,7 +35,7 @@ struct libcrun_context_s
 
   const char *cwd;
 
-  int fifo_exec_wait_dirfd;
+  int fifo_exec_wait_fd;
 
   int tty : 1;
   int has_fifo_exec_wait : 1;

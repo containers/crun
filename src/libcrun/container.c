@@ -240,15 +240,25 @@ container_entrypoint (void *args, const char *notify_socket,
 
   if (entrypoint_args->context->has_fifo_exec_wait)
     {
-      cleanup_close int fifo_fd = openat (entrypoint_args->context->fifo_exec_wait_dirfd, "exec.fifo", O_WRONLY);
-      if (UNLIKELY (fifo_fd < 0))
-        return crun_make_error (err, errno, "opening exec.fifo");
+      char buffer[1];
+      fd_set read_set;
+      cleanup_close int fd = entrypoint_args->context->fifo_exec_wait_fd;
+      entrypoint_args->context->fifo_exec_wait_fd = -1;
 
-      ret = TEMP_FAILURE_RETRY (write (fifo_fd, "0", 1));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write to the exec fifo");
-      close (entrypoint_args->context->fifo_exec_wait_dirfd);
-      entrypoint_args->context->fifo_exec_wait_dirfd = -1;
+      FD_ZERO (&read_set);
+      FD_SET (fd, &read_set);
+
+      do
+        {
+          ret = select (fd + 1, &read_set, NULL, NULL, NULL);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "select");
+
+          ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "read from the exec fifo");
+        }
+      while (ret == 0);
     }
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
@@ -816,7 +826,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   int container_ready_pipe[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
-  cleanup_close int dirfd = -1;
+  cleanup_close int exec_fifo_fd = -1;
   context->detach = 1;
   container->context = context;
 
@@ -828,9 +838,9 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   if (UNLIKELY (ret < 0))
     return ret;
 
-  dirfd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
-  if (UNLIKELY (dirfd < 0))
-    return dirfd;
+  exec_fifo_fd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
+  if (UNLIKELY (exec_fifo_fd < 0))
+    return exec_fifo_fd;
 
   ret = pipe (container_ready_pipe);
   if (UNLIKELY (ret < 0))
@@ -855,8 +865,8 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
     }
 
   context->has_fifo_exec_wait = 1;
-  context->fifo_exec_wait_dirfd = dirfd;
-  dirfd = -1;
+  context->fifo_exec_wait_fd = exec_fifo_fd;
+  exec_fifo_fd = -1;
 
   /* forked process.  */
   ret = detach_process ();
@@ -886,7 +896,7 @@ libcrun_container_start (struct libcrun_context_s *context, const char *id, libc
   if (!ret)
     return crun_make_error (err, errno, "container '%s' is not running", id);
 
-  return libcrun_status_read_exec_fifo (context->state_root, id, err);
+  return libcrun_status_write_exec_fifo (context->state_root, id, err);
 }
 
 int
