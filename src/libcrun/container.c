@@ -253,10 +253,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
-    {
-      crun_make_error (err, errno, "read from the sync socket");
-      crun_error_write_warning_and_release (entrypoint_args->context->stderr, err);
-    }
+    crun_error_write_warning_and_release (entrypoint_args->context->stderr, err);
 
   execvp (def->process->args[0], def->process->args);
   return crun_make_error (err, errno, "exec the container process");
