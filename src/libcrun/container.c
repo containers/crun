@@ -227,6 +227,10 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from the sync socket");
 
+  ret = unblock_signals (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (entrypoint_args->context->has_fifo_exec_wait)
     {
       cleanup_close int fifo_fd = openat (entrypoint_args->context->fifo_exec_wait_dirfd, "exec.fifo", O_WRONLY);
@@ -246,10 +250,6 @@ container_entrypoint (void *args, const char *notify_socket,
       crun_make_error (err, errno, "read from the sync socket");
       crun_error_write_warning_and_release (entrypoint_args->context->stderr, err);
     }
-
-  ret = unblock_signals (err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   execvp (def->process->args[0], def->process->args);
   return crun_make_error (err, errno, "exec the container process");
