@@ -499,7 +499,7 @@ create_signalfd (sigset_t *mask, libcrun_error_t *err)
 }
 
 int
-epoll_helper (int *fds, libcrun_error_t *err)
+epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
 {
   struct epoll_event ev;
   cleanup_close int epollfd = -1;
@@ -518,6 +518,14 @@ epoll_helper (int *fds, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "epoll_ctl add '%d'", *it);
     }
+  for (it = levelfds; *it >= 0; it++)
+    {
+      ev.events = EPOLLIN | EPOLLET;
+      ev.data.fd = *it;
+      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "epoll_ctl add '%d'", *it);
+    }
 
   ret = epollfd;
   epollfd = -1;
@@ -525,32 +533,40 @@ epoll_helper (int *fds, libcrun_error_t *err)
 }
 
 int
-copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err)
+copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
 {
-#ifdef HAVE_COPY_FILE_RANGE
-  ret = copy_file_range (0, NULL, terminal_fd, NULL, 4096, 0);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "copy_file_range");
-  return 0;
-#else
-  cleanup_free char *buffer = xmalloc (8192);
-  int ret, nread;
-  nread = TEMP_FAILURE_RETRY (read (src, buffer, sizeof (buffer)));
-  if (errno == EIO)
-    return 0;
-  if (UNLIKELY (nread < 0))
-    return crun_make_error (err, errno, "read");
-
-  while (nread)
+  do
     {
-      ret = TEMP_FAILURE_RETRY (write (dst, buffer, nread));
+#ifdef HAVE_COPY_FILE_RANGE
+      ret = copy_file_range (0, NULL, terminal_fd, NULL, 4096, 0);
+      if (consume && ret < 0 && errno == EAGAIN)
+        return 0;
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write");
-      nread -= ret;
+        return crun_make_error (err, errno, "copy_file_range");
+#else
+      cleanup_free char *buffer = xmalloc (8192);
+      int ret, nread;
+      nread = TEMP_FAILURE_RETRY (read (src, buffer, sizeof (buffer)));
+      if (consume && nread < 0 && errno == EAGAIN)
+        return 0;
+      if (nread < 0 && errno == EIO)
+        return 0;
+      if (UNLIKELY (nread < 0))
+        return crun_make_error (err, errno, "read");
+
+      while (nread)
+        {
+          ret = TEMP_FAILURE_RETRY (write (dst, buffer, nread));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write");
+          nread -= ret;
+        }
+#endif
     }
+  while (consume);
 
   return 0;
-#endif
+
 }
 
 int
@@ -793,4 +809,20 @@ get_current_timestamp (char *out)
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
   sprintf (out, "%s.%09ldZ", timestamp, tv.tv_usec);
+}
+
+int
+set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
+{
+  int ret, flags = fcntl (fd, F_GETFL, 0);
+  if (UNLIKELY (flags < 0))
+    return crun_make_error (err, errno, "fcntl");
+
+  if (blocking)
+    ret = fcntl (fd, F_SETFL, flags & ~O_NONBLOCK);
+  else
+    ret = fcntl (fd, F_SETFL, flags | O_NONBLOCK);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fcntl");
+  return 0;
 }

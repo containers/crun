@@ -466,6 +466,8 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
   int ret, container_exit_code, last_process;
   sigset_t mask;
   int fds[10];
+  int levelfds[10];
+  int levelfds_len = 0;
   int fds_len = 0;
 
   if (context->detach && notify_socket < 0)
@@ -493,21 +495,23 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
   if (terminal_fd >= 0)
     {
       fds[fds_len++] = 0;
-      fds[fds_len++] = terminal_fd;
+      levelfds[levelfds_len++] = terminal_fd;
     }
   fds[fds_len++] = -1;
+  levelfds[levelfds_len++] = -1;
 
-  epollfd = epoll_helper (fds, err);
+  epollfd = epoll_helper (fds, levelfds, err);
   if (UNLIKELY (epollfd < 0))
     return epollfd;
-
 
   while (1)
     {
       struct signalfd_siginfo si;
       ssize_t res;
       struct epoll_event events[10];
-      int i, nr_events = epoll_wait (epollfd, events, 10, -1);
+      int i, nr_events;
+
+      nr_events = TEMP_FAILURE_RETRY (epoll_wait (epollfd, events, 10, -1));
       if (UNLIKELY (nr_events < 0))
         return crun_make_error (err, errno, "epoll_wait");
 
@@ -515,13 +519,21 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
         {
           if (events[i].data.fd == 0)
             {
-              ret = copy_from_fd_to_fd (0, terminal_fd, err);
+              ret = copy_from_fd_to_fd (0, terminal_fd, 0, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
           else if (events[i].data.fd == terminal_fd)
             {
-              ret = copy_from_fd_to_fd (terminal_fd, 1, err);
+              ret = set_blocking_fd (terminal_fd, 0, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              ret = copy_from_fd_to_fd (terminal_fd, 1, 1, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              ret = set_blocking_fd (terminal_fd, 1, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }

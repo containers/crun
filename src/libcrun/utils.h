@@ -85,9 +85,9 @@ int receive_fd_from_socket (int from, libcrun_error_t *err);
 
 int create_signalfd (sigset_t *mask, libcrun_error_t *err);
 
-int epoll_helper (int *fds, libcrun_error_t *err);
+int epoll_helper (int *fds, int *levelfds, libcrun_error_t *err);
 
-int copy_from_fd_to_fd (int src, int dst, libcrun_error_t *err);
+int copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err);
 
 int run_process (char **args, libcrun_error_t *err);
 
@@ -98,5 +98,7 @@ int run_process_with_stdin_timeout_envp (char *path, char **args, int timeout, c
 int close_fds_ge_than (int n, libcrun_error_t *err);
 
 void get_current_timestamp (char *out);
+
+int set_blocking_fd (int fd, int blocking, libcrun_error_t *err);
 
 #endif
