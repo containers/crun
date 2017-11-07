@@ -1,6 +1,23 @@
 DIST_SUBDIRS = libocispec
 SUBDIRS = libocispec
 
+WD := $(shell pwd)
+
+crun.spec: $(srcdir)/rpm/crun.spec.template
+	sed -e 's|#VERSION#|$(VERSION)|g' < $< > $@
+
+rpm: dist-gzip crun.spec
+	echo $(VERSION)
+	$(MAKE) -C $(WD) dist-xz
+	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" crun.spec
+
+srpm: dist-gzip crun.spec
+	echo $(VERSION)
+	$(MAKE) -C $(WD) dist-xz
+	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" crun.spec
+
+CLEANFILES = crun.spec
+
 libcrun_a_SOURCES = src/libcrun/utils.c \
 		src/libcrun/container.c \
 		src/libcrun/cgroup.c \
@@ -19,7 +36,7 @@ crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 
 crun_LDADD = libcrun.a libocispec/libocispec.a $(SELINUX_LIBS) $(YAJL_LIBS) -lcap -lseccomp -lsystemd
 
-EXTRA_DIST = COPYING COPYING.libcrun README.md \
+EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
