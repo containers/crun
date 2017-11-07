@@ -56,7 +56,7 @@ write_to (const char *path, const char *str)
   int ret;
   if (f == NULL)
     error (EXIT_FAILURE, errno, "fopen");
-  ret = fprintf (f, str);
+  ret = fprintf (f, "%s", str);
   if (ret < 0)
     error (EXIT_FAILURE, errno, "fprintf");
   ret = fclose (f);

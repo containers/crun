@@ -240,7 +240,7 @@ do_mount (libcrun_container *container,
           int skip_labelling,
           libcrun_error_t *err)
 {
-  int ret;
+  int ret = 0;
   cleanup_free char *data_with_label = NULL;
   const char *label = container->container_def->linux->mount_label;
 
@@ -743,8 +743,7 @@ int
 libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
-  int ret;
-  int is_user_ns;
+  int ret = 0, is_user_ns = 0;
   unsigned long rootfsPropagation = 0;
 
   if (def->linux->rootfs_propagation)
