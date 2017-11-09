@@ -799,7 +799,6 @@ close_fds_ge_than (int n, libcrun_error_t *err)
 void
 get_current_timestamp (char *out)
 {
-  int ret;
   struct timeval tv;
   struct tm now;
   char timestamp[64];

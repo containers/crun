@@ -956,31 +956,31 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
   yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
 
   yajl_gen_map_open (gen);
+#define YAJL_STR(x) ((const unsigned char *) (x))
+  yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  yajl_gen_string (gen, YAJL_STR ("1.0.0"), strlen ("1.0.0"));
 
-  yajl_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  yajl_gen_string (gen, "1.0.0", strlen ("1.0.0"));
+  yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
+  yajl_gen_string (gen, YAJL_STR (id), strlen (id));
 
-  yajl_gen_string (gen, "id", strlen ("id"));
-  yajl_gen_string (gen, id, strlen (id));
-
-  yajl_gen_string (gen, "pid", strlen ("pid"));
+  yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
   yajl_gen_integer (gen, running ? status.pid : 0);
 
-  yajl_gen_string (gen, "status", strlen ("status"));
-  yajl_gen_string (gen, container_status, strlen (container_status));
+  yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
+  yajl_gen_string (gen, YAJL_STR (container_status), strlen (container_status));
 
-  yajl_gen_string (gen, "bundle", strlen ("bundle"));
-  yajl_gen_string (gen, status.bundle, strlen (status.bundle));
+  yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+  yajl_gen_string (gen, YAJL_STR (status.bundle), strlen (status.bundle));
 
-  yajl_gen_string (gen, "rootfs", strlen ("rootfs"));
-  yajl_gen_string (gen, status.rootfs, strlen (status.rootfs));
+  yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
+  yajl_gen_string (gen, YAJL_STR (status.rootfs), strlen (status.rootfs));
 
-  yajl_gen_string (gen, "created", strlen ("created"));
-  yajl_gen_string (gen, status.created, strlen (status.created));
+  yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
+  yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
 
   /* FIXME: store the owner.  */
-  yajl_gen_string (gen, "owner", strlen ("owner"));
-  yajl_gen_string (gen, "", strlen (""));
+  yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
+  yajl_gen_string (gen, YAJL_STR (""), strlen (""));
 
   {
     size_t i;
@@ -994,14 +994,14 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
 
     if (container->container_def->annotations->len)
       {
-        yajl_gen_string (gen, "annotations", strlen ("annotations"));
+        yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
         yajl_gen_map_open (gen);
         for (i = 0; i < container->container_def->annotations->len; i++)
           {
             const char *key = container->container_def->annotations->keys[i];
             const char *val = container->container_def->annotations->values[i];
-            yajl_gen_string (gen, key, strlen (key));
-            yajl_gen_string (gen, val, strlen (val));
+            yajl_gen_string (gen, YAJL_STR (key), strlen (key));
+            yajl_gen_string (gen, YAJL_STR (val), strlen (val));
           }
         yajl_gen_map_close (gen);
       }
