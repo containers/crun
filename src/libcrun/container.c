@@ -918,7 +918,7 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
   libcrun_container_status_t status;
   const char *state_root = context->state_root;
   const char *container_status;
-  yajl_gen gen;
+  yajl_gen gen = NULL;
   const unsigned char *buf;
   size_t len;
 
@@ -1015,7 +1015,8 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
   fprintf (out, "%s\n", buf);
 
  exit:
-  yajl_gen_free (gen);
+  if (gen)
+    yajl_gen_free (gen);
   libcrun_free_container_status (&status);
   return ret;
 }

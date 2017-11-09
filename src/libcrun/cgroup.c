@@ -705,7 +705,7 @@ write_network_resources (int dirfd, oci_container_linux_resources_network *net, 
 
       for (i = 0; i < net->priorities_len; i++)
         {
-          sprintf (fmt_buf, "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
+          len = sprintf (fmt_buf, "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
           ret = write (fd, fmt_buf, len);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write net_prio.ifpriomap");
@@ -1116,7 +1116,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
             return ret;
         }
 
-      xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpuset%s/", path);
+      xasprintf (&path_to_cpuset, "/sys/fs/cgroup/cpuset%s/", path);
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_cpuset, errno))
         libcrun_warning (stderr, "skip cpuset resources specified since there is no cgroup available");

@@ -140,7 +140,7 @@ int
 write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
   cleanup_close int fd = openat (dirfd, name, O_WRONLY | O_CREAT, 0700);
-  int ret;
+  int ret = 0;
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "writing file '%s'", name);
 
