@@ -1069,7 +1069,7 @@ libcrun_set_caps (libcrun_container *container, int keep_setuid, libcrun_error_t
     }
   if (keep_setuid)
     {
-      unsigned int mask = CAP_TO_MASK_0 (CAP_SETUID) | CAP_TO_MASK_0 (CAP_SETGID);
+      unsigned int mask = CAP_TO_MASK_0 (CAP_SETUID) | CAP_TO_MASK_0 (CAP_SETGID) | CAP_TO_MASK_0 (CAP_SETPCAP);
       caps.effective[0] |= mask;
       caps.inheritable[0] |= mask;
       caps.ambient[0] |= mask;
