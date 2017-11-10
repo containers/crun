@@ -41,6 +41,72 @@
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
+enum
+  {
+    SYNC_SOCKET_SYNC_MESSAGE,
+    SYNC_SOCKET_ERROR_MESSAGE,
+  };
+
+struct sync_socket_message_s
+{
+  int type;
+  int error_value;
+  char message[256];
+};
+
+static int
+sync_socket_write_error (int fd, libcrun_error_t *out_err)
+{
+  int ret;
+  size_t err_len;
+  struct sync_socket_message_s msg;
+  msg.type = SYNC_SOCKET_ERROR_MESSAGE;
+  msg.error_value = (*out_err)->status;
+
+  err_len = strlen ((*out_err)->msg);
+  if (err_len > sizeof(msg.message))
+    err_len = sizeof(msg.message) - 1;
+
+  memcpy (msg.message, (*out_err)->msg, err_len);
+  msg.message[err_len] = '\0';
+
+  ret = TEMP_FAILURE_RETRY (write (fd, &msg, sizeof (msg)));
+  if (UNLIKELY (ret < 0))
+    return -1;
+
+  return 0;
+}
+
+static int
+sync_socket_do_sync (int fd, libcrun_error_t *err)
+{
+  int ret;
+  struct sync_socket_message_s msg;
+  msg.type = SYNC_SOCKET_SYNC_MESSAGE;
+
+  ret = TEMP_FAILURE_RETRY (write (fd, &msg, sizeof (msg)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  return 0;
+}
+
+static int
+sync_socket_wait_sync (int fd, libcrun_error_t *err)
+{
+  int ret;
+  struct sync_socket_message_s msg;
+
+  ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from sync socket");
+
+  if (msg.type == SYNC_SOCKET_SYNC_MESSAGE)
+    return 0;
+
+  return crun_make_error (err, msg.error_value, "%s", msg.message);
+}
+
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *err)
 {
@@ -109,10 +175,9 @@ struct container_entrypoint_s
   int terminal_socketpair[2];
 };
 
-/* Entrypoint to the container.  */
 static int
-container_entrypoint (void *args, const char *notify_socket,
-                      int sync_socket, libcrun_error_t *err)
+container_entrypoint_init (void *args, const char *notify_socket,
+                           int sync_socket, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container *container = entrypoint_args->container;
@@ -226,11 +291,35 @@ container_entrypoint (void *args, const char *notify_socket,
         return crun_make_error (err, errno, "putenv '%s'", notify_socket_env);
     }
 
-  ret = TEMP_FAILURE_RETRY (write (sync_socket, &c, 1));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to the sync socket");
+  return 0;
+}
 
-  ret = TEMP_FAILURE_RETRY (read (sync_socket, &c, 1));
+/* Entrypoint to the container.  */
+static int
+container_entrypoint (void *args, const char *notify_socket,
+                      int sync_socket, libcrun_error_t *err)
+{
+  struct container_entrypoint_s *entrypoint_args = args;
+  int ret;
+  oci_container *def = entrypoint_args->container->container_def;
+
+  ret = container_entrypoint_init (args, notify_socket, sync_socket, err);
+  if (UNLIKELY (ret < 0))
+    {
+      /* If it fails to write the error using the sync socket, then fallback
+         to stderr.  */
+      if (sync_socket_write_error (sync_socket, err) < 0)
+        return ret;
+
+      crun_error_release (err);
+      return 0;
+    }
+
+  ret = sync_socket_do_sync (sync_socket, err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  ret = sync_socket_wait_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from the sync socket");
 
@@ -704,11 +793,11 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = TEMP_FAILURE_RETRY (read (sync_socket, &c, 1));
+  ret = sync_socket_wait_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
-      return crun_make_error (err, errno, "read from the sync socket");
+      return ret;
     }
 
     /* The container is waiting that we write back.  In this phase we can launch the
@@ -725,7 +814,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         }
     }
 
-  ret = TEMP_FAILURE_RETRY (write (sync_socket, "1", 1));
+  ret = sync_socket_do_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
