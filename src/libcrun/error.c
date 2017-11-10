@@ -92,43 +92,58 @@ crun_error_get_errno (libcrun_error_t *err)
   return (*err)->status;
 }
 
-static void
-write_log (FILE *out, int errno_, int color, const char *msg, va_list args_list)
+void
+log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
 {
-  int ret;
-  cleanup_free char *warning = NULL;
   struct timeval tv;
   struct tm now;
   char timestamp[64];
-  int can_color = isatty (fileno (out));
-  char color_begin[32];
+  int can_color = isatty (2);
+  const char *color_begin = "";
   const char *color_end = can_color ? "\x1b[0m" : "";
 
   if (can_color)
-    sprintf (color_begin, "\x1b[1;%dm", color);
-  else
-    color_begin[0] = '\0';
+    color_begin = warning ? "\x1b[1;33m" : "\x1b[1;31m";
 
   gettimeofday (&tv, NULL);
   gmtime_r (&tv.tv_sec, &now);
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
-  ret = vasprintf (&warning, msg, args_list);
+  if (errno_)
+    fprintf (stderr, "%s%s.%09ldZ: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, strerror (errno_), msg, color_end);
+  else
+    fprintf (stderr, "%s%s.%09ldZ: %s%s\n", color_begin, timestamp, tv.tv_usec, msg, color_end);
+}
+
+static crun_output_handler output_handler = log_write_to_stderr;
+static void *output_handler_arg = NULL;
+
+void
+crun_set_output_handler (crun_output_handler handler, void *arg)
+{
+  output_handler = handler;
+  output_handler_arg = arg;
+}
+
+static void
+write_log (FILE *out, int errno_, bool warning, const char *msg, va_list args_list)
+{
+  int ret;
+  cleanup_free char *output = NULL;
+
+  ret = vasprintf (&output, msg, args_list);
   if (UNLIKELY (ret < 0))
     OOM ();
 
-  if (errno_)
-    fprintf (out, "%s%s.%09ldZ: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, strerror (errno_), warning, color_end);
-  else
-    fprintf (out, "%s%s.%09ldZ: %s%s\n", color_begin, timestamp, tv.tv_usec, warning, color_end);
+  output_handler (errno_, output, warning, output_handler_arg);
 }
 
 void
-libcrun_warning (FILE *out, const char *msg, ...)
+libcrun_warning (const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
-  write_log (out ? out : stderr, 0, 33, msg, args_list);
+  write_log (stderr, 0, true, msg, args_list);
   va_end (args_list);
 }
 
@@ -137,7 +152,7 @@ libcrun_fail_with_error (int errno_, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
-  write_log (stderr, errno_, 31, msg, args_list);
+  write_log (stderr, errno_, false, msg, args_list);
   va_end (args_list);
   exit (EXIT_FAILURE);
 }

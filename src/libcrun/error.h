@@ -21,6 +21,7 @@
 # include <error.h>
 # include <stdlib.h>
 # include <stdio.h>
+# include <stdbool.h>
 
 struct libcrun_error_s
 {
@@ -30,6 +31,12 @@ struct libcrun_error_s
 typedef struct libcrun_error_s *libcrun_error_t;
 
 void oom_handler ();
+
+typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
+
+void crun_set_output_handler (crun_output_handler handler, void *arg);
+
+void log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg);
 
 # define OOM() do {oom_handler ();} while (0)
 
@@ -41,7 +48,7 @@ int crun_error_release (libcrun_error_t *err);
 
 void crun_error_write_warning_and_release (FILE *out, libcrun_error_t *err);
 
-void libcrun_warning (FILE *out, const char *msg, ...);
+void libcrun_warning (const char *msg, ...);
 
 void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
 

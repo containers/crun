@@ -18,6 +18,7 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+#include <stdbool.h>
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
@@ -45,7 +46,17 @@ enum
   {
     SYNC_SOCKET_SYNC_MESSAGE,
     SYNC_SOCKET_ERROR_MESSAGE,
+    SYNC_SOCKET_WARNING_MESSAGE,
   };
+
+struct container_entrypoint_s
+{
+  libcrun_container *container;
+  struct libcrun_context_s *context;
+  int has_terminal_socket_pair;
+  int terminal_socketpair[2];
+  int sync_socket;
+};
 
 struct sync_socket_message_s
 {
@@ -55,19 +66,19 @@ struct sync_socket_message_s
 };
 
 static int
-sync_socket_write_error (int fd, libcrun_error_t *out_err)
+sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
 {
   int ret;
   size_t err_len;
   struct sync_socket_message_s msg;
-  msg.type = SYNC_SOCKET_ERROR_MESSAGE;
-  msg.error_value = (*out_err)->status;
+  msg.type = warning ? SYNC_SOCKET_WARNING_MESSAGE : SYNC_SOCKET_ERROR_MESSAGE;
+  msg.error_value = err_value;
 
-  err_len = strlen ((*out_err)->msg);
+  err_len = strlen (log_msg);
   if (err_len > sizeof(msg.message))
     err_len = sizeof(msg.message) - 1;
 
-  memcpy (msg.message, (*out_err)->msg, err_len);
+  memcpy (msg.message, log_msg, err_len);
   msg.message[err_len] = '\0';
 
   ret = TEMP_FAILURE_RETRY (write (fd, &msg, sizeof (msg)));
@@ -78,7 +89,23 @@ sync_socket_write_error (int fd, libcrun_error_t *out_err)
 }
 
 static int
-sync_socket_do_sync (int fd, libcrun_error_t *err)
+sync_socket_write_error (int fd, libcrun_error_t *out_err)
+{
+  return sync_socket_write_msg (fd, false, (*out_err)->status, (*out_err)->msg);
+}
+
+static void
+log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
+{
+  struct container_entrypoint_s *entrypoint_args = arg;
+  int fd = entrypoint_args->sync_socket;
+
+  if (sync_socket_write_msg (fd, warning, errno_, msg) < 0)
+    log_write_to_stderr (errno_, msg, warning, arg);
+}
+
+static int
+sync_socket_send_sync (int fd, libcrun_error_t *err)
 {
   int ret;
   struct sync_socket_message_s msg;
@@ -103,6 +130,12 @@ sync_socket_wait_sync (int fd, libcrun_error_t *err)
 
   if (msg.type == SYNC_SOCKET_SYNC_MESSAGE)
     return 0;
+
+  if (msg.type == SYNC_SOCKET_WARNING_MESSAGE)
+    {
+      log_write_to_stderr (msg.error_value, msg.message, 1, NULL);
+      return 0;
+    }
 
   return crun_make_error (err, msg.error_value, "%s", msg.message);
 }
@@ -166,14 +199,6 @@ set_uid_gid (libcrun_container *container, libcrun_error_t *err)
     return crun_make_error (err, errno, "setuid");
   return 0;
 }
-
-struct container_entrypoint_s
-{
-  libcrun_container *container;
-  struct libcrun_context_s *context;
-  int has_terminal_socket_pair;
-  int terminal_socketpair[2];
-};
 
 static int
 container_entrypoint_init (void *args, const char *notify_socket,
@@ -302,6 +327,9 @@ container_entrypoint (void *args, const char *notify_socket,
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
   oci_container *def = entrypoint_args->container->container_def;
+  entrypoint_args->sync_socket = sync_socket;
+
+  crun_set_output_handler (log_write_to_sync_socket, args);
 
   ret = container_entrypoint_init (args, notify_socket, sync_socket, err);
   if (UNLIKELY (ret < 0))
@@ -315,7 +343,10 @@ container_entrypoint (void *args, const char *notify_socket,
       return 0;
     }
 
-  ret = sync_socket_do_sync (sync_socket, err);
+  entrypoint_args->sync_socket = -1;
+  crun_set_output_handler (log_write_to_stderr, NULL);
+
+  ret = sync_socket_send_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to sync socket");
 
@@ -786,7 +817,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = libcrun_set_cgroup_resources (container, cgroup_path, context->stderr, err);
+  ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
@@ -814,7 +845,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         }
     }
 
-  ret = sync_socket_do_sync (sync_socket, err);
+  ret = sync_socket_send_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, context->id, terminal_fd, context->stderr);
@@ -901,6 +932,8 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
       if (UNLIKELY (ret < 0))
         return ret;
 
+      if (context->stderr)
+        stderr = context->stderr;
       return libcrun_container_run_internal (container, context, -1, err);
     }
 
@@ -909,6 +942,9 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
     return crun_make_error (err, errno, "fork");
   if (ret)
     return 0;
+
+  if (context->stderr)
+    stderr = context->stderr;
 
   /* forked process.  */
   ret = detach_process ();

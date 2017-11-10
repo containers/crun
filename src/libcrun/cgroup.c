@@ -955,7 +955,7 @@ write_cpuset_resources (int dirfd_cpuset, oci_container_linux_resources_cpu *cpu
 }
 
 int
-libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *stderr, libcrun_error_t *err)
+libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -973,7 +973,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_blkio, errno))
-        libcrun_warning (stderr, "skip block IO resources specified since there is no cgroup available");
+        libcrun_warning ("skip block IO resources specified since there is no cgroup available");
       else
         {
           if (UNLIKELY (dirfd_blkio < 0))
@@ -994,7 +994,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
       dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_network, errno))
-        libcrun_warning (stderr, "skip network resources specified since there is no cgroup available");
+        libcrun_warning ("skip network resources specified since there is no cgroup available");
       else
         {
           if (UNLIKELY (dirfd_network < 0))
@@ -1014,7 +1014,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_htlb, "/sys/fs/cgroup/hugetlb%s/", path);
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_htlb, errno))
-        libcrun_warning (stderr, "hugetlb resources specified since there is no cgroup available");
+        libcrun_warning ("hugetlb resources specified since there is no cgroup available");
       else
         {
           if (UNLIKELY (dirfd_htlb < 0))
@@ -1037,7 +1037,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_devs, "/sys/fs/cgroup/devices%s/", path);
       dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_devs, errno))
-        libcrun_warning (stderr, "skip devices resources specified since there is no cgroup available");
+        libcrun_warning ("skip devices resources specified since there is no cgroup available");
       else
         {
           if (UNLIKELY (dirfd_devs < 0))
@@ -1060,7 +1060,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_mem, "/sys/fs/cgroup/memory%s/", path);
       dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_mem, errno))
-        libcrun_warning (stderr, "skip memory resources specified since there is no cgroup available");
+        libcrun_warning ("skip memory resources specified since there is no cgroup available");
       else
         {
           if (UNLIKELY (dirfd_mem < 0))
@@ -1082,7 +1082,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_pid, "/sys/fs/cgroup/pids%s/", path);
       dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_pid, errno))
-        libcrun_warning (stderr, "skip pids resources specified since there is no cgroup available");
+        libcrun_warning ("skip pids resources specified since there is no cgroup available");
       else
         {
           if (UNLIKELY (dirfd_pid < 0))
@@ -1106,7 +1106,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpu%s/", path);
       dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_cpu, errno))
-        libcrun_warning (stderr, "skip cpu resources specified since there is no cgroup available");
+        libcrun_warning ("skip cpu resources specified since there is no cgroup available");
       else
         {
           ret = write_cpu_resources (dirfd_cpu,
@@ -1119,7 +1119,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, FILE *st
       xasprintf (&path_to_cpuset, "/sys/fs/cgroup/cpuset%s/", path);
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_cpuset, errno))
-        libcrun_warning (stderr, "skip cpuset resources specified since there is no cgroup available");
+        libcrun_warning ("skip cpuset resources specified since there is no cgroup available");
       else
         {
           ret = write_cpuset_resources (dirfd_cpuset,
