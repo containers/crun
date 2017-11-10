@@ -72,34 +72,50 @@ def test_new_privs():
 
     return 0
 
-def helper_test_some_caps(captypes, proc_name):
+def helper_test_some_caps(uid, captypes, proc_name):
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
+    conf['process']['user']['uid'] = uid
     conf['process']['capabilities'] = {}
     for i in captypes + ['bounding']:
         conf['process']['capabilities'][i] = ["CAP_SYS_ADMIN"]
     out = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
 
-    if proc_status[proc_name] == "0000000000000000":
+    if proc_status[proc_name] != "0000000000200000":
         return -1
     return 0
 
 def test_some_caps_effective():
-    return helper_test_some_caps(["effective"], 'CapEff')
+    return helper_test_some_caps(0, ["effective"], 'CapEff')
 
 def test_some_caps_bounding():
-    return helper_test_some_caps(["bounding"], 'CapBnd')
+    return helper_test_some_caps(0, ["bounding"], 'CapBnd')
 
 def test_some_caps_inheritable():
-    return helper_test_some_caps(["inheritable"], 'CapInh')
+    return helper_test_some_caps(0, ["inheritable"], 'CapInh')
 
 def test_some_caps_ambient():
-    return helper_test_some_caps(["ambient", "permitted", "inheritable"], 'CapAmb')
+    return helper_test_some_caps(0, ["ambient", "permitted", "inheritable"], 'CapAmb')
 
 def test_some_caps_permitted():
-    return helper_test_some_caps(["permitted"], 'CapPrm')
+    return helper_test_some_caps(0, ["permitted"], 'CapPrm')
+
+def test_some_caps_effective_non_root():
+    return helper_test_some_caps(1000, ["effective", "permitted", "inheritable", "ambient"], 'CapEff')
+
+def test_some_caps_bounding_non_root():
+    return helper_test_some_caps(1000, ["bounding"], 'CapBnd')
+
+def test_some_caps_inheritable_non_root():
+    return helper_test_some_caps(1000, ["inheritable"], 'CapInh')
+
+def test_some_caps_ambient_non_root():
+    return helper_test_some_caps(1000, ["ambient", "permitted", "inheritable"], 'CapAmb')
+
+def test_some_caps_permitted_non_root():
+    return helper_test_some_caps(1000, ["ambient", "permitted", "inheritable"], 'CapPrm')
 
 
 all_tests = {
@@ -109,7 +125,12 @@ all_tests = {
     "some-caps-bounding" : test_some_caps_bounding,
     "some-caps-inheritable" : test_some_caps_inheritable,
     "some-caps-ambient" : test_some_caps_ambient,
-    "some-caps-permitted" : test_some_caps_permitted
+    "some-caps-permitted" : test_some_caps_permitted,
+    "some-caps-effective-non-root" : test_some_caps_effective_non_root,
+    "some-caps-bounding-non-root" : test_some_caps_bounding_non_root,
+    "some-caps-inheritable-non-root" : test_some_caps_inheritable_non_root,
+    "some-caps-ambient-non-root" : test_some_caps_ambient_non_root,
+    "some-caps-permitted-non-root" : test_some_caps_permitted_non_root
 }
 
 if __name__ == "__main__":
