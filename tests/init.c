@@ -24,6 +24,7 @@
 #include <error.h>
 #include <errno.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -47,6 +48,18 @@ cat (char *file)
       if (s == 0)
         error (EXIT_FAILURE, errno, "fwrite");
     }
+}
+
+static int
+open_only (char *file)
+{
+  int fd = open (file, O_RDONLY);
+  if (fd >= 0)
+    {
+      close (fd);
+      exit (0);
+    }
+  error (EXIT_FAILURE, errno, "could not open %s", file);
 }
 
 static int
@@ -96,6 +109,13 @@ int main (int argc, char **argv)
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'cat' requires an argument");
       return cat (argv[2]);
+    }
+
+  if (strcmp (argv[1], "open") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'open' requires an argument");
+      return open_only (argv[2]);
     }
 
   if (strcmp (argv[1], "cwd") == 0)

@@ -29,8 +29,18 @@ def test_deny_devices():
 
     conf = base_config()
     add_all_namespaces(conf)
-    conf['process']['args'] = ['/init', 'cat', '/dev/null']
+    conf['process']['args'] = ['/init', 'open', '/dev/fuse']
     conf['linux']['resources'] = {"devices": [{"allow": False, "access": "rwm"}]}
+    dev = {
+	"destination": "/dev",
+	"type": "bind",
+	"source": "/dev",
+	"options": [
+            "rbind",
+	    "rw"
+	]
+    }
+    conf['mounts'].append(dev)
     try:
         run_and_get_output(conf)
     except Exception as e:
@@ -44,9 +54,19 @@ def test_allow_device():
 
     conf = base_config()
     add_all_namespaces(conf)
-    conf['process']['args'] = ['/init', 'cat', '/dev/null']
+    conf['process']['args'] = ['/init', 'open', '/dev/fuse']
     conf['linux']['resources'] = {"devices": [{"allow": False, "access": "rwm"},
-           {"allow": True, "type": "c", "major": 1, "minor": 3, "access": "r"}]}
+                                              {"allow": True, "type": "c", "major": 10, "minor": 229, "access": "r"}]}
+    dev = {
+	"destination": "/dev",
+	"type": "bind",
+	"source": "/dev",
+	"options": [
+            "rbind",
+	    "rw"
+	]
+    }
+    conf['mounts'].append(dev)
     try:
         run_and_get_output(conf)
     except Exception as e:
