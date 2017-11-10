@@ -1078,7 +1078,7 @@ libcrun_set_caps (libcrun_container *container, int keep_setuid, libcrun_error_t
     }
   ret = prctl (PR_SET_KEEPCAPS, 1, 0, 0, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "PR_SET_KEEPCAPS");
+    return crun_make_error (err, errno, "error while setting PR_SET_KEEPCAPS");
 
   return set_required_caps (&caps, def->process->no_new_privileges, err);
 }
