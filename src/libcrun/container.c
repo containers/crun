@@ -62,8 +62,10 @@ struct sync_socket_message_s
 {
   int type;
   int error_value;
-  char message[256];
+  char message[512];
 };
+
+#define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
 
 static int
 sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
@@ -75,13 +77,13 @@ sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
   msg.error_value = err_value;
 
   err_len = strlen (log_msg);
-  if (err_len > sizeof(msg.message))
-    err_len = sizeof(msg.message) - 1;
+  if (err_len > sizeof (msg.message))
+    err_len = sizeof (msg.message) - 1;
 
   memcpy (msg.message, log_msg, err_len);
   msg.message[err_len] = '\0';
 
-  ret = TEMP_FAILURE_RETRY (write (fd, &msg, sizeof (msg)));
+  ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, err_len + 1)));
   if (UNLIKELY (ret < 0))
     return -1;
 
@@ -111,7 +113,7 @@ sync_socket_send_sync (int fd, libcrun_error_t *err)
   struct sync_socket_message_s msg;
   msg.type = SYNC_SOCKET_SYNC_MESSAGE;
 
-  ret = TEMP_FAILURE_RETRY (write (fd, &msg, sizeof (msg)));
+  ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, 0)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to sync socket");
 
@@ -124,20 +126,22 @@ sync_socket_wait_sync (int fd, libcrun_error_t *err)
   int ret;
   struct sync_socket_message_s msg;
 
-  ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from sync socket");
-
-  if (msg.type == SYNC_SOCKET_SYNC_MESSAGE)
-    return 0;
-
-  if (msg.type == SYNC_SOCKET_WARNING_MESSAGE)
+  while (true)
     {
-      log_write_to_stderr (msg.error_value, msg.message, 1, NULL);
-      return 0;
-    }
+      ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "read from sync socket");
 
-  return crun_make_error (err, msg.error_value, "%s", msg.message);
+      if (msg.type == SYNC_SOCKET_SYNC_MESSAGE)
+        return 0;
+
+      if (msg.type == SYNC_SOCKET_WARNING_MESSAGE)
+        {
+          log_write_to_stderr (msg.error_value, msg.message, 1, NULL);
+          continue;
+        }
+      return crun_make_error (err, msg.error_value, "%s", msg.message);
+    }
 }
 
 libcrun_container *
@@ -208,7 +212,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   libcrun_container *container = entrypoint_args->container;
   int ret;
   size_t i;
-  char c;
   int has_terminal;
   cleanup_close int console_socket = -1;
   cleanup_close int terminal_fd = -1;
