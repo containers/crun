@@ -83,7 +83,9 @@ get_private_data (struct libcrun_container_s *container)
 static struct linux_namespace_s namespaces[] =
   {
     {"mount", CLONE_NEWNS},
+#ifdef CLONE_NEWCGROUP
     {"cgroup", CLONE_NEWCGROUP},
+#endif
     {"network", CLONE_NEWNET},
     {"ipc", CLONE_NEWIPC},
     {"pid", CLONE_NEWPID},
@@ -1478,7 +1480,11 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   int ret;
   int sync_socket_fd[2];
   int fds[10] = {-1, };
-  int namespaces_id[] = {CLONE_NEWCGROUP, CLONE_NEWIPC, CLONE_NEWNS, CLONE_NEWNET, CLONE_NEWPID, CLONE_NEWUTS, CLONE_NEWUSER, 0};
+  int namespaces_id[] = {CLONE_NEWIPC, CLONE_NEWNS, CLONE_NEWNET, CLONE_NEWPID, CLONE_NEWUTS, CLONE_NEWUSER,
+#ifdef CLONE_NEWCGROUP
+                         CLONE_NEWCGROUP,
+#endif
+                         0};
   const char *namespaces[] = {"cgroup", "ipc", "mnt",  "net", "pid", "uts", "user", NULL};
   size_t i;
   cleanup_close int sync_fd = -1;
