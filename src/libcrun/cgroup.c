@@ -781,12 +781,12 @@ write_devices_resources (int dirfd, oci_container_linux_resources_devices_elemen
         return ret;
     }
 
-    for (i = 0; default_devices[i]; i++)
-      {
-        ret = write_file_at (dirfd, "devices.allow", default_devices[i], strlen (default_devices[i]), err);
-        if (UNLIKELY (ret < 0))
-          return ret;
-      }
+  for (i = 0; default_devices[i]; i++)
+    {
+      ret = write_file_at (dirfd, "devices.allow", default_devices[i], strlen (default_devices[i]), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   return 0;
 }
