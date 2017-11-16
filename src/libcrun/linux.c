@@ -980,6 +980,7 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *e
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "capset");
 
+#ifdef PR_CAP_AMBIENT
   ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
   if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
     return crun_make_error (err, errno, "prctl reset ambient");
@@ -991,6 +992,7 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *e
         if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
           return crun_make_error (err, errno, "prctl ambient raise");
       }
+#endif
 
   if (no_new_privs)
     if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
