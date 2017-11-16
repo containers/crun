@@ -1323,9 +1323,13 @@ libcrun_run_linux_container (libcrun_container *container,
   sync_socket_host = sync_socket[0];
   sync_socket_container = sync_socket[1];
 
+#ifdef HAVE_SYSTEMD
   ret = do_notify_socket (container, notify_socket_out, def->root->path, err);
   if (UNLIKELY (ret < 0))
     return ret;
+#else
+  *notify_socket_out = -1;
+#endif
 
   pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
