@@ -21,8 +21,10 @@ AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers n
 
 AC_CHECK_FUNCS(copy_file_range)
 
-AC_CHECK_LIB(cap, cap_from_name, [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])])
-AC_CHECK_LIB(seccomp, seccomp_rule_add, [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])])
+AC_CHECK_LIB(cap, cap_from_name, [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])], [AC_MSG_ERROR([*** libcap headers not found])])
+AC_CHECK_LIB(seccomp, seccomp_rule_add, [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])], [AC_MSG_ERROR([*** libseccomp headers not found])])
+
+AC_CHECK_LIB(seccomp, seccomp_arch_resolve_name, [AC_DEFINE([SECCOMP_ARCH_RESOLVE_NAME], 1, [Define if seccomp_arch_resolve_name is available])], [ ])
 
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 PKG_CHECK_MODULES([SYSTEMD], [libsystemd >= 221], [AC_DEFINE([HAVE_SYSTEMD], 1, [Define if libsystemd is available])], [ ])
