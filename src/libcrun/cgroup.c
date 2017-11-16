@@ -845,7 +845,7 @@ write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory,
 
   if (memory->kernel)
     {
-      len = sprintf (fmt_buf, "%lu", memory->swappiness);
+      len = sprintf (fmt_buf, "%lu", memory->kernel);
       ret = write_file_at (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -871,7 +871,7 @@ write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory,
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (memory->swappiness)
+  if (memory->swappiness <= 100)
     {
       len = sprintf (fmt_buf, "%lu", memory->swappiness);
       ret = write_file_at (dirfd, "memory.swappiness", fmt_buf, len, err);
