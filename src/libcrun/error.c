@@ -110,7 +110,7 @@ log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
   if (errno_)
-    fprintf (stderr, "%s%s.%09ldZ: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, strerror (errno_), msg, color_end);
+    fprintf (stderr, "%s%s.%09ldZ: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, msg, strerror (errno_), color_end);
   else
     fprintf (stderr, "%s%s.%09ldZ: %s%s\n", color_begin, timestamp, tv.tv_usec, msg, color_end);
 }
