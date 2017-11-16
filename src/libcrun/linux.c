@@ -85,6 +85,8 @@ static struct linux_namespace_s namespaces[] =
     {"mount", CLONE_NEWNS},
 #ifdef CLONE_NEWCGROUP
     {"cgroup", CLONE_NEWCGROUP},
+#else
+    {"cgroup", 0},
 #endif
     {"network", CLONE_NEWNET},
     {"ipc", CLONE_NEWIPC},
