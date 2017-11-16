@@ -435,7 +435,7 @@ run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_
   int ret;
   oci_container *def;
 
-  asprintf (&config_file, "%s/config.json", status->bundle);
+  xasprintf (&config_file, "%s/config.json", status->bundle);
   container = libcrun_container_load (config_file, err);
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
