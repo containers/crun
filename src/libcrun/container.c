@@ -660,6 +660,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
               if (UNLIKELY (ret < 0))
                 return ret;
             }
+#ifdef HAVE_SYSTEMD
           else if (events[i].data.fd == notify_socket)
             {
               char buf[256];
@@ -677,6 +678,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
                     return 0;
                 }
             }
+#endif
           else if (events[i].data.fd == signalfd)
             {
               res = TEMP_FAILURE_RETRY (read (signalfd, &si, sizeof (si)));
