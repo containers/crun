@@ -38,7 +38,11 @@
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <systemd/sd-daemon.h>
+
+#ifdef HAVE_SYSTEMD
+# include <systemd/sd-daemon.h>
+#endif
+
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
