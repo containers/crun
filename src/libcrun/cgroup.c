@@ -23,7 +23,12 @@
 #include "utils.h"
 #include <string.h>
 #include <sys/types.h>
-#include <systemd/sd-bus.h>
+#include <signal.h>
+
+#ifdef HAVE_SYSTEMD
+# include <systemd/sd-bus.h>
+#endif
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -176,6 +181,8 @@ int get_current_path (char **path, pid_t pid, const char *suffix, libcrun_error_
 
   return 0;
 }
+
+#ifdef HAVE_SYSTEMD
 
 struct systemd_job_removed_s
 {
@@ -432,6 +439,8 @@ exit:
   return ret;
 }
 
+#endif
+
 int
 libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
@@ -439,6 +448,7 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
   cleanup_free char *scope;
   xasprintf (&scope, "%s.scope", id);
 
+#ifdef HAVE_SYSTEMD
   if (systemd || getuid ())
     {
       ret = enter_systemd_cgroup_scope (path, scope, pid, err);
@@ -446,20 +456,18 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
         return ret;
       return get_current_path (path, pid, NULL, err);
     }
+#endif
+
+  if (cgroup_path != NULL)
+    *path = xstrdup (cgroup_path);
   else
     {
-      if (cgroup_path != NULL)
-        *path = xstrdup (cgroup_path);
-      else
-        {
-          ret = get_system_path (path, scope, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      return enter_cgroup (pid, *path, 1, err);
+      ret = get_system_path (path, scope, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
-  return 0;
+
+  return enter_cgroup (pid, *path, 1, err);
 }
 
 
@@ -529,11 +537,13 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   int ret;
   size_t i;
 
+#ifdef HAVE_SYSTEMD
   if (systemd_cgroup)
     {
       ret = destroy_systemd_cgroup_scope (id, err);
       crun_error_release (err);
     }
+#endif
 
   for (i = 0; subsystems[i]; i++)
     {
