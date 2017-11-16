@@ -1,6 +1,8 @@
 crun
 ==========
 
+[![Build Status](https://travis-ci.org/giuseppe/crun.svg?branch=master)](https://travis-ci.org/giuseppe/crun)
+
 An OCI Container Runtime written in C.
 
 An experimental and full of bugs implementation of the OCI specs
