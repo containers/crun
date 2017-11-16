@@ -726,6 +726,9 @@ run_process_with_stdin_timeout_envp (char *path,
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "writing to pipe");
 
+      close (pipe_w);
+      pipe_w = -1;
+
       if (timeout)
         {
           time_t start = time (NULL);
