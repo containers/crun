@@ -1,0 +1,25 @@
+language: c
+sudo: required
+dist: trusty
+addons:
+  apt:
+    packages:
+      - automake
+      - autotools-dev
+      - libseccomp-dev
+      - git
+      - make
+      - libcap-dev
+      - cmake
+      - pkg-config
+      - gcc
+      - libseccomp-dev
+before_install:
+  - git clone --depth=1 git://github.com/lloyd/yajl
+  - (cd yajl && ./configure -p /usr && make && sudo make install)
+script:
+  - git submodule update --init --recursive
+  - NOCONFIGURE=1 ./autogen.sh
+  - ./configure
+  - make -j $(nproc)
+  - make syntax-check
