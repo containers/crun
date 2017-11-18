@@ -213,19 +213,20 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
   sd_bus_message *reply = NULL;
-  int ret = 0;
+  int sd_err, ret = 0;
   sd_bus_error error = SD_BUS_ERROR_NULL;
   const char *object;
   int terminated = 0;
   struct systemd_job_removed_s userdata;
 
-  if (sd_bus_default (&bus) < 0)
+  sd_err = sd_bus_default (&bus);
+  if (sd_err < 0)
     {
-      ret = crun_make_error (err, 0, "cannot open sd-bus");
+      ret = crun_make_error (err, -sd_err, "cannot open sd-bus");
       goto exit;
     }
 
-  ret = sd_bus_add_match (bus,
+  sd_err = sd_bus_add_match (bus,
                           NULL,
                           "type='signal',"
                           "sender='org.freedesktop.systemd1',"
@@ -233,69 +234,75 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
                           "member='JobRemoved',"
                           "path='/org/freedesktop/systemd1'",
                           systemd_job_removed, &userdata);
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message read");
+      ret = crun_make_error (err, -sd_err, "sd-bus message read");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_new_method_call (bus, &m,
-                                                "org.freedesktop.systemd1",
-                                                "/org/freedesktop/systemd1",
-                                                "org.freedesktop.systemd1.Manager",
-                                                "StartTransientUnit") < 0))
+  sd_err = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1",
+                                           "/org/freedesktop/systemd1",
+                                           "org.freedesktop.systemd1.Manager",
+                                           "StartTransientUnit");
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "set up dbus message");
+      ret = crun_make_error (err, -sd_err, "set up dbus message");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_append (m, "ss", scope, "replace") < 0))
+  sd_err = sd_bus_message_append (m, "ss", scope, "replace");
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message append");
+      ret = crun_make_error (err, -sd_err, "sd-bus message append");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_open_container (m, 'a', "(sv)") < 0))
+  sd_err = sd_bus_message_open_container (m, 'a', "(sv)");
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus open container");
+      ret = crun_make_error (err, -sd_err, "sd-bus open container");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_append (m, "(sv)", "Description", "s", "libcrun container") < 0))
+  sd_err = sd_bus_message_append (m, "(sv)", "Description", "s", "libcrun container");
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message append");
+      ret = crun_make_error (err, -sd_err, "sd-bus message append");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_append (m, "(sv)", "PIDs", "au", 1, pid) < 0))
+  sd_err = sd_bus_message_append (m, "(sv)", "PIDs", "au", 1, pid);
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message append");
+      ret = crun_make_error (err, -sd_err, "sd-bus message append");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_close_container (m) < 0))
+  sd_err = sd_bus_message_close_container (m);
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus close container");
+      ret = crun_make_error (err, -sd_err, "sd-bus close container");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_append (m, "a(sa(sv))", 0) < 0))
+  sd_err = sd_bus_message_append (m, "a(sa(sv))", 0);
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message append");
+      ret = crun_make_error (err, -sd_err, "sd-bus message append");
       goto exit;
     }
 
-  ret = sd_bus_call (bus, m, 0, &error, &reply);
-  if (UNLIKELY (ret < 0))
+  sd_err = sd_bus_call (bus, m, 0, &error, &reply);
+  if (UNLIKELY (sd_err < 0))
     {
       ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
       goto exit;
     }
 
-  ret = sd_bus_message_read (reply, "o", &object);
-  if (UNLIKELY (ret < 0))
+  sd_err = sd_bus_message_read (reply, "o", &object);
+  if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message read");
+      ret = crun_make_error (err, -sd_err, "sd-bus message read");
       goto exit;
     }
 
@@ -303,28 +310,22 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
   userdata.terminated = &terminated;
   while (!terminated)
     {
-      ret = sd_bus_process (bus, NULL);
-      if (UNLIKELY (ret < 0))
+      sd_err = sd_bus_process (bus, NULL);
+      if (UNLIKELY (sd_err < 0))
         {
-          ret = crun_make_error (err, 0, "sd-bus process");
+          ret = crun_make_error (err, -sd_err, "sd-bus process");
           break;
         }
 
-      if (ret == 0)
+      if (sd_err == 0)
         {
-          ret = sd_bus_wait (bus, (uint64_t) -1);
-          if (UNLIKELY (ret < 0))
+          sd_err = sd_bus_wait (bus, (uint64_t) -1);
+          if (UNLIKELY (sd_err < 0))
             {
-              ret = crun_make_error (err, 0, "sd-bus wait");
+              ret = crun_make_error (err, -sd_err, "sd-bus wait");
               break;
             }
           continue;
-        }
-
-      if (UNLIKELY (ret < 0))
-        {
-          ret = crun_make_error (err, 0, "sd-bus wait");
-          break;
         }
     }
 
