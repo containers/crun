@@ -104,6 +104,11 @@ int main (int argc, char **argv)
   if (argc < 2)
     error (EXIT_FAILURE, 0, "specify at least one command");
 
+  if (strcmp (argv[1], "true") == 0)
+    {
+      exit (0);
+    }
+
   if (strcmp (argv[1], "cat") == 0)
     {
       if (argc < 3)

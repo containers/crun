@@ -32,7 +32,8 @@ base_conf = """
 	},
         "terminal": false,
 	"args": [
-            "/init"
+            "/init",
+            "true"
 	],
 	"env": [
 	    "PATH=/bin",
