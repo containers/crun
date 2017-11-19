@@ -409,8 +409,8 @@ struct hook_s
 };
 
 static int
-do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks,
-          size_t hooks_len, libcrun_error_t *err)
+do_hooks (pid_t pid, const char *id, bool keep_going, const char *rootfs,
+          struct hook_s **hooks, size_t hooks_len, libcrun_error_t *err)
 {
   size_t i, stdin_len;
   int ret;
@@ -424,7 +424,7 @@ do_hooks (pid_t pid, const char *id, const char *rootfs, struct hook_s **hooks,
   for (i = 0; i < hooks_len; i++)
     {
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
-      if (UNLIKELY (ret < 0))
+      if (!keep_going && UNLIKELY (ret != 0))
         return ret;
     }
   return 0;
@@ -447,7 +447,7 @@ run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_
   def = container->container_def;
   if (def->hooks && def->hooks->poststop_len)
     {
-      ret = do_hooks (0, id, def->root->path,
+      ret = do_hooks (0, id, true, def->root->path,
                       (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
@@ -844,10 +844,10 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
        prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
-      ret = do_hooks (pid, context->id, def->root->path,
+      ret = do_hooks (pid, context->id, false, def->root->path,
                       (struct hook_s **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret != 0))
         {
           cleanup_watch (context, context->id, terminal_fd, context->stderr);
           return ret;
@@ -879,7 +879,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   if (def->hooks && def->hooks->poststart_len)
     {
-      ret = do_hooks (pid, context->id, def->root->path,
+      ret = do_hooks (pid, context->id, true, def->root->path,
                       (struct hook_s **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
