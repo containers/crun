@@ -136,6 +136,9 @@ sync_socket_wait_sync (int fd, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "read from sync socket");
 
+      if (ret == 0)
+        return crun_make_error (err, errno, "sync socket closed");
+
       if (msg.type == SYNC_SOCKET_SYNC_MESSAGE)
         return 0;
 

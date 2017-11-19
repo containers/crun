@@ -1318,7 +1318,7 @@ libcrun_run_linux_container (libcrun_container *container,
 
   get_private_data (container)->unshare_flags = flags;
 
-  ret = socketpair (AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, sync_socket);
+  ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "socketpair");
 
@@ -1501,7 +1501,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "set child subreaper");
 
-  ret = socketpair (AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, sync_socket_fd);
+  ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket_fd);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error creating socketpair");
 
