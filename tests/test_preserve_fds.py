@@ -38,6 +38,12 @@ def test_preserve_fds_some():
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'ls', '/proc/1/fd']
     with open('/dev/null', 'r') as f1, open('/dev/null', 'r') as f2, open('/dev/null', 'r') as f3:
+        if hasattr(os, 'set_inheritable'):
+            for i in range(100):
+                try:
+                    os.set_inheritable(i, True)
+                except:
+                    pass
         out = run_and_get_output(conf, preserve_fds="100")
     files = [x for x in out.split('\n') if len(x) > 0 and x[0] != '.']
     if any([int(x) > 3 for x in files]):

@@ -202,7 +202,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None):
         pid_file_arg = ['--pid-file', pid_file] if pid_file else []
         
         args = [crun, 'run'] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
-        return subprocess.check_output(args, cwd=temp_dir, stderr=subprocess.STDOUT).decode()
+        return subprocess.check_output(args, cwd=temp_dir, stderr=subprocess.STDOUT, close_fds=False).decode()
     finally:
         shutil.rmtree(temp_dir)
 
