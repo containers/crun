@@ -761,12 +761,18 @@ run_process_with_stdin_timeout_envp (char *path,
       if (WIFEXITED (status) || WIFSIGNALED (status))
         return WEXITSTATUS (status);
     }
+  else
+    {
+      char *tmp_args[] = {path, NULL};
+      close (pipe_w);
+      dup2 (pipe_r, 0);
+      close (pipe_r);
+      if (args == NULL)
+        args = tmp_args;
 
-  close (pipe_w);
-  dup2 (pipe_r, 0);
-  close (pipe_r);
-  execvpe (path, args, envp);
-  _exit (1);
+      execvpe (path, args, envp);
+      _exit (1);
+    }
 }
 
 int
