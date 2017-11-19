@@ -1,4 +1,4 @@
-#!/bin/python -Es
+#!/bin/env $PYTHON
 # crun - OCI runtime written in C
 #
 # Copyright (C) 2017 Giuseppe Scrivano <giuseppe@scrivano.org>
