@@ -45,7 +45,7 @@ def test_limit_pid_n():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        if "fork: Resource temporarily unavailable" in e.output:
+        if "fork: Resource temporarily unavailable" in e.output.decode():
             return 0
     return -1
 

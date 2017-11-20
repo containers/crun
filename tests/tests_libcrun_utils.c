@@ -164,7 +164,7 @@ test_dir_p ()
   libcrun_error_t err;
   if (crun_dir_p ("/usr", &err) <= 0)
     return -1;
-  if (crun_dir_p ("/usr/bin/ls", &err) != 0)
+  if (crun_dir_p ("/dev/zero", &err) != 0)
     return -1;
   if (crun_dir_p ("/hopefully/does/not/really/exist", &err) >= 0)
     return -1;
@@ -227,7 +227,7 @@ test_crun_path_exists ()
 {
 
   libcrun_error_t err = NULL;
-  if (crun_path_exists ("/usr/bin/ls", 1, &err) <= 0)
+  if (crun_path_exists ("/dev/null", 1, &err) <= 0)
     return -1;
   if (crun_path_exists ("/usr/foo/bin/ls", 1, &err) != 0)
     return -1;

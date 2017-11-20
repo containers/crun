@@ -44,7 +44,7 @@ def test_deny_devices():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        if "Operation not permitted" in e.output:
+        if "Operation not permitted" in e.output.decode():
             return 0
     return -1
 
