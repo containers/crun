@@ -773,6 +773,7 @@ run_process_with_stdin_timeout_envp (char *path,
       execvpe (path, args, envp);
       _exit (1);
     }
+  return -1;
 }
 
 int

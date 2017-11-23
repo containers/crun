@@ -60,6 +60,7 @@ open_only (char *file)
       exit (0);
     }
   error (EXIT_FAILURE, errno, "could not open %s", file);
+  return -1;
 }
 
 static int

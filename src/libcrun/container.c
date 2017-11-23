@@ -755,7 +755,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   oci_container *def = container->container_def;
   int ret;
   pid_t pid;
-  char c;
   int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
