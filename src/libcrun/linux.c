@@ -1333,13 +1333,13 @@ libcrun_run_linux_container (libcrun_container *container,
   *notify_socket_out = -1;
 #endif
 
-  pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
-  if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "clone");
-
   get_uid_gid_from_def (container->container_def,
                         &container->container_uid,
                         &container->container_gid);
+
+  pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "clone");
 
   if (pid)
     {
