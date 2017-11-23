@@ -595,7 +595,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
 {
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
-  int ret, container_exit_code, last_process;
+  int ret, container_exit_code = 0, last_process;
   sigset_t mask;
   int fds[10];
   int levelfds[10];
