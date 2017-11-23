@@ -86,5 +86,5 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
-  return libcrun_delete_container (&crun_context, argv[first_arg], delete_options.force, err);
+  return libcrun_delete_container (&crun_context, NULL, argv[first_arg], delete_options.force, err);
 }

@@ -434,20 +434,22 @@ do_hooks (pid_t pid, const char *id, bool keep_going, const char *rootfs,
 }
 
 static int
-run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_t *status,
+run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
+                    libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
-  libcrun_container *container;
-  cleanup_free char *config_file = NULL;
   int ret;
-  oci_container *def;
+  if (def == NULL)
+    {
+      cleanup_free char *config_file = NULL;
+      libcrun_container *container;
+      xasprintf (&config_file, "%s/config.json", status->bundle);
+      container = libcrun_container_load (config_file, err);
+      if (container == NULL)
+        libcrun_fail_with_error (0, "error loading config.json");
+      def = container->container_def;
+    }
 
-  xasprintf (&config_file, "%s/config.json", status->bundle);
-  container = libcrun_container_load (config_file, err);
-  if (container == NULL)
-    libcrun_fail_with_error (0, "error loading config.json");
-
-  def = container->container_def;
   if (def->hooks && def->hooks->poststop_len)
     {
       ret = do_hooks (0, id, true, def->root->path,
@@ -460,7 +462,7 @@ run_poststop_hooks (struct libcrun_context_s *context, libcrun_container_status_
 }
 
 int
-libcrun_delete_container (struct libcrun_context_s *context, const char *id, int force, libcrun_error_t *err)
+libcrun_delete_container (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
@@ -512,7 +514,7 @@ libcrun_delete_container (struct libcrun_context_s *context, const char *id, int
         crun_error_write_warning_and_release (context->stderr, err);
     }
 
-  ret = run_poststop_hooks (context, &status, state_root, id, err);
+  ret = run_poststop_hooks (context, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     goto error;
 
@@ -740,10 +742,10 @@ flush_fd_to_err (int terminal_fd, FILE *stderr)
 }
 
 static void
-cleanup_watch (struct libcrun_context_s *context, const char *id, int terminal_fd, FILE *stderr)
+cleanup_watch (struct libcrun_context_s *context, oci_container *def, const char *id, int terminal_fd, FILE *stderr)
 {
   libcrun_error_t err = NULL;
-  libcrun_delete_container (context, id, 1, &err);
+  libcrun_delete_container (context, def, id, 1, &err);
   crun_error_release (&err);
 
   flush_fd_to_err (terminal_fd, stderr);
@@ -824,21 +826,21 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = libcrun_cgroup_enter (&cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, context->id, terminal_fd, context->stderr);
+      cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
       return ret;
     }
 
   ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, context->id, terminal_fd, context->stderr);
+      cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
       return ret;
     }
 
   ret = sync_socket_wait_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, context->id, terminal_fd, context->stderr);
+      cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
       return ret;
     }
 
@@ -851,7 +853,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret != 0))
         {
-          cleanup_watch (context, context->id, terminal_fd, context->stderr);
+          cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
           return ret;
         }
     }
@@ -859,7 +861,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = sync_socket_send_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, context->id, terminal_fd, context->stderr);
+      cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
       return crun_make_error (err, errno, "write to sync socket");
     }
 
@@ -875,7 +877,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = write_container_status (container, context, pid, cgroup_path, created, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, context->id, terminal_fd, context->stderr);
+      cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
       return ret;
     }
 
@@ -886,7 +888,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
         {
-          cleanup_watch (context, context->id, terminal_fd, context->stderr);
+          cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
           return ret;
         }
     }
@@ -899,7 +901,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, err);
   if (! context->has_fifo_exec_wait)
-    cleanup_watch (context, context->id, terminal_fd, context->stderr);
+    cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
   return ret;
 }
 
