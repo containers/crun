@@ -60,11 +60,16 @@ struct libcrun_container_s
   struct libcrun_context_s *context;
 };
 
+enum
+  {
+    LIBCRUN_RUN_NO_FORK = 1,
+  };
+
 typedef struct libcrun_container_s libcrun_container;
 
 libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *err);
 
-int libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *error);
+int libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, unsigned int options, libcrun_error_t *error);
 
 int libcrun_delete_container (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err);
 

@@ -920,7 +920,7 @@ int check_config_file (oci_container *def, libcrun_error_t *err)
 }
 
 int
-libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
+libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, unsigned int options, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -950,11 +950,14 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
       return libcrun_container_run_internal (container, context, -1, err);
     }
 
-  ret = fork ();
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fork");
-  if (ret)
-    return 0;
+  if (! (options & LIBCRUN_RUN_NO_FORK))
+    {
+      ret = fork ();
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fork");
+      if (ret)
+        return 0;
+    }
 
   if (context->stderr)
     stderr = context->stderr;
