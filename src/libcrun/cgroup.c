@@ -966,20 +966,16 @@ write_cpuset_resources (int dirfd_cpuset, oci_container_linux_resources_cpu *cpu
 }
 
 int
-libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
+libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char *path, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
   int ret;
 
-  if (!def->linux || !def->linux->resources)
-    return 0;
-
 #define SKIP(ret, errno)(ret < 0 && errno == ENOENT)
-  if (def->linux->resources->block_io)
+  if (resources->block_io)
     {
       cleanup_free char *path_to_blkio = NULL;
       cleanup_close int dirfd_blkio = -1;
-      oci_container_linux_resources_block_io *blkio = def->linux->resources->block_io;
+      oci_container_linux_resources_block_io *blkio = resources->block_io;
 
       xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
@@ -996,11 +992,11 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
         }
     }
 
-  if (def->linux->resources->network)
+  if (resources->network)
     {
       cleanup_free char *path_to_network = NULL;
       cleanup_close int dirfd_network = -1;
-      oci_container_linux_resources_network *network = def->linux->resources->network;
+      oci_container_linux_resources_network *network = resources->network;
 
       xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
       dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
@@ -1017,7 +1013,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
         }
     }
 
-  if (def->linux->resources->hugepage_limits_len)
+  if (resources->hugepage_limits_len)
     {
       cleanup_free char *path_to_htlb = NULL;
       cleanup_close int dirfd_htlb = -1;
@@ -1032,15 +1028,15 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
             return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
 
           ret = write_hugetlb_resources (dirfd_htlb,
-                                         def->linux->resources->hugepage_limits,
-                                         def->linux->resources->hugepage_limits_len,
+                                         resources->hugepage_limits,
+                                         resources->hugepage_limits_len,
                                          err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
     }
 
-  if (def->linux->resources->devices_len)
+  if (resources->devices_len)
     {
       cleanup_free char *path_to_devs = NULL;
       cleanup_close int dirfd_devs = -1;
@@ -1055,15 +1051,15 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
             return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
 
           ret = write_devices_resources (dirfd_devs,
-                                         def->linux->resources->devices,
-                                         def->linux->resources->devices_len,
+                                         resources->devices,
+                                         resources->devices_len,
                                          err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
     }
 
-  if (def->linux->resources->memory)
+  if (resources->memory)
     {
       cleanup_free char *path_to_mem = NULL;
       cleanup_close int dirfd_mem = -1;
@@ -1078,14 +1074,14 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
             return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
 
           ret = write_memory_resources (dirfd_mem,
-                                        def->linux->resources->memory,
+                                        resources->memory,
                                         err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
     }
 
-  if (def->linux->resources->pids)
+  if (resources->pids)
     {
       cleanup_free char *path_to_pid = NULL;
       cleanup_close int dirfd_pid = -1;
@@ -1100,14 +1096,14 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
             return crun_make_error (err, errno, "open %s", path);
 
           ret = write_pids_resources (dirfd_pid,
-                                      def->linux->resources->pids,
+                                      resources->pids,
                                       err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
     }
 
-  if (def->linux->resources->cpu)
+  if (resources->cpu)
     {
       cleanup_free char *path_to_cpu = NULL;
       cleanup_close int dirfd_cpu = -1;
@@ -1121,7 +1117,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
       else
         {
           ret = write_cpu_resources (dirfd_cpu,
-                                     def->linux->resources->cpu,
+                                     resources->cpu,
                                      err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -1134,7 +1130,7 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
       else
         {
           ret = write_cpuset_resources (dirfd_cpuset,
-                                        def->linux->resources->cpu,
+                                        resources->cpu,
                                         err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -1142,4 +1138,16 @@ libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_
     }
 
   return 0;
+}
+
+int
+libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
+{
+  oci_container *def = container->container_def;
+  int ret;
+
+  if (!def->linux || !def->linux->resources)
+    return 0;
+
+  return libcrun_update_cgroup_resources (def->linux->resources, path, err);
 }

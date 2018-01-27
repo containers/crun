@@ -1234,8 +1234,16 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, int a
 }
 
 int
-libcrun_container_update_from_file (const char *id, const char *path, libcrun_error_t *err)
+libcrun_container_update_from_file (struct libcrun_context_s *context, const char *id, const char *path, libcrun_error_t *err)
 {
-  /*FIXME: implement.  */
-  return 0;
+  int ret;
+  libcrun_container_status_t status;
+  const char *state_root = context->state_root;
+
+  memset (&status, 0, sizeof (status));
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return libcrun_linux_container_update (&status, path, err);
 }

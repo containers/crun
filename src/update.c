@@ -71,7 +71,9 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
 
   if (resources == NULL)
-      libcrun_fail_with_error (0, "Please specify a resources file");
+      libcrun_fail_with_error (0, "please specify a resources file");
 
-  return libcrun_container_update_from_file (argv[first_arg], resources, err);
+  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+
+  return libcrun_container_update_from_file (&crun_context, argv[first_arg], resources, err);
 }

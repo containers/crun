@@ -1625,3 +1625,57 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
       close (fds[i]);
   return ret;
 }
+
+static int
+parse_resources_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err)
+{
+    yajl_val tree;
+    char errbuf[1024];
+
+    *err = NULL;
+
+    *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
+    if (*out == NULL)
+      return crun_make_error (err, 0, "cannot parse the data: '%s'", errbuf);
+      crun_make_error (err, errno, "fork");
+    return 0;
+}
+
+
+int
+libcrun_linux_container_update (libcrun_container_status_t *status, const char *path, libcrun_error_t *err)
+{
+  int ret;
+  yajl_val tree = NULL;
+  cleanup_free char *content = NULL;
+  size_t len;
+  parser_error parser_err = NULL;
+  oci_container_linux_resources *resources = NULL;
+  struct parser_context ctx = {0, NULL};
+
+  ret = read_all_file (path, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_resources_file (&tree, content, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return -1;
+
+  resources = make_oci_container_linux_resources (tree, &ctx, &parser_err);
+  if (UNLIKELY (resources == NULL))
+    {
+      ret = crun_make_error (err, errno, "cannot parse resources");
+      goto cleanup;
+    }
+
+  ret = libcrun_update_cgroup_resources (resources, status->cgroup_path, err);
+
+ cleanup:
+  if (tree)
+    yajl_tree_free (tree);
+  free (parser_err);
+  if (resources)
+    free_oci_container_linux_resources (resources);
+
+  return ret;
+}
