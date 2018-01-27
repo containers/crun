@@ -1232,3 +1232,10 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, int a
   flush_fd_to_err (terminal_fd, context->stderr);
   return ret;
 }
+
+int
+libcrun_container_update_from_file (const char *id, const char *path, libcrun_error_t *err)
+{
+  /*FIXME: implement.  */
+  return 0;
+}

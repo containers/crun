@@ -33,6 +33,7 @@
 #include "create.h"
 #include "exec.h"
 #include "state.h"
+#include "update.h"
 #include "spec.h"
 
 static struct crun_global_arguments arguments;
@@ -71,7 +72,8 @@ enum
     COMMAND_RUN,
     COMMAND_SPEC,
     COMMAND_START,
-    COMMAND_STATE
+    COMMAND_STATE,
+    COMMAND_UPDATE,
   };
 
 struct commands_s commands[] =
@@ -85,6 +87,7 @@ struct commands_s commands[] =
     { COMMAND_SPEC, "spec", crun_command_spec},
     { COMMAND_START, "start", crun_command_start},
     { COMMAND_STATE, "state", crun_command_state},
+    { COMMAND_UPDATE, "update", crun_command_update},
     { 0, 0}
   };
 
@@ -99,6 +102,7 @@ static char doc[] =                                                  \
   "\tspec   - generate a configuration file\n"                       \
   "\tstart  - start a container\n"                                   \
   "\tstate  - output the state of a container\n"                     \
+  "\tupdate - update container resource constraints\n"               \
   ;
 static char args_doc[] = "COMMAND [OPTION...]";
 

@@ -83,4 +83,6 @@ int libcrun_container_state (FILE *out, struct libcrun_context_s *context, const
 
 int libcrun_exec_container (struct libcrun_context_s *context, const char *id, int argc, char **argv, libcrun_error_t *err);
 
+int libcrun_container_update_from_file (const char *id, const char *path, libcrun_error_t *err);
+
 #endif
