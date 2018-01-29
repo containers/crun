@@ -83,7 +83,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   if (UNLIKELY (ret < 0))
     return ret;
 
-  printf ("NAME\tPID\tBUNDLE PATH\n");
+  printf ("%-30s%-10s%-39s\n", "NAME", "PID", "BUNDLE PATH");
   for (it = list; it; it = it->next)
     {
       libcrun_container_status_t status;
@@ -93,7 +93,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           crun_error_write_warning_and_release (stderr, err);
           continue;
         }
-      printf ("%s\t%d\t%s\n", it->name, status.pid, status.bundle);
+      printf ("%-30s%-10d%-39s\n", it->name, status.pid, status.bundle);
 
       libcrun_free_container_status (&status);
     }
