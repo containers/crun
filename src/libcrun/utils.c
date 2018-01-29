@@ -538,7 +538,7 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
   do
     {
 #ifdef HAVE_COPY_FILE_RANGE
-      ret = copy_file_range (0, NULL, terminal_fd, NULL, 4096, 0);
+      int ret = copy_file_range (src, NULL, dst, NULL, 4096, 0);
       if (consume && ret < 0 && errno == EAGAIN)
         return 0;
       if (UNLIKELY (ret < 0))
