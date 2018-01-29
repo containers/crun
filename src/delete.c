@@ -23,10 +23,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <regex.h>
 
 #include "crun.h"
 #include "libcrun/container.h"
 #include "libcrun/utils.h"
+#include "libcrun/status.h"
 
 static char doc[] = "OCI runtime";
 
@@ -41,6 +43,7 @@ enum
 
 struct delete_options_s
 {
+  int regex;
   int force;
 };
 
@@ -49,6 +52,7 @@ static struct delete_options_s delete_options;
 static struct argp_option options[] =
   {
     {"force", 'f', 0, 0, "delete the container even if it is still running" },
+    {"regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (delete multiple containers)" },
     { 0 }
   };
 
@@ -61,6 +65,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
     {
     case 'f':
       delete_options.force = 1;
+      break;
+
+    case 'r':
+      delete_options.regex = 1;
       break;
 
     case ARGP_KEY_NO_ARGS:
@@ -85,6 +93,34 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &delete_options);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
+
+  if (delete_options.regex)
+    {
+      int ret = 0;
+      regex_t re;
+      libcrun_container_list_t *list, *it;
+
+      ret = regcomp (&re, argv[first_arg], REG_EXTENDED | REG_NOSUB);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (0, "invalid regular expression %s", argv[first_arg]);
+
+      ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (0, "cannot read containers list");
+
+      for (it = list; it; it = it->next)
+        if (regexec (&re, it->name, 0, NULL, 0) == 0)
+          {
+            ret = libcrun_delete_container (&crun_context, NULL, it->name, delete_options.force, err);
+            if (UNLIKELY (ret < 0))
+              crun_error_write_warning_and_release (stderr, err);
+          }
+
+
+      libcrun_free_containers_list (list);
+      regfree (&re);
+      return 0;
+    }
 
   return libcrun_delete_container (&crun_context, NULL, argv[first_arg], delete_options.force, err);
 }
