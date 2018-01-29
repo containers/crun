@@ -446,7 +446,8 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
       xasprintf (&config_file, "%s/config.json", status->bundle);
       container = libcrun_container_load (config_file, err);
       if (container == NULL)
-        libcrun_fail_with_error (0, "error loading config.json");
+        return crun_make_error (err, 0, "error loading config.json");
+
       def = container->container_def;
     }
 
@@ -476,6 +477,7 @@ libcrun_delete_container (struct libcrun_context_s *context, oci_container *def,
         {
           libcrun_delete_container_status (state_root, id, err);
           crun_error_release (err);
+          *err = NULL;
           return 0;
         }
       goto exit;
@@ -516,7 +518,7 @@ libcrun_delete_container (struct libcrun_context_s *context, oci_container *def,
 
   ret = run_poststop_hooks (context, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    goto error;
+    crun_error_write_warning_and_release (context->stderr, err);
 
  exit:
   ret = libcrun_delete_container_status (state_root, id, err);
