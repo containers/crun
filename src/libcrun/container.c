@@ -1133,7 +1133,7 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
     if (UNLIKELY (container == NULL))
       return -1;
 
-    if (container->container_def->annotations->len)
+    if (container->container_def->annotations && container->container_def->annotations->len)
       {
         yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
         yajl_gen_map_open (gen);
