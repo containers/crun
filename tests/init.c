@@ -169,7 +169,13 @@ int main (int argc, char **argv)
         error (EXIT_FAILURE, 0, "'write' requires two arguments");
       return write_to (argv[2], argv[3]);
     }
-
+  if (strcmp (argv[1], "pause") == 0)
+    {
+      close (1);
+      close (2);
+      pause ();
+      exit (0);
+    }
   if (strcmp (argv[1], "forkbomb") == 0)
     {
       int i, n;

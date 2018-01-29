@@ -28,7 +28,7 @@ def test_hostname():
     conf['process']['args'] = ['/init', 'gethostname']
     conf['hostname'] = "foomachine"
     add_all_namespaces(conf)
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     if "foomachine" not in out:
         return -1
     return 0

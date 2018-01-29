@@ -27,7 +27,7 @@ def test_preserve_fds_0():
     conf = base_config()
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'ls', '/proc/1/fd']
-    out = run_and_get_output(conf, preserve_fds="0")
+    out, _ = run_and_get_output(conf, preserve_fds="0")
     files = [x for x in out.split('\n') if len(x) > 0 and x[0] != '.']
     if all([int(x) < 3 for x in files]):
         return 0
@@ -44,7 +44,7 @@ def test_preserve_fds_some():
                     os.set_inheritable(i, True)
                 except:
                     pass
-        out = run_and_get_output(conf, preserve_fds="100")
+        out, _ = run_and_get_output(conf, preserve_fds="100")
     files = [x for x in out.split('\n') if len(x) > 0 and x[0] != '.']
     if any([int(x) > 3 for x in files]):
         return 0

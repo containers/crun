@@ -28,7 +28,7 @@ def test_fail_prestart():
     conf['hooks'] = {"prestart" : [{"path" : "/bin/false"}]}
     add_all_namespaces(conf)
     try:
-        out = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf)
     except:
         return 0
     return -1
@@ -38,7 +38,7 @@ def test_success_prestart():
     conf['hooks'] = {"prestart" : [{"path" : "/bin/true"}]}
     add_all_namespaces(conf)
     try:
-        out = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf)
     except:
         return -1
     return 0

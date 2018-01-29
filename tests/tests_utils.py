@@ -190,21 +190,27 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None):
     with open(os.path.join(rootfs, "var", "file"), "w+") as f:
         f.write("file")
     id_container = 'test-%s' % os.path.basename(temp_dir)
-    try:
-        with open(os.path.join(temp_dir, "config.json"), "w") as config_file:
-            conf = json.dumps(config)
-            config_file.write(conf)
 
-        shutil.copy2("tests/init", os.path.join(rootfs, "init"))
-        crun = os.path.join(cwd, "crun")
-        detach_arg = ['--detach'] if detach else []
-        preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
-        pid_file_arg = ['--pid-file', pid_file] if pid_file else []
-        
-        args = [crun, 'run'] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
-        return subprocess.check_output(args, cwd=temp_dir, stderr=subprocess.STDOUT, close_fds=False).decode()
-    finally:
-        shutil.rmtree(temp_dir)
+    with open(os.path.join(temp_dir, "config.json"), "w") as config_file:
+        conf = json.dumps(config)
+        config_file.write(conf)
+
+    shutil.copy2("tests/init", os.path.join(rootfs, "init"))
+    crun = os.path.join(cwd, "crun")
+    detach_arg = ['--detach'] if detach else []
+    preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
+    pid_file_arg = ['--pid-file', pid_file] if pid_file else []
+
+    args = [crun, 'run'] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
+
+    return subprocess.check_output(args, cwd=temp_dir, stderr=subprocess.STDOUT, close_fds=False).decode(), id_container
+
+
+def run_crun_command(args):
+    cwd = os.getcwd()
+    crun = os.path.join(cwd, "crun")
+    args = [crun] + args
+    return subprocess.check_output(args, stderr=subprocess.STDOUT, close_fds=False).decode()
 
 def tests_main(all_tests):
     os.environ["LANG"] = "C"

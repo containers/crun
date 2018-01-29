@@ -30,7 +30,7 @@ def test_limit_pid_0():
         return 77
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : 0}}
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     if len(out) == 0:
         return 0
     return -1

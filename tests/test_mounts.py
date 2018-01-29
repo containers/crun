@@ -36,7 +36,7 @@ def helper_mount(options):
     add_all_namespaces(conf)
     mount_opt = {"destination": "/var/dir", "type": "tmpfs", "source": "tmpfs", "options": [options]}
     conf['mounts'].append(mount_opt)
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
         f.write(out)
         f.flush()

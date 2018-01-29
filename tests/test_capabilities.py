@@ -28,7 +28,7 @@ def test_no_caps():
     conf['process']['capabilities'] = {}
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = []
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
 
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
@@ -43,7 +43,7 @@ def test_some_caps():
     conf['process']['capabilities'] = {}
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = []
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
 
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
@@ -57,14 +57,14 @@ def test_new_privs():
     add_all_namespaces(conf)
 
     conf['process']['noNewPrivileges'] = True
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status['NoNewPrivs']
     if no_new_privs != "1":
         return -1
 
     conf['process']['noNewPrivileges'] = False
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status['NoNewPrivs']
     if no_new_privs != "0":
@@ -80,7 +80,7 @@ def helper_test_some_caps(uid, captypes, proc_name):
     conf['process']['capabilities'] = {}
     for i in captypes + ['bounding']:
         conf['process']['capabilities'][i] = ["CAP_SYS_ADMIN"]
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
 
     if proc_status[proc_name] != "0000000000200000":

@@ -41,7 +41,7 @@ def test_masked_paths():
     conf['process']['args'] = ['/init', 'cat', '/var/file']
     conf['linux']['maskedPaths'] = ['/var/file']
     add_all_namespaces(conf)
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     if len(out) > 0:
         return -1
     return 0

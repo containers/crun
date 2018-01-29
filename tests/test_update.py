@@ -23,42 +23,39 @@ import shutil
 import sys
 from tests_utils import *
 
-def tty_helper(fd):
+def test_update():
     conf = base_config()
-    conf['process']['args'] = ['/init', 'isatty', fd]
-    conf['process']['terminal'] = True
+    conf['process']['args'] = ['/init', 'pause']
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
-    if "true" not in out:
-        return -1
-    return 0
 
-def test_stdin_tty():
-    return tty_helper("0")
-
-def test_stdout_tty():
-    return tty_helper("1")
-
-def test_stderr_tty():
-    return tty_helper("2")
-
-def test_tty_and_detach():
-    conf = base_config()
-    conf['process']['args'] = ['/init', 'isatty', 0]
-    conf['process']['terminal'] = True
-    add_all_namespaces(conf)
+    temp_dir = tempfile.mkdtemp(dir=get_tests_root())
+    out, container_id = run_and_get_output(conf, detach=True)
     try:
-        out, _ = run_and_get_output(conf, detach=True)
-    except Exception as e:
-        if "use --console-socket" in e.output.decode():
+        p = "/sys/fs/cgroup/memory/system.slice/libcrun-%s.scope/memory.limit_in_bytes" % container_id
+        if not os.path.exists(p):
+            return 77
+        with open(p) as f:
+            oldval = f.read()
+
+        res_file = os.path.join(temp_dir, "resources")
+        with open(res_file, 'w') as f:
+            f.write('{"memory": {"limit": 2000000}}')
+
+        run_crun_command(["update", "-r", res_file, container_id])
+
+        with open(p) as f:
+            newval = f.read()
+
+        if newval != oldval:
             return 0
-    return -1
-    
+    finally:
+        run_crun_command(["delete", "-f", container_id])
+        shutil.rmtree(temp_dir)
+    return 1
+
+
 all_tests = {
-    "test-stdin-tty" : test_stdin_tty,
-    "test-stdout-tty" : test_stdout_tty,
-    "test-stderr-tty" : test_stderr_tty,
-    "test-detach-tty" : test_tty_and_detach,
+    "test-update" : test_update,
 }
 
 if __name__ == "__main__":

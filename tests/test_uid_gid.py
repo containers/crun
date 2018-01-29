@@ -28,7 +28,7 @@ def test_uid():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
     conf['process']['user']['uid'] = 1000
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
 
     ids = proc_status['Uid'].split()
@@ -42,7 +42,7 @@ def test_gid():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
     conf['process']['user']['gid'] = 1000
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
 
     ids = proc_status['Gid'].split()

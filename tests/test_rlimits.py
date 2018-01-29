@@ -54,7 +54,7 @@ def test_rlimits():
     ]
     conf['process']['rlimits'] = rlimits
     add_all_namespaces(conf)
-    out = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf)
     limits = parse_proc_limits(out)
 
     for v in rlimits:
