@@ -24,9 +24,11 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <regex.h>
 
 #include "crun.h"
 #include "libcrun/container.h"
+#include "libcrun/status.h"
 #include "libcrun/utils.h"
 #include "libcrun/sig2str.h"
 
@@ -43,6 +45,7 @@ enum
 
 struct kill_options_s
 {
+  int regex;
   int force;
 };
 
@@ -51,6 +54,7 @@ static struct kill_options_s kill_options;
 static struct argp_option options[] =
   {
     {"force", 'f', 0, 0, "kill the container even if it is still running" },
+    {"regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (kill multiple containers)" },
     { 0 }
   };
 
@@ -63,6 +67,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
     {
     case 'f':
       kill_options.force = 1;
+      break;
+
+    case 'r':
+      kill_options.regex = 1;
       break;
 
     case ARGP_KEY_NO_ARGS:
@@ -96,6 +104,34 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
       int res = str2sig (argv[first_arg + 1], &signal);
       if (UNLIKELY (res < 0))
         libcrun_fail_with_error (0, "unknown signal %s", argv[first_arg + 1]);
+    }
+
+  if (kill_options.regex)
+    {
+      int ret = 0;
+      regex_t re;
+      libcrun_container_list_t *list, *it;
+
+      ret = regcomp (&re, argv[first_arg], REG_EXTENDED | REG_NOSUB);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (0, "invalid regular expression %s", argv[first_arg]);
+
+      ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (0, "cannot read containers list");
+
+      for (it = list; it; it = it->next)
+        if (regexec (&re, it->name, 0, NULL, 0) == 0)
+          {
+            ret = libcrun_kill_container (&crun_context, it->name, signal, err);
+            if (UNLIKELY (ret < 0))
+              crun_error_write_warning_and_release (stderr, err);
+          }
+
+
+      libcrun_free_containers_list (list);
+      regfree (&re);
+      return 0;
     }
 
   return libcrun_kill_container (&crun_context, argv[first_arg], signal, err);
