@@ -125,7 +125,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
           {
             ret = libcrun_kill_container (&crun_context, it->name, signal, err);
             if (UNLIKELY (ret < 0))
-              crun_error_write_warning_and_release (stderr, err);
+              crun_error_write_warning_and_release (stderr, &err);
           }
 
 

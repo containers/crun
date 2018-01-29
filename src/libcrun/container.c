@@ -393,7 +393,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (entrypoint_args->context->stderr, err);
+    crun_error_write_warning_and_release (entrypoint_args->context->stderr, &err);
 
   execvp (def->process->args[0], def->process->args);
   return crun_make_error (err, errno, "exec the container process");
@@ -457,7 +457,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
                       (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->stderr, err);
+        crun_error_write_warning_and_release (context->stderr, &err);
     }
   return 0;
 }
@@ -513,12 +513,12 @@ libcrun_delete_container (struct libcrun_context_s *context, oci_container *def,
     {
       ret = libcrun_cgroup_destroy (id, status.cgroup_path, status.systemd_cgroup, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->stderr, err);
+        crun_error_write_warning_and_release (context->stderr, &err);
     }
 
   ret = run_poststop_hooks (context, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (context->stderr, err);
+    crun_error_write_warning_and_release (context->stderr, &err);
 
  exit:
   ret = libcrun_delete_container_status (state_root, id, err);

@@ -113,7 +113,7 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
           {
             ret = libcrun_delete_container (&crun_context, NULL, it->name, delete_options.force, err);
             if (UNLIKELY (ret < 0))
-              crun_error_write_warning_and_release (stderr, err);
+              crun_error_write_warning_and_release (stderr, &err);
           }
 
 

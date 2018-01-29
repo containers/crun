@@ -67,21 +67,22 @@ oom_handler ()
 }
 
 void
-crun_error_write_warning_and_release (FILE *out, libcrun_error_t *err)
+crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
 {
   libcrun_error_t ref;
 
   if (out == NULL)
     out = stderr;
-  if (err == NULL)
+  if (err == NULL || *err == NULL)
     return;
 
-  ref = *err;
+  ref = **err;
   if (ref->status)
     fprintf (out, "%s: %s\n", ref->msg, strerror (ref->status));
   else
     fprintf (out, "%s\n", ref->msg);
-  crun_error_release (err);
+  crun_error_release (*err);
+  *err = NULL;
 }
 
 int

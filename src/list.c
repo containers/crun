@@ -90,7 +90,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
       ret = libcrun_read_container_status (&status, crun_context.state_root, it->name, err);
       if (UNLIKELY (ret < 0))
         {
-          crun_error_write_warning_and_release (stderr, err);
+          crun_error_write_warning_and_release (stderr, &err);
           continue;
         }
       printf ("%-30s%-10d%-39s\n", it->name, status.pid, status.bundle);

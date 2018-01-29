@@ -1597,14 +1597,14 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
           master_fd = open_terminal (&slave, err);
           if (UNLIKELY (master_fd < 0))
             {
-              crun_error_write_warning_and_release (stderr, err);
+              crun_error_write_warning_and_release (stderr, &err);
               _exit (1);
             }
 
           ret = send_fd_to_socket (sync_fd, master_fd, err);
           if (UNLIKELY (ret < 0))
             {
-              crun_error_write_warning_and_release (stderr, err);
+              crun_error_write_warning_and_release (stderr, &err);
               _exit (1);
             }
         }
