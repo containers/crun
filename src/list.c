@@ -71,7 +71,7 @@ int
 crun_command_list (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  int ret;
+  int ret, max_length = 4;
   struct libcrun_context_s crun_context;
   libcrun_container_list_t *list, *it;
 
@@ -83,7 +83,16 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   if (UNLIKELY (ret < 0))
     return ret;
 
-  printf ("%-30s%-10s%-39s\n", "NAME", "PID", "BUNDLE PATH");
+  for (it = list; it; it = it->next)
+    {
+      int l = strlen (it->name);
+      if (l > max_length)
+        max_length = l;
+    }
+
+  max_length++;
+
+  printf ("%-*s%-10s%-39s\n", max_length, "NAME", "PID", "BUNDLE PATH");
   for (it = list; it; it = it->next)
     {
       libcrun_container_status_t status;
@@ -93,7 +102,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           crun_error_write_warning_and_release (stderr, &err);
           continue;
         }
-      printf ("%-30s%-10d%-39s\n", it->name, status.pid, status.bundle);
+      printf ("%-*s%-10d%-39s\n", max_length, it->name, status.pid, status.bundle);
 
       libcrun_free_container_status (&status);
     }
