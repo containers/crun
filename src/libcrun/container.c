@@ -1210,6 +1210,13 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         if (putenv (process->env[i]) < 0)
           libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
 
+      if (process->selinux_label)
+        {
+          libcrun_error_t err = NULL;
+          if (UNLIKELY (set_selinux_exec_label (process->selinux_label, &err) < 0))
+            libcrun_fail_with_error (err->status, "%s", err->msg);
+        }
+
       if (process->user)
         {
           if (setgid (process->user->gid) < 0)
@@ -1217,6 +1224,10 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
           if (setuid (process->user->uid) < 0)
             libcrun_fail_with_error (errno, "setuid");
         }
+
+      if (process->no_new_privileges)
+        if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
+          libcrun_fail_with_error (errno, "no new privs");
 
       execv (process->args[0], process->args);
       _exit (1);
