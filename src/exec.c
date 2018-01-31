@@ -92,9 +92,11 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc };
 int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg;
+  int i, first_arg, ret = 0;
   pid_t pid;
   struct libcrun_context_s crun_context;
+  oci_container_process *process = NULL;
+
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
   if (argc - first_arg < 2)
@@ -102,12 +104,25 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
   crun_context.detach = exec_options.detach;
-  crun_context.cwd = exec_options.cwd;
   crun_context.console_socket = exec_options.console_socket;
-  crun_context.tty = exec_options.tty;
 
-  pid = libcrun_exec_container (&crun_context, argv[first_arg], argc - first_arg - 1, argv + first_arg + 1, err);
+  process = xmalloc (sizeof (*process));
+  process->args_len = argc;
+  process->args = xmalloc ((argc + 1) * sizeof (*process->args));
+
+  for (i = 0; i < argc; i++)
+    process->args[i] = xstrdup (argv[first_arg + i + 1]);
+  process->args[i] = NULL;
+  if (exec_options.cwd)
+    process->cwd = xstrdup (exec_options.cwd);
+  process->terminal = exec_options.tty;
+
+  pid = libcrun_exec_container (&crun_context, argv[first_arg], process, err);
   if (UNLIKELY (pid < 0))
-    return pid;
-  return 0;
+    ret = pid;
+
+ exit:
+  free_oci_container_process (process);
+
+  return ret;
 }

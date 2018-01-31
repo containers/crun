@@ -1165,7 +1165,7 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
 }
 
 int
-libcrun_exec_container (struct libcrun_context_s *context, const char *id, int argc, char **argv, libcrun_error_t *err)
+libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
@@ -1191,17 +1191,17 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, int a
         return ret;
     }
 
-  ret = libcrun_join_process (status.pid, &status, context->detach, context->tty ? &terminal_fd : NULL, err);
+  ret = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   /* Process to exec.  */
   if (ret == 0)
     {
-      const char *cwd = context->cwd ? context->cwd : "/";
+      const char *cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
-      execv (argv[0], argv);
+      execv (process->args[0], process->args);
       _exit (1);
     }
 

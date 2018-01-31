@@ -33,11 +33,8 @@ struct libcrun_context_s
   int preserve_fds;
   FILE *stderr;
 
-  const char *cwd;
-
   int fifo_exec_wait_fd;
 
-  int tty : 1;
   int has_fifo_exec_wait : 1;
   int systemd_cgroup : 1;
   int detach : 1;
@@ -81,7 +78,7 @@ int libcrun_container_start (struct libcrun_context_s *context, const char *id, 
 
 int libcrun_container_state (FILE *out, struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
 
-int libcrun_exec_container (struct libcrun_context_s *context, const char *id, int argc, char **argv, libcrun_error_t *err);
+int libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err);
 
 int libcrun_container_update_from_file (struct libcrun_context_s *context, const char *id, const char *path, libcrun_error_t *err);
 
