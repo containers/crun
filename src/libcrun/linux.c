@@ -1488,12 +1488,17 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   int ret;
   int sync_socket_fd[2];
   int fds[10] = {-1, };
+  int fds_joined[10] = {0, };
   int namespaces_id[] = {CLONE_NEWIPC, CLONE_NEWNS, CLONE_NEWNET, CLONE_NEWPID, CLONE_NEWUTS, CLONE_NEWUSER,
 #ifdef CLONE_NEWCGROUP
                          CLONE_NEWCGROUP,
 #endif
                          0};
-  const char *namespaces[] = {"cgroup", "ipc", "mnt",  "net", "pid", "uts", "user", NULL};
+  const char *namespaces[] = {"ipc", "mnt",  "net", "pid", "uts", "user",
+#ifdef CLONE_NEWCGROUP
+                              "cgroup",
+#endif
+                              NULL};
   size_t i;
   cleanup_close int sync_fd = -1;
 
@@ -1537,11 +1542,11 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
     {
       ret = setns (fds[i], namespaces_id[i]);
       if (ret > 0)
-        fds[i] = -1;
+        fds_joined[i] = 1;
     }
   for (i = 0; namespaces[i]; i++)
     {
-      if (fds[i] < 0)
+      if (fds_joined[i])
         continue;
       ret = setns (fds[i], namespaces_id[i]);
       if (UNLIKELY (ret < 0 && errno != EINVAL))
@@ -1549,7 +1554,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
           crun_make_error (err, errno, "setns '%s'", namespaces[i]);
           goto exit;
         }
-      fds[i] = -1;
+      fds_joined[i] = 1;
     }
   for (i = 0; namespaces[i]; i++)
     {
