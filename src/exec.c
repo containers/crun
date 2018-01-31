@@ -107,6 +107,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   crun_context.console_socket = exec_options.console_socket;
 
   process = xmalloc (sizeof (*process));
+  memset (process, 0, sizeof (*process));
   process->args_len = argc;
   process->args = xmalloc ((argc + 1) * sizeof (*process->args));
 

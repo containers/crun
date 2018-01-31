@@ -1198,9 +1198,26 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
   /* Process to exec.  */
   if (ret == 0)
     {
+      int i;
       const char *cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
+
+      if (clearenv ())
+        libcrun_fail_with_error (errno, "clearenv");
+
+      for (i = 0; i < process->env_len; i++)
+        if (putenv (process->env[i]) < 0)
+          libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
+
+      if (process->user)
+        {
+          if (setgid (process->user->gid) < 0)
+            libcrun_fail_with_error (errno, "setgid");
+          if (setuid (process->user->uid) < 0)
+            libcrun_fail_with_error (errno, "setuid");
+        }
+
       execv (process->args[0], process->args);
       _exit (1);
     }
