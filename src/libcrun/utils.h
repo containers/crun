@@ -25,6 +25,7 @@
 # include <argp.h>
 # include "error.h"
 # include <dirent.h>
+# include <oci_runtime_spec.h>
 
 void cleanup_filep (FILE **f);
 void cleanup_freep (void *p);
@@ -100,5 +101,7 @@ int close_fds_ge_than (int n, libcrun_error_t *err);
 void get_current_timestamp (char *out);
 
 int set_blocking_fd (int fd, int blocking, libcrun_error_t *err);
+
+int parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
 
 #endif

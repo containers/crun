@@ -33,6 +33,7 @@ static char doc[] = "OCI runtime";
 struct exec_options_s
 {
   const char *cwd;
+  const char *process;
   const char *console_socket;
   int tty;
   int detach;
@@ -49,6 +50,7 @@ static struct argp_option options[] =
   {
     {"console-socket", OPTION_CONSOLE_SOCKET, 0, 0, "path to a socket that will receive the master end of the tty" },
     {"tty", 't', 0, 0, "allocate a pseudo-TTY"},
+    {"process", 'p', "FILE", 0, "path to the process.json"},
     {"cwd", 'c', "CWD", 0, "current working directory" },
     {"detach", 'd', 0, 0, "detach the command in the background" },
     { 0 }
@@ -67,6 +69,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case 'd':
       exec_options.detach = 1;
+      break;
+
+    case 'p':
+      exec_options.process = arg;
       break;
 
     case 't':
@@ -96,34 +102,63 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   pid_t pid;
   struct libcrun_context_s crun_context;
   oci_container_process *process = NULL;
-
+  yajl_val tree = NULL;
+  parser_error parser_err = NULL;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
-  if (argc - first_arg < 2)
+  if (exec_options.process == NULL && (argc - first_arg < 2))
     libcrun_fail_with_error (0, "please specify at least one argument");
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
   crun_context.detach = exec_options.detach;
   crun_context.console_socket = exec_options.console_socket;
 
-  process = xmalloc (sizeof (*process));
-  memset (process, 0, sizeof (*process));
-  process->args_len = argc;
-  process->args = xmalloc ((argc + 1) * sizeof (*process->args));
+  if (exec_options.process)
+    {
+      size_t len;
+      cleanup_free char *content = NULL;
+      struct parser_context ctx = {0, NULL};
 
-  for (i = 0; i < argc; i++)
-    process->args[i] = xstrdup (argv[first_arg + i + 1]);
-  process->args[i] = NULL;
-  if (exec_options.cwd)
-    process->cwd = xstrdup (exec_options.cwd);
-  process->terminal = exec_options.tty;
+      ret = read_all_file (exec_options.process, &content, &len, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+
+      ret = parse_json_file (&tree, content, &ctx, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+
+      process = make_oci_container_process (tree, &ctx, &parser_err);
+      if (UNLIKELY (process == NULL))
+        {
+          ret = crun_make_error (err, errno, "cannot parse process file");
+          goto exit;
+        }
+    }
+  else
+    {
+      process = xmalloc (sizeof (*process));
+      memset (process, 0, sizeof (*process));
+
+      process->args_len = argc;
+      process->args = xmalloc ((argc + 1) * sizeof (*process->args));
+      for (i = 0; i < argc; i++)
+        process->args[i] = xstrdup (argv[first_arg + i + 1]);
+      process->args[i] = NULL;
+      if (exec_options.cwd)
+        process->cwd = xstrdup (exec_options.cwd);
+      process->terminal = exec_options.tty;
+    }
 
   pid = libcrun_exec_container (&crun_context, argv[first_arg], process, err);
   if (UNLIKELY (pid < 0))
     ret = pid;
 
  exit:
-  free_oci_container_process (process);
+  if (tree)
+    yajl_tree_free (tree);
+  if (process)
+    free_oci_container_process (process);
+  free (parser_err);
 
   return ret;
 }

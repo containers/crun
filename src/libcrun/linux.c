@@ -1626,22 +1626,6 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   return ret;
 }
 
-static int
-parse_resources_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err)
-{
-    yajl_val tree;
-    char errbuf[1024];
-
-    *err = NULL;
-
-    *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
-    if (*out == NULL)
-      return crun_make_error (err, 0, "cannot parse the data: '%s'", errbuf);
-      crun_make_error (err, errno, "fork");
-    return 0;
-}
-
-
 int
 libcrun_linux_container_update (libcrun_container_status_t *status, const char *path, libcrun_error_t *err)
 {
@@ -1657,7 +1641,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = parse_resources_file (&tree, content, &ctx, err);
+  ret = parse_json_file (&tree, content, &ctx, err);
   if (UNLIKELY (ret < 0))
     return -1;
 
