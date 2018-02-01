@@ -187,6 +187,9 @@ libcrun_free_container_status (libcrun_container_status_t *status)
   if (status == NULL)
     return;
   free (status->cgroup_path);
+  free (status->bundle);
+  free (status->rootfs);
+  free (status->created);
 }
 
 int
@@ -216,7 +219,10 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       xasprintf (&status_file, "%s/%s/status", run_directory, next->d_name);
       exists = crun_path_exists (status_file, 1, err);
       if (exists < 0)
-        return exists;
+       {
+         libcrun_free_containers_list (tmp);
+         return exists;
+       }
 
       if (!exists)
         continue;
