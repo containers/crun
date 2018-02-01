@@ -35,13 +35,15 @@ struct exec_options_s
   const char *cwd;
   const char *process;
   const char *console_socket;
+  const char *pid_file;
   int tty;
   int detach;
 };
 
 enum
   {
-    OPTION_CONSOLE_SOCKET = 1000
+    OPTION_CONSOLE_SOCKET = 1000,
+    OPTION_PID_FILE
   };
 
 static struct exec_options_s exec_options;
@@ -53,6 +55,7 @@ static struct argp_option options[] =
     {"process", 'p', "FILE", 0, "path to the process.json"},
     {"cwd", 'c', "CWD", 0, "current working directory" },
     {"detach", 'd', 0, 0, "detach the command in the background" },
+    {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
     { 0 }
   };
 
@@ -65,6 +68,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
     {
     case OPTION_CONSOLE_SOCKET:
       exec_options.console_socket = arg;
+      break;
+
+    case OPTION_PID_FILE:
+      exec_options.pid_file = arg;
       break;
 
     case 'd':
@@ -112,6 +119,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
   crun_context.detach = exec_options.detach;
   crun_context.console_socket = exec_options.console_socket;
+  crun_context.pid_file = exec_options.pid_file;
 
   if (exec_options.process)
     {

@@ -1195,6 +1195,15 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (ret && context->pid_file)
+    {
+      char buf[12];
+      size_t buf_len = sprintf (buf, "%d", ret);
+      ret = write_file (context->pid_file, buf, buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   /* Process to exec.  */
   if (ret == 0)
     {
