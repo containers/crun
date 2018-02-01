@@ -1193,9 +1193,9 @@ libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err)
   if (!def->linux || !def->linux->sysctl)
     return 0;
 
-  dirfd = open ("/sys/fs", O_DIRECTORY | O_RDONLY);
+  dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open /sys/fs");
+    return crun_make_error (err, errno, "open /proc/sys");
 
   for (i = 0; i < def->linux->sysctl->len; i++)
     {
@@ -1209,11 +1209,11 @@ libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err)
 
       fd = openat (dirfd, name, O_WRONLY);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open /sys/fs/%s", name);
+        return crun_make_error (err, errno, "open /proc/sys/%s", name);
 
       ret = write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i]));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write to /sys/fs/%s", name);
+        return crun_make_error (err, errno, "write to /proc/sys/%s", name);
     }
   return 0;
 }
