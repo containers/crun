@@ -256,6 +256,7 @@ do_mount (libcrun_container *container,
       data = data_with_label;
     }
 
+
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
@@ -651,11 +652,24 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
           is_dir = crun_dir_p (def->mounts[i]->source, err);
           if (UNLIKELY (is_dir < 0))
             return ret;
+
+          if (data == NULL || strstr (data, "mode=") == NULL)
+            {
+              if (data == NULL || data[0] == '\0')
+                data = xstrdup ("mode=1755");
+              else
+                {
+                  char *newdata;
+                  xasprintf (&newdata, "%s,%s", data, "mode=1755");
+                  free (data);
+                  data = newdata;
+                }
+            }
         }
 
       if (is_dir)
         {
-          ret = crun_ensure_directory (target, 0755, err);
+          ret = crun_ensure_directory (target, 01755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
