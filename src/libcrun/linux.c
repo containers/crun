@@ -1433,7 +1433,8 @@ libcrun_run_linux_container (libcrun_container *container,
   /* ENTRYPOINT returns only on an error, fallback here: */
 
  out:
-  libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+  if (*err)
+    libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
   return 1;
 }
 
