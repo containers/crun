@@ -81,8 +81,10 @@ crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
     fprintf (out, "%s: %s\n", ref->msg, strerror (ref->status));
   else
     fprintf (out, "%s\n", ref->msg);
-  crun_error_release (*err);
-  *err = NULL;
+
+  free (ref->msg);
+  free (ref);
+  **err = NULL;
 }
 
 int

@@ -39,9 +39,6 @@ test_crun_make_error ()
 
   crun_error_release (&err);
 
-  if (err != NULL)
-    return -1;
-
   return 0;
 }
 
@@ -50,16 +47,18 @@ test_crun_write_warning_and_release ()
 {
 
   libcrun_error_t err_data = NULL;
+  libcrun_error_t *err = &err_data;
   cleanup_free char *buffer = NULL;
   size_t len;
   FILE *stream;
-  libcrun_error_t *err = &err_data;
 
   int ret = crun_make_error (err, 0, "HELLO %s", "WORLD");
   if (ret >= 0)
     return -1;
 
   if ((*err)->status != 0)
+    return -1;
+  if ((*err)->msg == NULL)
     return -1;
 
   stream = open_memstream (&buffer, &len);
@@ -69,10 +68,10 @@ test_crun_write_warning_and_release ()
   if (len != 12)
     return -1;
 
-  if (strcmp (buffer, "HELLO WORLD\n") != 0)
+  if (*err)
     return -1;
 
-  if (err != NULL)
+  if (strcmp (buffer, "HELLO WORLD\n") != 0)
     return -1;
 
   return 0;
