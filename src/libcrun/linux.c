@@ -375,7 +375,7 @@ create_dev (libcrun_container *container, int devfd, struct device_s *device, co
       cleanup_free char *path_to_container = NULL;
       xasprintf (&path_to_container, "%s/dev/%s", rootfs, basename);
 
-      ret = create_file_if_missing_at (devfd, basename, err);
+      ret = crun_ensure_file (path_to_container, 0700, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
