@@ -460,7 +460,12 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
 #endif
 
   if (cgroup_path != NULL)
-    *path = xstrdup (cgroup_path);
+    {
+      if (cgroup_path[0] == '/')
+        *path = xstrdup (cgroup_path);
+      else
+        xasprintf (path, "/%s", cgroup_path);
+    }
   else
     {
       ret = get_system_path (path, scope, err);
