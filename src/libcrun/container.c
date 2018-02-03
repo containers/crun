@@ -1132,7 +1132,7 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
     xasprintf (&config_file, "%s/config.json", status.bundle);
     container = libcrun_container_load (config_file, err);
     if (UNLIKELY (container == NULL))
-      return -1;
+      return crun_make_error (err, 0, "error loading config.json");
 
     if (container->container_def->annotations && container->container_def->annotations->len)
       {
