@@ -1237,7 +1237,7 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
           libcrun_fail_with_error (errno, "no new privs");
 
-      execv (process->args[0], process->args);
+      execvp (process->args[0], process->args);
       _exit (1);
     }
 
