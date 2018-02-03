@@ -106,7 +106,6 @@ int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int i, first_arg, ret = 0;
-  pid_t pid;
   struct libcrun_context_s crun_context;
   oci_container_process *process = NULL;
   yajl_val tree = NULL;
@@ -157,9 +156,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->terminal = exec_options.tty;
     }
 
-  pid = libcrun_exec_container (&crun_context, argv[first_arg], process, err);
-  if (UNLIKELY (pid < 0))
-    ret = pid;
+  ret = libcrun_exec_container (&crun_context, argv[first_arg], process, err);
 
  exit:
   if (tree)
