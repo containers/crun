@@ -1211,9 +1211,6 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
 
-      if (clearenv ())
-        libcrun_fail_with_error (errno, "clearenv");
-
       for (i = 0; i < process->env_len; i++)
         if (putenv (process->env[i]) < 0)
           libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
