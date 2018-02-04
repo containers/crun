@@ -27,6 +27,7 @@ struct libcrun_context_s
 {
   char *state_root;
   const char *id;
+  const char *bundle;
   const char *console_socket;
   const char *pid_file;
   char *notify_socket;

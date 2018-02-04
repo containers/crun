@@ -937,6 +937,34 @@ int check_config_file (oci_container *def, libcrun_error_t *err)
   return 0;
 }
 
+static
+int libcrun_copy_config_file (const char *id, const char *state_root, const char *bundle, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *src_path = NULL;
+  cleanup_free char *dest_path = NULL;
+  cleanup_free char *dir = NULL;
+  cleanup_free char *buffer = NULL;
+  size_t len;
+
+  dir = libcrun_get_state_directory (state_root, id);
+  if (UNLIKELY (dir == NULL))
+        return crun_make_error (err, 0, "cannot get state directory");
+
+  xasprintf (&src_path, "%s/config.json", bundle);
+  xasprintf (&dest_path, "%s/config.json", dir);
+
+  ret = read_all_file (src_path, &buffer, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = write_file (dest_path, buffer, len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
 int
 libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, unsigned int options, libcrun_error_t *err)
 {
@@ -951,6 +979,10 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
     return ret;
 
   ret = libcrun_status_check_directories (context->state_root, context->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -992,13 +1024,13 @@ int
 libcrun_container_create (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
-  int ret;
-  int tmp;
+  int tmp, ret;
   int container_ready_pipe[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
   cleanup_close int exec_fifo_fd = -1;
   context->detach = 1;
+
   container->context = context;
 
   ret = check_config_file (def, err);
@@ -1008,6 +1040,13 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   ret = libcrun_status_check_directories (context->state_root, context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (def->process->terminal && context->console_socket == NULL)
+    return crun_make_error (err, 0, "use --console-socket with create when a terminal is used");
 
   exec_fifo_fd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
   if (UNLIKELY (exec_fifo_fd < 0))
@@ -1035,6 +1074,9 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
       return 0;
     }
 
+  if (context->stderr)
+    stderr = context->stderr;
+
   context->has_fifo_exec_wait = 1;
   context->fifo_exec_wait_fd = exec_fifo_fd;
   exec_fifo_fd = -1;
@@ -1043,6 +1085,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
+
   tmp = pipefd1;
   pipefd1 = -1;
   libcrun_container_run_internal (container, context, tmp, err);
@@ -1145,8 +1188,13 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
     size_t i;
     cleanup_free char *config_file;
     libcrun_container *container;
+    cleanup_free char *dir = NULL;
 
-    xasprintf (&config_file, "%s/config.json", status.bundle);
+    dir = libcrun_get_state_directory (state_root, id);
+    if (UNLIKELY (dir == NULL))
+      return crun_make_error (err, 0, "cannot get state directory");
+
+    xasprintf (&config_file, "%s/config.json", dir);
     container = libcrun_container_load (config_file, err);
     if (UNLIKELY (container == NULL))
       return crun_make_error (err, 0, "error loading config.json");

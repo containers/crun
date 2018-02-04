@@ -60,6 +60,8 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
       if (con->stderr == NULL)
         libcrun_fail_with_error (errno, "open log file %s\n", glob->log);
     }
+  if (con->bundle == NULL)
+    con->bundle = ".";
 }
 
 enum

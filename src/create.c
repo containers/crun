@@ -37,7 +37,7 @@ enum
     OPTION_PRESERVE_FDS
   };
 
-static char *bundle = NULL;
+static const char *bundle = NULL;
 
 static struct libcrun_context_s crun_context;
 
@@ -62,7 +62,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'b':
-      bundle = argp_mandatory_argument (arg, state);
+      bundle = crun_context.bundle = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_CONSOLE_SOCKET:
