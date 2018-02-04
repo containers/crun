@@ -22,6 +22,7 @@
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
+#include <stdbool.h>
 #include <argp.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -111,20 +112,6 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
 }
 
 static int
-sync_socket_send_sync (int fd, libcrun_error_t *err)
-{
-  int ret;
-  struct sync_socket_message_s msg;
-  msg.type = SYNC_SOCKET_SYNC_MESSAGE;
-
-  ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, 0)));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to sync socket");
-
-  return 0;
-}
-
-static int
 sync_socket_wait_sync (int fd, libcrun_error_t *err)
 {
   int ret;
@@ -149,6 +136,31 @@ sync_socket_wait_sync (int fd, libcrun_error_t *err)
         }
       return crun_make_error (err, msg.error_value, "%s", msg.message);
     }
+}
+
+static int
+sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
+{
+  int ret;
+  struct sync_socket_message_s msg;
+  msg.type = SYNC_SOCKET_SYNC_MESSAGE;
+
+  ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, 0)));
+  if (UNLIKELY (ret < 0))
+    {
+      if (flush_errors)
+        {
+          ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
+          if (UNLIKELY (ret < 0))
+            goto original_error;
+          if (msg.type == SYNC_SOCKET_ERROR_MESSAGE)
+            return crun_make_error (err, msg.error_value, "%s", msg.message);
+        }
+    original_error:
+      return crun_make_error (err, errno, "write to sync socket");
+    }
+
+  return 0;
 }
 
 libcrun_container *
@@ -234,7 +246,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   ret = sync_socket_wait_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from the sync socket");
+    return ret;
 
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
@@ -366,13 +378,13 @@ container_entrypoint (void *args, const char *notify_socket,
   entrypoint_args->sync_socket = -1;
   crun_set_output_handler (log_write_to_stderr, NULL);
 
-  ret = sync_socket_send_sync (sync_socket, err);
+  ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to sync socket");
+    ret;
 
   ret = sync_socket_wait_sync (sync_socket, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from the sync socket");
+    return ret;
 
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
@@ -835,11 +847,11 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = sync_socket_send_sync (sync_socket, err);
+  ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
-      return crun_make_error (err, errno, "write to sync socket");
+      return ret;
     }
 
   if (def->process->terminal && !detach && context->console_socket == NULL)
@@ -876,11 +888,11 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         }
     }
 
-  ret = sync_socket_send_sync (sync_socket, err);
+  ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
-      return crun_make_error (err, errno, "write to sync socket");
+      return ret;
     }
 
   ret = close (sync_socket);
@@ -888,7 +900,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     {
       flush_fd_to_err (terminal_fd, context->stderr);
-      return crun_make_error (err, errno, "close the sync socket");
+      return ret;
     }
 
   get_current_timestamp (created);
