@@ -106,8 +106,7 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
       cleanup_free char *cgroup_path = NULL;
       cleanup_free char *cgroup_path_procs = NULL;
 
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystems[i], path);
-
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystems[i], path ? path : "");
       if (ensure_missing)
         {
           ret = crun_ensure_directory (cgroup_path, 0755, err);
@@ -130,7 +129,8 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
             continue;
         }
 
-      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/%s/cgroup.procs", subsystems[i], path);
+      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystems[i], path ? path : "");
+
       ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -446,10 +446,10 @@ int
 libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   int ret;
-  cleanup_free char *scope;
-  xasprintf (&scope, "%s.scope", id);
 
 #ifdef HAVE_SYSTEMD
+  cleanup_free char *scope = NULL;
+  xasprintf (&scope, "%s.scope", id);
   if (systemd || getuid ())
     {
       ret = enter_systemd_cgroup_scope (path, scope, pid, err);
@@ -468,7 +468,7 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
     }
   else
     {
-      ret = get_system_path (path, scope, err);
+      ret = get_system_path (path, id, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }

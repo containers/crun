@@ -83,11 +83,6 @@ get_private_data (struct libcrun_container_s *container)
 static struct linux_namespace_s namespaces[] =
   {
     {"mount", CLONE_NEWNS},
-#ifdef CLONE_NEWCGROUP
-    {"cgroup", CLONE_NEWCGROUP},
-#else
-    {"cgroup", 0},
-#endif
     {"network", CLONE_NEWNET},
     {"ipc", CLONE_NEWIPC},
     {"pid", CLONE_NEWPID},
@@ -1537,6 +1532,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
                               "cgroup",
 #endif
                               NULL};
+
   size_t i;
   cleanup_close int sync_fd = -1;
 

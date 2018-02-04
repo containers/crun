@@ -147,7 +147,7 @@ def add_all_namespaces(conf):
     has = {}
     for i in conf['linux']['namespaces']:
         has[i['type']] = i['type']
-    for i in ['pid', 'user', 'cgroup', 'ipc', 'uts', 'network']:
+    for i in ['pid', 'user', 'ipc', 'uts', 'network']:
         if i not in has:
             conf['linux']['namespaces'].append({"type" : i})
 

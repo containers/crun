@@ -232,6 +232,10 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (entrypoint_args->terminal_socketpair[0] >= 0)
     close (entrypoint_args->terminal_socketpair[0]);
 
+  ret = sync_socket_wait_sync (sync_socket, err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from the sync socket");
+
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
     {
@@ -239,6 +243,12 @@ container_entrypoint_init (void *args, const char *notify_socket,
       if (UNLIKELY (console_socket < 0))
         return console_socket;
     }
+
+#ifdef CLONE_NEWCGROUP
+  ret = unshare (CLONE_NEWCGROUP);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
+#endif
 
   ret = libcrun_set_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
@@ -810,20 +820,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       if (UNLIKELY (ret < 0))
         return ret;
     }
-
-  if (def->process->terminal && !detach && context->console_socket == NULL)
-    {
-      terminal_fd = receive_fd_from_socket (container_args.terminal_socketpair[0], err);
-      if (UNLIKELY (terminal_fd < 0))
-        return terminal_fd;
-
-      ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      close (container_args.terminal_socketpair[0]);
-    }
-
   ret = libcrun_cgroup_enter (&cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
@@ -836,6 +832,26 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     {
       cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
       return ret;
+    }
+
+  ret = sync_socket_send_sync (sync_socket, err);
+  if (UNLIKELY (ret < 0))
+    {
+      cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
+      return crun_make_error (err, errno, "write to sync socket");
+    }
+
+  if (def->process->terminal && !detach && context->console_socket == NULL)
+    {
+      terminal_fd = receive_fd_from_socket (container_args.terminal_socketpair[0], err);
+      if (UNLIKELY (terminal_fd < 0))
+        return terminal_fd;
+
+      ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      close (container_args.terminal_socketpair[0]);
     }
 
   ret = sync_socket_wait_sync (sync_socket, err);
