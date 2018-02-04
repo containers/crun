@@ -360,6 +360,7 @@ container_entrypoint (void *args, const char *notify_socket,
         return ret;
 
       crun_error_release (err);
+      return ret;
     }
 
   entrypoint_args->sync_socket = -1;
