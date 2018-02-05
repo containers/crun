@@ -268,6 +268,10 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   if (has_terminal)
     {
+      ret = setsid ();
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setsid");
+
       terminal_fd = libcrun_set_terminal (container, err);
       if (UNLIKELY (terminal_fd < 0))
         return ret;

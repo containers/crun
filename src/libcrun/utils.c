@@ -474,6 +474,7 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
   char ctrl_buf[CMSG_SPACE (sizeof (int))];
   char data[1];
   struct cmsghdr *cmsg;
+
   memset (&msg, 0, sizeof (struct msghdr));
   memset (ctrl_buf, 0, CMSG_SPACE (sizeof (int)));
 
@@ -505,7 +506,7 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
 int
 create_socket_pair (int *pair, libcrun_error_t *err)
 {
-  int ret = socketpair (AF_UNIX, SOCK_DGRAM, 0, pair);
+  int ret = socketpair (AF_UNIX, SOCK_SEQPACKET, 0, pair);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "socketpair");
   return 0;
