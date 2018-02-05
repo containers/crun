@@ -40,6 +40,7 @@
 #include "cgroup.h"
 #include "status.h"
 #include <sys/socket.h>
+#include <libgen.h>
 
 struct remount_s
 {
@@ -363,12 +364,10 @@ create_dev (libcrun_container *container, int devfd, struct device_s *device, co
   dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
   const char *fullname = device->path;
-  /* Skip the common prefix /dev.  */
-  const char *basename = device->path + 5;
   if (binds)
     {
       cleanup_free char *path_to_container = NULL;
-      xasprintf (&path_to_container, "%s/dev/%s", rootfs, basename);
+      xasprintf (&path_to_container, "%s%s", rootfs, device->path);
 
       ret = crun_ensure_file (path_to_container, 0700, err);
       if (UNLIKELY (ret < 0))
@@ -380,13 +379,22 @@ create_dev (libcrun_container *container, int devfd, struct device_s *device, co
     }
   else
     {
+      cleanup_free char *basename_buffer = xstrdup (device->path);
+      cleanup_free char *dirname_buffer = xstrdup (device->path);
+      const char *dname = dirname (dirname_buffer);
+      const char *bname = basename (basename_buffer);
+
+      ret = crun_ensure_directory (dname, 0700, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       dev = makedev (device->major, device->minor);
-      ret = mknodat (devfd, basename, device->mode | type, dev);
+      ret = mknodat (devfd, bname, device->mode | type, dev);
       /* We don't fail when the file already exists.  */
       if (UNLIKELY (ret < 0 && errno == EEXIST))
         return 0;
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mknod '%s'", basename);
+        return crun_make_error (err, errno, "mknod '%s'", bname);
     }
   return 0;
 }

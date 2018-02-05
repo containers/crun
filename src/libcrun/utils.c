@@ -294,7 +294,8 @@ check_running_in_user_namespace (libcrun_error_t *err)
   int ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
     return ret;
-  return strstr (buffer, "4294967295") ? 1 : 0;
+
+  return strstr (buffer, "4294967295") ? 0 : 1;
 }
 
 int
