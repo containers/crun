@@ -50,7 +50,7 @@ static struct exec_options_s exec_options;
 
 static struct argp_option options[] =
   {
-    {"console-socket", OPTION_CONSOLE_SOCKET, 0, 0, "path to a socket that will receive the master end of the tty" },
+    {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty" },
     {"tty", 't', 0, 0, "allocate a pseudo-TTY"},
     {"process", 'p', "FILE", 0, "path to the process.json"},
     {"cwd", 'c', "CWD", 0, "current working directory" },
