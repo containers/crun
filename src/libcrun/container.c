@@ -1392,7 +1392,7 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
       if (context->console_socket)
         {
           int ret;
-          cleanup_close int console_socket_fd = open_unix_domain_socket (context->console_socket, 0, err);
+          cleanup_close int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
           if (UNLIKELY (console_socket_fd < 0))
             return console_socket_fd;
           ret = send_fd_to_socket (console_socket_fd, terminal_fd, err);

@@ -1382,12 +1382,6 @@ libcrun_run_linux_container (libcrun_container *container,
     }
   sync_socket_host = -1;
 
-  if (detach && setsid () < 0)
-    {
-      crun_make_error (err, errno, "setsid");
-      goto out;
-    }
-
   /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
   if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
     {
