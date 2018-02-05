@@ -349,7 +349,7 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 
   /* NUL terminate the buffer.  */
   allocated = stat.st_size;
-  if (stat.st_size)
+  if (stat.st_size == 0)
     allocated = 256;
   buf = xmalloc (allocated + 1);
   buf[stat.st_size] = '\0';
