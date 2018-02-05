@@ -645,7 +645,10 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
         break;
       if (r != main_process)
         continue;
-      if (WIFEXITED (status) || WIFSIGNALED (status))
+
+      if (WIFSIGNALED (status))
+        *main_process_exit = 128 + WTERMSIG (status);
+      if (WIFEXITED (status))
         *main_process_exit = WEXITSTATUS (status);
     }
   return 0;
