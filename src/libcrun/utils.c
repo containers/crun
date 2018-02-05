@@ -377,6 +377,28 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 }
 
 int
+open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *err)
+{
+  struct sockaddr_un addr;
+  int ret;
+  cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "error creating UNIX socket");
+
+  memset (&addr, 0, sizeof (addr));
+  strcpy (addr.sun_path, path);
+  addr.sun_family = AF_UNIX;
+  ret = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "connect socket to '%s'", path);
+
+  ret = fd;
+  fd = -1;
+
+  return ret;
+}
+
+int
 open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
 {
   struct sockaddr_un addr;
