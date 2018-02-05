@@ -39,6 +39,7 @@
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/ptrace.h>
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -1318,11 +1319,13 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
 int
 libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err)
 {
-  int ret;
+  int ret, pid_status;
+  pid_t pid;
   libcrun_container_status_t status;
   const char *state_root = context->state_root;
   cleanup_close int terminal_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
+
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1342,21 +1345,12 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         return ret;
     }
 
-  ret = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (ret && context->pid_file)
-    {
-      char buf[12];
-      size_t buf_len = sprintf (buf, "%d", ret);
-      ret = write_file (context->pid_file, buf, buf_len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  pid = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
+  if (UNLIKELY (pid < 0))
+    return pid;
 
   /* Process to exec.  */
-  if (ret == 0)
+  if (pid == 0)
     {
       int i;
       const char *cwd = process->cwd ? process->cwd : "/";
@@ -1385,6 +1379,9 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
       if (process->no_new_privileges)
         if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
           libcrun_fail_with_error (errno, "no new privs");
+
+      if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
+        libcrun_fail_with_error (errno, "ptrace(PTRACE_TRACEME)");
 
       execvp (process->args[0], process->args);
       _exit (1);
@@ -1415,7 +1412,35 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         }
     }
 
-  ret = wait_for_process (ret, context, terminal_fd, -1, err);
+  if (context->pid_file)
+    {
+      char buf[12];
+      size_t buf_len = sprintf (buf, "%d", pid);
+      ret = write_file (context->pid_file, buf, buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  do
+    {
+      ret = waitpid (pid, &pid_status, 0);
+    }
+  while (ret != pid);
+
+  ptrace (PTRACE_DETACH, pid, NULL, NULL);
+
+  ret = 0;
+  if (WIFSIGNALED (pid_status))
+    ret = 128 + WTERMSIG (pid_status);
+  if (WIFEXITED (pid_status))
+    ret = WEXITSTATUS (pid_status);
+
+  if (ret != 0)
+    goto exit;
+
+  ret = wait_for_process (pid, context, terminal_fd, -1, err);
+
+ exit:
   flush_fd_to_err (terminal_fd, context->stderr);
   return ret;
 }

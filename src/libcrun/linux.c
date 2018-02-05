@@ -1555,7 +1555,8 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   if (pid)
     {
       close (sync_socket_fd[1]);
-      return join_process_parent_helper (sync_socket_fd[0], status, terminal_fd, err);
+      sync_fd = sync_socket_fd[0];
+      return join_process_parent_helper (sync_fd, status, terminal_fd, err);
     }
 
   close (sync_socket_fd[0]);
