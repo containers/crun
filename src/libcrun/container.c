@@ -251,7 +251,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
     {
-      console_socket = open_unix_domain_socket (entrypoint_args->context->console_socket, 0, err);
+      console_socket = open_unix_domain_client_socket (entrypoint_args->context->console_socket, 0, err);
       if (UNLIKELY (console_socket < 0))
         return console_socket;
     }
@@ -268,10 +268,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   if (has_terminal)
     {
-      ret = setsid ();
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "setsid");
-
       terminal_fd = libcrun_set_terminal (container, err);
       if (UNLIKELY (terminal_fd < 0))
         return ret;
@@ -932,6 +928,9 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, err);
   if (! (context->has_fifo_exec_wait || context->detach))
     cleanup_watch (context, def, context->id, terminal_fd, context->stderr);
+
+  crun_set_output_handler (log_write_to_stderr, NULL);
+
   return ret;
 }
 
@@ -1028,8 +1027,13 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
-  libcrun_container_run_internal (container, context, -1, err);
-  _exit (0);
+  ret = libcrun_container_run_internal (container, context, -1, err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_set_output_handler (log_write_to_stderr, NULL);
+      libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+    }
+  _exit (ret);
 }
 
 int
@@ -1083,7 +1087,9 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "waiting for container to be ready");
 
-      return 0;
+      if (ret == 1 && c == '1')
+        return 0;
+      return crun_make_error (err, 0, "container process error");
     }
 
   if (context->stderr)
@@ -1100,8 +1106,13 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
 
   tmp = pipefd1;
   pipefd1 = -1;
-  libcrun_container_run_internal (container, context, tmp, err);
-  _exit (0);
+  ret = libcrun_container_run_internal (container, context, tmp, err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_set_output_handler (log_write_to_stderr, NULL);
+      libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+    }
+  _exit (ret);
 }
 
 int
