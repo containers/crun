@@ -40,6 +40,7 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/ptrace.h>
+#include <grp.h>
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -1375,6 +1376,14 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
 
       if (process->user)
         {
+          if (process->user->additional_gids)
+            {
+              gid_t *additional_gids = process->user->additional_gids;
+              size_t additional_gids_len = process->user->additional_gids_len;
+              ret = setgroups (additional_gids_len, additional_gids);
+              if (UNLIKELY (ret < 0))
+                libcrun_fail_with_error (errno, "%s", "setgroups");
+            }
           ret = set_uid_gid (process->user->uid, process->user->gid, err);
           if (UNLIKELY (ret < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
