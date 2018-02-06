@@ -243,11 +243,8 @@ int unblock_signals (libcrun_error_t *err)
 }
 
 static int
-set_uid_gid (libcrun_container *container, libcrun_error_t *err)
+set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err)
 {
-  uid_t uid = container->container_uid;
-  gid_t gid = container->container_gid;
-
   if (gid && setgid (gid) < 0)
     return crun_make_error (err, errno, "setgid");
   if (uid && setuid (uid) < 0)
@@ -345,21 +342,21 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_caps (container, container->container_uid, err);
+  ret = libcrun_set_caps (def->process->capabilities, def->process->no_new_privileges, container->container_uid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_rlimits (container, err);
+  ret = libcrun_set_rlimits (def->process->rlimits, def->process->rlimits_len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = set_uid_gid (container, err);
+  ret = set_uid_gid (container->container_uid, container->container_gid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (container->container_uid)
     {
-      ret = libcrun_set_caps (container, 0, err);
+      ret = libcrun_set_caps (def->process->capabilities, def->process->no_new_privileges, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1353,6 +1350,7 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
   if (pid == 0)
     {
       int i;
+      uid_t container_uid = process->user ? process->user->uid : 0;
       const char *cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
@@ -1363,22 +1361,31 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
 
       if (process->selinux_label)
         {
-          libcrun_error_t err = NULL;
-          if (UNLIKELY (set_selinux_exec_label (process->selinux_label, &err) < 0))
-            libcrun_fail_with_error (err->status, "%s", err->msg);
+          if (UNLIKELY (set_selinux_exec_label (process->selinux_label, err) < 0))
+            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
+
+      ret = libcrun_set_caps (process->capabilities, process->no_new_privileges, container_uid, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+
+      ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
       if (process->user)
         {
-          if (setgid (process->user->gid) < 0)
-            libcrun_fail_with_error (errno, "setgid");
-          if (setuid (process->user->uid) < 0)
-            libcrun_fail_with_error (errno, "setuid");
+          ret = set_uid_gid (process->user->uid, process->user->gid, err);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
-      if (process->no_new_privileges)
-        if (UNLIKELY (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0))
-          libcrun_fail_with_error (errno, "no new privs");
+      if (process->user && process->user->uid)
+        {
+          ret = libcrun_set_caps (process->capabilities, process->no_new_privileges, 0, err);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
 
       if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
         libcrun_fail_with_error (errno, "ptrace(PTRACE_TRACEME)");

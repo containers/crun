@@ -1047,45 +1047,45 @@ libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *e
 }
 
 int
-libcrun_set_caps (libcrun_container *container, int keep_setuid, libcrun_error_t *err)
+libcrun_set_caps (oci_container_process_capabilities *capabilities, int no_new_privileges, int keep_setuid, libcrun_error_t *err)
 {
   int ret;
   struct all_caps_s caps;
-  oci_container *def = container->container_def;
+
   memset (&caps, 0, sizeof (caps));
-  if (def->process->capabilities)
+  if (capabilities)
     {
       ret = read_caps (caps.effective,
-                       def->process->capabilities->effective,
-                       def->process->capabilities->effective_len,
+                       capabilities->effective,
+                       capabilities->effective_len,
                        err);
       if (ret < 0)
         return ret;
 
       ret = read_caps (caps.inheritable,
-                       def->process->capabilities->inheritable,
-                       def->process->capabilities->inheritable_len,
+                       capabilities->inheritable,
+                       capabilities->inheritable_len,
                        err);
       if (ret < 0)
         return ret;
 
       ret = read_caps (caps.ambient,
-                       def->process->capabilities->ambient,
-                       def->process->capabilities->ambient_len,
+                       capabilities->ambient,
+                       capabilities->ambient_len,
                        err);
       if (ret < 0)
         return ret;
 
       ret = read_caps (caps.bounding,
-                       def->process->capabilities->bounding,
-                       def->process->capabilities->bounding_len,
+                       capabilities->bounding,
+                       capabilities->bounding_len,
                        err);
       if (ret < 0)
         return ret;
 
       ret = read_caps (caps.permitted,
-                       def->process->capabilities->permitted,
-                       def->process->capabilities->permitted_len,
+                       capabilities->permitted,
+                       capabilities->permitted_len,
                        err);
       if (ret < 0)
         return ret;
@@ -1103,7 +1103,7 @@ libcrun_set_caps (libcrun_container *container, int keep_setuid, libcrun_error_t
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error while setting PR_SET_KEEPCAPS");
 
-  return set_required_caps (&caps, def->process->no_new_privileges, err);
+  return set_required_caps (&caps, no_new_privileges, err);
 }
 
 struct rlimit_s
@@ -1144,21 +1144,18 @@ get_rlimit_resource (const char *name)
 }
 
 int
-libcrun_set_rlimits (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
   size_t i;
-  if (def->process->rlimits == NULL)
-    return 0;
-  for (i = 0; i < def->process->rlimits_len; i++)
+  for (i = 0; i < len; i++)
     {
       struct rlimit limit;
-      char *type = def->process->rlimits[i]->type;
+      char *type = rlimits[i]->type;
       int resource = get_rlimit_resource (type);
       if (UNLIKELY (resource < 0))
         return crun_make_error (err, errno, "invalid rlimit '%s'", type);
-      limit.rlim_cur = def->process->rlimits[i]->soft;
-      limit.rlim_max = def->process->rlimits[i]->hard;
+      limit.rlim_cur = rlimits[i]->soft;
+      limit.rlim_max = rlimits[i]->hard;
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
         return crun_make_error (err, errno, "setrlimit '%s'", type);
     }
