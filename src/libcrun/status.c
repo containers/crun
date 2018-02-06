@@ -148,7 +148,7 @@ int
 libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *dir = NULL;
-  const char *run_directory = get_run_directory (state_root);
+  cleanup_free char *run_directory = get_run_directory (state_root);
   int ret;
 
   ret = crun_ensure_directory (run_directory, 0700, err);
