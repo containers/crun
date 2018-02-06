@@ -313,6 +313,9 @@ container_entrypoint_init (void *args, const char *notify_socket,
     return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
 #endif
 
+  if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
+    libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
+
   ret = libcrun_set_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -433,7 +436,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
-    ret;
+    return ret;
 
   ret = sync_socket_wait_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
@@ -442,29 +445,6 @@ container_entrypoint (void *args, const char *notify_socket,
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  if (entrypoint_args->context->has_fifo_exec_wait)
-    {
-      char buffer[1];
-      fd_set read_set;
-      cleanup_close int fd = entrypoint_args->context->fifo_exec_wait_fd;
-      entrypoint_args->context->fifo_exec_wait_fd = -1;
-
-      FD_ZERO (&read_set);
-      FD_SET (fd, &read_set);
-
-      do
-        {
-          ret = select (fd + 1, &read_set, NULL, NULL, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "select");
-
-          ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "read from the exec fifo");
-        }
-      while (ret == 0);
-    }
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
@@ -671,28 +651,57 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
-wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd, int notify_socket, libcrun_error_t *err)
+wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd, int notify_socket, int container_ready_fd, libcrun_error_t *err)
 {
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
-  int ret, container_exit_code = 0, last_process;
+  int ret, container_exit_code = 0, last_process, pid_status;
   sigset_t mask;
   int fds[10];
   int levelfds[10];
   int levelfds_len = 0;
   int fds_len = 0;
+  cleanup_close int exec_wait_fd = -1;
 
-  if (context->detach && notify_socket < 0)
+  ret = TEMP_FAILURE_RETRY (waitpid (pid, &pid_status, 0));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "waitpid for exec status");
+
+  ret = 0;
+  if (WIFSIGNALED (pid_status))
+    ret = 128 + WTERMSIG (pid_status);
+  if (WIFEXITED (pid_status))
+    ret = WEXITSTATUS (pid_status);
+
+  if (ret != 0)
+    return ret;
+
+  if (container_ready_fd >= 0)
+    {
+      unsigned char r = (unsigned char) ret;
+      TEMP_FAILURE_RETRY (write (container_ready_fd, &r, 1));
+      close (container_ready_fd);
+      container_ready_fd = -1;
+    }
+
+  if (context->detach && notify_socket < 0 && !context->has_fifo_exec_wait)
     return 0;
 
-  sigfillset (&mask);
-  signalfd = create_signalfd (&mask, err);
-  if (UNLIKELY (signalfd < 0))
-    return signalfd;
+  if (! context->has_fifo_exec_wait)
+    {
+      ret = ptrace (PTRACE_DETACH, pid, NULL, NULL);
+      if (UNLIKELY (ret < 0 && errno != ESRCH))
+        return crun_make_error (err, errno, "ptrace");
+    }
 
+  sigfillset (&mask);
   ret = sigprocmask (SIG_BLOCK, &mask, NULL);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
+
+  signalfd = create_signalfd (&mask, err);
+  if (UNLIKELY (signalfd < 0))
+    return signalfd;
 
   ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
   if (UNLIKELY (ret < 0))
@@ -708,6 +717,12 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
     {
       fds[fds_len++] = 0;
       levelfds[levelfds_len++] = terminal_fd;
+    }
+  if (context->has_fifo_exec_wait)
+    {
+      exec_wait_fd = context->fifo_exec_wait_fd;
+      fds[fds_len++] = exec_wait_fd;
+      context->fifo_exec_wait_fd = -1;
     }
   fds[fds_len++] = -1;
   levelfds[levelfds_len++] = -1;
@@ -768,6 +783,10 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
                 }
             }
 #endif
+          else if (events[i].data.fd == exec_wait_fd)
+            {
+              return 0;
+            }
           else if (events[i].data.fd == signalfd)
             {
               res = TEMP_FAILURE_RETRY (read (signalfd, &si, sizeof (si)));
@@ -950,8 +969,8 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-    /* The container is waiting that we write back.  In this phase we can launch the
-       prestart hooks.  */
+  /* The container is waiting that we write back.  In this phase we can launch the
+     prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
       ret = do_hooks (pid, context->id, false, def->root->path,
@@ -999,14 +1018,8 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         }
     }
 
-  if (container_ready_fd >= 0)
-    {
-      TEMP_FAILURE_RETRY (write (container_ready_fd, "1", 1));
-      close (container_ready_fd);
-    }
-
-  ret = wait_for_process (pid, context, terminal_fd, notify_socket, err);
-  if (! (context->has_fifo_exec_wait || context->detach))
+  ret = wait_for_process (pid, context, terminal_fd, notify_socket, container_ready_fd, err);
+  if (!context->detach)
     cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
 
   crun_set_output_handler (log_write_to_stderr, NULL);
@@ -1159,7 +1172,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
     return crun_make_error (err, errno, "fork");
   if (ret)
     {
-      char c;
+      unsigned char c;
       close (pipefd1);
       pipefd1 = -1;
 
@@ -1167,8 +1180,8 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "waiting for container to be ready");
 
-      if (ret == 1 && c == '1')
-        return 0;
+      if (ret == 1)
+        return c;
       return crun_make_error (err, 0, "container process error");
     }
 
@@ -1189,6 +1202,8 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   ret = libcrun_container_run_internal (container, context, tmp, err);
   if (UNLIKELY (ret < 0))
     {
+      libcrun_error_t tmp_err;
+        libcrun_delete_container (context, def, context->id, 1, &tmp_err);
       crun_set_output_handler (log_write_to_stderr, NULL);
       libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
     }
@@ -1360,6 +1375,10 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         return ret;
     }
 
+  ret = block_signals (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   pid = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
@@ -1372,6 +1391,13 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
       const char *cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
+
+      ret = unblock_signals (err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
+        libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
 
       for (i = 0; i < process->env_len; i++)
         if (putenv (process->env[i]) < 0)
@@ -1413,10 +1439,9 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
-      if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
-        libcrun_fail_with_error (errno, "ptrace(PTRACE_TRACEME)");
-
-      execvp (process->args[0], process->args);
+      ret = execvp (process->args[0], process->args);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (errno, "exec");
       _exit (1);
     }
 
@@ -1454,26 +1479,8 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         return ret;
     }
 
-  do
-    {
-      ret = waitpid (pid, &pid_status, 0);
-    }
-  while (ret != pid);
+  ret = wait_for_process (pid, context, terminal_fd, -1, -1, err);
 
-  ptrace (PTRACE_DETACH, pid, NULL, NULL);
-
-  ret = 0;
-  if (WIFSIGNALED (pid_status))
-    ret = 128 + WTERMSIG (pid_status);
-  if (WIFEXITED (pid_status))
-    ret = WEXITSTATUS (pid_status);
-
-  if (ret != 0)
-    goto exit;
-
-  ret = wait_for_process (pid, context, terminal_fd, -1, err);
-
- exit:
   flush_fd_to_err (terminal_fd, context->stderr);
   return ret;
 }

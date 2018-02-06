@@ -41,6 +41,7 @@
 #include "status.h"
 #include <sys/socket.h>
 #include <libgen.h>
+#include <sys/wait.h>
 
 struct remount_s
 {
@@ -1447,12 +1448,13 @@ libcrun_run_linux_container (libcrun_container *container,
 }
 
 static int
-join_process_parent_helper (int sync_socket_fd,
+join_process_parent_helper (pid_t child_pid,
+                            int sync_socket_fd,
                             libcrun_container_status_t *status,
                             int *terminal_fd,
                             libcrun_error_t *err)
 {
-  int ret;
+  int ret, pid_status;
   char res;
   pid_t pid;
   cleanup_close int sync_fd = sync_socket_fd;
@@ -1471,6 +1473,11 @@ join_process_parent_helper (int sync_socket_fd,
   ret = TEMP_FAILURE_RETRY (read (sync_fd, &pid, sizeof (pid)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from sync socket");
+
+  /* Wait for the child pid so we ensure the grandchild gets properly reparented.  */
+  ret = TEMP_FAILURE_RETRY (waitpid (child_pid, &pid_status, 0));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "waitpid for exec child pid");
 
   ret = libcrun_move_process_to_cgroup (pid, status->cgroup_path, err);
   /* The write unblocks the grandchild process so it can run once we setup
@@ -1553,7 +1560,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
     {
       close (sync_socket_fd[1]);
       sync_fd = sync_socket_fd[0];
-      return join_process_parent_helper (sync_fd, status, terminal_fd, err);
+      return join_process_parent_helper (pid, sync_fd, status, terminal_fd, err);
     }
 
   close (sync_socket_fd[0]);
