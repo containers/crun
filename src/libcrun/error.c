@@ -101,21 +101,25 @@ log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
   struct timeval tv;
   struct tm now;
   char timestamp[64];
-  int can_color = isatty (2);
+  int tty = isatty (2);
   const char *color_begin = "";
-  const char *color_end = can_color ? "\x1b[0m" : "";
+  const char *color_end = tty ? "\x1b[0m" : "";
 
-  if (can_color)
-    color_begin = warning ? "\x1b[1;33m" : "\x1b[1;31m";
+  timestamp[0] = '\0';
+  if (tty)
+    {
+      color_begin = warning ? "\x1b[1;33m" : "\x1b[1;31m";
 
-  gettimeofday (&tv, NULL);
-  gmtime_r (&tv.tv_sec, &now);
-  strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
+      gettimeofday (&tv, NULL);
+      gmtime_r (&tv.tv_sec, &now);
+      strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
+      sprintf (&timestamp[19], ".%09ldZ: ", tv.tv_usec);
+    }
 
   if (errno_)
-    fprintf (stderr, "%s%s.%09ldZ: %s: %s%s\n", color_begin, timestamp, tv.tv_usec, msg, strerror (errno_), color_end);
+    fprintf (stderr, "%s%s%s: %s%s\n", color_begin, timestamp, msg, strerror (errno_), color_end);
   else
-    fprintf (stderr, "%s%s.%09ldZ: %s%s\n", color_begin, timestamp, tv.tv_usec, msg, color_end);
+    fprintf (stderr, "%s%s%s%s\n", color_begin, timestamp, msg, color_end);
 }
 
 static crun_output_handler output_handler = log_write_to_stderr;
