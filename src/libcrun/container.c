@@ -676,6 +676,15 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
   if (ret != 0)
     return ret;
 
+  if (context->pid_file)
+    {
+      char buf[12];
+      size_t buf_len = sprintf (buf, "%d", pid);
+      ret = write_file (context->pid_file, buf, buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (container_ready_fd >= 0)
     {
       unsigned char r = (unsigned char) ret;
@@ -916,14 +925,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       socket_pair_1 = -1;
     }
 
-  if (context->pid_file)
-    {
-      char buf[12];
-      size_t buf_len = sprintf (buf, "%d", pid);
-      ret = write_file (context->pid_file, buf, buf_len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
   ret = libcrun_cgroup_enter (&cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
@@ -1468,14 +1469,6 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
               return ret;
             }
         }
-    }
-  if (context->pid_file)
-    {
-      char buf[12];
-      size_t buf_len = sprintf (buf, "%d", pid);
-      ret = write_file (context->pid_file, buf, buf_len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
     }
 
   ret = wait_for_process (pid, context, terminal_fd, -1, -1, err);
