@@ -339,6 +339,9 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   struct stat stat;
   size_t nread, allocated;
 
+  if (strcmp (path, "-") == 0)
+    path = "/dev/stdin";
+
   fd = TEMP_FAILURE_RETRY (open (path, O_RDONLY));
 
   if (UNLIKELY (fd < 0))
@@ -353,23 +356,22 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   if (stat.st_size == 0)
     allocated = 256;
   buf = xmalloc (allocated + 1);
-  buf[stat.st_size] = '\0';
   nread = 0;
-  while ((stat.st_size && nread < stat.st_size) || 1)
+  while ((stat.st_size && nread < stat.st_size) || stat.st_size == 0)
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "error reading from file '%s'", path);
 
-      nread += ret;
-
-      if (nread < allocated)
+      if (ret == 0)
         break;
+
+      nread += ret;
 
       allocated += 256;
       buf = xrealloc (buf, allocated + 1);
-      buf[allocated] = '\0';
     }
+  buf[nread] = '\0';
   *out = buf;
   buf = NULL;
   if (len)
