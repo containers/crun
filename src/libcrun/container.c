@@ -84,6 +84,9 @@ sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
   msg.type = warning ? SYNC_SOCKET_WARNING_MESSAGE : SYNC_SOCKET_ERROR_MESSAGE;
   msg.error_value = err_value;
 
+  if (fd < 0)
+    return 0;
+
   err_len = strlen (log_msg);
   if (err_len > sizeof (msg.message))
     err_len = sizeof (msg.message) - 1;
@@ -101,6 +104,8 @@ sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
 static int
 sync_socket_write_error (int fd, libcrun_error_t *out_err)
 {
+  if (fd < 0)
+    return 0;
   return sync_socket_write_msg (fd, false, (*out_err)->status, (*out_err)->msg);
 }
 
@@ -109,6 +114,9 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
 {
   struct container_entrypoint_s *entrypoint_args = arg;
   int fd = entrypoint_args->sync_socket;
+
+  if (fd < 0)
+    return;
 
   if (sync_socket_write_msg (fd, warning, errno_, msg) < 0)
     log_write_to_stderr (errno_, msg, warning, arg);
@@ -119,6 +127,9 @@ sync_socket_wait_sync (int fd, bool flush, libcrun_error_t *err)
 {
   int ret;
   struct sync_socket_message_s msg;
+
+  if (fd < 0)
+    return 0;
 
   while (true)
     {
@@ -166,6 +177,9 @@ sync_socket_send_abort (int fd, libcrun_error_t *err)
   struct sync_socket_message_s msg;
   msg.type = SYNC_SOCKET_ABORT_MESSAGE;
 
+  if (fd < 0)
+    return 0;
+
   ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, 0)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to sync socket");
@@ -177,6 +191,9 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   int ret;
   struct sync_socket_message_s msg;
   msg.type = SYNC_SOCKET_SYNC_MESSAGE;
+
+  if (fd < 0)
+    return 0;
 
   ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, 0)));
   if (UNLIKELY (ret < 0))
