@@ -396,6 +396,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   for (i = 0; i < def->process->env_len; i++)
     if (putenv (def->process->env[i]) < 0)
       return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
+
   if (notify_socket)
     {
       char *notify_socket_env;
@@ -432,7 +433,6 @@ container_entrypoint (void *args, const char *notify_socket,
     }
 
   entrypoint_args->sync_socket = -1;
-  crun_set_output_handler (log_write_to_stderr, NULL);
 
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
@@ -446,11 +446,16 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  crun_set_output_handler (log_write_to_stderr, NULL);
+
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->stderr, &err);
 
   execvp (def->process->args[0], def->process->args);
+  if (errno == ENOENT)
+    return crun_make_error (err, errno, "executable file not found in $PATH");
+
   return crun_make_error (err, errno, "exec the container process");
 }
 
@@ -667,16 +672,13 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec status");
 
-  ret = 0;
+  container_exit_code = 0;
   if (WIFSIGNALED (pid_status))
-    ret = 128 + WTERMSIG (pid_status);
+    container_exit_code = 128 + WTERMSIG (pid_status);
   if (WIFEXITED (pid_status))
-    ret = WEXITSTATUS (pid_status);
+    container_exit_code = WEXITSTATUS (pid_status);
 
-  if (ret != 0)
-    return ret;
-
-  if (context->pid_file)
+  if (container_exit_code == 0 && context->pid_file)
     {
       char buf[12];
       size_t buf_len = sprintf (buf, "%d", pid);
@@ -685,16 +687,19 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
         return ret;
     }
 
-  if (container_ready_fd >= 0)
-    {
-      unsigned char r = (unsigned char) ret;
-      TEMP_FAILURE_RETRY (write (container_ready_fd, &r, 1));
-      close (container_ready_fd);
-      container_ready_fd = -1;
-    }
+  if (container_exit_code || WIFEXITED (pid_status))
+    return container_exit_code;
 
   if (context->detach && notify_socket < 0 && !context->has_fifo_exec_wait)
     return 0;
+
+  if (container_ready_fd >= 0)
+    {
+      ret = 0;
+      TEMP_FAILURE_RETRY (write (container_ready_fd, &ret, sizeof (ret)));
+      close (container_ready_fd);
+      container_ready_fd = -1;
+    }
 
   if (! context->has_fifo_exec_wait)
     {
@@ -847,6 +852,9 @@ flush_fd_to_err (int terminal_fd, FILE *stderr)
       fwrite (buf, ret, 1, stderr);
     }
   fcntl (terminal_fd, F_SETFL, flags);
+  fflush (stderr);
+  fsync (1);
+  fsync (2);
 }
 
 static void
@@ -964,7 +972,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
           cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
           return terminal_fd;
         }
-
     }
 
   ret = sync_socket_wait_sync (sync_socket, false, err);
@@ -1026,8 +1033,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, container_ready_fd, err);
   if (!context->detach)
     cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
-
-  crun_set_output_handler (log_write_to_stderr, NULL);
 
   return ret;
 }
@@ -1134,7 +1139,7 @@ int
 libcrun_container_create (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
-  int tmp, ret;
+  int ret;
   int container_ready_pipe[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
@@ -1173,17 +1178,26 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
     return crun_make_error (err, errno, "fork");
   if (ret)
     {
-      unsigned char c;
+      int exit_code;
       close (pipefd1);
       pipefd1 = -1;
 
-      ret = TEMP_FAILURE_RETRY (read (pipefd0, &c, 1));
+      TEMP_FAILURE_RETRY (waitpid (ret, NULL, 0));
+
+      ret = TEMP_FAILURE_RETRY (read (pipefd0, &exit_code, sizeof (exit_code)));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "waiting for container to be ready");
-
-      if (ret == 1)
-        return c;
-      return crun_make_error (err, 0, "container process error");
+      if (ret > 0)
+        {
+          if (exit_code != 0)
+            {
+              libcrun_error_t tmp_err;
+              libcrun_delete_container (context, def, context->id, 1, &tmp_err);
+              crun_error_release (err);
+            }
+          return -exit_code;
+        }
+      return 1;
     }
 
   if (context->stderr)
@@ -1198,17 +1212,16 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
 
-  tmp = pipefd1;
-  pipefd1 = -1;
-  ret = libcrun_container_run_internal (container, context, tmp, err);
+  ret = libcrun_container_run_internal (container, context, pipefd1, err);
   if (UNLIKELY (ret < 0))
     {
-      libcrun_error_t tmp_err;
-        libcrun_delete_container (context, def, context->id, 1, &tmp_err);
       crun_set_output_handler (log_write_to_stderr, NULL);
-      libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+      log_write_to_stderr ((*err)->status, (*err)->msg, 0, NULL);
+      fflush (stderr);
     }
-  _exit (ret);
+
+  TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
+  exit (ret);
 }
 
 int
@@ -1441,8 +1454,9 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
         }
 
       ret = execvp (process->args[0], process->args);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error (errno, "exec");
+      if (errno == ENOENT)
+        libcrun_fail_with_error (errno, "executable file not found in $PATH");
+      libcrun_fail_with_error (errno, "exec");
       _exit (1);
     }
 

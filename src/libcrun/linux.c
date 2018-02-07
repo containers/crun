@@ -1444,7 +1444,7 @@ libcrun_run_linux_container (libcrun_container *container,
  out:
   if (*err)
     libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-  return 1;
+  _exit (1);
 }
 
 static int
