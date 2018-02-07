@@ -900,6 +900,10 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       socket_pair_1 = container_args.terminal_socketpair[1];
     }
 
+  ret = block_signals (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   pid = libcrun_run_linux_container (container, context->detach,
                                      container_entrypoint, &container_args,
                                      &notify_socket, &sync_socket, err);
@@ -1095,10 +1099,6 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
 
   if (!detach)
     {
-      ret = block_signals (err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
       if (context->stderr)
         stderr = context->stderr;
       return libcrun_container_run_internal (container, context, -1, err);
@@ -1469,7 +1469,6 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
             }
         }
     }
-
   if (context->pid_file)
     {
       char buf[12];
