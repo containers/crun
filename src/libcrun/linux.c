@@ -335,6 +335,10 @@ do_mount_cgroup (libcrun_container *container,
         return ret;
     }
 
+  ret = libcrun_cgroups_create_symlinks (target, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   return 0;
 }
 

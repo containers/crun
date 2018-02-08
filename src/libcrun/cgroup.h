@@ -27,4 +27,5 @@ int libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libc
 int libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err);
 int libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char *path, libcrun_error_t *err);
+int libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err);
 #endif

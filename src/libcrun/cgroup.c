@@ -39,6 +39,20 @@ static const char *subsystems[] = { "cpuset", "devices", "pids", "memory",
                                     "hugetlb", "cpu,cpuacct", "perf_event",
                                     "unified", NULL};
 
+struct symlink_s
+{
+  const char *name;
+  const char *target;
+};
+
+static struct symlink_s cgroup_symlinks[] = {
+  { "cpu", "cpu,cpuacct" },
+  { "cpuacct", "cpu,cpuacct" },
+  { "net_cls", "net_cls,net_prio" },
+  { "net_prio", "net_cls,net_prio" },
+  { NULL, NULL }
+};
+
 static int
 initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 {
@@ -99,7 +113,6 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
   size_t i;
 
   sprintf (pid_str, "%d", pid);
-
   for (i = 0; subsystems[i]; i++)
     {
       cleanup_free char *cgroup_path = NULL;
@@ -135,6 +148,28 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
         return ret;
     }
 
+  return 0;
+}
+
+int
+libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err)
+{
+  int i, ret;
+  cleanup_close int dirfd = open (target, O_DIRECTORY | O_RDONLY);
+
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "cannot open /sys/fs/cgroup");
+
+  for (i = 0; cgroup_symlinks[i].name; i++)
+    {
+      ret = symlinkat (cgroup_symlinks[i].target, dirfd, cgroup_symlinks[i].name);
+      if (UNLIKELY (ret < 0))
+        {
+          if (errno == ENOENT)
+            continue;
+          return crun_make_error (err, errno, "symlinkat %s", cgroup_symlinks[i].name);
+        }
+    }
   return 0;
 }
 
