@@ -825,9 +825,10 @@ close_fds_ge_than (int n, libcrun_error_t *err)
       val = strtoll (name, NULL, 10);
       if (val < n || val == fd)
         continue;
-      ret = close (val);
+
+      ret = fcntl (val, F_SETFD, FD_CLOEXEC);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "cannot close fd for '/proc/self/fd/%s'", name);
+        return crun_make_error (err, errno, "cannot set CLOEXEC fd for '/proc/self/fd/%s'", name);
     }
   return 0;
 }
