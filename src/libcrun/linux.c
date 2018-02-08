@@ -1688,19 +1688,13 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
 }
 
 int
-libcrun_linux_container_update (libcrun_container_status_t *status, const char *path, libcrun_error_t *err)
+libcrun_linux_container_update (libcrun_container_status_t *status, const char *content, size_t len, libcrun_error_t *err)
 {
   int ret;
   yajl_val tree = NULL;
-  cleanup_free char *content = NULL;
-  size_t len;
   parser_error parser_err = NULL;
   oci_container_linux_resources *resources = NULL;
   struct parser_context ctx = {0, NULL};
-
-  ret = read_all_file (path, &content, &len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = parse_json_file (&tree, content, &ctx, err);
   if (UNLIKELY (ret < 0))

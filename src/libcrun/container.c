@@ -1506,7 +1506,7 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
 }
 
 int
-libcrun_container_update_from_file (struct libcrun_context_s *context, const char *id, const char *path, libcrun_error_t *err)
+libcrun_container_update (struct libcrun_context_s *context, const char *id, const char *content, size_t len, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
@@ -1517,5 +1517,5 @@ libcrun_container_update_from_file (struct libcrun_context_s *context, const cha
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return libcrun_linux_container_update (&status, path, err);
+  return libcrun_linux_container_update (&status, content, len, err);
 }
