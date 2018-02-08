@@ -96,7 +96,7 @@ crun_error_get_errno (libcrun_error_t *err)
 }
 
 void
-log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
+log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
 {
   struct timeval tv;
   struct tm now;
@@ -104,6 +104,7 @@ log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
   int tty = isatty (2);
   const char *color_begin = "";
   const char *color_end = tty ? "\x1b[0m" : "";
+  FILE *stream = arg;
 
   timestamp[0] = '\0';
   if (tty)
@@ -117,9 +118,15 @@ log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
     }
 
   if (errno_)
-    fprintf (stderr, "%s%s%s: %s%s\n", color_begin, timestamp, msg, strerror (errno_), color_end);
+    fprintf (stream, "%s%s%s: %s%s\n", color_begin, timestamp, msg, strerror (errno_), color_end);
   else
-    fprintf (stderr, "%s%s%s%s\n", color_begin, timestamp, msg, color_end);
+    fprintf (stream, "%s%s%s%s\n", color_begin, timestamp, msg, color_end);
+}
+
+void
+log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
+{
+  log_write_to_stream (errno_, msg, warning, stderr);
 }
 
 static crun_output_handler output_handler = log_write_to_stderr;

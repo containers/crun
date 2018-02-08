@@ -36,6 +36,8 @@ typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, 
 
 void crun_set_output_handler (crun_output_handler handler, void *arg);
 
+void log_write_to_stream (int errno_, const char *msg, bool warning, void *arg);
+
 void log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg);
 
 # define OOM() do {oom_handler ();} while (0)
