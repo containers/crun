@@ -81,7 +81,6 @@ initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
           ret = TEMP_FAILURE_RETRY (write (fd, b, b_len));
           if (UNLIKELY (ret < 0))
             return ret;
-
         }
 
       ret = write_file_at (dirfd, files[i], b, b_len, err);
@@ -146,9 +145,12 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 }
 
 static
-int get_system_path (char **path, const char *suffix, libcrun_error_t *err)
+int get_system_path (char **path, const char *suffix, int systemd, libcrun_error_t *err)
 {
-  xasprintf (path, "/system.slice/libcrun-%s", suffix);
+  if (systemd)
+    xasprintf (path, "/libcrun-%s", suffix);
+  else
+    xasprintf (path, "/system.slice/libcrun-%s", suffix);
   return 0;
 }
 
@@ -468,7 +470,7 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
     }
   else
     {
-      ret = get_system_path (path, id, err);
+      ret = get_system_path (path, id, systemd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
