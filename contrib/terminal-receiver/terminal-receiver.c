@@ -27,6 +27,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 
 int
 open_unix_domain_socket (const char *path)
@@ -106,6 +108,7 @@ main (int argc, char **argv)
   socket = open_unix_domain_socket (argv[1]);
   while (1)
     {
+      struct termios tset;
       int conn = TEMP_FAILURE_RETRY (accept (socket, NULL, NULL));
       if (conn < 0)
         error (EXIT_FAILURE, errno, "accept");
@@ -116,6 +119,14 @@ main (int argc, char **argv)
           close (conn);
           continue;
         }
+
+      if (tcgetattr(fd, &tset) == -1)
+        error (0, errno, "failed to get console terminal settings");
+
+      tset.c_oflag |= ONLCR;
+
+      if (tcsetattr (fd, TCSANOW, &tset) == -1)
+        error (0, errno, "failed to set console terminal settings");
 
       while (1)
         {
