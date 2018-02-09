@@ -563,34 +563,6 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
   return 0;
 }
 
-static void
-kill_all_processes (char *cgroup_path)
-{
-  libcrun_error_t err = NULL;
-  cleanup_free char *buffer = NULL;
-  size_t len;
-  int ret;
-  cleanup_free char *cgroup_procs_path = NULL;
-  char *it;
-  char *saveptr = NULL;
-
-  xasprintf (&cgroup_procs_path, "%s/%s", cgroup_path, "cgroup.procs");
-
-  ret = read_all_file (cgroup_procs_path, &buffer, &len, &err);
-  if (UNLIKELY (ret < 0))
-    {
-      crun_error_release (&err);
-      return;
-    }
-
-  for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
-    {
-      pid_t pid = strtoull (it, NULL, 10);
-      if (pid > 0)
-        kill (pid, SIGKILL);
-    }
-}
-
 int
 libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_error_t *err)
 {
@@ -616,7 +588,9 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
       if (ret == 0)
         continue;
 
-      kill_all_processes (cgroup_path);
+      ret = libcrun_cgroup_killall (cgroup_path, err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
 
       rmdir (cgroup_path);
     }
