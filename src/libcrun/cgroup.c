@@ -106,6 +106,48 @@ initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 }
 
 static int
+enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+{
+  char pid_str[16];
+  int ret;
+
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *cgroup_path_procs = NULL;
+
+  sprintf (pid_str, "%d", pid);
+
+  xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystem, path ? path : "");
+  if (ensure_missing)
+    {
+      ret = crun_ensure_directory (cgroup_path, 0755, err);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+
+      if (strcmp (subsystem, "cpuset") == 0)
+        {
+          ret = initialize_cpuset_subsystem (cgroup_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+  else
+    {
+      ret = crun_path_exists (cgroup_path, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (ret == 0)
+        return 0;
+    }
+
+  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystem, path ? path : "");
+
+  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+static int
 enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *err)
 {
   char pid_str[16];
@@ -115,37 +157,10 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
   sprintf (pid_str, "%d", pid);
   for (i = 0; subsystems[i]; i++)
     {
-      cleanup_free char *cgroup_path = NULL;
-      cleanup_free char *cgroup_path_procs = NULL;
-
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystems[i], path ? path : "");
-      if (ensure_missing)
-        {
-          ret = crun_ensure_directory (cgroup_path, 0755, err);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
-
-          if (strcmp (subsystems[i], "cpuset") == 0)
-            {
-              ret = initialize_cpuset_subsystem (cgroup_path, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-        }
-      else
-        {
-          ret = crun_path_exists (cgroup_path, 0, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          if (ret == 0)
-            continue;
-        }
-
-      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystems[i], path ? path : "");
-
-      ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+      ret = enter_cgroup_subsystem (pid, subsystems[i], path, ensure_missing, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
     }
 
   return 0;
@@ -190,11 +205,12 @@ int get_system_path (char **path, const char *suffix, int systemd, libcrun_error
 }
 
 static
-int get_current_path (char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
+int systemd_finalize (char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int ret;
   char *from, *to;
+  char *saveptr;
   cleanup_free char *cgroup_path = NULL;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
@@ -210,11 +226,29 @@ int get_current_path (char **path, pid_t pid, const char *suffix, libcrun_error_
   if (UNLIKELY (to == NULL))
     return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
   *to = '\0';
-
   if (suffix)
     xasprintf (path, "%s/%s", from, suffix);
   else
     *path = xstrdup (from);
+  *to = '\n';
+
+  if (getuid ())
+    return 0;
+
+  for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
+    {
+      char *subpath, *subsystem;
+      subsystem = strchr (from, ':') + 1;
+      subpath = strchr (subsystem, ':') + 1;
+      *(subpath - 1) = '\0';
+
+      if (strcmp (subpath, *path))
+        {
+          ret = enter_cgroup_subsystem (pid, subsystem, *path, 1, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
 
   return 0;
 }
@@ -503,13 +537,13 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
 
 #ifdef HAVE_SYSTEMD
   cleanup_free char *scope = NULL;
-  xasprintf (&scope, "%s.scope", id);
+  xasprintf (&scope, "%s-%d.scope", id, getpid ());
   if (systemd || getuid ())
     {
       ret = enter_systemd_cgroup_scope (scope, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
-      return get_current_path (path, pid, NULL, err);
+      return systemd_finalize (path, pid, NULL, err);
     }
 #endif
 
