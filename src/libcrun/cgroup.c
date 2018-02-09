@@ -1182,6 +1182,9 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
             return ret;
         }
 
+      if (resources->cpu->cpus == NULL || resources->cpu->mems == NULL)
+        return 0;
+
       xasprintf (&path_to_cpuset, "/sys/fs/cgroup/cpuset%s/", path);
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
       if (SKIP (dirfd_cpuset, errno))
