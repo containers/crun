@@ -245,7 +245,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
 }
 
 static
-int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (const char *scope, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -255,6 +255,13 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
   const char *object;
   int terminated = 0;
   struct systemd_job_removed_s userdata;
+  int i;
+  const char *boolean_opts[] = {"CPUAccounting",
+                                "MemoryAccounting",
+                                "IOAccounting",
+                                "TasksAccounting",
+                                "Delegate",
+                                NULL};
 
   sd_err = sd_bus_default (&bus);
   if (sd_err < 0)
@@ -313,6 +320,16 @@ int enter_systemd_cgroup_scope (char **path, const char *scope, pid_t pid, libcr
     {
       ret = crun_make_error (err, -sd_err, "sd-bus message append");
       goto exit;
+    }
+
+  for (i = 0; boolean_opts[i]; i++)
+    {
+      sd_err = sd_bus_message_append (m, "(sv)", boolean_opts[i], "b", 1);
+      if (UNLIKELY (sd_err < 0))
+        {
+          ret = crun_make_error (err, -sd_err, "sd-bus message append");
+          goto exit;
+        }
     }
 
   sd_err = sd_bus_message_close_container (m);
@@ -489,7 +506,7 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
   xasprintf (&scope, "%s.scope", id);
   if (systemd || getuid ())
     {
-      ret = enter_systemd_cgroup_scope (path, scope, pid, err);
+      ret = enter_systemd_cgroup_scope (scope, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
       return get_current_path (path, pid, NULL, err);
