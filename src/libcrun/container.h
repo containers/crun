@@ -58,11 +58,6 @@ struct libcrun_container_s
   struct libcrun_context_s *context;
 };
 
-enum
-  {
-    LIBCRUN_RUN_NO_FORK = 1,
-  };
-
 typedef struct libcrun_container_s libcrun_container;
 
 libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *err);

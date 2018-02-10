@@ -315,8 +315,11 @@ container_entrypoint_init (void *args, const char *notify_socket,
     return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
 #endif
 
-  if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
-    libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
+  if (entrypoint_args->context->detach)
+    {
+      if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
+        libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
+    }
 
   ret = libcrun_set_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
@@ -681,17 +684,21 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
   int fds_len = 0;
   cleanup_close int exec_wait_fd = -1;
 
-  ret = TEMP_FAILURE_RETRY (waitpid (pid, &pid_status, 0));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "waitpid for exec status");
-
   container_exit_code = 0;
-  if (WIFSIGNALED (pid_status))
-    container_exit_code = 128 + WTERMSIG (pid_status);
-  if (WIFEXITED (pid_status))
-    container_exit_code = WEXITSTATUS (pid_status);
 
-  if (container_exit_code == 0 && context->pid_file)
+  /* On detach, the container uses PTRACEME.  In this case read its status after exec.  */
+  if (context->detach)
+    {
+      ret = TEMP_FAILURE_RETRY (waitpid (pid, &pid_status, 0));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "waitpid for exec status");
+      if (WIFSIGNALED (pid_status))
+        container_exit_code = 128 + WTERMSIG (pid_status);
+      if (WIFEXITED (pid_status))
+        container_exit_code = WEXITSTATUS (pid_status);
+    }
+
+  if ((!context->detach || container_exit_code == 0) && context->pid_file)
     {
       char buf[12];
       size_t buf_len = sprintf (buf, "%d", pid);
@@ -700,9 +707,11 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
         return ret;
     }
 
-  if (container_exit_code || WIFEXITED (pid_status))
+  /* If the container process exited, return immediately when detach is used.  */
+  if (context->detach && (container_exit_code || WIFEXITED (pid_status)))
     return container_exit_code;
 
+  /* Also exit if there is nothing more to wait for.  */
   if (context->detach && notify_socket < 0 && !context->has_fifo_exec_wait)
     return 0;
 
@@ -1099,6 +1108,9 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
   oci_container *def = container->container_def;
   int ret;
   int detach = context->detach;
+  int container_ret_status[2];
+  cleanup_close int pipefd0 = -1;
+  cleanup_close int pipefd1 = -1;
 
   container->context = context;
 
@@ -1124,14 +1136,32 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
       return libcrun_container_run_internal (container, context, -1, err);
     }
 
-  if (! (options & LIBCRUN_RUN_NO_FORK))
+
+  ret = pipe (container_ret_status);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "pipe");
+  pipefd0 = container_ret_status[0];
+  pipefd1 = container_ret_status[1];
+
+  ret = fork ();
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fork");
+  if (ret)
     {
-      ret = fork ();
+      int status;
+      close (pipefd1);
+      pipefd1 = -1;
+      TEMP_FAILURE_RETRY (waitpid (ret, &status, 0));
+
+      ret = TEMP_FAILURE_RETRY (read (pipefd0, &status, sizeof (status)));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "fork");
-      if (ret)
-        return 0;
+        return ret;
+
+      return status;
     }
+
+  close (pipefd0);
+  pipefd0 = -1;
 
   if (context->stderr)
     stderr = context->stderr;
@@ -1141,12 +1171,13 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
   ret = libcrun_container_run_internal (container, context, -1, err);
+  TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
     {
       crun_set_output_handler (log_write_to_stderr, NULL);
       libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
     }
-  _exit (ret);
+  exit (ret);
 }
 
 int
@@ -1424,8 +1455,11 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
-        libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
+      if (context->detach)
+        {
+          if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
+            libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
+        }
 
       for (i = 0; i < process->env_len; i++)
         if (putenv (process->env[i]) < 0)
