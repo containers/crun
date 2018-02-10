@@ -241,7 +241,11 @@ ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *er
 
   ret = mkdir (path, mode);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "creating file '%s'", path);
+    {
+      if (errno == EEXIST)
+        return 0;
+      return crun_make_error (err, errno, "creating file '%s'", path);
+    }
   return 0;
 }
 
