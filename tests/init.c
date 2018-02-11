@@ -110,6 +110,14 @@ int main (int argc, char **argv)
       exit (0);
     }
 
+  if (strcmp (argv[1], "echo") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'cat' requires an argument");
+      fputs (argv[2], stdout);
+      exit (0);
+    }
+
   if (strcmp (argv[1], "cat") == 0)
     {
       if (argc < 3)
