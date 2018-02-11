@@ -402,10 +402,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       return crun_make_error (err, errno, "chdir");
 
-  ret = libcrun_set_seccomp (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   if (clearenv ())
     return crun_make_error (err, errno, "clearenv");
 
@@ -467,6 +463,10 @@ container_entrypoint (void *args, const char *notify_socket,
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->stderr, &err);
+
+  ret = libcrun_set_seccomp (entrypoint_args->container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   execvp (def->process->args[0], def->process->args);
   if (errno == ENOENT)
