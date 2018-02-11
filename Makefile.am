@@ -83,6 +83,7 @@ TESTS = tests/test_capabilities.py \
 	tests/test_hooks.py \
 	tests/test_update.py \
 	tests/test_detach.py \
+	tests/test_resources.py \
 	$(UNIT_TESTS)
 
 EXTRA_DIST += $(TESTS) tests/tests_utils.py
