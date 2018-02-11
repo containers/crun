@@ -1414,6 +1414,8 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
   const char *state_root = context->state_root;
   cleanup_close int terminal_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
+  cleanup_free char *config_file = NULL;
+  libcrun_container *container;
 
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -1437,6 +1439,11 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  xasprintf (&config_file, "%s/config.json", status.bundle);
+  container = libcrun_container_load (config_file, err);
+  if (container == NULL)
+    return crun_make_error (err, 0, "error loading config.json");
 
   pid = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
@@ -1504,6 +1511,10 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
       ret = close_fds_ge_than (context->preserve_fds + 3, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+
+      ret = libcrun_set_seccomp (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = execvp (process->args[0], process->args);
       if (errno == ENOENT)
