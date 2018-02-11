@@ -1501,6 +1501,10 @@ libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_c
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
+      ret = close_fds_ge_than (context->preserve_fds + 3, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+
       ret = execvp (process->args[0], process->args);
       if (errno == ENOENT)
         libcrun_fail_with_error (errno, "executable file not found in $PATH");

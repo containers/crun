@@ -111,6 +111,8 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   yajl_val tree = NULL;
   parser_error parser_err = NULL;
 
+  crun_context.preserve_fds = 0;
+
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
   if (exec_options.process == NULL && (argc - first_arg < 2))
     libcrun_fail_with_error (0, "please specify at least one argument");
@@ -156,6 +158,8 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->terminal = exec_options.tty;
     }
 
+  if (getenv ("LISTEN_FDS"))
+    crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
   ret = libcrun_exec_container (&crun_context, argv[first_arg], process, err);
 
  exit:
