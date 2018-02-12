@@ -46,8 +46,11 @@ struct list_options_s
 
 static struct list_options_s list_options;
 
+static bool quiet;
+
 static struct argp_option options[] =
   {
+    {"quiet", 'q', 0, 0, "show only IDs"},
     { 0 }
   };
 
@@ -58,6 +61,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {
+    case 'q':
+      quiet = true;
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -92,7 +99,8 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
 
   max_length++;
 
-  printf ("%-*s%-10s%-39s\n", max_length, "NAME", "PID", "BUNDLE PATH");
+  if (!quiet)
+    printf ("%-*s%-10s%-39s\n", max_length, "NAME", "PID", "BUNDLE PATH");
   for (it = list; it; it = it->next)
     {
       libcrun_container_status_t status;
@@ -102,7 +110,10 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           crun_error_write_warning_and_release (stderr, &err);
           continue;
         }
-      printf ("%-*s%-10d%-39s\n", max_length, it->name, status.pid, status.bundle);
+      if (quiet)
+        printf ("%s\n", it->name);
+      else
+        printf ("%-*s%-10d%-39s\n", max_length, it->name, status.pid, status.bundle);
 
       libcrun_free_container_status (&status);
     }
