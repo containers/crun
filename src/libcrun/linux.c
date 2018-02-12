@@ -1329,6 +1329,21 @@ libcrun_run_linux_container (libcrun_container *container,
       int value = find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
+
+      if (def->linux->namespaces[i]->path != NULL && value == CLONE_NEWPID)
+        {
+          cleanup_close int fd = -1;
+          fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+
+          ret = setns (fd, value);
+          if (UNLIKELY (ret < 0 && errno != EINVAL))
+            return crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
+
+          continue;
+        }
+
       flags |= value;
     }
 
