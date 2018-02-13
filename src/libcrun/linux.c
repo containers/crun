@@ -823,9 +823,18 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_pivot (container, rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
+    {
+      ret = do_pivot (container, rootfs, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      ret = chroot (rootfs);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "chroot to '%s'", rootfs);
+    }
 
   return 0;
 }
