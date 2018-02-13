@@ -5,12 +5,8 @@ crun
 
 An OCI Container Runtime written in C.
 
-An experimental and full of bugs implementation of the OCI specs
-(https://github.com/opencontainers/runtime-spec), run at your own
-risk.
-
-If you find it useful though, and fix any of the issue that might be
-present, feel free to open a PR.
+An implementation of the OCI specs
+(https://github.com/opencontainers/runtime-spec) written in C.
 
 Why another implementation?
 ==========
@@ -21,7 +17,7 @@ tool.  runC, the most used implementation of the OCI runtime specs and
 that is written in Go, forks itself and use a module written in C for
 setting up the environment before the container process starts.
 
-Crun aims to be usable as a library, that can be easily included in
+crun aims to be usable as a library, that can be easily included in
 programs without requiring an external process for managing OCI
 containers.
 
