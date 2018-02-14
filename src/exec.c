@@ -160,7 +160,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
 
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
-  ret = libcrun_exec_container (&crun_context, argv[first_arg], process, err);
+  ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
 
  exit:
   if (tree)

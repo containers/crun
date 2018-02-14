@@ -1406,7 +1406,7 @@ libcrun_container_state (FILE *out, struct libcrun_context_s *context, const cha
 }
 
 int
-libcrun_exec_container (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err)
+libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err)
 {
   int ret, pid_status;
   pid_t pid;
