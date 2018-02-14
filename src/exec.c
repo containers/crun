@@ -156,6 +156,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       if (exec_options.cwd)
         process->cwd = xstrdup (exec_options.cwd);
       process->terminal = exec_options.tty;
+      process->no_new_privileges = 1;
     }
 
   if (getenv ("LISTEN_FDS"))
