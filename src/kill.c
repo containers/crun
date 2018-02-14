@@ -123,7 +123,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
       for (it = list; it; it = it->next)
         if (regexec (&re, it->name, 0, NULL, 0) == 0)
           {
-            ret = libcrun_kill_container (&crun_context, it->name, signal, err);
+            ret = libcrun_container_kill (&crun_context, it->name, signal, err);
             if (UNLIKELY (ret < 0))
               crun_error_write_warning_and_release (stderr, &err);
           }
@@ -134,5 +134,5 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
       return 0;
     }
 
-  return libcrun_kill_container (&crun_context, argv[first_arg], signal, err);
+  return libcrun_container_kill (&crun_context, argv[first_arg], signal, err);
 }

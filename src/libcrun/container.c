@@ -605,7 +605,7 @@ libcrun_delete_container (struct libcrun_context_s *context, oci_container *def,
 }
 
 int
-libcrun_kill_container (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err)
+libcrun_container_kill (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;
