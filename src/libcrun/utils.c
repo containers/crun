@@ -335,25 +335,16 @@ set_selinux_exec_label (const char *label, libcrun_error_t *err)
 }
 
 int
-read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
+read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_error_t *err)
 {
-  cleanup_close int fd;
   int ret;
-  cleanup_free char *buf = NULL;
   struct stat stat;
   size_t nread, allocated;
-
-  if (strcmp (path, "-") == 0)
-    path = "/dev/stdin";
-
-  fd = TEMP_FAILURE_RETRY (open (path, O_RDONLY));
-
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "error opening file '%s'", path);
+  cleanup_free char *buf = NULL;
 
   ret = fstat (fd, &stat);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error stat'ing file '%s'", path);
+    return crun_make_error (err, errno, "error stat'ing file '%s'", description);
 
   /* NUL terminate the buffer.  */
   allocated = stat.st_size;
@@ -365,7 +356,7 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "error reading from file '%s'", path);
+        return crun_make_error (err, errno, "error reading from file '%s'", description);
 
       if (ret == 0)
         break;
@@ -381,6 +372,24 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
   if (len)
     *len = nread;
   return 0;
+}
+
+int
+read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
+{
+  cleanup_close int fd;
+  int ret;
+  struct stat stat;
+
+  if (strcmp (path, "-") == 0)
+    path = "/dev/stdin";
+
+  fd = TEMP_FAILURE_RETRY (open (path, O_RDONLY));
+
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "error opening file '%s'", path);
+
+  return read_all_fd (fd, path, out, len, err);
 }
 
 int

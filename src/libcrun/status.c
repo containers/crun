@@ -188,6 +188,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   unlinkat (dirfd, "notify", 0);
   unlinkat (dirfd, "config.json", 0);
   unlinkat (dirfd, "exec.fifo", 0);
+  unlinkat (dirfd, "seccomp.bpf", 0);
 
   ret = rmdir (dir);
   if (UNLIKELY (ret < 0))

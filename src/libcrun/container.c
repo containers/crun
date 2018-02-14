@@ -64,6 +64,7 @@ struct container_entrypoint_s
   int has_terminal_socket_pair;
   int terminal_socketpair[2];
   int sync_socket;
+  int seccomp_fd;
   FILE *orig_stderr;
 };
 
@@ -464,7 +465,7 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->stderr, &err);
 
-  ret = libcrun_set_seccomp (entrypoint_args->container, err);
+  ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -901,6 +902,42 @@ cleanup_watch (struct libcrun_context_s *context, oci_container *def, const char
     flush_fd_to_err (terminal_fd, stderr);
 }
 
+static
+int open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_root, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *dest_path = NULL;
+  cleanup_free char *dir = NULL;
+
+  dir = libcrun_get_state_directory (state_root, id);
+  if (UNLIKELY (dir == NULL))
+        return crun_make_error (err, 0, "cannot get state directory");
+
+  xasprintf (&dest_path, "%s/seccomp.bpf", dir);
+
+  *fd = -1;
+  if (readonly)
+    {
+      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDONLY));
+      if (UNLIKELY (ret < 0))
+        {
+          if (errno == ENOENT)
+            return 0;
+          return crun_make_error (err, 0, "open seccomp.bpf");
+        }
+      *fd = ret;
+    }
+  else
+    {
+      ret = TEMP_FAILURE_RETRY (open (dest_path, O_WRONLY | O_CREAT, 0700));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "open seccomp.bpf");
+      *fd = ret;
+    }
+
+  return 0;
+}
+
 static int
 libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, int container_ready_fd, libcrun_error_t *err)
 {
@@ -915,6 +952,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   cleanup_close int notify_socket = -1;
   cleanup_close int socket_pair_0 = -1;
   cleanup_close int socket_pair_1 = -1;
+  cleanup_close int seccomp_fd = -1;
   char created[35];
   struct container_entrypoint_s container_args =
     {
@@ -944,11 +982,25 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (container->container_def->linux && container->container_def->linux->seccomp)
+    {
+      ret = open_seccomp_output (context->id, &seccomp_fd, false, context->state_root, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  container_args.seccomp_fd = seccomp_fd;
+
   pid = libcrun_run_linux_container (container, context->detach,
                                      container_entrypoint, &container_args,
                                      &notify_socket, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
+
+  if (seccomp_fd >= 0)
+    {
+      close (seccomp_fd);
+      seccomp_fd = container_args.seccomp_fd = -1;
+    }
 
   if (container_args.terminal_socketpair[1] >= 0)
     {
@@ -1413,9 +1465,9 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
   libcrun_container_status_t status;
   const char *state_root = context->state_root;
   cleanup_close int terminal_fd = -1;
+  cleanup_close int seccomp_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_free char *config_file = NULL;
-  libcrun_container *container;
 
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -1440,10 +1492,10 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
   if (UNLIKELY (ret < 0))
     return ret;
 
-  xasprintf (&config_file, "%s/config.json", status.bundle);
-  container = libcrun_container_load (config_file, err);
-  if (container == NULL)
-    return crun_make_error (err, 0, "error loading config.json");
+  ret = open_seccomp_output (context->id, &seccomp_fd, true, context->state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
 
   pid = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
@@ -1512,7 +1564,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      ret = libcrun_set_seccomp (container, err);
+      ret = libcrun_apply_seccomp (seccomp_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1521,6 +1573,12 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
         libcrun_fail_with_error (errno, "executable file not found in $PATH");
       libcrun_fail_with_error (errno, "exec");
       _exit (1);
+    }
+
+  if (seccomp_fd >= 0)
+    {
+      close (seccomp_fd);
+      seccomp_fd = -1;
     }
 
   if (terminal_fd >= 0)

@@ -34,8 +34,10 @@
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
 #include <seccomp.h>
+#include <linux/seccomp.h>
+#include <linux/filter.h>
+#include <sys/prctl.h>
 
 unsigned long
 get_seccomp_operator (const char *name, libcrun_error_t *err)
@@ -102,16 +104,40 @@ cleanup_seccompp (void *p)
 }
 #define cleanup_seccomp __attribute__((cleanup (cleanup_seccompp)))
 
+int
+libcrun_apply_seccomp (int infd, libcrun_error_t *err)
+{
+  int ret;
+  struct sock_fprog seccomp_filter;
+  cleanup_free char *bpf = NULL;
+  size_t len;
+
+  if (infd < 0)
+    return 0;
+
+  ret = read_all_fd (infd, "seccomp.bpf", &bpf, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  seccomp_filter.len = len / 8;
+  seccomp_filter.filter = (struct sock_filter *) bpf;
+
+  ret = prctl (PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &seccomp_filter);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "prctl (PR_SET_SECCOMP)");
+
+  return 0;
+}
 
 int
-libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
+libcrun_generate_and_load_seccomp (libcrun_container *container, int outfd, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
   int action;
-  const char *defAction = "SCMP_ACT_ALLOW";
+  const char *def_action = "SCMP_ACT_ALLOW";
 
   if (seccomp == NULL)
     return 0;
@@ -121,9 +147,9 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
     return crun_make_error (err, errno, "prctl");
 
   if (seccomp->default_action != NULL)
-    defAction = seccomp->default_action;
+    def_action = seccomp->default_action;
 
-  action = get_seccomp_action (defAction, err);
+  action = get_seccomp_action (def_action, err);
   if (UNLIKELY (action == 0))
     return crun_make_error (err, 0, "invalid seccomp action '%s'", seccomp->default_action);
 
@@ -193,6 +219,13 @@ libcrun_set_seccomp (libcrun_container *container, libcrun_error_t *err)
                 return crun_make_error (err, 0, "seccomp_rule_add_array");
             }
         }
+    }
+
+  if (outfd >= 0)
+    {
+      ret = seccomp_export_bpf (ctx, outfd);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "seccomp_export_bpf");
     }
 
   ret = seccomp_load (ctx);
