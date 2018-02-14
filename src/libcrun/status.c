@@ -173,7 +173,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
 }
 
 int
-libcrun_delete_container_status (const char *state_root, const char *id, libcrun_error_t *err)
+libcrun_container_delete_status (const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *dir = libcrun_get_state_directory (state_root, id);

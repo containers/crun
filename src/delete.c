@@ -111,7 +111,7 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
       for (it = list; it; it = it->next)
         if (regexec (&re, it->name, 0, NULL, 0) == 0)
           {
-            ret = libcrun_delete_container (&crun_context, NULL, it->name, delete_options.force, err);
+            ret = libcrun_container_delete (&crun_context, NULL, it->name, delete_options.force, err);
             if (UNLIKELY (ret < 0))
               crun_error_write_warning_and_release (stderr, &err);
           }
@@ -122,5 +122,5 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
       return 0;
     }
 
-  return libcrun_delete_container (&crun_context, NULL, argv[first_arg], delete_options.force, err);
+  return libcrun_container_delete (&crun_context, NULL, argv[first_arg], delete_options.force, err);
 }

@@ -539,7 +539,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
 }
 
 int
-libcrun_delete_container (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err)
+libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
@@ -551,7 +551,7 @@ libcrun_delete_container (struct libcrun_context_s *context, oci_container *def,
     {
       if (force && crun_error_get_errno (err) == ENOENT)
         {
-          libcrun_delete_container_status (state_root, id, err);
+          libcrun_container_delete_status (state_root, id, err);
           crun_error_release (err);
           *err = NULL;
           return 0;
@@ -597,7 +597,7 @@ libcrun_delete_container (struct libcrun_context_s *context, oci_container *def,
     crun_error_write_warning_and_release (context->stderr, &err);
 
  exit:
-  ret = libcrun_delete_container_status (state_root, id, err);
+  ret = libcrun_container_delete_status (state_root, id, err);
 
  error:
   libcrun_free_container_status (&status);
@@ -883,7 +883,7 @@ static void
 cleanup_watch (struct libcrun_context_s *context, oci_container *def, const char *id, int sync_socket, int terminal_fd, FILE *stderr)
 {
   libcrun_error_t err = NULL;
-  libcrun_delete_container (context, def, id, 1, &err);
+  libcrun_container_delete (context, def, id, 1, &err);
   crun_error_release (&err);
 
   sync_socket_send_abort (sync_socket, &err);
@@ -1237,7 +1237,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
           if (exit_code != 0)
             {
               libcrun_error_t tmp_err;
-              libcrun_delete_container (context, def, context->id, 1, &tmp_err);
+              libcrun_container_delete (context, def, context->id, 1, &tmp_err);
               crun_error_release (err);
             }
           return -exit_code;

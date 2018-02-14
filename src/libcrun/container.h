@@ -64,7 +64,7 @@ libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *er
 
 int libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, unsigned int options, libcrun_error_t *error);
 
-int libcrun_delete_container (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err);
+int libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err);
 
 int libcrun_container_kill (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err);
 
