@@ -380,6 +380,13 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (!def->process->no_new_privileges)
+    {
+      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = libcrun_set_caps (def->process->capabilities, def->process->no_new_privileges, container->container_uid, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -465,9 +472,12 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->stderr, &err);
 
-  ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (def->process->no_new_privileges)
+    {
+      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   execvp (def->process->args[0], def->process->args);
   if (errno == ENOENT)
@@ -1530,6 +1540,13 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
+      if (!process->no_new_privileges)
+        {
+          ret = libcrun_apply_seccomp (seccomp_fd, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
       ret = libcrun_set_caps (process->capabilities, process->no_new_privileges, container_uid, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
@@ -1564,9 +1581,12 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      ret = libcrun_apply_seccomp (seccomp_fd, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (process->no_new_privileges)
+        {
+          ret = libcrun_apply_seccomp (seccomp_fd, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = execvp (process->args[0], process->args);
       if (errno == ENOENT)
