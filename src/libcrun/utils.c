@@ -220,33 +220,37 @@ ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *er
 {
   char *it = path + len;
   int ret;
-  ret = crun_path_exists (path, 1, err);
-  if (ret > 0)
-    return 0;
+  int parent_created;
 
-  while (it > path && *it != '/')
+  for (parent_created = 0; parent_created < 2; parent_created++)
     {
-      it--;
-      len--;
-    }
-  if (it == path)
-    return 0;
+      ret = mkdir (path, mode);
+      if (ret == 0)
+        return 0;
 
-  *it = '\0';
-
-  ret = ensure_directory_internal (path, len - 1, mode, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  *it = '/';
-
-  ret = mkdir (path, mode);
-  if (UNLIKELY (ret < 0))
-    {
       if (errno == EEXIST)
         return 0;
-      return crun_make_error (err, errno, "creating file '%s'", path);
+
+      if (errno != ENOENT || parent_created)
+        return crun_make_error (err, errno, "creating file '%s'", path);
+      else
+        {
+          while (it > path && *it != '/')
+            {
+              it--;
+              len--;
+            }
+          if (it == path)
+            return 0;
+
+          *it = '\0';
+          ret = ensure_directory_internal (path, len - 1, mode, err);
+          *it = '/';
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
-  return 0;
+  return ret;
 }
 
 int
