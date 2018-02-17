@@ -1353,7 +1353,7 @@ libcrun_container_start (struct libcrun_context_s *context, const char *id, libc
 }
 
 int
-libcrun_container_state (FILE *out, struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
+libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE *out, libcrun_error_t *err)
 {
   int ret, running, has_fifo = 0;
   libcrun_container_status_t status;

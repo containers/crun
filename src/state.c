@@ -85,5 +85,5 @@ crun_command_state (struct crun_global_arguments *global_args, int argc, char **
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
-  return libcrun_container_state (stdout, &crun_context, argv[first_arg], err);
+  return libcrun_container_state (&crun_context, argv[first_arg], stdout, err);
 }
