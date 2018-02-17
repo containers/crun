@@ -591,18 +591,24 @@ epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
 int
 copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
 {
+  ssize_t nread;
   do
     {
 #ifdef HAVE_COPY_FILE_RANGE
-      int ret = copy_file_range (src, NULL, dst, NULL, 4096, 0);
-      if (consume && ret < 0 && errno == EAGAIN)
+      nread = TEMP_FAILURE_RETRY (copy_file_range (src, NULL, dst, NULL, 4096, 0));
+      if (consume && nread < 0 && errno == EAGAIN)
+        return 0;
+      if (nread < 0 && errno == EIO)
         return 0;
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "copy_file_range");
 #else
-      cleanup_free char *buffer = xmalloc (8192);
-      int ret, nread;
-      nread = TEMP_FAILURE_RETRY (read (src, buffer, sizeof (buffer)));
+# define BUFFER_SIZE 4096
+      cleanup_free char *buffer = xmalloc (BUFFER_SIZE);
+      int ret;
+      ssize_t remaining;
+
+      nread = TEMP_FAILURE_RETRY (read (src, buffer, BUFFER_SIZE));
       if (consume && nread < 0 && errno == EAGAIN)
         return 0;
       if (nread < 0 && errno == EIO)
@@ -610,16 +616,17 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
       if (UNLIKELY (nread < 0))
         return crun_make_error (err, errno, "read");
 
-      while (nread)
+      remaining = nread;
+      while (remaining)
         {
           ret = TEMP_FAILURE_RETRY (write (dst, buffer, nread));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write");
-          nread -= ret;
+          remaining -= ret;
         }
 #endif
     }
-  while (consume);
+  while (consume && nread);
 
   return 0;
 
