@@ -121,6 +121,7 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
     return -1;
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  crun_context.bundle = bundle ? bundle : ".";
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
 

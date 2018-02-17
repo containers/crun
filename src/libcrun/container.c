@@ -1263,7 +1263,7 @@ libcrun_container_create (libcrun_container *container, struct libcrun_context_s
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
+  ret = libcrun_copy_config_file (context->id, context->state_root, ".", err);
   if (UNLIKELY (ret < 0))
     return ret;
 
