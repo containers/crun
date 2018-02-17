@@ -404,6 +404,23 @@ create_dev (libcrun_container *container, int devfd, struct device_s *device, co
   return 0;
 }
 
+struct symlink_s
+{
+  const char *path;
+  const char *target;
+};
+
+static struct symlink_s symlinks[] =
+  {
+    {"/proc/self/fd", "fd"},
+    {"/proc/self/fd/0", "stdin"},
+    {"/proc/self/fd/1", "stdout"},
+    {"/proc/self/fd/2", "stderr"},
+    {"/proc/kcore", "core"},
+    {"/dev/pts/ptmx", "ptmx"},
+    {NULL, NULL}
+  };
+
 static int
 create_missing_devs (libcrun_container *container, const char *rootfs, int binds, libcrun_error_t *err)
 {
@@ -440,29 +457,12 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
         return ret;
     }
 
-  ret = symlinkat ("/proc/self/fd", devfd, "fd");
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating symlink for /dev/fd");
-
-  ret = symlinkat ("/proc/self/fd/0", devfd, "stdin");
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating symlink for /dev/stdin");
-
-  ret = symlinkat ("/proc/self/fd/1", devfd, "stdout");
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating symlink for /dev/stdout");
-
-  ret = symlinkat ("/proc/self/fd/2", devfd, "stderr");
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating symlink for /dev/stderr");
-
-  ret = symlinkat ("/proc/kcore", devfd, "core");
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating symlink for /dev/core");
-
-  ret = symlinkat ("/dev/pts/ptmx", devfd, "ptmx");
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "creating symlink for /dev/ptmx");
+  for (i = 0; symlinks[i].target; i++)
+    {
+      ret = symlinkat (symlinks[i].path, devfd, symlinks[i].target);
+      if (UNLIKELY (ret < 0 && errno != EEXIST))
+        return crun_make_error (err, errno, "creating symlink for /dev/%s", symlinks[i].target);
+    }
 
   return 0;
 }
