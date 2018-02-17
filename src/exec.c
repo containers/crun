@@ -107,9 +107,6 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
 {
   int i, first_arg, ret = 0;
   struct libcrun_context_s crun_context;
-  oci_container_process *process = NULL;
-  yajl_val tree = NULL;
-  parser_error parser_err = NULL;
 
   crun_context.preserve_fds = 0;
 
@@ -122,30 +119,14 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   crun_context.console_socket = exec_options.console_socket;
   crun_context.pid_file = exec_options.pid_file;
 
+  if (getenv ("LISTEN_FDS"))
+    crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+
   if (exec_options.process)
-    {
-      size_t len;
-      cleanup_free char *content = NULL;
-      struct parser_context ctx = {0, NULL};
-
-      ret = read_all_file (exec_options.process, &content, &len, err);
-      if (UNLIKELY (ret < 0))
-        goto exit;
-
-      ret = parse_json_file (&tree, content, &ctx, err);
-      if (UNLIKELY (ret < 0))
-        goto exit;
-
-      process = make_oci_container_process (tree, &ctx, &parser_err);
-      if (UNLIKELY (process == NULL))
-        {
-          ret = crun_make_error (err, errno, "cannot parse process file");
-          goto exit;
-        }
-    }
+    return libcrun_container_exec_process_file (&crun_context, argv[first_arg], exec_options.process, err);
   else
     {
-      process = xmalloc (sizeof (*process));
+      oci_container_process *process = xmalloc (sizeof (*process));
       memset (process, 0, sizeof (*process));
 
       process->args_len = argc;
@@ -157,18 +138,8 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
         process->cwd = xstrdup (exec_options.cwd);
       process->terminal = exec_options.tty;
       process->no_new_privileges = 1;
+      ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
+      free_oci_container_process (process);
+      return ret;
     }
-
-  if (getenv ("LISTEN_FDS"))
-    crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
-  ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
-
- exit:
-  if (tree)
-    yajl_tree_free (tree);
-  if (process)
-    free_oci_container_process (process);
-  free (parser_err);
-
-  return ret;
 }

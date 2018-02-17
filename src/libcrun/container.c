@@ -1633,6 +1633,46 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
 }
 
 int
+libcrun_container_exec_process_file (struct libcrun_context_s *context, const char *id, const char *path, libcrun_error_t *err)
+{
+  int ret;
+  size_t len;
+  cleanup_free char *content = NULL;
+  struct parser_context ctx = {0, NULL};
+  yajl_val tree = NULL;
+  parser_error parser_err = NULL;
+  oci_container_process *process = NULL;
+
+  ret = read_all_file (path, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_json_file (&tree, content, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  process = make_oci_container_process (tree, &ctx, &parser_err);
+  if (UNLIKELY (process == NULL))
+    {
+      ret = crun_make_error (err, errno, "cannot parse process file");
+      goto exit;
+    }
+
+  ret = libcrun_container_exec (context, id, process, err);
+
+ exit:
+  free (parser_err);
+
+  if (tree)
+    yajl_tree_free (tree);
+
+  if (process)
+    free_oci_container_process (process);
+
+  return ret;
+}
+
+int
 libcrun_container_update (struct libcrun_context_s *context, const char *id, const char *content, size_t len, libcrun_error_t *err)
 {
   int ret;
