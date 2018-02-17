@@ -1243,7 +1243,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
 }
 
 int
-libcrun_container_create (libcrun_container *container, struct libcrun_context_s *context, libcrun_error_t *err)
+libcrun_container_create (struct libcrun_context_s *context, libcrun_container *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
