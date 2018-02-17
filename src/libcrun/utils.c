@@ -40,6 +40,19 @@
 # include <selinux/selinux.h>
 #endif
 
+int
+close_and_reset (int *fd)
+{
+  int ret = 0;
+  if (*fd >= 0)
+    {
+      ret = close (*fd);
+      if (LIKELY (ret == 0))
+        *fd = -1;
+    }
+  return ret;
+}
+
 void
 cleanup_freep (void *p)
 {
@@ -762,15 +775,13 @@ run_process_with_stdin_timeout_envp (char *path,
     {
       int r, status;
 
-      close (pipe_r);
-      pipe_r = -1;
+      close_and_reset (&pipe_r);
 
       ret = write (pipe_w, stdin, stdin_len);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "writing to pipe");
 
-      close (pipe_w);
-      pipe_w = -1;
+      close_and_reset (&pipe_w);
 
       if (timeout)
         {

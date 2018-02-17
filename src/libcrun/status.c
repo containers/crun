@@ -90,8 +90,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (write (fd_write, data, len) < 0))
     return crun_make_error (err, 0, "cannot write status file");
 
-  close (fd_write);
-  fd_write = -1;
+  close_and_reset (&fd_write);
 
   if (UNLIKELY (rename (file_tmp, file) < 0))
     return crun_make_error (err, 0, "cannot rename status file");

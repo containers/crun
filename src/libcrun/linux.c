@@ -1386,7 +1386,7 @@ libcrun_run_linux_container (libcrun_container *container,
 
   if (pid)
     {
-      ret = close (sync_socket_container);
+      ret = close_and_reset (&sync_socket_container);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "close");
       sync_socket_container = -1;
@@ -1408,7 +1408,7 @@ libcrun_run_linux_container (libcrun_container *container,
       return pid;
     }
 
-  ret = close (sync_socket_host);
+  ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
     {
       crun_make_error (err, errno, "close");
@@ -1586,12 +1586,12 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
     }
   if (pid)
     {
-      close (sync_socket_fd[1]);
+      close_and_reset (&sync_socket_fd[1]);
       sync_fd = sync_socket_fd[0];
       return join_process_parent_helper (pid, sync_fd, status, terminal_fd, err);
     }
 
-  close (sync_socket_fd[0]);
+  close_and_reset (&sync_socket_fd[0]);
   sync_fd = sync_socket_fd[1];
 
   ret = clearenv ();
@@ -1637,10 +1637,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
       fds_joined[i] = 1;
     }
   for (i = 0; namespaces[i]; i++)
-    {
-      close (fds[i]);
-      fds[i] = -1;
-    }
+    close_and_reset (&fds[i]);
 
   if (detach && setsid () < 0)
     {

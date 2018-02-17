@@ -294,7 +294,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   if (entrypoint_args->terminal_socketpair[0] >= 0)
     {
-      close (entrypoint_args->terminal_socketpair[0]);
+      close_and_reset (&entrypoint_args->terminal_socketpair[0]);
       console_socketpair = entrypoint_args->terminal_socketpair[1];
     }
 
@@ -351,7 +351,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
           ret = send_fd_to_socket (console_socket, terminal_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
-          close (console_socket);
+          close_and_reset (&console_socket);
         }
       else if (entrypoint_args->has_terminal_socket_pair)
         {
@@ -359,8 +359,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
           if (UNLIKELY (ret < 0))
             return ret;
 
-          close (console_socketpair);
-          console_socketpair = -1;
+          close_and_reset (&console_socketpair);
         }
     }
 
@@ -730,8 +729,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
     {
       ret = 0;
       TEMP_FAILURE_RETRY (write (container_ready_fd, &ret, sizeof (ret)));
-      close (container_ready_fd);
-      container_ready_fd = -1;
+      close_and_reset (&container_ready_fd);
     }
 
   if (! context->has_fifo_exec_wait)
@@ -1007,16 +1005,10 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     return pid;
 
   if (seccomp_fd >= 0)
-    {
-      close (seccomp_fd);
-      seccomp_fd = container_args.seccomp_fd = -1;
-    }
+    close_and_reset (&seccomp_fd);
 
   if (container_args.terminal_socketpair[1] >= 0)
-    {
-      ret = close (container_args.terminal_socketpair[1]);
-      socket_pair_1 = -1;
-    }
+    close_and_reset (&socket_pair_1);
 
   ret = libcrun_cgroup_enter (&cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
@@ -1048,8 +1040,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
           return terminal_fd;
         }
 
-      close (socket_pair_0);
-      socket_pair_0 = -1;
+      close_and_reset (&socket_pair_0);
 
       ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
       if (UNLIKELY (ret < 0))
@@ -1087,8 +1078,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = close (sync_socket);
-  sync_socket = -1;
+  ret = close_and_reset (&sync_socket);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
@@ -1211,8 +1201,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
   if (ret)
     {
       int status;
-      close (pipefd1);
-      pipefd1 = -1;
+      close_and_reset (&pipefd1);
       TEMP_FAILURE_RETRY (waitpid (ret, &status, 0));
 
       ret = TEMP_FAILURE_RETRY (read (pipefd0, &status, sizeof (status)));
@@ -1222,8 +1211,7 @@ libcrun_container_run (libcrun_container *container, struct libcrun_context_s *c
       return status;
     }
 
-  close (pipefd0);
-  pipefd0 = -1;
+  close_and_reset (&pipefd0);
 
   if (context->stderr)
     stderr = context->stderr;
@@ -1286,8 +1274,7 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
   if (ret)
     {
       int exit_code;
-      close (pipefd1);
-      pipefd1 = -1;
+      close_and_reset (&pipefd1);
 
       TEMP_FAILURE_RETRY (waitpid (ret, NULL, 0));
 
@@ -1596,10 +1583,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
     }
 
   if (seccomp_fd >= 0)
-    {
-      close (seccomp_fd);
-      seccomp_fd = -1;
-    }
+    close_and_reset (&seccomp_fd);
 
   if (terminal_fd >= 0)
     {
@@ -1612,8 +1596,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
           ret = send_fd_to_socket (console_socket_fd, terminal_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
-          close (terminal_fd);
-          terminal_fd = -1;
+          close_and_reset (&terminal_fd);
         }
       else
         {

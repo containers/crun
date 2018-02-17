@@ -31,6 +31,7 @@ void cleanup_filep (FILE **f);
 void cleanup_freep (void *p);
 void cleanup_closep (void *p);
 void cleanup_dirp (DIR **p);
+int close_and_reset (int *fd);
 
 # define cleanup_file __attribute__((cleanup (cleanup_filep)))
 # define cleanup_free __attribute__((cleanup (cleanup_freep)))
