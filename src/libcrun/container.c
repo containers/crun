@@ -313,7 +313,10 @@ container_entrypoint_init (void *args, const char *notify_socket,
 #ifdef CLONE_NEWCGROUP
   ret = unshare (CLONE_NEWCGROUP);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
+    {
+      if (errno != EINVAL)
+	return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
+    }
 #endif
 
   if (entrypoint_args->context->detach)
@@ -563,7 +566,6 @@ libcrun_container_delete (struct libcrun_context_s *context, oci_container *def,
         {
           libcrun_container_delete_status (state_root, id, err);
           crun_error_release (err);
-          *err = NULL;
           return 0;
         }
       goto exit;
