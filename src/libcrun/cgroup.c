@@ -589,14 +589,11 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
   for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
     {
       pid_t pid = strtoul (it, NULL, 10);
-      if (pid)
+      if (pid > 0)
         {
-          if (pid > 0)
-            {
-              ret = kill (pid, SIGKILL);
-              if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "kill process %d", pid);
-            }
+          ret = kill (pid, SIGKILL);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "kill process %d", pid);
         }
     }
 
@@ -617,6 +614,10 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
     }
 #endif
 
+  ret = libcrun_cgroup_killall (path, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
   for (i = 0; subsystems[i]; i++)
     {
       cleanup_free char *cgroup_path;
@@ -627,10 +628,6 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
         return ret;
       if (ret == 0)
         continue;
-
-      ret = libcrun_cgroup_killall (cgroup_path, err);
-      if (UNLIKELY (ret < 0))
-        crun_error_release (err);
 
       rmdir (cgroup_path);
     }
