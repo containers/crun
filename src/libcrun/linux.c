@@ -319,7 +319,12 @@ do_mount_cgroup (libcrun_container *container,
 
   ret = do_mount (container, source, cgroup_unified, "cgroup2", mountflags, NULL, 1, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      if (errno == ENODEV)
+	crun_error_release (err);
+      else
+	return ret;
+    }
 
   for (i = 0; subsystems[i]; i++)
     {
