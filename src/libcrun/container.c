@@ -1415,7 +1415,7 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE
   {
     size_t i;
     cleanup_free char *config_file;
-    libcrun_container *container;
+    cleanup_free libcrun_container *container = NULL;
     cleanup_free char *dir = NULL;
 
     dir = libcrun_get_state_directory (state_root, id);
