@@ -333,7 +333,7 @@ do_mount_cgroup (libcrun_container *container,
 
       ret = mkdir (subsystem_path, 0755);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mkdir for '%s' failed", cgroup_unified);
+        return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
 
       ret = do_mount (container, source, subsystem_path, "cgroup", mountflags, subsystems[i], 1, err);
       if (UNLIKELY (ret < 0))
