@@ -121,7 +121,13 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
     {
       ret = crun_ensure_directory (cgroup_path, 0755, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+	{
+	  if (strcmp (subsystem, "unified") != 0 || errno != EROFS)
+	    return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+
+	  crun_error_release (err);
+	  return 0;
+	}
 
       if (strcmp (subsystem, "cpuset") == 0)
         {
@@ -908,7 +914,6 @@ write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory,
           if (UNLIKELY (ret < 0))
             return ret;
         }
-
     }
 
   if (memory->kernel)
