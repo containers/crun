@@ -633,7 +633,10 @@ libcrun_container_kill (struct libcrun_context_s *context, const char *id, int s
 {
   int ret;
   const char *state_root = context->state_root;
-  libcrun_container_status_t status;
+  cleanup_container_status libcrun_container_status_t status;
+
+  memset (&status, 0, sizeof (status));
+
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
