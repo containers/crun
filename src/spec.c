@@ -249,7 +249,7 @@ int
 crun_command_spec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  struct libcrun_context_s crun_context;
+  struct libcrun_context_s crun_context = {0, };
   int ret;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);

@@ -90,7 +90,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
 {
   int first_arg, signal;
 
-  struct libcrun_context_s crun_context;
+  struct libcrun_context_s crun_context = {0, };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &kill_options);
   if (argc - first_arg < 1)

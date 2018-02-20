@@ -88,7 +88,7 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
 {
   int first_arg;
 
-  struct libcrun_context_s crun_context;
+  struct libcrun_context_s crun_context = {0, };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &delete_options);
 
@@ -115,7 +115,6 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
             if (UNLIKELY (ret < 0))
               crun_error_write_warning_and_release (stderr, &err);
           }
-
 
       libcrun_free_containers_list (list);
       regfree (&re);

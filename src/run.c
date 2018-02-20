@@ -106,7 +106,7 @@ int
 crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  libcrun_container *container;
+  cleanup_free libcrun_container *container = NULL;
 
   crun_context.preserve_fds = 0;
 

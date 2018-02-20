@@ -218,7 +218,7 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
 libcrun_container *
 libcrun_container_load (const char *path, libcrun_error_t *err)
 {
-  libcrun_container *container;
+  libcrun_container *container = NULL;
   oci_container *container_def;
   cleanup_free char *oci_error = NULL;
   container_def = oci_container_parse_file (path, 0, &oci_error);
@@ -528,10 +528,10 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
+  cleanup_free libcrun_container *container = NULL;
   if (def == NULL)
     {
       cleanup_free char *config_file = NULL;
-      libcrun_container *container;
       xasprintf (&config_file, "%s/config.json", status->bundle);
       container = libcrun_container_load (config_file, err);
       if (container == NULL)
@@ -564,8 +564,11 @@ libcrun_container_delete (struct libcrun_context_s *context, oci_container *def,
     {
       if (force && crun_error_get_errno (err) == ENOENT)
         {
-          libcrun_container_delete_status (state_root, id, err);
+          libcrun_error_t tmp_err = NULL;
+
           crun_error_release (err);
+          libcrun_container_delete_status (state_root, id, &tmp_err);
+          crun_error_release (&tmp_err);
           return 0;
         }
       goto exit;
@@ -627,9 +630,6 @@ libcrun_container_kill (struct libcrun_context_s *context, const char *id, int s
     return ret;
 
   ret = kill (status.pid, signal);
-
-  libcrun_free_container_status (&status);
-
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "kill container");
   return 0;

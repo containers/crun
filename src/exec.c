@@ -106,7 +106,7 @@ int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int i, first_arg, ret = 0;
-  struct libcrun_context_s crun_context;
+  struct libcrun_context_s crun_context = {0, };
 
   crun_context.preserve_fds = 0;
 
