@@ -548,14 +548,16 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->stderr, &err);
     }
+  if (container && container->container_def)
+    free_oci_container (container->container_def);
   return 0;
 }
 
-int
-libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err)
+static int
+container_delete_internal (struct libcrun_context_s *context, oci_container *def, const char *id, int force, bool only_cleanup, libcrun_error_t *err)
 {
   int ret;
-  libcrun_container_status_t status;
+  cleanup_container_status libcrun_container_status_t status;
   const char *state_root = context->state_root;
 
   memset (&status, 0, sizeof (status));
@@ -571,32 +573,35 @@ libcrun_container_delete (struct libcrun_context_s *context, oci_container *def,
           crun_error_release (&tmp_err);
           return 0;
         }
-      goto exit;
+      goto delete;
     }
 
-  if (force)
+  if (!only_cleanup && !status.detached)
     {
-      ret = kill (status.pid, 9);
-      if (UNLIKELY (ret < 0) && errno != ESRCH)
+      if (force)
         {
-          crun_make_error (err, errno, "kill");
-          goto error;
+          ret = kill (status.pid, 9);
+          if (UNLIKELY (ret < 0) && errno != ESRCH)
+            {
+              crun_make_error (err, errno, "kill");
+              return ret;
+            }
         }
-    }
-  else
-    {
-      ret = libcrun_is_container_running (&status, err);
-      if (UNLIKELY (ret < 0))
-        goto error;
-      if (ret == 1)
+      else
         {
-          crun_make_error (err, 0, "the container '%s' is still running", id);
-          goto error;
-        }
-      if (UNLIKELY (ret < 0 && errno != ESRCH))
-        {
-          crun_make_error (err, errno, "signaling the container");
-          goto error;
+          ret = libcrun_is_container_running (&status, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          if (ret == 1)
+            {
+              crun_make_error (err, 0, "the container '%s' is still running", id);
+              return ret;
+            }
+          if (UNLIKELY (ret < 0 && errno != ESRCH))
+            {
+              crun_make_error (err, errno, "signaling the container");
+              return ret;
+            }
         }
     }
 
@@ -611,12 +616,16 @@ libcrun_container_delete (struct libcrun_context_s *context, oci_container *def,
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (context->stderr, &err);
 
- exit:
+ delete:
   ret = libcrun_container_delete_status (state_root, id, err);
 
- error:
-  libcrun_free_container_status (&status);
   return ret;
+}
+
+int
+libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err)
+{
+  return container_delete_internal (context, def, id, force, false, err);
 }
 
 int
@@ -645,7 +654,8 @@ write_container_status (libcrun_container *container, struct libcrun_context_s *
                                        .rootfs = container->container_def->root->path,
                                        .bundle = cwd,
                                        .created = created,
-                                       .systemd_cgroup = context->systemd_cgroup};
+                                       .systemd_cgroup = context->systemd_cgroup,
+                                       .detached = context->detach};
   if (cwd == NULL)
     OOM ();
   return libcrun_write_container_status (context->state_root, context->id, &status, err);
@@ -894,7 +904,7 @@ static void
 cleanup_watch (struct libcrun_context_s *context, oci_container *def, const char *id, int sync_socket, int terminal_fd, FILE *stderr)
 {
   libcrun_error_t err = NULL;
-  libcrun_container_delete (context, def, id, 1, &err);
+  container_delete_internal (context, def, id, 1, true, &err);
   crun_error_release (&err);
 
   sync_socket_send_abort (sync_socket, &err);

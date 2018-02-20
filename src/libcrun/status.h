@@ -39,10 +39,15 @@ struct libcrun_container_status_s
   char *cgroup_path;
   int systemd_cgroup;
   char *created;
+  int detached;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
+
 void libcrun_free_container_status (libcrun_container_status_t *status);
+
+# define cleanup_container_status __attribute__((cleanup (libcrun_free_container_status)))
+
 int libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
