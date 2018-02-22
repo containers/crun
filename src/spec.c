@@ -184,6 +184,7 @@ static char spec_file[] = "\
 			{\n\
 				\"type\": \"uts\"\n\
 			},\n\
+%s\
 			{\n\
 				\"type\": \"mount\"\n\
 			}\n\
@@ -206,6 +207,11 @@ static char spec_file[] = "\
 		]\n\
 	}\n\
 }\n";
+
+static const char *user = "\
+			{\n\
+				\"type\": \"user\"\n \
+			},\n";
 
 static char doc[] = "OCI runtime";
 
@@ -251,6 +257,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   int first_arg;
   struct libcrun_context_s crun_context = {0, };
   int ret;
+  cleanup_file FILE *f = NULL;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);
 
@@ -262,8 +269,11 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (ret)
     return crun_make_error (err, 0, "config.json already exists", err);
 
-  ret = write_file ("config.json", spec_file, strlen (spec_file), err);
-  if (ret < 0)
-    return ret;
+  f = fopen ("config.json", "w+");
+  if (f == NULL)
+    return crun_make_error (err, 0, "cannot open config.json", err);
+
+  fprintf (f, spec_file, geteuid () ? user : "");
+
   return 0;
 }
