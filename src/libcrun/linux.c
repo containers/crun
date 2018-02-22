@@ -487,7 +487,13 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
 
       ret = crun_path_exists (path, 1, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (errno != EACCES)
+            return ret;
+
+          crun_error_release (err);
+          continue;
+        }
 
       if (ret == 0)
         continue;
@@ -511,7 +517,13 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
 
       ret = crun_path_exists (path, 1, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (errno != EACCES)
+            return ret;
+
+          crun_error_release (err);
+          continue;
+        }
 
       if (ret == 0)
         continue;
