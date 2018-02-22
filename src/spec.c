@@ -205,7 +205,7 @@ static char spec_file[] = "\
 			\"/proc/sysrq-trigger\"\n\
 		]\n\
 	}\n\
-}";
+}\n";
 
 static char doc[] = "OCI runtime";
 
@@ -262,7 +262,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (ret)
     return crun_make_error (err, 0, "config.json already exists", err);
 
-  ret = write_file ("config.json", spec_file, sizeof (spec_file), err);
+  ret = write_file ("config.json", spec_file, strlen (spec_file), err);
   if (ret < 0)
     return ret;
   return 0;
