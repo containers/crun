@@ -260,7 +260,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (ret < 0)
     return ret;
   if (ret)
-    crun_make_error (err, 0, "config.json already exists", err);
+    return crun_make_error (err, 0, "config.json already exists", err);
 
   ret = write_file ("config.json", spec_file, sizeof (spec_file), err);
   if (ret < 0)
