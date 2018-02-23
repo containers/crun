@@ -968,6 +968,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   int ret;
   pid_t pid;
   int detach = context->detach;
+  bool skip_cgroups = false;
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int terminal_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
@@ -1032,11 +1033,16 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
-  if (UNLIKELY (ret < 0))
+  skip_cgroups = ret == 77;
+
+  if (!skip_cgroups)
     {
-      cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
-      return ret;
+      ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
+      if (UNLIKELY (ret < 0))
+        {
+          cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
+          return ret;
+        }
     }
 
   ret = sync_socket_send_sync (sync_socket, true, err);

@@ -306,7 +306,8 @@ int enter_systemd_cgroup_scope (const char *scope, pid_t pid, libcrun_error_t *e
   sd_err = sd_bus_default (&bus);
   if (sd_err < 0)
     {
-      ret = crun_make_error (err, -sd_err, "cannot open sd-bus");
+      crun_make_error (err, -sd_err, "cannot open sd-bus");
+      ret = 77;
       goto exit;
     }
 
@@ -544,11 +545,37 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
 #ifdef HAVE_SYSTEMD
   cleanup_free char *scope = NULL;
   xasprintf (&scope, "%s-%d.scope", id, getpid ());
-  if (systemd || getuid ())
+  if (systemd || geteuid ())
     {
       ret = enter_systemd_cgroup_scope (scope, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
+      if (ret == 77)
+        {
+          libcrun_error_t *tmp_err;
+
+          if (getuid () == 0)
+            {
+              ret = check_running_in_user_namespace (tmp_err);
+              if (UNLIKELY (ret < 0))
+                {
+                  crun_error_release (err);
+                  *err = *tmp_err;
+                  return ret;
+                }
+
+              if (ret == 0)
+                return -1;
+
+              crun_error_release (err);
+              libcrun_warning ("systemd not available and running in an usernamespace, skip cgroups configuration");
+              return 77;
+            }
+
+	  crun_error_release (err);
+          libcrun_warning ("systemd not available, skip cgroups configuration");
+          return 77;
+        }
       return systemd_finalize (path, pid, NULL, err);
     }
 #endif
