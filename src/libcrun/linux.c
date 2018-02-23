@@ -877,7 +877,7 @@ uidgidmap_helper (char *helper, pid_t pid, char *map_file, libcrun_error_t *err)
     }
   args[nargs++] = NULL;
 
-  return run_process (args, err);
+  return run_process (args, err) ? -1 : 0;
 }
 
 static int
@@ -967,6 +967,13 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       crun_error_release (err);
       ret = newgidmap (pid, gid_map, err);
+      if (ret && !def->linux->gid_mappings_len)
+        {
+          size_t single_mapping_len;
+          char single_mapping[32];
+          single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_gid, container->host_gid);
+          ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
+        }
     }
   if (UNLIKELY (ret < 0))
     return ret;
@@ -977,6 +984,13 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       crun_error_release (err);
       ret = newuidmap (pid, uid_map, err);
+      if (ret && !def->linux->uid_mappings_len)
+        {
+          size_t single_mapping_len;
+          char single_mapping[32];
+          single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_uid, container->host_uid);
+          ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
+        }
     }
   if (UNLIKELY (ret < 0))
     return ret;
