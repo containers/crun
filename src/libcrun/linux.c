@@ -263,7 +263,22 @@ do_mount (libcrun_container *container,
         flags &= ~ALL_PROPAGATIONS;
       ret = mount (source, target, fstype, flags, data);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
+        {
+          if (strcmp (fstype, "sysfs") == 0)
+            {
+              /* If we are running in an user namespace, just bind mount /sys if creating
+                 sysfs failed.  */
+              ret = check_running_in_user_namespace (err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              ret = mount ("/sys", target, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
+              if (ret == 0)
+                return 0;
+            }
+          else
+            return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
+        }
     }
 
   if (mountflags & ALL_PROPAGATIONS)
