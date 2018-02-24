@@ -1487,11 +1487,14 @@ libcrun_run_linux_container (libcrun_container *container,
           additional_gids_len = def->process->user->additional_gids_len;
         }
 
-      ret = setgroups (additional_gids_len, additional_gids);
-      if (UNLIKELY (ret < 0))
+      if (additional_gids && getgroups(0, NULL))
         {
-          crun_make_error (err, errno, "setgroups");
-          goto out;
+          ret = setgroups (additional_gids_len, additional_gids);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_make_error (err, errno, "setgroups");
+              goto out;
+            }
         }
     }
 
