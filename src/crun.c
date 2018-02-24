@@ -137,7 +137,6 @@ static struct argp_option options[] =
     {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups"},
     {"log", OPTION_LOG, "FILE", 0},
     {"root", OPTION_ROOT, "DIR",  0},
-    {"version", 'v', 0, 0 },
     { 0 }
   };
 
