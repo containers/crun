@@ -24,6 +24,8 @@ import sys
 from tests_utils import *
 
 def test_resources_pid_limit():
+    if os.getuid() != 0:
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', "/sys/fs/cgroup/pids/pids.max"]
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
