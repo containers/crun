@@ -572,7 +572,7 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
               return 77;
             }
 
-	  crun_error_release (err);
+          crun_error_release (err);
           libcrun_warning ("systemd not available, skip cgroups configuration");
           return 77;
         }
