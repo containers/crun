@@ -636,7 +636,11 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
       struct remount_s *next = r->next;
       ret = mount ("none", r->target, "", r->flags, r->data);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "remount '%s'", r->target);
+        {
+          ret = mount ("none", r->target, "", r->flags | MS_NOSUID | MS_NODEV, r->data);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "remount '%s'", r->target);
+        }
 
       free_remount (r);
 
