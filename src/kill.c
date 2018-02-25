@@ -46,7 +46,7 @@ enum
 struct kill_options_s
 {
   int regex;
-  int force;
+  bool force;
 };
 
 static struct kill_options_s kill_options;

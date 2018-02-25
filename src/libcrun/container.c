@@ -554,7 +554,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
 }
 
 static int
-container_delete_internal (struct libcrun_context_s *context, oci_container *def, const char *id, int force, bool only_cleanup, libcrun_error_t *err)
+container_delete_internal (struct libcrun_context_s *context, oci_container *def, const char *id, bool force, bool only_cleanup, libcrun_error_t *err)
 {
   int ret;
   cleanup_container_status libcrun_container_status_t status;
@@ -623,7 +623,7 @@ container_delete_internal (struct libcrun_context_s *context, oci_container *def
 }
 
 int
-libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, int force, libcrun_error_t *err)
+libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, bool force, libcrun_error_t *err)
 {
   return container_delete_internal (context, def, id, force, false, err);
 }
@@ -1307,7 +1307,7 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
           if (exit_code != 0)
             {
               libcrun_error_t tmp_err;
-              libcrun_container_delete (context, def, context->id, 1, &tmp_err);
+              libcrun_container_delete (context, def, context->id, true, &tmp_err);
               crun_error_release (err);
             }
           return -exit_code;

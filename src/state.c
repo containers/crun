@@ -41,7 +41,7 @@ enum
 
 struct state_options_s
 {
-  int force;
+  bool force;
 };
 
 static struct state_options_s state_options;

@@ -44,7 +44,7 @@ enum
 struct delete_options_s
 {
   int regex;
-  int force;
+  bool force;
 };
 
 static struct delete_options_s delete_options;
@@ -64,7 +64,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'f':
-      delete_options.force = 1;
+      delete_options.force = true;
       break;
 
     case 'r':
