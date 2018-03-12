@@ -636,9 +636,9 @@ get_default_flags (libcrun_container *container, const char *destination, char *
 static int
 finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
 {
-  int ret;
-  struct remount_s *r;
-  for (r = get_private_data (container)->remounts; r;)
+  int ret = 0;
+  struct remount_s *r = get_private_data (container)->remounts;
+  while (r)
     {
       struct remount_s *next = r->next;
       ret = mount ("none", r->target, "", r->flags, r->data);
@@ -646,13 +646,24 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
         {
           ret = mount ("none", r->target, "", r->flags | MS_NOSUID | MS_NODEV, r->data);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "remount '%s'", r->target);
+            {
+              crun_make_error (err, errno, "remount '%s'", r->target);
+              goto cleanup;
+            }
         }
 
       free_remount (r);
-
       r = next;
     }
+
+ cleanup:
+  while (r)
+    {
+      struct remount_s *next = r->next;
+      free_remount (r);
+      r = next;
+    }
+
   get_private_data (container)->remounts = NULL;
   return 0;
 }
