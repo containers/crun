@@ -52,7 +52,7 @@ static struct argp_option options[] =
     { 0 }
   };
 
-static char args_doc[] = "state CONTAINER SIGNAL";
+static char args_doc[] = "state CONTAINER";
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
@@ -82,6 +82,7 @@ crun_command_state (struct crun_global_arguments *global_args, int argc, char **
   struct libcrun_context_s crun_context = {0, };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &state_options);
+  crun_assert_n_args (argc - first_arg, 1, 1);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 

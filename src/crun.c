@@ -182,13 +182,23 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
+static struct commands_s *command;
+
+void
+crun_assert_n_args (int n, int min, int max)
+{
+  if (min >= 0 && n < min)
+    error (EXIT_FAILURE, 0, "'%s' requires a minimum of %d arguments", command->name, min);
+  if (max >= 0 && n > max)
+    error (EXIT_FAILURE, 0, "'%s' requires a maximum of %d arguments", command->name, max);
+}
+
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
 int
 main (int argc, char **argv)
 {
   libcrun_error_t err = NULL;
-  struct commands_s *command;
   int ret, first_argument;
 
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);

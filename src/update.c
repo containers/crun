@@ -236,6 +236,7 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
   size_t len;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
+  crun_assert_n_args (argc - first_arg, 1, 1);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 

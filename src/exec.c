@@ -111,8 +111,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   crun_context.preserve_fds = 0;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
-  if (exec_options.process == NULL && (argc - first_arg < 2))
-    libcrun_fail_with_error (0, "please specify at least one argument");
+  crun_assert_n_args (argc - first_arg, 2, -1);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
   crun_context.detach = exec_options.detach;

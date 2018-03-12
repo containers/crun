@@ -31,5 +31,5 @@ struct crun_global_arguments
 };
 
 void init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob);
-
+void crun_assert_n_args (int n, int min, int max);
 #endif

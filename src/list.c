@@ -83,6 +83,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   libcrun_container_list_t *list, *it;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &list_options);
+  crun_assert_n_args (argc - first_arg, 0, 0);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 

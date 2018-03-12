@@ -260,6 +260,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   cleanup_file FILE *f = NULL;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);
+  crun_assert_n_args (argc - first_arg, 0, 0);
 
   init_libcrun_context (&crun_context, argv[first_arg], global_args);
 
