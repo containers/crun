@@ -1176,7 +1176,7 @@ int libcrun_copy_config_file (const char *id, const char *state_root, const char
 }
 
 int
-libcrun_container_run (libcrun_container *container, struct libcrun_context_s *context, unsigned int options, libcrun_error_t *err)
+libcrun_container_run (struct libcrun_context_s *context, libcrun_container *container, unsigned int options, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
