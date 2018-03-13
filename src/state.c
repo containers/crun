@@ -60,7 +60,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'f':
-      state_options.force = 1;
+      state_options.force = true;
       break;
 
     case ARGP_KEY_NO_ARGS:

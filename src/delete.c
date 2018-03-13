@@ -68,7 +68,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'r':
-      delete_options.regex = 1;
+      delete_options.regex = true;
       break;
 
     case ARGP_KEY_NO_ARGS:

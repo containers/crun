@@ -153,11 +153,11 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case OPTION_DEBUG:
-      arguments.debug = 1;
+      arguments.debug = true;
       break;
 
     case OPTION_SYSTEMD_CGROUP:
-      arguments.option_systemd_cgroup = 1;
+      arguments.option_systemd_cgroup = true;
       break;
 
     case OPTION_LOG:

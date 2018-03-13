@@ -25,9 +25,9 @@ struct crun_global_arguments
   char *root;
   char *log;
 
-  int command : 1;
-  int debug : 1;
-  int option_systemd_cgroup : 1;
+  bool command;
+  bool debug;
+  bool option_systemd_cgroup;
 };
 
 void init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob);

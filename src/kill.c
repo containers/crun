@@ -45,7 +45,7 @@ enum
 
 struct kill_options_s
 {
-  int regex;
+  bool regex;
   bool force;
 };
 
@@ -66,11 +66,11 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'f':
-      kill_options.force = 1;
+      kill_options.force = true;
       break;
 
     case 'r':
-      kill_options.regex = 1;
+      kill_options.regex = true;
       break;
 
     case ARGP_KEY_NO_ARGS:

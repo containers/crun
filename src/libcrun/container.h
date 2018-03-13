@@ -36,10 +36,10 @@ struct libcrun_context_s
 
   int fifo_exec_wait_fd;
 
-  int systemd_cgroup : 1;
-  int detach : 1;
-  int no_subreaper: 1;
-  int no_new_keyring : 1;
+  bool systemd_cgroup;
+  bool detach;
+  bool no_subreaper;
+  bool no_new_keyring;
 };
 
 struct libcrun_container_s

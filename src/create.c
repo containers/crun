@@ -74,11 +74,11 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_NO_SUBREAPER:
-      crun_context.no_subreaper = 1;
+      crun_context.no_subreaper = true;
       break;
 
     case OPTION_NO_NEW_KEYRING:
-      crun_context.no_new_keyring = 1;
+      crun_context.no_new_keyring = true;
       break;
 
     case OPTION_PID_FILE:

@@ -36,8 +36,8 @@ struct exec_options_s
   const char *process;
   const char *console_socket;
   const char *pid_file;
-  int tty;
-  int detach;
+  bool tty;
+  bool detach;
 };
 
 enum
@@ -75,7 +75,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'd':
-      exec_options.detach = 1;
+      exec_options.detach = true;
       break;
 
     case 'p':
@@ -83,7 +83,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 't':
-      exec_options.tty = 1;
+      exec_options.tty = true;
       break;
 
     case 'c':
