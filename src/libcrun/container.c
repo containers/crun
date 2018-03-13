@@ -215,20 +215,10 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   return 0;
 }
 
-libcrun_container *
-libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
+static libcrun_container *
+make_container (oci_container *container_def)
 {
-  libcrun_container *container = NULL;
-  oci_container *container_def;
-  cleanup_free char *oci_error = NULL;
-  container_def = oci_container_parse_file (path, 0, &oci_error);
-  if (container_def == NULL)
-    {
-      crun_make_error (err, 0, "load '%s': %s", path, oci_error);
-      return NULL;
-    }
-
-  container = xmalloc (sizeof (*container));
+  libcrun_container *container = xmalloc (sizeof (*container));
   memset (container, 0, sizeof (*container));
   container->container_def = container_def;
 
@@ -236,6 +226,36 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   container->host_gid = getgid ();
 
   return container;
+}
+
+libcrun_container *
+libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
+{
+  libcrun_container *container = NULL;
+  oci_container *container_def;
+  cleanup_free char *oci_error = NULL;
+  container_def = oci_container_parse_data (json, NULL, &oci_error);
+  if (container_def == NULL)
+    {
+      crun_make_error (err, 0, "load: %s", oci_error);
+      return NULL;
+    }
+  return make_container (container_def);
+}
+
+libcrun_container *
+libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
+{
+  libcrun_container *container = NULL;
+  oci_container *container_def;
+  cleanup_free char *oci_error = NULL;
+  container_def = oci_container_parse_file (path, NULL, &oci_error);
+  if (container_def == NULL)
+    {
+      crun_make_error (err, 0, "load '%s': %s", path, oci_error);
+      return NULL;
+    }
+  return make_container (container_def);
 }
 
 static

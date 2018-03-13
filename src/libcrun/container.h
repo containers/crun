@@ -62,6 +62,8 @@ typedef struct libcrun_container_s libcrun_container;
 
 libcrun_container *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
 
+libcrun_container *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
+
 int libcrun_container_run (struct libcrun_context_s *context, libcrun_container *container, unsigned int options, libcrun_error_t *error);
 
 int libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, bool force, libcrun_error_t *err);
