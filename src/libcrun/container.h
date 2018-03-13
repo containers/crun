@@ -36,7 +36,6 @@ struct libcrun_context_s
 
   int fifo_exec_wait_fd;
 
-  int has_fifo_exec_wait : 1;
   int systemd_cgroup : 1;
   int detach : 1;
   int no_subreaper: 1;

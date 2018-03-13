@@ -757,7 +757,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
     return container_exit_code;
 
   /* Also exit if there is nothing more to wait for.  */
-  if (context->detach && notify_socket < 0 && !context->has_fifo_exec_wait)
+  if (context->detach && notify_socket < 0 && context->fifo_exec_wait_fd < 0)
     return 0;
 
   if (container_ready_fd >= 0)
@@ -767,7 +767,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
       close_and_reset (&container_ready_fd);
     }
 
-  if (! context->has_fifo_exec_wait)
+  if (context->fifo_exec_wait_fd < 0)
     {
       ret = ptrace (PTRACE_DETACH, pid, NULL, NULL);
       if (UNLIKELY (ret < 0 && errno != ESRCH))
@@ -798,7 +798,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
       fds[fds_len++] = 0;
       levelfds[levelfds_len++] = terminal_fd;
     }
-  if (context->has_fifo_exec_wait)
+  if (context->fifo_exec_wait_fd >= 0)
     {
       exec_wait_fd = context->fifo_exec_wait_fd;
       fds[fds_len++] = exec_wait_fd;
@@ -1338,7 +1338,6 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
   if (context->stderr)
     stderr = context->stderr;
 
-  context->has_fifo_exec_wait = 1;
   context->fifo_exec_wait_fd = exec_fifo_fd;
   exec_fifo_fd = -1;
 

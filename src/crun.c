@@ -52,7 +52,7 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
   con->state_root = glob->root;
   con->systemd_cgroup = glob->option_systemd_cgroup;
   con->notify_socket = getenv ("NOTIFY_SOCKET");
-  con->has_fifo_exec_wait = 0;
+  con->fifo_exec_wait_fd = -1;
   if (glob->log == NULL)
     con->stderr = stderr;
   else
