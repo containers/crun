@@ -216,7 +216,7 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
 }
 
 libcrun_container *
-libcrun_container_load (const char *path, libcrun_error_t *err)
+libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 {
   libcrun_container *container = NULL;
   oci_container *container_def;
@@ -533,7 +533,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
     {
       cleanup_free char *config_file = NULL;
       xasprintf (&config_file, "%s/config.json", status->bundle);
-      container = libcrun_container_load (config_file, err);
+      container = libcrun_container_load_from_file (config_file, err);
       if (container == NULL)
         return crun_make_error (err, 0, "error loading config.json");
 
@@ -1442,7 +1442,7 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE
       return crun_make_error (err, 0, "cannot get state directory");
 
     xasprintf (&config_file, "%s/config.json", dir);
-    container = libcrun_container_load (config_file, err);
+    container = libcrun_container_load_from_file (config_file, err);
     if (UNLIKELY (container == NULL))
       return crun_make_error (err, 0, "error loading config.json");
 

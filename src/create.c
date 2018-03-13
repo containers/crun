@@ -112,7 +112,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
     if (chdir (bundle) < 0)
       libcrun_fail_with_error (errno, "chdir '%s' failed", bundle);
 
-  container = libcrun_container_load ("config.json", err);
+  container = libcrun_container_load_from_file ("config.json", err);
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
 

@@ -60,7 +60,7 @@ struct libcrun_container_s
 
 typedef struct libcrun_container_s libcrun_container;
 
-libcrun_container *libcrun_container_load (const char *path, libcrun_error_t *err);
+libcrun_container *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
 
 int libcrun_container_run (struct libcrun_context_s *context, libcrun_container *container, unsigned int options, libcrun_error_t *error);
 
