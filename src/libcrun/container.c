@@ -185,6 +185,8 @@ sync_socket_send_abort (int fd, libcrun_error_t *err)
   ret = TEMP_FAILURE_RETRY (write (fd, &msg, SYNC_SOCKET_MESSAGE_LEN (msg, 0)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write to sync socket");
+
+  return 0;
 }
 
 static int
@@ -231,7 +233,6 @@ make_container (oci_container *container_def)
 libcrun_container *
 libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 {
-  libcrun_container *container = NULL;
   oci_container *container_def;
   cleanup_free char *oci_error = NULL;
   container_def = oci_container_parse_data (json, NULL, &oci_error);
@@ -246,7 +247,6 @@ libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 libcrun_container *
 libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 {
-  libcrun_container *container = NULL;
   oci_container *container_def;
   cleanup_free char *oci_error = NULL;
   container_def = oci_container_parse_file (path, NULL, &oci_error);
@@ -1497,7 +1497,7 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE
 int
 libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err)
 {
-  int ret, pid_status;
+  int ret;
   pid_t pid;
   libcrun_container_status_t status;
   const char *state_root = context->state_root;

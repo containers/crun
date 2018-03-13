@@ -395,14 +395,11 @@ int
 read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 {
   cleanup_close int fd;
-  int ret;
-  struct stat stat;
 
   if (strcmp (path, "-") == 0)
     path = "/dev/stdin";
 
   fd = TEMP_FAILURE_RETRY (open (path, O_RDONLY));
-
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error opening file '%s'", path);
 
@@ -901,7 +898,6 @@ set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
 int
 parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err)
 {
-    yajl_val tree;
     char errbuf[1024];
 
     *err = NULL;

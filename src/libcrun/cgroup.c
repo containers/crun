@@ -552,10 +552,10 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
         return ret;
       if (ret == 77)
         {
-          libcrun_error_t *tmp_err;
-
           if (getuid () == 0)
             {
+              libcrun_error_t *tmp_err = NULL;
+
               ret = check_running_in_user_namespace (tmp_err);
               if (UNLIKELY (ret < 0))
                 {
@@ -1243,7 +1243,6 @@ int
 libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
-  int ret;
 
   if (!def->linux || !def->linux->resources)
     return 0;
