@@ -29,12 +29,22 @@ libcrun_a_SOURCES = src/libcrun/utils.c \
 		src/libcrun/sig2str.c
 
 libcrun_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+
+COMMON_LIBS = $(SELINUX_LIBS) $(YAJL_LIBS) -lcap -lseccomp $(SYSTEMD_LIBS)
+
+if PYTHON_BINDINGS
+pyexec_LTLIBRARIES = python_crun.la
+python_crun_la_SOURCES = python/crun_python.c
+python_crun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src -I $(abs_top_builddir)/src $(PYTHON_CFLAGS)
+python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS) -Wl,--whole-archive libcrun.a libocispec/libocispec.a -Wl,--no-whole-archive $(COMMON_LIBS)
+endif
+
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c
 
-crun_LDADD = libcrun.a libocispec/libocispec.a $(SELINUX_LIBS) $(YAJL_LIBS) -lcap -lseccomp $(SYSTEMD_LIBS)
+crun_LDADD = libcrun.a libocispec/libocispec.a $(COMMON_LIBS)
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
@@ -51,14 +61,14 @@ UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 bin_PROGRAMS = crun
 noinst_PROGRAMS = tests/init $(UNIT_TESTS)
 
-tests_init_LDFLAGS = -static-libgcc -static
+tests_init_LDFLAGS = -static-libgcc -all-static
 tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
 
-tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
 tests_tests_libcrun_utils_LDADD = $(crun_LDADD)
 
-tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(crun_LDADD)
 
