@@ -54,4 +54,13 @@ void libcrun_warning (const char *msg, ...);
 
 void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
 
+enum
+  {
+    LIBCRUN_VERBOSITY_ERROR,
+    LIBCRUN_VERBOSITY_WARNING,
+  };
+
+void libcrun_set_verbosity (int verbosity);
+int libcrun_get_verbosity ();
+
 #endif

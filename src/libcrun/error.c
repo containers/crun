@@ -131,6 +131,19 @@ log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
 
 static crun_output_handler output_handler = log_write_to_stderr;
 static void *output_handler_arg = NULL;
+static int output_verbosity = LIBCRUN_VERBOSITY_WARNING;
+
+void
+libcrun_set_verbosity (int verbosity)
+{
+  output_verbosity = verbosity;
+}
+
+int
+libcrun_get_verbosity ()
+{
+  return output_verbosity;
+}
 
 void
 crun_set_output_handler (crun_output_handler handler, void *arg)
@@ -144,6 +157,9 @@ write_log (FILE *out, int errno_, bool warning, const char *msg, va_list args_li
 {
   int ret;
   cleanup_free char *output = NULL;
+
+  if (warning && output_verbosity < LIBCRUN_VERBOSITY_WARNING)
+    return;
 
   ret = vasprintf (&output, msg, args_list);
   if (UNLIKELY (ret < 0))
