@@ -1424,7 +1424,7 @@ libcrun_run_linux_container (libcrun_container *container,
       flags |= value;
     }
 
-  if (container->host_uid && (flags & ~CLONE_NEWUSER))
+  if (container->host_uid && (flags & CLONE_NEWUSER) == 0)
     {
       libcrun_warning ("non root user need to have an 'user' namespace");
       flags |= CLONE_NEWUSER;
