@@ -139,7 +139,6 @@ make_context (PyObject *self, PyObject *args, PyObject *kwargs)
   ctx->state_root = xstrdup (state_root);
   ctx->notify_socket = xstrdup (notify_socket);
   return PyCapsule_New (ctx, CONTEXT_OBJ_TAG, NULL);
-
 }
 
 static PyObject *
@@ -150,6 +149,7 @@ container_run (PyObject *self, PyObject *args)
   PyObject *ctr_obj = NULL;
   libcrun_container *ctr;
   struct libcrun_context_s *ctx;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "OO", &ctx_obj, &ctr_obj))
     return NULL;
@@ -162,7 +162,10 @@ container_run (PyObject *self, PyObject *args)
   if (ctr == NULL)
     return NULL;
 
-  if (libcrun_container_run (ctx, ctr, LIBCRUN_RUN_OPTIONS_PREFORK, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_container_run (ctx, ctr, LIBCRUN_RUN_OPTIONS_PREFORK, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
 
   Py_RETURN_NONE;
@@ -176,6 +179,7 @@ container_create (PyObject *self, PyObject *args)
   PyObject *ctr_obj = NULL;
   libcrun_container *ctr;
   struct libcrun_context_s *ctx;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "OO", &ctx_obj, &ctr_obj))
     return NULL;
@@ -188,7 +192,10 @@ container_create (PyObject *self, PyObject *args)
   if (ctr == NULL)
     return NULL;
 
-  if (libcrun_container_create (ctx, ctr, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_container_create (ctx, ctr, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
 
   Py_RETURN_NONE;
@@ -202,6 +209,7 @@ container_delete (PyObject *self, PyObject *args)
   char *id = NULL;
   bool force;
   struct libcrun_context_s *ctx;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "Osn", &ctx_obj, &id, &force))
     return NULL;
@@ -210,7 +218,10 @@ container_delete (PyObject *self, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  if (libcrun_container_delete (ctx, NULL, id, force, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_container_delete (ctx, NULL, id, force, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
 
   Py_RETURN_NONE;
@@ -224,6 +235,7 @@ container_kill (PyObject *self, PyObject *args)
   char *id = NULL;
   int signal;
   struct libcrun_context_s *ctx;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "Osi", &ctx_obj, &id, &signal))
     return NULL;
@@ -232,7 +244,10 @@ container_kill (PyObject *self, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  if (libcrun_container_kill (ctx, id, signal, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_container_kill (ctx, id, signal, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
 
   Py_RETURN_NONE;
@@ -245,6 +260,7 @@ container_start (PyObject *self, PyObject *args)
   PyObject *ctx_obj = NULL;
   char *id = NULL;
   struct libcrun_context_s *ctx;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "Os", &ctx_obj, &id))
     return NULL;
@@ -253,7 +269,10 @@ container_start (PyObject *self, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  if (libcrun_container_start (ctx, id, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_container_start (ctx, id, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
 
   Py_RETURN_NONE;
@@ -266,8 +285,9 @@ containers_list (PyObject *self, PyObject *args)
   PyObject *ctx_obj = NULL;
   struct libcrun_context_s *ctx;
   libcrun_container_list_t *containers, *it;
-  PyObject *ret;
+  PyObject *retobj;
   Py_ssize_t i = 0;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "O", &ctx_obj))
     return NULL;
@@ -276,23 +296,27 @@ containers_list (PyObject *self, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  if (libcrun_get_containers_list (&containers, ctx->state_root, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_get_containers_list (&containers, ctx->state_root, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
 
   i = 0;
   for (it = containers; it; it = it->next)
     i++;
-  ret = PyList_New (i);
-  if (ret == NULL)
+
+  retobj = PyList_New (i);
+  if (retobj == NULL)
     return NULL;
 
   i = 0;
   for (it = containers; it; it = it->next)
-    PyList_SetItem (ret, i++, PyUnicode_FromString (it->name));
+    PyList_SetItem (retobj, i++, PyUnicode_FromString (it->name));
 
   libcrun_free_containers_list (containers);
 
-  return ret;
+  return retobj;
 }
 
 static PyObject *
@@ -305,6 +329,7 @@ container_status (PyObject *self, PyObject *args)
   libcrun_container_status_t status;
   cleanup_free char *buffer = NULL;
   FILE *memfile;
+  int ret;
 
   if (!PyArg_ParseTuple (args, "Os", &ctx_obj, &id))
     return NULL;
@@ -322,8 +347,12 @@ container_status (PyObject *self, PyObject *args)
   memset (buffer, 0, 4096);
 
   memfile = fmemopen (buffer, 4095, "w");
-  if (libcrun_container_state (ctx, id, memfile, &err) < 0)
+  Py_BEGIN_ALLOW_THREADS;
+  ret = libcrun_container_state (ctx, id, memfile, &err);
+  Py_END_ALLOW_THREADS;
+  if (ret < 0)
     return set_error (&err);
+
   fclose (memfile);
 
   return PyUnicode_FromString (buffer);
@@ -367,7 +396,10 @@ container_update (PyObject *self, PyObject *args)
       return NULL;
     }
 
+  Py_BEGIN_ALLOW_THREADS;
   ret = libcrun_container_exec (ctx, id, process, &err);
+  Py_END_ALLOW_THREADS;
+
   free_oci_container_process (process);
   if (ret < 0)
     return set_error (&err);
@@ -391,7 +423,9 @@ container_spec (PyObject *self, PyObject *args)
     return NULL;
 
   memfile = fmemopen (buffer, 4095, "w");
+  Py_BEGIN_ALLOW_THREADS;
   ret = libcrun_container_spec (geteuid () == 0, memfile, &err);
+  Py_END_ALLOW_THREADS;
   if (ret < 0)
     return set_error (&err);
   buffer[ret] = '\0';
