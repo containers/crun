@@ -1435,6 +1435,22 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
       if (UNLIKELY (ret < 0))
         return ret;
 
+      if (status < 0)
+        {
+          int errno_;
+          char buf[512];
+          ret = TEMP_FAILURE_RETRY (read (pipefd0, &errno_, sizeof (errno_)));
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = TEMP_FAILURE_RETRY (read (pipefd0, buf, sizeof (buf) - 1));
+          if (UNLIKELY (ret < 0))
+            return ret;
+          buf[ret] = '\0';
+
+          return crun_make_error (err, errno_, buf);
+        }
+
       return status;
     }
 
@@ -1451,6 +1467,9 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
     {
+      TEMP_FAILURE_RETRY (write (pipefd1, &((*err)->status), sizeof ((*err)->status)));
+      TEMP_FAILURE_RETRY (write (pipefd1, (*err)->msg, strlen ((*err)->msg) + 1));
+
       crun_set_output_handler (log_write_to_stderr, NULL);
       libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
     }
