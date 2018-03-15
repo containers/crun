@@ -1409,13 +1409,12 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
   if (def->process->terminal && detach && context->console_socket == NULL)
     return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
 
-  if (!detach)
+  if (!detach && (options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
     {
       if (context->stderr)
         stderr = context->stderr;
       return libcrun_container_run_internal (container, context, -1, err);
     }
-
 
   ret = pipe (container_ret_status);
   if (UNLIKELY (ret < 0))

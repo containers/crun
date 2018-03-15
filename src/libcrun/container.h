@@ -42,6 +42,11 @@ struct libcrun_context_s
   bool no_new_keyring;
 };
 
+enum
+  {
+    LIBCRUN_RUN_OPTIONS_PREFORK = 1 << 0,
+  };
+
 struct libcrun_container_s
 {
   /* Container parsed from the runtime json file.  */
