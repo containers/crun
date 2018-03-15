@@ -162,7 +162,7 @@ container_run (PyObject *self, PyObject *args)
   if (ctr == NULL)
     return NULL;
 
-  if (libcrun_container_run (ctx, ctr, 0, &err) < 0)
+  if (libcrun_container_run (ctx, ctr, LIBCRUN_RUN_OPTIONS_PREFORK, &err) < 0)
     return set_error (&err);
 
   Py_RETURN_NONE;
