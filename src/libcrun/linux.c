@@ -427,6 +427,11 @@ create_dev (libcrun_container *container, int devfd, struct device_s *device, co
         return 0;
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "mknod '%s'", bname);
+
+      ret = fchmodat (devfd, bname, device->mode, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fchmodat '%s'", bname);
+
     }
   return 0;
 }
