@@ -1159,7 +1159,7 @@ int open_seccomp_output (const char *id, int *fd, bool readonly, const char *sta
     }
   else
     {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_WRONLY | O_CREAT, 0700));
+      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDWR | O_CREAT, 0700));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, 0, "open seccomp.bpf");
       *fd = ret;

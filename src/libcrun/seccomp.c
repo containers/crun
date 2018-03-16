@@ -228,9 +228,8 @@ libcrun_generate_and_load_seccomp (libcrun_container *container, int outfd, libc
         return crun_make_error (err, 0, "seccomp_export_bpf");
     }
 
-  ret = seccomp_load (ctx);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "seccomp load");
+  if (lseek (outfd, 0, SEEK_SET) == (off_t) -1)
+    return crun_make_error (err, 0, "lseek");
 
-  return 0;
+  return libcrun_apply_seccomp (outfd, err);
 }
