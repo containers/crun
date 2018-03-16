@@ -801,13 +801,12 @@ container_delete_internal (struct libcrun_context_s *context, oci_container *def
             return ret;
           if (ret == 1)
             {
-              crun_make_error (err, 0, "the container '%s' is still running", id);
-              return ret;
-            }
-          if (UNLIKELY (ret < 0 && errno != ESRCH))
-            {
-              crun_make_error (err, errno, "signaling the container");
-              return ret;
+              ret = libcrun_status_has_read_exec_fifo (state_root, id, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              if (ret == 0)
+                return crun_make_error (err, 0, "the container '%s' is still running", id);
+              kill (status.pid, 9);
             }
         }
     }
