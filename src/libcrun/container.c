@@ -1403,6 +1403,9 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
+    return crun_make_error (err, 0, "unknown version specified");
+
   ret = libcrun_status_check_directories (context->state_root, context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -1493,6 +1496,9 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
   context->detach = 1;
 
   container->context = context;
+
+  if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
+    return crun_make_error (err, 0, "unknown version specified");
 
   ret = check_config_file (def, err);
   if (UNLIKELY (ret < 0))
