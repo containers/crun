@@ -511,7 +511,7 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
     {
       cleanup_free char *path = NULL;
       int dir;
-      xasprintf (&path, "%s%s", rootfs, def->linux->masked_paths[i]);
+      xasprintf (&path, "%s/%s", rootfs, def->linux->masked_paths[i]);
 
       ret = crun_path_exists (path, 1, err);
       if (UNLIKELY (ret < 0))
@@ -541,7 +541,7 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
     {
       cleanup_free char *path = NULL;
 
-      xasprintf (&path, "%s%s", rootfs, def->linux->readonly_paths[i]);
+      xasprintf (&path, "%s/%s", rootfs, def->linux->readonly_paths[i]);
 
       ret = crun_path_exists (path, 1, err);
       if (UNLIKELY (ret < 0))
@@ -841,14 +841,14 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mount (container, def->root->path, rootfs, "", MS_BIND | MS_REC, "", 0, err);
+  ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (def->root->readonly)
     {
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
-      struct remount_s *r = make_remount (def->root->path, remount_flags, "", get_private_data (container)->remounts);
+      struct remount_s *r = make_remount (rootfs, remount_flags, "", get_private_data (container)->remounts);
       get_private_data (container)->remounts = r;
     }
 
