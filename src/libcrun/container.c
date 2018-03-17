@@ -41,7 +41,6 @@
 #include <sys/socket.h>
 #include <sys/ptrace.h>
 #include <grp.h>
-#include <sys/fsuid.h>
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -471,21 +470,6 @@ int unblock_signals (libcrun_error_t *err)
 }
 
 static int
-set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err)
-{
-  if (gid && setfsgid (gid) < 0)
-    return crun_make_error (err, errno, "setfsgid");
-  if (uid && setfsuid (uid) < 0)
-    return crun_make_error (err, errno, "setfsuid");
-
-  if (setgid (gid) < 0)
-    return crun_make_error (err, errno, "setgid");
-  if (setuid (uid) < 0)
-    return crun_make_error (err, errno, "setuid");
-  return 0;
-}
-
-static int
 container_entrypoint_init (void *args, const char *notify_socket,
                            int sync_socket, libcrun_error_t *err)
 {
@@ -610,7 +594,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = set_uid_gid (container->container_uid, container->container_gid, err);
+  ret = libcrun_set_uid_gid (container->container_uid, container->container_gid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1808,7 +1792,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
               if (UNLIKELY (ret < 0))
                 libcrun_fail_with_error (errno, "%s", "setgroups");
             }
-          ret = set_uid_gid (process->user->uid, process->user->gid, err);
+          ret = libcrun_set_uid_gid (process->user->uid, process->user->gid, err);
           if (UNLIKELY (ret < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }

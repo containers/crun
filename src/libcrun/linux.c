@@ -1635,6 +1635,21 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
 }
 
 int
+libcrun_set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err)
+{
+  if (gid && setfsgid (gid) < 0)
+    return crun_make_error (err, errno, "setfsgid");
+  if (uid && setfsuid (uid) < 0)
+    return crun_make_error (err, errno, "setfsuid");
+
+  if (setgid (gid) < 0)
+    return crun_make_error (err, errno, "setgid");
+  if (setuid (uid) < 0)
+    return crun_make_error (err, errno, "setuid");
+  return 0;
+}
+
+int
 libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
 {
   pid_t pid;
