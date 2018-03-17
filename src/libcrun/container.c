@@ -478,9 +478,9 @@ set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err)
   if (uid && setfsuid (uid) < 0)
     return crun_make_error (err, errno, "setfsuid");
 
-  if (gid && setgid (gid) < 0)
+  if (setgid (gid) < 0)
     return crun_make_error (err, errno, "setgid");
-  if (uid && setuid (uid) < 0)
+  if (setuid (uid) < 0)
     return crun_make_error (err, errno, "setuid");
   return 0;
 }
