@@ -42,6 +42,7 @@
 #include <sys/socket.h>
 #include <libgen.h>
 #include <sys/wait.h>
+#include <sys/fsuid.h>
 
 struct remount_s
 {
@@ -1503,7 +1504,7 @@ libcrun_run_linux_container (libcrun_container *container,
           additional_gids_len = def->process->user->additional_gids_len;
         }
 
-      if (additional_gids && getgroups(0, NULL))
+      if (additional_gids && getgroups (0, NULL))
         {
           ret = setgroups (additional_gids_len, additional_gids);
           if (UNLIKELY (ret < 0))
@@ -1542,6 +1543,12 @@ libcrun_run_linux_container (libcrun_container *container,
       ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "read from sync socket");
+      ret = setfsuid (0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setfsuid");
+      ret = setfsgid (0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setfsgid");
     }
 
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);

@@ -41,6 +41,7 @@
 #include <sys/socket.h>
 #include <sys/ptrace.h>
 #include <grp.h>
+#include <sys/fsuid.h>
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -472,6 +473,11 @@ int unblock_signals (libcrun_error_t *err)
 static int
 set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err)
 {
+  if (gid && setfsgid (gid) < 0)
+    return crun_make_error (err, errno, "setfsgid");
+  if (uid && setfsuid (uid) < 0)
+    return crun_make_error (err, errno, "setfsuid");
+
   if (gid && setgid (gid) < 0)
     return crun_make_error (err, errno, "setgid");
   if (uid && setuid (uid) < 0)
