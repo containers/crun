@@ -254,7 +254,6 @@ do_mount (libcrun_container *container,
       data = data_with_label;
     }
 
-
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
@@ -830,18 +829,22 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
 {
   oci_container *def = container->container_def;
   int ret = 0, is_user_ns = 0;
-  unsigned long rootfsPropagation = 0;
+  unsigned long rootfs_propagation = 0;
 
   if (def->linux->rootfs_propagation)
-    rootfsPropagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL);
+    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL);
   else
-    rootfsPropagation = MS_REC | MS_PRIVATE;
+    rootfs_propagation = MS_REC | MS_PRIVATE;
 
-  ret = do_mount (container, "", "/", "", MS_REC | rootfsPropagation, "", 0, err);
+  ret = do_mount (container, "", "/", "", rootfs_propagation, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC, "", 0, err);
+  ret = do_mount (container, "", "/", "", MS_PRIVATE, "", 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
