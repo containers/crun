@@ -63,6 +63,7 @@ struct private_data_s
   char *host_notify_socket_path;
   char *container_notify_socket_path;
   bool mount_dev_from_host;
+  unsigned long rootfs_propagation;
 };
 
 struct linux_namespace_s
@@ -586,7 +587,7 @@ do_pivot (libcrun_container *container, const char *rootfs, libcrun_error_t *err
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fchdir '%s'", rootfs);
 
-  ret = do_mount (container, "", ".", "", MS_PRIVATE | MS_REC, "", 0, err);
+  ret = do_mount (container, "", ".", "", MS_REC | MS_PRIVATE, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -597,6 +598,10 @@ do_pivot (libcrun_container *container, const char *rootfs, libcrun_error_t *err
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chdir to newroot");
+
+  ret = do_mount (container, "", "/", "", get_private_data (container)->rootfs_propagation, "", 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return 0;
 }
@@ -836,13 +841,24 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   else
     rootfs_propagation = MS_REC | MS_PRIVATE;
 
+  get_private_data (container)->rootfs_propagation = rootfs_propagation;
+
   ret = do_mount (container, "", "/", "", rootfs_propagation, "", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mount (container, "", "/", "", MS_PRIVATE, "", 0, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if ((rootfs_propagation & MS_PRIVATE) || (rootfs_propagation & MS_UNBINDABLE))
+    {
+      ret = do_mount (container, "", "/", "", MS_REC | MS_PRIVATE, "", 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      ret = do_mount (container, "", "/", "", MS_PRIVATE, "", 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, "", 0, err);
   if (UNLIKELY (ret < 0))
