@@ -662,6 +662,7 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
 {
   int ret;
   size_t i;
+  size_t path_len;
 
 #ifdef HAVE_SYSTEMD
   if (systemd_cgroup)
@@ -675,18 +676,22 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
-  for (i = 0; subsystems[i]; i++)
+  path_len = strlen (path);
+  while (1)
     {
-      cleanup_free char *cgroup_path;
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
+      for (; path_len > 1 && path[path_len] != '/'; path_len--);
+      if (path_len == 1)
+        break;
+      path[path_len] = '\0';
+      for (i = 0; subsystems[i]; i++)
+        {
+          cleanup_free char *cgroup_path;
+          xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
 
-      ret = crun_path_exists (cgroup_path, 1, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      if (ret == 0)
-        continue;
+          if (rmdir (cgroup_path) < 0)
+            break;
+        }
 
-      rmdir (cgroup_path);
     }
 
   return 0;
