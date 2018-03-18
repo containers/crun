@@ -34,10 +34,16 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-static const char *subsystems[] = { "cpuset", "devices", "pids", "memory",
-                                    "net_cls,net_prio", "freezer", "blkio",
-                                    "hugetlb", "cpu,cpuacct", "perf_event",
-                                    "unified", NULL};
+static const cgroups_subsystem_t cgroups_subsystems[] = { "cpuset", "devices", "pids", "memory",
+                                                          "net_cls,net_prio", "freezer", "blkio",
+                                                          "hugetlb", "cpu,cpuacct", "perf_event",
+                                                          "unified", NULL};
+
+const cgroups_subsystem_t *
+libcrun_get_cgroups_subsystems (libcrun_error_t *err)
+{
+  return cgroups_subsystems;
+}
 
 struct symlink_s
 {
@@ -183,12 +189,16 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
 
   return 0;
 }
+
 static int
 enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *err)
 {
   char pid_str[16];
   int ret;
   size_t i;
+  const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
+  if (UNLIKELY (subsystems == NULL))
+    return -1;
 
   sprintf (pid_str, "%d", pid);
   for (i = 0; subsystems[i]; i++)
@@ -671,6 +681,9 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   int ret;
   size_t i;
   size_t path_len;
+  const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
+  if (UNLIKELY (subsystems == NULL))
+    return -1;
 
 #ifdef HAVE_SYSTEMD
   if (systemd_cgroup)
