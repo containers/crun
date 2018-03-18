@@ -193,6 +193,14 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
   sprintf (pid_str, "%d", pid);
   for (i = 0; subsystems[i]; i++)
     {
+      char subsystem_path[64];
+      sprintf (subsystem_path, "/sys/fs/cgroup/%s", subsystems[i]);
+      ret = crun_path_exists (subsystem_path, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (ret == 0)
+        continue;
+
       ret = enter_cgroup_subsystem (pid, subsystems[i], path, ensure_missing, err);
       if (UNLIKELY (ret < 0))
         return ret;

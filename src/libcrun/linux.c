@@ -360,7 +360,15 @@ do_mount_cgroup (libcrun_container *container,
 
       ret = do_mount (container, source, subsystem_path, "cgroup", mountflags, subsystems[i], 1, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (crun_error_get_errno (err) == ENOENT)
+            {
+              /* We are trying to mount a subsystem that is not present.  */
+              crun_error_release (err);
+              continue;
+            }
+          return ret;
+        }
     }
 
   ret = libcrun_cgroups_create_symlinks (target, err);
