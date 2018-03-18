@@ -54,55 +54,85 @@ static struct symlink_s cgroup_symlinks[] = {
 };
 
 static int
-initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
+initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *mems, libcrun_error_t *err)
 {
-  int ret;
-  size_t i;
-  cleanup_free char *parentdir_path_buf = NULL;
-  char *parent_dir_path = NULL;
   cleanup_close int dirfd = -1;
-  cleanup_close int parent_dirfd = -1;
-  const char *files[2] = {"cpuset.cpus", "cpuset.mems"};
-
-  parentdir_path_buf = xstrdup (path);
-  parent_dir_path = dirname (parentdir_path_buf);
+  cleanup_close int mems_fd = -1;
+  cleanup_close int cpus_fd = -1;
+  size_t parent_path_len, b_len;
+  int ret;
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open '%s'", path);
 
-  parent_dirfd = open (parent_dir_path, O_DIRECTORY | O_RDONLY);
-  if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open '%s'", parent_dir_path);
-
-  for (i = 0; i < 2; i++)
+  if (cpus[0] == '\0')
     {
-      char b[256];
-      ssize_t b_len;
-      cleanup_close int fd = openat (parent_dirfd, files[i], O_RDWR);
-      if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open '%s/%s'", parent_dir_path, files[i]);
+      size_t b_len;
+      cpus_fd = openat (dirfd, "cpuset.cpus", O_RDWR);
+      if (UNLIKELY (cpus_fd < 0))
+        return crun_make_error (err, errno, "open '%s/%s'", path, "cpuset.cpus");
 
-      b_len = TEMP_FAILURE_RETRY (read (fd, b, sizeof (b)));
+      b_len = TEMP_FAILURE_RETRY (read (cpus_fd, cpus, 256));
       if (UNLIKELY (b_len < 0))
-        return crun_make_error (err, errno, "read from '%s/%s'", parent_dir_path, files[i]);
+        return crun_make_error (err, errno, "read from 'cpuset.cpus'");
+      if (cpus[0] == '\n')
+        cpus[0] = '\0';
+    }
 
-      /* Write to the parent only if not already configured.  */
-      if (b_len == 0 || (b_len == 1 && b[0] == '\n'))
-        {
-          strcpy (b, "0\n");
-          b_len = 2;
-          ret = TEMP_FAILURE_RETRY (write (fd, b, b_len));
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+  if (mems[0] == '\0')
+    {
+      mems_fd = openat (dirfd, "cpuset.mems", O_RDWR);
+      if (UNLIKELY (mems_fd < 0))
+        return crun_make_error (err, errno, "open '%s/%s'", path, "cpuset.mems");
 
-      ret = write_file_at (dirfd, files[i], b, b_len, err);
+      b_len = TEMP_FAILURE_RETRY (read (mems_fd, mems, 256));
+      if (UNLIKELY (b_len < 0))
+        return crun_make_error (err, errno, "read from 'memset.mems'");
+      if (mems[0] == '\n')
+        mems[0] = '\0';
+    }
+
+  /* look up in the parent directory.  */
+  if (cpus[0] == '\0' || mems[0] == '\0')
+    {
+      for (parent_path_len = path_len -1; parent_path_len > 1 && path[parent_path_len] != '/'; parent_path_len--);
+      if (parent_path_len == 1)
+        return 0;
+
+      path[parent_path_len] = '\0';
+      ret = initialize_cpuset_subsystem_rec (path, parent_path_len, cpus, mems, err);
       if (UNLIKELY (ret < 0))
         return ret;
+      path[parent_path_len] = '/';
+    }
+
+  if (cpus_fd >= 0)
+    {
+      b_len = TEMP_FAILURE_RETRY (write (cpus_fd, cpus, strlen (cpus)));
+      if (UNLIKELY (b_len < 0))
+        return crun_make_error (err, errno, "write 'cpuset.cpus'");
+    }
+
+  if (mems_fd >= 0)
+    {
+      b_len = TEMP_FAILURE_RETRY (write (mems_fd, mems, strlen (mems)));
+      if (UNLIKELY (b_len < 0))
+        return crun_make_error (err, errno, "write 'cpuset.mems'");
     }
 
   return 0;
+}
+
+static int
+initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *tmp_path = xstrdup (path);
+  char cpus_buf[256];
+  char mems_buf[256];
+
+  cpus_buf[0] = mems_buf[0] = '\0';
+  return initialize_cpuset_subsystem_rec (tmp_path, strlen (tmp_path), cpus_buf, mems_buf, err);
 }
 
 static int
