@@ -62,7 +62,7 @@ struct private_data_s
 
   char *host_notify_socket_path;
   char *container_notify_socket_path;
-  int mount_dev_from_host;
+  bool mount_dev_from_host;
 };
 
 struct linux_namespace_s
@@ -711,7 +711,7 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
       if (strcmp (type, "bind") == 0)
         {
           if (strcmp (def->mounts[i]->destination, "/dev") == 0)
-            get_private_data (container)->mount_dev_from_host = 1;
+            get_private_data (container)->mount_dev_from_host = true;
           flags |= MS_BIND;
         }
 
@@ -864,7 +864,7 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
         return is_user_ns;
     }
 
-  if (get_private_data (container)->mount_dev_from_host == 0)
+  if (!get_private_data (container)->mount_dev_from_host)
     {
       ret = create_missing_devs (container, rootfs, is_user_ns, err);
       if (UNLIKELY (ret < 0))
