@@ -90,7 +90,6 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
     return crun_make_error (err, 0, "cannot open config.json", err);
 
   ret = libcrun_container_spec (geteuid (), f, err);
-  fclose (f);
 
   return ret >= 0 ? 0 : ret;
 }
