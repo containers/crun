@@ -30,7 +30,7 @@ PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 PKG_CHECK_MODULES([SYSTEMD], [libsystemd >= 221], [AC_DEFINE([HAVE_SYSTEMD], 1, [Define if libsystemd is available])], [ ])
 PKG_CHECK_MODULES([SELINUX], [libselinux >= 2.1.9], [AC_DEFINE([HAVE_SELINUX], 1, [Define if SELinux is available])], [ ])
 
-AC_ARG_WITH([python-bindings], AS_HELP_STRING([--with-python-bindings], [Build the Python bindings]))
+AC_ARG_WITH([python-bindings], AS_HELP_STRING([--with-python-bindings], [build the Python bindings]))
 AS_IF([test "x$with_python_bindings" = "xyes"], [
             PKG_CHECK_MODULES([PYTHON], [python], [], [AC_MSG_ERROR([*** python headers not found])])
             # configure should not touch CFLAGS/LDFLAGS but we need it to propagate it
