@@ -168,7 +168,7 @@ container_run (PyObject *self, PyObject *args)
   if (ret < 0)
     return set_error (&err);
 
-  Py_RETURN_NONE;
+  return PyLong_FromLong (ret);
 }
 
 static PyObject *
@@ -198,7 +198,7 @@ container_create (PyObject *self, PyObject *args)
   if (ret < 0)
     return set_error (&err);
 
-  Py_RETURN_NONE;
+  return PyLong_FromLong (ret);
 }
 
 static PyObject *
@@ -275,7 +275,7 @@ container_start (PyObject *self, PyObject *args)
   if (ret < 0)
     return set_error (&err);
 
-  Py_RETURN_NONE;
+  return PyLong_FromLong (ret);
 }
 
 static PyObject *
