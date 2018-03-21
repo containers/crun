@@ -21,17 +21,20 @@ oci-runtime-validation:
 
 CLEANFILES = crun.spec
 
-libcrun_a_SOURCES = src/libcrun/utils.c \
-		src/libcrun/container.c \
-		src/libcrun/cgroup.c \
-		src/libcrun/linux.c \
-		src/libcrun/seccomp.c \
-		src/libcrun/error.c \
-		src/libcrun/status.c \
-		src/libcrun/terminal.c \
-		src/libcrun/sig2str.c
+lib_LTLIBRARIES = libcrun.la
 
-libcrun_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+libcrun_la_SOURCES = src/libcrun/utils.c \
+			src/libcrun/container.c \
+			src/libcrun/cgroup.c \
+			src/libcrun/linux.c \
+			src/libcrun/seccomp.c \
+			src/libcrun/error.c \
+			src/libcrun/status.c \
+			src/libcrun/terminal.c \
+			src/libcrun/sig2str.c
+
+libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+libcrun_la_LIBADD = libocispec/libocispec.la
 
 COMMON_LIBS = $(SELINUX_LIBS) $(YAJL_LIBS) -lcap -lseccomp $(SYSTEMD_LIBS)
 
@@ -39,15 +42,15 @@ if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
 python_crun_la_SOURCES = python/crun_python.c
 python_crun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src -I $(abs_top_builddir)/src $(PYTHON_CFLAGS)
-python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS) -Wl,--whole-archive libcrun.a libocispec/libocispec.a -Wl,--no-whole-archive $(COMMON_LIBS)
+python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS) $(COMMON_LIBS)
+python_crun_la_LIBADD = libcrun.la
 endif
 
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
-
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c
-
-crun_LDADD = libcrun.a libocispec/libocispec.a $(COMMON_LIBS)
+crun_LDFLAGS = $(COMMON_LIBS)
+crun_LDADD = libcrun.la
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
@@ -56,8 +59,6 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/sig2str.h \
 	src/libcrun/intprops.h
-
-noinst_LIBRARIES = libcrun.a
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
@@ -70,10 +71,12 @@ tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
 tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
 tests_tests_libcrun_utils_LDADD = $(crun_LDADD)
+tests_tests_libcrun_utils_LDFLAGS = $(crun_LDFLAGS)
 
 tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(crun_LDADD)
+tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
