@@ -23,4 +23,3 @@ script:
   - ./configure
   - make -j $(nproc)
   - make syntax-check
-  - make oci-runtime-validation
