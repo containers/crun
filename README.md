@@ -40,8 +40,9 @@ BUILD
 
 On Fedora you will need these dependencies:
 ```
-$ dnf install -y python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel libselinux-devel glibc-static python3-libmount
-
+$ dnf install -y python git gcc automake autoconf libcap-devel \
+    systemd-devel yajl-devel libseccomp-devel libselinux-devel \
+    glibc-static python3-libmount
 ```
 
 Python is needed by libocispec to generate the C parser, it won't be
