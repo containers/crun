@@ -1432,6 +1432,7 @@ libcrun_run_linux_container (libcrun_container *container,
   int ret;
   int flags = 0;
   pid_t pid;
+  bool restore_pid_namespace = false;
   cleanup_close int sync_socket_host = -1;
   cleanup_close int sync_socket_container = -1;
   int sync_socket[2];
@@ -1453,6 +1454,7 @@ libcrun_run_linux_container (libcrun_container *container,
           if (UNLIKELY (ret < 0 && errno != EINVAL))
             return crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
 
+          restore_pid_namespace = true;
           continue;
         }
 
@@ -1492,6 +1494,18 @@ libcrun_run_linux_container (libcrun_container *container,
 
   if (pid)
     {
+      if (restore_pid_namespace)
+        {
+          cleanup_close int fd = -1;
+          fd = open ("/proc/self/ns/pid", O_RDONLY);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "open '%s'", "/proc/self/ns/pid");
+
+          ret = setns (fd, CLONE_NEWPID);
+          if (UNLIKELY (ret < 0 && errno != EINVAL))
+            return crun_make_error (err, errno, "setns '%s'", "/proc/self/ns/pid");
+        }
+
       ret = close_and_reset (&sync_socket_container);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "close");
