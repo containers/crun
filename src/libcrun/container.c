@@ -65,6 +65,7 @@ struct container_entrypoint_s
   int terminal_socketpair[2];
   int sync_socket;
   int seccomp_fd;
+  int console_socket_fd;
   FILE *orig_stderr;
 };
 
@@ -501,11 +502,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   has_terminal = container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
-    {
-      console_socket = open_unix_domain_client_socket (entrypoint_args->context->console_socket, 0, err);
-      if (UNLIKELY (console_socket < 0))
-        return console_socket;
-    }
+    console_socket = entrypoint_args->console_socket_fd;
 
 #ifdef CLONE_NEWCGROUP
   ret = unshare (CLONE_NEWCGROUP);
@@ -1173,13 +1170,15 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   cleanup_close int socket_pair_0 = -1;
   cleanup_close int socket_pair_1 = -1;
   cleanup_close int seccomp_fd = -1;
+  cleanup_close int console_socket_fd = -1;
   char created[35];
   struct container_entrypoint_s container_args =
     {
       .container = container,
       .context = context,
       .terminal_socketpair = {-1, -1},
-      .orig_stderr = stderr
+      .orig_stderr = stderr,
+      .console_socket_fd = -1
     };
 
   container->context = context;
@@ -1209,6 +1208,14 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
   container_args.seccomp_fd = seccomp_fd;
+
+  if (context->console_socket)
+    {
+      console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
+      if (UNLIKELY (console_socket_fd < 0))
+        return ret;
+      container_args.console_socket_fd = console_socket_fd;
+    }
 
   pid = libcrun_run_linux_container (container, context->detach,
                                      container_entrypoint, &container_args,
