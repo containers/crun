@@ -32,21 +32,19 @@ static char doc[] = "OCI runtime";
 
 struct spec_options_s
 {
-  const char *cwd;
-  const char *console_socket;
-  int tty;
-  int detach;
+  bool rootless;
 };
 
 enum
   {
-    OPTION_CONSOLE_SOCKET = 1000
+    OPTION_ROOTLESS = 1000
   };
 
 static struct spec_options_s spec_options;
 
 static struct argp_option options[] =
   {
+    {"rootless", OPTION_ROOTLESS, 0, 0, "spec for the rootless case" },
     { 0 }
   };
 
@@ -57,6 +55,11 @@ parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {
+    case OPTION_ROOTLESS:
+      /* Ignored.  */
+      spec_options.rootless = true;
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
