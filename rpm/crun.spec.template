@@ -21,6 +21,7 @@ BuildRequires: libseccomp-devel
 BuildRequires: libselinux-devel
 BuildRequires: glibc-static
 BuildRequires: python3-libmount
+BuildRequires: libtool
 
 %description
 crun is an OCI runtime
