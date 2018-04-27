@@ -588,6 +588,7 @@ epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
 int
 copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
 {
+  int ret;
   ssize_t nread;
   do
     {
@@ -602,7 +603,6 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
 #else
 # define BUFFER_SIZE 4096
       cleanup_free char *buffer = xmalloc (BUFFER_SIZE);
-      int ret;
       ssize_t remaining;
 
       nread = TEMP_FAILURE_RETRY (read (src, buffer, BUFFER_SIZE));
