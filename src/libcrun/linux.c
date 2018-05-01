@@ -990,7 +990,12 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, 1);
       if (uid_map == NULL)
-        uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->container_uid, container->host_uid);
+        {
+          if (container->host_uid)
+            uid_map_len = xasprintf (&uid_map, "%d %d 1", 0, container->host_uid);
+          else
+            uid_map_len = xasprintf (&uid_map, "%d %d %d", 0, container->host_uid, container->container_uid + 1);
+        }
     }
   else
     {
@@ -1014,7 +1019,12 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       gid_map_len = format_default_id_mapping (&gid_map, container->container_uid, container->host_gid, 0);
       if (gid_map == NULL)
-        gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
+        {
+          if (container->host_gid)
+            gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
+          else
+            gid_map_len = xasprintf (&gid_map, "%d %d %d", 0, container->host_gid, container->container_gid + 1);
+        }
     }
   else
     {
