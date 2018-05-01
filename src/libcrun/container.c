@@ -484,7 +484,9 @@ container_entrypoint_init (void *args, const char *notify_socket,
   cleanup_close int terminal_fd = -1;
   cleanup_close int console_socketpair = -1;
   oci_container *def = container->container_def;
+  oci_container_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
+  int no_new_privs;
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
@@ -595,24 +597,24 @@ container_entrypoint_init (void *args, const char *notify_socket,
         return ret;
     }
 
-  ret = libcrun_set_caps (def->process->capabilities, def->process->no_new_privileges, container->container_uid, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   ret = libcrun_set_rlimits (def->process->rlimits, def->process->rlimits_len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_uid_gid (container->container_uid, container->container_gid, err);
+  if (def->process->user && def->process->user->additional_gids)
+    {
+      gid_t *additional_gids = def->process->user->additional_gids;
+      size_t additional_gids_len = def->process->user->additional_gids_len;
+      ret = setgroups (additional_gids_len, additional_gids);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (errno, "%s", "setgroups");
+    }
+
+  capabilities = def->process ? def->process->capabilities : NULL;
+  no_new_privs = def->process ? def->process->no_new_privileges : 1;
+  ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  if (container->container_uid)
-    {
-      ret = libcrun_set_caps (def->process->capabilities, def->process->no_new_privileges, 0, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
 
   if (def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
@@ -1754,6 +1756,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
     {
       int i;
       uid_t container_uid = process->user ? process->user->uid : 0;
+      gid_t container_gid = process->user ? process->user->gid : 0;
       const char *cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
@@ -1785,35 +1788,22 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
             return ret;
         }
 
-      ret = libcrun_set_caps (process->capabilities, process->no_new_privileges, container_uid, err);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+      if (process->user && process->user->additional_gids)
+        {
+          gid_t *additional_gids = process->user->additional_gids;
+          size_t additional_gids_len = process->user->additional_gids_len;
+          ret = setgroups (additional_gids_len, additional_gids);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error (errno, "%s", "setgroups");
+        }
 
       ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      if (process->user)
-        {
-          if (process->user->additional_gids)
-            {
-              gid_t *additional_gids = process->user->additional_gids;
-              size_t additional_gids_len = process->user->additional_gids_len;
-              ret = setgroups (additional_gids_len, additional_gids);
-              if (UNLIKELY (ret < 0))
-                libcrun_fail_with_error (errno, "%s", "setgroups");
-            }
-          ret = libcrun_set_uid_gid (process->user->uid, process->user->gid, err);
-          if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-        }
-
-      if (process->user && process->user->uid)
-        {
-          ret = libcrun_set_caps (process->capabilities, process->no_new_privileges, 0, err);
-          if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-        }
+      ret = libcrun_set_caps (process->capabilities, container_uid, container_gid, process->no_new_privileges, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
       ret = close_fds_ge_than (context->preserve_fds + 3, err);
       if (UNLIKELY (ret < 0))

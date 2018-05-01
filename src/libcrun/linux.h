@@ -41,7 +41,7 @@ pid_t libcrun_run_linux_container (libcrun_container *container,
 int libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container *container, const char *rootfs, libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err);
-int libcrun_set_caps (oci_container_process_capabilities *capabilities, int no_new_privileges, int keep_setuid, libcrun_error_t *err);
+int libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err);
 int libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err);
 int libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err);
@@ -50,6 +50,5 @@ int libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err);
 int libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err);
 int libcrun_linux_container_update (libcrun_container_status_t *status, const char *content, size_t len, libcrun_error_t *err);
-int libcrun_set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err);
 
 #endif

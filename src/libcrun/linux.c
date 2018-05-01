@@ -42,7 +42,6 @@
 #include <sys/socket.h>
 #include <libgen.h>
 #include <sys/wait.h>
-#include <sys/fsuid.h>
 
 struct remount_s
 {
@@ -991,7 +990,7 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, 1);
       if (uid_map == NULL)
-        uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->host_uid);
+        uid_map_len = xasprintf (&uid_map, "%d %d 1", container->container_uid, container->container_uid, container->host_uid);
     }
   else
     {
@@ -1013,7 +1012,7 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
 
   if (!def->linux->gid_mappings_len)
     {
-      gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_gid, 0);
+      gid_map_len = format_default_id_mapping (&gid_map, container->container_uid, container->host_gid, 0);
       if (gid_map == NULL)
         gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
     }
@@ -1035,10 +1034,13 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
       gid_map_len = written;
     }
 
-  xasprintf (&groups_file, "/proc/%d/setgroups", pid);
-  ret = write_file (groups_file, "deny", 4, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (container->host_uid)
+    {
+      xasprintf (&groups_file, "/proc/%d/setgroups", pid);
+      ret = write_file (groups_file, "deny", 4, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
   ret = write_file (gid_map_file, gid_map, gid_map_len, err);
@@ -1097,7 +1099,7 @@ has_cap_on (int cap, long unsigned *caps)
 }
 
 static int
-set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *err)
+set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_privs, libcrun_error_t *err)
 {
   unsigned long cap;
   int ret;
@@ -1108,7 +1110,7 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *e
     if (! has_cap_on (cap, caps->bounding))
       {
         ret = prctl (PR_CAPBSET_DROP, cap, 0, 0, 0);
-        if (UNLIKELY (ret < 0 && !(errno == EINVAL || errno == EPERM)))
+        if (UNLIKELY (ret < 0 && !(errno == EINVAL)))
           return crun_make_error (err, errno, "prctl drop bounding");
       }
 
@@ -1118,6 +1120,18 @@ set_required_caps (struct all_caps_s *caps, int no_new_privs, libcrun_error_t *e
   data[1].inheritable = caps->inheritable[1];
   data[0].permitted = caps->permitted[0];
   data[1].permitted = caps->permitted[1];
+
+  ret = prctl (PR_SET_KEEPCAPS, 1, 0, 0, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "error while setting PR_SET_KEEPCAPS");
+
+  ret = setgid (gid);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "cannot setgid");
+
+  ret = setuid (uid);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "cannot setuid");
 
   ret = capset (&hdr, data) < 0;
   if (UNLIKELY (ret < 0))
@@ -1171,7 +1185,7 @@ libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *e
 }
 
 int
-libcrun_set_caps (oci_container_process_capabilities *capabilities, int no_new_privileges, int keep_setuid, libcrun_error_t *err)
+libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
 {
   int ret;
   struct all_caps_s caps;
@@ -1214,20 +1228,8 @@ libcrun_set_caps (oci_container_process_capabilities *capabilities, int no_new_p
       if (ret < 0)
         return ret;
     }
-  if (keep_setuid)
-    {
-      unsigned int mask = CAP_TO_MASK_0 (CAP_SETUID) | CAP_TO_MASK_0 (CAP_SETGID) | CAP_TO_MASK_0 (CAP_SETPCAP);
-      caps.effective[0] |= mask;
-      caps.inheritable[0] |= mask;
-      caps.ambient[0] |= mask;
-      caps.bounding[0] |= mask;
-      caps.permitted[0] |= mask;
-    }
-  ret = prctl (PR_SET_KEEPCAPS, 1, 0, 0, 0);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error while setting PR_SET_KEEPCAPS");
 
-  return set_required_caps (&caps, no_new_privileges, err);
+  return set_required_caps (&caps, uid, gid, no_new_privileges, err);
 }
 
 struct rlimit_s
@@ -1593,12 +1595,14 @@ libcrun_run_linux_container (libcrun_container *container,
       ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "read from sync socket");
-      ret = setfsuid (0);
+
+      ret = setgid (0);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "setfsuid");
-      ret = setfsgid (0);
+        return crun_make_error (err, errno, "setgid(0)");
+
+      ret = setuid (0);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "setfsgid");
+        return crun_make_error (err, errno, "setuid(0)");
     }
 
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);
@@ -1682,21 +1686,6 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
       return crun_make_error (err, errno, "putenv '%s'", str);
 
   return ret;
-}
-
-int
-libcrun_set_uid_gid (uid_t uid, gid_t gid, libcrun_error_t *err)
-{
-  if (gid && setfsgid (gid) < 0)
-    return crun_make_error (err, errno, "setfsgid");
-  if (uid && setfsuid (uid) < 0)
-    return crun_make_error (err, errno, "setfsuid");
-
-  if (setgid (gid) < 0)
-    return crun_make_error (err, errno, "setgid");
-  if (setuid (uid) < 0)
-    return crun_make_error (err, errno, "setuid");
-  return 0;
 }
 
 int
