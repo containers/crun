@@ -523,6 +523,18 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = sync_socket_send_sync (sync_socket, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = sync_socket_wait_sync (sync_socket, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_do_pivot_root (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (has_terminal)
     {
       ret = setsid ();
@@ -649,14 +661,6 @@ container_entrypoint (void *args, const char *notify_socket,
     }
 
   entrypoint_args->sync_socket = -1;
-
-  ret = sync_socket_send_sync (sync_socket, false, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = sync_socket_wait_sync (sync_socket, false, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
@@ -1255,25 +1259,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  if (def->process->terminal && !detach && context->console_socket == NULL)
-    {
-      terminal_fd = receive_fd_from_socket (socket_pair_0, err);
-      if (UNLIKELY (terminal_fd < 0))
-        {
-          cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
-          return terminal_fd;
-        }
-
-      close_and_reset (&socket_pair_0);
-
-      ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
-      if (UNLIKELY (ret < 0))
-        {
-          cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
-          return terminal_fd;
-        }
-    }
-
   ret = sync_socket_wait_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     {
@@ -1300,6 +1285,25 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     {
       cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
       return ret;
+    }
+
+  if (def->process->terminal && !detach && context->console_socket == NULL)
+    {
+      terminal_fd = receive_fd_from_socket (socket_pair_0, err);
+      if (UNLIKELY (terminal_fd < 0))
+        {
+          cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
+          return terminal_fd;
+        }
+
+      close_and_reset (&socket_pair_0);
+
+      ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
+      if (UNLIKELY (ret < 0))
+        {
+          cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->stderr);
+          return terminal_fd;
+        }
     }
 
   ret = close_and_reset (&sync_socket);

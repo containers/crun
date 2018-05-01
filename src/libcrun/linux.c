@@ -912,6 +912,13 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   if (UNLIKELY (ret < 0))
     return ret;
 
+  return 0;
+}
+
+int
+libcrun_do_pivot_root (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
+{
+  int ret;
   if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
     {
       ret = do_pivot (container, rootfs, err);
