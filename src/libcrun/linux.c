@@ -973,7 +973,6 @@ newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
 int
 libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err)
 {
-#define MAX_MAPPINGS 5
   cleanup_free char *groups_file = NULL;
   cleanup_free char *uid_map_file = NULL;
   cleanup_free char *gid_map_file = NULL;
@@ -1000,9 +999,9 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
   else
     {
       size_t written = 0, len, s;
-      char buffer[128];
-      uid_map = xmalloc (sizeof (buffer) * MAX_MAPPINGS + 1);
-      for (s = 0; s < def->linux->uid_mappings_len && s < MAX_MAPPINGS; s++)
+      char buffer[64];
+      uid_map = xmalloc (sizeof (buffer) * def->linux->uid_mappings_len + 1);
+      for (s = 0; s < def->linux->uid_mappings_len; s++)
         {
           len = sprintf (buffer, "%d %d %d\n",
                          def->linux->uid_mappings[s]->container_id,
@@ -1029,9 +1028,9 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
   else
     {
       size_t written = 0, len, s;
-      char buffer[128];
-      gid_map = xmalloc (sizeof (buffer) * MAX_MAPPINGS + 1);
-      for (s = 0; s < def->linux->gid_mappings_len && s < MAX_MAPPINGS; s++)
+      char buffer[64];
+      gid_map = xmalloc (sizeof (buffer) * def->linux->gid_mappings_len + 1);
+      for (s = 0; s < def->linux->gid_mappings_len; s++)
         {
           len = sprintf (buffer, "%d %d %d\n",
                          def->linux->gid_mappings[s]->container_id,
