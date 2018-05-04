@@ -1,5 +1,6 @@
 DIST_SUBDIRS = libocispec
 SUBDIRS = libocispec
+ACLOCAL_AMFLAGS = -I m4
 
 WD := $(shell pwd)
 
