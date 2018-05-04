@@ -592,19 +592,25 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
   ssize_t nread;
   do
     {
+      cleanup_free char *buffer = NULL;
+      ssize_t remaining;
+
 #ifdef HAVE_COPY_FILE_RANGE
-      nread = TEMP_FAILURE_RETRY (copy_file_range (src, NULL, dst, NULL, 4096, 0));
+      nread = copy_file_range (src, NULL, dst, NULL, 0, 0);
+      if (nread < 0 && errno == EINVAL)
+        goto fallback;
       if (consume && nread < 0 && errno == EAGAIN)
         return 0;
       if (nread < 0 && errno == EIO)
         return 0;
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "copy_file_range");
-#else
+#endif
 # define BUFFER_SIZE 4096
-      cleanup_free char *buffer = xmalloc (BUFFER_SIZE);
-      ssize_t remaining;
 
+    fallback:
+
+      buffer = xmalloc (BUFFER_SIZE);
       nread = TEMP_FAILURE_RETRY (read (src, buffer, BUFFER_SIZE));
       if (consume && nread < 0 && errno == EAGAIN)
         return 0;
@@ -621,7 +627,6 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
             return crun_make_error (err, errno, "write");
           remaining -= ret;
         }
-#endif
     }
   while (consume && nread);
 
