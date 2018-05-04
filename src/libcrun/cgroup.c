@@ -701,7 +701,7 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   while (1)
     {
       for (; path_len > 1 && path[path_len] != '/'; path_len--);
-      if (path_len == 1)
+      if (path_len <= 1)
         break;
       path[path_len] = '\0';
       for (i = 0; subsystems[i]; i++)
