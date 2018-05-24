@@ -282,7 +282,7 @@ do_mount (libcrun_container *container,
 
       if ((flags & MS_BIND) && (flags & ~(MS_BIND | ALL_PROPAGATIONS)))
         {
-          ret = mount (source, target, fstype, MS_REMOUNT | flags, data);
+          ret = mount (source, target, fstype, MS_REMOUNT | flags, NULL);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "remount '%s'", target);
         }
