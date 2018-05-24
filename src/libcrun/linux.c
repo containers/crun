@@ -822,10 +822,16 @@ do_finalize_notify_socket (libcrun_container *container, libcrun_error_t *err)
   int ret;
   cleanup_free char *host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
   cleanup_free char *container_notify_socket_path = get_private_data (container)->container_notify_socket_path;
+  cleanup_free char *container_notify_socket_path_dir = NULL;
   get_private_data (container)->host_notify_socket_path = get_private_data (container)->container_notify_socket_path = NULL;
 
   if (host_notify_socket_path == NULL || container_notify_socket_path == NULL)
     return 0;
+
+  container_notify_socket_path_dir = xstrdup (container_notify_socket_path);
+  ret = crun_ensure_directory (dirname (container_notify_socket_path_dir), 0700, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = create_file_if_missing (container_notify_socket_path, err);
   if (UNLIKELY (ret < 0))
