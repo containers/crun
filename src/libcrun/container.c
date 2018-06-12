@@ -1244,7 +1244,12 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   skip_cgroups = ret == 77;
 
-  if (!skip_cgroups)
+  if (skip_cgroups)
+    {
+      free (cgroup_path);
+      cgroup_path = strdup ("");
+    }
+  else
     {
       ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
       if (UNLIKELY (ret < 0))

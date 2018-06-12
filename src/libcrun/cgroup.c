@@ -196,6 +196,7 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
   char pid_str[16];
   int ret;
   size_t i;
+  int entered_any = 0;
   const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
     return -1;
@@ -211,13 +212,13 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
       if (ret == 0)
         continue;
 
+      entered_any = 1;
       ret = enter_cgroup_subsystem (pid, subsystems[i], path, ensure_missing, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
     }
 
-  return 0;
+  return entered_any ? 0 : 77;
 }
 
 int
