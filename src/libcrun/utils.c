@@ -114,9 +114,9 @@ int
 crun_path_exists (const char *path, int readonly, libcrun_error_t *err)
 {
   int ret = access (path, readonly ? R_OK : W_OK);
-  if (UNLIKELY (ret < 0 && errno != ENOENT))
-    return crun_make_error (err, errno, "accessing file '%s'", path);
-  return !ret;
+  if (ret < 0)
+    return 0;
+  return 1;
 }
 
 int
