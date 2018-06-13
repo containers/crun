@@ -32,7 +32,7 @@ struct libcrun_context_s
   const char *pid_file;
   char *notify_socket;
   int preserve_fds;
-  FILE *stderr;
+  FILE *errfile;
 
   int fifo_exec_wait_fd;
 

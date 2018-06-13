@@ -126,7 +126,7 @@ make_context (PyObject *self, PyObject *args, PyObject *kwargs)
     return NULL;
 
   memset (ctx, 0, sizeof (*ctx));
-  ctx->stderr = stderr;
+  ctx->errfile = stderr;
   ctx->fifo_exec_wait_fd = -1;
 
   if (!PyArg_ParseTupleAndKeywords

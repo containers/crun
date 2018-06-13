@@ -54,11 +54,11 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
   con->notify_socket = getenv ("NOTIFY_SOCKET");
   con->fifo_exec_wait_fd = -1;
   if (glob->log == NULL)
-    con->stderr = stderr;
+    con->errfile = stderr;
   else
     {
-      con->stderr = fopen (glob->log, "w");
-      if (con->stderr == NULL)
+      con->errfile = fopen (glob->log, "w");
+      if (con->errfile == NULL)
         libcrun_fail_with_error (errno, "open log file %s\n", glob->log);
     }
   if (con->bundle == NULL)
