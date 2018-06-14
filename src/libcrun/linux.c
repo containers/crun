@@ -43,6 +43,10 @@
 #include <libgen.h>
 #include <sys/wait.h>
 
+#ifndef RLIMIT_RTTIME
+# define RLIMIT_RTTIME 15
+#endif
+
 struct remount_s
 {
   struct remount_s *next;
