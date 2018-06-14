@@ -26,6 +26,16 @@
 # include <dirent.h>
 # include <oci_runtime_spec.h>
 
+# ifndef TEMP_FAILURE_RETRY
+#  define TEMP_FAILURE_RETRY(expression)                                \
+  (__extension__                                                        \
+   ({ long int __result;                                                \
+     do __result = (long int) (expression);                             \
+     while (__result < 0 && errno == EINTR);                            \
+     __result; }))
+# endif
+
+
 void cleanup_filep (FILE **f);
 void cleanup_freep (void *p);
 void cleanup_closep (void *p);

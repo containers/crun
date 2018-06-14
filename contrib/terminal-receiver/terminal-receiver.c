@@ -77,7 +77,9 @@ receive_fd_from_socket (int from)
   msg.msg_controllen = CMSG_SPACE (sizeof (int));
   msg.msg_control = ctrl_buf;
 
-  ret = TEMP_FAILURE_RETRY (recvmsg (from, &msg, 0));
+  do
+    ret = recvmsg (from, &msg, 0);
+  while (ret < 0 && errno == EINTR);
   if (ret < 0)
     {
       error (0, errno, "recvmsg");
@@ -109,7 +111,11 @@ main (int argc, char **argv)
   while (1)
     {
       struct termios tset;
-      int conn = TEMP_FAILURE_RETRY (accept (socket, NULL, NULL));
+      int conn;
+
+      do
+        conn = TEMP_FAILURE_RETRY (accept (socket, NULL, NULL));
+      while (conn < 0 && errno == EINTR);
       if (conn < 0)
         error (EXIT_FAILURE, errno, "accept");
 
