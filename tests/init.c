@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <error.h>
+#include "error.h"
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>

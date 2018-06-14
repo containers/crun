@@ -18,7 +18,16 @@
 #ifndef ERROR_H
 # define ERROR_H
 # include <config.h>
-# include <error.h>
+# ifdef HAVE_ERROR_H
+#  include <error.h>
+# else
+# define error(status, errno, fmt, ...) do {                              \
+    if (errno)                                                            \
+      fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                      \
+    else                                                                  \
+      fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+  } while(0)
+# endif
 # include <stdlib.h>
 # include <stdio.h>
 # include <stdbool.h>

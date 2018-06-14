@@ -19,6 +19,8 @@ AM_PATH_PYTHON
 
 AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers not found])])
 
+AC_CHECK_HEADERS([error.h])
+
 AC_CHECK_FUNCS(copy_file_range)
 
 AC_CHECK_LIB(cap, cap_from_name, [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])], [AC_MSG_ERROR([*** libcap headers not found])])

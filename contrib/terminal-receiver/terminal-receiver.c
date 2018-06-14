@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <sys/un.h>
 #include <sys/socket.h>
-#include <error.h>
+#include "error.h"
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
