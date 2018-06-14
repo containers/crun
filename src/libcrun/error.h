@@ -26,6 +26,8 @@
       fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                      \
     else                                                                  \
       fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+    if (status)                                                         \
+      exit (status);                                                    \
   } while(0)
 # endif
 # include <stdlib.h>
