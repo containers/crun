@@ -41,6 +41,8 @@ AS_IF([test "x$with_python_bindings" = "xyes"], [
             LDFLAGS+=" -fPIC "
 ])
 
+AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
+
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
 
 AC_CONFIG_FILES([Makefile])
