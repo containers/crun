@@ -23,12 +23,19 @@
 #include <stdlib.h>
 #include <sys/un.h>
 #include <sys/socket.h>
-#include "error.h"
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <stdio.h>
+
+#define error(status, errno, fmt, ...) do {                             \
+    if (errno)                                                          \
+      fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
+    else                                                                \
+      fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+  } while(0)
 
 int
 open_unix_domain_socket (const char *path)
@@ -114,7 +121,7 @@ main (int argc, char **argv)
       int conn;
 
       do
-        conn = TEMP_FAILURE_RETRY (accept (socket, NULL, NULL));
+        conn = accept (socket, NULL, NULL);
       while (conn < 0 && errno == EINTR);
       if (conn < 0)
         error (EXIT_FAILURE, errno, "accept");
