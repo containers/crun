@@ -21,12 +21,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "error.h"
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+
+#define error(status, errno, fmt, ...) do {                             \
+    if (errno)                                                          \
+      fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
+    else                                                                \
+      fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+  } while(0)
 
 static int
 cat (char *file)
