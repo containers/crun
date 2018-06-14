@@ -1420,11 +1420,7 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
     return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
 
   if (!detach && (options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
-    {
-      if (context->errfile)
-        stderr = context->errfile;
-      return libcrun_container_run_internal (container, context, -1, err);
-    }
+    return libcrun_container_run_internal (container, context, -1, err);
 
   ret = pipe (container_ret_status);
   if (UNLIKELY (ret < 0))
@@ -1465,9 +1461,6 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
     }
 
   close_and_reset (&pipefd0);
-
-  if (context->errfile)
-    stderr = context->errfile;
 
   /* forked process.  */
   ret = detach_process ();
@@ -1552,9 +1545,6 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
         }
       return 1;
     }
-
-  if (context->errfile)
-    stderr = context->errfile;
 
   context->fifo_exec_wait_fd = exec_fifo_fd;
   exec_fifo_fd = -1;
