@@ -1,7 +1,7 @@
 Summary: OCI runtime written in C
 Name: crun
 Version: #VERSION#
-Release: 5%{?dist}
+Release: 6%{?dist}
 Source0: %{url}/archive/%{name}-%{version}.tar.gz
 License: GPLv3+
 URL: https://github.com/giuseppe/crun
