@@ -17,6 +17,8 @@
  */
 #define _GNU_SOURCE
 
+#include <config.h>
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -27,7 +29,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define error(status, errno, fmt, ...) do {                             \
+#ifdef HAVE_ERROR_H
+# include <error.h>
+#else
+# define error(status, errno, fmt, ...) do {                             \
     if (errno)                                                          \
       fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
     else                                                                \
@@ -35,6 +40,7 @@
     if (status)                                                         \
       exit (status);                                                    \
   } while(0)
+#endif
 
 static int
 cat (char *file)
