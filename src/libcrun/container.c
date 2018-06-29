@@ -39,7 +39,6 @@
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <sys/ptrace.h>
 #include <grp.h>
 
 #ifdef HAVE_SYSTEMD
@@ -487,6 +486,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   oci_container_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
+  struct stat st;
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
@@ -515,12 +515,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
     }
 #endif
 
-  if (entrypoint_args->context->detach)
-    {
-      if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
-        libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
-    }
-
   ret = libcrun_set_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -536,6 +530,9 @@ container_entrypoint_init (void *args, const char *notify_socket,
   ret = libcrun_do_pivot_root (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (UNLIKELY (def->process->args[0][0] == '/' && stat (def->process->args[0], &st) < 0))
+    return crun_make_error (err, errno, "cannot stat %s", def->process->args[0]);
 
   if (has_terminal)
     {
@@ -667,6 +664,32 @@ container_entrypoint (void *args, const char *notify_socket,
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  ret = sync_socket_send_sync (sync_socket, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (entrypoint_args->context->fifo_exec_wait_fd >= 0)
+    {
+      char buffer[1];
+      fd_set read_set;
+      cleanup_close int fd = entrypoint_args->context->fifo_exec_wait_fd;
+      entrypoint_args->context->fifo_exec_wait_fd = -1;
+
+      FD_ZERO (&read_set);
+      FD_SET (fd, &read_set);
+      do
+        {
+          ret = select (fd + 1, &read_set, NULL, NULL, NULL);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "select");
+
+          ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "read from the exec fifo");
+        }
+      while (ret == 0);
+    }
 
   crun_set_output_handler (log_write_to_stream, entrypoint_args->orig_stderr);
 
@@ -906,21 +929,8 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
   int levelfds[10];
   int levelfds_len = 0;
   int fds_len = 0;
-  cleanup_close int exec_wait_fd = -1;
 
   container_exit_code = 0;
-
-  /* On detach, the container uses PTRACEME.  In this case read its status after exec.  */
-  if (context->detach)
-    {
-      ret = TEMP_FAILURE_RETRY (waitpid (pid, &pid_status, 0));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "waitpid for exec status");
-      if (WIFSIGNALED (pid_status))
-        container_exit_code = 128 + WTERMSIG (pid_status);
-      if (WIFEXITED (pid_status))
-        container_exit_code = WEXITSTATUS (pid_status);
-    }
 
   if ((!context->detach || container_exit_code == 0) && context->pid_file)
     {
@@ -936,7 +946,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
     return container_exit_code;
 
   /* Also exit if there is nothing more to wait for.  */
-  if (context->detach && notify_socket < 0 && context->fifo_exec_wait_fd < 0)
+  if (context->detach && notify_socket < 0)
     return 0;
 
   if (container_ready_fd >= 0)
@@ -944,13 +954,6 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
       ret = 0;
       TEMP_FAILURE_RETRY (write (container_ready_fd, &ret, sizeof (ret)));
       close_and_reset (&container_ready_fd);
-    }
-
-  if (context->fifo_exec_wait_fd < 0)
-    {
-      ret = ptrace (PTRACE_DETACH, pid, NULL, NULL);
-      if (UNLIKELY (ret < 0 && errno != ESRCH))
-        return crun_make_error (err, errno, "ptrace");
     }
 
   sigfillset (&mask);
@@ -976,12 +979,6 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
     {
       fds[fds_len++] = 0;
       levelfds[levelfds_len++] = terminal_fd;
-    }
-  if (context->fifo_exec_wait_fd >= 0)
-    {
-      exec_wait_fd = context->fifo_exec_wait_fd;
-      fds[fds_len++] = exec_wait_fd;
-      context->fifo_exec_wait_fd = -1;
     }
   fds[fds_len++] = -1;
   levelfds[levelfds_len++] = -1;
@@ -1042,10 +1039,6 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
                 }
             }
 #endif
-          else if (events[i].data.fd == exec_wait_fd)
-            {
-              return 0;
-            }
           else if (events[i].data.fd == signalfd)
             {
               res = TEMP_FAILURE_RETRY (read (signalfd, &si, sizeof (si)));
@@ -1288,6 +1281,13 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
     }
 
   ret = sync_socket_send_sync (sync_socket, true, err);
+  if (UNLIKELY (ret < 0))
+    {
+      cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->errfile);
+      return ret;
+    }
+
+  ret = sync_socket_wait_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, def, context->id, sync_socket, terminal_fd, context->errfile);
@@ -1759,12 +1759,6 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       ret = unblock_signals (err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      if (context->detach)
-        {
-          if (UNLIKELY (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0))
-            libcrun_fail_with_error (errno, "ptrace (PTRACE_TRACEME)");
-        }
 
       for (i = 0; i < process->env_len; i++)
         if (putenv (process->env[i]) < 0)
