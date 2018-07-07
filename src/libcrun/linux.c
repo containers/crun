@@ -980,16 +980,25 @@ newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
   return uidgidmap_helper ("/usr/bin/newuidmap", pid, map_file, err);
 }
 
+static int
+deny_setgroups (pid_t pid, libcrun_error_t *err)
+{
+  cleanup_free char *groups_file = NULL;
+
+  xasprintf (&groups_file, "/proc/%d/setgroups", pid);
+  return write_file (groups_file, "deny", 4, err);
+}
+
 int
 libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err)
 {
-  cleanup_free char *groups_file = NULL;
   cleanup_free char *uid_map_file = NULL;
   cleanup_free char *gid_map_file = NULL;
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
   int ret;
+  bool setgroups_denied = false;
   oci_container *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
@@ -1054,23 +1063,23 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     }
 
   if (container->host_uid)
-    {
-      xasprintf (&groups_file, "/proc/%d/setgroups", pid);
-      ret = write_file (groups_file, "deny", 4, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
-  xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
-  ret = write_file (gid_map_file, gid_map, gid_map_len, err);
-  if (ret < 1 && errno == EPERM && container->host_uid)
+    ret = newgidmap (pid, gid_map, err);
+  if (container->host_uid == 0 || ret < 0)
     {
       crun_error_release (err);
-      ret = newgidmap (pid, gid_map, err);
-      if (ret && !def->linux->gid_mappings_len)
+
+      ret = deny_setgroups (pid, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      setgroups_denied = true;
+
+      xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
+      ret = write_file (gid_map_file, gid_map, gid_map_len, err);
+      if (ret < 0 && !def->linux->gid_mappings_len)
         {
           size_t single_mapping_len;
           char single_mapping[32];
+          crun_error_release (err);
           single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_gid, container->host_gid);
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
         }
@@ -1078,16 +1087,26 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
   if (UNLIKELY (ret < 0))
     return ret;
 
-  xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
-  ret = write_file (uid_map_file, uid_map, uid_map_len, err);
-  if (ret < 1 && errno == EPERM && container->host_uid)
+  if (container->host_uid)
+    ret = newuidmap (pid, uid_map, err);
+  if (container->host_uid == 0 || ret < 0)
     {
       crun_error_release (err);
-      ret = newuidmap (pid, uid_map, err);
-      if (ret && !def->linux->uid_mappings_len)
+
+      if (!setgroups_denied)
+        {
+          ret = deny_setgroups (pid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
+      ret = write_file (uid_map_file, uid_map, uid_map_len, err);
+      if (ret < 0 && !def->linux->uid_mappings_len)
         {
           size_t single_mapping_len;
           char single_mapping[32];
+          crun_error_release (err);
           single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_uid, container->host_uid);
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
