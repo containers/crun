@@ -3,54 +3,57 @@ crun
 
 [![Build Status](https://travis-ci.org/giuseppe/crun.svg?branch=master)](https://travis-ci.org/giuseppe/crun)
 
-An OCI Container Runtime written in C.
+A fast and low-memory footprint OCI Container Runtime fully written in C.
 
-An implementation of the OCI specs
-(https://github.com/opencontainers/runtime-spec) written in C.
+crun conforms to the OCI Container Runtime specifications
+(https://github.com/opencontainers/runtime-spec).
 
 Why another implementation?
 ==========
 
 While most of the tools used in the Linux containers ecosystem are
-written in Go, I believe C is a better fit for such a lower level
-tool.  runC, the most used implementation of the OCI runtime specs and
-that is written in Go, forks itself and use a module written in C for
-setting up the environment before the container process starts.
+written in Go, I believe C is a better fit for a lower level tool like
+a container runtime.  runc, the most used implementation of the OCI
+runtime specs written in Go, re-execs itself and use a module written
+in C for setting up the environment before the container process
+starts.
 
-crun aims to be usable as a library, that can be easily included in
-programs without requiring an external process for managing OCI
+crun aims to be also usable as a library that can be easily included
+in programs without requiring an external process for managing OCI
 containers.
 
 Performance
 ===========
 
-crun is slightly faster than runC.
+crun is slightly faster than runc and has a much lower memory
+footprint.
 
-On my machine, this is the (elapsed time) for running sequentially 100
-containers that execs `/bin/true`:
+On my machine, this is the elapsed time for running sequentially 100
+containers that runs `/bin/true`:
 
-|                                      | crun | runC | % |
+|                                      | crun | runc | % |
 | ------------- |-------------:| -----:| -----:|
 | 100 /bin/true (no network namespace) | 0m4.449s | 0m7.514s | 40.7% |
 | 100 /bin/true (new network namespace) | 0m15.850s | 0m18.986s | 16.5% |
 
 
-BUILD
+Build
 ==========
 
-On Fedora you will need these dependencies:
+On Fedora these dependencies are required for the build:
 ```
 $ dnf install -y python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel libselinux-devel \
     glibc-static python3-libmount libtool
 ```
 
-Python is needed by libocispec to generate the C parser, it won't be
+Unless you are also building the Python bindings, Python is needed
+only by libocispec to generate the C parser at build time, it won't be
 used afterwards.
 
-At this point it is enough to run:
+Once all the dependencies are installed:
 ```
 $ ./autogen.sh && ./configure
 $ make
-
+$ sudo make install
 ```
