@@ -932,7 +932,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
 
   container_exit_code = 0;
 
-  if ((!context->detach || container_exit_code == 0) && context->pid_file)
+  if (context->pid_file)
     {
       char buf[12];
       size_t buf_len = sprintf (buf, "%d", pid);
@@ -940,10 +940,6 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
       if (UNLIKELY (ret < 0))
         return ret;
     }
-
-  /* If the container process exited, return immediately when detach is used.  */
-  if (context->detach && (container_exit_code || WIFEXITED (pid_status)))
-    return container_exit_code;
 
   /* Also exit if there is nothing more to wait for.  */
   if (context->detach && notify_socket < 0)
