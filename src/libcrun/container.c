@@ -527,7 +527,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_do_pivot_root (container, rootfs, err);
+  ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
