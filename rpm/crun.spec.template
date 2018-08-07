@@ -41,4 +41,4 @@ env NOCONFIGURE=1 ./autogen.sh
 %files
 %license COPYING
 %{_bindir}/%{name}
-%{_libdir}
+%{_libdir}/libcrun.*
