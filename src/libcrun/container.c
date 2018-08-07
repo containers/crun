@@ -1182,6 +1182,13 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "set child subreaper");
 
+  if (!context->no_new_keyring)
+    {
+      ret = libcrun_create_keyring (container->context->id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (def->process->terminal && !detach && context->console_socket == NULL)
     {
       container_args.has_terminal_socket_pair = 1;

@@ -114,6 +114,22 @@ syscall_clone (unsigned long flags, void *child_stack)
   return (int) syscall (__NR_clone, flags, child_stack);
 }
 
+static int
+syscall_keyctl_join (const char *name)
+{
+#define KEYCTL_JOIN_SESSION_KEYRING 0x1
+  return (int) syscall (__NR_keyctl, KEYCTL_JOIN_SESSION_KEYRING, name, 0);
+}
+
+int
+libcrun_create_keyring (const char *name, libcrun_error_t *err)
+{
+  int ret = syscall_keyctl_join (name);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "create keyring '%s'", name);
+  return 0;
+}
+
 static void
 get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
 {
