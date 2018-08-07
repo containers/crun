@@ -124,7 +124,8 @@ enum
     OPTION_DEBUG = 1000,
     OPTION_SYSTEMD_CGROUP,
     OPTION_LOG,
-    OPTION_ROOT
+    OPTION_ROOT,
+    OPTION_ROOTLESS
   };
 
 
@@ -137,6 +138,7 @@ static struct argp_option options[] =
     {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups"},
     {"log", OPTION_LOG, "FILE", 0},
     {"root", OPTION_ROOT, "DIR",  0},
+    {"rootless", OPTION_ROOT, "VALUE",  0},
     { 0 }
   };
 
@@ -166,6 +168,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_ROOT:
       arguments.root = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_ROOTLESS:
+      /* Ignored.  So that a runc command line won't fail.  */
       break;
 
     case 'v':
