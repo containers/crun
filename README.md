@@ -1,5 +1,4 @@
-crun
-==========
+# crun
 
 [![Build Status](https://travis-ci.org/giuseppe/crun.svg?branch=master)](https://travis-ci.org/giuseppe/crun)
 
@@ -8,8 +7,7 @@ A fast and low-memory footprint OCI Container Runtime fully written in C.
 crun conforms to the OCI Container Runtime specifications
 (https://github.com/opencontainers/runtime-spec).
 
-Why another implementation?
-==========
+## Why another implementation?
 
 While most of the tools used in the Linux containers ecosystem are
 written in Go, I believe C is a better fit for a lower level tool like
@@ -22,8 +20,7 @@ crun aims to be also usable as a library that can be easily included
 in programs without requiring an external process for managing OCI
 containers.
 
-Performance
-===========
+## Performance
 
 crun is slightly faster than runc and has a much lower memory
 footprint.
@@ -37,8 +34,7 @@ containers that runs `/bin/true`:
 | 100 /bin/true (new network namespace) | 0m15.850s | 0m18.986s | 16.5% |
 
 
-Build
-==========
+## Build
 
 On Fedora these dependencies are required for the build:
 ```
