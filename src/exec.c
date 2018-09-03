@@ -32,10 +32,12 @@ static char doc[] = "OCI runtime";
 
 struct exec_options_s
 {
-  const char *cwd;
   const char *process;
   const char *console_socket;
   const char *pid_file;
+  char *cwd;
+  char **env;
+  size_t env_size;
   bool tty;
   bool detach;
 };
@@ -55,11 +57,23 @@ static struct argp_option options[] =
     {"process", 'p', "FILE", 0, "path to the process.json"},
     {"cwd", 'c', "CWD", 0, "current working directory" },
     {"detach", 'd', 0, 0, "detach the command in the background" },
+    {"env", 'e', "ENV", 0, "add an environment variable" },
     {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
     { 0 }
   };
 
 static char args_doc[] = "exec CONTAINER cmd";
+
+static void
+append_env (const char *arg)
+{
+  exec_options.env = realloc (exec_options.env, exec_options.env_size + 2);
+  if (exec_options.env == NULL)
+    error (EXIT_FAILURE, errno, "cannot allocate memory");
+  exec_options.env[exec_options.env_size + 1] = NULL;
+  exec_options.env[exec_options.env_size] = xstrdup (arg);
+  exec_options.env_size++;
+}
 
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
@@ -86,8 +100,12 @@ parse_opt (int key, char *arg, struct argp_state *state)
       exec_options.tty = true;
       break;
 
+    case 'e':
+      append_env (arg);
+      break;
+
     case 'c':
-      exec_options.cwd = arg;
+      exec_options.cwd = xstrdup (arg);
       break;
 
     case ARGP_KEY_NO_ARGS:
@@ -134,8 +152,10 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
         process->args[i] = xstrdup (argv[first_arg + i + 1]);
       process->args[i] = NULL;
       if (exec_options.cwd)
-        process->cwd = xstrdup (exec_options.cwd);
+        process->cwd = exec_options.cwd;
       process->terminal = exec_options.tty;
+      process->env = exec_options.env;
+      process->env_len = exec_options.env_size;
       process->no_new_privileges = 1;
       ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
       free_oci_container_process (process);
