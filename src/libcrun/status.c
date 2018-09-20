@@ -38,9 +38,13 @@ get_run_directory (const char *state_root)
     root = xstrdup (state_root);
   if (root == NULL)
     {
-      const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
-      if (runtime_dir)
-        xasprintf (&root, "%s/crun", runtime_dir);
+      char *user = getenv ("USER");
+      if (user && strcmp (user, "root") != 0)
+        {
+          const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
+          if (runtime_dir)
+            xasprintf (&root, "%s/crun", runtime_dir);
+        }
     }
   if (root == NULL)
     root = xstrdup ("/run/crun");
