@@ -53,7 +53,7 @@ static struct exec_options_s exec_options;
 static struct argp_option options[] =
   {
     {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty" },
-    {"tty", 't', 0, 0, "allocate a pseudo-TTY"},
+    {"tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY"},
     {"process", 'p', "FILE", 0, "path to the process.json"},
     {"cwd", 'c', "CWD", 0, "current working directory" },
     {"detach", 'd', 0, 0, "detach the command in the background" },
@@ -93,11 +93,11 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'p':
-      exec_options.process = arg;
+        exec_options.process = arg;
       break;
 
     case 't':
-      exec_options.tty = true;
+      exec_options.tty = arg == NULL || (strcmp (arg, "false") != 0 && strcmp (arg, "no") != 0);
       break;
 
     case 'e':
