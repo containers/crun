@@ -201,7 +201,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, c
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
 
-    args = [crun, "--log=/dev/null", command] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
+    args = [crun, command] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
 
     if use_popen:
         return subprocess.Popen(args, cwd=temp_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=False), id_container
@@ -211,8 +211,8 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, c
 def run_crun_command(args):
     cwd = os.getcwd()
     crun = os.path.join(cwd, "crun")
-    args = [crun] + ["--log=/dev/null"] + args
-    return subprocess.check_output(args, stderr=subprocess.STDOUT, close_fds=False).decode()
+    args = [crun] + args
+    return subprocess.check_output(args, close_fds=False).decode()
 
 def tests_main(all_tests):
     os.environ["LANG"] = "C"
