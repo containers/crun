@@ -185,34 +185,43 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 {
   int ret;
   DIR *d;
-  cleanup_free char *dir = libcrun_get_state_directory (state_root, id);
+  struct dirent *de;
+  cleanup_close int rundir_dfd = -1;
   cleanup_close int dfd = -1;
+  cleanup_free char *dir = NULL;
+
+  dir = get_run_directory (state_root);
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
-  dfd = open (dir, O_DIRECTORY | O_RDONLY);
+
+  rundir_dfd = open (dir, O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (rundir_dfd < 0))
+    return crun_make_error (err, errno, "cannot open run directory '%s'", dir);
+
+  dfd = openat (rundir_dfd, id, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dfd < 0))
-    return crun_make_error (err, errno, "cannot open directory '%s'", dir);
+    return crun_make_error (err, errno, "cannot open directory '%s/%s'", dir, id);
 
   d = fdopendir (dfd);
   if (d == NULL)
-    return crun_make_error (err, errno, "cannot open directory '%s'", dir);
+    {
+      close (dfd);
+      return crun_make_error (err, errno, "cannot open directory '%s'", dir);
+    }
 
   /* Now d owns the file descriptor.  */
   dfd = -1;
 
-  for (;;)
+  for (de = readdir (d); de; de = readdir (d))
     {
-      struct dirent *de = readdir (d);
-      if (de == NULL)
-        break;
       /* Ignore errors here and keep deleting, the unlinkat (AT_REMOVEDIR) will fail anyway.  */
       unlinkat (dirfd (d), de->d_name, 0);
     }
-  ret = unlinkat (dirfd (d), ".", AT_REMOVEDIR);
+  ret = unlinkat (rundir_dfd, id, AT_REMOVEDIR);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "cannot rm state directory");
+    return crun_make_error (err, errno, "cannot rm state directory '%s/%s'", dir, id);
 
-  return ret;
+  return 0;
 }
 
 void
