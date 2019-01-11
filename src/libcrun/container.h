@@ -40,7 +40,6 @@ struct libcrun_context_s
   bool detach;
   bool no_subreaper;
   bool no_new_keyring;
-  bool no_pivot;
 };
 
 enum

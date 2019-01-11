@@ -36,8 +36,7 @@ enum
     OPTION_PID_FILE,
     OPTION_NO_SUBREAPER,
     OPTION_NO_NEW_KEYRING,
-    OPTION_PRESERVE_FDS,
-    OPTION_NO_PIVOT
+    OPTION_PRESERVE_FDS
   };
 
 static const char *bundle = NULL;
@@ -53,7 +52,6 @@ static struct argp_option options[] =
     {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
     {"no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process"},
     {"no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key"},
-    {"no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root"},
     { 0 }
   };
 
@@ -90,10 +88,6 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_PID_FILE:
       crun_context.pid_file = argp_mandatory_argument (arg, state);
-      break;
-
-    case OPTION_NO_PIVOT:
-      crun_context.no_pivot = true;
       break;
 
     case ARGP_KEY_NO_ARGS:

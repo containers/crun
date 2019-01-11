@@ -936,48 +936,15 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   return 0;
 }
 
-static int
-move_root (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
-{
-  int ret;
-
-  ret = chdir (rootfs);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to '%s'", rootfs);
-
-  ret = mount (rootfs, "/", "", MS_MOVE, "");
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount MS_MOVE to '/'");
-
-  ret = chroot (".");
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chroot to '%s'", rootfs);
-
-  ret = chdir ("/");
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to '%s'", rootfs);
-
-  return 0;
-}
-
 int
-libcrun_do_pivot_root (libcrun_container *container, bool no_pivot, const char *rootfs, libcrun_error_t *err)
+libcrun_do_pivot_root (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
   if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
     {
-      if (no_pivot)
-        {
-          ret = move_root (container, rootfs, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else
-        {
-          ret = do_pivot (container, rootfs, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = do_pivot (container, rootfs, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = do_mount (container, "", "/", "", get_private_data (container)->rootfs_propagation, "", 0, err);
       if (UNLIKELY (ret < 0))
