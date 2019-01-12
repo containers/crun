@@ -218,7 +218,7 @@ enter_cgroup (pid_t pid, const char *path, int ensure_missing, libcrun_error_t *
         return ret;
     }
 
-  return entered_any ? 0 : 77;
+  return entered_any ? 0 : -1;
 }
 
 int
@@ -356,7 +356,7 @@ int enter_systemd_cgroup_scope (const char *scope, pid_t pid, libcrun_error_t *e
   if (sd_err < 0)
     {
       crun_make_error (err, -sd_err, "cannot open sd-bus");
-      ret = 77;
+      ret = -1;
       goto exit;
     }
 
@@ -599,32 +599,6 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
       ret = enter_systemd_cgroup_scope (scope, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
-      if (ret == 77)
-        {
-          if (getuid () == 0)
-            {
-              libcrun_error_t *tmp_err = NULL;
-
-              ret = check_running_in_user_namespace (tmp_err);
-              if (UNLIKELY (ret < 0))
-                {
-                  crun_error_release (err);
-                  *err = *tmp_err;
-                  return ret;
-                }
-
-              if (ret == 0)
-                return -1;
-
-              crun_error_release (err);
-              libcrun_warning ("systemd not available and running in an usernamespace, skip cgroups configuration");
-              return 77;
-            }
-
-          crun_error_release (err);
-          libcrun_warning ("systemd not available, skip cgroups configuration");
-          return 77;
-        }
       return systemd_finalize (path, pid, NULL, err);
     }
 #endif
@@ -1123,7 +1097,6 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 {
   int ret;
 
-#define SKIP(ret, errno)(ret < 0 && errno == ENOENT)
   if (resources->block_io)
     {
       cleanup_free char *path_to_blkio = NULL;
@@ -1132,17 +1105,12 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_blkio, errno))
-        libcrun_warning ("skip block IO resources specified since there is no cgroup available");
-      else
-        {
-          if (UNLIKELY (dirfd_blkio < 0))
-            return crun_make_error (err, errno, "open /sys/fs/cgroup/blkio%s", path);
+      if (UNLIKELY (dirfd_blkio < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/blkio%s", path);
 
-          ret = write_blkio_resources (dirfd_blkio, blkio, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_blkio_resources (dirfd_blkio, blkio, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (resources->network)
@@ -1153,17 +1121,12 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
       dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_network, errno))
-        libcrun_warning ("skip network resources specified since there is no cgroup available");
-      else
-        {
-          if (UNLIKELY (dirfd_network < 0))
-            return crun_make_error (err, errno, "open /sys/fs/cgroup/net_cls,net_prio%s", path);
+      if (UNLIKELY (dirfd_network < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/net_cls,net_prio%s", path);
 
-          ret = write_network_resources (dirfd_network, network, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_network_resources (dirfd_network, network, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (resources->hugepage_limits_len)
@@ -1173,20 +1136,15 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_htlb, "/sys/fs/cgroup/hugetlb%s/", path);
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_htlb, errno))
-        libcrun_warning ("hugetlb resources specified since there is no cgroup available");
-      else
-        {
-          if (UNLIKELY (dirfd_htlb < 0))
-            return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
+      if (UNLIKELY (dirfd_htlb < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
 
-          ret = write_hugetlb_resources (dirfd_htlb,
-                                         resources->hugepage_limits,
-                                         resources->hugepage_limits_len,
-                                         err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_hugetlb_resources (dirfd_htlb,
+                                     resources->hugepage_limits,
+                                     resources->hugepage_limits_len,
+                                     err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (resources->devices_len)
@@ -1196,20 +1154,15 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_devs, "/sys/fs/cgroup/devices%s/", path);
       dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_devs, errno))
-        libcrun_warning ("skip devices resources specified since there is no cgroup available");
-      else
-        {
-          if (UNLIKELY (dirfd_devs < 0))
-            return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
+      if (UNLIKELY (dirfd_devs < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
 
-          ret = write_devices_resources (dirfd_devs,
-                                         resources->devices,
-                                         resources->devices_len,
-                                         err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_devices_resources (dirfd_devs,
+                                     resources->devices,
+                                     resources->devices_len,
+                                     err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (resources->memory)
@@ -1219,19 +1172,14 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_mem, "/sys/fs/cgroup/memory%s/", path);
       dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_mem, errno))
-        libcrun_warning ("skip memory resources specified since there is no cgroup available");
-      else
-        {
-          if (UNLIKELY (dirfd_mem < 0))
-            return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
+      if (UNLIKELY (dirfd_mem < 0))
+        return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
 
-          ret = write_memory_resources (dirfd_mem,
-                                        resources->memory,
-                                        err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_memory_resources (dirfd_mem,
+                                    resources->memory,
+                                    err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (resources->pids)
@@ -1241,19 +1189,14 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_pid, "/sys/fs/cgroup/pids%s/", path);
       dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_pid, errno))
-        libcrun_warning ("skip pids resources specified since there is no cgroup available");
-      else
-        {
-          if (UNLIKELY (dirfd_pid < 0))
-            return crun_make_error (err, errno, "open %s", path);
+      if (UNLIKELY (dirfd_pid < 0))
+        return crun_make_error (err, errno, "open %s", path);
 
-          ret = write_pids_resources (dirfd_pid,
-                                      resources->pids,
-                                      err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_pids_resources (dirfd_pid,
+                                  resources->pids,
+                                  err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (resources->cpu)
@@ -1265,32 +1208,22 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
 
       xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpu%s/", path);
       dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_cpu, errno))
-        libcrun_warning ("skip cpu resources specified since there is no cgroup available");
-      else
-        {
-          ret = write_cpu_resources (dirfd_cpu,
-                                     resources->cpu,
-                                     err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_cpu_resources (dirfd_cpu,
+                                 resources->cpu,
+                                 err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       if (resources->cpu->cpus == NULL || resources->cpu->mems == NULL)
         return 0;
 
       xasprintf (&path_to_cpuset, "/sys/fs/cgroup/cpuset%s/", path);
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
-      if (SKIP (dirfd_cpuset, errno))
-        libcrun_warning ("skip cpuset resources specified since there is no cgroup available");
-      else
-        {
-          ret = write_cpuset_resources (dirfd_cpuset,
-                                        resources->cpu,
-                                        err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_cpuset_resources (dirfd_cpuset,
+                                    resources->cpu,
+                                    err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   return 0;
