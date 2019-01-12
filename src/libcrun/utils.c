@@ -603,7 +603,7 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
         return 0;
       if (nread < 0 && errno == EIO)
         return 0;
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (nread < 0))
         return crun_make_error (err, errno, "copy_file_range");
 #endif
 # define BUFFER_SIZE 4096
