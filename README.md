@@ -28,10 +28,10 @@ footprint.
 On my machine, this is the elapsed time for running sequentially 100
 containers that runs `/bin/true`:
 
-|                                      | crun | runc | % |
-| ------------- |-------------:| -----:| -----:|
-| 100 /bin/true (no network namespace) | 0m4.449s | 0m7.514s | 40.7% |
-| 100 /bin/true (new network namespace) | 0m15.850s | 0m18.986s | 16.5% |
+|                                       | crun           | runc    | %      |
+| -------------                         | -------------: | -----:  | -----: |
+| 100 /bin/true (no network namespace)  | 0:05.70        | 0:10.95 | -47.9% |
+| 100 /bin/true (new network namespace) | 0:06.16        | 0:11.17 | -44.8%  |
 
 
 ## Build
