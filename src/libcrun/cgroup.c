@@ -586,8 +586,8 @@ exit:
 
 #endif
 
-int
-libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+static int
+libcrun_cgroup_enter_internal (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   int ret;
 
@@ -620,6 +620,42 @@ libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t p
   return enter_cgroup (pid, *path, 1, err);
 }
 
+static int
+is_rootless (libcrun_error_t *err)
+{
+  int ret;
+
+  if (geteuid ())
+    return 1;
+
+  return check_running_in_user_namespace (err);
+}
+
+int
+libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+{
+  libcrun_error_t *tmp_err = NULL;
+  int ret = libcrun_cgroup_enter_internal (path, cgroup_path, systemd, pid, id, err);
+  if (LIKELY (ret == 0))
+    return ret;
+
+  ret = is_rootless (tmp_err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (err);
+      *err = *tmp_err;
+      return ret;
+    }
+
+  if (ret == 1)
+    {
+      free (*path);
+      *path = NULL;
+    }
+
+  crun_error_release (err);
+  return 0;
+}
 
 int
 libcrun_cgroup_killall (char *path, libcrun_error_t *err)
