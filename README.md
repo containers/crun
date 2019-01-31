@@ -37,10 +37,16 @@ containers that runs `/bin/true`:
 ## Build
 
 On Fedora these dependencies are required for the build:
-```
+```shell
 $ dnf install -y python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel libselinux-devel \
     glibc-static python3-libmount libtool
+```
+
+On Ubuntu:
+```shell
+apt-get install -y git gcc build-essential pkgconf libtool \
+   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev
 ```
 
 Unless you are also building the Python bindings, Python is needed
