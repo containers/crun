@@ -754,8 +754,14 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
   cleanup_free libcrun_container *container = NULL;
   if (def == NULL)
     {
+      cleanup_free char *dir = NULL;
       cleanup_free char *config_file = NULL;
-      xasprintf (&config_file, "%s/config.json", status->bundle);
+
+      dir = libcrun_get_state_directory (state_root, id);
+      if (UNLIKELY (dir == NULL))
+        return crun_make_error (err, 0, "cannot get state directory");
+
+      xasprintf (&config_file, "%s/config.json", dir);
       container = libcrun_container_load_from_file (config_file, err);
       if (container == NULL)
         return crun_make_error (err, 0, "error loading config.json");
