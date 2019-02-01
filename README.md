@@ -38,7 +38,7 @@ containers that runs `/bin/true`:
 
 On Fedora these dependencies are required for the build:
 ```shell
-$ dnf install -y python git gcc automake autoconf libcap-devel \
+dnf install -y python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel libselinux-devel \
     glibc-static python3-libmount libtool
 ```
@@ -55,7 +55,7 @@ used afterwards.
 
 Once all the dependencies are installed:
 ```
-$ ./autogen.sh && ./configure
-$ make
-$ sudo make install
+./autogen.sh && ./configure
+make
+sudo make install
 ```
