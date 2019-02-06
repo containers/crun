@@ -1711,6 +1711,8 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
   cleanup_close int seccomp_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_free char *config_file = NULL;
+  cleanup_free libcrun_container *container = NULL;
+  cleanup_free char *dir = NULL;
 
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -1720,6 +1722,15 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
   ret = libcrun_is_container_running (&status, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  dir = libcrun_get_state_directory (state_root, id);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory");
+
+  xasprintf (&config_file, "%s/config.json", dir);
+  container = libcrun_container_load_from_file (config_file, err);
+  if (container == NULL)
+    return crun_make_error (err, 0, "error loading config.json");
 
   if (ret == 0)
     return crun_make_error (err, 0, "the container '%s' is not running.", id);
@@ -1740,7 +1751,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
     return ret;
 
 
-  pid = libcrun_join_process (status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
+  pid = libcrun_join_process (container, status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
 

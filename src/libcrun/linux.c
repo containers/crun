@@ -1743,7 +1743,7 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
 }
 
 int
-libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
+libcrun_join_process (libcrun_container *container, pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
 {
   pid_t pid;
   int ret;
@@ -1760,7 +1760,7 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
                               "cgroup",
 #endif
                               NULL};
-
+  oci_container *def = container->container_def;
   size_t i;
   cleanup_close int sync_fd = -1;
 
@@ -1799,6 +1799,12 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
   if (UNLIKELY (ret < 0))
     goto exit;
 
+  if (def->linux->namespaces_len >= 10)
+    {
+      crun_make_error (err, 0, "invalid configuration");
+      goto exit;
+    }
+
   for (i = 0; namespaces[i]; i++)
     {
       cleanup_close int fd = -1;
@@ -1811,10 +1817,9 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
           goto exit;
         }
     }
-
   for (i = 0; namespaces[i]; i++)
     {
-      ret = setns (fds[i], namespaces_id[i]);
+      ret = setns (fds[i], 0);
       if (ret > 0)
         fds_joined[i] = 1;
     }
@@ -1822,9 +1827,26 @@ libcrun_join_process (pid_t pid_to_join, libcrun_container_status_t *status, int
     {
       if (fds_joined[i])
         continue;
-      ret = setns (fds[i], namespaces_id[i]);
+      ret = setns (fds[i], 0);
       if (UNLIKELY (ret < 0 && errno != EINVAL))
         {
+          int j;
+          bool found = false;
+
+          for (j = 0; j < def->linux->namespaces_len; j++)
+            {
+              if (strcmp (namespaces[i], def->linux->namespaces[j]->type) == 0)
+                {
+                  found = true;
+                  break;
+                }
+            }
+          if (!found)
+            {
+              /* It was not requested to create this ns, so just ignore it.  */
+              fds_joined[i] = 1;
+              continue;
+            }
           crun_make_error (err, errno, "setns '%s'", namespaces[i]);
           goto exit;
         }
