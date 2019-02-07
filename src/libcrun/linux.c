@@ -1820,7 +1820,7 @@ libcrun_join_process (libcrun_container *container, pid_t pid_to_join, libcrun_c
   for (i = 0; namespaces[i]; i++)
     {
       ret = setns (fds[i], 0);
-      if (ret > 0)
+      if (ret == 0)
         fds_joined[i] = 1;
     }
   for (i = 0; namespaces[i]; i++)
