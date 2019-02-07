@@ -1786,13 +1786,13 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
             return ret;
         }
 
-      if (process->user && process->user->additional_gids)
+      if (process->user && process->user->additional_gids_len)
         {
           gid_t *additional_gids = process->user->additional_gids;
           size_t additional_gids_len = process->user->additional_gids_len;
           ret = setgroups (additional_gids_len, additional_gids);
           if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error (errno, "%s", "setgroups");
+            libcrun_fail_with_error (errno, "%s", "setgroups %d groups", process->user->additional_gids_len);
         }
 
       ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);

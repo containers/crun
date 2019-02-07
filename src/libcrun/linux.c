@@ -67,6 +67,7 @@ struct private_data_s
   char *container_notify_socket_path;
   bool mount_dev_from_host;
   unsigned long rootfs_propagation;
+  bool deny_setgroups;
 };
 
 struct linux_namespace_s
@@ -997,12 +998,30 @@ newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
 }
 
 static int
-deny_setgroups (pid_t pid, libcrun_error_t *err)
+deny_setgroups (libcrun_container *container, pid_t pid, libcrun_error_t *err)
 {
+  int ret;
   cleanup_free char *groups_file = NULL;
 
   xasprintf (&groups_file, "/proc/%d/setgroups", pid);
-  return write_file (groups_file, "deny", 4, err);
+  ret = write_file (groups_file, "deny", 4, err);
+  if (ret >= 0)
+    get_private_data (container)->deny_setgroups = true;
+  return ret;
+}
+
+static int
+can_setgroups (libcrun_container *container, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *content = NULL;
+
+  if (get_private_data (container)->deny_setgroups)
+    return 0;
+  ret = read_all_file ("/proc/self/setgroups", &content, NULL, err);
+  if (ret < 0)
+    return -1;
+  return strncmp (content, "deny", 4) == 0 ? 0 : 1;
 }
 
 int
@@ -1014,7 +1033,6 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
   int ret;
-  bool setgroups_denied = false;
   oci_container *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
@@ -1092,10 +1110,9 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
           char single_mapping[32];
           crun_error_release (err);
 
-          ret = deny_setgroups (pid, err);
+          ret = deny_setgroups (container, pid, err);
           if (UNLIKELY (ret < 0))
             return ret;
-          setgroups_denied = true;
 
           single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_gid, container->host_gid);
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
@@ -1118,9 +1135,9 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
           char single_mapping[32];
           crun_error_release (err);
 
-          if (!setgroups_denied)
+          if (!get_private_data (container)->deny_setgroups)
             {
-              ret = deny_setgroups (pid, err);
+              ret = deny_setgroups (container, pid, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
@@ -1606,13 +1623,22 @@ libcrun_run_linux_container (libcrun_container *container,
     {
       gid_t *additional_gids = NULL;
       size_t additional_gids_len = 0;
+      int can_do_setgroups;
+
       if (def->process->user)
         {
           additional_gids = def->process->user->additional_gids;
           additional_gids_len = def->process->user->additional_gids_len;
         }
 
-      if (additional_gids && getgroups (0, NULL))
+      if (additional_gids_len == 0)
+        {
+          ret = can_do_setgroups = can_setgroups (container, err);
+          if (can_do_setgroups < 0)
+            goto out;
+        }
+
+      if (additional_gids_len || can_do_setgroups)
         {
           ret = setgroups (additional_gids_len, additional_gids);
           if (UNLIKELY (ret < 0))
