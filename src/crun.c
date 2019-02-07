@@ -36,6 +36,7 @@
 #include "update.h"
 #include "spec.h"
 #include "pause.h"
+#include "unpause.h"
 
 static struct crun_global_arguments arguments;
 
@@ -79,6 +80,7 @@ enum
     COMMAND_STATE,
     COMMAND_UPDATE,
     COMMAND_PAUSE,
+    COMMAND_UNPAUSE,
   };
 
 struct commands_s commands[] =
@@ -94,22 +96,24 @@ struct commands_s commands[] =
     { COMMAND_STATE, "state", crun_command_state},
     { COMMAND_UPDATE, "update", crun_command_update},
     { COMMAND_PAUSE, "pause", crun_command_pause},
+    { COMMAND_UNPAUSE, "resume", crun_command_unpause},
     { 0, 0}
   };
 
-static char doc[] =                                                  \
-  "\nCOMMANDS:\n"                                                    \
-  "\tcreate - create a container\n"                                  \
-  "\tdelete - remove definition for a container\n"                   \
-  "\texec   - exec a command in a running container\n"               \
-  "\tlist   - list known containers\n"                               \
-  "\tkill   - send a signal to the container init process\n"         \
-  "\trun    - run a container\n"                                     \
-  "\tspec   - generate a configuration file\n"                       \
-  "\tstart  - start a container\n"                                   \
-  "\tstate  - output the state of a container\n"                     \
-  "\tpause  - pause all the processes in the container\n"            \
-  "\tupdate - update container resource constraints\n"               \
+static char doc[] =                                                   \
+  "\nCOMMANDS:\n"                                                     \
+  "\tcreate  - create a container\n"                                  \
+  "\tdelete  - remove definition for a container\n"                   \
+  "\texec    - exec a command in a running container\n"               \
+  "\tlist    - list known containers\n"                               \
+  "\tkill    - send a signal to the container init process\n"         \
+  "\trun     - run a container\n"                                     \
+  "\tspec    - generate a configuration file\n"                       \
+  "\tstart   - start a container\n"                                   \
+  "\tstate   - output the state of a container\n"                     \
+  "\tpause   - pause all the processes in the container\n"            \
+  "\tresume  - unpause the processes in the container\n"              \
+  "\tupdate  - update container resource constraints\n"               \
   ;
 static char args_doc[] = "COMMAND [OPTION...]";
 

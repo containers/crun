@@ -90,4 +90,6 @@ int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
 
 int libcrun_container_pause (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
 
+int libcrun_container_unpause (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
+
 #endif

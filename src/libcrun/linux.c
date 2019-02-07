@@ -1958,13 +1958,28 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   return ret;
 }
 
-int
-libcrun_container_pause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
+static int
+libcrun_container_pause_unpause_linux (libcrun_container_status_t *status, const char *id, const char *const state, libcrun_error_t *err)
 {
-  const char *const state = "FROZEN";
+  int ret;
   cleanup_free char *path = NULL;
 
   xasprintf (&path, "/sys/fs/cgroup/freezer/%s/freezer.state", status->cgroup_path);
 
-  return write_file (path, state, strlen (state), err);
+  ret = write_file (path, state, strlen (state), err);
+  if (ret >= 0)
+    return 0;
+  return ret;
+}
+
+int
+libcrun_container_pause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
+{
+  return libcrun_container_pause_unpause_linux (status, id, "FROZEN", err);
+}
+
+int
+libcrun_container_unpause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
+{
+  return libcrun_container_pause_unpause_linux (status, id, "THAWED", err);
 }
