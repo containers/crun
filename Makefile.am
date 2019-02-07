@@ -48,12 +48,12 @@ python_crun_la_LIBADD = libcrun.la $(COMMON_LIBS) $(PYTHON_LIBS)
 endif
 
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
-crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/spec.c \
+crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c
 crun_LDADD = libcrun.la $(COMMON_LIBS)
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
-	src/crun.h src/list.h src/run.h src/delete.h src/kill.h \
+	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h src/update.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \

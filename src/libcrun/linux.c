@@ -1957,3 +1957,14 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
 
   return ret;
 }
+
+int
+libcrun_container_pause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
+{
+  const char *const state = "FROZEN";
+  cleanup_free char *path = NULL;
+
+  xasprintf (&path, "/sys/fs/cgroup/freezer/%s/freezer.state", status->cgroup_path);
+
+  return write_file (path, state, strlen (state), err);
+}
