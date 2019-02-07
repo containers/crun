@@ -1084,11 +1084,6 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       crun_error_release (err);
 
-      ret = deny_setgroups (pid, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      setgroups_denied = true;
-
       xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
       ret = write_file (gid_map_file, gid_map, gid_map_len, err);
       if (ret < 0 && !def->linux->gid_mappings_len)
@@ -1096,6 +1091,12 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
           size_t single_mapping_len;
           char single_mapping[32];
           crun_error_release (err);
+
+          ret = deny_setgroups (pid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          setgroups_denied = true;
+
           single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_gid, container->host_gid);
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
         }
@@ -1109,13 +1110,6 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
     {
       crun_error_release (err);
 
-      if (!setgroups_denied)
-        {
-          ret = deny_setgroups (pid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
       xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
       ret = write_file (uid_map_file, uid_map, uid_map_len, err);
       if (ret < 0 && !def->linux->uid_mappings_len)
@@ -1123,6 +1117,14 @@ libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_erro
           size_t single_mapping_len;
           char single_mapping[32];
           crun_error_release (err);
+
+          if (!setgroups_denied)
+            {
+              ret = deny_setgroups (pid, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+
           single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_uid, container->host_uid);
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
