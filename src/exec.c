@@ -27,6 +27,7 @@
 #include "crun.h"
 #include "libcrun/container.h"
 #include "libcrun/utils.h"
+#include "libcrun/linux.h"
 
 static char doc[] = "OCI runtime";
 
@@ -37,6 +38,8 @@ struct exec_options_s
   const char *pid_file;
   char *cwd;
   char **env;
+  char **cap;
+  size_t cap_size;
   size_t env_size;
   bool tty;
   bool detach;
@@ -45,7 +48,8 @@ struct exec_options_s
 enum
   {
     OPTION_CONSOLE_SOCKET = 1000,
-    OPTION_PID_FILE
+    OPTION_PID_FILE,
+    OPTION_CWD
   };
 
 static struct exec_options_s exec_options;
@@ -55,9 +59,10 @@ static struct argp_option options[] =
     {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty" },
     {"tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY"},
     {"process", 'p', "FILE", 0, "path to the process.json"},
-    {"cwd", 'c', "CWD", 0, "current working directory" },
+    {"cwd", OPTION_CWD, "CWD", 0, "current working directory" },
     {"detach", 'd', 0, 0, "detach the command in the background" },
     {"env", 'e', "ENV", 0, "add an environment variable" },
+    {"cap", 'c', "CAP", 0, "add a capability" },
     {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
     { 0 }
   };
@@ -73,6 +78,30 @@ append_env (const char *arg)
   exec_options.env[exec_options.env_size + 1] = NULL;
   exec_options.env[exec_options.env_size] = xstrdup (arg);
   exec_options.env_size++;
+}
+
+static void
+append_cap (const char *arg)
+{
+  exec_options.cap = realloc (exec_options.cap, (exec_options.cap_size + 2) * sizeof (*exec_options.cap));
+  if (exec_options.cap == NULL)
+    error (EXIT_FAILURE, errno, "cannot allocate memory");
+  exec_options.cap[exec_options.cap_size + 1] = NULL;
+  exec_options.cap[exec_options.cap_size] = xstrdup (arg);
+  exec_options.cap_size++;
+}
+
+static char **dup_array (char **arr, size_t len)
+{
+  size_t i;
+  char **ret;
+
+  ret = xmalloc (sizeof (char *) * (len + 1));
+  for (i = 0; i < len; i++)
+    ret[i] = xstrdup (arr[i]);
+
+  ret[i] = NULL;
+  return ret;
 }
 
 static error_t
@@ -105,6 +134,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'c':
+      append_cap (arg);
+      break;
+
+    case OPTION_CWD:
       exec_options.cwd = xstrdup (arg);
       break;
 
@@ -156,6 +189,28 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->terminal = exec_options.tty;
       process->env = exec_options.env;
       process->env_len = exec_options.env_size;
+      if (exec_options.cap_size > 0)
+        {
+          size_t i;
+          oci_container_process_capabilities *capabilities = xmalloc (sizeof (oci_container_process_capabilities));
+
+          capabilities->effective = exec_options.cap;
+          capabilities->effective_len = exec_options.cap_size;
+
+          capabilities->inheritable = dup_array (exec_options.cap, exec_options.cap_size);
+          capabilities->inheritable_len = exec_options.cap_size;
+
+          capabilities->bounding = dup_array (exec_options.cap, exec_options.cap_size);
+          capabilities->bounding_len = exec_options.cap_size;
+
+          capabilities->ambient = dup_array (exec_options.cap, exec_options.cap_size);
+          capabilities->ambient_len = exec_options.cap_size;
+
+          capabilities->permitted = dup_array (exec_options.cap, exec_options.cap_size);
+          capabilities->permitted_len = exec_options.cap_size;
+
+          process->capabilities = capabilities;
+        }
       process->no_new_privileges = 1;
       ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
       free_oci_container_process (process);
