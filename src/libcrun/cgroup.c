@@ -1250,7 +1250,7 @@ libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char 
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (resources->cpu->cpus == NULL || resources->cpu->mems == NULL)
+      if (resources->cpu->cpus == NULL && resources->cpu->mems == NULL)
         return 0;
 
       xasprintf (&path_to_cpuset, "/sys/fs/cgroup/cpuset%s/", path);
