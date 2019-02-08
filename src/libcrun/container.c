@@ -515,6 +515,10 @@ container_entrypoint_init (void *args, const char *notify_socket,
     }
 #endif
 
+  ret = libcrun_set_sysctl (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = libcrun_set_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -580,10 +584,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
     return ret;
 
   ret = libcrun_set_oom (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = libcrun_set_sysctl (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
