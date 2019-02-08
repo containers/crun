@@ -968,43 +968,17 @@ write_memory_resources (int dirfd, oci_container_linux_resources_memory *memory,
   swap_buf_len = sprintf (swap_buf, "%lu", memory->swap);
   limit_buf_len = sprintf (limit_buf, "%lu", memory->limit);
 
-  if (memory->limit && memory->swap)
+  if (memory->limit)
     {
-      if (memory->limit < memory->swap)
-        {
-          ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else
-        {
-          ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
-  else
+  if (memory->swap)
     {
-      if (memory->swap)
-        {
-          ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      if (memory->limit)
-        {
-          ret = write_file_at (dirfd, "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = write_file_at (dirfd, "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (memory->kernel)
