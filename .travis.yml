@@ -1,6 +1,6 @@
 language: c
 sudo: required
-dist: trusty
+dist: xenial
 addons:
   apt:
     packages:
