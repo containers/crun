@@ -37,6 +37,7 @@ struct exec_options_s
   const char *console_socket;
   const char *pid_file;
   char *cwd;
+  char *user;
   char **env;
   char **cap;
   size_t cap_size;
@@ -61,6 +62,7 @@ static struct argp_option options[] =
     {"process", 'p', "FILE", 0, "path to the process.json"},
     {"cwd", OPTION_CWD, "CWD", 0, "current working directory" },
     {"detach", 'd', 0, 0, "detach the command in the background" },
+    {"user", 'u', "USERSPEC", 0, "specify the user in the form UID[:GID]" },
     {"env", 'e', "ENV", 0, "add an environment variable" },
     {"cap", 'c', "CAP", 0, "add a capability" },
     {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
@@ -129,6 +131,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
       exec_options.tty = arg == NULL || (strcmp (arg, "false") != 0 && strcmp (arg, "no") != 0);
       break;
 
+    case 'u':
+      exec_options.user = arg;
+      break;
+
     case 'e':
       append_env (arg);
       break;
@@ -152,6 +158,37 @@ parse_opt (int key, char *arg, struct argp_state *state)
 }
 
 static struct argp run_argp = { options, parse_opt, args_doc, doc };
+
+static oci_container_process_user *
+make_oci_process_user (const char *userspec)
+{
+  oci_container_process_user *u;
+  char *endptr = NULL;
+
+  if (userspec == NULL)
+    return NULL;
+
+  u = xmalloc (sizeof (oci_container_process_user));
+  memset (u, 0, sizeof (oci_container_process_user));
+
+  errno = 0;
+  u->uid = strtol (userspec, &endptr, 10);
+  if (errno == ERANGE)
+    libcrun_fail_with_error (0, "invalid UID specified");
+  if (endptr && *endptr == '\0')
+    return u;
+  if (*endptr != ':')
+    libcrun_fail_with_error (0, "invalid USERSPEC specified");
+
+  errno = 0;
+  u->gid = strtol (endptr + 1, &endptr, 10);
+  if (errno == ERANGE)
+    libcrun_fail_with_error (0, "invalid GID specified");
+  if (endptr && *endptr != '\0')
+    libcrun_fail_with_error (0, "invalid USERSPEC specified");
+
+  return u;
+}
 
 int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
@@ -189,6 +226,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->terminal = exec_options.tty;
       process->env = exec_options.env;
       process->env_len = exec_options.env_size;
+      process->user = make_oci_process_user (exec_options.user);
       if (exec_options.cap_size > 0)
         {
           size_t i;
