@@ -1761,7 +1761,10 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       int i;
       uid_t container_uid = process->user ? process->user->uid : 0;
       gid_t container_gid = process->user ? process->user->gid : 0;
-      const char *cwd = process->cwd ? process->cwd : "/";
+      const char *cwd;
+      oci_container_process_capabilities *capabilities;
+
+      cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
         libcrun_fail_with_error (errno, "chdir");
 
@@ -1799,7 +1802,11 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      ret = libcrun_set_caps (process->capabilities, container_uid, container_gid, process->no_new_privileges, err);
+      if (process->capabilities == NULL && container->container_def->process)
+        capabilities = container->container_def->process->capabilities;
+      else
+        capabilities = process->capabilities;
+      ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
