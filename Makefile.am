@@ -25,6 +25,7 @@ CLEANFILES = crun.spec
 lib_LTLIBRARIES = libcrun.la
 
 libcrun_la_SOURCES = src/libcrun/utils.c \
+			src/libcrun/cloned_binary.c \
 			src/libcrun/container.c \
 			src/libcrun/cgroup.c \
 			src/libcrun/linux.c \

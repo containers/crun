@@ -2011,3 +2011,14 @@ libcrun_container_unpause_linux (libcrun_container_status_t *status, const char 
 {
   return libcrun_container_pause_unpause_linux (status, id, "THAWED", err);
 }
+
+/* Protection for attacks like CVE-2019-5736.  */
+int ensure_cloned_binary ();
+__attribute__((constructor)) static void libcrun_rexec(void)
+{
+  if (ensure_cloned_binary () < 0)
+    {
+      fprintf (stderr, "Failed to re-execute libcrun via memory file descriptor\n");
+      _exit (EXIT_FAILURE);
+    }
+}

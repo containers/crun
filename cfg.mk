@@ -1,4 +1,4 @@
-export VC_LIST_EXCEPT_DEFAULT=^(lib/.*|m4/.*|md5/.*|build-aux/.*|src/gettext\.h|.*ChangeLog)$$
+export VC_LIST_EXCEPT_DEFAULT=^(lib/.*|m4/.*|md5/.*|build-aux/.*|src/gettext\.h|.*ChangeLog|src/libcrun/cloned_binary.c)$$
 
 local-checks-to-skip = \
     sc_immutable_NEWS \
