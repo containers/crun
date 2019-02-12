@@ -274,12 +274,12 @@ int systemd_finalize (char **path, pid_t pid, const char *suffix, libcrun_error_
     return ret;
   from = strstr (content, "0::");
   if (UNLIKELY (from == NULL))
-    return crun_make_error (err, 0, "cannot find cgroup2 for the current process");
+    return crun_make_error (err, -1, "cannot find cgroup2 for the current process");
 
   from += 3;
   to = strchr (from, '\n');
   if (UNLIKELY (to == NULL))
-    return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+    return crun_make_error (err, -1, "cannot parse /proc/self/cgroup");
   *to = '\0';
   if (suffix)
     xasprintf (path, "%s/%s", from, suffix);
@@ -599,6 +599,7 @@ libcrun_cgroup_enter_internal (char **path, const char *cgroup_path, int systemd
       ret = enter_systemd_cgroup_scope (scope, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
       return systemd_finalize (path, pid, NULL, err);
     }
 #endif
@@ -635,26 +636,28 @@ int
 libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   libcrun_error_t *tmp_err = NULL;
+  int rootless;
   int ret = libcrun_cgroup_enter_internal (path, cgroup_path, systemd, pid, id, err);
   if (LIKELY (ret == 0))
     return ret;
 
-  ret = is_rootless (tmp_err);
-  if (UNLIKELY (ret < 0))
+  rootless = is_rootless (tmp_err);
+  if (UNLIKELY (rootless < 0))
     {
       crun_error_release (err);
       *err = *tmp_err;
       return ret;
     }
 
-  if (ret == 1)
+  if (rootless > 0)
     {
       free (*path);
       *path = NULL;
+      crun_error_release (err);
+      return 0;
     }
 
-  crun_error_release (err);
-  return 0;
+  return ret;
 }
 
 int

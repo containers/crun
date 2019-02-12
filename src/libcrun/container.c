@@ -506,14 +506,9 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (has_terminal && entrypoint_args->context->console_socket)
     console_socket = entrypoint_args->console_socket_fd;
 
-#ifdef CLONE_NEWCGROUP
-  ret = unshare (CLONE_NEWCGROUP);
+  ret = libcrun_container_enter_cgroup_ns (container, err);
   if (UNLIKELY (ret < 0))
-    {
-      if (errno != EINVAL)
-	return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
-    }
-#endif
+    return ret;
 
   ret = libcrun_set_sysctl (container, err);
   if (UNLIKELY (ret < 0))

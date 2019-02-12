@@ -59,7 +59,7 @@ struct private_data_s
 {
   struct remount_s *remounts;
 
-  /* Filled by libcrun_set_namespaces().  Useful to query what
+  /* Filled by libcrun_run_linux_container().  Useful to query what
      namespaces are available.  */
   int unshare_flags;
 
@@ -96,6 +96,9 @@ static struct linux_namespace_s namespaces[] =
     {"pid", CLONE_NEWPID},
     {"uts", CLONE_NEWUTS},
     {"user", CLONE_NEWUSER},
+#ifdef CLONE_NEWCGROUP
+    {"cgroup", CLONE_NEWCGROUP},
+#endif
     {NULL, 0}
   };
 
@@ -346,6 +349,7 @@ do_mount_cgroup (libcrun_container *container,
 {
   int ret;
   size_t i;
+  bool has_new_cgroup = false;
   const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
 
   if (UNLIKELY (subsystems == NULL))
@@ -355,34 +359,71 @@ do_mount_cgroup (libcrun_container *container,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  for (i = 0; subsystems[i]; i++)
+#ifdef CLONE_NEWCGROUP
+  has_new_cgroup = (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0;
+#endif
+
+  if (has_new_cgroup)
     {
-      cleanup_free char *subsystem_path = NULL;
-      xasprintf (&subsystem_path, "%s/%s", target, subsystems[i]);
+      cleanup_free char *content = NULL;
+      char *from, *to;
+      char *saveptr;
 
-      ret = mkdir (subsystem_path, 0755);
+      ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
+        return ret;
 
-      if (strcmp (subsystems[i], "unified") == 0)
+      for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
         {
-          ret = do_mount (container, source, subsystem_path, "cgroup2", mountflags, NULL, 1, err);
+          cleanup_free char *source_path = NULL;
+          cleanup_free char *subsystem_path = NULL;
+          char *subpath, *subsystem;
+          subsystem = strchr (from, ':') + 1;
+          subpath = strchr (subsystem, ':') + 1;
+          *(subpath - 1) = '\0';
+
+          if (subsystem[0] == '\0')
+            continue;
+
+          xasprintf (&source_path, "/sys/fs/cgroup/%s/%s", subsystem, subpath);
+          xasprintf (&subsystem_path, "%s/%s", target, subsystem);
+
+          ret = mkdir (subsystem_path, 0755);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
+
+          ret = do_mount (container, source_path, subsystem_path, "", MS_BIND | mountflags, "", 0, err);
           if (UNLIKELY (ret < 0))
             {
-              if (errno == ENODEV)
+              if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
                 {
+                  /* We are trying to mount a subsystem that is not present.  */
                   crun_error_release (err);
                   continue;
                 }
               return ret;
             }
         }
-      else
+    }
+  else
+    {
+      for (i = 0; subsystems[i]; i++)
         {
-          ret = do_mount (container, source, subsystem_path, "cgroup", mountflags, subsystems[i], 1, err);
+          cleanup_free char *subsystem_path = NULL;
+          xasprintf (&subsystem_path, "%s/%s", target, subsystems[i]);
+
+          ret = mkdir (subsystem_path, 0755);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
+
+          if (strcmp (subsystems[i], "unified") == 0)
+            ret = do_mount (container, source, subsystem_path, "cgroup2", mountflags, NULL, 1, err);
+          else
+            ret = do_mount (container, source, subsystem_path, "cgroup", mountflags, subsystems[i], 1, err);
+
           if (UNLIKELY (ret < 0))
             {
-              if (crun_error_get_errno (err) == ENOENT)
+              if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
                 {
                   /* We are trying to mount a subsystem that is not present.  */
                   crun_error_release (err);
@@ -680,7 +721,7 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
       ret = mount ("none", r->target, "", r->flags, r->data);
       if (UNLIKELY (ret < 0))
         {
-          ret = mount ("none", r->target, "", r->flags | MS_NOSUID | MS_NODEV, r->data);
+          ret = mount ("none", r->target, "", r->flags | MS_NOSUID | MS_NODEV | MS_NOEXEC, r->data);
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, errno, "remount '%s'", r->target);
@@ -1022,6 +1063,23 @@ can_setgroups (libcrun_container *container, libcrun_error_t *err)
   if (ret < 0)
     return -1;
   return strncmp (content, "deny", 4) == 0 ? 0 : 1;
+}
+
+int
+libcrun_container_enter_cgroup_ns (libcrun_container *container, libcrun_error_t *err)
+{
+#ifdef CLONE_NEWCGROUP
+  if (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP)
+    {
+      int ret = unshare (CLONE_NEWCGROUP);
+      if (UNLIKELY (ret < 0))
+        {
+          if (errno != EINVAL)
+            return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
+        }
+    }
+#endif
+  return 0;
 }
 
 int
@@ -1550,6 +1608,10 @@ libcrun_run_linux_container (libcrun_container *container,
     }
 
   get_private_data (container)->unshare_flags = flags;
+#ifdef CLONE_NEWCGROUP
+  /* cgroup will be unshared later.  */
+  flags &= ~CLONE_NEWCGROUP;
+#endif
 
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket);
   if (UNLIKELY (ret < 0))

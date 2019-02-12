@@ -53,5 +53,6 @@ int libcrun_linux_container_update (libcrun_container_status_t *status, const ch
 int libcrun_create_keyring (const char *name, libcrun_error_t *err);
 int libcrun_container_pause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err);
 int libcrun_container_unpause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err);
+int libcrun_container_enter_cgroup_ns (libcrun_container *container, libcrun_error_t *err);
 
 #endif
