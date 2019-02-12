@@ -334,7 +334,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
 }
 
 static
-int enter_systemd_cgroup_scope (const char *scope, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (const char *scope, const char *slice, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -384,7 +384,7 @@ int enter_systemd_cgroup_scope (const char *scope, pid_t pid, libcrun_error_t *e
       goto exit;
     }
 
-  sd_err = sd_bus_message_append (m, "ss", scope, "replace");
+  sd_err = sd_bus_message_append (m, "ss", scope, "fail");
   if (UNLIKELY (sd_err < 0))
     {
       ret = crun_make_error (err, -sd_err, "sd-bus message append");
@@ -396,6 +396,22 @@ int enter_systemd_cgroup_scope (const char *scope, pid_t pid, libcrun_error_t *e
     {
       ret = crun_make_error (err, -sd_err, "sd-bus open container");
       goto exit;
+    }
+
+  if (slice && slice[0])
+    {
+      cleanup_free char *slice_name = xstrdup (slice);
+      char *endptr = strchr (slice_name, ':');
+
+      if (endptr)
+        *endptr = '\0';
+
+      sd_err = sd_bus_message_append (m, "(sv)", "Slice", "s", slice_name);
+      if (UNLIKELY (sd_err < 0))
+        {
+          ret = crun_make_error (err, -sd_err, "sd-bus message append");
+          goto exit;
+        }
     }
 
   sd_err = sd_bus_message_append (m, "(sv)", "Description", "s", "libcrun container");
@@ -596,7 +612,7 @@ libcrun_cgroup_enter_internal (char **path, const char *cgroup_path, int systemd
   xasprintf (&scope, "%s-%d.scope", id, getpid ());
   if (systemd || geteuid ())
     {
-      ret = enter_systemd_cgroup_scope (scope, pid, err);
+      ret = enter_systemd_cgroup_scope (scope, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
