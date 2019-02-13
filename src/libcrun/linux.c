@@ -701,7 +701,7 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
     }
 
   get_private_data (container)->remounts = NULL;
-  return 0;
+  return ret;
 }
 
 static int
