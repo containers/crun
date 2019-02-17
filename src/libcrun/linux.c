@@ -339,29 +339,99 @@ do_mount (libcrun_container *container,
 }
 
 static int
-do_mount_cgroup (libcrun_container *container,
-                 const char *source,
-                 const char *target,
-                 const char *fstype,
-                 unsigned long mountflags,
-                 const void *data,
-                 libcrun_error_t *err)
+do_mount_cgroup_v2 (libcrun_container *container,
+                    const char *source,
+                    const char *target,
+                    const char *fstype,
+                    unsigned long mountflags,
+                    const void *data,
+                    libcrun_error_t *err)
+{
+  int ret;
+  bool has_new_cgroup = false;
+  int cgroup_mode;
+
+#ifdef CLONE_NEWCGROUP
+  has_new_cgroup = (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0;
+#endif
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  if (has_new_cgroup)
+    {
+      ret = do_mount (container, "cgroup2", target, "cgroup2", mountflags, NULL, 1, err);
+      if (UNLIKELY (ret < 0))
+        {
+          if (crun_error_get_errno (err) == EPERM)
+            {
+              crun_error_release (err);
+
+              ret = do_mount (container, "/sys/fs/cgroup", target, "", MS_BIND | mountflags, "", 0, err);
+            }
+          return ret;
+        }
+    }
+  else
+    {
+      cleanup_free char *source_path = NULL;
+      cleanup_free char *content = NULL;
+      char *it;
+      size_t n;
+
+      ret = read_all_file ("/proc/self/cgroup", &content, &n, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (n < 4)
+        return crun_make_error (err, -1, "invalid file /proc/self/cgroup");
+      content[n - 1] = '\0';  /* Drop the '\n' */
+
+      it = strstr (content + 3, "name=");
+      if (it != NULL)
+        it += 5;
+      else
+        it = content + 3;
+      xasprintf (&source_path, "/sys/fs/cgroup%s", it);
+
+      ret = mkdir (target, 0755);
+      if (UNLIKELY (ret < 0 && errno != EEXIST))
+        return crun_make_error (err, errno, "mkdir for '%s' failed", target);
+
+      ret = do_mount (container, source_path, target, "", MS_BIND | mountflags, "", 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
+static int
+do_mount_cgroup_v1 (libcrun_container *container,
+                    int cgroup_mode,
+                    const char *source,
+                    const char *target,
+                    const char *fstype,
+                    unsigned long mountflags,
+                    const void *data,
+                    libcrun_error_t *err)
 {
   int ret;
   size_t i;
   bool has_new_cgroup = false;
-  const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
+  const cgroups_subsystem_t *subsystems = NULL;
 
+#ifdef CLONE_NEWCGROUP
+  has_new_cgroup = (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0;
+#endif
+
+  subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
   ret = do_mount (container, source, target, "tmpfs", mountflags, "size=1024k", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-#ifdef CLONE_NEWCGROUP
-  has_new_cgroup = (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0;
-#endif
 
   if (has_new_cgroup)
     {
@@ -377,13 +447,17 @@ do_mount_cgroup (libcrun_container *container,
         {
           cleanup_free char *source_path = NULL;
           cleanup_free char *subsystem_path = NULL;
-          char *subpath, *subsystem;
+          char *subpath, *subsystem, *it;
           subsystem = strchr (from, ':') + 1;
           subpath = strchr (subsystem, ':') + 1;
           *(subpath - 1) = '\0';
 
           if (subsystem[0] == '\0')
             continue;
+
+          it = strstr (subsystem, "name=");
+          if (it)
+            subsystem += 5;
 
           xasprintf (&source_path, "/sys/fs/cgroup/%s/%s", subsystem, subpath);
           xasprintf (&subsystem_path, "%s/%s", target, subsystem);
@@ -439,6 +513,33 @@ do_mount_cgroup (libcrun_container *container,
     return ret;
 
   return 0;
+}
+
+static int
+do_mount_cgroup (libcrun_container *container,
+                 const char *source,
+                 const char *target,
+                 const char *fstype,
+                 unsigned long mountflags,
+                 const void *data,
+                 libcrun_error_t *err)
+{
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  switch (cgroup_mode)
+    {
+    case CGROUP_MODE_UNIFIED:
+      return do_mount_cgroup_v2 (container, source, target, fstype, mountflags, data, err);
+    case CGROUP_MODE_LEGACY:
+    case CGROUP_MODE_HYBRID:
+      return do_mount_cgroup_v1 (container, cgroup_mode, source, target, fstype, mountflags, data, err);
+    }
+
+  return crun_make_error (err, 0, "unknown cgroups mode %s", cgroup_mode);
 }
 
 struct device_s

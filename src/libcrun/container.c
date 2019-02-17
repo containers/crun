@@ -482,15 +482,15 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (has_terminal && entrypoint_args->context->console_socket)
     console_socket = entrypoint_args->console_socket_fd;
 
-  ret = libcrun_container_enter_cgroup_ns (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   ret = libcrun_set_sysctl (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   ret = libcrun_set_mounts (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_container_enter_cgroup_ns (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1141,6 +1141,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   cleanup_close int socket_pair_1 = -1;
   cleanup_close int seccomp_fd = -1;
   cleanup_close int console_socket_fd = -1;
+  int cgroup_mode;
   char created[35];
   struct container_entrypoint_s container_args =
     {
@@ -1206,14 +1207,18 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (container_args.terminal_socketpair[1] >= 0)
     close_and_reset (&socket_pair_1);
 
-  ret = libcrun_cgroup_enter (&cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  ret = libcrun_cgroup_enter (cgroup_mode, &cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
       return ret;
     }
 
-  ret = libcrun_set_cgroup_resources (container, cgroup_path, err);
+  ret = libcrun_set_cgroup_resources (cgroup_mode, container, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);

@@ -46,7 +46,7 @@ dnf install -y python git gcc automake autoconf libcap-devel \
 On Ubuntu:
 ```shell
 apt-get install -y git gcc build-essential pkgconf libtool \
-   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev
+   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev libtool
 ```
 
 Unless you are also building the Python bindings, Python is needed

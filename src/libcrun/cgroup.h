@@ -21,10 +21,18 @@
 # include "container.h"
 # include <unistd.h>
 
-int libcrun_cgroup_enter (char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
+enum
+  {
+   CGROUP_MODE_UNIFIED = 1,
+   CGROUP_MODE_LEGACY,
+   CGROUP_MODE_HYBRID
+  };
+
+int libcrun_get_cgroup_mode (libcrun_error_t *err);
+int libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
 int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
 int libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_error_t *err);
-int libcrun_set_cgroup_resources (libcrun_container *container, char *path, libcrun_error_t *err);
+int libcrun_set_cgroup_resources (int cgroup_mode, libcrun_container *container, char *path, libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err);
 int libcrun_update_cgroup_resources (oci_container_linux_resources *resources, char *path, libcrun_error_t *err);
 int libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err);
