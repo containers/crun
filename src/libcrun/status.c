@@ -297,22 +297,6 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
 {
   int ret;
 
-  if (status->cgroup_path)
-    {
-      cleanup_free char *unified = NULL;
-      cleanup_free char *pids = NULL;
-
-      xasprintf (&unified, "/sys/fs/cgroup/unified%s", status->cgroup_path);
-      ret = crun_path_exists (unified, 1, err);
-      if (ret > 0)
-        return ret;
-
-      xasprintf (&unified, "/sys/fs/cgroup/pids%s", status->cgroup_path);
-      ret = crun_path_exists (pids, 1, err);
-      if (ret > 0)
-        return ret;
-    }
-
   ret = kill (status->pid, 0);
   if (UNLIKELY (ret < 0) && errno != ESRCH)
     return crun_make_error (err, errno, "kill");
