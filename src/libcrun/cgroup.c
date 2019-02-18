@@ -682,6 +682,41 @@ exit:
 #endif
 
 static int
+enable_controllers (const char *path, libcrun_error_t *err)
+{
+  const char *controllers = "+cpu +io +memory +pids";
+  cleanup_free char *tmp_path = NULL;
+  char *it;
+  int ret;
+
+  asprintf (&tmp_path, "%s/", path);
+
+  for (it = strchr (tmp_path + 1, '/'); it; it = strchr (it + 1, '/'))
+    {
+      cleanup_free char *subtree_control = NULL;
+
+      *it = '\0';
+
+      asprintf (&subtree_control, "/sys/fs/cgroup%s/cgroup.subtree_control", tmp_path);
+      ret = write_file (subtree_control, controllers, strlen (controllers), err);
+      if (ret < 0)
+        {
+          int e = crun_error_get_errno (err);
+          if (e == EPERM)
+            {
+              crun_error_release (err);
+              continue;
+            }
+          return ret;
+        }
+
+      *it = '/';
+    }
+  return 0;
+
+}
+
+static int
 libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   int ret;
@@ -709,6 +744,13 @@ libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_
   else
     {
       ret = get_system_path (path, id, systemd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    {
+      ret = enable_controllers (*path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
