@@ -460,13 +460,9 @@ container_entrypoint_init (void *args, const char *notify_socket,
   cleanup_close int console_socketpair = -1;
   oci_container *def = container->container_def;
   oci_container_process_capabilities *capabilities;
-  cleanup_free char *rootfs = NULL;
+  char *rootfs = def->root->path;
   int no_new_privs;
   struct stat st;
-
-  rootfs = realpath (def->root->path, NULL);
-  if (UNLIKELY (rootfs == NULL))
-    return crun_make_error (err, errno, "realpath");
 
   if (entrypoint_args->terminal_socketpair[0] >= 0)
     {
