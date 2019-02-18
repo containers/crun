@@ -1208,11 +1208,14 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  ret = libcrun_set_cgroup_resources (cgroup_mode, container, cgroup_path, err);
-  if (UNLIKELY (ret < 0))
+  if (def->linux && def->linux->resources)
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
-      return ret;
+      ret = libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources, cgroup_path, err);
+      if (UNLIKELY (ret < 0))
+        {
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+          return ret;
+        }
     }
 
   ret = sync_socket_send_sync (sync_socket, true, err);
