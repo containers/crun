@@ -66,7 +66,7 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc };
 int
 crun_command_unpause (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg, signal;
+  int first_arg;
 
   struct libcrun_context_s crun_context = {0, };
 

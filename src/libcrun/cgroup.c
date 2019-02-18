@@ -747,8 +747,6 @@ libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_
 static int
 is_rootless (libcrun_error_t *err)
 {
-  int ret;
-
   if (geteuid ())
     return 1;
 

@@ -436,7 +436,7 @@ do_mount_cgroup_v1 (libcrun_container *container,
   if (has_new_cgroup)
     {
       cleanup_free char *content = NULL;
-      char *from, *to;
+      char *from;
       char *saveptr;
 
       ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
@@ -1941,12 +1941,6 @@ libcrun_join_process (libcrun_container *container, pid_t pid_to_join, libcrun_c
   int sync_socket_fd[2];
   int fds[10] = {-1, };
   int fds_joined[10] = {0, };
-  int namespaces_id[] = {CLONE_NEWIPC, CLONE_NEWNS, CLONE_NEWNET, CLONE_NEWPID, CLONE_NEWUTS,
-#ifdef CLONE_NEWCGROUP
-                         CLONE_NEWCGROUP,
-#endif
-                         CLONE_NEWUSER,
-                         0};
   const char *namespaces[] = {"ipc", "mnt",  "net", "pid", "uts",
 #ifdef CLONE_NEWCGROUP
                               "cgroup",
