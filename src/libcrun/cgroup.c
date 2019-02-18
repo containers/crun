@@ -732,7 +732,23 @@ libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int
 {
   libcrun_error_t *tmp_err = NULL;
   int rootless;
-  int ret = libcrun_cgroup_enter_internal (cgroup_mode, path, cgroup_path, systemd, pid, id, err);
+  int ret;
+
+  if (cgroup_mode == CGROUP_MODE_HYBRID)
+    {
+      /* We don't really support hybrid mode, so check that cgroups2 is not using any controller.  */
+
+      size_t len;
+      cleanup_free char *buffer = NULL;
+
+      ret = read_all_file ("/sys/fs/cgroup/unified/cgroup.controllers", &buffer, &len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (len > 0)
+        return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
+    }
+
+  ret = libcrun_cgroup_enter_internal (cgroup_mode, path, cgroup_path, systemd, pid, id, err);
   if (LIKELY (ret == 0))
     return ret;
 
