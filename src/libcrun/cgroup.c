@@ -439,7 +439,7 @@ int enter_systemd_cgroup_scope (const char *scope, const char *slice, pid_t pid,
                           systemd_job_removed, &userdata);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, -sd_err, "sd-bus message read");
+      ret = crun_make_error (err, -sd_err, "sd-bus add match");
       goto exit;
     }
 
