@@ -308,16 +308,6 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 }
 
 static
-int get_system_path (char **path, const char *suffix, int systemd, libcrun_error_t *err)
-{
-  if (systemd)
-    xasprintf (path, "/libcrun-%s", suffix);
-  else
-    xasprintf (path, "/system.slice/libcrun-%s", suffix);
-  return 0;
-}
-
-static
 int systemd_finalize (int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
@@ -734,18 +724,14 @@ libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_
     }
 #endif
 
-  if (cgroup_path != NULL)
+  if (cgroup_path == NULL)
+      xasprintf (path, "/%s", id);
+  else
     {
       if (cgroup_path[0] == '/')
         *path = xstrdup (cgroup_path);
       else
         xasprintf (path, "/%s", cgroup_path);
-    }
-  else
-    {
-      ret = get_system_path (path, id, systemd, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
     }
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
