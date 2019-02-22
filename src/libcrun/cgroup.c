@@ -424,9 +424,13 @@ int enter_systemd_cgroup_scope (const char *scope, const char *slice, pid_t pid,
   sd_err = sd_bus_default (&bus);
   if (sd_err < 0)
     {
-      crun_make_error (err, -sd_err, "cannot open sd-bus");
-      ret = -1;
-      goto exit;
+      sd_err = sd_bus_default_system (&bus);
+      if (sd_err < 0)
+        {
+          crun_make_error (err, -sd_err, "cannot open sd-bus");
+          ret = -1;
+          goto exit;
+        }
     }
 
   sd_err = sd_bus_add_match (bus,
