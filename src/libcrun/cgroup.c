@@ -622,10 +622,21 @@ libcrun_cgroup_enter_internal (char **path, const char *cgroup_path, int systemd
 
   if (cgroup_path != NULL)
     {
+      char *it;
+
       if (cgroup_path[0] == '/')
         *path = xstrdup (cgroup_path);
       else
         xasprintf (path, "/%s", cgroup_path);
+
+      it = strchr (*path, ':');
+      if (it)
+        {
+          *it = '/';
+          it = strchr (it + 1, ':');
+          if (it)
+          *it = '-';
+        }
     }
   else
     {
