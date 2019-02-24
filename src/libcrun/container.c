@@ -212,12 +212,6 @@ static char spec_file[] = "\
 	],\n\
 	\"linux\": {\n\
 		\"resources\": {\n\
-			\"devices\": [\n\
-				{\n\
-					\"allow\": false,\n\
-					\"access\": \"rwm\"\n\
-				}\n\
-			]\n\
 		},\n\
 		\"namespaces\": [\n\
 			{\n\
