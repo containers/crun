@@ -172,6 +172,36 @@ initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 }
 
 static int
+initialize_memory_subsystem (const char *path, libcrun_error_t *err)
+{
+  const char *const files[] = {"memory.limit_in_bytes", "memory.kmem.limit_in_bytes", "memory.memsw.limit_in_bytes", NULL};
+  const char *const max = "9223372036854771712";
+  cleanup_close int dirfd = -1;
+  int i;
+
+  dirfd = open (path, O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open '%s'", path);
+
+  for (i = 0; files[i]; i++)
+    {
+      int ret;
+
+      ret = write_file_at (dirfd, files[i], max, strlen (max), err);
+      if (UNLIKELY (ret < 0))
+        {
+          int e = crun_error_get_errno (err);
+          if (e != ENOENT)
+            return ret;
+
+          crun_error_release (err);
+        }
+    }
+
+  return 0;
+}
+
+static int
 enter_cgroup_subsystem (int cgroup_mode, pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
@@ -197,6 +227,12 @@ enter_cgroup_subsystem (int cgroup_mode, pid_t pid, const char *subsystem, const
       if (strcmp (subsystem, "cpuset") == 0)
         {
           ret = initialize_cpuset_subsystem (cgroup_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      if (strcmp (subsystem, "memory") == 0)
+        {
+          ret = initialize_memory_subsystem (cgroup_path, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
