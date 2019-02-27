@@ -59,9 +59,11 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
     con->errfile = stderr;
   else
     {
-      con->errfile = fopen (glob->log, "w");
+      con->errfile = fopen (glob->log, "a+");
       if (con->errfile == NULL)
         libcrun_fail_with_error (errno, "open log file %s\n", glob->log);
+
+      crun_set_output_handler (log_write_to_stream, con->errfile);
     }
   if (con->bundle == NULL)
     con->bundle = ".";

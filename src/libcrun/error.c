@@ -101,15 +101,16 @@ log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
   struct timeval tv;
   struct tm now;
   char timestamp[64];
-  int tty = isatty (2);
-  const char *color_begin = "";
-  const char *color_end = tty ? "\x1b[0m" : "";
   FILE *stream = arg;
+  int tty = isatty (fileno (stream));
+  const char *color_begin = "";
+  const char *color_end = "";
 
   timestamp[0] = '\0';
   if (tty)
     {
       color_begin = warning ? "\x1b[1;33m" : "\x1b[1;31m";
+      color_end = "\x1b[0m";
 
       gettimeofday (&tv, NULL);
       gmtime_r (&tv.tv_sec, &now);
