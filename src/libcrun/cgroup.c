@@ -209,7 +209,6 @@ static int
 initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 {
   const char *const files[] = {"memory.limit_in_bytes", "memory.kmem.limit_in_bytes", "memory.memsw.limit_in_bytes", NULL};
-  const char *const max = "9223372036854771712";
   cleanup_close int dirfd = -1;
   int i;
 
@@ -221,13 +220,10 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
     {
       int ret;
 
-      ret = write_file_at (dirfd, files[i], max, strlen (max), err);
+      ret = write_file_at (dirfd, files[i], "-1", 2, err);
       if (UNLIKELY (ret < 0))
         {
-          int e = crun_error_get_errno (err);
-          if (e != ENOENT)
-            return ret;
-
+          /* Ignore any error here.  */
           crun_error_release (err);
         }
     }
