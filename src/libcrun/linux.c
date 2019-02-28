@@ -622,7 +622,7 @@ static struct symlink_s symlinks[] =
     {"/proc/self/fd/1", "stdout"},
     {"/proc/self/fd/2", "stderr"},
     {"/proc/kcore", "core"},
-    {"/dev/pts/ptmx", "ptmx"},
+    {"pts/ptmx", "ptmx"},
     {NULL, NULL}
   };
 
