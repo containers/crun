@@ -327,7 +327,7 @@ sync_socket_wait_sync (int fd, bool flush, libcrun_error_t *err)
         {
           if (flush)
             return 0;
-          return crun_make_error (err, errno, "sync socket closed");
+          return crun_make_error (err, 0, "sync socket closed");
         }
 
       if (!flush && msg.type == SYNC_SOCKET_SYNC_MESSAGE)
