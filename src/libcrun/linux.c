@@ -1693,6 +1693,7 @@ libcrun_run_linux_container (libcrun_container *container,
   bool restore_pid_namespace = false;
   cleanup_close int sync_socket_host = -1;
   cleanup_close int sync_socket_container = -1;
+  cleanup_close int cwd_fd = -1;
   int sync_socket[2];
 
   for (i = 0; i < def->linux->namespaces_len; i++)
@@ -1798,6 +1799,14 @@ libcrun_run_linux_container (libcrun_container *container,
     }
   sync_socket_host = -1;
 
+  cwd_fd = open (".", O_DIRECTORY);
+  if (UNLIKELY (cwd_fd < 0))
+    {
+      crun_make_error (err, errno, "open current directory");
+      goto out;
+    }
+
+
   /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
   if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
     {
@@ -1850,6 +1859,10 @@ libcrun_run_linux_container (libcrun_container *container,
           goto out;
         }
     }
+
+  ret = fchdir (cwd_fd);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fchdir(.)");
 
   if (flags & CLONE_NEWUSER)
     {
