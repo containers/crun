@@ -454,9 +454,16 @@ container_entrypoint_init (void *args, const char *notify_socket,
   cleanup_close int console_socketpair = -1;
   oci_container *def = container->container_def;
   oci_container_process_capabilities *capabilities;
-  char *rootfs = def->root->path;
+  cleanup_free char *rootfs = NULL;
   int no_new_privs;
   struct stat st;
+
+  rootfs = realpath (def->root->path, NULL);
+  if (UNLIKELY (rootfs == NULL))
+    {
+      /* If realpath failed for any reason, try the relative directory.  */
+      rootfs = xstrdup (def->root->path);
+    }
 
   if (entrypoint_args->terminal_socketpair[0] >= 0)
     {
