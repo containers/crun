@@ -562,10 +562,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
         return ret;
     }
 
-  ret = libcrun_set_rlimits (def->process->rlimits, def->process->rlimits_len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   if (def->process->user && def->process->user->additional_gids)
     {
       gid_t *additional_gids = def->process->user->additional_gids;
@@ -1772,10 +1768,6 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
           if (UNLIKELY (ret < 0))
             libcrun_fail_with_error (errno, "%s", "setgroups %d groups", process->user->additional_gids_len);
         }
-
-      ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
       if (process->capabilities == NULL && container->container_def->process)
         capabilities = container->container_def->process->capabilities;

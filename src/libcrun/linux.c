@@ -1751,6 +1751,11 @@ libcrun_run_linux_container (libcrun_container *container,
                         &container->container_uid,
                         &container->container_gid);
 
+  /* This must be done before we enter a user namespace.  */
+  ret = libcrun_set_rlimits (def->process->rlimits, def->process->rlimits_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
@@ -1806,8 +1811,8 @@ libcrun_run_linux_container (libcrun_container *container,
       goto out;
     }
 
-
   /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
+
   if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
     {
       gid_t *additional_gids = NULL;
