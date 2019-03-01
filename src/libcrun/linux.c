@@ -728,7 +728,7 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
       if (ret == 0)
         continue;
 
-      ret = do_mount (container, path, path, "", MS_BIND | MS_UNBINDABLE | MS_PRIVATE | MS_RDONLY | MS_REC, "", 0, err);
+      ret = do_mount (container, path, path, "", MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, "", 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
