@@ -897,7 +897,7 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
 {
   int ret;
   size_t i;
-  size_t path_len;
+  ssize_t path_len;
   int mode;
   const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
@@ -923,9 +923,8 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   while (1)
     {
       for (; path_len > 1 && path[path_len] != '/'; path_len--);
-      if (path_len <= 1)
-        break;
-      path[path_len] = '\0';
+      if (path_len > 1)
+       path[path_len] = '\0';
 
       if (mode == CGROUP_MODE_UNIFIED)
         {
@@ -950,6 +949,8 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
                 break;
             }
         }
+      if (path_len <= 1)
+       break;
     }
 
   return 0;
