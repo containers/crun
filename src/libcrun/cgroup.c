@@ -864,15 +864,9 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
         return ret;
       break;
 
+    case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
       xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/pids/%s/cgroup.procs", path);
-      ret = read_all_file (cgroup_path_procs, &buffer, &len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      break;
-
-    case CGROUP_MODE_HYBRID:
-      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/unified/%s/cgroup.procs", path);
       ret = read_all_file (cgroup_path_procs, &buffer, &len, err);
       if (UNLIKELY (ret < 0))
         return ret;
