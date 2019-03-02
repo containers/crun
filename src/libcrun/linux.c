@@ -140,7 +140,7 @@ get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
   *uid = 0;
   *gid = 0;
 
-  if (def->process->user)
+  if (def->process && def->process->user)
     {
       if (def->process->user->uid)
         *uid = def->process->user->uid;
@@ -1427,7 +1427,12 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
 int
 libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *err)
 {
-  char *label = container->container_def->process->selinux_label;
+  char *label;
+
+  if (container->container_def->process == NULL)
+    return 0;
+
+  label = container->container_def->process->selinux_label;
   if (label == NULL)
     return 0;
   return set_selinux_exec_label (label, err);
@@ -1560,7 +1565,7 @@ libcrun_set_oom (libcrun_container *container, libcrun_error_t *err)
   cleanup_close int fd = -1;
   int ret;
   char oom_buffer[16];
-  if (def->process->oom_score_adj == 0)
+  if (def->process == NULL || def->process->oom_score_adj == 0)
     return 0;
   sprintf (oom_buffer, "%i", def->process->oom_score_adj);
   fd = open ("/proc/self/oom_score_adj", O_WRONLY);
@@ -1633,7 +1638,7 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   cleanup_close int fd = -1;
   cleanup_free char *slave = NULL;
   oci_container *def = container->container_def;
-  if (!def->process->terminal)
+  if (def->process == NULL || !def->process->terminal)
     return 0;
 
   fd = open_terminal (&slave, err);
@@ -1752,9 +1757,12 @@ libcrun_run_linux_container (libcrun_container *container,
                         &container->container_gid);
 
   /* This must be done before we enter a user namespace.  */
-  ret = libcrun_set_rlimits (def->process->rlimits, def->process->rlimits_len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (def->process)
+    {
+      ret = libcrun_set_rlimits (def->process->rlimits, def->process->rlimits_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   pid = syscall_clone (flags | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
@@ -1819,7 +1827,7 @@ libcrun_run_linux_container (libcrun_container *container,
       size_t additional_gids_len = 0;
       int can_do_setgroups;
 
-      if (def->process->user)
+      if (def->process && def->process->user)
         {
           additional_gids = def->process->user->additional_gids;
           additional_gids_len = def->process->user->additional_gids_len;

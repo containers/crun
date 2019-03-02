@@ -475,7 +475,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  has_terminal = container->container_def->process->terminal;
+  has_terminal = container->container_def->process && container->container_def->process->terminal;
   if (has_terminal && entrypoint_args->context->console_socket)
     console_socket = entrypoint_args->console_socket_fd;
 
@@ -503,7 +503,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (UNLIKELY (def->process->args[0][0] == '/' && stat (def->process->args[0], &st) < 0))
+  if (def->process && UNLIKELY (def->process->args[0][0] == '/' && stat (def->process->args[0], &st) < 0))
     return crun_make_error (err, errno, "cannot stat %s", def->process->args[0]);
 
   if (has_terminal)
@@ -555,14 +555,14 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (!def->process->no_new_privileges)
+  if (def->process && !def->process->no_new_privileges)
     {
       ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
-  if (def->process->user && def->process->user->additional_gids)
+  if (def->process && def->process->user && def->process->user->additional_gids)
     {
       gid_t *additional_gids = def->process->user->additional_gids;
       size_t additional_gids_len = def->process->user->additional_gids_len;
@@ -577,16 +577,17 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->process->cwd)
+  if (def->process && def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       return crun_make_error (err, errno, "chdir");
 
   if (clearenv ())
     return crun_make_error (err, errno, "clearenv");
 
-  for (i = 0; i < def->process->env_len; i++)
-    if (putenv (def->process->env[i]) < 0)
-      return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
+  if (def->process)
+    for (i = 0; i < def->process->env_len; i++)
+      if (putenv (def->process->env[i]) < 0)
+        return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
 
   if (notify_socket)
     {
@@ -661,12 +662,15 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->errfile, &err);
 
-  if (def->process->no_new_privileges)
+  if (def->process && def->process->no_new_privileges)
     {
       ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  if (! def->process)
+    return crun_make_error (err, errno, "block 'process' not found");
 
   execvp (def->process->args[0], def->process->args);
   if (errno == ENOENT)
@@ -1158,7 +1162,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
         return ret;
     }
 
-  if (def->process->terminal && !detach && context->console_socket == NULL)
+  if (def->process && def->process->terminal && !detach && context->console_socket == NULL)
     {
       container_args.has_terminal_socket_pair = 1;
       ret = create_socket_pair (container_args.terminal_socketpair, err);
@@ -1263,7 +1267,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       return ret;
     }
 
-  if (def->process->terminal && !detach && context->console_socket == NULL)
+  if (def->process && def->process->terminal && !detach && context->console_socket == NULL)
     {
       terminal_fd = receive_fd_from_socket (socket_pair_0, err);
       if (UNLIKELY (terminal_fd < 0))
@@ -1321,8 +1325,6 @@ int check_config_file (oci_container *def, libcrun_error_t *err)
 {
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
-  if (UNLIKELY (def->process == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'process' block specified");
   if (UNLIKELY (def->linux == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
   if (UNLIKELY (def->mounts == NULL))
@@ -1385,7 +1387,7 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->process->terminal && detach && context->console_socket == NULL)
+  if (def->process && def->process->terminal && detach && context->console_socket == NULL)
     return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
 
   if (!detach && (options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
@@ -1476,7 +1478,7 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->process->terminal && context->console_socket == NULL)
+  if (def->process && def->process->terminal && context->console_socket == NULL)
     return crun_make_error (err, 0, "use --console-socket with create when a terminal is used");
 
   exec_fifo_fd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
@@ -1735,9 +1737,12 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       const char *cwd;
       oci_container_process_capabilities *capabilities;
 
-      cwd = process->cwd ? process->cwd : "/";
-      if (chdir (cwd) < 0)
-        libcrun_fail_with_error (errno, "chdir");
+      if (process)
+        {
+          cwd = process->cwd ? process->cwd : "/";
+          if (chdir (cwd) < 0)
+            libcrun_fail_with_error (errno, "chdir");
+        }
 
       ret = unblock_signals (err);
       if (UNLIKELY (ret < 0))
@@ -1747,20 +1752,20 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
         if (putenv (process->env[i]) < 0)
           libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
 
-      if (process->selinux_label)
+      if (process && process->selinux_label)
         {
           if (UNLIKELY (set_selinux_exec_label (process->selinux_label, err) < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
-      if (!process->no_new_privileges)
+      if (process && !process->no_new_privileges)
         {
           ret = libcrun_apply_seccomp (seccomp_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      if (process->user && process->user->additional_gids_len)
+      if (process && process->user && process->user->additional_gids_len)
         {
           gid_t *additional_gids = process->user->additional_gids;
           size_t additional_gids_len = process->user->additional_gids_len;
@@ -1769,19 +1774,23 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
             libcrun_fail_with_error (errno, "%s", "setgroups %d groups", process->user->additional_gids_len);
         }
 
-      if (process->capabilities == NULL && container->container_def->process)
-        capabilities = container->container_def->process->capabilities;
-      else
+      if (process && process->capabilities)
         capabilities = process->capabilities;
-      ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+      else if (container->container_def->process)
+        capabilities = container->container_def->process->capabilities;
+
+      if (capabilities)
+        {
+          ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
 
       ret = close_fds_ge_than (context->preserve_fds + 3, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      if (process->no_new_privileges)
+      if (process && process->no_new_privileges)
         {
           ret = libcrun_apply_seccomp (seccomp_fd, err);
           if (UNLIKELY (ret < 0))
