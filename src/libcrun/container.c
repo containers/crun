@@ -503,9 +503,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->process && UNLIKELY (def->process->args[0][0] == '/' && stat (def->process->args[0], &st) < 0))
-    return crun_make_error (err, errno, "cannot stat %s", def->process->args[0]);
-
   if (has_terminal)
     {
       ret = setsid ();
