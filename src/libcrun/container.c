@@ -690,7 +690,7 @@ struct hook_s
 
 static int
 do_hooks (pid_t pid, const char *id, bool keep_going, const char *rootfs,
-          struct hook_s **hooks, size_t hooks_len, libcrun_error_t *err)
+          const char *status, struct hook_s **hooks, size_t hooks_len, libcrun_error_t *err)
 {
   size_t i, stdin_len;
   int ret;
@@ -699,7 +699,7 @@ do_hooks (pid_t pid, const char *id, bool keep_going, const char *rootfs,
   if (cwd == NULL)
     OOM ();
 
-  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\"}", id, pid, rootfs, cwd);
+  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", \"status\":\"%s\"}", id, pid, rootfs, cwd, status);
 
   for (i = 0; i < hooks_len; i++)
     {
@@ -736,7 +736,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
 
   if (def->hooks && def->hooks->poststop_len)
     {
-      ret = do_hooks (0, id, true, def->root->path,
+      ret = do_hooks (0, id, true, def->root->path, "stopped",
                       (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
@@ -1240,7 +1240,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
      prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
-      ret = do_hooks (pid, context->id, false, def->root->path,
+      ret = do_hooks (pid, context->id, false, def->root->path, "created",
                       (struct hook_s **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret != 0))
@@ -1300,7 +1300,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   if (def->hooks && def->hooks->poststart_len)
     {
-      ret = do_hooks (pid, context->id, true, def->root->path,
+      ret = do_hooks (pid, context->id, true, def->root->path, "running",
                       (struct hook_s **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
