@@ -749,6 +749,7 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
 int
 run_process_with_stdin_timeout_envp (char *path,
                                      char **args,
+                                     const char *cwd,
                                      int timeout,
                                      char **envp,
                                      char *stdin,
@@ -832,6 +833,9 @@ run_process_with_stdin_timeout_envp (char *path,
       close (pipe_r);
       if (args == NULL)
         args = tmp_args;
+
+      if (cwd)
+        chdir (cwd);
 
       execvpe (path, args, envp);
       _exit (1);

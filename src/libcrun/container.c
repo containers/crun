@@ -48,6 +48,8 @@
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
+#define YAJL_STR(x) ((const unsigned char *) (x))
+
 enum
   {
     SYNC_SOCKET_SYNC_MESSAGE,
@@ -689,25 +691,63 @@ struct hook_s
 };
 
 static int
-do_hooks (pid_t pid, const char *id, bool keep_going, const char *rootfs,
-          const char *status, struct hook_s **hooks, size_t hooks_len, libcrun_error_t *err)
+do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
+          const char *cwd, const char *status, struct hook_s **hooks, size_t hooks_len,
+          libcrun_error_t *err)
 {
   size_t i, stdin_len;
   int ret;
   cleanup_free char *stdin = NULL;
-  cleanup_free char *cwd = get_current_dir_name ();
-  if (cwd == NULL)
-    OOM ();
+  const unsigned char *annotations = "{}";
+  cleanup_free char *cwd_allocated = NULL;
+  yajl_gen gen = NULL;
 
-  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", \"status\":\"%s\"}", id, pid, rootfs, cwd, status);
+  if (cwd == NULL)
+    {
+      cwd = cwd_allocated = get_current_dir_name ();
+      if (cwd == NULL)
+        OOM ();
+    }
+
+  if (def && def->annotations && def->annotations->len)
+    {
+      unsigned char *buf = NULL;
+      size_t len;
+
+      gen = yajl_gen_alloc (NULL);
+      if (gen == NULL)
+        return crun_make_error (err, 0, "yajl_gen_alloc failed");
+
+      yajl_gen_map_open (gen);
+      for (i = 0; i < def->annotations->len; i++)
+        {
+          const char *key = def->annotations->keys[i];
+          const char *val = def->annotations->values[i];
+
+          yajl_gen_string (gen, YAJL_STR (key), strlen (key));
+          yajl_gen_string (gen, YAJL_STR (val), strlen (val));
+        }
+      yajl_gen_map_close (gen);
+
+      yajl_gen_get_buf (gen, &annotations, &len);
+    }
+
+  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", \"status\":\"%s\", \"annotations\":%s}", id, pid, rootfs, cwd, status, annotations);
 
   for (i = 0; i < hooks_len; i++)
     {
-      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
+      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
       if (!keep_going && UNLIKELY (ret != 0))
-        return ret;
+          goto exit;
     }
-  return 0;
+
+  ret = 0;
+
+ exit:
+  if (gen)
+    yajl_gen_free (gen);
+
+  return ret;
 }
 
 static int
@@ -736,8 +776,8 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
 
   if (def->hooks && def->hooks->poststop_len)
     {
-      ret = do_hooks (0, id, true, def->root->path, "stopped",
-                      (struct hook_s **) def->hooks->poststop,
+      ret = do_hooks (def, 0, id, true, def->root->path, status->bundle,
+                      "stopped", (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->errfile, &err);
@@ -1240,7 +1280,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
      prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
-      ret = do_hooks (pid, context->id, false, def->root->path, "created",
+      ret = do_hooks (def, pid, context->id, false, def->root->path, NULL, "created",
                       (struct hook_s **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret != 0))
@@ -1300,7 +1340,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
 
   if (def->hooks && def->hooks->poststart_len)
     {
-      ret = do_hooks (pid, context->id, true, def->root->path, "running",
+      ret = do_hooks (def, pid, context->id, true, def->root->path, NULL, "running",
                       (struct hook_s **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
@@ -1600,7 +1640,6 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE
   yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
 
   yajl_gen_map_open (gen);
-#define YAJL_STR(x) ((const unsigned char *) (x))
   yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
   yajl_gen_string (gen, YAJL_STR ("1.0.0"), strlen ("1.0.0"));
 
