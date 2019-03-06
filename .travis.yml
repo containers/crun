@@ -1,3 +1,7 @@
+env:
+  - TEST=make
+  - TEST=podman
+  - TEST=oci-validation
 services:
   - docker
 language: c
@@ -18,13 +22,12 @@ addons:
       - libseccomp-dev
 before_install:
   - sudo apt-get remove apparmor
-  - docker build -t crun-podman tests/podman
+  - git submodule update --init --recursive
+  - if test $TEST = podman; then docker build -t crun-podman tests/podman; fi
+  - if test $TEST = oci-validation; then docker build -t crun-oci-validation tests/oci-validation; fi
   - git clone --depth=1 git://github.com/lloyd/yajl
   - (cd yajl && ./configure -p /usr && make && sudo make install)
 script:
-  - git submodule update --init --recursive
-  - NOCONFIGURE=1 ./autogen.sh
-  - ./configure
-  - make -j $(nproc)
-  - make syntax-check
-  - sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman
+  - if test $TEST = make; then NOCONFIGURE=1 ./autogen.sh && ./configure && make -j $(nproc) && make syntax-check; fi
+  - if test $TEST = podman; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman; fi
+  - if test $TEST = oci-validation; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi

@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -e
+set -x
+
+if test "$(id -u)" != 0; then
+	echo "run as root"
+	exit 1
+fi
+
+(cd /crun; git clean -fdx; ./autogen.sh && ./configure && make -j $(nproc))
+
+# Install and run runtime-tools' validation tests
+go get -d -u github.com/opencontainers/runtime-tools || true
+
+export TMPDIR=/var/tmp
+
+cd $GOPATH/src/github.com/opencontainers/runtime-tools
+make -j $(nproc)
+
+# Skip:
+# cgroup tests as they require special configurations on the host
+# readonly_paths, masked_paths and seccomp timeouts or don't work on Travis
+# kill, hostname, process and pidfile are flaky.
+export VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | egrep -v "(cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname)" | tr '\n' ' ')
+
+export RUNTIME="/crun/crun"
+
+make localvalidation
