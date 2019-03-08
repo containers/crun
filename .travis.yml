@@ -28,6 +28,6 @@ before_install:
   - git clone --depth=1 git://github.com/lloyd/yajl
   - (cd yajl && ./configure -p /usr && make && sudo make install)
 script:
-  - if test $TEST = make; then NOCONFIGURE=1 ./autogen.sh && ./configure && make -j $(nproc) && make syntax-check; fi
+  - if test $TEST = make; then NOCONFIGURE=1 ./autogen.sh && ./configure CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi
   - if test $TEST = podman; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman; fi
   - if test $TEST = oci-validation; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi
