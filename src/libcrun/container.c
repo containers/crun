@@ -458,7 +458,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   oci_container_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
-  struct stat st;
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
@@ -698,7 +697,7 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
   size_t i, stdin_len;
   int ret;
   cleanup_free char *stdin = NULL;
-  const unsigned char *annotations = "{}";
+  const unsigned char *annotations = (const unsigned char *) "{}";
   cleanup_free char *cwd_allocated = NULL;
   yajl_gen gen = NULL;
 
@@ -711,7 +710,6 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
 
   if (def && def->annotations && def->annotations->len)
     {
-      unsigned char *buf = NULL;
       size_t len;
 
       gen = yajl_gen_alloc (NULL);

@@ -605,10 +605,10 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
         return 0;
       if (UNLIKELY (nread < 0))
         return crun_make_error (err, errno, "copy_file_range");
-#endif
-# define BUFFER_SIZE 4096
 
     fallback:
+#endif
+# define BUFFER_SIZE 4096
 
       buffer = xmalloc (BUFFER_SIZE);
       nread = TEMP_FAILURE_RETRY (read (src, buffer, BUFFER_SIZE));

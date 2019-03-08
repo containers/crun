@@ -959,6 +959,7 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
   return 0;
 }
 
+#ifdef HAVE_SYSTEMD
 static int
 do_notify_socket (libcrun_container *container, int *notify_socket_out, const char *rootfs, libcrun_error_t *err)
 {
@@ -991,6 +992,7 @@ do_notify_socket (libcrun_container *container, int *notify_socket_out, const ch
   notify_fd = -1;
   return 0;
 }
+#endif
 
 static int
 do_finalize_notify_socket (libcrun_container *container, libcrun_error_t *err)

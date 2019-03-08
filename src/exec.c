@@ -229,7 +229,6 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->user = make_oci_process_user (exec_options.user);
       if (exec_options.cap_size > 0)
         {
-          size_t i;
           oci_container_process_capabilities *capabilities = xmalloc (sizeof (oci_container_process_capabilities));
 
           capabilities->effective = exec_options.cap;

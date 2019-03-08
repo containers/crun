@@ -373,6 +373,7 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
   return enter_cgroup (cgroup_mode, pid, path, 0, err);
 }
 
+#ifdef HAVE_SYSTEMD
 static
 int systemd_finalize (int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
 {
@@ -449,8 +450,6 @@ int systemd_finalize (int cgroup_mode, char **path, pid_t pid, const char *suffi
 
   return 0;
 }
-
-#ifdef HAVE_SYSTEMD
 
 struct systemd_job_removed_s
 {
