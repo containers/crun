@@ -355,7 +355,7 @@ libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err)
       ret = symlinkat (cgroup_symlinks[i].target, dirfd, cgroup_symlinks[i].name);
       if (UNLIKELY (ret < 0))
         {
-          if (errno == ENOENT)
+          if (errno == ENOENT || errno == EEXIST)
             continue;
           return crun_make_error (err, errno, "symlinkat %s", cgroup_symlinks[i].name);
         }
