@@ -417,13 +417,10 @@ do_mount_cgroup_v1 (libcrun_container *container,
                     libcrun_error_t *err)
 {
   int ret;
-  size_t i;
-  bool has_new_cgroup = false;
   const cgroups_subsystem_t *subsystems = NULL;
-
-#ifdef CLONE_NEWCGROUP
-  has_new_cgroup = (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0;
-#endif
+  cleanup_free char *content = NULL;
+  char *from;
+  char *saveptr;
 
   subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
@@ -433,78 +430,43 @@ do_mount_cgroup_v1 (libcrun_container *container,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (has_new_cgroup)
-    {
-      cleanup_free char *content = NULL;
-      char *from;
-      char *saveptr;
+  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
-      ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
+    {
+      cleanup_free char *source_path = NULL;
+      cleanup_free char *subsystem_path = NULL;
+      char *subpath, *subsystem, *it;
+      subsystem = strchr (from, ':') + 1;
+      subpath = strchr (subsystem, ':') + 1;
+      *(subpath - 1) = '\0';
+
+      if (subsystem[0] == '\0')
+        continue;
+
+      it = strstr (subsystem, "name=");
+      if (it)
+        subsystem += 5;
+
+      xasprintf (&source_path, "/sys/fs/cgroup/%s/%s", subsystem, subpath);
+      xasprintf (&subsystem_path, "%s/%s", target, subsystem);
+
+      ret = mkdir (subsystem_path, 0755);
       if (UNLIKELY (ret < 0))
-        return ret;
+        return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
 
-      for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
+      ret = do_mount (container, source_path, subsystem_path, "", MS_BIND | mountflags, "", 0, err);
+      if (UNLIKELY (ret < 0))
         {
-          cleanup_free char *source_path = NULL;
-          cleanup_free char *subsystem_path = NULL;
-          char *subpath, *subsystem, *it;
-          subsystem = strchr (from, ':') + 1;
-          subpath = strchr (subsystem, ':') + 1;
-          *(subpath - 1) = '\0';
-
-          if (subsystem[0] == '\0')
-            continue;
-
-          it = strstr (subsystem, "name=");
-          if (it)
-            subsystem += 5;
-
-          xasprintf (&source_path, "/sys/fs/cgroup/%s/%s", subsystem, subpath);
-          xasprintf (&subsystem_path, "%s/%s", target, subsystem);
-
-          ret = mkdir (subsystem_path, 0755);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
-
-          ret = do_mount (container, source_path, subsystem_path, "", MS_BIND | mountflags, "", 0, err);
-          if (UNLIKELY (ret < 0))
+          if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
             {
-              if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
-                {
-                  /* We are trying to mount a subsystem that is not present.  */
-                  crun_error_release (err);
-                  continue;
-                }
-              return ret;
+              /* We are trying to mount a subsystem that is not present.  */
+              crun_error_release (err);
+              continue;
             }
-        }
-    }
-  else
-    {
-      for (i = 0; subsystems[i]; i++)
-        {
-          cleanup_free char *subsystem_path = NULL;
-          xasprintf (&subsystem_path, "%s/%s", target, subsystems[i]);
-
-          ret = mkdir (subsystem_path, 0755);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
-
-          if (strcmp (subsystems[i], "unified") == 0)
-            ret = do_mount (container, source, subsystem_path, "cgroup2", mountflags, NULL, 1, err);
-          else
-            ret = do_mount (container, source, subsystem_path, "cgroup", mountflags, subsystems[i], 1, err);
-
-          if (UNLIKELY (ret < 0))
-            {
-              if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
-                {
-                  /* We are trying to mount a subsystem that is not present.  */
-                  crun_error_release (err);
-                  continue;
-                }
-              return ret;
-            }
+          return ret;
         }
     }
 
