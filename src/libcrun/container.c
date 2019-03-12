@@ -66,7 +66,6 @@ struct container_entrypoint_s
   int sync_socket;
   int seccomp_fd;
   int console_socket_fd;
-  FILE *orig_stderr;
 };
 
 struct sync_socket_message_s
@@ -450,7 +449,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   int ret;
   size_t i;
   int has_terminal;
-  int old_stderr = -1;
   cleanup_close int console_socket = -1;
   cleanup_close int terminal_fd = -1;
   cleanup_close int console_socketpair = -1;
@@ -510,19 +508,11 @@ container_entrypoint_init (void *args, const char *notify_socket,
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setsid");
 
-      old_stderr = dup (2);
-      if (old_stderr < 0)
-        return crun_make_error (err, errno, "dup stderr");
-
       fflush (stderr);
 
       terminal_fd = libcrun_set_terminal (container, err);
       if (UNLIKELY (terminal_fd < 0))
         return terminal_fd;
-
-      entrypoint_args->orig_stderr = fdopen (old_stderr, "a");
-      if (UNLIKELY (entrypoint_args->orig_stderr == NULL))
-        return crun_make_error (err, errno, "re-opening stderr");
 
       if (console_socket >= 0)
         {
@@ -654,7 +644,7 @@ container_entrypoint (void *args, const char *notify_socket,
       while (ret == 0);
     }
 
-  crun_set_output_handler (log_write_to_stream, entrypoint_args->orig_stderr);
+  crun_set_output_handler (log_write_to_stream, stderr);
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
@@ -1173,7 +1163,6 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       .container = container,
       .context = context,
       .terminal_socketpair = {-1, -1},
-      .orig_stderr = stderr,
       .console_socket_fd = -1
     };
 
