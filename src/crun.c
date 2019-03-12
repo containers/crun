@@ -134,6 +134,7 @@ enum
     OPTION_DEBUG = 1000,
     OPTION_SYSTEMD_CGROUP,
     OPTION_LOG,
+    OPTION_LOG_FORMAT,
     OPTION_ROOT,
     OPTION_ROOTLESS
   };
@@ -147,6 +148,7 @@ static struct argp_option options[] =
     {"debug", OPTION_DEBUG, 0, 0, "produce verbose output"},
     {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups"},
     {"log", OPTION_LOG, "FILE", 0},
+    {"log-format", OPTION_LOG_FORMAT, "format", 0},
     {"root", OPTION_ROOT, "DIR",  0},
     {"rootless", OPTION_ROOT, "VALUE",  0},
     { 0 }
@@ -174,6 +176,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_LOG:
       arguments.log = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_LOG_FORMAT:
+      /* Ignored.  */
       break;
 
     case OPTION_ROOT:
