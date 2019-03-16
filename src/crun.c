@@ -47,9 +47,11 @@ struct commands_s
   int (*handler) (struct crun_global_arguments *, int, char **, libcrun_error_t *);
 };
 
-void
-init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob)
+int
+init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err)
 {
+  int ret;
+
   con->id = id;
   con->state_root = glob->root;
   con->systemd_cgroup = glob->option_systemd_cgroup;
@@ -65,8 +67,17 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
 
       crun_set_output_handler (log_write_to_stream, con->errfile);
     }
+  if (glob->log_format)
+    {
+      ret = crun_set_log_format (glob->log_format, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (con->bundle == NULL)
     con->bundle = ".";
+
+  return 0;
 }
 
 enum
@@ -179,7 +190,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_LOG_FORMAT:
-      /* Ignored.  */
+      arguments.log_format = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_ROOT:

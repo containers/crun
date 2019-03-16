@@ -26,6 +26,19 @@
 #include <stdio.h>
 #include "utils.h"
 
+#include <yajl/yajl_tree.h>
+#include <yajl/yajl_gen.h>
+
+#define YAJL_STR(x) ((const unsigned char *) (x))
+
+enum
+  {
+   LOG_FORMAT_TEXT = 0,
+   LOG_FORMAT_JSON,
+  };
+
+static int log_format;
+
 int
 crun_make_error (libcrun_error_t *err, int status, const char *msg, ...)
 {
@@ -95,27 +108,36 @@ crun_error_get_errno (libcrun_error_t *err)
   return (*err)->status;
 }
 
-void
-log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
+typedef char timestamp_t[64];
+
+static void
+get_timestamp (timestamp_t *timestamp, const char *suffix)
 {
   struct timeval tv;
   struct tm now;
-  char timestamp[64];
+
+  gettimeofday (&tv, NULL);
+  gmtime_r (&tv.tv_sec, &now);
+  strftime ((char *) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
+  sprintf (((char *) timestamp) + 19, ".%09ldZ%.8s", tv.tv_usec, suffix);
+}
+
+void
+log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
+{
+  timestamp_t timestamp = {0, };
   FILE *stream = arg;
   int tty = isatty (fileno (stream));
   const char *color_begin = "";
   const char *color_end = "";
 
-  timestamp[0] = '\0';
   if (tty)
     {
       color_begin = warning ? "\x1b[1;33m" : "\x1b[1;31m";
       color_end = "\x1b[0m";
 
-      gettimeofday (&tv, NULL);
-      gmtime_r (&tv.tv_sec, &now);
-      strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
-      sprintf (&timestamp[19], ".%09ldZ: ", tv.tv_usec);
+      if (log_format == LOG_FORMAT_TEXT)
+        get_timestamp (&timestamp, ": ");
     }
 
   if (errno_)
@@ -153,11 +175,58 @@ crun_set_output_handler (crun_output_handler handler, void *arg)
   output_handler_arg = arg;
 }
 
+static char *
+make_json_error (const char *msg, int errno_, bool warning)
+{
+  const char *level = warning ? "warning" : "error";
+  const unsigned char *buf = NULL;
+  yajl_gen gen = NULL;
+  char *ret = NULL;
+  size_t buf_len;
+  timestamp_t timestamp = {0, };
+
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return NULL;
+
+  get_timestamp (&timestamp, "");
+
+  yajl_gen_map_open (gen);
+
+  yajl_gen_string (gen, YAJL_STR ("msg"), strlen ("msg"));
+  if (errno_ == 0)
+    yajl_gen_string (gen, YAJL_STR (msg), strlen (msg));
+  else
+    {
+      cleanup_free char *tmp = NULL;
+
+      xasprintf (&tmp, "%s: %s", msg, strerror (errno_));
+      yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+    }
+
+  yajl_gen_string (gen, YAJL_STR ("level"), strlen ("level"));
+  yajl_gen_string (gen, YAJL_STR (level), strlen (level));
+
+  yajl_gen_string (gen, YAJL_STR ("time"), strlen ("time"));
+  yajl_gen_string (gen, YAJL_STR (timestamp), strlen (timestamp));
+
+  yajl_gen_map_close (gen);
+
+  yajl_gen_get_buf (gen, &buf, &buf_len);
+  if (buf)
+    ret = strdup ((const char *) buf);
+
+  yajl_gen_free (gen);
+
+  return ret;
+}
+
 static void
-write_log (FILE *out, int errno_, bool warning, const char *msg, va_list args_list)
+write_log (int errno_, bool warning, const char *msg, va_list args_list)
 {
   int ret;
   cleanup_free char *output = NULL;
+  cleanup_free char *json = NULL;
 
   if (warning && output_verbosity < LIBCRUN_VERBOSITY_WARNING)
     return;
@@ -166,7 +235,20 @@ write_log (FILE *out, int errno_, bool warning, const char *msg, va_list args_li
   if (UNLIKELY (ret < 0))
     OOM ();
 
-  output_handler (errno_, output, warning, output_handler_arg);
+  switch (log_format)
+    {
+    case LOG_FORMAT_TEXT:
+      output_handler (errno_, output, warning, output_handler_arg);
+      break;
+
+    case LOG_FORMAT_JSON:
+      json = make_json_error (output, errno_, warning);
+      if (json)
+        output_handler (0, json, warning, output_handler_arg);
+      else
+        output_handler (errno_, output, warning, output_handler_arg);
+      break;
+    }
 }
 
 void
@@ -174,8 +256,19 @@ libcrun_warning (const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
-  write_log (stderr, 0, true, msg, args_list);
+  write_log (0, true, msg, args_list);
   va_end (args_list);
+}
+
+void
+libcrun_error (int errno_, bool also_stderr, const char *msg, ...)
+{
+  va_list args_list;
+  va_start (args_list, msg);
+
+  write_log (errno_, false, msg, args_list);
+  va_end (args_list);
+  exit (EXIT_FAILURE);
 }
 
 void __attribute__ ((noreturn))
@@ -183,7 +276,20 @@ libcrun_fail_with_error (int errno_, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
-  write_log (stderr, errno_, false, msg, args_list);
+  write_log (errno_, false, msg, args_list);
   va_end (args_list);
   exit (EXIT_FAILURE);
+}
+
+int
+crun_set_log_format (const char *format, libcrun_error_t *err)
+{
+  if (strcmp (format, "text") == 0)
+    log_format = LOG_FORMAT_TEXT;
+  else if (strcmp (format, "json") == 0)
+    log_format = LOG_FORMAT_JSON;
+  else
+    return crun_make_error (err, 0, "unknown log format type %s", format);
+
+  return 0;
 }

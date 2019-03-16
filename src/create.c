@@ -100,7 +100,7 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc };
 int
 crun_command_create (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg;
+  int first_arg, ret;
   libcrun_container *container;
 
   crun_context.preserve_fds = 0;
@@ -116,7 +116,9 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
 
-  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
   crun_context.bundle = bundle ? bundle : ".";
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);

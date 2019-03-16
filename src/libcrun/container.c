@@ -340,10 +340,7 @@ sync_socket_wait_sync (int fd, bool flush, libcrun_error_t *err)
           continue;
         }
       if (msg.type == SYNC_SOCKET_ERROR_MESSAGE)
-        {
-          return crun_make_error (err, msg.error_value, "%s", msg.message);
-        }
-
+        return crun_make_error (err, msg.error_value, "%s", msg.message);
     }
 }
 
@@ -1545,9 +1542,8 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container *
   ret = libcrun_container_run_internal (container, context, pipefd1, err);
   if (UNLIKELY (ret < 0))
     {
+      libcrun_error ((*err)->status, true, "%s", (*err)->msg);
       crun_set_output_handler (log_write_to_stderr, NULL);
-      log_write_to_stderr ((*err)->status, (*err)->msg, 0, NULL);
-      fflush (stderr);
     }
 
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));

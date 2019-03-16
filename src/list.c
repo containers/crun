@@ -85,7 +85,9 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &list_options);
   crun_assert_n_args (argc - first_arg, 0, 0);
 
-  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
   if (UNLIKELY (ret < 0))

@@ -201,7 +201,10 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
   crun_assert_n_args (argc - first_arg, 2, -1);
 
-  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   crun_context.detach = exec_options.detach;
   crun_context.console_socket = exec_options.console_socket;
   crun_context.pid_file = exec_options.pid_file;

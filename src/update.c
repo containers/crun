@@ -231,14 +231,16 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc };
 int
 crun_command_update (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg;
+  int first_arg, ret;
   char *content = NULL;
   size_t len;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
   crun_assert_n_args (argc - first_arg, 1, 1);
 
-  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (resources == NULL)
     {

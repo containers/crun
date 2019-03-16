@@ -105,7 +105,7 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc };
 int
 crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg;
+  int first_arg, ret;
   cleanup_free libcrun_container *container = NULL;
 
   crun_context.preserve_fds = 0;
@@ -121,7 +121,10 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   if (container == NULL)
     return -1;
 
-  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   crun_context.bundle = bundle ? bundle : ".";
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);

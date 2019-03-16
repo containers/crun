@@ -80,7 +80,9 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);
   crun_assert_n_args (argc - first_arg, 0, 0);
 
-  init_libcrun_context (&crun_context, argv[first_arg], global_args);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = crun_path_exists ("config.json", 0, err);
   if (ret < 0)

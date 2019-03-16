@@ -24,12 +24,13 @@ struct crun_global_arguments
 {
   char *root;
   char *log;
+  char *log_format;
 
   bool command;
   bool debug;
   bool option_systemd_cgroup;
 };
 
-void init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob);
+int init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err);
 void crun_assert_n_args (int n, int min, int max);
 #endif
