@@ -36,6 +36,8 @@ def parse_proc_limits(content):
     return r
 
 def test_rlimits():
+    if os.getuid() != 0:
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/limits']
     rlimits = [
