@@ -45,25 +45,9 @@ def test_start():
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
     return 0
-    
-def test_start_not_exists():
-    conf = base_config()
-    conf['process']['args'] = ['/does-not-exist']
-    add_all_namespaces(conf)
-    cid = None
-    try:
-        proc, cid = run_and_get_output(conf, command='create', use_popen=True)
-        ret = proc.wait()
-        if ret == 0:
-            return -1;
-    finally:
-        if cid is not None:
-            run_crun_command(["delete", "-f", cid])
-    return 0
-    
+
 all_tests = {
     "start" : test_start,
-    "start-not-exists" : test_start_not_exists,
 }
 
 if __name__ == "__main__":
