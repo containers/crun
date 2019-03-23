@@ -109,3 +109,9 @@ EXTRA_DIST += $(TESTS) tests/tests_utils.py
 
 sync:
 	(cd libocispec; git pull https://github.com/giuseppe/libocispec)
+
+coverity:
+	$(MAKE) $(AM_MAKEFLAGS) -C libocispec
+	$(MAKE) $(AM_MAKEFLAGS) crun
+
+.PHONY: coverity sync
