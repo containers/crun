@@ -271,7 +271,7 @@ sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
     return 0;
 
   err_len = strlen (log_msg);
-  if (err_len > sizeof (msg.message))
+  if (err_len >= sizeof (msg.message))
     err_len = sizeof (msg.message) - 1;
 
   memcpy (msg.message, log_msg, err_len);
@@ -348,7 +348,7 @@ static int
 sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
 {
   int ret;
-  struct sync_socket_message_s msg;
+  struct sync_socket_message_s msg = {0, };
   msg.type = SYNC_SOCKET_SYNC_MESSAGE;
 
   if (fd < 0)
@@ -1074,7 +1074,7 @@ flush_fd_to_err (int terminal_fd, FILE *stderr)
         break;
       fwrite (buf, ret, 1, stderr);
     }
-  fcntl (terminal_fd, F_SETFL, flags);
+  (void) fcntl (terminal_fd, F_SETFL, flags);
   fflush (stderr);
   fsync (1);
   fsync (2);
@@ -1190,7 +1190,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (container->container_def->linux && container->container_def->linux->seccomp)
+  if (def->linux && def->linux->seccomp)
     {
       ret = open_seccomp_output (context->id, &seccomp_fd, false, context->state_root, err);
       if (UNLIKELY (ret < 0))
@@ -1222,7 +1222,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  ret = libcrun_cgroup_enter (cgroup_mode, &cgroup_path, def->linux->cgroups_path, context->systemd_cgroup, pid, context->id, err);
+  ret = libcrun_cgroup_enter (cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
@@ -1749,12 +1749,9 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       const char *cwd;
       oci_container_process_capabilities *capabilities;
 
-      if (process)
-        {
-          cwd = process->cwd ? process->cwd : "/";
-          if (chdir (cwd) < 0)
-            libcrun_fail_with_error (errno, "chdir");
-        }
+      cwd = process->cwd ? process->cwd : "/";
+      if (chdir (cwd) < 0)
+        libcrun_fail_with_error (errno, "chdir");
 
       ret = unblock_signals (err);
       if (UNLIKELY (ret < 0))
@@ -1764,20 +1761,20 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
         if (putenv (process->env[i]) < 0)
           libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
 
-      if (process && process->selinux_label)
+      if (process->selinux_label)
         {
           if (UNLIKELY (set_selinux_exec_label (process->selinux_label, err) < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
-      if (process && !process->no_new_privileges)
+      if (!process->no_new_privileges)
         {
           ret = libcrun_apply_seccomp (seccomp_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      if (process && process->user && process->user->additional_gids_len)
+      if (process->user && process->user->additional_gids_len)
         {
           gid_t *additional_gids = process->user->additional_gids;
           size_t additional_gids_len = process->user->additional_gids_len;
@@ -1786,7 +1783,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
             libcrun_fail_with_error (errno, "%s", "setgroups %d groups", process->user->additional_gids_len);
         }
 
-      if (process && process->capabilities)
+      if (process->capabilities)
         capabilities = process->capabilities;
       else if (container->container_def->process)
         capabilities = container->container_def->process->capabilities;
@@ -1802,14 +1799,14 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      if (process && process->no_new_privileges)
+      if (process->no_new_privileges)
         {
           ret = libcrun_apply_seccomp (seccomp_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      ret = execvp (process->args[0], process->args);
+      execvp (process->args[0], process->args);
       if (errno == ENOENT)
         libcrun_fail_with_error (errno, "executable file not found in $PATH");
       libcrun_fail_with_error (errno, "exec");
@@ -1855,7 +1852,7 @@ libcrun_container_exec_process_file (struct libcrun_context_s *context, const ch
   int ret;
   size_t len;
   cleanup_free char *content = NULL;
-  struct parser_context ctx = {0, NULL};
+  struct parser_context ctx = {0, stderr};
   yajl_val tree = NULL;
   parser_error parser_err = NULL;
   oci_container_process *process = NULL;

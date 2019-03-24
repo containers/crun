@@ -369,7 +369,7 @@ container_update (PyObject *self, PyObject *args)
   yajl_val tree = NULL;
   int ret;
   parser_error parser_err = NULL;
-  struct parser_context parser_ctx = { 0, NULL };
+  struct parser_context parser_ctx = { 0, stderr };
   oci_container_process *process = NULL;
 
   if (!PyArg_ParseTuple (args, "Oss", &ctx_obj, &id, &content))

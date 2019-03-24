@@ -204,10 +204,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   d = fdopendir (dfd);
   if (d == NULL)
-    {
-      close (dfd);
-      return crun_make_error (err, errno, "cannot open directory '%s'", dir);
-    }
+    return crun_make_error (err, errno, "cannot open directory '%s'", dir);
 
   /* Now d owns the file descriptor.  */
   dfd = -1;
@@ -330,7 +327,7 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
   cleanup_free char *fifo_path;
-  char buffer[1];
+  char buffer[1] = {0, };
   int ret;
   cleanup_close int fd = -1;
 

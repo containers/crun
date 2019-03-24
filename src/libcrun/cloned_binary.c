@@ -349,6 +349,7 @@ static int seal_execfd(int *fd, int fdtype)
 
 static int try_bindfd(void)
 {
+	mode_t mask;
 	int fd, ret = -1;
 	char template[PATH_MAX] = {0};
 	char *prefix = secure_getenv("_LIBCONTAINER_STATEDIR");
@@ -362,7 +363,9 @@ static int try_bindfd(void)
 	 * We need somewhere to mount it, mounting anything over /proc/self is a
 	 * BAD idea on the host -- even if we do it temporarily.
 	 */
+	mask = umask(0700);
 	fd = mkstemp(template);
+	umask(mask);
 	if (fd < 0)
 		return ret;
 	close(fd);

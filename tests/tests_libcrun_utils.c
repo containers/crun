@@ -42,17 +42,24 @@ test_socket_pair ()
   if (err != NULL)
     return -1;
 
-  write (fds[0], "HELLO", 6);
+  ret = write (fds[0], "HELLO", 6);
+  if (ret != 6)
+    return -1;
+
   ret = read (fds[1], buffer, sizeof (buffer));
   if (ret != 6)
     return -1;
   if (strcmp (buffer, "HELLO") != 0)
     return -1;
 
-  write (fds[1], "WORLD", 6);
+  ret = write (fds[1], "WORLD", 6);
+  if (ret != 6)
+    return -1;
+
   ret = read (fds[0], buffer, sizeof (buffer));
   if (ret != 6)
     return -1;
+
   if (strcmp (buffer, "WORLD") != 0)
     return -1;
 
@@ -121,6 +128,8 @@ test_send_receive_fd ()
       fd1 = -1;
 
       ret = read (fd, buffer, sizeof (buffer));
+      if (ret <= 0)
+        return -1;
       write (fd0, buffer, ret);
 
       _exit (0);

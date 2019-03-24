@@ -129,8 +129,8 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   cleanup_close int dirfd = -1;
   cleanup_close int mems_fd = -1;
   cleanup_close int cpus_fd = -1;
-  size_t parent_path_len, b_len;
-  int ret;
+  size_t parent_path_len;
+  int ret, b_len;
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
@@ -138,7 +138,6 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 
   if (cpus[0] == '\0')
     {
-      size_t b_len;
       cpus_fd = openat (dirfd, "cpuset.cpus", O_RDWR);
       if (UNLIKELY (cpus_fd < 0))
         return crun_make_error (err, errno, "open '%s/%s'", path, "cpuset.cpus");
@@ -146,6 +145,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
       b_len = TEMP_FAILURE_RETRY (read (cpus_fd, cpus, 256));
       if (UNLIKELY (b_len < 0))
         return crun_make_error (err, errno, "read from 'cpuset.cpus'");
+      cpus[b_len] = '\0';
       if (cpus[0] == '\n')
         cpus[0] = '\0';
     }
@@ -159,6 +159,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
       b_len = TEMP_FAILURE_RETRY (read (mems_fd, mems, 256));
       if (UNLIKELY (b_len < 0))
         return crun_make_error (err, errno, "read from 'memset.mems'");
+      mems[b_len] = '\0';
       if (mems[0] == '\n')
         mems[0] = '\0';
     }
@@ -172,9 +173,12 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 
       path[parent_path_len] = '\0';
       ret = initialize_cpuset_subsystem_rec (path, parent_path_len, cpus, mems, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
       path[parent_path_len] = '/';
+      if (UNLIKELY (ret < 0))
+        {
+          /* Ignore errors here and try to write the configuration we want later on.  */
+          crun_error_release (err);
+        }
     }
 
   if (cpus_fd >= 0)
@@ -198,8 +202,8 @@ static int
 initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 {
   cleanup_free char *tmp_path = xstrdup (path);
-  char cpus_buf[256];
-  char mems_buf[256];
+  char cpus_buf[257];
+  char mems_buf[257];
 
   cpus_buf[0] = mems_buf[0] = '\0';
   return initialize_cpuset_subsystem_rec (tmp_path, strlen (tmp_path), cpus_buf, mems_buf, err);
@@ -380,7 +384,7 @@ int systemd_finalize (int cgroup_mode, char **path, pid_t pid, const char *suffi
   cleanup_free char *content = NULL;
   int ret;
   char *from, *to;
-  char *saveptr;
+  char *saveptr = NULL;
   cleanup_free char *cgroup_path = NULL;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
@@ -798,7 +802,7 @@ is_rootless (libcrun_error_t *err)
 int
 libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
-  libcrun_error_t *tmp_err = NULL;
+  libcrun_error_t tmp_err = NULL;
   int rootless;
   int ret;
 
@@ -820,11 +824,11 @@ libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int
   if (LIKELY (ret == 0))
     return ret;
 
-  rootless = is_rootless (tmp_err);
+  rootless = is_rootless (&tmp_err);
   if (UNLIKELY (rootless < 0))
     {
       crun_error_release (err);
-      *err = *tmp_err;
+      *err = tmp_err;
       return ret;
     }
 

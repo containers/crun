@@ -199,32 +199,18 @@ detach_process ()
 int
 create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 {
-  int ret = faccessat (dirfd, file, R_OK, 0);
-  if (UNLIKELY (ret < 0 && errno != ENOENT))
-    return crun_make_error (err, errno, "accessing file '%s'", file);
-
-  if (ret)
-    {
-      cleanup_close int fd_write = openat (dirfd, file, O_CREAT | O_WRONLY, 0700);
-      if (fd_write < 0)
-        return crun_make_error (err, errno, "creating file '%s'", file);
-    }
+  cleanup_close int fd_write = openat (dirfd, file, O_CREAT | O_WRONLY, 0700);
+  if (fd_write < 0)
+    return crun_make_error (err, errno, "creating file '%s'", file);
   return 0;
 }
 
 int
 create_file_if_missing (const char *file, libcrun_error_t *err)
 {
-  int ret = access (file, R_OK);
-  if (UNLIKELY (ret < 0 && errno != ENOENT))
-    return crun_make_error (err, errno, "accessing file '%s'", file);
-
-  if (ret)
-    {
-      cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
-      if (fd_write < 0)
-        return crun_make_error (err, errno, "creating file '%s'", file);
-    }
+  cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
+  if (fd_write < 0)
+    return crun_make_error (err, errno, "creating file '%s'", file);
   return 0;
 }
 
@@ -232,17 +218,20 @@ static int
 ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *err)
 {
   char *it = path + len;
-  int ret;
+  int ret = 0;
   int parent_created;
 
   for (parent_created = 0; parent_created < 2; parent_created++)
     {
       ret = mkdir (path, mode);
       if (ret == 0)
-        return 0;
+        break;
 
       if (errno == EEXIST)
-        return 0;
+        {
+          ret = 0;
+          break;
+        }
 
       if (errno != ENOENT || parent_created)
         return crun_make_error (err, errno, "creating file '%s'", path);
@@ -254,13 +243,16 @@ ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *er
               len--;
             }
           if (it == path)
-            return 0;
+            {
+              ret = 0;
+              break;
+            }
 
           *it = '\0';
           ret = ensure_directory_internal (path, len - 1, mode, err);
           *it = '/';
           if (UNLIKELY (ret < 0))
-            return ret;
+            break;
         }
     }
   return ret;
@@ -416,6 +408,8 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
     return crun_make_error (err, errno, "error creating UNIX socket");
 
   memset (&addr, 0, sizeof (addr));
+  if (strlen (path) >= sizeof (addr.sun_path))
+    return crun_make_error (err, errno, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
@@ -438,6 +432,8 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
     return crun_make_error (err, errno, "error creating UNIX socket");
 
   memset (&addr, 0, sizeof (addr));
+  if (strlen (path) >= sizeof (addr.sun_path))
+    return crun_make_error (err, errno, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
@@ -834,11 +830,11 @@ run_process_with_stdin_timeout_envp (char *path,
       if (args == NULL)
         args = tmp_args;
 
-      if (cwd)
-        chdir (cwd);
+      if (cwd && chdir (cwd) < 0)
+        _exit (EXIT_FAILURE);
 
       execvpe (path, args, envp);
-      _exit (1);
+      _exit (EXIT_FAILURE);
     }
   return -1;
 }

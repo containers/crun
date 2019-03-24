@@ -58,7 +58,11 @@ cat (char *file)
       if (s == 0)
         {
           if (feof (f))
-            return 0;
+            {
+              fclose (f);
+              return 0;
+            }
+          fclose (f);
           error (EXIT_FAILURE, errno, "fread");
         }
       s = fwrite (buf, 1, s, stdout);
@@ -111,9 +115,13 @@ ls (char *path)
       if (de == NULL && errno)
         error (EXIT_FAILURE, errno, "readdir");
       if (de == NULL)
-        return 0;
+        {
+          closedir (dir);
+          return 0;
+        }
       printf ("%s\n", de->d_name);
     }
+  closedir (dir);
   return 0;
 }
 
@@ -207,6 +215,8 @@ int main (int argc, char **argv)
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'forkbomb' requires two arguments");
       n = atoi (argv[2]);
+      if (n < 0)
+        return 0;
       for (i = 0; i < n; i++)
         {
           pid_t pid = fork ();
@@ -230,8 +240,12 @@ int main (int argc, char **argv)
         error (EXIT_FAILURE, errno, "fork");
       if (pid)
         {
-          int status;
-          waitpid (pid, &status, 0);
+          int ret, status;
+          do
+            ret = waitpid (pid, &status, 0);
+          while (ret < 0 && errno == EINTR);
+          if (ret < 0)
+            return ret;
           return status;
         }
       return ls (argv[2]);

@@ -243,11 +243,7 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
     return ret;
 
   if (resources == NULL)
-    {
-      if (values == NULL)
-        libcrun_fail_with_error (0, "please specify a resources or some other options");
-      content = (char *) build_file (&len);
-    }
+    content = (char *) build_file (&len);
   else
     {
       int ret = read_all_file (resources, &content, &len, err);

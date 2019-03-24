@@ -288,7 +288,7 @@ do_mount (libcrun_container *container,
       ret = mount (source, target, fstype, flags, data);
       if (UNLIKELY (ret < 0))
         {
-          if (strcmp (fstype, "sysfs"))
+          if (strcmp (fstype ? fstype : "", "sysfs"))
             return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
           else
             {
@@ -338,6 +338,15 @@ do_mount (libcrun_container *container,
   return ret;
 }
 
+static bool
+has_new_cgroup_namespace (libcrun_container *container)
+{
+#ifdef CLONE_NEWCGROUP
+  return (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) != 0;
+#endif
+  return false;
+}
+
 static int
 do_mount_cgroup_v2 (libcrun_container *container,
                     const char *source,
@@ -348,18 +357,13 @@ do_mount_cgroup_v2 (libcrun_container *container,
                     libcrun_error_t *err)
 {
   int ret;
-  bool has_new_cgroup = false;
   int cgroup_mode;
-
-#ifdef CLONE_NEWCGROUP
-  has_new_cgroup = (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0;
-#endif
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  if (has_new_cgroup)
+  if (! has_new_cgroup_namespace (container))
     {
       ret = do_mount (container, "cgroup2", target, "cgroup2", mountflags, NULL, 1, err);
       if (UNLIKELY (ret < 0))
@@ -420,7 +424,7 @@ do_mount_cgroup_v1 (libcrun_container *container,
   const cgroups_subsystem_t *subsystems = NULL;
   cleanup_free char *content = NULL;
   char *from;
-  char *saveptr;
+  char *saveptr = NULL;
 
   subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
@@ -433,6 +437,9 @@ do_mount_cgroup_v1 (libcrun_container *container,
   ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (UNLIKELY (content == NULL || content[0] == '\0'))
+    return crun_make_error (err, errno, "invalid content from /proc/self/cgroup");
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -1346,7 +1353,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "cannot setuid");
 
-  ret = capset (&hdr, data) < 0;
+  ret = capset (&hdr, data);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "capset");
 
@@ -1799,7 +1806,7 @@ libcrun_run_linux_container (libcrun_container *container,
 
       if (additional_gids_len == 0)
         {
-          ret = can_do_setgroups = can_setgroups (container, err);
+          can_do_setgroups = can_setgroups (container, err);
           if (can_do_setgroups < 0)
             goto out;
         }
@@ -1830,7 +1837,8 @@ libcrun_run_linux_container (libcrun_container *container,
           goto out;
         }
 
-      if (UNLIKELY (setns (fd, value) < 0))
+      ret = setns (fd, value);
+      if (UNLIKELY (ret < 0))
         {
           crun_make_error (err, errno, "setns '%s'", def->linux->namespaces[i]->path);
           goto out;
@@ -1935,8 +1943,7 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
 
   for (str = content; str < content + len; str += strlen (str) + 1)
     if (putenv (str) < 0)
-      return crun_make_error (err, errno, "putenv '%s'", str);
-
+        return crun_make_error (err, errno, "putenv '%s'", str);
   return ret;
 }
 
@@ -2125,7 +2132,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   yajl_val tree = NULL;
   parser_error parser_err = NULL;
   oci_container_linux_resources *resources = NULL;
-  struct parser_context ctx = {0, NULL};
+  struct parser_context ctx = {0, stderr};
   int cgroup_mode;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
