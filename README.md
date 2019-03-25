@@ -1,6 +1,7 @@
 # crun
 
 [![Build Status](https://travis-ci.org/giuseppe/crun.svg?branch=master)](https://travis-ci.org/giuseppe/crun)
+[![Coverity Status](https://scan.coverity.com/projects/17787/badge.svg)](https://scan.coverity.com/projects/giuseppe-crun)
 
 A fast and low-memory footprint OCI Container Runtime fully written in C.
 
@@ -38,14 +39,14 @@ containers that runs `/bin/true`:
 
 On Fedora these dependencies are required for the build:
 ```shell
-dnf install -y python git gcc automake autoconf libcap-devel \
+dnf install -y make python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel libselinux-devel \
     glibc-static python3-libmount libtool
 ```
 
 On Ubuntu:
 ```shell
-apt-get install -y git gcc build-essential pkgconf libtool \
+apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev libtool
 ```
 
