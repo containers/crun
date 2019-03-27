@@ -913,3 +913,10 @@ parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx
 
     return 0;
 }
+
+int
+has_prefix (const char *str, const char *prefix)
+{
+  size_t prefix_len = strlen (prefix);
+  return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
+}

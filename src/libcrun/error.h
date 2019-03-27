@@ -36,6 +36,7 @@
 # include <stdlib.h>
 # include <stdio.h>
 # include <stdbool.h>
+# include <syslog.h>
 
 struct libcrun_error_s
 {
@@ -49,6 +50,10 @@ void oom_handler ();
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
 
 void crun_set_output_handler (crun_output_handler handler, void *arg);
+
+void log_write_to_journald (int errno_, const char *msg, bool warning, void *arg);
+
+void log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg);
 
 void log_write_to_stream (int errno_, const char *msg, bool warning, void *arg);
 
@@ -71,6 +76,9 @@ void libcrun_error (int errno_, bool also_stderr, const char *msg, ...);
 void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
 
 int crun_set_log_format (const char *format, libcrun_error_t *err);
+
+int init_logging (crun_output_handler *output_handler, void **output_handler_arg,
+                  const char *id, const char *log, libcrun_error_t *err);
 
 enum
   {

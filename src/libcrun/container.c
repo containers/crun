@@ -306,7 +306,7 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
 }
 
 static int
-sync_socket_wait_sync (int fd, bool flush, libcrun_error_t *err)
+sync_socket_wait_sync (struct libcrun_context_s *context, int fd, bool flush, libcrun_error_t *err)
 {
   int ret;
   struct sync_socket_message_s msg;
@@ -336,7 +336,8 @@ sync_socket_wait_sync (int fd, bool flush, libcrun_error_t *err)
 
       if (msg.type == SYNC_SOCKET_WARNING_MESSAGE)
         {
-          log_write_to_stderr (msg.error_value, msg.message, 1, NULL);
+          if (context)
+            context->output_handler (msg.error_value, msg.message, 1, context->output_handler_arg);
           continue;
         }
       if (msg.type == SYNC_SOCKET_ERROR_MESSAGE)
@@ -467,7 +468,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
       console_socketpair = entrypoint_args->terminal_socketpair[1];
     }
 
-  ret = sync_socket_wait_sync (sync_socket, false, err);
+  ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -491,7 +492,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = sync_socket_wait_sync (sync_socket, false, err);
+  ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -645,7 +646,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (entrypoint_args->context->errfile, &err);
+    crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
   if (def->process && def->process->no_new_privileges)
     {
@@ -765,7 +766,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
                       "stopped", (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->errfile, &err);
+        crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
   if (container && container->container_def)
     free_oci_container (container->container_def);
@@ -820,12 +821,12 @@ container_delete_internal (struct libcrun_context_s *context, oci_container *def
     {
       ret = libcrun_cgroup_destroy (id, status.cgroup_path, status.systemd_cgroup, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->errfile, &err);
+        crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
 
   ret = run_poststop_hooks (context, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (context->errfile, &err);
+    crun_error_write_warning_and_release (context->output_handler_arg, &err);
 
  delete:
   ret = libcrun_container_delete_status (state_root, id, err);
@@ -1054,7 +1055,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
 }
 
 static void
-flush_fd_to_err (int terminal_fd, FILE *stderr)
+flush_fd_to_err (struct libcrun_context_s *context, int terminal_fd)
 {
   char buf[256];
   int flags;
@@ -1069,10 +1070,11 @@ flush_fd_to_err (int terminal_fd, FILE *stderr)
 
   for (;;)
     {
-      int ret = read (terminal_fd, buf, sizeof (buf));
+      int ret = read (terminal_fd, buf, sizeof (buf) - 1);
       if (ret <= 0)
         break;
-      fwrite (buf, ret, 1, stderr);
+      buf[ret] = '\0';
+      context->output_handler (0, buf, false, context->output_handler_arg);
     }
   (void) fcntl (terminal_fd, F_SETFL, flags);
   fflush (stderr);
@@ -1081,7 +1083,7 @@ flush_fd_to_err (int terminal_fd, FILE *stderr)
 }
 
 static void
-cleanup_watch (struct libcrun_context_s *context, pid_t init_pid, oci_container *def, const char *id, int sync_socket, int terminal_fd, FILE *stderr)
+cleanup_watch (struct libcrun_context_s *context, pid_t init_pid, oci_container *def, const char *id, int sync_socket, int terminal_fd)
 {
   libcrun_error_t err = NULL;
   container_delete_internal (context, def, id, 1, true, &err);
@@ -1090,15 +1092,15 @@ cleanup_watch (struct libcrun_context_s *context, pid_t init_pid, oci_container 
   if (init_pid)
     kill (init_pid, SIGKILL);
 
-  sync_socket_wait_sync (sync_socket, true, &err);
+  sync_socket_wait_sync (context, sync_socket, true, &err);
   if (err)
     {
-      log_write_to_stderr (err->status, err->msg, false, NULL);
+      context->output_handler (err->status, err->msg, false, context->output_handler_arg);
       crun_error_release (&err);
     }
 
   if (terminal_fd >= 0)
-    flush_fd_to_err (terminal_fd, stderr);
+    flush_fd_to_err (context, terminal_fd);
 }
 
 static
@@ -1225,7 +1227,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = libcrun_cgroup_enter (cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
@@ -1234,7 +1236,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       ret = libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources, cgroup_path, err);
       if (UNLIKELY (ret < 0))
         {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
           return ret;
         }
     }
@@ -1242,14 +1244,14 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
-  ret = sync_socket_wait_sync (sync_socket, false, err);
+  ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
@@ -1262,7 +1264,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret != 0))
         {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
           return ret;
         }
     }
@@ -1270,14 +1272,14 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
-  ret = sync_socket_wait_sync (sync_socket, false, err);
+  ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
@@ -1286,7 +1288,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       terminal_fd = receive_fd_from_socket (socket_pair_0, err);
       if (UNLIKELY (terminal_fd < 0))
         {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
           return terminal_fd;
         }
 
@@ -1295,7 +1297,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
       ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
       if (UNLIKELY (ret < 0))
         {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
           return terminal_fd;
         }
     }
@@ -1303,7 +1305,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = close_and_reset (&sync_socket);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
@@ -1311,7 +1313,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   ret = write_container_status (container, context, pid, cgroup_path, created, err);
   if (UNLIKELY (ret < 0))
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
       return ret;
     }
 
@@ -1322,14 +1324,14 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
         {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, context->errfile);
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
           return ret;
         }
     }
 
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, container_ready_fd, err);
   if (!context->detach)
-    cleanup_watch (context, 0, def, context->id, sync_socket, terminal_fd, context->errfile);
+    cleanup_watch (context, 0, def, context->id, sync_socket, terminal_fd);
 
   return ret;
 }
@@ -1834,7 +1836,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
           ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
           if (UNLIKELY (ret < 0))
             {
-              flush_fd_to_err (terminal_fd, context->errfile);
+              flush_fd_to_err (context, terminal_fd);
               return ret;
             }
         }
@@ -1842,7 +1844,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
 
   ret = wait_for_process (pid, context, terminal_fd, -1, -1, err);
 
-  flush_fd_to_err (terminal_fd, context->errfile);
+  flush_fd_to_err (context, terminal_fd);
   return ret;
 }
 

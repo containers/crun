@@ -79,12 +79,6 @@ get_seccomp_action (const char *name, libcrun_error_t *err)
   return 0;
 }
 
-static int
-has_prefix (const char *str, const char *prefix)
-{
-  size_t prefix_len = strlen (prefix);
-  return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
-}
 static void
 make_lowercase (char *str)
 {

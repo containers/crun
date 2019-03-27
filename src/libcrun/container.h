@@ -32,7 +32,9 @@ struct libcrun_context_s
   const char *pid_file;
   char *notify_socket;
   int preserve_fds;
-  FILE *errfile;
+
+  crun_output_handler output_handler;
+  void *output_handler_arg;
 
   int fifo_exec_wait_fd;
 

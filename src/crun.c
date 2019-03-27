@@ -57,16 +57,11 @@ init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun
   con->systemd_cgroup = glob->option_systemd_cgroup;
   con->notify_socket = getenv ("NOTIFY_SOCKET");
   con->fifo_exec_wait_fd = -1;
-  if (glob->log == NULL)
-    con->errfile = stderr;
-  else
-    {
-      con->errfile = fopen (glob->log, "a+");
-      if (con->errfile == NULL)
-        libcrun_fail_with_error (errno, "open log file %s\n", glob->log);
 
-      crun_set_output_handler (log_write_to_stream, con->errfile);
-    }
+  ret = init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (glob->log_format)
     {
       ret = crun_set_log_format (glob->log_format, err);
