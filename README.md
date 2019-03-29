@@ -8,6 +8,10 @@ A fast and low-memory footprint OCI Container Runtime fully written in C.
 crun conforms to the OCI Container Runtime specifications
 (https://github.com/opencontainers/runtime-spec).
 
+## Documentation
+
+The user documentation is available [here](crun.1.md).
+
 ## Why another implementation?
 
 While most of the tools used in the Linux containers ecosystem are
@@ -23,17 +27,15 @@ containers.
 
 ## Performance
 
-crun is slightly faster than runc and has a much lower memory
-footprint.
+crun is faster than runc and has a much lower memory footprint.
 
-On my machine, this is the elapsed time for running sequentially 100
-containers that runs `/bin/true`:
+This is the elapsed time on my machine for running sequentially 100
+containers, the containers run `/bin/true`:
 
 |                                       | crun           | runc    | %      |
 | -------------                         | -------------: | -----:  | -----: |
 | 100 /bin/true (no network namespace)  | 0:05.70        | 0:10.95 | -47.9% |
 | 100 /bin/true (new network namespace) | 0:06.16        | 0:11.17 | -44.8%  |
-
 
 ## Build
 
@@ -41,13 +43,14 @@ On Fedora these dependencies are required for the build:
 ```shell
 dnf install -y make python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel libselinux-devel \
-    glibc-static python3-libmount libtool
+    go-md2man glibc-static python3-libmount libtool
 ```
 
 On Ubuntu:
 ```shell
 apt-get install -y make git gcc build-essential pkgconf libtool \
-   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev libtool
+   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev \
+   go-md2man libtool
 ```
 
 Unless you are also building the Python bindings, Python is needed

@@ -36,6 +36,7 @@ addons:
     - libseccomp-dev
     - libcap-dev
     - wget
+    - go-md2man
 before_install:
 - sudo apt-get remove apparmor
 - git submodule update --init --recursive

@@ -107,6 +107,13 @@ TESTS = tests/test_capabilities.py \
 
 EXTRA_DIST += $(TESTS) tests/tests_utils.py
 
+man1_MANS = crun.1
+
+crun.1:
+	go-md2man -in $(abs_srcdir)/crun.1.md -out crun.1
+
+generate-man: crun.1
+
 sync:
 	(cd libocispec; git pull https://github.com/giuseppe/libocispec)
 

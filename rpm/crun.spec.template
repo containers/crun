@@ -22,9 +22,10 @@ BuildRequires: libselinux-devel
 BuildRequires: glibc-static
 BuildRequires: python3-libmount
 BuildRequires: libtool
+BuildRequires: go-md2man
 
 %description
-crun is an OCI runtime
+crun is a OCI runtime
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -42,3 +43,4 @@ env NOCONFIGURE=1 ./autogen.sh
 %license COPYING
 %{_bindir}/%{name}
 %{_libdir}/libcrun.*
+%{_mandir}/man1/*
