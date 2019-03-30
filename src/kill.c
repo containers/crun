@@ -46,7 +46,6 @@ enum
 struct kill_options_s
 {
   bool regex;
-  bool force;
 };
 
 static struct kill_options_s kill_options;
@@ -54,7 +53,6 @@ static struct kill_options_s kill_options;
 static struct argp_option options[] =
   {
     {"all", 'a', 0, 0, "kill all the processes (IGNORED)" },
-    {"force", 'f', 0, 0, "kill the container even if it is still running" },
     {"regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (kill multiple containers)" },
     { 0 }
   };
@@ -67,10 +65,6 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'a':
-      break;
-
-    case 'f':
-      kill_options.force = true;
       break;
 
     case 'r':

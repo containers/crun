@@ -41,14 +41,12 @@ enum
 
 struct state_options_s
 {
-  bool force;
 };
 
 static struct state_options_s state_options;
 
 static struct argp_option options[] =
   {
-    {"force", 'f', 0, 0, "state the container even if it is still running" },
     { 0 }
   };
 
@@ -59,10 +57,6 @@ parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {
-    case 'f':
-      state_options.force = true;
-      break;
-
     case ARGP_KEY_NO_ARGS:
       libcrun_fail_with_error (0, "please specify a ID for the container");
 
