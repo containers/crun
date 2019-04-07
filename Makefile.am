@@ -59,7 +59,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/sig2str.h \
-	src/libcrun/intprops.h
+	src/libcrun/intprops.h crun.1.md
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
@@ -109,7 +109,7 @@ EXTRA_DIST += $(TESTS) tests/tests_utils.py
 
 man1_MANS = crun.1
 
-crun.1:
+crun.1: $(abs_srcdir)/crun.1.md
 	go-md2man -in $(abs_srcdir)/crun.1.md -out crun.1
 
 generate-man: crun.1
