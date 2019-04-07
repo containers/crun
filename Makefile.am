@@ -69,12 +69,12 @@ noinst_PROGRAMS = tests/init $(UNIT_TESTS)
 tests_init_LDFLAGS = -static-libgcc -all-static
 tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
 
-tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src
+tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
 tests_tests_libcrun_utils_LDADD = $(crun_LDADD)
 tests_tests_libcrun_utils_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src
+tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(crun_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
