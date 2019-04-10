@@ -39,12 +39,14 @@
 void cleanup_filep (FILE **f);
 void cleanup_freep (void *p);
 void cleanup_closep (void *p);
+void cleanup_close_vecp (int **p);
 void cleanup_dirp (DIR **p);
 int close_and_reset (int *fd);
 
 # define cleanup_file __attribute__((cleanup (cleanup_filep)))
 # define cleanup_free __attribute__((cleanup (cleanup_freep)))
 # define cleanup_close __attribute__((cleanup (cleanup_closep)))
+# define cleanup_close_vec __attribute__((cleanup (cleanup_close_vecp)))
 # define cleanup_dir __attribute__((cleanup (cleanup_dirp)))
 
 # define LIKELY(x) __builtin_expect((x),1)

@@ -77,6 +77,16 @@ cleanup_closep (void *p)
 }
 
 void
+cleanup_close_vecp (int **p)
+{
+  int *pp = *p;
+  int i;
+
+  for (i = 0; pp[i] >= 0; i++)
+    close (pp[i]);
+}
+
+void
 cleanup_dirp (DIR **p)
 {
   DIR *dir = *p;
