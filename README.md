@@ -12,6 +12,11 @@ crun conforms to the OCI Container Runtime specifications
 
 The user documentation is available [here](crun.1.md).
 
+## Static build
+
+If you are looking for a static build, take a look at the instructions
+[here](contrib/static-builder-x86_64/README.md).
+
 ## Why another implementation?
 
 While most of the tools used in the Linux containers ecosystem are
