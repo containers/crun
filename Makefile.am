@@ -38,20 +38,18 @@ libcrun_la_SOURCES = src/libcrun/utils.c \
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 libcrun_la_LIBADD = libocispec/libocispec.la
 
-COMMON_LIBS = $(SELINUX_LIBS) $(YAJL_LIBS) -lcap -lseccomp $(SYSTEMD_LIBS)
-
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
 python_crun_la_SOURCES = python/crun_python.c
 python_crun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src -I $(abs_top_builddir)/src $(PYTHON_CFLAGS)
 python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS)
-python_crun_la_LIBADD = libcrun.la $(COMMON_LIBS) $(PYTHON_LIBS)
+python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS)
 endif
 
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c
-crun_LDADD = libcrun.la $(COMMON_LIBS)
+crun_LDADD = libcrun.la $(FOUND_LIBS)
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \
@@ -66,6 +64,7 @@ UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 bin_PROGRAMS = crun
 noinst_PROGRAMS = tests/init $(UNIT_TESTS)
 
+tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
 tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
 
