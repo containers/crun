@@ -198,7 +198,7 @@ libcrun_generate_and_load_seccomp (libcrun_container *container, int outfd, libc
             {
               ret = seccomp_rule_add (ctx, action, syscall, 0);
               if (UNLIKELY (ret < 0))
-                return crun_make_error (err, 0, "seccomp_rule_add");
+                return crun_make_error (err, -ret, "seccomp_rule_add '%s'", seccomp->syscalls[i]->names[j]);
             }
           else
             {
