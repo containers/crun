@@ -537,10 +537,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_oom (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   if (def->process && !def->process->no_new_privileges)
     {
       ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);

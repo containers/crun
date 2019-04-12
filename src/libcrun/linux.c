@@ -1539,9 +1539,9 @@ libcrun_set_oom (libcrun_container *container, libcrun_error_t *err)
   if (def->process == NULL || def->process->oom_score_adj == 0)
     return 0;
   sprintf (oom_buffer, "%i", def->process->oom_score_adj);
-  fd = open ("/proc/self/oom_score_adj", O_WRONLY);
+  fd = open ("/proc/self/oom_score_adj", O_RDWR);
   if (fd < 0)
-    return crun_make_error (err, errno, "read /proc/self/oom_score_adj");
+    return crun_make_error (err, errno, "open /proc/self/oom_score_adj");
   ret = write (fd, oom_buffer, strlen (oom_buffer));
   if (ret < 0)
     return crun_make_error (err, errno, "write to /proc/self/oom_score_adj");
@@ -1774,6 +1774,10 @@ libcrun_run_linux_container (libcrun_container *container,
 
       return pid;
     }
+
+  ret = libcrun_set_oom (container, err);
+  if (UNLIKELY (ret < 0))
+      goto out;
 
   ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
