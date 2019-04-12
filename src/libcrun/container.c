@@ -1737,6 +1737,10 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* This must be done before we enter a user namespace.  */
+  ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   pid = libcrun_join_process (container, status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
