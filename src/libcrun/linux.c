@@ -42,6 +42,7 @@
 #include <sys/socket.h>
 #include <libgen.h>
 #include <sys/wait.h>
+#include <sys/vfs.h>
 
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
@@ -791,7 +792,19 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
       ret = mount ("none", r->target, "", r->flags, r->data);
       if (UNLIKELY (ret < 0))
         {
-          ret = mount ("none", r->target, "", r->flags | MS_NOSUID | MS_NODEV | MS_NOEXEC, r->data);
+          unsigned long flags;
+          struct statfs sfs;
+
+          ret = statfs (r->target, &sfs);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_make_error (err, errno, "statfs '%s'", r->target);
+              goto cleanup;
+            }
+
+          flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
+
+          ret = mount ("none", r->target, "", r->flags | flags, r->data);
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, errno, "remount '%s'", r->target);
