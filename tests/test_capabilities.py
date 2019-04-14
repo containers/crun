@@ -87,9 +87,6 @@ def helper_test_some_caps(uid, captypes, proc_name):
         return -1
     return 0
 
-def test_some_caps_effective():
-    return helper_test_some_caps(0, ["effective"], 'CapEff')
-
 def test_some_caps_bounding():
     return helper_test_some_caps(0, ["bounding"], 'CapBnd')
 
@@ -121,7 +118,6 @@ def test_some_caps_permitted_non_root():
 all_tests = {
     "no-caps" : test_no_caps,
     "new-privs" : test_new_privs,
-    "some-caps-effective" : test_some_caps_effective,
     "some-caps-bounding" : test_some_caps_bounding,
     "some-caps-inheritable" : test_some_caps_inheritable,
     "some-caps-ambient" : test_some_caps_ambient,
