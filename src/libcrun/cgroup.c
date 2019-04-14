@@ -1586,6 +1586,8 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
 
       xasprintf (&path_to_cpu, "/sys/fs/cgroup/cpu%s/", path);
       dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_cpu < 0))
+        return crun_make_error (err, errno, "open %s", path_to_cpu);
       ret = write_cpu_resources (dirfd_cpu, false,
                                  resources->cpu,
                                  err);
@@ -1597,6 +1599,8 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
 
       xasprintf (&path_to_cpuset, "/sys/fs/cgroup/cpuset%s/", path);
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_cpuset < 0))
+        return crun_make_error (err, errno, "open %s", path_to_cpuset);
       ret = write_cpuset_resources (dirfd_cpuset,
                                     resources->cpu,
                                     err);
