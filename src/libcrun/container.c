@@ -544,15 +544,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
         return ret;
     }
 
-  if (def->process && def->process->user && def->process->user->additional_gids)
-    {
-      gid_t *additional_gids = def->process->user->additional_gids;
-      size_t additional_gids_len = def->process->user->additional_gids_len;
-      ret = setgroups (additional_gids_len, additional_gids);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error (errno, "%s", "setgroups");
-    }
-
   capabilities = def->process ? def->process->capabilities : NULL;
   no_new_privs = def->process ? def->process->no_new_privileges : 1;
   ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs, err);
