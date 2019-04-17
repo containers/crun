@@ -45,6 +45,7 @@ FOUND_LIBS=$LIBS
 LIBS=""
 
 AC_SUBST([FOUND_LIBS])
+AC_SUBST([CRUN_LDFLAGS])
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
