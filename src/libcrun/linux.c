@@ -1004,6 +1004,34 @@ do_finalize_notify_socket (libcrun_container *container, libcrun_error_t *err)
   return 0;
 }
 
+static int
+make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
+{
+  cleanup_free char *tmp = xstrdup (rootfs);
+  char *it;
+  int ret;
+
+  for (;;)
+    {
+      ret = mount ("", tmp, "", MS_PRIVATE, NULL);
+      if (ret == 0)
+        return 0;
+
+      if (errno == EINVAL)
+        {
+          it = strrchr (tmp, '/');
+          if (it == NULL || it == tmp)
+            break;
+
+          *it = '\0';
+          continue;
+        }
+
+      return crun_make_error (err, errno, "make %s private", tmp);
+    }
+  return 0;
+}
+
 int
 libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
 {
@@ -1022,7 +1050,7 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if ((rootfs_propagation & MS_PRIVATE) || (rootfs_propagation & MS_UNBINDABLE))
+  if (rootfs_propagation & (MS_UNBINDABLE | MS_PRIVATE))
     {
       ret = do_mount (container, "", "/", "", MS_REC | MS_PRIVATE, "", 0, err);
       if (UNLIKELY (ret < 0))
@@ -1031,6 +1059,10 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
   else
     {
       ret = do_mount (container, "", "/", "", MS_PRIVATE, "", 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = make_parent_mount_private (rootfs, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
