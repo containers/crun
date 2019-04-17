@@ -73,7 +73,9 @@ set_raw (int fd, libcrun_error_t *err)
     return crun_make_error (err, errno, "tcgetattr");
 
   cfmakeraw (&termios);
-  termios.c_oflag |= OPOST;
+
+  termios.c_iflag &= OPOST;
+  termios.c_oflag &= OPOST;
 
   ret = tcsetattr (fd, TCSANOW, &termios);
   if (UNLIKELY (ret < 0))
@@ -122,8 +124,6 @@ libcrun_setup_terminal_master (int fd, void **current_status, libcrun_error_t *e
       memcpy (&(s->termios), &termios, sizeof (termios));
       *current_status = s;
     }
-
-  termios.c_oflag |= OPOST;
 
   ret = tcsetattr (fd, TCSANOW, &termios);
   if (UNLIKELY (ret < 0))
