@@ -919,10 +919,6 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   path_len = strlen (path);
   while (1)
     {
-      for (; path_len > 1 && path[path_len] != '/'; path_len--);
-      if (path_len > 1)
-       path[path_len] = '\0';
-
       if (mode == CGROUP_MODE_UNIFIED)
         {
           cleanup_free char *cgroup_path = NULL;
@@ -933,6 +929,8 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
         }
       else
         {
+          bool cleaned_any = false;
+
           for (i = 0; subsystems[i]; i++)
             {
               cleanup_free char *cgroup_path = NULL;
@@ -942,13 +940,21 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
 
               xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
 
-              if (rmdir (cgroup_path) < 0)
-                break;
+              if (rmdir (cgroup_path) == 0)
+                cleaned_any = true;
             }
+
+          if (!cleaned_any)
+            break;
         }
+
       if (path_len <= 1)
        break;
-    }
+
+      for (; path_len > 1 && path[path_len] != '/'; path_len--);
+      if (path_len > 1)
+       path[path_len] = '\0';
+   }
 
   return 0;
 }
