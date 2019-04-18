@@ -35,7 +35,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-static const cgroups_subsystem_t cgroups_subsystems[] = { "cpuset", "devices", "pids", "memory",
+static const cgroups_subsystem_t cgroups_subsystems[] = { "cpuset", "cpu", "devices", "pids", "memory",
                                                           "net_cls,net_prio", "freezer", "blkio",
                                                           "hugetlb", "cpu,cpuacct", "perf_event",
                                                           "unified", NULL};
