@@ -1,9 +1,10 @@
-export VC_LIST_EXCEPT_DEFAULT=^(lib/.*|m4/.*|md5/.*|build-aux/.*|src/gettext\.h|.*ChangeLog|src/libcrun/cloned_binary.c)$$
+export VC_LIST_EXCEPT_DEFAULT=^(lib/.*|m4/.*|md5/.*|build-aux/.*|src/gettext\.h|.*ChangeLog|src/libcrun/cloned_binary.c|src/libcrun/chroot_realpath.c)$$
 
 local-checks-to-skip = \
     sc_immutable_NEWS \
     sc_copyright_check \
     \
+    sc_prohibit_path_max_allocation \
     sc_prohibit_strcmp \
     sc_program_name \
     sc_bindtextdomain	 \

@@ -48,6 +48,9 @@
 # define RLIMIT_RTTIME 15
 #endif
 
+/* Defined in chroot_realpath.c  */
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
+
 struct remount_s
 {
   struct remount_s *next;
@@ -836,18 +839,33 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
   oci_container *def = container->container_def;
   for (i = 0; i < def->mounts_len; i++)
     {
-      cleanup_free char *target = NULL;
+      cleanup_free char *target_buffer = NULL;
       cleanup_free char *data = NULL;
       char *type;
       char *source;
       unsigned long flags = 0;
       int skip_labelling;
       int is_dir = 1;
+      char *resolved_path, buffer_resolved_path[PATH_MAX];
+      char *target = NULL;
 
-      if (rootfs)
-        xasprintf (&target, "%s/%s", rootfs, def->mounts[i]->destination + 1);
+      resolved_path = chroot_realpath (rootfs, def->mounts[i]->destination, buffer_resolved_path);
+      if (resolved_path != NULL)
+        target = resolved_path;
       else
-        target = xstrdup (def->mounts[i]->destination);
+        {
+          if (errno != ENOENT)
+            return crun_make_error (err, errno, "cannot resolve %s", def->mounts[i]->destination);
+
+          resolved_path = def->mounts[i]->destination;
+          if (!rootfs)
+            target = def->mounts[i]->destination;
+          else
+            {
+              xasprintf (&target_buffer, "%s/%s", rootfs, resolved_path + 1);
+              target = target_buffer;
+            }
+        }
 
       if (def->mounts[i]->options == NULL)
         flags = get_default_flags (container, def->mounts[i]->destination, &data);
