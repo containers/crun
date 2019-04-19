@@ -39,7 +39,7 @@ def test_start():
 
         run_crun_command(["start", cid])
         out, _ = proc.communicate()
-        if "hello" not in out:
+        if "hello" not in str(out):
             return -1
     finally:
         if cid is not None:
