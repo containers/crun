@@ -1490,7 +1490,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_blkio < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/blkio%s", path);
+        return crun_make_error (err, errno, "open %s", path_to_blkio);
 
       ret = write_blkio_resources (dirfd_blkio, false, blkio, err);
       if (UNLIKELY (ret < 0))
@@ -1506,7 +1506,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
       dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_network < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/net_cls,net_prio%s", path);
+        return crun_make_error (err, errno, "open %s", path_to_network);
 
       ret = write_network_resources (dirfd_network, network, err);
       if (UNLIKELY (ret < 0))
@@ -1521,7 +1521,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       xasprintf (&path_to_htlb, "/sys/fs/cgroup/hugetlb%s/", path);
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_htlb < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/hugetlb%s", path);
+        return crun_make_error (err, errno, "open %s", path_to_htlb);
 
       ret = write_hugetlb_resources (dirfd_htlb,
                                      resources->hugepage_limits,
@@ -1539,7 +1539,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       xasprintf (&path_to_devs, "/sys/fs/cgroup/devices%s/", path);
       dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_devs < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/devices%s", path);
+        return crun_make_error (err, errno, "open %s", path_to_devs);
 
       ret = write_devices_resources (dirfd_devs,
                                      resources->devices,
@@ -1557,7 +1557,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       xasprintf (&path_to_mem, "/sys/fs/cgroup/memory%s/", path);
       dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_mem < 0))
-        return crun_make_error (err, errno, "open /sys/fs/cgroup/memory%s", path);
+        return crun_make_error (err, errno, "open %s", path_to_mem);
 
       ret = write_memory_resources (dirfd_mem, false,
                                     resources->memory,
@@ -1574,7 +1574,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       xasprintf (&path_to_pid, "/sys/fs/cgroup/pids%s/", path);
       dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_pid < 0))
-        return crun_make_error (err, errno, "open %s", path);
+        return crun_make_error (err, errno, "open %s", path_to_pid);
 
       ret = write_pids_resources (dirfd_pid, false,
                                   resources->pids,
