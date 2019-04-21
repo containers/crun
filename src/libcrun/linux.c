@@ -1038,13 +1038,20 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
       if (errno == EINVAL)
         {
           it = strrchr (tmp, '/');
-          if (it == NULL || it == tmp)
-            break;
-
-          *it = '\0';
-          continue;
+          if (it == NULL)
+            return 0;
+          else if (it != tmp)
+            {
+              *it = '\0';
+              continue;
+            }
+          else
+            {
+              ret = mount ("", "/", "", MS_PRIVATE, NULL);
+              if (ret == 0)
+                return 0;
+            }
         }
-
       return crun_make_error (err, errno, "make %s private", tmp);
     }
   return 0;
@@ -1059,35 +1066,26 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
 
   if (def->linux->rootfs_propagation)
     rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL);
-  else
+
+  if ((rootfs_propagation & (MS_SHARED | MS_SLAVE | MS_PRIVATE | MS_UNBINDABLE)) == 0)
     rootfs_propagation = MS_REC | MS_PRIVATE;
 
   get_private_data (container)->rootfs_propagation = rootfs_propagation;
 
-  ret = do_mount (container, "", "/", "", rootfs_propagation, "", 0, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (rootfs_propagation & (MS_UNBINDABLE | MS_PRIVATE))
+  if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
     {
-      ret = do_mount (container, "", "/", "", MS_REC | MS_PRIVATE, "", 0, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-  else
-    {
-      ret = do_mount (container, "", "/", "", MS_PRIVATE, "", 0, err);
+      ret = do_mount (container, "", "/", "", rootfs_propagation, "", 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = make_parent_mount_private (rootfs, err);
       if (UNLIKELY (ret < 0))
         return ret;
-    }
 
-  ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, "", 0, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+      ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, "", 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (def->root->readonly)
     {
