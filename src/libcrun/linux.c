@@ -557,26 +557,51 @@ create_dev (libcrun_container *container, int devfd, struct device_s *device, co
     }
   else
     {
-      cleanup_free char *basename_buffer = xstrdup (device->path);
-      cleanup_free char *dirname_buffer = xstrdup (device->path);
-      const char *dname = dirname (dirname_buffer);
-      const char *bname = basename (basename_buffer);
-
-      ret = crun_ensure_directory (dname, 0700, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
       dev = makedev (device->major, device->minor);
-      ret = mknodat (devfd, bname, device->mode | type, dev);
-      /* We don't fail when the file already exists.  */
-      if (UNLIKELY (ret < 0 && errno == EEXIST))
-        return 0;
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mknod '%s'", bname);
 
-      ret = fchmodat (devfd, bname, device->mode, 0);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "fchmodat '%s'", bname);
+      if (device->path[0] != '/')
+        {
+          ret = mknodat (devfd, device->path, device->mode | type, dev);
+          /* We don't fail when the file already exists.  */
+          if (UNLIKELY (ret < 0 && errno == EEXIST))
+            return 0;
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "mknod '%s'", device->path);
+
+          ret = fchmodat (devfd, device->path, device->mode, 0);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "fchmodat '%s'", device->path);
+        }
+      else
+        {
+          char *tmp;
+          char *resolved_path, buffer[PATH_MAX];
+
+          resolved_path = chroot_realpath (rootfs, device->path, buffer);
+          if (resolved_path == NULL)
+            return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
+
+          tmp = strrchr (resolved_path, '/');
+          if (tmp != resolved_path)
+            {
+              *tmp = '\0';
+              ret = crun_ensure_directory (resolved_path, 0700, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              *tmp = '/';
+            }
+
+          ret = mknod (resolved_path, device->mode | type, dev);
+          /* We don't fail when the file already exists.  */
+          if (UNLIKELY (ret < 0 && errno == EEXIST))
+            return 0;
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "mknod '%s'", device->path);
+
+          ret = chmod (resolved_path, device->mode);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "fchmodat '%s'", device->path);
+        }
 
     }
   return 0;
