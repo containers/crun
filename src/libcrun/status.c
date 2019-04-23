@@ -39,7 +39,7 @@ get_run_directory (const char *state_root)
   if (root == NULL)
     {
       const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
-      if (runtime_dir)
+      if (runtime_dir && runtime_dir[0] != '\0')
         xasprintf (&root, "%s/crun", runtime_dir);
     }
   if (root == NULL)
