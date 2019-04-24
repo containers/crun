@@ -263,3 +263,45 @@ Maximum number of pids allowed in the container.
 
 **-r**, **--resources**=**FILE**
 Path to the file containing the resources to update.
+
+# CGROUP v2
+
+crun has some basic support for cgroup v2.  Since the OCI spec is
+designed for cgroup v1, in some cases there is need to convert from
+the cgroup v1 configuration to cgroup v2.
+
+These are the OCI resources currently supported with cgroup v2 and how
+they are converted when needed from the cgroup v1 configuration.
+
+## Memory controller
+
+| OCI (x) | cgroup 2 value (y) | conversion  |   comment |
+|---|---|---|---|
+| limit | memory.max | y = x ||
+| swap | memory.swap_max | y = x ||
+| reservation | memory.high | y = x ||
+
+## PIDs controller
+
+| OCI (x) | cgroup 2 value (y) | conversion  |   comment |
+|---|---|---|---|
+| limit | pids.max | y = x ||
+
+## CPU controller
+
+| OCI (x) | cgroup 2 value (y) | conversion  |  comment |
+|---|---|---|---|
+| shares | cpu.weight | y = (1 + ((x - 2) * 9999) / 262142) | convert from [2-262144] to [1-10000]|
+| period | cpu.max | y = x| period and quota are written together|
+| quota | cpu.max | y = x| period and quota are written together|
+
+## blkio controller
+
+| OCI (x) | cgroup 2 value (y) | conversion  |   comment |
+|---|---|---|---|
+| weight | io.weight | y = (1 + (x - 10) * 9999 / 990) | convert linearly from [10-1000] to [1-10000]|
+| weight_device | io.weight | y = (1 + (x - 10) * 9999 / 990) | convert linearly from [10-1000] to [1-10000]|
+|rbps|io.max|y=x||
+|wbps|io.max|y=x||
+|riops|io.max|y=x||
+|wiops|io.max|y=x||
