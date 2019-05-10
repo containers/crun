@@ -1234,7 +1234,7 @@ write_hugetlb_resources (int dirfd, oci_container_linux_resources_hugepage_limit
 }
 
 static int
-write_devices_resources (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
 {
   size_t i, len;
   int ret;
@@ -1254,6 +1254,16 @@ write_devices_resources (int dirfd, oci_container_linux_resources_devices_elemen
       "c 10:200 rwm",
       NULL
   };
+
+  if (cgroup2)
+    {
+      for (i = 0; i < devs_len; i++)
+        {
+          if (devs[i]->allow || strcmp (devs[i]->access, "rwm"))
+            return crun_make_error (err, errno, "devices not supported on cgroupv2");
+        }
+      return 0;
+    }
 
   for (i = 0; i < devs_len; i++)
     {
@@ -1541,7 +1551,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       if (UNLIKELY (dirfd_devs < 0))
         return crun_make_error (err, errno, "open %s", path_to_devs);
 
-      ret = write_devices_resources (dirfd_devs,
+      ret = write_devices_resources (dirfd_devs, false,
                                      resources->devices,
                                      resources->devices_len,
                                      err);
@@ -1628,14 +1638,22 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
     return crun_make_error (err, errno, "network limits not supported on cgroupv2");
   if (resources->hugepage_limits_len)
     return crun_make_error (err, errno, "hugepages not supported on cgroupv2");
-  if (resources->devices_len)
-    return crun_make_error (err, errno, "devices not supported on cgroupv2");
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup%s", path);
 
   cgroup_dirfd = open (cgroup_path, O_DIRECTORY);
   if (UNLIKELY (cgroup_dirfd < 0))
     return crun_make_error (err, errno, "open %s", cgroup_path);
+
+  if (resources->devices_len)
+    {
+      ret = write_devices_resources (cgroup_dirfd, true,
+                                     resources->devices,
+                                     resources->devices_len,
+                                     err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (resources->memory)
     {
