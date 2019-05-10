@@ -1290,7 +1290,7 @@ write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_
 }
 
 static int
-write_memory_resources (int dirfd, int cgroup2, oci_container_linux_resources_memory *memory, libcrun_error_t *err)
+write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_memory *memory, libcrun_error_t *err)
 {
   size_t len;
   int ret;
