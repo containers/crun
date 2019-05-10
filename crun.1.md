@@ -305,3 +305,10 @@ they are converted when needed from the cgroup v1 configuration.
 |wbps|io.max|y=x||
 |riops|io.max|y=x||
 |wiops|io.max|y=x||
+
+## cpuset controller
+
+| OCI (x) | cgroup 2 value (y) | conversion  |   comment |
+|---|---|---|---|
+| cpus | cpuset.cpus | y = x ||
+| mems | cpuset.mems | y = x ||

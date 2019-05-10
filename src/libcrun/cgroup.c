@@ -92,7 +92,7 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
 static int
 enable_controllers (const char *path, libcrun_error_t *err)
 {
-  const char controllers[] = "+cpu +io +memory +pids";
+  const char controllers[] = "+cpuset +cpu +io +memory +pids";
   cleanup_free char *tmp_path = NULL;
   char *it;
   int ret;
@@ -1467,7 +1467,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
 }
 
 static int
-write_cpuset_resources (int dirfd_cpuset, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
+write_cpuset_resources (int dirfd_cpuset, int cgroup2, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
 {
   int ret;
 
@@ -1617,7 +1617,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_cpuset < 0))
         return crun_make_error (err, errno, "open %s", path_to_cpuset);
-      ret = write_cpuset_resources (dirfd_cpuset,
+      ret = write_cpuset_resources (dirfd_cpuset, false,
                                     resources->cpu,
                                     err);
       if (UNLIKELY (ret < 0))
@@ -1673,13 +1673,9 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
     }
   if (resources->cpu)
     {
-      if (resources->cpu->cpus)
-        return crun_make_error (err, errno, "cpus not supported on cgroupv2");
-      if (resources->cpu->mems)
-        return crun_make_error (err, errno, "mems not supported on cgroupv2");
-      ret = write_cpu_resources (cgroup_dirfd, true,
-                                 resources->cpu,
-                                 err);
+      ret = write_cpuset_resources (cgroup_dirfd, true,
+                                    resources->cpu,
+                                    err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
