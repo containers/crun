@@ -194,6 +194,10 @@ static struct propagation_flags_s propagation_flags[] =
     {"rprivate", 0, MS_REC | MS_PRIVATE},
     {"unbindable", 0, MS_UNBINDABLE},
     {"runbindable", 0, MS_REC | MS_UNBINDABLE},
+
+    /* runc has support for tmpcopyup which is not part of OCI.  Silently ignore it for now.  */
+    {"tmpcopyup", 0, 0},
+
     {NULL, 0}
   };
 
