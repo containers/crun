@@ -519,7 +519,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
             return ret;
           close_and_reset (&console_socket);
         }
-      else if (entrypoint_args->has_terminal_socket_pair)
+      else if (entrypoint_args->has_terminal_socket_pair && console_socketpair >= 0)
         {
           ret = send_fd_to_socket (console_socketpair, terminal_fd, err);
           if (UNLIKELY (ret < 0))
@@ -1061,7 +1061,8 @@ flush_fd_to_err (struct libcrun_context_s *context, int terminal_fd)
       if (ret <= 0)
         break;
       buf[ret] = '\0';
-      context->output_handler (0, buf, false, context->output_handler_arg);
+      if (context->output_handler)
+        context->output_handler (0, buf, false, context->output_handler_arg);
     }
   (void) fcntl (terminal_fd, F_SETFL, flags);
   fflush (stderr);
@@ -1082,7 +1083,8 @@ cleanup_watch (struct libcrun_context_s *context, pid_t init_pid, oci_container 
   sync_socket_wait_sync (context, sync_socket, true, &err);
   if (err)
     {
-      context->output_handler (err->status, err->msg, false, context->output_handler_arg);
+      if (context->output_handler)
+        context->output_handler (err->status, err->msg, false, context->output_handler_arg);
       crun_error_release (&err);
     }
 
@@ -1740,7 +1742,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
       uid_t container_uid = process->user ? process->user->uid : 0;
       gid_t container_gid = process->user ? process->user->gid : 0;
       const char *cwd;
-      oci_container_process_capabilities *capabilities;
+      oci_container_process_capabilities *capabilities = NULL;
 
       cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)

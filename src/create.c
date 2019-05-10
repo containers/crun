@@ -112,13 +112,14 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
     if (chdir (bundle) < 0)
       libcrun_fail_with_error (errno, "chdir '%s' failed", bundle);
 
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   container = libcrun_container_load_from_file ("config.json", err);
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
   crun_context.bundle = bundle ? bundle : ".";
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
