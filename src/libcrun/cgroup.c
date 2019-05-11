@@ -832,7 +832,7 @@ libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int
       return ret;
     }
 
-  if (rootless > 0)
+  if (rootless > 0 && cgroup_mode != CGROUP_MODE_UNIFIED)
     {
       free (*path);
       *path = NULL;
