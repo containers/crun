@@ -29,7 +29,7 @@ enum
   };
 
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
-int libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
+int libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
 int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
 int libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err);

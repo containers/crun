@@ -1213,7 +1213,7 @@ libcrun_container_run_internal (libcrun_container *container, struct libcrun_con
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  ret = libcrun_cgroup_enter (cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", context->systemd_cgroup, pid, context->id, err);
+  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", context->systemd_cgroup, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);

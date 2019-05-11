@@ -90,12 +90,28 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
 }
 
 static int
-enable_controllers (const char *path, libcrun_error_t *err)
+enable_controllers (oci_container_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
-  const char controllers[] = "+cpuset +cpu +io +memory +pids";
   cleanup_free char *tmp_path = NULL;
   char *it;
   int ret;
+  cleanup_free char *controllers = NULL;
+  bool has_cpuset, has_cpu, has_io, has_memory, has_pids;
+
+  has_cpu = resources->cpu && (resources->cpu->shares || resources->cpu->period
+                               || resources->cpu->quota || resources->cpu->realtime_period
+                               || resources->cpu->realtime_runtime);
+  has_cpuset = resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
+  has_io = resources->block_io;
+  has_memory = resources->memory;
+  has_pids = resources->pids;
+
+  xasprintf (&controllers, "%s %s %s %s %s",
+             has_cpu ? "+cpu" : "",
+             has_io ? "+io" : "",
+             has_memory ? "+memory" : "",
+             has_pids ? "+pids" : "",
+             has_cpuset ? "+cpuset" : "");
 
   xasprintf (&tmp_path, "%s/", path);
 
@@ -106,7 +122,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
       *it = '\0';
 
       xasprintf (&subtree_control, "/sys/fs/cgroup%s/cgroup.subtree_control", tmp_path);
-      ret = write_file (subtree_control, controllers, sizeof (controllers), err);
+      ret = write_file (subtree_control, controllers, strlen (controllers), err);
       if (ret < 0)
         {
           int e = crun_error_get_errno (err);
@@ -379,7 +395,7 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 
 #ifdef HAVE_SYSTEMD
 static
-int systemd_finalize (int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
+int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int ret;
@@ -429,7 +445,7 @@ int systemd_finalize (int cgroup_mode, char **path, pid_t pid, const char *suffi
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
-      ret = enable_controllers (*path, err);
+      ret = enable_controllers (resources, *path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -479,7 +495,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
 }
 
 static
-int enter_systemd_cgroup_scope (const char *scope, const char *slice, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const char *scope, const char *slice, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -490,12 +506,19 @@ int enter_systemd_cgroup_scope (const char *scope, const char *slice, pid_t pid,
   int terminated = 0;
   struct systemd_job_removed_s userdata;
   int i;
-  const char *boolean_opts[] = {"CPUAccounting",
-                                "MemoryAccounting",
-                                "IOAccounting",
-                                "TasksAccounting",
-                                "Delegate",
-                                NULL};
+  const char *boolean_opts[10];
+
+  i = 0;
+  boolean_opts[i++] = "Delegate";
+  if (resources->cpu)
+    boolean_opts[i++] = "CPUAccounting";
+  if (resources->memory)
+    boolean_opts[i++] = "MemoryAccounting";
+  if (resources->block_io)
+    boolean_opts[i++] = "IOAccounting";
+  if (resources->pids)
+    boolean_opts[i++] = "TasksAccounting";
+  boolean_opts[i++] = NULL;
 
   sd_err = sd_bus_default (&bus);
   if (sd_err < 0)
@@ -752,7 +775,7 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   int ret;
 
@@ -762,11 +785,11 @@ libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_
       cleanup_free char *scope = NULL;
       xasprintf (&scope, "%s-%d.scope", id, getpid ());
 
-      ret = enter_systemd_cgroup_scope (scope, cgroup_path, pid, err);
+      ret = enter_systemd_cgroup_scope (resources, scope, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      return systemd_finalize (cgroup_mode, path, pid, NULL, err);
+      return systemd_finalize (resources, cgroup_mode, path, pid, NULL, err);
     }
 #endif
 
@@ -782,7 +805,7 @@ libcrun_cgroup_enter_internal (int cgroup_mode, char **path, const char *cgroup_
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
-      ret = enable_controllers (*path, err);
+      ret = enable_controllers (resources, *path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -800,7 +823,7 @@ is_rootless (libcrun_error_t *err)
 }
 
 int
-libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
 {
   libcrun_error_t tmp_err = NULL;
   int rootless;
@@ -820,7 +843,7 @@ libcrun_cgroup_enter (int cgroup_mode, char **path, const char *cgroup_path, int
         return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = libcrun_cgroup_enter_internal (cgroup_mode, path, cgroup_path, systemd, pid, id, err);
+  ret = libcrun_cgroup_enter_internal (resources, cgroup_mode, path, cgroup_path, systemd, pid, id, err);
   if (LIKELY (ret == 0))
     return ret;
 
