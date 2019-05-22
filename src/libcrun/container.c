@@ -1813,6 +1813,18 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
 
   if (terminal_fd >= 0)
     {
+      unsigned short rows = 0, cols = 0;
+
+      if (process->console_size)
+        {
+          cols = process->console_size->width;
+          rows = process->console_size->height;
+        }
+
+      ret = libcrun_terminal_setup_size (terminal_fd, rows, cols, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       if (context->console_socket)
         {
           int ret;

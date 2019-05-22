@@ -147,7 +147,16 @@ int
 libcrun_terminal_setup_size (int fd, unsigned short rows, unsigned short cols, libcrun_error_t *err)
 {
   struct winsize ws = {.ws_row = rows, .ws_col = cols};
-  int ret = ioctl (0, TIOCSWINSZ, &ws);
+  int ret;
+
+  if (ws.ws_row == 0 || ws.ws_col == 0)
+    {
+      ret = ioctl (0, TIOCGWINSZ, &ws);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "ioctl TIOCGWINSZ");
+    }
+
+  ret = ioctl (fd, TIOCSWINSZ, &ws);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "ioctl TIOCSWINSZ");
   return 0;

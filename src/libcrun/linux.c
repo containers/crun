@@ -1699,6 +1699,7 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   cleanup_close int fd = -1;
   cleanup_free char *slave = NULL;
   oci_container *def = container->container_def;
+
   if (def->process == NULL || !def->process->terminal)
     return 0;
 
@@ -1709,15 +1710,6 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
   ret = libcrun_set_stdio (slave, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  if (def->process->console_size)
-    {
-      ret = libcrun_terminal_setup_size (0, def->process->console_size->height,
-                                         def->process->console_size->width,
-                                         err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
 
   if (def->process->console_size)
     {
