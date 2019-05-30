@@ -68,7 +68,7 @@ crun_command_pause (struct crun_global_arguments *global_args, int argc, char **
 {
   int first_arg, ret;
 
-  struct libcrun_context_s crun_context = {0, };
+  libcrun_context_t crun_context = {0, };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &pause_options);
   crun_assert_n_args (argc - first_arg, 1, 2);

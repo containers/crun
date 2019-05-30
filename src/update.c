@@ -32,7 +32,7 @@ static char doc[] = "OCI runtime";
 
 static char *resources = NULL;
 
-static struct libcrun_context_s crun_context;
+static libcrun_context_t crun_context;
 
 enum
   {

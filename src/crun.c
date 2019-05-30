@@ -48,7 +48,7 @@ struct commands_s
 };
 
 int
-init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err)
+init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err)
 {
   int ret;
 

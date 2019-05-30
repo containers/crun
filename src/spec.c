@@ -73,7 +73,7 @@ int
 crun_command_spec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  struct libcrun_context_s crun_context = {0, };
+  libcrun_context_t crun_context = {0, };
   int ret;
   cleanup_file FILE *f = NULL;
 

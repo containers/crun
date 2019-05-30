@@ -60,7 +60,7 @@ enum
 struct container_entrypoint_s
 {
   libcrun_container_t *container;
-  struct libcrun_context_s *context;
+  libcrun_context_t *context;
   int has_terminal_socket_pair;
   int terminal_socketpair[2];
   int sync_socket;
@@ -306,7 +306,7 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
 }
 
 static int
-sync_socket_wait_sync (struct libcrun_context_s *context, int fd, bool flush, libcrun_error_t *err)
+sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_error_t *err)
 {
   int ret;
   struct sync_socket_message_s msg;
@@ -724,7 +724,7 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
 }
 
 static int
-run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
+run_poststop_hooks (libcrun_context_t *context, oci_container *def,
                     libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
@@ -761,7 +761,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
 }
 
 static int
-container_delete_internal (struct libcrun_context_s *context, oci_container *def, const char *id, bool force, bool only_cleanup, libcrun_error_t *err)
+container_delete_internal (libcrun_context_t *context, oci_container *def, const char *id, bool force, bool only_cleanup, libcrun_error_t *err)
 {
   int ret;
   cleanup_container_status libcrun_container_status_t status;
@@ -822,13 +822,13 @@ container_delete_internal (struct libcrun_context_s *context, oci_container *def
 }
 
 int
-libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, bool force, libcrun_error_t *err)
+libcrun_container_delete (libcrun_context_t *context, oci_container *def, const char *id, bool force, libcrun_error_t *err)
 {
   return container_delete_internal (context, def, id, force, false, err);
 }
 
 int
-libcrun_container_kill (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err)
+libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;
@@ -847,7 +847,7 @@ libcrun_container_kill (struct libcrun_context_s *context, const char *id, int s
 }
 
 static int
-write_container_status (libcrun_container_t *container, struct libcrun_context_s *context, pid_t pid,
+write_container_status (libcrun_container_t *container, libcrun_context_t *context, pid_t pid,
                         char *cgroup_path, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
@@ -896,7 +896,7 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
-wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd, int notify_socket, int container_ready_fd, libcrun_error_t *err)
+wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int notify_socket, int container_ready_fd, libcrun_error_t *err)
 {
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
@@ -1042,7 +1042,7 @@ wait_for_process (pid_t pid, struct libcrun_context_s *context, int terminal_fd,
 }
 
 static void
-flush_fd_to_err (struct libcrun_context_s *context, int terminal_fd)
+flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
 {
   char buf[256];
   int flags;
@@ -1071,7 +1071,7 @@ flush_fd_to_err (struct libcrun_context_s *context, int terminal_fd)
 }
 
 static void
-cleanup_watch (struct libcrun_context_s *context, pid_t init_pid, oci_container *def, const char *id, int sync_socket, int terminal_fd)
+cleanup_watch (libcrun_context_t *context, pid_t init_pid, oci_container *def, const char *id, int sync_socket, int terminal_fd)
 {
   libcrun_error_t err = NULL;
   container_delete_internal (context, def, id, 1, true, &err);
@@ -1129,7 +1129,7 @@ int open_seccomp_output (const char *id, int *fd, bool readonly, const char *sta
 }
 
 static int
-libcrun_container_run_internal (libcrun_container_t *container, struct libcrun_context_s *context, int container_ready_fd, libcrun_error_t *err)
+libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context, int container_ready_fd, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1366,7 +1366,7 @@ int libcrun_copy_config_file (const char *id, const char *state_root, const char
 }
 
 int
-libcrun_container_run (struct libcrun_context_s *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err)
+libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1456,7 +1456,7 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container_t *c
 }
 
 int
-libcrun_container_create (struct libcrun_context_s *context, libcrun_container_t *container, libcrun_error_t *err)
+libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1542,7 +1542,7 @@ libcrun_container_create (struct libcrun_context_s *context, libcrun_container_t
 }
 
 int
-libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
+libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;
@@ -1563,7 +1563,7 @@ libcrun_container_start (struct libcrun_context_s *context, const char *id, libc
 }
 
 int
-libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE *out, libcrun_error_t *err)
+libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
   int ret, running, has_fifo = 0;
   libcrun_container_status_t status;
@@ -1677,7 +1677,7 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE
 }
 
 int
-libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err)
+libcrun_container_exec (libcrun_context_t *context, const char *id, oci_container_process *process, libcrun_error_t *err)
 {
   int ret;
   pid_t pid;
@@ -1854,7 +1854,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
 }
 
 int
-libcrun_container_exec_process_file (struct libcrun_context_s *context, const char *id, const char *path, libcrun_error_t *err)
+libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err)
 {
   int ret;
   size_t len;
@@ -1894,7 +1894,7 @@ libcrun_container_exec_process_file (struct libcrun_context_s *context, const ch
 }
 
 int
-libcrun_container_update (struct libcrun_context_s *context, const char *id, const char *content, size_t len, libcrun_error_t *err)
+libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len, libcrun_error_t *err)
 {
   int ret;
   libcrun_container_status_t status;
@@ -1915,7 +1915,7 @@ libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err)
 }
 
 int
-libcrun_container_pause (struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
+libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;
@@ -1936,7 +1936,7 @@ libcrun_container_pause (struct libcrun_context_s *context, const char *id, libc
 }
 
 int
-libcrun_container_unpause (struct libcrun_context_s *context, const char *id, libcrun_error_t *err)
+libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;

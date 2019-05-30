@@ -65,33 +65,34 @@ struct libcrun_container_s
 };
 
 typedef struct libcrun_container_s libcrun_container_t;
+typedef struct libcrun_context_s libcrun_context_t;
 
 libcrun_container_t *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
 
 libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
 
-int libcrun_container_run (struct libcrun_context_s *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *error);
+int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *error);
 
-int libcrun_container_delete (struct libcrun_context_s *context, oci_container *def, const char *id, bool force, libcrun_error_t *err);
+int libcrun_container_delete (libcrun_context_t *context, oci_container *def, const char *id, bool force, libcrun_error_t *err);
 
-int libcrun_container_kill (struct libcrun_context_s *context, const char *id, int signal, libcrun_error_t *err);
+int libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
 
-int libcrun_container_create (struct libcrun_context_s *context, libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, libcrun_error_t *err);
 
-int libcrun_container_start (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
+int libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
-int libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE *out, libcrun_error_t *err);
+int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err);
 
-int libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_container_process *process, libcrun_error_t *err);
+int libcrun_container_exec (libcrun_context_t *context, const char *id, oci_container_process *process, libcrun_error_t *err);
 
-int libcrun_container_exec_process_file (struct libcrun_context_s *context, const char *id, const char *path, libcrun_error_t *err);
+int libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err);
 
-int libcrun_container_update (struct libcrun_context_s *context, const char *id, const char *content, size_t len, libcrun_error_t *err);
+int libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len, libcrun_error_t *err);
 
 int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
 
-int libcrun_container_pause (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
+int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
-int libcrun_container_unpause (struct libcrun_context_s *context, const char *id, libcrun_error_t *err);
+int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
 #endif

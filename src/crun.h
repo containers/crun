@@ -31,6 +31,6 @@ struct crun_global_arguments
   bool option_systemd_cgroup;
 };
 
-int init_libcrun_context (struct libcrun_context_s *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err);
+int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err);
 void crun_assert_n_args (int n, int min, int max);
 #endif

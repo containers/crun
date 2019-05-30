@@ -41,7 +41,7 @@ enum
 
 static const char *bundle = NULL;
 
-static struct libcrun_context_s crun_context;
+static libcrun_context_t crun_context;
 
 static struct argp_option options[] =
   {
