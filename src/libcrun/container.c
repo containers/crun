@@ -59,7 +59,7 @@ enum
 
 struct container_entrypoint_s
 {
-  libcrun_container *container;
+  libcrun_container_t *container;
   struct libcrun_context_s *context;
   int has_terminal_socket_pair;
   int terminal_socketpair[2];
@@ -373,10 +373,10 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   return 0;
 }
 
-static libcrun_container *
+static libcrun_container_t *
 make_container (oci_container *container_def)
 {
-  libcrun_container *container = xmalloc (sizeof (*container));
+  libcrun_container_t *container = xmalloc (sizeof (*container));
   memset (container, 0, sizeof (*container));
   container->container_def = container_def;
 
@@ -386,7 +386,7 @@ make_container (oci_container *container_def)
   return container;
 }
 
-libcrun_container *
+libcrun_container_t *
 libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 {
   oci_container *container_def;
@@ -400,7 +400,7 @@ libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
   return make_container (container_def);
 }
 
-libcrun_container *
+libcrun_container_t *
 libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 {
   oci_container *container_def;
@@ -443,7 +443,7 @@ container_entrypoint_init (void *args, const char *notify_socket,
                            int sync_socket, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
-  libcrun_container *container = entrypoint_args->container;
+  libcrun_container_t *container = entrypoint_args->container;
   int ret;
   size_t i;
   int has_terminal;
@@ -729,7 +729,7 @@ run_poststop_hooks (struct libcrun_context_s *context, oci_container *def,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
-  cleanup_free libcrun_container *container = NULL;
+  cleanup_free libcrun_container_t *container = NULL;
   if (def == NULL)
     {
       cleanup_free char *dir = NULL;
@@ -847,7 +847,7 @@ libcrun_container_kill (struct libcrun_context_s *context, const char *id, int s
 }
 
 static int
-write_container_status (libcrun_container *container, struct libcrun_context_s *context, pid_t pid,
+write_container_status (libcrun_container_t *container, struct libcrun_context_s *context, pid_t pid,
                         char *cgroup_path, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
@@ -1129,7 +1129,7 @@ int open_seccomp_output (const char *id, int *fd, bool readonly, const char *sta
 }
 
 static int
-libcrun_container_run_internal (libcrun_container *container, struct libcrun_context_s *context, int container_ready_fd, libcrun_error_t *err)
+libcrun_container_run_internal (libcrun_container_t *container, struct libcrun_context_s *context, int container_ready_fd, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1366,7 +1366,7 @@ int libcrun_copy_config_file (const char *id, const char *state_root, const char
 }
 
 int
-libcrun_container_run (struct libcrun_context_s *context, libcrun_container *container, unsigned int options, libcrun_error_t *err)
+libcrun_container_run (struct libcrun_context_s *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1456,7 +1456,7 @@ libcrun_container_run (struct libcrun_context_s *context, libcrun_container *con
 }
 
 int
-libcrun_container_create (struct libcrun_context_s *context, libcrun_container *container, libcrun_error_t *err)
+libcrun_container_create (struct libcrun_context_s *context, libcrun_container_t *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1635,7 +1635,7 @@ libcrun_container_state (struct libcrun_context_s *context, const char *id, FILE
   {
     size_t i;
     cleanup_free char *config_file;
-    cleanup_free libcrun_container *container = NULL;
+    cleanup_free libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
 
     dir = libcrun_get_state_directory (state_root, id);
@@ -1687,7 +1687,7 @@ libcrun_container_exec (struct libcrun_context_s *context, const char *id, oci_c
   cleanup_close int seccomp_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_free char *config_file = NULL;
-  cleanup_free libcrun_container *container = NULL;
+  cleanup_free libcrun_container_t *container = NULL;
   cleanup_free char *dir = NULL;
 
   memset (&status, 0, sizeof (status));

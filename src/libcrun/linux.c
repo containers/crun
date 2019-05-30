@@ -265,7 +265,7 @@ make_remount (const char *target, unsigned long flags, const char *data, struct 
 }
 
 static int
-do_mount (libcrun_container *container,
+do_mount (libcrun_container_t *container,
           const char *source,
           const char *target,
           const char *fstype,
@@ -347,7 +347,7 @@ do_mount (libcrun_container *container,
 }
 
 static bool
-has_new_cgroup_namespace (libcrun_container *container)
+has_new_cgroup_namespace (libcrun_container_t *container)
 {
 #ifdef CLONE_NEWCGROUP
   return (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) != 0;
@@ -356,7 +356,7 @@ has_new_cgroup_namespace (libcrun_container *container)
 }
 
 static int
-do_mount_cgroup_v2 (libcrun_container *container,
+do_mount_cgroup_v2 (libcrun_container_t *container,
                     const char *source,
                     const char *target,
                     const char *fstype,
@@ -419,7 +419,7 @@ do_mount_cgroup_v2 (libcrun_container *container,
 }
 
 static int
-do_mount_cgroup_v1 (libcrun_container *container,
+do_mount_cgroup_v1 (libcrun_container_t *container,
                     int cgroup_mode,
                     const char *source,
                     const char *target,
@@ -493,7 +493,7 @@ do_mount_cgroup_v1 (libcrun_container *container,
 }
 
 static int
-do_mount_cgroup (libcrun_container *container,
+do_mount_cgroup (libcrun_container_t *container,
                  const char *source,
                  const char *target,
                  const char *fstype,
@@ -540,7 +540,7 @@ struct device_s needed_devs[] =
   };
 
 static int
-create_dev (libcrun_container *container, int devfd, struct device_s *device, const char *rootfs, int binds, libcrun_error_t *err)
+create_dev (libcrun_container_t *container, int devfd, struct device_s *device, const char *rootfs, int binds, libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
@@ -629,7 +629,7 @@ static struct symlink_s symlinks[] =
   };
 
 static int
-create_missing_devs (libcrun_container *container, const char *rootfs, int binds, libcrun_error_t *err)
+create_missing_devs (libcrun_container_t *container, const char *rootfs, int binds, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -675,7 +675,7 @@ create_missing_devs (libcrun_container *container, const char *rootfs, int binds
 }
 
 static int
-do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
+do_masked_and_readonly_paths (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -738,7 +738,7 @@ do_masked_and_readonly_paths (libcrun_container *container, const char *rootfs, 
 }
 
 static int
-do_pivot (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
+do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
   cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_RDONLY);
@@ -777,7 +777,7 @@ do_pivot (libcrun_container *container, const char *rootfs, libcrun_error_t *err
 }
 
 static int
-get_default_flags (libcrun_container *container, const char *destination, char **data)
+get_default_flags (libcrun_container_t *container, const char *destination, char **data)
 {
   if (strcmp (destination, "/proc") == 0)
       return 0;
@@ -814,7 +814,7 @@ get_default_flags (libcrun_container *container, const char *destination, char *
 }
 
 static int
-finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
+finalize_mounts (libcrun_container_t *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
 {
   int ret = 0;
   struct remount_s *r = get_private_data (container)->remounts;
@@ -861,7 +861,7 @@ finalize_mounts (libcrun_container *container, const char *rootfs, int is_user_n
 }
 
 static int
-do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
+do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -990,7 +990,7 @@ do_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *er
 
 #ifdef HAVE_SYSTEMD
 static int
-do_notify_socket (libcrun_container *container, int *notify_socket_out, const char *rootfs, libcrun_error_t *err)
+do_notify_socket (libcrun_container_t *container, int *notify_socket_out, const char *rootfs, libcrun_error_t *err)
 {
   const char *notify_socket = container->context->notify_socket;
   cleanup_free char *host_notify_socket_path = NULL;
@@ -1024,7 +1024,7 @@ do_notify_socket (libcrun_container *container, int *notify_socket_out, const ch
 #endif
 
 static int
-do_finalize_notify_socket (libcrun_container *container, libcrun_error_t *err)
+do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
@@ -1087,7 +1087,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 }
 
 int
-libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
+libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret = 0, is_user_ns = 0;
@@ -1158,7 +1158,7 @@ libcrun_set_mounts (libcrun_container *container, const char *rootfs, libcrun_er
 }
 
 int
-libcrun_do_pivot_root (libcrun_container *container, const char *rootfs, libcrun_error_t *err)
+libcrun_do_pivot_root (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
   if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
@@ -1218,7 +1218,7 @@ newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
 }
 
 static int
-deny_setgroups (libcrun_container *container, pid_t pid, libcrun_error_t *err)
+deny_setgroups (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *groups_file = NULL;
@@ -1231,7 +1231,7 @@ deny_setgroups (libcrun_container *container, pid_t pid, libcrun_error_t *err)
 }
 
 static int
-can_setgroups (libcrun_container *container, libcrun_error_t *err)
+can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *content = NULL;
@@ -1245,7 +1245,7 @@ can_setgroups (libcrun_container *container, libcrun_error_t *err)
 }
 
 int
-libcrun_container_enter_cgroup_ns (libcrun_container *container, libcrun_error_t *err)
+libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err)
 {
 #ifdef CLONE_NEWCGROUP
   if (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP)
@@ -1262,7 +1262,7 @@ libcrun_container_enter_cgroup_ns (libcrun_container *container, libcrun_error_t
 }
 
 int
-libcrun_set_usernamespace (libcrun_container *container, pid_t pid, libcrun_error_t *err)
+libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
   cleanup_free char *uid_map_file = NULL;
   cleanup_free char *gid_map_file = NULL;
@@ -1486,7 +1486,7 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
 }
 
 int
-libcrun_set_selinux_exec_label (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_selinux_exec_label (libcrun_container_t *container, libcrun_error_t *err)
 {
   char *label;
 
@@ -1604,7 +1604,7 @@ libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len
 }
 
 int
-libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int has_uts = get_private_data (container)->unshare_flags & CLONE_NEWUTS;
@@ -1620,7 +1620,7 @@ libcrun_set_hostname (libcrun_container *container, libcrun_error_t *err)
 }
 
 int
-libcrun_set_oom (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   cleanup_close int fd = -1;
@@ -1639,7 +1639,7 @@ libcrun_set_oom (libcrun_container *container, libcrun_error_t *err)
 }
 
 int
-libcrun_set_sysctl (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   size_t i;
@@ -1693,7 +1693,7 @@ open_terminal (char **slave, libcrun_error_t *err)
 }
 
 int
-libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
+libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
   cleanup_close int fd = -1;
@@ -1735,7 +1735,7 @@ libcrun_set_terminal (libcrun_container *container, libcrun_error_t *err)
 }
 
 pid_t
-libcrun_run_linux_container (libcrun_container *container,
+libcrun_run_linux_container (libcrun_container_t *container,
                              int detach,
                              container_entrypoint_t entrypoint,
                              void *args,
@@ -2099,7 +2099,7 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
 }
 
 int
-libcrun_join_process (libcrun_container *container, pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
+libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
 {
   pid_t pid;
   int ret;

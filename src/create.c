@@ -101,7 +101,7 @@ int
 crun_command_create (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg, ret;
-  libcrun_container *container;
+  libcrun_container_t *container;
 
   crun_context.preserve_fds = 0;
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);

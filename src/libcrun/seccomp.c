@@ -124,7 +124,7 @@ libcrun_apply_seccomp (int infd, libcrun_error_t *err)
 }
 
 int
-libcrun_generate_and_load_seccomp (libcrun_container *container, int outfd, libcrun_error_t *err)
+libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;
