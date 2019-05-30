@@ -122,4 +122,9 @@ coverity:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec
 	$(MAKE) $(AM_MAKEFLAGS) crun
 
-.PHONY: coverity sync
+libcrun.rs: src/libcrun/container.h
+	bindgen src/libcrun/container.h -- -I$(abs_builddir) -I$(abs_builddir)/libocispec/src  > $@
+
+generate-rust-bindings: libcrun.rs
+
+.PHONY: coverity sync generate-rust-bindings
