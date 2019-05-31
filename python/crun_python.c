@@ -63,7 +63,7 @@ set_error (libcrun_error_t *err)
 static void
 free_container (PyObject *ptr)
 {
-  libcrun_container *ctr = PyCapsule_GetPointer (ptr, CONTAINER_OBJ_TAG);
+  libcrun_container_t *ctr = PyCapsule_GetPointer (ptr, CONTAINER_OBJ_TAG);
   free_oci_container (ctr->container_def);
 }
 
@@ -72,7 +72,7 @@ container_load_from_file (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   const char *path;
-  libcrun_container *ctr;
+  libcrun_container_t *ctr;
 
   if (!PyArg_ParseTuple (args, "s", &path))
     return NULL;
@@ -89,7 +89,7 @@ container_load_from_memory (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   const char *def;
-  libcrun_container *ctr;
+  libcrun_container_t *ctr;
 
   if (!PyArg_ParseTuple (args, "s", &def))
     return NULL;
@@ -104,7 +104,7 @@ container_load_from_memory (PyObject *self, PyObject *args)
 static void
 free_context (void *ptr)
 {
-  struct libcrun_context_s *ctx = ptr;
+  libcrun_context_t *ctx = ptr;
   char *id = (char *) ctx->id;
   free (ctx->state_root);
   free (ctx->notify_socket);
@@ -121,12 +121,11 @@ make_context (PyObject *self, PyObject *args, PyObject *kwargs)
   char *notify_socket = NULL;
   static char *kwlist[] =
     { "id", "state-root", "systemd-cgroup", "notify-socket", "detach", NULL };
-  struct libcrun_context_s *ctx = malloc (sizeof (*ctx));
+  libcrun_context_t *ctx = malloc (sizeof (*ctx));
   if (ctx == NULL)
     return NULL;
 
   memset (ctx, 0, sizeof (*ctx));
-  ctx->errfile = stderr;
   ctx->fifo_exec_wait_fd = -1;
 
   if (!PyArg_ParseTupleAndKeywords
@@ -147,8 +146,8 @@ container_run (PyObject *self, PyObject *args)
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
   PyObject *ctr_obj = NULL;
-  libcrun_container *ctr;
-  struct libcrun_context_s *ctx;
+  libcrun_container_t *ctr;
+  libcrun_context_t *ctx;
   int ret;
 
   if (!PyArg_ParseTuple (args, "OO", &ctx_obj, &ctr_obj))
@@ -177,8 +176,8 @@ container_create (PyObject *self, PyObject *args)
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
   PyObject *ctr_obj = NULL;
-  libcrun_container *ctr;
-  struct libcrun_context_s *ctx;
+  libcrun_container_t *ctr;
+  libcrun_context_t *ctx;
   int ret;
 
   if (!PyArg_ParseTuple (args, "OO", &ctx_obj, &ctr_obj))
@@ -208,7 +207,7 @@ container_delete (PyObject *self, PyObject *args)
   PyObject *ctx_obj = NULL;
   char *id = NULL;
   bool force;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   int ret;
 
   if (!PyArg_ParseTuple (args, "Osn", &ctx_obj, &id, &force))
@@ -234,7 +233,7 @@ container_kill (PyObject *self, PyObject *args)
   PyObject *ctx_obj = NULL;
   char *id = NULL;
   int signal;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   int ret;
 
   if (!PyArg_ParseTuple (args, "Osi", &ctx_obj, &id, &signal))
@@ -259,7 +258,7 @@ container_start (PyObject *self, PyObject *args)
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
   char *id = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   int ret;
 
   if (!PyArg_ParseTuple (args, "Os", &ctx_obj, &id))
@@ -283,7 +282,7 @@ containers_list (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   libcrun_container_list_t *containers, *it;
   PyObject *retobj;
   Py_ssize_t i = 0;
@@ -324,7 +323,7 @@ container_status (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   char *id = NULL;
   libcrun_container_status_t status;
   cleanup_free char *buffer = NULL;
@@ -363,7 +362,7 @@ container_update (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   char *id = NULL;
   char *content = NULL;
   yajl_val tree = NULL;
@@ -411,7 +410,7 @@ container_spec (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   char *id = NULL;
   libcrun_container_status_t status;
   cleanup_free char *buffer = NULL;
@@ -439,7 +438,7 @@ get_verbosity (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   int verbosity;
 
   if (!PyArg_ParseTuple (args, "i", &verbosity))
@@ -453,7 +452,7 @@ set_verbosity (PyObject *self, PyObject *args)
 {
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
-  struct libcrun_context_s *ctx;
+  libcrun_context_t *ctx;
   int verbosity;
 
   if (!PyArg_ParseTuple (args, "i", &verbosity))
