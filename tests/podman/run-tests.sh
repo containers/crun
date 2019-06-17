@@ -21,7 +21,7 @@ export TMPDIR=/var/tmp
 # - checkpoint
 #  crun doesn't support CRIU.
 #
-# - search|trust|inspect|logs|generate|import
+# - search|trust|inspect|logs|generate|import|mounted rw|inherit host devices|privileged CapEff|
 #   Flaky or not using the runtime.
 #
 # - selinux
@@ -35,6 +35,6 @@ export TMPDIR=/var/tmp
 #   assumption that "create" must fail if the executable is not found.  We must add lookup for the executable in $PATH to mimic the runc behavior.
 
 
-ginkgo --focus='.*' --skip='.*(checkpoint|selinux|notify_socket|systemd|podman run exit 12*|podman run exit code on failure to exec|failed to start|search|trust|inspect|logs|generate|import).*' \
+ginkgo --focus='.*' --skip='.*(checkpoint|selinux|notify_socket|systemd|podman run exit 12*|podman run exit code on failure to exec|failed to start|search|trust|inspect|logs|generate|import|mounted rw|inherit host devices|privileged CapEff|).*' \
 	 -v -tags "seccomp   ostree selinux  varlink exclude_graphdriver_devicemapper" \
 	 -timeout=50m -cover -flakeAttempts 3 -progress -trace -noColor test/e2e/.
