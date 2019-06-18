@@ -2,24 +2,21 @@ Summary: OCI runtime written in C
 Name: crun
 Version: #VERSION#
 Release: 1%{?dist}
-Source0: %{url}/archive/%{name}-%{version}.tar.gz
+Source0: https://github.com/giuseppe/crun/releases/download/%{version}/%{name}-%{version}.tar.gz
 License: GPLv3+
 URL: https://github.com/giuseppe/crun
 
 # We always run autogen.sh
-BuildRequires: autoconf automake
+BuildRequires: autoconf
+BuildRequires: automake
 BuildRequires: gcc
 BuildRequires: python
 BuildRequires: git
-BuildRequires: gcc
-BuildRequires: automake
-BuildRequires: autoconf
 BuildRequires: libcap-devel
 BuildRequires: systemd-devel
 BuildRequires: yajl-devel
 BuildRequires: libseccomp-devel
 BuildRequires: libselinux-devel
-BuildRequires: glibc-static
 BuildRequires: python3-libmount
 BuildRequires: libtool
 BuildRequires: go-md2man
@@ -31,16 +28,16 @@ crun is a OCI runtime
 %autosetup -n %{name}-%{version}
 
 %build
-env NOCONFIGURE=1 ./autogen.sh
+./autogen.sh
 %configure --disable-silent-rules
 
 %make_build
 
 %install
-%make_install INSTALL="install -p"
+%make_install
+rm -rf $RPM_BUILD_ROOT/usr/lib*
 
 %files
 %license COPYING
 %{_bindir}/%{name}
-%{_libdir}/libcrun.*
 %{_mandir}/man1/*
