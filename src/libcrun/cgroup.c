@@ -495,7 +495,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
 }
 
 static
-int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const char *scope, const char *slice, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const char *id, const char *slice, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -507,6 +507,7 @@ int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const 
   struct systemd_job_removed_s userdata;
   int i;
   const char *boolean_opts[10];
+  cleanup_free char *scope = NULL;
 
   i = 0;
   boolean_opts[i++] = "Delegate";
@@ -554,6 +555,22 @@ int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const 
     {
       ret = crun_make_error (err, -sd_err, "set up dbus message");
       goto exit;
+    }
+
+  if (slice == NULL || slice[0] == '\0')
+      xasprintf (&scope, "%s-%d.scope", id, getpid ());
+  else
+    {
+      char *n = strchr (slice, ':');
+      if (n == NULL)
+        xasprintf (&scope, "%s.scope", slice);
+      else
+        {
+          xasprintf (&scope, "%s.scope", n + 1);
+          n = strchr (scope, ':');
+          if (n)
+            *n = '-';
+        }
     }
 
   sd_err = sd_bus_message_append (m, "ss", scope, "fail");
@@ -782,10 +799,7 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
 #ifdef HAVE_SYSTEMD
   if (systemd)
     {
-      cleanup_free char *scope = NULL;
-      xasprintf (&scope, "%s-%d.scope", id, getpid ());
-
-      ret = enter_systemd_cgroup_scope (resources, scope, cgroup_path, pid, err);
+      ret = enter_systemd_cgroup_scope (resources, id, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
