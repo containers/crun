@@ -27,6 +27,11 @@ def test_deny_devices():
     if os.getuid() != 0:
         return 77
 
+    try:
+        os.stat("/dev/fuse")
+    except:
+        return 77
+
     conf = base_config()
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'open', '/dev/fuse']
@@ -50,6 +55,11 @@ def test_deny_devices():
 
 def test_allow_device():
     if os.getuid() != 0:
+        return 77
+
+    try:
+        os.stat("/dev/fuse")
+    except:
         return 77
 
     conf = base_config()
