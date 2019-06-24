@@ -1731,14 +1731,21 @@ libcrun_update_cgroup_resources (int cgroup_mode, oci_container_linux_resources 
 {
   if (path == NULL)
     {
+      size_t i;
+
       if (resources->block_io
           || resources->network
           || resources->hugepage_limits_len
-          || resources->devices_len
           || resources->memory
           || resources->pids
           || resources->cpu)
         return crun_make_error (err, errno, "cannot set limits without cgroups");
+
+      for (i = 0; i < resources->devices_len; i++)
+        {
+          if (resources->devices[i]->allow || strcmp (resources->devices[i]->access, "rwm"))
+            return crun_make_error (err, errno, "cannot set limits without cgroups");
+        }
 
       return 0;
     }
