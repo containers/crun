@@ -1,4 +1,4 @@
-FROM fedora AS base
+FROM registry.fedoraproject.org/fedora:latest AS base
 RUN dnf install -y git dnf-utils gcc meson ninja-build libselinux-static libseccomp-static libcap-static \
     make python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel cmake \
     libselinux-devel go-md2man glibc-static python3-libmount libtool
