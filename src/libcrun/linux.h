@@ -35,9 +35,9 @@ pid_t libcrun_run_linux_container (libcrun_container_t *container,
                                    int detach,
                                    container_entrypoint_t entrypoint,
                                    void *args,
-                                   int *notify_socket_out,
                                    int *sync_socket_out,
                                    libcrun_error_t *err);
+int get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *notify_socket_out, libcrun_error_t *err);
 int libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);

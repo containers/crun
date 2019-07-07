@@ -29,7 +29,6 @@ export TMPDIR=/var/tmp
 #
 # - systemd
 # - notify_socket
-#   must fix NOTIFY_PATH support in crun.  upstream runc doesn't support it as well :-) https://github.com/opencontainers/runc/pull/1807
 #
 # - podman run exit 12*|podman run exit code on failure to exec|failed to start
 #   assumption that "create" must fail if the executable is not found.  We must add lookup for the executable in $PATH to mimic the runc behavior.

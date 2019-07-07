@@ -896,6 +896,33 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
+handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
+{
+#ifdef HAVE_SYSTEMD
+  int ret;
+  char buf[256];
+  const char *ready_str = "READY=1";
+
+  ret = recvfrom (notify_socketfd, buf, sizeof (buf) - 1, 0, NULL, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "recvfrom notify socket");
+
+  buf[ret] = '\0';
+  if (strstr (buf, ready_str))
+    {
+      ret = sd_notify (0, ready_str);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "sd_notify");
+
+      return 1;
+    }
+  return 0;
+#else
+  return 1;
+#endif
+}
+
+static int
 wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int notify_socket, int container_ready_fd, libcrun_error_t *err)
 {
   cleanup_close int epollfd = -1;
@@ -993,25 +1020,14 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
               if (UNLIKELY (ret < 0))
                 return ret;
             }
-#ifdef HAVE_SYSTEMD
           else if (events[i].data.fd == notify_socket)
             {
-              char buf[256];
-              const char *ready_str = "READY=1";
-              ret = recvfrom (notify_socket, buf, sizeof (buf) - 1, 0, NULL, NULL);
+              ret = handle_notify_socket (notify_socket, err);
               if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "recvfrom");
-              buf[ret] = '\0';
-              if (strstr (buf, ready_str))
-                {
-                  ret = sd_notify (0, ready_str);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "sd_notify");
-                  if (context->detach)
+                return ret;
+              if (ret && context->detach)
                     return 0;
-                }
             }
-#endif
           else if (events[i].data.fd == signalfd)
             {
               res = TEMP_FAILURE_RETRY (read (signalfd, &si, sizeof (si)));
@@ -1199,9 +1215,17 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   pid = libcrun_run_linux_container (container, context->detach,
                                      container_entrypoint, &container_args,
-                                     &notify_socket, &sync_socket, err);
+                                     &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
+
+  if (context->fifo_exec_wait_fd < 0 && context->notify_socket)
+    {
+      /* Do not open the notify socket here on "create".  "start" will take care of it.  */
+      ret = get_notify_fd (context, container, &notify_socket, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (seccomp_fd >= 0)
     close_and_reset (&seccomp_fd);
@@ -1559,7 +1583,31 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
   if (!ret)
     return crun_make_error (err, errno, "container '%s' is not running", id);
 
-  return libcrun_status_write_exec_fifo (context->state_root, id, err);
+  ret = libcrun_status_write_exec_fifo (context->state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (context->notify_socket)
+    {
+      cleanup_close int fd = -1;
+
+      ret = get_notify_fd (context, NULL, &fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (ret > 0)
+        {
+          while (1)
+            {
+              ret = handle_notify_socket (fd, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              if (ret)
+                break;
+            }
+        }
+    }
+
+  return 0;
 }
 
 int

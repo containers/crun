@@ -988,37 +988,66 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
   return 0;
 }
 
+/*
+  Open a fd to the NOTIFY_SOCKET end on the host.  If CONTAINER is NULL, then CONTEXT
+  is used to retrieve the path to the socket.
+*/
+int
+get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *notify_socket_out, libcrun_error_t *err)
+{
+#ifdef HAVE_SYSTEMD
+  cleanup_close int notify_fd = -1;
+  cleanup_free char *host_notify_socket_path = NULL;
+  cleanup_free char *state_dir = NULL;
+  char *host_path = NULL;
+
+  if (container)
+    host_path = get_private_data (container)->host_notify_socket_path;
+
+  *notify_socket_out = -1;
+
+  if (host_path == NULL)
+    {
+      state_dir = libcrun_get_state_directory (context->state_root, context->id);
+      xasprintf (&host_notify_socket_path, "%s/notify", state_dir);
+      host_path = host_notify_socket_path;
+    }
+
+  notify_fd = open_unix_domain_socket (host_path, 1, err);
+  if (UNLIKELY (notify_fd < 0))
+    return notify_fd;
+
+  if (UNLIKELY (chmod (host_path, 0777) < 0))
+    return crun_make_error (err, errno, "chmod %s", host_path);
+
+  *notify_socket_out = notify_fd;
+  notify_fd = -1;
+  return 1;
+#else
+  *notify_socket_out = -1;
+  return 0;
+#endif
+}
+
 #ifdef HAVE_SYSTEMD
 static int
-do_notify_socket (libcrun_container_t *container, int *notify_socket_out, const char *rootfs, libcrun_error_t *err)
+do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   const char *notify_socket = container->context->notify_socket;
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
   cleanup_free char *state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
-  cleanup_close int notify_fd = -1;
   int ret;
 
-  *notify_socket_out = -1;
   if (notify_socket == NULL)
     return 0;
 
   xasprintf (&container_notify_socket_path, "%s%s", rootfs, notify_socket);
   xasprintf (&host_notify_socket_path, "%s/notify", state_dir);
 
-  notify_fd = open_unix_domain_socket (host_notify_socket_path, 1, err);
-  if (UNLIKELY (notify_fd < 0))
-    return notify_fd;
-
-  ret = chmod (host_notify_socket_path, 0777);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chmod");
-
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
   host_notify_socket_path = container_notify_socket_path = NULL;
-  *notify_socket_out = notify_fd;
-  notify_fd = -1;
   return 0;
 }
 #endif
@@ -1029,22 +1058,29 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
   int ret;
   cleanup_free char *host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
   cleanup_free char *container_notify_socket_path = get_private_data (container)->container_notify_socket_path;
-  cleanup_free char *container_notify_socket_path_dir = NULL;
+  cleanup_free char *container_notify_socket_path_dir_alloc = NULL;
+  char *container_notify_socket_path_dir = NULL;
+  cleanup_free char *host_notify_dir_alloc = NULL;
+  char *host_notify_dir = NULL;
   get_private_data (container)->host_notify_socket_path = get_private_data (container)->container_notify_socket_path = NULL;
 
   if (host_notify_socket_path == NULL || container_notify_socket_path == NULL)
     return 0;
 
-  container_notify_socket_path_dir = xstrdup (container_notify_socket_path);
-  ret = crun_ensure_directory (dirname (container_notify_socket_path_dir), 0700, err);
+  container_notify_socket_path_dir_alloc = xstrdup (container_notify_socket_path);
+  container_notify_socket_path_dir = dirname (container_notify_socket_path_dir_alloc);
+  ret = crun_ensure_directory (container_notify_socket_path_dir, 0700, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = create_file_if_missing (container_notify_socket_path, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  host_notify_dir_alloc = xstrdup (host_notify_socket_path);
+  host_notify_dir = dirname (host_notify_dir_alloc);
 
-  ret = do_mount (container, host_notify_socket_path, container_notify_socket_path, "", MS_BIND | MS_PRIVATE, "", 0, err);
+  FILE *f = fopen ("/tmp/log", "w+");
+  fprintf (f, "MOUNT %s to %s\n", host_notify_dir, container_notify_socket_path_dir);
+  fclose (f);
+
+  ret = do_mount (container, host_notify_dir, container_notify_socket_path_dir, "", MS_BIND | MS_PRIVATE, "", 0, err);
   if (UNLIKELY (ret < 0))
    return ret;
 
@@ -1743,7 +1779,6 @@ libcrun_run_linux_container (libcrun_container_t *container,
                              int detach,
                              container_entrypoint_t entrypoint,
                              void *args,
-                             int *notify_socket_out,
                              int *sync_socket_out,
                              libcrun_error_t *err)
 {
@@ -1815,11 +1850,9 @@ libcrun_run_linux_container (libcrun_container_t *container,
   sync_socket_container = sync_socket[1];
 
 #ifdef HAVE_SYSTEMD
-  ret = do_notify_socket (container, notify_socket_out, def->root->path, err);
+  ret = do_notify_socket (container, def->root->path, err);
   if (UNLIKELY (ret < 0))
     return ret;
-#else
-  *notify_socket_out = -1;
 #endif
 
   get_uid_gid_from_def (container->container_def,
