@@ -161,10 +161,23 @@ static struct argp_option options[] =
   };
 
 static void
-print_version_and_exit ()
+print_version (FILE *stream, struct argp_state *state)
 {
-  printf ("%s\nspec: 1.0.0\n", argp_program_version);
-  exit (EXIT_SUCCESS);
+  fprintf (stream, "%s\n", argp_program_version);
+  fprintf (stream, "spec: 1.0.0\n");
+#ifdef HAVE_SYSTEMD
+  fprintf (stream, "+SYSTEMD ");
+#endif
+#ifdef HAVE_SELINUX
+  fprintf (stream, "+SELINUX ");
+#endif
+#ifdef HAVE_CAP
+  fprintf (stream, "+CAP ");
+#endif
+#ifdef HAVE_SECCOMP
+  fprintf (stream, "+SECCOMP ");
+#endif
+  fprintf (stream, "+YAJL\n");
 }
 
 static error_t
@@ -196,10 +209,6 @@ parse_opt (int key, char *arg, struct argp_state *state)
       /* Ignored.  So that a runc command line won't fail.  */
       break;
 
-    case 'v':
-      print_version_and_exit ();
-      break;
-
     case ARGP_KEY_NO_ARGS:
       libcrun_fail_with_error (0, "please specify a command");
 
@@ -228,6 +237,8 @@ main (int argc, char **argv)
 {
   libcrun_error_t err = NULL;
   int ret, first_argument;
+
+  argp_program_version_hook = print_version;
 
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);
 
