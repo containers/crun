@@ -1178,6 +1178,10 @@ libcrun_do_pivot_root (libcrun_container_t *container, const char *rootfs, libcr
         return crun_make_error (err, errno, "chroot to '%s'", rootfs);
     }
 
+  ret = chdir ("/");
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chdir to /");
+
   return 0;
 }
 
