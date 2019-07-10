@@ -28,10 +28,17 @@ enum
    CGROUP_MODE_HYBRID
   };
 
+enum
+  {
+   CGROUP_MANAGER_CGROUPFS = 1,
+   CGROUP_MANAGER_SYSTEMD,
+   CGROUP_MANAGER_DISABLED
+  };
+
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
-int libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err);
+int libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err);
 int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
-int libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_error_t *err);
+int libcrun_cgroup_destroy (const char *id, char *path, int manager, libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err);
 int libcrun_update_cgroup_resources (int cgroup_mode, oci_container_linux_resources *resources, char *path, libcrun_error_t *err);
 int libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err);

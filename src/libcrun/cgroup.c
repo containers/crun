@@ -795,12 +795,18 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
 {
   int ret;
 
+  if (manager == CGROUP_MANAGER_DISABLED)
+    {
+      *path = NULL;
+      return 0;
+    }
+
 #ifdef HAVE_SYSTEMD
-  if (systemd)
+  if (manager == CGROUP_MANAGER_SYSTEMD)
     {
       ret = enter_systemd_cgroup_scope (resources, id, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
@@ -840,7 +846,7 @@ is_rootless (libcrun_error_t *err)
 }
 
 int
-libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int systemd, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
 {
   libcrun_error_t tmp_err = NULL;
   int rootless;
@@ -860,7 +866,7 @@ libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode,
         return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = libcrun_cgroup_enter_internal (resources, cgroup_mode, path, cgroup_path, systemd, pid, id, err);
+  ret = libcrun_cgroup_enter_internal (resources, cgroup_mode, path, cgroup_path, manager, pid, id, err);
   if (LIKELY (ret == 0))
     return ret;
 
@@ -893,6 +899,9 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
   char *it;
   char *saveptr = NULL;
   int mode;
+
+  if (path == NULL || *path == '\0')
+    return 0;
 
   mode = libcrun_get_cgroup_mode (err);
   if (mode < 0)
@@ -936,7 +945,12 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   size_t i;
   ssize_t path_len;
   int mode;
-  const cgroups_subsystem_t *subsystems = libcrun_get_cgroups_subsystems (err);
+  const cgroups_subsystem_t *subsystems;
+
+  if (path == NULL || *path == '\0')
+    return 0;
+
+  subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
     return -1;
 

@@ -1160,7 +1160,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int socket_pair_1 = -1;
   cleanup_close int seccomp_fd = -1;
   cleanup_close int console_socket_fd = -1;
-  int cgroup_mode;
+  int cgroup_mode, cgroup_manager;
   char created[35];
   struct container_entrypoint_s container_args =
     {
@@ -1237,7 +1237,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", context->systemd_cgroup, pid, context->id, err);
+  cgroup_manager = CGROUP_MANAGER_CGROUPFS;
+  if (context->systemd_cgroup)
+    cgroup_manager = CGROUP_MANAGER_SYSTEMD;
+  else if (context->force_no_cgroup)
+    cgroup_manager = CGROUP_MANAGER_DISABLED;
+
+  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", cgroup_manager, pid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
