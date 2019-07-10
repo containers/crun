@@ -511,14 +511,17 @@ int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const 
 
   i = 0;
   boolean_opts[i++] = "Delegate";
-  if (resources->cpu)
-    boolean_opts[i++] = "CPUAccounting";
-  if (resources->memory)
-    boolean_opts[i++] = "MemoryAccounting";
-  if (resources->block_io)
-    boolean_opts[i++] = "IOAccounting";
-  if (resources->pids)
-    boolean_opts[i++] = "TasksAccounting";
+  if (resources)
+    {
+      if (resources->cpu)
+        boolean_opts[i++] = "CPUAccounting";
+      if (resources->memory)
+        boolean_opts[i++] = "MemoryAccounting";
+      if (resources->block_io)
+        boolean_opts[i++] = "IOAccounting";
+      if (resources->pids)
+        boolean_opts[i++] = "TasksAccounting";
+    }
   boolean_opts[i++] = NULL;
 
   sd_err = sd_bus_default (&bus);
