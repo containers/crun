@@ -55,6 +55,7 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   con->id = id;
   con->state_root = glob->root;
   con->systemd_cgroup = glob->option_systemd_cgroup;
+  con->force_no_cgroup = glob->option_force_no_cgroup;
   con->notify_socket = getenv ("NOTIFY_SOCKET");
   con->fifo_exec_wait_fd = -1;
 
@@ -139,6 +140,7 @@ enum
   {
     OPTION_DEBUG = 1000,
     OPTION_SYSTEMD_CGROUP,
+    OPTION_CGROUP_MANAGER,
     OPTION_LOG,
     OPTION_LOG_FORMAT,
     OPTION_ROOT,
@@ -152,9 +154,10 @@ const char *argp_program_bug_address = PACKAGE_BUGREPORT;
 static struct argp_option options[] =
   {
     {"debug", OPTION_DEBUG, 0, 0, "produce verbose output"},
+    {"cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager"},
     {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups"},
     {"log", OPTION_LOG, "FILE", 0},
-    {"log-format", OPTION_LOG_FORMAT, "format", 0},
+    {"log-format", OPTION_LOG_FORMAT, "FORMAT", 0},
     {"root", OPTION_ROOT, "DIR",  0},
     {"rootless", OPTION_ROOT, "VALUE",  0},
     { 0 }
@@ -183,13 +186,39 @@ print_version (FILE *stream, struct argp_state *state)
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
+  const char *tmp;
+
   switch (key)
     {
     case OPTION_DEBUG:
       arguments.debug = true;
       break;
 
+    case OPTION_CGROUP_MANAGER:
+      tmp = argp_mandatory_argument (arg, state);
+      if (strcmp (tmp, "systemd") == 0)
+        {
+          arguments.option_force_no_cgroup = false;
+          arguments.option_systemd_cgroup = true;
+        }
+      else if (strcmp (tmp, "cgroupfs") == 0)
+        {
+          arguments.option_force_no_cgroup = false;
+          arguments.option_systemd_cgroup = false;
+        }
+      else if (strcmp (tmp, "disabled") == 0)
+        {
+          arguments.option_systemd_cgroup = false;
+          arguments.option_force_no_cgroup = true;
+        }
+      else
+        {
+          libcrun_fail_with_error (0, "unknown cgroup manager specified");
+        }
+      break;
+
     case OPTION_SYSTEMD_CGROUP:
+      arguments.option_force_no_cgroup = false;
       arguments.option_systemd_cgroup = true;
       break;
 

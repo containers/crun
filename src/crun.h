@@ -29,6 +29,7 @@ struct crun_global_arguments
   bool command;
   bool debug;
   bool option_systemd_cgroup;
+  bool option_force_no_cgroup;
 };
 
 int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err);
