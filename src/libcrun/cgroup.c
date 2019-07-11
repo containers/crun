@@ -1321,13 +1321,22 @@ write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_
 
   for (i = 0; i < devs_len; i++)
     {
-      cleanup_free char *fmt_buf;
+      /* It is plenty of room for "TYPE MAJOR:MINOR ACCESS", where type is one char, and ACCESS is at most 3.   */
+#define FMT_BUF_LEN 64
+      char fmt_buf[FMT_BUF_LEN];
       const char *file = devs[i]->allow ? "devices.allow" : "devices.deny";
 
       if (devs[i]->type == NULL || devs[i]->type[0] == 'a')
-        len = xasprintf (&fmt_buf, "a");
+        {
+          strcpy (fmt_buf, "a");
+          len = 1;
+        }
       else
-        len = xasprintf (&fmt_buf, "%s %lu:%lu %s", devs[i]->type, devs[i]->major, devs[i]->minor, devs[i]->access);
+        {
+          len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %lu:%lu %s", devs[i]->type, devs[i]->major, devs[i]->minor, devs[i]->access);
+          /* Make sure it is still a NUL terminated string.  */
+          fmt_buf[len] = '\0';
+        }
       ret = write_file_at (dirfd, file, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
