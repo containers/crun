@@ -20,6 +20,7 @@
 
 #include <config.h>
 #include "cgroup.h"
+#include "ebpf.h"
 #include "utils.h"
 #include <string.h>
 #include <sys/types.h>
@@ -1287,8 +1288,9 @@ write_hugetlb_resources (int dirfd, oci_container_linux_resources_hugepage_limit
   return 0;
 }
 
+
 static int
-write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v1 (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
 {
   size_t i, len;
   int ret;
@@ -1308,16 +1310,6 @@ write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_
       "c 10:200 rwm",
       NULL
   };
-
-  if (cgroup2)
-    {
-      for (i = 0; i < devs_len; i++)
-        {
-          if (devs[i]->allow || strcmp (devs[i]->access, "rwm"))
-            return crun_make_error (err, errno, "devices not supported on cgroupv2");
-        }
-      return 0;
-    }
 
   for (i = 0; i < devs_len; i++)
     {
@@ -1350,6 +1342,117 @@ write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_
     }
 
   return 0;
+}
+
+static int
+write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+{
+  int i, ret;
+  cleanup_free struct bpf_program *program = NULL;
+  struct default_dev_s {
+    char type;
+    int major;
+    int minor;
+    const char *access;
+  };
+  struct default_dev_s default_devices[] =
+    {
+     {'c', -1, -1, "m"},
+     {'b', -1, -1, "m"},
+     {'c', 1, 3, "rwm"},
+     {'c', 1, 8, "rwm"},
+     {'c', 1, 7, "rwm"},
+     {'c', 5, 0, "rwm"},
+     {'c', 1, 5, "rwm"},
+     {'c', 1, 9, "rwm"},
+     {'c', 5, 1, "rwm"},
+     {'c', 136, -1, "rwm"},
+     {'c', 5, 2, "rwm"},
+     {'c', 10, 200, "rwm"},
+  };
+
+  program = bpf_program_new (2048);
+
+  ret = bpf_program_init_dev (program, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (i = (sizeof (default_devices) / sizeof (default_devices[0])) - 1; i >= 0 ; i--)
+    {
+      ret = bpf_program_append_dev (program, default_devices[i].access, default_devices[i].type,
+                                    default_devices[i].major, default_devices[i].minor, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+    }
+  for (i = devs_len - 1; i >= 0; i--)
+    {
+      char type = 'a';
+      int minor, major;
+      if (devs[i]->type != NULL)
+        type = devs[i]->type[0];
+
+      major = devs[i]->major;
+      minor = devs[i]->minor;
+
+      if (major == 0)
+        major = -1;
+      if (minor == 0)
+        minor = -1;
+
+      ret = bpf_program_append_dev (program, devs[i]->access, type, major, minor, devs[i]->allow, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = bpf_program_complete_dev (program, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_ebpf_load (program, dirfd, NULL, err);
+  if (ret < 0)
+    return ret;
+
+  return 0;
+}
+
+static int
+write_devices_resources_v2 (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+{
+  int ret, i;
+  bool can_skip = true;
+
+  ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
+  if (LIKELY (ret == 0))
+    return 0;
+
+  /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
+  for (i = 0; i < devs_len; i++)
+    {
+      if (devs[i]->allow || strcmp (devs[i]->access, "rwm"))
+        {
+          can_skip = false;
+          break;
+        }
+    }
+
+  if (can_skip)
+    {
+      crun_error_release (err);
+      ret = 0;
+    }
+
+  return ret;
+}
+
+
+static int
+write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+{
+  if (cgroup2)
+    return write_devices_resources_v2 (dirfd, devs, devs_len, err);
+
+  return write_devices_resources_v1 (dirfd, devs, devs_len, err);
 }
 
 static int
