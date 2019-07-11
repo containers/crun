@@ -153,7 +153,11 @@ libcrun_terminal_setup_size (int fd, unsigned short rows, unsigned short cols, l
     {
       ret = ioctl (0, TIOCGWINSZ, &ws);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "ioctl TIOCGWINSZ");
+        {
+          if (errno == ENOTTY)
+            return 0;
+          return crun_make_error (err, errno, "ioctl TIOCGWINSZ");
+        }
     }
 
   ret = ioctl (fd, TIOCSWINSZ, &ws);
