@@ -180,6 +180,9 @@ print_version (FILE *stream, struct argp_state *state)
 #ifdef HAVE_SECCOMP
   fprintf (stream, "+SECCOMP ");
 #endif
+#ifdef HAVE_EBPF
+  fprintf (stream, "+EBPF ");
+#endif
   fprintf (stream, "+YAJL\n");
 }
 
