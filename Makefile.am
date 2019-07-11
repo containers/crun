@@ -30,6 +30,7 @@ libcrun_la_SOURCES = src/libcrun/utils.c \
 			src/libcrun/cgroup.c \
 			src/libcrun/linux.c \
 			src/libcrun/seccomp.c \
+			src/libcrun/ebpf.c \
 			src/libcrun/error.c \
 			src/libcrun/status.c \
 			src/libcrun/terminal.c \
@@ -56,7 +57,7 @@ crun_LDFLAGS = $(CRUN_LDFLAGS)
 EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h src/update.h \
-	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/cgroup.h \
+	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/ebpf.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/sig2str.h \
 	src/libcrun/intprops.h crun.1.md
