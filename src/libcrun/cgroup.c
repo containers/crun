@@ -116,26 +116,38 @@ enable_controllers (oci_container_linux_resources *resources, const char *path, 
 
   xasprintf (&tmp_path, "%s/", path);
 
-  for (it = strchr (tmp_path + 1, '/'); it; it = strchr (it + 1, '/'))
+  for (it = strchr (tmp_path + 1, '/'); it;)
     {
+      cleanup_free char *cgroup_path = NULL;
       cleanup_free char *subtree_control = NULL;
+      char *next_slash = strchr (it + 1, '/');
 
       *it = '\0';
 
-      xasprintf (&subtree_control, "/sys/fs/cgroup%s/cgroup.subtree_control", tmp_path);
-      ret = write_file (subtree_control, controllers, strlen (controllers), err);
-      if (ret < 0)
+      xasprintf (&cgroup_path, "/sys/fs/cgroup%s", tmp_path);
+      ret = mkdir (cgroup_path, 0755);
+      if (ret < 0 && errno != EEXIST) {
+        return crun_make_error (err, errno, "create '%s'", cgroup_path);
+      }
+
+      if (next_slash)
         {
-          int e = crun_error_get_errno (err);
-          if (e == EPERM || e == EACCES || e == EBUSY)
+          xasprintf (&subtree_control, "%s/cgroup.subtree_control", cgroup_path);
+          ret = write_file (subtree_control, controllers, strlen (controllers), err);
+          if (ret < 0)
             {
-              crun_error_release (err);
-              goto next;
+              int e = crun_error_get_errno (err);
+              if (e == EPERM || e == EACCES || e == EBUSY)
+                {
+                  crun_error_release (err);
+                  goto next;
+                }
+              return ret;
             }
-          return ret;
         }
     next:
       *it = '/';
+      it = next_slash;
     }
   return 0;
 }
