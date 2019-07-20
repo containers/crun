@@ -30,11 +30,11 @@
 struct bpf_program;
 
 struct bpf_program *bpf_program_new (size_t size);
-void bpf_program_append (struct bpf_program *p, void *data, size_t size);
+struct bpf_program *bpf_program_append (struct bpf_program *p, void *data, size_t size);
 
-int bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err);
-int bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err);
-int bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err);
+struct bpf_program *bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err);
+struct bpf_program *bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err);
+struct bpf_program *bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err);
 
 
 int libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err);

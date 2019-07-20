@@ -138,7 +138,7 @@ bpf_program_new (size_t size)
   return p;
 }
 
-void
+struct bpf_program *
 bpf_program_append (struct bpf_program *p, void *data, size_t size)
 {
   if (p->allocated <= p->used + size)
@@ -148,9 +148,10 @@ bpf_program_append (struct bpf_program *p, void *data, size_t size)
     }
   memcpy (p->program + p->used, data, size);
   p->used += size;
+  return p;
 }
 
-int
+struct bpf_program *
 bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err)
 {
 #ifdef HAVE_EBPF
@@ -169,12 +170,12 @@ bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err)
                                 /* minor -> R5.  */
                                 BPF_LDX_MEM (BPF_W, BPF_REG_5, BPF_REG_1, 8),
   };
-  bpf_program_append (program, pre_insn, sizeof (pre_insn));
+  program = bpf_program_append (program, pre_insn, sizeof (pre_insn));
 #endif
-  return 0;
+  return program;
 }
 
-int
+struct bpf_program *
 bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err)
 {
 #ifdef HAVE_EBPF
@@ -237,7 +238,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_2, bpf_type, number_instructions)
       };
       number_instructions--;
-      bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, i, sizeof (i));
     }
   if (has_access)
     {
@@ -247,7 +248,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
       };
       number_instructions -= 3;
-      bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, i, sizeof (i));
     }
   if (has_major)
     {
@@ -255,7 +256,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_4, major, number_instructions)
       };
       number_instructions--;
-      bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, i, sizeof (i));
     }
   if (has_minor)
     {
@@ -263,18 +264,18 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_5, minor, number_instructions)
       };
       number_instructions--;
-      bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, i, sizeof (i));
     }
 
   if (has_type == 0 && has_access == 0 && has_major == 0 && has_minor == 0)
     program->private |= HAS_WILDCARD;
 
-  bpf_program_append (program, accept_block, sizeof (accept_block));
+  program = bpf_program_append (program, accept_block, sizeof (accept_block));
 #endif
-  return 0;
+  return program;
 }
 
-int
+struct bpf_program *
 bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err)
 {
 #ifdef HAVE_EBPF
@@ -286,9 +287,9 @@ bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err)
   if (program->private & HAS_WILDCARD)
     return 0;
 
-  bpf_program_append (program, &i, sizeof (i));
+  program = bpf_program_append (program, &i, sizeof (i));
 #endif
-  return 0;
+  return program;
 }
 
 int

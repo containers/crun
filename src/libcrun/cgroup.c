@@ -1399,17 +1399,16 @@ write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_de
 
   program = bpf_program_new (2048);
 
-  ret = bpf_program_init_dev (program, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  program = bpf_program_init_dev (program, err);
+  if (UNLIKELY (program == NULL))
+    return -1;
 
   for (i = (sizeof (default_devices) / sizeof (default_devices[0])) - 1; i >= 0 ; i--)
     {
-      ret = bpf_program_append_dev (program, default_devices[i].access, default_devices[i].type,
-                                    default_devices[i].major, default_devices[i].minor, true, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
+      program = bpf_program_append_dev (program, default_devices[i].access, default_devices[i].type,
+                                        default_devices[i].major, default_devices[i].minor, true, err);
+      if (UNLIKELY (program == NULL))
+        return -1;
     }
   for (i = devs_len - 1; i >= 0; i--)
     {
@@ -1423,14 +1422,14 @@ write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_de
       if (devs[i]->minor_present)
         minor = devs[i]->minor;
 
-      ret = bpf_program_append_dev (program, devs[i]->access, type, major, minor, devs[i]->allow, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      program = bpf_program_append_dev (program, devs[i]->access, type, major, minor, devs[i]->allow, err);
+      if (UNLIKELY (program == NULL))
+        return -1;
     }
 
-  ret = bpf_program_complete_dev (program, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  program = bpf_program_complete_dev (program, err);
+  if (UNLIKELY (program == NULL))
+    return -1;
 
   ret = libcrun_ebpf_load (program, dirfd, NULL, err);
   if (ret < 0)
