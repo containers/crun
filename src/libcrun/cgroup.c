@@ -1337,7 +1337,21 @@ write_devices_resources_v1 (int dirfd, oci_container_linux_resources_devices_ele
         }
       else
         {
-          len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %lu:%lu %s", devs[i]->type, devs[i]->major, devs[i]->minor, devs[i]->access);
+          char fmt_buf_major[16];
+          char fmt_buf_minor[16];
+
+#define FMT_DEV(x, b)                           \
+          {                                     \
+            if (x ## _present)                  \
+              sprintf (b, "%lu", x);            \
+            else                                \
+              strcpy (b, "*");                  \
+          } while(0)                            \
+
+          FMT_DEV (devs[i]->major, fmt_buf_major);
+          FMT_DEV (devs[i]->minor, fmt_buf_minor);
+
+          len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor, devs[i]->access);
           /* Make sure it is still a NUL terminated string.  */
           fmt_buf[len] = '\0';
         }
@@ -1400,17 +1414,14 @@ write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_de
   for (i = devs_len - 1; i >= 0; i--)
     {
       char type = 'a';
-      int minor, major;
+      int minor = -1, major = -1;
       if (devs[i]->type != NULL)
         type = devs[i]->type[0];
 
-      major = devs[i]->major;
-      minor = devs[i]->minor;
-
-      if (major == 0)
-        major = -1;
-      if (minor == 0)
-        minor = -1;
+      if (devs[i]->major_present)
+        major = devs[i]->major;
+      if (devs[i]->minor_present)
+        minor = devs[i]->minor;
 
       ret = bpf_program_append_dev (program, devs[i]->access, type, major, minor, devs[i]->allow, err);
       if (UNLIKELY (ret < 0))
