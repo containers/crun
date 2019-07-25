@@ -39,7 +39,7 @@ pid_t libcrun_run_linux_container (libcrun_container_t *container,
                                    libcrun_error_t *err);
 int get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *notify_socket_out, libcrun_error_t *err);
 int libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err);
-int libcrun_do_pivot_root (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err);
+int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char *rootfs, libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
 int libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err);
 int libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err);

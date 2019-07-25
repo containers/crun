@@ -34,7 +34,8 @@ enum
     OPTION_PID_FILE,
     OPTION_NO_SUBREAPER,
     OPTION_NO_NEW_KEYRING,
-    OPTION_PRESERVE_FDS
+    OPTION_PRESERVE_FDS,
+    OPTION_NO_PIVOT
   };
 
 static const char *bundle = NULL;
@@ -46,6 +47,7 @@ static struct argp_option options[] =
     {"bundle", 'b', 0, 0, "container bundle (default \".\")" },
     {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty" },
     {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container"},
+    {"no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root"},
     {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
     {"no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process"},
     {"no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key"},
@@ -75,6 +77,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_NO_SUBREAPER:
       crun_context.no_subreaper = true;
+      break;
+
+    case OPTION_NO_PIVOT:
+      crun_context.no_pivot = true;
       break;
 
     case OPTION_NO_NEW_KEYRING:
