@@ -1202,6 +1202,14 @@ move_root (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chdir to '%s'", rootfs);
 
+  ret = umount2 ("/sys", MNT_DETACH);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "umount /sys");
+
+  ret = umount2 ("/proc", MNT_DETACH);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "umount /proc");
+
   ret = mount (rootfs, "/", "", MS_MOVE, "");
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount MS_MOVE to '/'");
