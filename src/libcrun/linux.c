@@ -418,6 +418,20 @@ do_mount_cgroup_v2 (libcrun_container_t *container,
   return 0;
 }
 
+static bool
+has_mount_for (libcrun_container_t *container, const char *destination)
+{
+  size_t i;
+  oci_container *def = container->container_def;
+
+  for (i = 0; i < def->mounts_len; i++)
+    {
+          if (strcmp (def->mounts[i]->destination, destination) == 0)
+            return true;
+    }
+  return false;
+}
+
 static int
 do_mount_cgroup_v1 (libcrun_container_t *container,
                     int cgroup_mode,
@@ -452,6 +466,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
       cleanup_free char *source_path = NULL;
+      cleanup_free char *source_subsystem = NULL;
       cleanup_free char *subsystem_path = NULL;
       char *subpath, *subsystem, *it;
       subsystem = strchr (from, ':') + 1;
@@ -465,7 +480,13 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
       if (it)
         subsystem += 5;
 
-      xasprintf (&source_path, "/sys/fs/cgroup/%s/%s", subsystem, subpath);
+      xasprintf (&source_subsystem, "/sys/fs/cgroup/%s", subsystem);
+
+      /* if there is already a mount specified, do not add a default one.  */
+      if (has_mount_for (container, source_subsystem))
+        continue;
+
+      xasprintf (&source_path, "%s/%s", source_subsystem, subpath);
       xasprintf (&subsystem_path, "%s/%s", target, subsystem);
 
       ret = mkdir (subsystem_path, 0755);
