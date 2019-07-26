@@ -1617,14 +1617,43 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
 }
 
 int
+libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status, const char *state_root, const char **container_status, int *running, libcrun_error_t *err)
+{
+  int ret, has_fifo = 0;
+
+  ret = libcrun_is_container_running (status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  *running = ret;
+
+  if (*running)
+    {
+      ret = libcrun_status_has_read_exec_fifo (state_root, id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      has_fifo = ret;
+    }
+
+  if (! *running)
+    *container_status = "stopped";
+  else if (has_fifo)
+    *container_status = "created";
+  else
+    *container_status = "running";
+
+  return 0;
+}
+
+int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
-  int ret, running, has_fifo = 0;
   libcrun_container_status_t status;
   const char *state_root = context->state_root;
-  const char *container_status;
+  const char *container_status = NULL;
   yajl_gen gen = NULL;
   const unsigned char *buf;
+  int ret = 0;
+  int running;
   size_t len;
 
   memset (&status, 0, sizeof (status));
@@ -1632,25 +1661,9 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_is_container_running (&status, err);
+  ret = libcrun_get_container_state_string (id, &status, state_root, &container_status, &running, err);
   if (UNLIKELY (ret < 0))
     goto exit;
-  running = ret;
-
-  if (running)
-    {
-      ret = libcrun_status_has_read_exec_fifo (state_root, id, err);
-      if (UNLIKELY (ret < 0))
-        goto exit;
-      has_fifo = ret;
-    }
-
-  if (! running)
-    container_status = "stopped";
-  else if (has_fifo)
-    container_status = "created";
-  else
-    container_status = "running";
 
   ret = 0;
   gen = yajl_gen_alloc (NULL);

@@ -66,6 +66,9 @@ struct libcrun_container_s
   struct libcrun_context_s *context;
 };
 
+struct libcrun_container_status_s;
+typedef struct libcrun_container_status_s libcrun_container_status_t;
+
 typedef struct libcrun_container_s libcrun_container_t;
 typedef struct libcrun_context_s libcrun_context_t;
 
@@ -84,6 +87,8 @@ int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *c
 int libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
 int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err);
+
+int libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status, const char *state_root, const char **container_status, int *running, libcrun_error_t *err);
 
 int libcrun_container_exec (libcrun_context_t *context, const char *id, oci_container_process *process, libcrun_error_t *err);
 
