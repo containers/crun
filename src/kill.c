@@ -107,7 +107,6 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
 
   if (kill_options.regex)
     {
-      int ret = 0;
       regex_t re;
       libcrun_container_list_t *list, *it;
 

@@ -99,7 +99,6 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
 
   if (delete_options.regex)
     {
-      int ret = 0;
       regex_t re;
       libcrun_container_list_t *list, *it;
 
