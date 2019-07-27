@@ -193,7 +193,7 @@ make_oci_process_user (const char *userspec)
 int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int i, first_arg, ret = 0;
+  int first_arg, ret = 0;
   libcrun_context_t crun_context = {0, };
 
   crun_context.preserve_fds = 0;
@@ -217,6 +217,8 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   else
     {
       oci_container_process *process = xmalloc (sizeof (*process));
+      int i;
+
       memset (process, 0, sizeof (*process));
 
       process->args_len = argc;
