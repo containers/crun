@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/vfs.h>
+#include <inttypes.h>
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-bus.h>
@@ -158,8 +159,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   cleanup_close int dirfd = -1;
   cleanup_close int mems_fd = -1;
   cleanup_close int cpus_fd = -1;
-  size_t parent_path_len;
-  int ret, b_len;
+  int b_len;
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
@@ -196,6 +196,9 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   /* look up in the parent directory.  */
   if (cpus[0] == '\0' || mems[0] == '\0')
     {
+      size_t parent_path_len;
+      int ret;
+
       for (parent_path_len = path_len -1; parent_path_len > 1 && path[parent_path_len] != '/'; parent_path_len--);
       if (parent_path_len == 1)
         return 0;
@@ -377,7 +380,7 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, int ensure_missing, 
 int
 libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err)
 {
-  int i, ret;
+  int i;
   cleanup_close int dirfd = open (target, O_DIRECTORY | O_RDONLY);
 
   if (UNLIKELY (dirfd < 0))
@@ -385,6 +388,8 @@ libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err)
 
   for (i = 0; cgroup_symlinks[i].name; i++)
     {
+      int ret;
+
       ret = symlinkat (cgroup_symlinks[i].target, dirfd, cgroup_symlinks[i].name);
       if (UNLIKELY (ret < 0))
         {
@@ -810,8 +815,6 @@ exit:
 static int
 libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
 {
-  int ret;
-
   if (manager == CGROUP_MANAGER_DISABLED)
     {
       *path = NULL;
@@ -821,6 +824,8 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
 #ifdef HAVE_SYSTEMD
   if (manager == CGROUP_MANAGER_SYSTEMD)
     {
+      int ret;
+
       ret = enter_systemd_cgroup_scope (resources, id, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -841,6 +846,8 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
+      int ret;
+
       ret = enable_controllers (resources, *path, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -975,7 +982,8 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   if (systemd_cgroup)
     {
       ret = destroy_systemd_cgroup_scope (id, err);
-      crun_error_release (err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
     }
 #endif
 
@@ -1052,7 +1060,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, struct throttl
     {
       int ret;
       size_t len;
-      len = sprintf (fmt_buf, "%lu:%lu %lu\n",
+      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 "%" PRIu64 "\n",
                      throttling[i]->major,
                      throttling[i]->minor,
                      throttling[i]->rate);
@@ -1077,7 +1085,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, struct throttling
     {
       int ret;
       size_t len;
-      len = sprintf (fmt_buf, "%lu:%lu %s=%lu\n",
+      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %s=%lu\n",
                      throttling[i]->major,
                      throttling[i]->minor,
                      name,
@@ -1096,7 +1104,6 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
   char fmt_buf[128];
   size_t len;
   int ret;
-  size_t i;
       /* convert linearly from 10-1000 to 1-10000.  */
 #define CONVERT_WEIGHT_TO_CGROUPS_V2(x) (1 + ((x) - 10) * 9999 / 990)
 
@@ -1107,7 +1114,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
       if (cgroup2)
         val = CONVERT_WEIGHT_TO_CGROUPS_V2 (val);
 
-      len = sprintf (fmt_buf, "%d", val);
+      len = sprintf (fmt_buf, "%" PRIu32, val);
       ret = write_file_at (dirfd, cgroup2 ? "io.weight" : "blkio.weight", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1126,6 +1133,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
       if (cgroup2)
         {
           cleanup_close int wfd = -1;
+          size_t i;
 
           wfd = openat (dirfd, "io.weight", O_WRONLY);
           if (UNLIKELY (wfd < 0))
@@ -1134,7 +1142,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
             {
               uint32_t w = CONVERT_WEIGHT_TO_CGROUPS_V2 (blkio->weight_device[i]->weight);
 
-              len = sprintf (fmt_buf, "%lu:%lu %i\n",
+              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %i\n",
                              blkio->weight_device[i]->major,
                              blkio->weight_device[i]->minor,
                              w);
@@ -1149,6 +1157,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
         {
           cleanup_close int w_device_fd = -1;
           cleanup_close int w_leafdevice_fd = -1;
+          int i;
 
           w_device_fd = openat (dirfd, "blkio.weight_device", O_WRONLY);
           if (UNLIKELY (w_device_fd < 0))
@@ -1285,11 +1294,13 @@ static int
 write_hugetlb_resources (int dirfd, oci_container_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
 {
   char fmt_buf[128];
-  size_t i, len;
-  int ret;
+  size_t i;
   for (i = 0; i < htlb_len; i++)
     {
-      cleanup_free char *filename;
+      cleanup_free char *filename = NULL;
+      size_t len;
+      int ret;
+
       xasprintf (&filename, "hugetlb.%s.limit_in_bytes", htlb[i]->page_size);
 
       len = sprintf (fmt_buf, "%lu", htlb[i]->limit);
@@ -1556,12 +1567,12 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
 static int
 write_pids_resources (int dirfd, bool cgroup2, oci_container_linux_resources_pids *pids, libcrun_error_t *err)
 {
-  size_t len;
-  int ret;
-  char fmt_buf[32];
-
   if (pids->limit)
     {
+      char fmt_buf[32];
+      size_t len;
+      int ret;
+
       len = sprintf (fmt_buf, "%lu", pids->limit);
       ret = write_file_at (dirfd, "pids.max", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
@@ -1644,9 +1655,9 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
       if (period < 0)
         period = 100000;
       if (quota < 0)
-        len = sprintf (fmt_buf, "max %lu", period);
+        len = sprintf (fmt_buf, "max %" PRIi64, period);
       else
-        len = sprintf (fmt_buf, "%lu %lu", quota, period);
+        len = sprintf (fmt_buf, "%" PRIi64 "%" PRIi64, quota, period);
       ret = write_file_at (dirfd_cpu, "cpu.max", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
