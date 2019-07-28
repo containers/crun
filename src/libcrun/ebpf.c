@@ -301,10 +301,6 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
   int fd, ret;
   union bpf_attr attr;
   struct rlimit limit;
-  struct bpf_insn insn[] = {
-                            BPF_MOV64_IMM (BPF_REG_0, 0),
-                            BPF_EXIT_INSN (),
-  };
 
   limit.rlim_cur = RLIM_INFINITY;
   limit.rlim_max = RLIM_INFINITY;
