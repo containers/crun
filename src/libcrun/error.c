@@ -134,12 +134,6 @@ init_syslog (const char *id)
   return NULL;
 }
 
-static void *
-init_journald (const char *id)
-{
-  return (void *) id;
-}
-
 enum
   {
    LOG_TYPE_FILE = 1,
@@ -169,13 +163,13 @@ get_log_type (const char *log, const char **data)
 }
 
 int
-init_logging (crun_output_handler *output_handler, void **output_handler_arg,
+init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg,
               const char *id, const char *log, libcrun_error_t *err)
 {
   if (log == NULL)
     {
-      *output_handler = log_write_to_stderr;
-      *output_handler_arg = NULL;
+      *new_output_handler = log_write_to_stderr;
+      *new_output_handler_arg = NULL;
     }
   else
     {
@@ -188,25 +182,24 @@ init_logging (crun_output_handler *output_handler, void **output_handler_arg,
       switch (log_type)
         {
         case LOG_TYPE_FILE:
-          *output_handler = log_write_to_stream;
-          *output_handler_arg = fopen (arg, "a+");
-          if (*output_handler_arg == NULL)
+          *new_output_handler = log_write_to_stream;
+          *new_output_handler_arg = fopen (arg, "a+");
+          if (*new_output_handler_arg == NULL)
             return crun_make_error (err, errno, "open log file %s\n", log);
           break;
 
         case LOG_TYPE_SYSLOG:
-          *output_handler_arg = init_syslog (arg[0] ? arg : id);
-          *output_handler = log_write_to_syslog;
+          *new_output_handler_arg = init_syslog (arg[0] ? arg : id);
+          *new_output_handler = log_write_to_syslog;
           break;
 
         case LOG_TYPE_JOURNALD:
-          init_journald (arg[0] ? arg : id);
-          *output_handler = log_write_to_syslog;
-          *output_handler_arg = NULL;
+          *new_output_handler = log_write_to_syslog;
+          *new_output_handler_arg = NULL;
           break;
         }
     }
-  crun_set_output_handler (*output_handler, *output_handler_arg);
+  crun_set_output_handler (*new_output_handler, *new_output_handler_arg);
   return 0;
 }
 
