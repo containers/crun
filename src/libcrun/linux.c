@@ -537,7 +537,7 @@ do_mount_cgroup (libcrun_container_t *container,
       return do_mount_cgroup_v1 (container, cgroup_mode, source, target, fstype, mountflags, data, err);
     }
 
-  return crun_make_error (err, 0, "unknown cgroups mode %s", cgroup_mode);
+  return crun_make_error (err, 0, "unknown cgroups mode %d", cgroup_mode);
 }
 
 struct device_s
@@ -1058,7 +1058,6 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
   cleanup_free char *state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
-  int ret;
 
   if (notify_socket == NULL)
     return 0;
@@ -1113,10 +1112,11 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 {
   cleanup_free char *tmp = xstrdup (rootfs);
   char *it;
-  int ret;
 
   for (;;)
     {
+      int ret;
+
       ret = mount ("", tmp, "", MS_PRIVATE, NULL);
       if (ret == 0)
         return 0;
@@ -1390,11 +1390,13 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     }
   else
     {
-      size_t written = 0, len, s;
+      size_t written = 0, s;
       char buffer[64];
       uid_map = xmalloc (sizeof (buffer) * def->linux->uid_mappings_len + 1);
       for (s = 0; s < def->linux->uid_mappings_len; s++)
         {
+          size_t len;
+
           len = sprintf (buffer, "%d %d %d\n",
                          def->linux->uid_mappings[s]->container_id,
                          def->linux->uid_mappings[s]->host_id,
@@ -1419,11 +1421,13 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     }
   else
     {
-      size_t written = 0, len, s;
+      size_t written = 0, s;
       char buffer[64];
       gid_map = xmalloc (sizeof (buffer) * def->linux->gid_mappings_len + 1);
       for (s = 0; s < def->linux->gid_mappings_len; s++)
         {
+          size_t len;
+
           len = sprintf (buffer, "%d %d %d\n",
                          def->linux->gid_mappings[s]->container_id,
                          def->linux->gid_mappings[s]->host_id,
@@ -1687,18 +1691,18 @@ get_rlimit_resource (const char *name)
 }
 
 int
-libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err)
+libcrun_set_rlimits (oci_container_process_rlimits_element **new_rlimits, size_t len, libcrun_error_t *err)
 {
   size_t i;
   for (i = 0; i < len; i++)
     {
       struct rlimit limit;
-      char *type = rlimits[i]->type;
+      char *type = new_rlimits[i]->type;
       int resource = get_rlimit_resource (type);
       if (UNLIKELY (resource < 0))
         return crun_make_error (err, errno, "invalid rlimit '%s'", type);
-      limit.rlim_cur = rlimits[i]->soft;
-      limit.rlim_max = rlimits[i]->hard;
+      limit.rlim_cur = new_rlimits[i]->soft;
+      limit.rlim_max = new_rlimits[i]->hard;
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
         return crun_make_error (err, errno, "setrlimit '%s'", type);
     }
@@ -2122,7 +2126,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
  out:
   if (*err)
     libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-  _exit (1);
+  _exit (EXIT_FAILURE);
 }
 
 static int
@@ -2158,6 +2162,9 @@ join_process_parent_helper (pid_t child_pid,
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
   ret = libcrun_move_process_to_cgroup (pid, status->cgroup_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   /* The write unblocks the grandchild process so it can run once we setup
      the cgroups.  */
   ret = TEMP_FAILURE_RETRY (write (sync_fd, &ret, sizeof (ret)));
@@ -2205,12 +2212,12 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
   int sync_socket_fd[2];
   int fds[10] = {-1, };
   int fds_joined[10] = {0, };
-  const char *namespaces[] = {"ipc", "mnt",  "net", "pid", "uts",
+  const char *all_namespaces[] = {"ipc", "mnt",  "net", "pid", "uts",
 #ifdef CLONE_NEWCGROUP
-                              "cgroup",
+                                  "cgroup",
 #endif
-                              "user",
-                              NULL};
+                                  "user",
+                                  NULL};
   oci_container *def = container->container_def;
   size_t i;
   cleanup_close int sync_fd = -1;
@@ -2256,11 +2263,11 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
       goto exit;
     }
 
-  for (i = 0; namespaces[i]; i++)
+  for (i = 0; all_namespaces[i]; i++)
     {
       cleanup_close int fd = -1;
       cleanup_free char *ns_join;
-      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i]);
+      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, all_namespaces[i]);
       fds[i] = open (ns_join, O_RDONLY);
       if (UNLIKELY (fds[i] < 0))
         {
@@ -2268,13 +2275,13 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
           goto exit;
         }
     }
-  for (i = 0; namespaces[i]; i++)
+  for (i = 0; all_namespaces[i]; i++)
     {
       ret = setns (fds[i], 0);
       if (ret == 0)
         fds_joined[i] = 1;
     }
-  for (i = 0; namespaces[i]; i++)
+  for (i = 0; all_namespaces[i]; i++)
     {
       if (fds_joined[i])
         continue;
@@ -2286,7 +2293,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
           for (j = 0; j < def->linux->namespaces_len; j++)
             {
-              if (strcmp (namespaces[i], def->linux->namespaces[j]->type) == 0)
+              if (strcmp (all_namespaces[i], def->linux->namespaces[j]->type) == 0)
                 {
                   found = true;
                   break;
@@ -2298,12 +2305,12 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
               fds_joined[i] = 1;
               continue;
             }
-          crun_make_error (err, errno, "setns '%s'", namespaces[i]);
+          crun_make_error (err, errno, "setns '%s'", all_namespaces[i]);
           goto exit;
         }
       fds_joined[i] = 1;
     }
-  for (i = 0; namespaces[i]; i++)
+  for (i = 0; all_namespaces[i]; i++)
     close_and_reset (&fds[i]);
 
   if (detach && setsid () < 0)
@@ -2325,8 +2332,14 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
     {
       /* Just return the PID to the parent helper and exit.  */
       ret = TEMP_FAILURE_RETRY (write (sync_fd, "0", 1));
+      if (UNLIKELY (ret < 0))
+        _exit (EXIT_FAILURE);
+
       ret = TEMP_FAILURE_RETRY (write (sync_fd, &pid, sizeof (pid)));
-      _exit (0);
+      if (UNLIKELY (ret < 0))
+        _exit (EXIT_FAILURE);
+
+      _exit (EXIT_SUCCESS);
     }
   else
     {
@@ -2334,12 +2347,15 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
          used for the container.  */
       int r = -1;
       cleanup_free char *slave = NULL;
-      cleanup_close int master_fd = -1;
 
       ret = TEMP_FAILURE_RETRY (read (sync_fd, &r, sizeof (r)));
+      if (UNLIKELY (ret < 0))
+        _exit (EXIT_FAILURE);
 
       if (terminal_fd)
         {
+          cleanup_close int master_fd = -1;
+
           if (setsid () < 0)
             libcrun_fail_with_error (errno, "setsid");
 
@@ -2347,19 +2363,19 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
           if (UNLIKELY (master_fd < 0))
             {
               crun_error_write_warning_and_release (stderr, &err);
-              _exit (1);
+              _exit (EXIT_FAILURE);
             }
 
           ret = send_fd_to_socket (sync_fd, master_fd, err);
           if (UNLIKELY (ret < 0))
             {
               crun_error_write_warning_and_release (stderr, &err);
-              _exit (1);
+              _exit (EXIT_FAILURE);
             }
         }
 
       if (r != 0)
-        _exit (1);
+        _exit (EXIT_FAILURE);
     }
 
   return pid;
@@ -2369,7 +2385,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
     close (sync_socket_fd[0]);
   if (sync_socket_fd[1] >= 0)
     close (sync_socket_fd[1]);
-  for (i = 0; namespaces[i]; i++)
+  for (i = 0; all_namespaces[i]; i++)
     if (fds[i] >= 0)
       close (fds[i]);
   return ret;

@@ -308,7 +308,6 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
 static int
 sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_error_t *err)
 {
-  int ret;
   struct sync_socket_message_s msg;
 
   if (fd < 0)
@@ -316,6 +315,8 @@ sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_e
 
   while (true)
     {
+      int ret;
+
       ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
       if (UNLIKELY (ret < 0))
         {
@@ -445,10 +446,8 @@ container_entrypoint_init (void *args, const char *notify_socket,
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
   int ret;
-  size_t i;
   int has_terminal;
   cleanup_close int console_socket = -1;
-  cleanup_close int terminal_fd = -1;
   cleanup_close int console_socketpair = -1;
   oci_container *def = container->container_def;
   oci_container_process_capabilities *capabilities;
@@ -502,6 +501,8 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   if (has_terminal)
     {
+      cleanup_close int terminal_fd = -1;
+
       ret = setsid ();
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setsid");
@@ -558,10 +559,13 @@ container_entrypoint_init (void *args, const char *notify_socket,
     return crun_make_error (err, errno, "clearenv");
 
   if (def->process)
-    for (i = 0; i < def->process->env_len; i++)
-      if (putenv (def->process->env[i]) < 0)
-        return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
+    {
+      size_t i;
 
+      for (i = 0; i < def->process->env_len; i++)
+        if (putenv (def->process->env[i]) < 0)
+          return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
+    }
   if (notify_socket)
     {
       char *notify_socket_env;
@@ -728,7 +732,6 @@ run_poststop_hooks (libcrun_context_t *context, oci_container *def,
                     libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
-  int ret;
   cleanup_free libcrun_container_t *container = NULL;
   if (def == NULL)
     {
@@ -749,6 +752,8 @@ run_poststop_hooks (libcrun_context_t *context, oci_container *def,
 
   if (def->hooks && def->hooks->poststop_len)
     {
+      int ret;
+
       ret = do_hooks (def, 0, id, true, def->root->path, status->bundle,
                       "stopped", (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
@@ -1695,7 +1700,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
   yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
 
-  /* FIXME: store the owner.  */
   yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
   yajl_gen_string (gen, YAJL_STR (""), strlen (""));
 
@@ -1872,7 +1876,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       if (errno == ENOENT)
         libcrun_fail_with_error (errno, "executable file not found in $PATH");
       libcrun_fail_with_error (errno, "exec");
-      _exit (1);
+      _exit (EXIT_FAILURE);
     }
 
   if (seccomp_fd >= 0)
