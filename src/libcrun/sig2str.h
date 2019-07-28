@@ -17,37 +17,41 @@
 
 /* Written by Paul Eggert.  */
 
-#include <signal.h>
+#ifndef SIGSTR_H
+# define SIGSTR_H
+
+# include <signal.h>
 
 /* Don't override system declarations of SIG2STR_MAX, sig2str, str2sig.  */
-#ifndef SIG2STR_MAX
+# ifndef SIG2STR_MAX
 
-# include "intprops.h"
+#  include "intprops.h"
 
 /* Size of a buffer needed to hold a signal name like "HUP".  */
-# define SIG2STR_MAX (sizeof "SIGRTMAX" + INT_STRLEN_BOUND (int) - 1)
+#  define SIG2STR_MAX (sizeof "SIGRTMAX" + INT_STRLEN_BOUND (int) - 1)
 
-#ifdef __cplusplus
+# ifdef __cplusplus
 extern "C" {
-#endif
+# endif
 
 int sig2str (int, char *);
 int str2sig (char const *, int *);
 
-#ifdef __cplusplus
+# ifdef __cplusplus
 }
-#endif
+# endif
 
-#endif
+# endif
 
 /* An upper bound on signal numbers allowed by the system.  */
 
-#if defined _sys_nsig
-# define SIGNUM_BOUND (_sys_nsig - 1)
-#elif defined _SIG_MAXSIG
-# define SIGNUM_BOUND (_SIG_MAXSIG - 2) /* FreeBSD >= 7.  */
-#elif defined NSIG
-# define SIGNUM_BOUND (NSIG - 1)
-#else
-# define SIGNUM_BOUND 64
+# if defined _sys_nsig
+#  define SIGNUM_BOUND (_sys_nsig - 1)
+# elif defined _SIG_MAXSIG
+#  define SIGNUM_BOUND (_SIG_MAXSIG - 2) /* FreeBSD >= 7.  */
+# elif defined NSIG
+#  define SIGNUM_BOUND (NSIG - 1)
+# else
+#  define SIGNUM_BOUND 64
+# endif
 #endif
