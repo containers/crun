@@ -246,7 +246,7 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
     content = (char *) build_file (&len);
   else
     {
-      int ret = read_all_file (resources, &content, &len, err);
+      ret = read_all_file (resources, &content, &len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
