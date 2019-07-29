@@ -667,11 +667,33 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
   cleanup_file FILE *input = NULL;
   cleanup_free char *lineptr = NULL;
   size_t lenlineptr = 0, len_name;
+  size_t buf_size = sysconf (_SC_GETPW_R_SIZE_MAX);
+  cleanup_free char *buf = xmalloc (buf_size);
   const char *name;
-  struct passwd *pwd = getpwuid (id);
-  if (pwd == NULL)
-    return -1;
-  name = pwd->pw_name;
+  struct passwd pwd;
+
+  for (;;)
+    {
+      int ret;
+      struct passwd *ret_pw = NULL;
+
+      ret = getpwuid_r (id, &pwd, buf, buf_size, &ret_pw);
+      if (LIKELY (ret == 0))
+        {
+          if (ret_pw)
+            {
+              name = ret_pw->pw_name;
+              break;
+            }
+          return -1;
+        }
+
+      if (ret < 0 && errno != ERANGE)
+        return ret;
+
+      buf_size *= 2;
+      buf = xrealloc (buf, buf_size);
+    }
 
   len_name = strlen (name);
 
