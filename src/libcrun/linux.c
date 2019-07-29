@@ -1410,7 +1410,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
 
   if (!def->linux->gid_mappings_len)
     {
-      gid_map_len = format_default_id_mapping (&gid_map, container->container_uid, container->host_gid, 0);
+      gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, 0);
       if (gid_map == NULL)
         {
           if (container->host_gid)
