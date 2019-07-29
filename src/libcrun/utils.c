@@ -901,10 +901,7 @@ set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
   if (UNLIKELY (flags < 0))
     return crun_make_error (err, errno, "fcntl");
 
-  if (blocking)
-    ret = fcntl (fd, F_SETFL, flags & ~O_NONBLOCK);
-  else
-    ret = fcntl (fd, F_SETFL, flags | O_NONBLOCK);
+  ret = fcntl (fd, F_SETFL, blocking ? flags & ~O_NONBLOCK : flags | O_NONBLOCK);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fcntl");
   return 0;
