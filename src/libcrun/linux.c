@@ -917,6 +917,8 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
             }
         }
 
+      type = def->mounts[i]->type;
+
       if (def->mounts[i]->options == NULL)
         flags = get_default_flags (container, def->mounts[i]->destination, &data);
       else
@@ -927,25 +929,24 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
             {
               flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &data);
             }
-        }
 
-      type = def->mounts[i]->type;
-      if (type == NULL)
-        {
-          size_t j;
-
-          for (j = 0; j < def->mounts[i]->options_len; j++)
+          if (type == NULL)
             {
-              if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+              size_t j;
+
+              for (j = 0; j < def->mounts[i]->options_len; j++)
                 {
-                  type = "bind";
-                  break;
+                  if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+                    {
+                      type = "bind";
+                      break;
+                    }
                 }
             }
         }
+
       if (type == NULL)
         return crun_make_error (err, 0, "invalid mount type for %s", def->mounts[i]->destination);
-
 
       if (strcmp (type, "bind") == 0)
         {
