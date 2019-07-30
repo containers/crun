@@ -45,7 +45,7 @@ struct libcrun_error_s
 };
 typedef struct libcrun_error_s *libcrun_error_t;
 
-void oom_handler ();
+void oom_handler () __attribute__ ((noreturn));
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
 
