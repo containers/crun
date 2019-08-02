@@ -2430,12 +2430,27 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
 }
 
 static int
-libcrun_container_pause_unpause_linux (libcrun_container_status_t *status, const char *id, const char *const state, libcrun_error_t *err)
+libcrun_container_pause_unpause_linux (libcrun_container_status_t *status, const char *id, const bool pause, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *path = NULL;
+  int cgroup_mode;
+  const char *state = "";
 
-  xasprintf (&path, "/sys/fs/cgroup/freezer/%s/freezer.state", status->cgroup_path);
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    {
+      state = pause ? "1" : "0";
+      xasprintf (&path, "/sys/fs/cgroup/%s/cgroup.freeze", status->cgroup_path);
+    }
+  else
+    {
+      state = pause ? "FROZEN" : "THAWED";
+      xasprintf (&path, "/sys/fs/cgroup/freezer/%s/freezer.state", status->cgroup_path);
+    }
 
   ret = write_file (path, state, strlen (state), err);
   if (ret >= 0)
@@ -2446,13 +2461,13 @@ libcrun_container_pause_unpause_linux (libcrun_container_status_t *status, const
 int
 libcrun_container_pause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
 {
-  return libcrun_container_pause_unpause_linux (status, id, "FROZEN", err);
+  return libcrun_container_pause_unpause_linux (status, id, true, err);
 }
 
 int
 libcrun_container_unpause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
 {
-  return libcrun_container_pause_unpause_linux (status, id, "THAWED", err);
+  return libcrun_container_pause_unpause_linux (status, id, false, err);
 }
 
 /* Protection for attacks like CVE-2019-5736.  */
