@@ -1657,7 +1657,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
       if (quota < 0)
         len = sprintf (fmt_buf, "max %" PRIi64, period);
       else
-        len = sprintf (fmt_buf, "%" PRIi64 "%" PRIi64, quota, period);
+        len = sprintf (fmt_buf, "%" PRIi64 " %" PRIi64, quota, period);
       ret = write_file_at (dirfd_cpu, "cpu.max", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1872,6 +1872,12 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
     }
   if (resources->cpu)
     {
+      ret = write_cpu_resources (cgroup_dirfd, true,
+                                 resources->cpu,
+                                 err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = write_cpuset_resources (cgroup_dirfd, true,
                                     resources->cpu,
                                     err);
