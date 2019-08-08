@@ -24,6 +24,8 @@ import sys
 from tests_utils import *
 
 def tty_helper(fd):
+    if os.isatty(1) == False:
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'isatty', fd]
     conf['process']['terminal'] = True
@@ -43,6 +45,8 @@ def test_stderr_tty():
     return tty_helper("2")
 
 def test_tty_and_detach():
+    if os.isatty(1) == False:
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'isatty', 0]
     conf['process']['terminal'] = True
