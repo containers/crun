@@ -100,13 +100,13 @@ enable_controllers (oci_container_linux_resources *resources, const char *path, 
   cleanup_free char *controllers = NULL;
   bool has_cpuset, has_cpu, has_io, has_memory, has_pids;
 
-  has_cpu = resources->cpu && (resources->cpu->shares || resources->cpu->period
-                               || resources->cpu->quota || resources->cpu->realtime_period
-                               || resources->cpu->realtime_runtime);
-  has_cpuset = resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
-  has_io = resources->block_io;
-  has_memory = resources->memory;
-  has_pids = resources->pids;
+  has_cpu = resources && resources->cpu && (resources->cpu->shares || resources->cpu->period
+                                            || resources->cpu->quota || resources->cpu->realtime_period
+                                            || resources->cpu->realtime_runtime);
+  has_cpuset = resources && resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
+  has_io = resources && resources->block_io;
+  has_memory = resources && resources->memory;
+  has_pids = resources && resources->pids;
 
   xasprintf (&controllers, "%s %s %s %s %s",
              has_cpu ? "+cpu" : "",
