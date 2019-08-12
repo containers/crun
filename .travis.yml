@@ -1,14 +1,9 @@
 matrix:
   allow_failures:
   - env: TEST=coverity
-  - env: TEST=sonarcloud
-cache:
-  directories:
-    - '$HOME/.sonar/cache'
 env:
   matrix:
   - TEST=make
-  - TEST=sonarcloud
   - TEST=podman
   - TEST=oci-validation
   - TEST=coverity
@@ -27,10 +22,6 @@ language: c
 sudo: required
 dist: xenial
 addons:
-  sonarcloud:
-    organization: "giuseppe"
-    token:
-      secure: "cratZs866YzinJnsJvPpxGp+wGhp90Ei0uY8SM6p7ZAf0A0LGVFPUi+o2PeXRbjHLxqcjU4OvZdnz2/shYQh8ohEJxo9jH9HNM4j6O58O6vsk7/n4xzAzvnQK+1HKZ72Cz/fPLFDY8gwN2C+Ryq8nbqtzUohsiZNrtL3QFi9NerjgE8tTzod4YPrSHgpK8yaAAbuHxMkIZZO50Cf1lLCQPEjzMn2HJPCZgCOaOnh6hoP/+zAkwok8v/ZAEy0Fz63hBD/5OAYzdYYDtWVjDWoocGxxKMhlyIh+D5blUN4mLm4RyNIUi37puVhZT49Aua43GpdmiJ2iqCP8yF0OQHJ7eii2s53DwBQqtEdQIKG+ofoMmebgyPxTG7jxOD56h1ajNIXWOZ7/Ii3JuAGFCgRP/F7JC060hbj47CcqfUo4qqlfsw/18+X0pH7DBMzJl+JV0H7x6mbxJ30L3eZ4xUPF5dBNX7bcstXyuCQ+GkAA2PfalJMc4/50upeXVJ4ZhDkpPZ3xCxtJ71plcHH089l0KxgOdaCjerp19IoPx44Eo9otGRA/nO6YIPDHKAUJd5GZzSorguXGCzI4FEe/y9G5tDR2RsB+q7XXVE36f+PJtSVKMjB6sSFiQBk7270fXKUemQyDoo5YyjBp/rALtoHeyjfpP3WPBTeU33RroIzt98="
   apt:
     packages:
     - automake
@@ -55,7 +46,6 @@ before_install:
 - git clone --depth=1 git://github.com/lloyd/yajl
 - "(cd yajl && ./configure -p /usr && make && sudo make install)"
 script:
-- if test $TEST = sonarcloud; then ./autogen.sh && build-wrapper-linux-x86-64 --out-dir bw-output sh -c './configure && make' && cd contrib/sonarcloud && sonar-scanner -X; fi
 - if test $TEST = make; then ./autogen.sh && ./configure CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi
 - if test $TEST = podman; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman; fi
 - if test $TEST = oci-validation; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi

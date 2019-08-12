@@ -4,9 +4,6 @@
 [![Coverity Status](https://scan.coverity.com/projects/17787/badge.svg)](https://scan.coverity.com/projects/giuseppe-crun)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/giuseppe/crun.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/giuseppe/crun/alerts/)
 [![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/giuseppe/crun.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/giuseppe/crun/context:cpp)
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=giuseppe_crun&metric=bugs)](https://sonarcloud.io/dashboard?id=giuseppe_crun)
-[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=giuseppe_crun&metric=vulnerabilities)](https://sonarcloud.io/dashboard?id=giuseppe_crun)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=giuseppe_crun&metric=security_rating)](https://sonarcloud.io/dashboard?id=giuseppe_crun)
 
 A fast and low-memory footprint OCI Container Runtime fully written in C.
 
