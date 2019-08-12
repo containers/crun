@@ -117,7 +117,7 @@ crun.1: $(abs_srcdir)/crun.1.md
 generate-man: crun.1
 
 sync:
-	(cd libocispec; git pull https://github.com/giuseppe/libocispec)
+	(cd libocispec; git pull https://github.com/containers/libocispec)
 
 coverity:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec
