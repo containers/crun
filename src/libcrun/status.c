@@ -176,67 +176,6 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
   return 0;
 }
 
-static int
-empty_dirfd (int fd, libcrun_error_t *err)
-{
-  cleanup_dir DIR *dp = NULL;
-  struct dirent *dent;
-
-  dp = fdopendir (fd);
-  if (dp == NULL)
-    {
-      close (fd);
-      return crun_make_error (err, errno, "fdopendir");
-    }
-
-  for (;;)
-    {
-      int ret;
-
-      errno = 0;
-      dent = readdir (dp);
-      if (dent == NULL)
-        {
-          if (errno)
-            return crun_make_error (err, errno, "readdir");
-
-          break;
-        }
-      if (strcmp (dent->d_name, ".") == 0)
-        continue;
-      if (strcmp (dent->d_name, "..") == 0)
-        continue;
-
-      ret = unlinkat (dirfd (dp), dent->d_name, 0);
-      if (ret < 0 && errno == EISDIR)
-        {
-          ret = unlinkat (dirfd (dp), dent->d_name, AT_REMOVEDIR);
-          if (ret < 0 && errno == ENOTEMPTY)
-            {
-              int dfd;
-
-              dfd = openat (dirfd (dp), dent->d_name, O_DIRECTORY);
-              if (dfd < 0)
-                return crun_make_error (err, errno, "openat");
-
-              ret = empty_dirfd (dfd, err);
-              if (ret < 0)
-                return ret;
-
-              ret = unlinkat (dirfd (dp), dent->d_name, AT_REMOVEDIR);
-              if (ret < 0)
-                return crun_make_error (err, errno, "unlinkat(AT_REMOVEDIR)");
-
-              continue;
-            }
-        }
-      if (ret < 0)
-        return crun_make_error (err, errno, "unlinkat");
-    }
-
-  return 0;
-}
-
 int
 libcrun_container_delete_status (const char *state_root, const char *id, libcrun_error_t *err)
 {
@@ -244,8 +183,8 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   DIR *d;
   struct dirent *de;
   cleanup_close int rundir_dfd = -1;
+  cleanup_close int dfd = -1;
   cleanup_free char *dir = NULL;
-  int dfd = -1;
 
   dir = get_run_directory (state_root);
   if (UNLIKELY (dir == NULL))
@@ -259,13 +198,21 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (dfd < 0))
     return crun_make_error (err, errno, "cannot open directory '%s/%s'", dir, id);
 
-  ret = empty_dirfd (dfd, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  d = fdopendir (dfd);
+  if (d == NULL)
+    return crun_make_error (err, errno, "cannot open directory '%s'", dir);
 
+  /* Now d owns the file descriptor.  */
+  dfd = -1;
+
+  for (de = readdir (d); de; de = readdir (d))
+    {
+      /* Ignore errors here and keep deleting, the unlinkat (AT_REMOVEDIR) will fail anyway.  */
+      unlinkat (dirfd (d), de->d_name, 0);
+    }
   ret = unlinkat (rundir_dfd, id, AT_REMOVEDIR);
-  if (ret < 0)
-    return crun_make_error (err, errno, "unlinkat status directory");
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "cannot rm state directory '%s/%s'", dir, id);
 
   return 0;
 }

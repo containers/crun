@@ -1580,8 +1580,10 @@ int
 libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
   int ret;
+  cleanup_close int fd = -1;
   const char *state_root = context->state_root;
   libcrun_container_status_t status;
+
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1594,26 +1596,51 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
   if (!ret)
     return crun_make_error (err, errno, "container '%s' is not running", id);
 
+  if (context->notify_socket)
+    {
+      ret = get_notify_fd (context, NULL, &fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = libcrun_status_write_exec_fifo (context->state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (context->notify_socket)
     {
-      cleanup_close int fd = -1;
-
-      ret = get_notify_fd (context, NULL, &fd, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      if (ret > 0)
+      if (fd >= 0)
         {
+          fd_set read_set;
+
           while (1)
             {
-              ret = handle_notify_socket (fd, err);
+              struct timeval timeout = {
+                                        .tv_sec = 0,
+                                        .tv_usec = 10000,
+              };
+              FD_ZERO (&read_set);
+              FD_SET (fd, &read_set);
+
+              ret = select (fd + 1, &read_set, NULL, NULL, &timeout);
               if (UNLIKELY (ret < 0))
                 return ret;
               if (ret)
-                break;
+                {
+                  ret = handle_notify_socket (fd, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+                  if (ret)
+                    break;
+                }
+              else
+                {
+                  ret = libcrun_is_container_running (&status, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+                  if (!ret)
+                    return 0;
+                }
             }
         }
     }
