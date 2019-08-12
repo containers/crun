@@ -198,6 +198,8 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (dfd < 0))
     return crun_make_error (err, errno, "cannot open directory '%s/%s'", dir, id);
 
+  unlinkat (dfd, "notify/notify", 0);
+
   d = fdopendir (dfd);
   if (d == NULL)
     return crun_make_error (err, errno, "cannot open directory '%s'", dir);
@@ -208,7 +210,8 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   for (de = readdir (d); de; de = readdir (d))
     {
       /* Ignore errors here and keep deleting, the unlinkat (AT_REMOVEDIR) will fail anyway.  */
-      unlinkat (dirfd (d), de->d_name, 0);
+      if (unlinkat (dirfd (d), de->d_name, 0) < 0)
+        unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
     }
   ret = unlinkat (rundir_dfd, id, AT_REMOVEDIR);
   if (UNLIKELY (ret < 0))
