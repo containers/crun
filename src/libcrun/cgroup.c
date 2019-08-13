@@ -187,7 +187,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 
       b_len = TEMP_FAILURE_RETRY (read (mems_fd, mems, 256));
       if (UNLIKELY (b_len < 0))
-        return crun_make_error (err, errno, "read from 'memset.mems'");
+        return crun_make_error (err, errno, "read from 'cpuset.mems'");
       mems[b_len] = '\0';
       if (mems[0] == '\n')
         mems[0] = '\0';
