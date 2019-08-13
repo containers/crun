@@ -1536,7 +1536,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
   if (memory->disable_oom_killer)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "cannot disable OOM killer with cgroupv2");
+        return crun_make_error (err, 0, "cannot disable OOM killer with cgroupv2");
 
       ret = write_file_at (dirfd, "memory.oom_control", "1", 1, err);
       if (UNLIKELY (ret < 0))
@@ -1545,7 +1545,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
   if (memory->kernel_tcp)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "cannot set kernel TCP with cgroupv2");
+        return crun_make_error (err, 0, "cannot set kernel TCP with cgroupv2");
 
       len = sprintf (fmt_buf, "%lu", memory->kernel_tcp);
       ret = write_file_at (dirfd, "memory.kmem.tcp.limit_in_bytes", fmt_buf, len, err);
@@ -1555,7 +1555,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
   if (memory->swappiness && memory->swappiness <= 100)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "cannot set memory swappiness with cgroupv2");
+        return crun_make_error (err, 0, "cannot set memory swappiness with cgroupv2");
 
       len = sprintf (fmt_buf, "%lu", memory->swappiness);
       ret = write_file_at (dirfd, "memory.swappiness", fmt_buf, len, err);
@@ -1636,7 +1636,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
   if (cpu->realtime_period)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "realtime period not supported on cgroupv2");
+        return crun_make_error (err, 0, "realtime period not supported on cgroupv2");
       len = sprintf (fmt_buf, "%lu", cpu->realtime_period);
       ret = write_file_at (dirfd_cpu, "cpu.rt_period_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
@@ -1645,7 +1645,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
   if (cpu->realtime_runtime)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "realtime runtime not supported on cgroupv2");
+        return crun_make_error (err, 0, "realtime runtime not supported on cgroupv2");
       len = sprintf (fmt_buf, "%lu", cpu->realtime_runtime);
       ret = write_file_at (dirfd_cpu, "cpu.rt_runtime_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
@@ -1836,9 +1836,9 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
   int ret;
 
   if (resources->network)
-    return crun_make_error (err, errno, "network limits not supported on cgroupv2");
+    return crun_make_error (err, 0, "network limits not supported on cgroupv2");
   if (resources->hugepage_limits_len)
-    return crun_make_error (err, errno, "hugepages not supported on cgroupv2");
+    return crun_make_error (err, 0, "hugepages not supported on cgroupv2");
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup%s", path);
 
@@ -1909,12 +1909,12 @@ libcrun_update_cgroup_resources (int cgroup_mode, oci_container_linux_resources 
           || resources->memory
           || resources->pids
           || resources->cpu)
-        return crun_make_error (err, errno, "cannot set limits without cgroups");
+        return crun_make_error (err, 0, "cannot set limits without cgroups");
 
       for (i = 0; i < resources->devices_len; i++)
         {
           if (resources->devices[i]->allow || strcmp (resources->devices[i]->access, "rwm"))
-            return crun_make_error (err, errno, "cannot set limits without cgroups");
+            return crun_make_error (err, 0, "cannot set limits without cgroups");
         }
 
       return 0;
