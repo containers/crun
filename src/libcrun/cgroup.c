@@ -1117,7 +1117,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
         val = CONVERT_WEIGHT_TO_CGROUPS_V2 (val);
 
       len = sprintf (fmt_buf, "%" PRIu32, val);
-      ret = write_file_at (dirfd, cgroup2 ? "io.weight" : "blkio.weight", fmt_buf, len, err);
+      ret = write_file_at (dirfd, cgroup2 ? "io.bfq.weight" : "blkio.weight", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1137,7 +1137,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
           cleanup_close int wfd = -1;
           size_t i;
 
-          wfd = openat (dirfd, "io.weight", O_WRONLY);
+          wfd = openat (dirfd, "io.bfq.weight", O_WRONLY);
           if (UNLIKELY (wfd < 0))
             return crun_make_error (err, errno, "open io.weight");
           for (i = 0; i < blkio->weight_device_len; i++)
