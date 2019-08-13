@@ -1177,9 +1177,12 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   container->context = context;
 
-  ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "set child subreaper");
+  if (!detach)
+    {
+      ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set child subreaper");
+    }
 
   if (!context->no_new_keyring)
     {

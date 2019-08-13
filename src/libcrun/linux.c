@@ -2182,9 +2182,12 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
   size_t i;
   cleanup_close int sync_fd = -1;
 
-  ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "set child subreaper");
+  if (! detach)
+    {
+      ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set child subreaper");
+    }
 
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket_fd);
   if (UNLIKELY (ret < 0))
