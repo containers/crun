@@ -346,15 +346,6 @@ do_mount (libcrun_container_t *container,
   return ret;
 }
 
-static bool
-has_new_cgroup_namespace (libcrun_container_t *container)
-{
-#ifdef CLONE_NEWCGROUP
-  return (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) != 0;
-#endif
-  return false;
-}
-
 static int
 do_mount_cgroup_v2 (libcrun_container_t *container,
                     const char *source,
