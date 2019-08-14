@@ -943,3 +943,70 @@ has_prefix (const char *str, const char *prefix)
   size_t prefix_len = strlen (prefix);
   return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
 }
+
+static int
+check_access (const char *path)
+{
+  int ret;
+  struct stat st;
+
+  ret = eaccess (path, X_OK);
+  if (ret < 0)
+    return ret;
+
+  ret = stat (path, &st);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if ((st.st_mode & S_IFMT) != S_IFREG)
+    {
+      errno = EPERM;
+      return -1;
+    }
+
+  return 0;
+}
+
+const char *
+find_executable (const char *executable_path)
+{
+  cleanup_free char *tmp = NULL;
+  char path[PATH_MAX + 1];
+  int last_error = ENOENT;
+  char *it, *end;
+  int ret;
+
+  if (executable_path[0] == '/')
+    {
+      ret = check_access (executable_path);
+      if (ret == 0)
+        return xstrdup (executable_path);
+      return NULL;
+    }
+
+  end = tmp = xstrdup (getenv ("PATH"));
+
+  while ((it = strsep (&end, ":")))
+    {
+      size_t len;
+
+      if (it == end)
+        it = ".";
+
+      len = snprintf (path, PATH_MAX, "%s/%s", it, executable_path);
+      if (len == PATH_MAX)
+        continue;
+
+      ret = check_access (path);
+      if (ret == 0)
+        return xstrdup (path);
+
+      if (errno == ENOENT)
+        continue;
+
+      last_error = errno;
+    }
+
+  errno = last_error;
+  return NULL;
+}
