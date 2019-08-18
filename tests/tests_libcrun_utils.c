@@ -236,9 +236,11 @@ test_crun_path_exists ()
 {
 
   libcrun_error_t err = NULL;
-  if (crun_path_exists ("/dev/null", 1, &err) <= 0)
+  if (crun_path_exists ("/dev/null", &err) <= 0)
     return -1;
-  if (crun_path_exists ("/usr/foo/bin/ls", 1, &err) != 0)
+  if (crun_path_exists ("/usr/foo/bin/ls", &err) != 0)
+    return -1;
+  if (crun_path_exists ("/proc/sysrq-trigger", &err) != 1)
     return -1;
   return 0;
 }

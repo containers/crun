@@ -84,7 +84,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = crun_path_exists ("config.json", 0, err);
+  ret = crun_path_exists ("config.json", err);
   if (ret < 0)
     return ret;
   if (ret)
