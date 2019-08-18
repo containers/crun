@@ -585,6 +585,7 @@ container_entrypoint (void *args, const char *notify_socket,
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
   oci_container *def = entrypoint_args->container->container_def;
+  cleanup_free const char *exec_path = NULL;
   entrypoint_args->sync_socket = sync_socket;
 
   crun_set_output_handler (log_write_to_sync_socket, args);
@@ -606,6 +607,17 @@ container_entrypoint (void *args, const char *notify_socket,
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  exec_path = find_executable (def->process->args[0]);
+  if (UNLIKELY (exec_path == NULL))
+    {
+      if (errno == ENOENT)
+        ret = crun_make_error (err, errno, "executable file not found in $PATH");
+      else
+        ret = crun_make_error (err, errno, "open executable");
+      sync_socket_write_error (sync_socket, err);
+      return ret;
+    }
 
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
@@ -649,9 +661,7 @@ container_entrypoint (void *args, const char *notify_socket,
   if (! def->process)
     return crun_make_error (err, errno, "block 'process' not found");
 
-  execvp (def->process->args[0], def->process->args);
-  if (errno == ENOENT)
-    return crun_make_error (err, errno, "executable file not found in $PATH");
+  execv (exec_path, def->process->args);
 
   return crun_make_error (err, errno, "exec the container process");
 }
@@ -1790,6 +1800,11 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
   cleanup_free char *config_file = NULL;
   cleanup_free libcrun_container_t *container = NULL;
   cleanup_free char *dir = NULL;
+  cleanup_free const char *exec_path = NULL;
+  int container_ret_status[2];
+  cleanup_close int pipefd0 = -1;
+  cleanup_close int pipefd1 = -1;
+  char b;
 
   memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -1832,6 +1847,12 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = pipe (container_ret_status);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "pipe");
+  pipefd0 = container_ret_status[0];
+  pipefd1 = container_ret_status[1];
+
   pid = libcrun_join_process (container, status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
@@ -1844,6 +1865,9 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       gid_t container_gid = process->user ? process->user->gid : 0;
       const char *cwd;
       oci_container_process_capabilities *capabilities = NULL;
+
+      close (pipefd0);
+      pipefd0 = -1;
 
       cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
@@ -1891,6 +1915,17 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
+      exec_path = find_executable (process->args[0]);
+      if (UNLIKELY (exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            crun_make_error (err, errno, "executable file not found in $PATH");
+          else
+            crun_make_error (err, errno, "open executable");
+
+          libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
+
       ret = close_fds_ge_than (context->preserve_fds + 3, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
@@ -1902,12 +1937,17 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
             return ret;
         }
 
-      execvp (process->args[0], process->args);
-      if (errno == ENOENT)
-        libcrun_fail_with_error (errno, "executable file not found in $PATH");
+      TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
+      close (pipefd1);
+      pipefd1 = -1;
+
+      execv (exec_path, process->args);
       libcrun_fail_with_error (errno, "exec");
       _exit (EXIT_FAILURE);
     }
+
+  close (pipefd1);
+  pipefd1 = -1;
 
   if (seccomp_fd >= 0)
     close_and_reset (&seccomp_fd);
@@ -1948,7 +1988,13 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
         }
     }
 
-  ret = wait_for_process (pid, context, terminal_fd, -1, -1, err);
+  TEMP_FAILURE_RETRY (read (pipefd0, &b, sizeof (b)));
+  close (pipefd0);
+  pipefd0 = -1;
+  if (b != '0')
+    ret = -1;
+  else
+    ret = wait_for_process (pid, context, terminal_fd, -1, -1, err);
 
   flush_fd_to_err (context, terminal_fd);
   return ret;
