@@ -163,7 +163,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
   if (UNLIKELY (dir == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = crun_path_exists (dir, 0, err);
+  ret = crun_path_exists (dir, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -253,7 +253,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
         continue;
 
       xasprintf (&status_file, "%s/%s/status", run_directory, next->d_name);
-      exists = crun_path_exists (status_file, 1, err);
+      exists = crun_path_exists (status_file, err);
       if (exists < 0)
        {
          libcrun_free_containers_list (tmp);
@@ -352,5 +352,5 @@ libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcr
 
   xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
 
-  return crun_path_exists (fifo_path, 1, err);
+  return crun_path_exists (fifo_path, err);
 }

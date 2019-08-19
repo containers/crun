@@ -305,7 +305,7 @@ enter_cgroup_subsystem (int cgroup_mode, pid_t pid, const char *subsystem, const
     }
   else
     {
-      ret = crun_path_exists (cgroup_path, 0, err);
+      ret = crun_path_exists (cgroup_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
       if (ret == 0)
@@ -364,7 +364,7 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, int ensure_missing, 
         continue;
 
       sprintf (subsystem_path, "/sys/fs/cgroup/%s", subsystems[i]);
-      ret = crun_path_exists (subsystem_path, !ensure_missing, err);
+      ret = crun_path_exists (subsystem_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
       if (ret == 0)

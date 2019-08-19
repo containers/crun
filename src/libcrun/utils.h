@@ -62,7 +62,7 @@ int xasprintf (char **str, const char *fmt, ...);
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
-int crun_path_exists (const char *path, int readonly, libcrun_error_t *err);
+int crun_path_exists (const char *path, libcrun_error_t *err);
 
 int write_file (const char *name, const void *data, size_t len, libcrun_error_t *err);
 

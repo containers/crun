@@ -608,15 +608,18 @@ container_entrypoint (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  exec_path = find_executable (def->process->args[0]);
-  if (UNLIKELY (exec_path == NULL))
+  if (def->process && def->process->args)
     {
-      if (errno == ENOENT)
-        ret = crun_make_error (err, errno, "executable file not found in $PATH");
-      else
-        ret = crun_make_error (err, errno, "open executable");
-      sync_socket_write_error (sync_socket, err);
-      return ret;
+      exec_path = find_executable (def->process->args[0]);
+      if (UNLIKELY (exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            ret = crun_make_error (err, errno, "executable file not found in $PATH");
+          else
+            ret = crun_make_error (err, errno, "open executable");
+          sync_socket_write_error (sync_socket, err);
+          return ret;
+        }
     }
 
   ret = sync_socket_send_sync (sync_socket, false, err);
@@ -658,8 +661,11 @@ container_entrypoint (void *args, const char *notify_socket,
         return ret;
     }
 
-  if (! def->process)
+  if (UNLIKELY (def->process == NULL))
     return crun_make_error (err, errno, "block 'process' not found");
+
+  if (UNLIKELY (exec_path == NULL))
+    return crun_make_error (err, errno, "executable path not specified");
 
   execv (exec_path, def->process->args);
 

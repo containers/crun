@@ -121,9 +121,9 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
 }
 
 int
-crun_path_exists (const char *path, int readonly, libcrun_error_t *err)
+crun_path_exists (const char *path, libcrun_error_t *err)
 {
-  int ret = access (path, readonly ? R_OK : W_OK);
+  int ret = access (path, F_OK);
   if (ret < 0)
     return 0;
   return 1;

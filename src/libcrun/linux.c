@@ -667,7 +667,7 @@ do_masked_and_readonly_paths (libcrun_container_t *container, const char *rootfs
       int dir;
       xasprintf (&path, "%s/%s", rootfs, def->linux->masked_paths[i]);
 
-      ret = crun_path_exists (path, 1, err);
+      ret = crun_path_exists (path, err);
       if (UNLIKELY (ret < 0))
         {
           if (errno != EACCES)
@@ -697,7 +697,7 @@ do_masked_and_readonly_paths (libcrun_container_t *container, const char *rootfs
 
       xasprintf (&path, "%s/%s", rootfs, def->linux->readonly_paths[i]);
 
-      ret = crun_path_exists (path, 1, err);
+      ret = crun_path_exists (path, err);
       if (UNLIKELY (ret < 0))
         {
           if (errno != EACCES)
