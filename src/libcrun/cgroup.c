@@ -1062,7 +1062,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, struct throttl
     {
       int ret;
       size_t len;
-      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 "%" PRIu64 "\n",
+      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu64 "\n",
                      throttling[i]->major,
                      throttling[i]->minor,
                      throttling[i]->rate);
