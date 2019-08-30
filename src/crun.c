@@ -149,7 +149,7 @@ enum
 
 
 const char *argp_program_version = PACKAGE_STRING;
-const char *argp_program_bug_address = PACKAGE_BUGREPORT;
+const char *argp_program_bug_address = "https://github.com/containers/crun/issues";
 
 static struct argp_option options[] =
   {
