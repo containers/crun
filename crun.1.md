@@ -211,7 +211,7 @@ Show only the container ID.
 crun [global options] kill [options] CONTAINER SIGNAL
 
 **--all**
-Kill all the processes in the container.  Currently ignored.
+Kill all the processes in the container.
 
 **--regex**=**REGEX**
 Kill all the containers that satisfy the specified regex.
