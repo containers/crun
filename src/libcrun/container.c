@@ -918,6 +918,25 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, 
   return 0;
 }
 
+int
+libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
+{
+  int ret;
+  const char *state_root = context->state_root;
+  cleanup_container_status libcrun_container_status_t status;
+
+  memset (&status, 0, sizeof (status));
+
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_cgroup_killall_signal (status.cgroup_path, signal, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  return 0;
+}
+
 static int
 write_container_status (libcrun_container_t *container, libcrun_context_t *context, pid_t pid,
                         char *cgroup_path, char *created, libcrun_error_t *err)

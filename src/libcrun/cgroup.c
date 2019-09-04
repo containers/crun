@@ -963,7 +963,7 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
 }
 
 int
-libcrun_cgroup_killall (char *path, libcrun_error_t *err)
+libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
   cleanup_free char *buffer = NULL;
@@ -1006,13 +1006,23 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
       pid_t pid = strtoul (it, NULL, 10);
       if (pid > 0)
         {
-          ret = kill (pid, SIGKILL);
+          ret = kill (pid, signal);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "kill process %d", pid);
         }
     }
 
+  ret = libcrun_cgroup_pause_unpause (path, false, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
   return 0;
+}
+
+int
+libcrun_cgroup_killall (char *path, libcrun_error_t *err)
+{
+  return libcrun_cgroup_killall_signal (path, SIGKILL, err);
 }
 
 int
