@@ -322,7 +322,7 @@ enter_cgroup_subsystem (int cgroup_mode, pid_t pid, const char *subsystem, const
 }
 
 static int
-enter_cgroup (int cgroup_mode, pid_t pid, const char *path, int ensure_missing, libcrun_error_t *err)
+enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing, libcrun_error_t *err)
 {
   char pid_str[16];
   int ret;
@@ -348,7 +348,21 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, int ensure_missing, 
       xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/cgroup.procs", path);
       ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (!ensure_missing && (*err)->status == EBUSY)
+            {
+              /* There are subdirectories so it is not possible to join the initial
+                 cgroup.  Create a subdirectory and use that.
+                 It can still fail if the container creates a subdirectory under
+                 /sys/fs/cgroup/../crun-exec/  */
+              cleanup_free char *cgroup_crun_exec_path = NULL;
+
+              xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
+
+              return enter_cgroup (cgroup_mode, pid, cgroup_crun_exec_path, true, err);
+            }
+          return ret;
+        }
       return 0;
     }
 
@@ -410,7 +424,7 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  return enter_cgroup (cgroup_mode, pid, path, 0, err);
+  return enter_cgroup (cgroup_mode, pid, path, false, err);
 }
 
 #ifdef HAVE_SYSTEMD
@@ -855,7 +869,7 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
         return ret;
     }
 
-  return enter_cgroup (cgroup_mode, pid, *path, 1, err);
+  return enter_cgroup (cgroup_mode, pid, *path, true, err);
 }
 
 static int
