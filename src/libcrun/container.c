@@ -744,32 +744,44 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
 }
 
 static int
+read_container_config_from_state (libcrun_container_t **container, const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *dir = NULL;
+  cleanup_free char *config_file = NULL;
+
+  *container = NULL;
+
+  dir = libcrun_get_state_directory (state_root, id);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory from %s", state_root);
+
+  xasprintf (&config_file, "%s/config.json", dir);
+  *container = libcrun_container_load_from_file (config_file, err);
+  if (*container == NULL)
+    return crun_make_error (err, 0, "error loading %s", config_file);
+
+  return 0;
+}
+
+static int
 run_poststop_hooks (libcrun_context_t *context, oci_container *def,
                     libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free libcrun_container_t *container = NULL;
+  int ret;
+
   if (def == NULL)
     {
-      cleanup_free char *dir = NULL;
-      cleanup_free char *config_file = NULL;
-
-      dir = libcrun_get_state_directory (state_root, id);
-      if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
-
-      xasprintf (&config_file, "%s/config.json", dir);
-      container = libcrun_container_load_from_file (config_file, err);
-      if (container == NULL)
-        return crun_make_error (err, 0, "error loading config.json");
+      ret = read_container_config_from_state (&container, state_root, id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       def = container->container_def;
     }
 
   if (def->hooks && def->hooks->poststop_len)
     {
-      int ret;
-
       ret = do_hooks (def, 0, id, true, def->root->path, status->bundle,
                       "stopped", (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
