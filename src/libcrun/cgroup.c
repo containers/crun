@@ -980,6 +980,10 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
   if (mode < 0)
     return mode;
 
+  ret = libcrun_cgroup_pause_unpause (path, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
   switch (mode)
     {
     case CGROUP_MODE_UNIFIED:
