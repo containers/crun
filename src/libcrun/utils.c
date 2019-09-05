@@ -35,6 +35,7 @@
 #include <grp.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/xattr.h>
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -1009,4 +1010,216 @@ find_executable (const char *executable_path)
 
   errno = last_error;
   return NULL;
+}
+
+#ifdef HAVE_FGETXATTR
+
+static ssize_t
+safe_read_xattr (char **ret, int sfd, const char *srcname, const char *name, size_t initial_size, libcrun_error_t *err)
+{
+  cleanup_free char *buffer = NULL;
+  size_t current_size;
+  ssize_t s;
+
+  current_size = initial_size;
+  buffer = xmalloc (current_size + 1);
+
+  while (1)
+    {
+      s = fgetxattr (sfd, name, buffer, current_size);
+      if (UNLIKELY (s < 0))
+        return crun_make_error (err, errno, "get xattr %s from %s", name, srcname);
+
+      if (s < current_size)
+        break;
+
+      current_size *= 2;
+      buffer = xrealloc (buffer, current_size + 1);
+    }
+
+  if (s <= 0)
+    return s;
+
+  buffer[s] = '\0';
+
+  /* Change owner.  */
+  *ret = buffer;
+  buffer = NULL;
+
+  return s;
+}
+
+static ssize_t
+copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun_error_t *err)
+{
+  cleanup_free char *buf = NULL;
+  ssize_t xattr_len;
+  char *it;
+
+  xattr_len = flistxattr (sfd, NULL, 0);
+  if (UNLIKELY (xattr_len < 0))
+    {
+      if (errno == ENOTSUP)
+        return 0;
+
+      return crun_make_error (err, errno, "get xattr list for %s", srcname);
+    }
+
+
+  if (xattr_len == 0)
+    return 0;
+
+  buf = xmalloc (xattr_len + 1);
+
+  xattr_len = flistxattr (sfd, buf, xattr_len + 1);
+  if (UNLIKELY (xattr_len < 0))
+    return crun_make_error (err, errno, "get xattr list for %s", srcname);
+
+  for (it = buf; it - buf < xattr_len; it += strlen (it) + 1)
+    {
+      cleanup_free char *v = NULL;
+      ssize_t s;
+
+      s = safe_read_xattr (&v, sfd, srcname, it, 256, err);
+      if (UNLIKELY (s < 0))
+        return s;
+
+      s = fsetxattr (dfd, it, v, s, 0);
+      if (UNLIKELY (s < 0))
+        {
+          if (errno == EINVAL || errno == EOPNOTSUPP)
+            continue;
+
+          return crun_make_error (err, errno, "set xattr for %s", destname);
+        }
+    }
+
+  return 0;
+}
+
+#endif
+
+int
+copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const char *destname, libcrun_error_t *err)
+{
+  cleanup_close int dfd = destdirfd;
+  cleanup_dir DIR *dsrcfd = NULL;
+  struct dirent *de;
+
+  dsrcfd = fdopendir (srcdirfd);
+  if (UNLIKELY (dsrcfd == NULL))
+    {
+      close (srcdirfd);
+      return crun_make_error (err, errno, "cannot open directory %s", destname);
+    }
+
+  for (de = readdir (dsrcfd); de; de = readdir (dsrcfd))
+    {
+      struct stat st;
+      cleanup_close int srcfd = -1;
+      cleanup_close int destfd = -1;
+      cleanup_free char *target_buf = NULL;
+      size_t buf_size;
+      ssize_t size;
+      int ret;
+
+      if (strcmp (de->d_name, ".") == 0 ||
+          strcmp (de->d_name, "..") == 0)
+        continue;
+
+      ret = fstatat (dirfd (dsrcfd), de->d_name, &st, AT_SYMLINK_NOFOLLOW);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "stat %s/%s", srcname, de->d_name);
+
+      switch (st.st_mode & S_IFMT)
+        {
+        case S_IFREG:
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_RDONLY);
+          if (UNLIKELY (srcfd < 0))
+            return crun_make_error (err, errno, "open %s/%s", srcname, de->d_name);
+
+          destfd = openat (destdirfd, de->d_name, O_RDWR|O_CREAT, 0777);
+          if (UNLIKELY (destfd < 0))
+            return crun_make_error (err, errno, "open %s/%s", destname, de->d_name);
+
+          ret = copy_from_fd_to_fd (srcfd, destfd, 0, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+#ifdef HAVE_FGETXATTR
+          ret = (int) copy_xattr (srcfd, destfd, de->d_name, de->d_name, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+#endif
+
+          close (destfd);
+          destfd = -1;
+          break;
+
+        case S_IFDIR:
+          ret = mkdirat (destdirfd, de->d_name, st.st_mode);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "mkdir %s/%s", destname, de->d_name);
+
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_DIRECTORY);
+          if (UNLIKELY (srcfd < 0))
+            return crun_make_error (err, errno, "open directory %s/%s", srcname, de->d_name);
+
+          destfd = openat (destdirfd, de->d_name, O_DIRECTORY);
+          if (UNLIKELY (destfd < 0))
+            return crun_make_error (err, errno, "open directory %s/%s", srcname, de->d_name);
+
+#ifdef HAVE_FGETXATTR
+          ret = (int) copy_xattr (srcfd, destfd, de->d_name, de->d_name, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+#endif
+
+          ret = copy_recursive_fd_to_fd (srcfd, destfd, de->d_name, de->d_name, err);
+          srcfd = destfd = -1;
+          if (UNLIKELY (ret < 0))
+            return ret;
+          break;
+
+        case S_IFLNK:
+          buf_size = st.st_size + 1;
+          target_buf = xmalloc (buf_size);
+
+          do
+            {
+              buf_size += 1024;
+
+              target_buf = xrealloc (target_buf, buf_size);
+
+              size = readlinkat (dirfd (dsrcfd), de->d_name, target_buf, buf_size);
+              if (UNLIKELY (size < 0))
+                return crun_make_error (err, errno, "readlink %s/%s", srcname, de->d_name);
+            }
+          while (size == buf_size);
+
+          ret = symlinkat (target_buf, destdirfd, de->d_name);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "create symlink %s/%s", destname, de->d_name);
+          break;
+
+        case S_IFBLK:
+        case S_IFCHR:
+        case S_IFIFO:
+        case S_IFSOCK:
+          ret = mknodat (destdirfd, de->d_name, st.st_mode, st.st_rdev);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "create special file %s/%s", destname, de->d_name);
+          break;
+        }
+
+      ret = fchownat (destdirfd, de->d_name, st.st_uid, st.st_gid, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "chmod %s/%s", destname, de->d_name);
+
+      ret = fchmodat (destdirfd, de->d_name, st.st_mode & ALLPERMS, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "chmod %s/%s", destname, de->d_name);
+    }
+
+  return 0;
 }
