@@ -158,51 +158,55 @@ struct propagation_flags_s
     const char *name;
     int clear;
     int flags;
+    int extra_flags;
   };
+
+enum {
+      OPTION_TMPCOPYUP = 1
+};
 
 static struct propagation_flags_s propagation_flags[] =
   {
-    {"defaults", 0, 0},
-    {"rbind", 0, MS_REC | MS_BIND},
-    {"ro", 0, MS_RDONLY},
-    {"rw", 1, MS_RDONLY},
-    {"suid", 1, MS_NOSUID},
-    {"nosuid", 0, MS_NOSUID},
-    {"dev", 1, MS_NODEV},
-    {"nodev", 0, MS_NODEV},
-    {"exec", 1, MS_NOEXEC},
-    {"noexec", 0, MS_NOEXEC},
-    {"sync", 0, MS_SYNCHRONOUS},
-    {"async", 1, MS_SYNCHRONOUS},
-    {"dirsync", 0, MS_DIRSYNC},
-    {"remount", 0, MS_REMOUNT},
-    {"mand", 0, MS_MANDLOCK},
-    {"nomand", 1, MS_MANDLOCK},
-    {"atime", 1, MS_NOATIME},
-    {"noatime", 0, MS_NOATIME},
-    {"diratime", 1, MS_NODIRATIME},
-    {"nodiratime", 0, MS_NODIRATIME},
-    {"relatime", 0, MS_RELATIME},
-    {"norelatime", 1, MS_RELATIME},
-    {"strictatime", 0, MS_STRICTATIME},
-    {"nostrictatime", 1, MS_STRICTATIME},
-    {"shared", 0, MS_SHARED},
-    {"rshared", 0, MS_REC | MS_SHARED},
-    {"slave", 0, MS_SLAVE},
-    {"rslave", 0, MS_REC | MS_SLAVE},
-    {"private", 0, MS_PRIVATE},
-    {"rprivate", 0, MS_REC | MS_PRIVATE},
-    {"unbindable", 0, MS_UNBINDABLE},
-    {"runbindable", 0, MS_REC | MS_UNBINDABLE},
+   {"defaults", 0, 0, 0},
+   {"rbind", 0, MS_REC | MS_BIND, 0},
+   {"ro", 0, MS_RDONLY, 0},
+   {"rw", 1, MS_RDONLY, 0},
+   {"suid", 1, MS_NOSUID, 0},
+   {"nosuid", 0, MS_NOSUID, 0},
+   {"dev", 1, MS_NODEV, 0},
+   {"nodev", 0, MS_NODEV, 0},
+   {"exec", 1, MS_NOEXEC, 0},
+   {"noexec", 0, MS_NOEXEC, 0},
+   {"sync", 0, MS_SYNCHRONOUS, 0},
+   {"async", 1, MS_SYNCHRONOUS, 0},
+   {"dirsync", 0, MS_DIRSYNC, 0},
+   {"remount", 0, MS_REMOUNT, 0},
+   {"mand", 0, MS_MANDLOCK, 0},
+   {"nomand", 1, MS_MANDLOCK, 0},
+   {"atime", 1, MS_NOATIME, 0},
+   {"noatime", 0, MS_NOATIME, 0},
+   {"diratime", 1, MS_NODIRATIME, 0},
+   {"nodiratime", 0, MS_NODIRATIME, 0},
+   {"relatime", 0, MS_RELATIME, 0},
+   {"norelatime", 1, MS_RELATIME, 0},
+   {"strictatime", 0, MS_STRICTATIME, 0},
+   {"nostrictatime", 1, MS_STRICTATIME, 0},
+   {"shared", 0, MS_SHARED, 0},
+   {"rshared", 0, MS_REC | MS_SHARED, 0},
+   {"slave", 0, MS_SLAVE, 0},
+   {"rslave", 0, MS_REC | MS_SLAVE, 0},
+   {"private", 0, MS_PRIVATE, 0},
+   {"rprivate", 0, MS_REC | MS_PRIVATE, 0},
+   {"unbindable", 0, MS_UNBINDABLE, 0},
+   {"runbindable", 0, MS_REC | MS_UNBINDABLE, 0},
 
-    /* runc has support for tmpcopyup which is not part of OCI.  Silently ignore it for now.  */
-    {"tmpcopyup", 0, 0},
+   {"tmpcopyup", 0, 0, OPTION_TMPCOPYUP},
 
-    {NULL, 0}
+   {NULL, 0}
   };
 
 static unsigned long
-get_mount_flags (const char *name, int current_flags, int *found)
+get_mount_flags (const char *name, int current_flags, int *found, unsigned long *extra_flags)
 {
   struct propagation_flags_s *it;
   if (found)
@@ -213,6 +217,9 @@ get_mount_flags (const char *name, int current_flags, int *found)
         if (found)
           *found = 1;
 
+        if (extra_flags)
+          *extra_flags |= it->extra_flags;
+
         if (it->clear)
           return current_flags & ~it->flags;
 
@@ -222,11 +229,11 @@ get_mount_flags (const char *name, int current_flags, int *found)
 }
 
 static unsigned long
-get_mount_flags_or_option (const char *name, int current_flags, char **option)
+get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option)
 {
   int found;
   cleanup_free char *prev = NULL;
-  unsigned long flags = get_mount_flags (name, current_flags, &found);
+  unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags);
   if (found)
     return flags;
 
@@ -853,10 +860,12 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       char *type;
       char *source;
       unsigned long flags = 0;
+      unsigned long extra_flags = 0;
       int skip_labelling;
       int is_dir = 1;
       char *resolved_path, buffer_resolved_path[PATH_MAX];
       char *target = NULL;
+      cleanup_close int copy_from_fd = -1;
 
       resolved_path = chroot_realpath (rootfs, def->mounts[i]->destination, buffer_resolved_path);
       if (resolved_path != NULL)
@@ -885,9 +894,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
           size_t j;
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            {
-              flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &data);
-            }
+            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data);
 
           if (type == NULL)
             {
@@ -947,6 +954,19 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
             return ret;
         }
 
+      if (extra_flags & OPTION_TMPCOPYUP)
+        {
+          if (strcmp (type, "tmpfs") != 0)
+            return crun_make_error (err, errno, "tmpcopyup can be used only with tmpfs");
+
+          copy_from_fd = open (target, O_DIRECTORY);
+          if (UNLIKELY (copy_from_fd < 0))
+            {
+              if (errno != ENOTDIR)
+                return crun_make_error (err, errno, "open target for tmpcopyup");
+            }
+        }
+
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
       skip_labelling = strcmp (type, "sysfs") == 0
@@ -965,6 +985,24 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
           if (UNLIKELY (ret < 0))
             return ret;
         }
+
+      if (copy_from_fd >= 0)
+        {
+          int destfd, tmpfd;
+
+          destfd = open (target, O_DIRECTORY);
+          if (UNLIKELY (destfd < 0))
+            return crun_make_error (err, errno, "open target to write for tmpcopyup");
+
+          /* take ownership for the fd.  */
+          tmpfd = copy_from_fd;
+          copy_from_fd = -1;
+
+          ret = copy_recursive_fd_to_fd (tmpfd, destfd, target, target, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
     }
   return 0;
 }
@@ -1111,7 +1149,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   unsigned long rootfs_propagation = 0;
 
   if (def->linux->rootfs_propagation)
-    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL);
+    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL);
 
   if ((rootfs_propagation & (MS_SHARED | MS_SLAVE | MS_PRIVATE | MS_UNBINDABLE)) == 0)
     rootfs_propagation = MS_REC | MS_PRIVATE;
