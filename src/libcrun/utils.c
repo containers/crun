@@ -603,7 +603,7 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
 
 #ifdef HAVE_COPY_FILE_RANGE
       nread = copy_file_range (src, NULL, dst, NULL, 0, 0);
-      if (nread < 0 && errno == EINVAL)
+      if (nread < 0 && (errno == EINVAL || errno == EXDEV))
         goto fallback;
       if (consume && nread < 0 && errno == EAGAIN)
         return 0;
