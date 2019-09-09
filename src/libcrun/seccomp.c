@@ -38,6 +38,13 @@
 #include <linux/seccomp.h>
 #include <linux/filter.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
+
+static int
+syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
+{
+  return (int) syscall (__NR_seccomp, operation, flags, args);
+}
 
 unsigned long
 get_seccomp_operator (const char *name, libcrun_error_t *err)
@@ -99,15 +106,36 @@ cleanup_seccompp (void *p)
 #define cleanup_seccomp __attribute__((cleanup (cleanup_seccompp)))
 
 int
-libcrun_apply_seccomp (int infd, libcrun_error_t *err)
+libcrun_apply_seccomp (int infd, char **seccomp_flags, size_t seccomp_flags_len, libcrun_error_t *err)
 {
   int ret;
   struct sock_fprog seccomp_filter;
   cleanup_free char *bpf = NULL;
+  unsigned int flags = 0;
   size_t len;
 
   if (infd < 0)
     return 0;
+
+
+  /* if no seccomp flag was specified use a sane default.  */
+  if (seccomp_flags == NULL)
+    flags = SECCOMP_FILTER_FLAG_LOG|SECCOMP_FILTER_FLAG_SPEC_ALLOW;
+  else
+    {
+      size_t i = 0;
+      for (i = 0; i < seccomp_flags_len; i++)
+        {
+          if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_TSYNC") == 0)
+              flags |= SECCOMP_FILTER_FLAG_TSYNC;
+          else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_SPEC_ALLOW") == 0)
+            flags |= SECCOMP_FILTER_FLAG_SPEC_ALLOW;
+          else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_LOG") == 0)
+            flags |= SECCOMP_FILTER_FLAG_LOG;
+          else
+            return crun_make_error (err, 0, "unknown seccomp option %s", seccomp_flags[i]);
+        }
+    }
 
   ret = read_all_fd (infd, "seccomp.bpf", &bpf, &len, err);
   if (UNLIKELY (ret < 0))
@@ -116,15 +144,21 @@ libcrun_apply_seccomp (int infd, libcrun_error_t *err)
   seccomp_filter.len = len / 8;
   seccomp_filter.filter = (struct sock_filter *) bpf;
 
-  ret = prctl (PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &seccomp_filter);
+  ret = syscall_seccomp (SECCOMP_SET_MODE_FILTER, flags, &seccomp_filter);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "prctl (PR_SET_SECCOMP)");
+    {
+      /* If any of the flags is not supported, try again without specifying them:  */
+      if (errno == EINVAL)
+        ret = syscall_seccomp (SECCOMP_SET_MODE_FILTER, 0, &seccomp_filter);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "seccomp (SECCOMP_SET_MODE_FILTER)");
+    }
 
   return 0;
 }
 
 int
-libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, libcrun_error_t *err)
+libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, char **flags, size_t flags_len, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;
@@ -233,8 +267,8 @@ libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, li
         return crun_make_error (err, 0, "seccomp_export_bpf");
     }
 
-  if (lseek (outfd, 0, SEEK_SET) == (off_t) -1)
+  if (UNLIKELY (lseek (outfd, 0, SEEK_SET) == (off_t) -1))
     return crun_make_error (err, 0, "lseek");
 
-  return libcrun_apply_seccomp (outfd, err);
+  return libcrun_apply_seccomp (outfd, flags, flags_len, err);
 }

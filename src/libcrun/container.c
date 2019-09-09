@@ -540,7 +540,16 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
   if (def->process && !def->process->no_new_privileges)
     {
-      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
+      char **seccomp_flags = NULL;
+      size_t seccomp_flags_len = 0;
+
+      if (def->linux && def->linux->seccomp)
+        {
+          seccomp_flags = def->linux->seccomp->flags;
+          seccomp_flags_len = def->linux->seccomp->flags_len;
+        }
+
+      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -656,7 +665,16 @@ container_entrypoint (void *args, const char *notify_socket,
 
   if (def->process && def->process->no_new_privileges)
     {
-      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, err);
+      char **seccomp_flags = NULL;
+      size_t seccomp_flags_len = 0;
+
+      if (def->linux && def->linux->seccomp)
+        {
+          seccomp_flags = def->linux->seccomp->flags;
+          seccomp_flags_len = def->linux->seccomp->flags_len;
+        }
+
+      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1871,6 +1889,8 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       gid_t container_gid = process->user ? process->user->gid : 0;
       const char *cwd;
       oci_container_process_capabilities *capabilities = NULL;
+      char **seccomp_flags = NULL;
+      size_t seccomp_flags_len = 0;
 
       close (pipefd0);
       pipefd0 = -1;
@@ -1893,9 +1913,15 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
+      if (container->container_def->linux && container->container_def->linux->seccomp)
+        {
+          seccomp_flags = container->container_def->linux->seccomp->flags;
+          seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
+        }
+
       if (!process->no_new_privileges)
         {
-          ret = libcrun_apply_seccomp (seccomp_fd, err);
+          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_flags, seccomp_flags_len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1938,7 +1964,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
 
       if (process->no_new_privileges)
         {
-          ret = libcrun_apply_seccomp (seccomp_fd, err);
+          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_flags, seccomp_flags_len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
