@@ -929,15 +929,20 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
           if (data == NULL || strstr (data, "mode=") == NULL)
             {
-              if (data == NULL || data[0] == '\0')
-                data = xstrdup ("mode=1755");
-              else
+              bool append;
+
+              append = data != NULL && data[0] != '\0';
+
+              if (data != NULL)
                 {
-                  char *newdata;
-                  xasprintf (&newdata, "%s,%s", data, "mode=1755");
                   free (data);
-                  data = newdata;
+                  data = NULL;
                 }
+
+              if (append)
+                xasprintf (&data, "%s,%s", data, "mode=1755");
+              else
+                data = xstrdup ("mode=1755");
             }
         }
 
