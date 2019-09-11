@@ -45,6 +45,7 @@ enum
 
 struct kill_options_s
 {
+  bool all;
   bool regex;
 };
 
@@ -65,6 +66,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'a':
+      kill_options.all = true;
       break;
 
     case 'r':
@@ -131,6 +133,9 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
       regfree (&re);
       return 0;
     }
+
+  if (kill_options.all)
+    return libcrun_container_kill_all (&crun_context, argv[first_arg], signal, err);
 
   return libcrun_container_kill (&crun_context, argv[first_arg], signal, err);
 }

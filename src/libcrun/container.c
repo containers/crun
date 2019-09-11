@@ -762,32 +762,44 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
 }
 
 static int
+read_container_config_from_state (libcrun_container_t **container, const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *dir = NULL;
+  cleanup_free char *config_file = NULL;
+
+  *container = NULL;
+
+  dir = libcrun_get_state_directory (state_root, id);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory from %s", state_root);
+
+  xasprintf (&config_file, "%s/config.json", dir);
+  *container = libcrun_container_load_from_file (config_file, err);
+  if (*container == NULL)
+    return crun_make_error (err, 0, "error loading %s", config_file);
+
+  return 0;
+}
+
+static int
 run_poststop_hooks (libcrun_context_t *context, oci_container *def,
                     libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free libcrun_container_t *container = NULL;
+  int ret;
+
   if (def == NULL)
     {
-      cleanup_free char *dir = NULL;
-      cleanup_free char *config_file = NULL;
-
-      dir = libcrun_get_state_directory (state_root, id);
-      if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
-
-      xasprintf (&config_file, "%s/config.json", dir);
-      container = libcrun_container_load_from_file (config_file, err);
-      if (container == NULL)
-        return crun_make_error (err, 0, "error loading config.json");
+      ret = read_container_config_from_state (&container, state_root, id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       def = container->container_def;
     }
 
   if (def->hooks && def->hooks->poststop_len)
     {
-      int ret;
-
       ret = do_hooks (def, 0, id, true, def->root->path, status->bundle,
                       "stopped", (struct hook_s **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
@@ -797,6 +809,22 @@ run_poststop_hooks (libcrun_context_t *context, oci_container *def,
   if (container && container->container_def)
     free_oci_container (container->container_def);
   return 0;
+}
+
+static bool
+has_namespace_in_definition (oci_container *def, const char *namespace)
+{
+  size_t i;
+
+  if (def->linux == NULL || def->linux->namespaces == NULL)
+    return false;
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      if (strcmp (def->linux->namespaces[i]->type, namespace) == 0)
+        return true;
+    }
+  return false;
 }
 
 static int
@@ -824,22 +852,45 @@ container_delete_internal (libcrun_context_t *context, oci_container *def, const
 
   if (!only_cleanup && !status.detached)
     {
-      if (force)
-        {
-          ret = kill (status.pid, SIGKILL);
-          if (UNLIKELY (ret < 0) && errno != ESRCH)
-            {
-              crun_make_error (err, errno, "kill");
-              return ret;
-            }
-        }
-      else
+      if (! force)
         {
           ret = libcrun_is_container_running (&status, err);
           if (UNLIKELY (ret < 0))
             return ret;
           if (ret == 1)
             return crun_make_error (err, 0, "the container '%s' is not in 'stopped' state", id);
+        }
+      else
+        {
+          cleanup_free libcrun_container_t *container = NULL;
+
+          if (def == NULL)
+            {
+              ret = read_container_config_from_state (&container, state_root, id, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              def = container->container_def;
+            }
+
+          /* If the container has a pid namespace, it is enough to kill the first
+             process (pid=1 in the namespace).
+          */
+          if (has_namespace_in_definition (def, "pid"))
+            {
+              ret = kill (status.pid, SIGKILL);
+              if (UNLIKELY (ret < 0) && errno != ESRCH)
+                {
+                  crun_make_error (err, errno, "kill cannot find process");
+                  return ret;
+                }
+            }
+          else
+            {
+              ret = libcrun_cgroup_killall (status.cgroup_path, err);
+              if (UNLIKELY (ret < 0))
+                return 0;
+            }
         }
     }
 
@@ -882,6 +933,25 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, 
   ret = kill (status.pid, signal);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "kill container");
+  return 0;
+}
+
+int
+libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
+{
+  int ret;
+  const char *state_root = context->state_root;
+  cleanup_container_status libcrun_container_status_t status;
+
+  memset (&status, 0, sizeof (status));
+
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_cgroup_killall_signal (status.cgroup_path, signal, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
   return 0;
 }
 

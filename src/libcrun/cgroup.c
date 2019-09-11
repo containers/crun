@@ -925,8 +925,45 @@ libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode,
   return ret;
 }
 
+static int
+libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode, const bool pause, libcrun_error_t *err)
+{
+  cleanup_free char *path = NULL;
+  const char *state = "";
+  int ret;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    {
+      state = pause ? "1" : "0";
+      xasprintf (&path, "/sys/fs/cgroup/%s/cgroup.freeze", cgroup_path);
+    }
+  else
+    {
+      state = pause ? "FROZEN" : "THAWED";
+      xasprintf (&path, "/sys/fs/cgroup/freezer/%s/freezer.state", cgroup_path);
+    }
+
+  ret = write_file (path, state, strlen (state), err);
+  if (ret >= 0)
+    return 0;
+  return ret;
+
+}
+
 int
-libcrun_cgroup_killall (char *path, libcrun_error_t *err)
+libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun_error_t *err)
+{
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  return libcrun_cgroup_pause_unpause_with_mode (cgroup_path, cgroup_mode, pause, err);
+}
+
+int
+libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
   cleanup_free char *buffer = NULL;
@@ -942,6 +979,10 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
   mode = libcrun_get_cgroup_mode (err);
   if (mode < 0)
     return mode;
+
+  ret = libcrun_cgroup_pause_unpause (path, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
 
   switch (mode)
     {
@@ -965,13 +1006,23 @@ libcrun_cgroup_killall (char *path, libcrun_error_t *err)
       pid_t pid = strtoul (it, NULL, 10);
       if (pid > 0)
         {
-          ret = kill (pid, SIGKILL);
+          ret = kill (pid, signal);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "kill process %d", pid);
         }
     }
 
+  ret = libcrun_cgroup_pause_unpause (path, false, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
   return 0;
+}
+
+int
+libcrun_cgroup_killall (char *path, libcrun_error_t *err)
+{
+  return libcrun_cgroup_killall_signal (path, SIGKILL, err);
 }
 
 int
