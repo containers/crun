@@ -483,10 +483,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_container_enter_cgroup_ns (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
