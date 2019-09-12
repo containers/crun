@@ -1134,11 +1134,11 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       switch (st.st_mode & S_IFMT)
         {
         case S_IFREG:
-          srcfd = openat (dirfd (dsrcfd), de->d_name, O_RDONLY);
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_NONBLOCK | O_RDONLY);
           if (UNLIKELY (srcfd < 0))
             return crun_make_error (err, errno, "open %s/%s", srcname, de->d_name);
 
-          destfd = openat (destdirfd, de->d_name, O_RDWR|O_CREAT, 0777);
+          destfd = openat (destdirfd, de->d_name, O_RDWR | O_CREAT, 0777);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open %s/%s", destname, de->d_name);
 
@@ -1212,13 +1212,29 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
           break;
         }
 
-      ret = fchownat (destdirfd, de->d_name, st.st_uid, st.st_gid, 0);
+      ret = fchownat (destdirfd, de->d_name, st.st_uid, st.st_gid, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chmod %s/%s", destname, de->d_name);
+        return crun_make_error (err, errno, "chown %s/%s", destname, de->d_name);
 
-      ret = fchmodat (destdirfd, de->d_name, st.st_mode & ALLPERMS, 0);
+      ret = fchmodat (destdirfd, de->d_name, st.st_mode & ALLPERMS, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chmod %s/%s", destname, de->d_name);
+        {
+          if (errno == ENOTSUP)
+            {
+              char proc_path[32];
+              cleanup_close int fd = -1;
+
+              fd = openat (destdirfd, de->d_name, O_PATH | O_NOFOLLOW);
+              if (UNLIKELY (fd < 0))
+                return crun_make_error (err, errno, "open %s/%s", destname, de->d_name);
+
+              sprintf (proc_path, "/proc/self/fd/%d", fd);
+              ret = chmod (proc_path, st.st_mode & ALLPERMS);
+            }
+
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "chmod %s/%s", destname, de->d_name);
+        }
     }
 
   return 0;
