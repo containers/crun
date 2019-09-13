@@ -1183,6 +1183,10 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
       get_private_data (container)->remounts = r;
     }
 
+  ret = libcrun_container_enter_cgroup_ns (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = do_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
