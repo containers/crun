@@ -36,6 +36,8 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
+#include <sys/sysmacros.h>
+
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -299,15 +301,72 @@ crun_ensure_file (const char *path, int mode, libcrun_error_t *err)
   return 0;
 }
 
+static int
+get_file_size (int fd, off_t *size)
+{
+  struct stat st;
+  int ret;
+#ifdef HAVE_STATX
+  struct statx stx;
+
+  ret = statx (fd, "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC, STATX_SIZE, &stx);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == ENOSYS)
+        goto fallback;
+      return ret;
+    }
+  *size = stx.stx_size;
+
+  return ret;
+
+ fallback:
+#endif
+  ret = fstat (fd, &st);
+  *size = st.st_size;
+  return ret;
+}
+
+static int
+get_file_type (mode_t *mode, const char *path, bool nofollow)
+{
+  struct stat st;
+  int ret;
+
+#ifdef HAVE_STATX
+  struct statx stx;
+
+  ret = statx (AT_FDCWD, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == ENOSYS)
+        goto fallback;
+
+      return ret;
+    }
+  *mode = stx.stx_mode;
+  return ret;
+
+ fallback:
+#endif
+  ret = stat (path, &st);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  *mode = st.st_mode;
+  return ret;
+}
+
 int
 crun_dir_p (const char *path, libcrun_error_t *err)
 {
-  struct stat st;
-  int ret = stat (path, &st);
+  mode_t mode;
+  int ret;
+
+  ret = get_file_type (&mode, path, true);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error stat'ing file '%s'", path);
 
-  return S_ISDIR (st.st_mode);
+  return S_ISDIR (mode);
 }
 
 int
@@ -358,21 +417,21 @@ int
 read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_error_t *err)
 {
   int ret;
-  struct stat stat;
   size_t nread, allocated;
+  off_t size = 0;
   cleanup_free char *buf = NULL;
 
-  ret = fstat (fd, &stat);
+  ret = get_file_size (fd, &size);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error stat'ing file '%s'", description);
 
   /* NUL terminate the buffer.  */
-  allocated = stat.st_size;
-  if (stat.st_size == 0)
+  allocated = size;
+  if (size == 0)
     allocated = 256;
   buf = xmalloc (allocated + 1);
   nread = 0;
-  while ((stat.st_size && nread < stat.st_size) || stat.st_size == 0)
+  while ((size && nread < size) || size == 0)
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
@@ -949,17 +1008,17 @@ static int
 check_access (const char *path)
 {
   int ret;
-  struct stat st;
+  mode_t mode;
 
   ret = eaccess (path, X_OK);
   if (ret < 0)
     return ret;
 
-  ret = stat (path, &st);
+  ret = get_file_type (&mode, path, false);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if ((st.st_mode & S_IFMT) != S_IFREG)
+  if (! S_ISREG (mode))
     {
       errno = EPERM;
       return -1;
@@ -1099,6 +1158,45 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
 
 #endif
 
+static
+int copy_rec_stat_file_at (int dfd, const char *path, mode_t *mode, off_t *size, dev_t *rdev, uid_t *uid, gid_t *gid)
+{
+  struct stat st;
+  int ret;
+
+#ifdef HAVE_STATX
+  struct statx stx;
+
+  ret = statx (dfd, path, AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC, STATX_TYPE | STATX_MODE | STATX_SIZE | STATX_UID | STATX_GID, &stx);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == ENOSYS)
+        goto fallback;
+
+      return ret;
+    }
+
+  *mode = stx.stx_mode;
+  *size = stx.stx_size;
+  *rdev = makedev (stx.stx_rdev_major, stx.stx_rdev_minor);
+  *uid = stx.stx_uid;
+  *gid = stx.stx_gid;
+
+  return ret;
+
+ fallback:
+#endif
+  ret = fstatat (dfd, path, &st, AT_SYMLINK_NOFOLLOW);
+
+  *mode = st.st_mode;
+  *size = st.st_size;
+  *rdev = st.st_rdev;
+  *uid = st.st_uid;
+  *gid = st.st_gid;
+
+  return ret;
+}
+
 int
 copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const char *destname, libcrun_error_t *err)
 {
@@ -1115,23 +1213,27 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
 
   for (de = readdir (dsrcfd); de; de = readdir (dsrcfd))
     {
-      struct stat st;
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;
       cleanup_free char *target_buf = NULL;
       size_t buf_size;
       ssize_t size;
       int ret;
+      mode_t mode;
+      off_t st_size;
+      dev_t rdev;
+      uid_t uid;
+      gid_t gid;
 
       if (strcmp (de->d_name, ".") == 0 ||
           strcmp (de->d_name, "..") == 0)
         continue;
 
-      ret = fstatat (dirfd (dsrcfd), de->d_name, &st, AT_SYMLINK_NOFOLLOW);
+      ret = copy_rec_stat_file_at (dirfd (dsrcfd), de->d_name, &mode, &st_size, &rdev, &uid, &gid);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "stat %s/%s", srcname, de->d_name);
 
-      switch (st.st_mode & S_IFMT)
+      switch (mode & S_IFMT)
         {
         case S_IFREG:
           srcfd = openat (dirfd (dsrcfd), de->d_name, O_NONBLOCK | O_RDONLY);
@@ -1157,7 +1259,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
           break;
 
         case S_IFDIR:
-          ret = mkdirat (destdirfd, de->d_name, st.st_mode);
+          ret = mkdirat (destdirfd, de->d_name, mode);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mkdir %s/%s", destname, de->d_name);
 
@@ -1182,7 +1284,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
           break;
 
         case S_IFLNK:
-          buf_size = st.st_size + 1;
+          buf_size = st_size + 1;
           target_buf = xmalloc (buf_size);
 
           do
@@ -1206,17 +1308,17 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
         case S_IFCHR:
         case S_IFIFO:
         case S_IFSOCK:
-          ret = mknodat (destdirfd, de->d_name, st.st_mode, st.st_rdev);
+          ret = mknodat (destdirfd, de->d_name, mode, rdev);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "create special file %s/%s", destname, de->d_name);
           break;
         }
 
-      ret = fchownat (destdirfd, de->d_name, st.st_uid, st.st_gid, AT_SYMLINK_NOFOLLOW);
+      ret = fchownat (destdirfd, de->d_name, uid, gid, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chown %s/%s", destname, de->d_name);
 
-      ret = fchmodat (destdirfd, de->d_name, st.st_mode & ALLPERMS, AT_SYMLINK_NOFOLLOW);
+      ret = fchmodat (destdirfd, de->d_name, mode & ALLPERMS, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
         {
           if (errno == ENOTSUP)
@@ -1229,7 +1331,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
                 return crun_make_error (err, errno, "open %s/%s", destname, de->d_name);
 
               sprintf (proc_path, "/proc/self/fd/%d", fd);
-              ret = chmod (proc_path, st.st_mode & ALLPERMS);
+              ret = chmod (proc_path, mode & ALLPERMS);
             }
 
           if (UNLIKELY (ret < 0))
