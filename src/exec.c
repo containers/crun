@@ -33,6 +33,9 @@ static char doc[] = "OCI runtime";
 
 struct exec_options_s
 {
+  bool tty;
+  bool detach;
+  int preserve_fds;
   const char *process;
   const char *console_socket;
   const char *pid_file;
@@ -42,9 +45,6 @@ struct exec_options_s
   char **cap;
   size_t cap_size;
   size_t env_size;
-  int preserve_fds;
-  bool tty;
-  bool detach;
 };
 
 enum
