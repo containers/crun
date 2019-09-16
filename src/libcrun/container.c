@@ -441,7 +441,8 @@ int unblock_signals (libcrun_error_t *err)
 
 static int
 container_entrypoint_init (void *args, const char *notify_socket,
-                           int sync_socket, libcrun_error_t *err)
+                           int sync_socket, const char **exec_path,
+                           libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -494,6 +495,20 @@ container_entrypoint_init (void *args, const char *notify_socket,
   ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (def->process && def->process->args)
+    {
+      *exec_path = find_executable (def->process->args[0]);
+      if (UNLIKELY (*exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            ret = crun_make_error (err, errno, "executable file not found in $PATH");
+          else
+            ret = crun_make_error (err, errno, "open executable");
+          sync_socket_write_error (sync_socket, err);
+          return ret;
+        }
+    }
 
   if (has_terminal)
     {
@@ -595,7 +610,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   crun_set_output_handler (log_write_to_sync_socket, args);
 
-  ret = container_entrypoint_init (args, notify_socket, sync_socket, err);
+  ret = container_entrypoint_init (args, notify_socket, sync_socket, &exec_path, err);
   if (UNLIKELY (ret < 0))
     {
       /* If it fails to write the error using the sync socket, then fallback
@@ -612,20 +627,6 @@ container_entrypoint (void *args, const char *notify_socket,
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  if (def->process && def->process->args)
-    {
-      exec_path = find_executable (def->process->args[0]);
-      if (UNLIKELY (exec_path == NULL))
-        {
-          if (errno == ENOENT)
-            ret = crun_make_error (err, errno, "executable file not found in $PATH");
-          else
-            ret = crun_make_error (err, errno, "open executable");
-          sync_socket_write_error (sync_socket, err);
-          return ret;
-        }
-    }
 
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
