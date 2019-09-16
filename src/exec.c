@@ -42,6 +42,7 @@ struct exec_options_s
   char **cap;
   size_t cap_size;
   size_t env_size;
+  int preserve_fds;
   bool tty;
   bool detach;
 };
@@ -50,7 +51,8 @@ enum
   {
     OPTION_CONSOLE_SOCKET = 1000,
     OPTION_PID_FILE,
-    OPTION_CWD
+    OPTION_CWD,
+    OPTION_PRESERVE_FDS
   };
 
 static struct exec_options_s exec_options;
@@ -66,6 +68,7 @@ static struct argp_option options[] =
     {"env", 'e', "ENV", 0, "add an environment variable" },
     {"cap", 'c', "CAP", 0, "add a capability" },
     {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
+    {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container"},
     { 0 }
   };
 
@@ -117,6 +120,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_PID_FILE:
       exec_options.pid_file = arg;
+      break;
+
+    case OPTION_PRESERVE_FDS:
+      exec_options.preserve_fds = strtoul (argp_mandatory_argument (arg, state), NULL, 10);
       break;
 
     case 'd':
@@ -208,6 +215,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   crun_context.detach = exec_options.detach;
   crun_context.console_socket = exec_options.console_socket;
   crun_context.pid_file = exec_options.pid_file;
+  crun_context.preserve_fds = exec_options.preserve_fds;
 
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
