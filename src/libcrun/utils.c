@@ -328,7 +328,7 @@ get_file_size (int fd, off_t *size)
 }
 
 static int
-get_file_type (mode_t *mode, const char *path, bool nofollow)
+get_file_type (mode_t *mode, const char *path)
 {
   struct stat st;
   int ret;
@@ -336,7 +336,7 @@ get_file_type (mode_t *mode, const char *path, bool nofollow)
 #ifdef HAVE_STATX
   struct statx stx;
 
-  ret = statx (AT_FDCWD, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
+  ret = statx (AT_FDCWD, path, AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
   if (UNLIKELY (ret < 0))
     {
       if (errno == ENOSYS)
@@ -362,7 +362,7 @@ crun_dir_p (const char *path, libcrun_error_t *err)
   mode_t mode;
   int ret;
 
-  ret = get_file_type (&mode, path, true);
+  ret = get_file_type (&mode, path);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error stat'ing file '%s'", path);
 
@@ -1014,7 +1014,7 @@ check_access (const char *path)
   if (ret < 0)
     return ret;
 
-  ret = get_file_type (&mode, path, false);
+  ret = get_file_type (&mode, path);
   if (UNLIKELY (ret < 0))
     return ret;
 
