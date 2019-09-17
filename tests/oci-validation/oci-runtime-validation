@@ -25,8 +25,7 @@ make -j $(nproc)
 # readonly_paths, masked_paths and seccomp timeouts or don't work on Travis
 # misc_props, kill, hostname, process and pidfile are flaky.
 # start - expect to not fail if the specified process doesn't exist (support process unset)
-# state - flaky
-export VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | egrep -v "(state|misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname)" | tr '\n' ' ')
+export VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | egrep -v "(misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname)" | tr '\n' ' ')
 
 export RUNTIME="/crun/crun"
 
