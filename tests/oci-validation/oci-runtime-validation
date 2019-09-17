@@ -13,7 +13,9 @@ fi
 # Install and run runtime-tools' validation tests
 go get -d -u github.com/opencontainers/runtime-tools || true
 
+export GOCACHE=/var/tmp/gocache
 export TMPDIR=/var/tmp
+export XDG_RUNTIME_DIR=/run
 
 cd $GOPATH/src/github.com/opencontainers/runtime-tools
 make -j $(nproc)
