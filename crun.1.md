@@ -187,6 +187,9 @@ Detach the container process from the current session.
 **--env**=**ENV**
 Specify an environment variable.
 
+**--preserve-fds**=**N**
+Additional number of FDs to pass into the container.
+
 **--process**=**FILE**
 Path to a file containing the process JSON configuration.
 
