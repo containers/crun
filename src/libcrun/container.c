@@ -496,17 +496,27 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (clearenv ())
+    return crun_make_error (err, errno, "clearenv");
+
+  if (def->process)
+    {
+      size_t i;
+
+      for (i = 0; i < def->process->env_len; i++)
+        if (putenv (def->process->env[i]) < 0)
+          return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
+    }
+
   if (def->process && def->process->args)
     {
       *exec_path = find_executable (def->process->args[0]);
       if (UNLIKELY (*exec_path == NULL))
         {
           if (errno == ENOENT)
-            ret = crun_make_error (err, errno, "executable file not found in $PATH");
-          else
-            ret = crun_make_error (err, errno, "open executable");
-          sync_socket_write_error (sync_socket, err);
-          return ret;
+            return crun_make_error (err, errno, "executable file not found in $PATH");
+
+          return crun_make_error (err, errno, "open executable");
         }
     }
 
@@ -575,17 +585,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       return crun_make_error (err, errno, "chdir");
 
-  if (clearenv ())
-    return crun_make_error (err, errno, "clearenv");
-
-  if (def->process)
-    {
-      size_t i;
-
-      for (i = 0; i < def->process->env_len; i++)
-        if (putenv (def->process->env[i]) < 0)
-          return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
-    }
   if (notify_socket)
     {
       char *notify_socket_env;
@@ -1986,6 +1985,17 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
           seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
         }
 
+      exec_path = find_executable (process->args[0]);
+      if (UNLIKELY (exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            crun_make_error (err, errno, "executable file not found in $PATH");
+          else
+            crun_make_error (err, errno, "open executable");
+
+          libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
+
       if (!process->no_new_privileges)
         {
           ret = libcrun_apply_seccomp (seccomp_fd, seccomp_flags, seccomp_flags_len, err);
@@ -2012,17 +2022,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
           ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
           if (UNLIKELY (ret < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-        }
-
-      exec_path = find_executable (process->args[0]);
-      if (UNLIKELY (exec_path == NULL))
-        {
-          if (errno == ENOENT)
-            crun_make_error (err, errno, "executable file not found in $PATH");
-          else
-            crun_make_error (err, errno, "open executable");
-
-          libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
       ret = close_fds_ge_than (context->preserve_fds + 3, err);
