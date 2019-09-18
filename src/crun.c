@@ -166,7 +166,7 @@ static struct argp_option options[] =
 static void
 print_version (FILE *stream, struct argp_state *state)
 {
-  fprintf (stream, "%s\n", argp_program_version);
+  fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
   fprintf (stream, "spec: 1.0.0\n");
 #ifdef HAVE_SYSTEMD
   fprintf (stream, "+SYSTEMD ");
