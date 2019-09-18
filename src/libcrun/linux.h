@@ -44,6 +44,7 @@ int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcru
 int libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err);
 int libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err);
 int libcrun_set_selinux_exec_label (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_set_apparmor_profile (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);

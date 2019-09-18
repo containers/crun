@@ -1613,6 +1613,20 @@ libcrun_set_selinux_exec_label (libcrun_container_t *container, libcrun_error_t 
 }
 
 int
+libcrun_set_apparmor_profile(libcrun_container_t *container, libcrun_error_t *err)
+{
+  char *profile;
+
+  if (container->container_def->process == NULL)
+    return 0;
+
+  profile = container->container_def->process->apparmor_profile;
+  if (profile == NULL)
+    return 0;
+  return set_apparmor_profile (profile, err);
+}
+
+int
 libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
 {
   int ret;

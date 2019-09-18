@@ -28,6 +28,7 @@ AC_SEARCH_LIBS(seccomp_rule_add, [seccomp], [AC_DEFINE([HAVE_SECCOMP], 1, [Defin
 AC_SEARCH_LIBS(seccomp_arch_resolve_name, [seccomp], [AC_DEFINE([SECCOMP_ARCH_RESOLVE_NAME], 1, [Define if seccomp_arch_resolve_name is available])], [ ])
 AC_SEARCH_LIBS(sd_listen_fds, [systemd], [AC_DEFINE([HAVE_SYSTEMD], 1, [Define if libsystemd is available])], [ ])
 AC_SEARCH_LIBS(setfilecon, [selinux], [AC_DEFINE([HAVE_SELINUX], 1, [Define if SELinux is available])], [ ])
+AC_SEARCH_LIBS(aa_change_onexec, [apparmor], [AC_DEFINE([HAVE_APPARMOR], 1, [Define if AppArmor is available])], [ ])
 AC_SEARCH_LIBS(yajl_tree_get, [yajl], [AC_DEFINE([HAVE_YAJL], 1, [Define if libyajl is available])], [AC_MSG_ERROR([*** libyajl headers not found])])
 
 

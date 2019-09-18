@@ -33,12 +33,10 @@ addons:
     - cmake
     - pkg-config
     - gcc
-    - libseccomp-dev
-    - libcap-dev
+    - libapparmor-dev
     - wget
     - go-md2man
 before_install:
-- sudo apt-get remove apparmor
 - git submodule update --init --recursive
 - if test $TEST = podman; then docker build -t crun-podman tests/podman; fi
 - if test $TEST = oci-validation; then docker build -t crun-oci-validation tests/oci-validation; fi
