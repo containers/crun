@@ -221,12 +221,8 @@ libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, ch
         {
           int syscall = seccomp_syscall_resolve_name (seccomp->syscalls[i]->names[j]);
 
-         /* If the syscall is not known and we are trying to enable it, assume the kernel
-            doesn't support it.
-            Differently, raise an error if we are trying to block it.
-         */
-         if (syscall < 0 && action == SCMP_ACT_ALLOW)
-           continue;
+          if (UNLIKELY (syscall == __NR_SCMP_ERROR))
+            return crun_make_error (err, 0, "invalid seccomp syscall '%s'", seccomp->syscalls[i]->names[j]);
 
           if (seccomp->syscalls[i]->args == NULL)
             {
