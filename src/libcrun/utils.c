@@ -43,6 +43,11 @@
 # include <selinux/selinux.h>
 #endif
 
+#ifdef HAVE_APPARMOR
+# include <sys/apparmor.h>
+#endif
+
+
 int
 close_and_reset (int *fd)
 {
@@ -411,6 +416,38 @@ set_selinux_exec_label (const char *label, libcrun_error_t *err)
       }
 #endif
   return 0;
+}
+
+int
+set_apparmor_profile (const char *profile, libcrun_error_t *err)
+{
+#ifdef HAVE_APPARMOR
+  if (is_apparmor_enabled () == 1)
+    if (UNLIKELY (aa_change_onexec (profile) < 0))
+      {
+        crun_make_error (err, errno, "error setting apparmor profile");
+        return -1;
+      }
+#endif
+  return 0;
+}
+
+int
+is_apparmor_enabled(void)
+{
+	int size;
+	cleanup_close int fd;
+	char buf[2];
+
+	fd = open("/sys/module/apparmor/parameters/enabled", O_RDONLY);
+	if (fd == -1) {
+		return 0;
+	}
+	size = read(fd, &buf, 2);
+
+	if (size > 0 && buf[0] == 'Y')
+		return 1;
+	return 0;
 }
 
 int

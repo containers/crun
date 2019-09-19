@@ -555,6 +555,10 @@ container_entrypoint_init (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_set_apparmor_profile (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = libcrun_set_hostname (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -1976,6 +1980,12 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       if (process->selinux_label)
         {
           if (UNLIKELY (set_selinux_exec_label (process->selinux_label, err) < 0))
+            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
+
+	  if (process->apparmor_profile)
+        {
+          if (UNLIKELY (set_apparmor_profile (process->apparmor_profile, err) < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 

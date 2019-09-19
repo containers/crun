@@ -56,7 +56,7 @@ dnf install -y make python git gcc automake autoconf libcap-devel \
 On Ubuntu:
 ```shell
 apt-get install -y make git gcc build-essential pkgconf libtool \
-   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev \
+   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev libapparmor-dev \
    go-md2man libtool autoconf python3
 ```
 
