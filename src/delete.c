@@ -51,9 +51,9 @@ static struct delete_options_s delete_options;
 
 static struct argp_option options[] =
   {
-    {"force", 'f', 0, 0, "delete the container even if it is still running" },
-    {"regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (delete multiple containers)" },
-    { 0 }
+   {"force", 'f', 0, 0, "delete the container even if it is still running", 0},
+   {"regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (delete multiple containers)", 0},
+   { 0, }
   };
 
 static char args_doc[] = "delete CONTAINER";
@@ -81,7 +81,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
-static struct argp run_argp = { options, parse_opt, args_doc, doc };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
 crun_command_delete (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)

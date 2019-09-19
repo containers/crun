@@ -202,7 +202,7 @@ static struct propagation_flags_s propagation_flags[] =
 
    {"tmpcopyup", 0, 0, OPTION_TMPCOPYUP},
 
-   {NULL, 0}
+   {NULL, 0, 0, 0}
   };
 
 static unsigned long
