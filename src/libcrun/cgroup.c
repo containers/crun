@@ -914,8 +914,12 @@ libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode,
       return ret;
     }
 
-  if (rootless > 0 && cgroup_mode != CGROUP_MODE_UNIFIED)
+  if (rootless > 0 && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
     {
+      if (cgroup_mode == CGROUP_MODE_UNIFIED && manager != CGROUP_MANAGER_SYSTEMD)
+        libcrun_warning ("cannot configure rootless cgroup using the cgroupfs manager");
+
+      /* Ignore cgroups errors and set there is no cgroup path to use.  */
       free (*path);
       *path = NULL;
       crun_error_release (err);
