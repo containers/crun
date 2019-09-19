@@ -164,7 +164,7 @@ static struct argp_option options[] =
   };
 
 static void
-print_version (FILE *stream, struct argp_state *state)
+print_version (FILE *stream, struct argp_state *state arg_unused)
 {
   fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
   fprintf (stream, "spec: 1.0.0\n");

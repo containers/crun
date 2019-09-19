@@ -124,7 +124,7 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
 }
 
 int
-crun_path_exists (const char *path, libcrun_error_t *err)
+crun_path_exists (const char *path, libcrun_error_t *err arg_unused)
 {
   int ret = access (path, F_OK);
   if (ret < 0)
@@ -382,7 +382,7 @@ check_running_in_user_namespace (libcrun_error_t *err)
 }
 
 int
-add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err)
+add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_SELINUX
   if (label && is_selinux_enabled () > 0)
@@ -984,7 +984,7 @@ set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
 }
 
 int
-parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err)
+parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
 {
     char errbuf[1024];
 

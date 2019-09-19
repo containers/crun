@@ -1671,7 +1671,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   ret = libcrun_container_run_internal (container, context, pipefd1, err);
   if (UNLIKELY (ret < 0))
     {
-      libcrun_error ((*err)->status, true, "%s", (*err)->msg);
+      libcrun_error ((*err)->status, "%s", (*err)->msg);
       crun_set_output_handler (log_write_to_stderr, NULL);
     }
 
@@ -2154,7 +2154,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
 }
 
 int
-libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err)
+libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
 {
   return fprintf (out, spec_file, root ? "" : spec_user);
 }
@@ -2177,7 +2177,7 @@ libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_err
   if (ret == 0)
     return crun_make_error (err, errno, "the container %s is not running", id);
 
-  return libcrun_container_pause_linux (&status, id, err);
+  return libcrun_container_pause_linux (&status, err);
 }
 
 int
@@ -2198,5 +2198,5 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
   if (ret == 0)
     return crun_make_error (err, errno, "the container %s is not running", id);
 
-  return libcrun_container_unpause_linux (&status, id, err);
+  return libcrun_container_unpause_linux (&status, err);
 }

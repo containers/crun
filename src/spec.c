@@ -51,7 +51,7 @@ static struct argp_option options[] =
 static char args_doc[] = "spec";
 
 static error_t
-parse_opt (int key, char *arg, struct argp_state *state)
+parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 {
   switch (key)
     {

@@ -355,11 +355,8 @@ do_mount (libcrun_container_t *container,
 
 static int
 do_mount_cgroup_v2 (libcrun_container_t *container,
-                    const char *source,
                     const char *target,
-                    const char *fstype,
                     unsigned long mountflags,
-                    const void *data,
                     libcrun_error_t *err)
 {
   int ret;
@@ -400,12 +397,9 @@ has_mount_for (libcrun_container_t *container, const char *destination)
 
 static int
 do_mount_cgroup_v1 (libcrun_container_t *container,
-                    int cgroup_mode,
                     const char *source,
                     const char *target,
-                    const char *fstype,
                     unsigned long mountflags,
-                    const void *data,
                     libcrun_error_t *err)
 {
   int ret;
@@ -483,9 +477,7 @@ static int
 do_mount_cgroup (libcrun_container_t *container,
                  const char *source,
                  const char *target,
-                 const char *fstype,
                  unsigned long mountflags,
-                 const void *data,
                  libcrun_error_t *err)
 {
   int cgroup_mode;
@@ -497,10 +489,10 @@ do_mount_cgroup (libcrun_container_t *container,
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return do_mount_cgroup_v2 (container, source, target, fstype, mountflags, data, err);
+      return do_mount_cgroup_v2 (container, target, mountflags, err);
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
-      return do_mount_cgroup_v1 (container, cgroup_mode, source, target, fstype, mountflags, data, err);
+      return do_mount_cgroup_v1 (container, source, target, mountflags, err);
     }
 
   return crun_make_error (err, 0, "unknown cgroups mode %d", cgroup_mode);
@@ -801,7 +793,7 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
 }
 
 static int
-finalize_mounts (libcrun_container_t *container, const char *rootfs, int is_user_ns, libcrun_error_t *err)
+finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret = 0;
   struct remount_s *r = get_private_data (container)->remounts;
@@ -980,7 +972,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
       if (strcmp (type, "cgroup") == 0)
         {
-          ret = do_mount_cgroup (container, source, target, type, flags, data, err);
+          ret = do_mount_cgroup (container, source, target, flags, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1073,7 +1065,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
 
   ret = mkdir (host_notify_socket_path_dir, 0700);
   if (ret < 0)
-    return ret;
+    return crun_make_error (err, errno, "mkdir %s", host_notify_socket_path_dir);
 
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
@@ -1214,7 +1206,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = finalize_mounts (container, rootfs, is_user_ns, err);
+  ret = finalize_mounts (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1222,7 +1214,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 }
 
 static int
-move_root (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
+move_root (const char *rootfs, libcrun_error_t *err)
 {
   int ret;
 
@@ -1261,7 +1253,7 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
     {
       if (no_pivot)
         {
-          ret = move_root (container, rootfs, err);
+          ret = move_root (rootfs, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -2402,7 +2394,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 }
 
 int
-libcrun_linux_container_update (libcrun_container_status_t *status, const char *content, size_t len, libcrun_error_t *err)
+libcrun_linux_container_update (libcrun_container_status_t *status, const char *content, size_t len arg_unused, libcrun_error_t *err)
 {
   int ret;
   yajl_val tree = NULL;
@@ -2445,13 +2437,13 @@ libcrun_container_pause_unpause_linux (libcrun_container_status_t *status, const
 }
 
 int
-libcrun_container_pause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
+libcrun_container_pause_linux (libcrun_container_status_t *status, libcrun_error_t *err)
 {
   return libcrun_container_pause_unpause_linux (status, true, err);
 }
 
 int
-libcrun_container_unpause_linux (libcrun_container_status_t *status, const char *id, libcrun_error_t *err)
+libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err)
 {
   return libcrun_container_pause_unpause_linux (status, false, err);
 }
