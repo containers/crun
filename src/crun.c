@@ -174,6 +174,9 @@ print_version (FILE *stream, struct argp_state *state)
 #ifdef HAVE_SELINUX
   fprintf (stream, "+SELINUX ");
 #endif
+#ifdef HAVE_APPARMOR
+  fprintf (stream, "+APPARMOR ");
+#endif
 #ifdef HAVE_CAP
   fprintf (stream, "+CAP ");
 #endif
