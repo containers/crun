@@ -431,7 +431,7 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
     allocated = 256;
   buf = xmalloc (allocated + 1);
   nread = 0;
-  while ((size && nread < size) || size == 0)
+  while ((size && nread < (size_t) size) || size == 0)
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
@@ -769,11 +769,11 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
   for (;;)
     {
       char *endptr;
-      int read = getline (&lineptr, &lenlineptr, input);
+      ssize_t read = getline (&lineptr, &lenlineptr, input);
       if (read < 0)
         return -1;
 
-      if (read < len_name + 2)
+      if (read < (ssize_t) (len_name + 2))
         continue;
 
       if (memcmp (lineptr, name, len_name) || lineptr[len_name] != ':')
@@ -1077,10 +1077,10 @@ static ssize_t
 safe_read_xattr (char **ret, int sfd, const char *srcname, const char *name, size_t initial_size, libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
-  size_t current_size;
+  ssize_t current_size;
   ssize_t s;
 
-  current_size = initial_size;
+  current_size = (ssize_t) initial_size;
   buffer = xmalloc (current_size + 1);
 
   while (1)
@@ -1216,7 +1216,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;
       cleanup_free char *target_buf = NULL;
-      size_t buf_size;
+      ssize_t buf_size;
       ssize_t size;
       int ret;
       mode_t mode;

@@ -1950,7 +1950,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
   /* Process to exec.  */
   if (pid == 0)
     {
-      int i;
+      size_t i;
       uid_t container_uid = process->user ? process->user->uid : 0;
       gid_t container_gid = process->user ? process->user->gid : 0;
       const char *cwd;

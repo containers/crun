@@ -437,7 +437,7 @@ static int clone_binary(void)
 {
 	int binfd, execfd;
 	struct stat statbuf = {};
-	size_t sent = 0;
+	ssize_t sent = 0;
 	int fdtype = EFD_NONE;
 
 	/*

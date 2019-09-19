@@ -1224,7 +1224,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
         {
           cleanup_close int w_device_fd = -1;
           cleanup_close int w_leafdevice_fd = -1;
-          int i;
+          size_t i;
 
           w_device_fd = openat (dirfd, "blkio.weight_device", O_WRONLY);
           if (UNLIKELY (w_device_fd < 0))
@@ -1519,7 +1519,8 @@ write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_de
 static int
 write_devices_resources_v2 (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
 {
-  int ret, i;
+  int ret;
+  size_t i;
   bool can_skip = true;
 
   ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);

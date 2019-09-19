@@ -62,7 +62,7 @@ enum
 struct description_s
 {
   int id;
-  int section;
+  unsigned int section;
   const char *key;
   int numeric;
 };
@@ -125,7 +125,7 @@ build_file (size_t *len)
 {
   size_t i;
   yajl_gen gen = NULL;
-  int n_sections = sizeof(sections) / sizeof(sections[0]);
+  size_t n_sections = sizeof(sections) / sizeof(sections[0]);
   int has_sections[n_sections];
   const unsigned char *buf;
 
