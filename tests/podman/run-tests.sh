@@ -7,7 +7,7 @@ if test "$(id -u)" != 0; then
 	exit 1
 fi
 
-(cd /crun; git clean -fdx; ./autogen.sh && ./configure && make -j $(nproc))
+(cd /crun; git clean -fdx; ./autogen.sh && ./configure CFLAGS='-Wall -Wextra -Werror' && make -j $(nproc))
 
 export OCI_RUNTIME=/crun/crun
 export CGROUP_MANAGER=cgroupfs

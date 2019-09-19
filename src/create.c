@@ -44,14 +44,14 @@ static libcrun_context_t crun_context;
 
 static struct argp_option options[] =
   {
-    {"bundle", 'b', 0, 0, "container bundle (default \".\")" },
-    {"console-socket", OPTION_CONSOLE_SOCKET, "SOCK", 0, "path to a socket that will receive the master end of the tty" },
-    {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container"},
-    {"no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root"},
-    {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
-    {"no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process"},
-    {"no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key"},
-    { 0 }
+   {"bundle", 'b', 0, 0, "container bundle (default \".\")", 0},
+   {"console-socket", OPTION_CONSOLE_SOCKET, "SOCK", 0, "path to a socket that will receive the master end of the tty", 0},
+   {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0},
+   {"no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root", 0},
+   {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0},
+   {"no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process", 0},
+   {"no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key", 0},
+   { 0, }
   };
 
 static char doc[] = "OCI runtime";
@@ -101,7 +101,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
-static struct argp run_argp = { options, parse_opt, args_doc, doc };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
 crun_command_create (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)

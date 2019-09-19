@@ -71,7 +71,7 @@ void crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err);
 
 void libcrun_warning (const char *msg, ...);
 
-void libcrun_error (int errno_, bool also_stderr, const char *msg, ...);
+void libcrun_error (int errno_, const char *msg, ...);
 
 void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
 

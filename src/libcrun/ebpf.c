@@ -152,7 +152,7 @@ bpf_program_append (struct bpf_program *p, void *data, size_t size)
 }
 
 struct bpf_program *
-bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err)
+bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_EBPF
   /* taken from systemd.  */
@@ -176,7 +176,7 @@ bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err)
 }
 
 struct bpf_program *
-bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err)
+bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_EBPF
   int i;
@@ -276,7 +276,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
 }
 
 struct bpf_program *
-bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err)
+bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_EBPF
   struct bpf_insn i[] = {

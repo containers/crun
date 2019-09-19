@@ -48,6 +48,7 @@ int close_and_reset (int *fd);
 # define cleanup_close __attribute__((cleanup (cleanup_closep)))
 # define cleanup_close_vec __attribute__((cleanup (cleanup_close_vecp)))
 # define cleanup_dir __attribute__((cleanup (cleanup_dirp)))
+# define arg_unused __attribute__((unused))
 
 # define LIKELY(x) __builtin_expect((x),1)
 # define UNLIKELY(x) __builtin_expect((x),0)

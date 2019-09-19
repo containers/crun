@@ -194,7 +194,7 @@ init_logging (crun_output_handler *new_output_handler, void **new_output_handler
           break;
 
         case LOG_TYPE_JOURNALD:
-          *new_output_handler = log_write_to_syslog;
+          *new_output_handler = log_write_to_journald;
           *new_output_handler_arg = NULL;
           break;
         }
@@ -228,13 +228,13 @@ log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
 }
 
 void
-log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg)
+log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg arg_unused)
 {
   log_write_to_stream (errno_, msg, warning, stderr);
 }
 
 void
-log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg)
+log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg arg_unused)
 {
   if (errno_ == 0)
     syslog (warning ? LOG_WARNING : LOG_ERR, "%s", msg);
@@ -243,14 +243,13 @@ log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg)
 }
 
 void
-log_write_to_journald (int errno_, const char *msg, bool warning, void *arg)
+log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_unused)
 {
 #ifdef HAVE_SYSTEMD
   if (errno_ == 0)
-    sd_journal_send ("MESSAGE=%s", msg, "ID=%s", arg, NULL);
+    sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s", msg, "ID=%s", arg, NULL);
   else
-  if (errno_ == 0)
-    sd_journal_send ("MESSAGE=%s: %s", msg, strerror (errno_), "ID=%s", arg, NULL);
+    sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s: %s", msg, strerror (errno_), "ID=%s", arg, NULL);
 #endif
 }
 
@@ -363,7 +362,7 @@ libcrun_warning (const char *msg, ...)
 }
 
 void
-libcrun_error (int errno_, bool also_stderr, const char *msg, ...)
+libcrun_error (int errno_, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);

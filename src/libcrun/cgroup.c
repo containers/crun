@@ -43,7 +43,7 @@ static const cgroups_subsystem_t cgroups_subsystems[] = { "cpuset", "cpu", "devi
                                                           "unified", NULL};
 
 const cgroups_subsystem_t *
-libcrun_get_cgroups_subsystems (libcrun_error_t *err)
+libcrun_get_cgroups_subsystems (libcrun_error_t *err arg_unused)
 {
   return cgroups_subsystems;
 }
@@ -268,7 +268,7 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 }
 
 static int
-enter_cgroup_subsystem (int cgroup_mode, pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
   cleanup_free char *cgroup_path = NULL;
@@ -385,7 +385,7 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
         continue;
 
       entered_any = 1;
-      ret = enter_cgroup_subsystem (cgroup_mode, pid, subsystems[i], path, ensure_missing, err);
+      ret = enter_cgroup_subsystem (pid, subsystems[i], path, ensure_missing, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -496,7 +496,7 @@ int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode,
 
       if (strcmp (subpath, *path))
         {
-          ret = enter_cgroup_subsystem (cgroup_mode, pid, subsystem, *path, 1, err);
+          ret = enter_cgroup_subsystem (pid, subsystem, *path, 1, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -512,7 +512,7 @@ struct systemd_job_removed_s
 };
 
 static int
-systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error)
+systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_unused)
 {
   const char *path, *unit, *result;
   uint32_t id;
@@ -1224,7 +1224,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
         {
           cleanup_close int w_device_fd = -1;
           cleanup_close int w_leafdevice_fd = -1;
-          int i;
+          size_t i;
 
           w_device_fd = openat (dirfd, "blkio.weight_device", O_WRONLY);
           if (UNLIKELY (w_device_fd < 0))
@@ -1519,7 +1519,8 @@ write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_de
 static int
 write_devices_resources_v2 (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
 {
-  int ret, i;
+  int ret;
+  size_t i;
   bool can_skip = true;
 
   ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
@@ -1632,7 +1633,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
 }
 
 static int
-write_pids_resources (int dirfd, bool cgroup2, oci_container_linux_resources_pids *pids, libcrun_error_t *err)
+write_pids_resources (int dirfd, bool cgroup2 arg_unused, oci_container_linux_resources_pids *pids, libcrun_error_t *err)
 {
   if (pids->limit)
     {
@@ -1733,7 +1734,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
 }
 
 static int
-write_cpuset_resources (int dirfd_cpuset, int cgroup2, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
+write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
 {
   int ret;
 

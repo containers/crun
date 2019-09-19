@@ -106,7 +106,7 @@ struct commands_s commands[] =
     { COMMAND_UPDATE, "update", crun_command_update},
     { COMMAND_PAUSE, "pause", crun_command_pause},
     { COMMAND_UNPAUSE, "resume", crun_command_unpause},
-    { 0, 0}
+    { 0, }
   };
 
 static char doc[] =                                                   \
@@ -153,18 +153,18 @@ const char *argp_program_bug_address = "https://github.com/containers/crun/issue
 
 static struct argp_option options[] =
   {
-    {"debug", OPTION_DEBUG, 0, 0, "produce verbose output"},
-    {"cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager"},
-    {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups"},
-    {"log", OPTION_LOG, "FILE", 0},
-    {"log-format", OPTION_LOG_FORMAT, "FORMAT", 0},
-    {"root", OPTION_ROOT, "DIR",  0},
-    {"rootless", OPTION_ROOT, "VALUE",  0},
-    { 0 }
+   {"debug", OPTION_DEBUG, 0, 0, "produce verbose output", 0},
+   {"cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager", 0},
+   {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups", 0},
+   {"log", OPTION_LOG, "FILE", 0, NULL, 0},
+   {"log-format", OPTION_LOG_FORMAT, "FORMAT", 0, NULL, 0},
+   {"root", OPTION_ROOT, "DIR",  0, NULL, 0},
+   {"rootless", OPTION_ROOT, "VALUE",  0, NULL, 0},
+   { 0, }
   };
 
 static void
-print_version (FILE *stream, struct argp_state *state)
+print_version (FILE *stream, struct argp_state *state arg_unused)
 {
   fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
   fprintf (stream, "spec: 1.0.0\n");
@@ -265,7 +265,7 @@ crun_assert_n_args (int n, int min, int max)
     error (EXIT_FAILURE, 0, "'%s' requires a maximum of %d arguments", command->name, max);
 }
 
-static struct argp argp = { options, parse_opt, args_doc, doc };
+static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
 main (int argc, char **argv)

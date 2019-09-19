@@ -112,7 +112,7 @@ test_send_receive_fd ()
       if (ret < 0)
         return -1;
 
-      if (ret != strlen (test_string) + 1)
+      if (ret != (int) strlen (test_string) + 1)
         return -1;
 
       return strcmp (buffer, test_string);
@@ -186,7 +186,7 @@ test_write_read_file ()
   libcrun_error_t err = NULL;
   cleanup_free char *name = NULL;
   size_t len;
-  int i;
+  size_t i;
   int ret, failed = 0;
   size_t max = 1 << 10;
   cleanup_free char *written = xmalloc (max);

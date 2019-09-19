@@ -47,13 +47,13 @@ static struct state_options_s state_options;
 
 static struct argp_option options[] =
   {
-    { 0 }
+   { 0, }
   };
 
 static char args_doc[] = "state CONTAINER";
 
 static error_t
-parse_opt (int key, char *arg, struct argp_state *state)
+parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 {
   switch (key)
     {
@@ -67,7 +67,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
-static struct argp run_argp = { options, parse_opt, args_doc, doc };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
 crun_command_state (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)

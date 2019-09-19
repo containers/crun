@@ -62,7 +62,7 @@ enum
 struct description_s
 {
   int id;
-  int section;
+  unsigned int section;
   const char *key;
   int numeric;
 };
@@ -100,22 +100,22 @@ set_value (int id, const char *value)
 
 static struct argp_option options[] =
   {
-    {"resources", 'r', "FILE", 0, "path to the file containing the resources to update" },
-    {"blkio-weight", BLKIO_WEIGHT, "VALUE", 0, "Specifies per cgroup weight" },
-    {"cpu-period", CPU_PERIOD, "VALUE", 0, "CPU CFS period to be used for hardcapping" },
-    {"cpu-quota", CPU_QUOTA, "VALUE", 0, "CPU CFS hardcap limit" },
-    {"cpu-share", CPU_SHARE, "VALUE", 0, "CPU shares" },
-    {"cpu-rt-period", CPU_RT_PERIOD, "VALUE", 0, "CPU realtime period to be used for hardcapping" },
-    {"cpu-rt-runtime", CPU_RT_RUNTIME, "VALUE", 0, "CPU realtime hardcap limit" },
-    {"cpuset-cpus", CPUSET_CPUS, "VALUE", 0, "CPU(s) to use" },
-    {"cpuset-mems", CPUSET_MEMS, "VALUE", 0, "Memory node(s) to use" },
-    {"kernel-memory", KERNEL_MEMORY, "VALUE", 0, "Kernel memory limit" },
-    {"kernel-memory-tcp", KERNEL_MEMORY_TCP, "VALUE", 0, "Kernel memory limit for tcp buffer" },
-    {"memory", MEMORY, "VALUE", 0, "Memory limit" },
-    {"memory-reservation", MEMORY_RESERVATION, "VALUE", 0, "Memory reservation or soft_limit" },
-    {"memory-swap", MEMORY_SWAP, "VALUE", 0, "Total memory usage" },
-    {"pids-limit", PIDS_LIMIT, "VALUE", 0, "Maximum number of pids allowed in the container" },
-    { 0 }
+   {"resources", 'r', "FILE", 0, "path to the file containing the resources to update", 0},
+   {"blkio-weight", BLKIO_WEIGHT, "VALUE", 0, "Specifies per cgroup weight", 0},
+   {"cpu-period", CPU_PERIOD, "VALUE", 0, "CPU CFS period to be used for hardcapping", 0},
+   {"cpu-quota", CPU_QUOTA, "VALUE", 0, "CPU CFS hardcap limit", 0},
+   {"cpu-share", CPU_SHARE, "VALUE", 0, "CPU shares", 0},
+   {"cpu-rt-period", CPU_RT_PERIOD, "VALUE", 0, "CPU realtime period to be used for hardcapping", 0},
+   {"cpu-rt-runtime", CPU_RT_RUNTIME, "VALUE", 0, "CPU realtime hardcap limit", 0},
+   {"cpuset-cpus", CPUSET_CPUS, "VALUE", 0, "CPU(s) to use", 0},
+   {"cpuset-mems", CPUSET_MEMS, "VALUE", 0, "Memory node(s) to use", 0},
+   {"kernel-memory", KERNEL_MEMORY, "VALUE", 0, "Kernel memory limit", 0},
+   {"kernel-memory-tcp", KERNEL_MEMORY_TCP, "VALUE", 0, "Kernel memory limit for tcp buffer", 0},
+   {"memory", MEMORY, "VALUE", 0, "Memory limit", 0},
+   {"memory-reservation", MEMORY_RESERVATION, "VALUE", 0, "Memory reservation or soft_limit", 0},
+   {"memory-swap", MEMORY_SWAP, "VALUE", 0, "Total memory usage", 0},
+   {"pids-limit", PIDS_LIMIT, "VALUE", 0, "Maximum number of pids allowed in the container", 0},
+   {0,}
   };
 
 #define YAJL_STR(x) ((const unsigned char *) (x))
@@ -125,7 +125,7 @@ build_file (size_t *len)
 {
   size_t i;
   yajl_gen gen = NULL;
-  int n_sections = sizeof(sections) / sizeof(sections[0]);
+  size_t n_sections = sizeof(sections) / sizeof(sections[0]);
   int has_sections[n_sections];
   const unsigned char *buf;
 
@@ -226,7 +226,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
-static struct argp run_argp = { options, parse_opt, args_doc, doc };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
 crun_command_update (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)

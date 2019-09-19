@@ -59,17 +59,17 @@ static struct exec_options_s exec_options;
 
 static struct argp_option options[] =
   {
-    {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty" },
-    {"tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY"},
-    {"process", 'p', "FILE", 0, "path to the process.json"},
-    {"cwd", OPTION_CWD, "CWD", 0, "current working directory" },
-    {"detach", 'd', 0, 0, "detach the command in the background" },
-    {"user", 'u', "USERSPEC", 0, "specify the user in the form UID[:GID]" },
-    {"env", 'e', "ENV", 0, "add an environment variable" },
-    {"cap", 'c', "CAP", 0, "add a capability" },
-    {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container"},
-    {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container"},
-    { 0 }
+   {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty", 0},
+   {"tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY", 0},
+   {"process", 'p', "FILE", 0, "path to the process.json", 0},
+   {"cwd", OPTION_CWD, "CWD", 0, "current working directory", 0},
+   {"detach", 'd', 0, 0, "detach the command in the background", 0},
+   {"user", 'u', "USERSPEC", 0, "specify the user in the form UID[:GID]", 0},
+   {"env", 'e', "ENV", 0, "add an environment variable", 0},
+   {"cap", 'c', "CAP", 0, "add a capability", 0},
+   {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0},
+   {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0},
+   {0,}
   };
 
 static char args_doc[] = "exec CONTAINER cmd";
@@ -164,7 +164,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
-static struct argp run_argp = { options, parse_opt, args_doc, doc };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 static oci_container_process_user *
 make_oci_process_user (const char *userspec)
