@@ -40,6 +40,14 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
+#ifndef SECCOMP_FILTER_FLAG_LOG
+# define SECCOMP_FILTER_FLAG_LOG (1UL << 1)
+#endif
+
+#ifndef SECCOMP_FILTER_FLAG_SPEC_ALLOW
+# define SECCOMP_FILTER_FLAG_SPEC_ALLOW	(1UL << 2)
+#endif
+
 static int
 syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 {
