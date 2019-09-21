@@ -508,6 +508,13 @@ container_entrypoint_init (void *args, const char *notify_socket,
           return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
     }
 
+  if (getenv ("HOME") == NULL)
+    {
+      ret = set_home_env (container->container_uid);
+      if (UNLIKELY (ret < 0))
+        libcrun_warning ("cannot set HOME environment variable");
+    }
+
   if (def->process && def->process->args)
     {
       *exec_path = find_executable (def->process->args[0]);
@@ -1976,6 +1983,13 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       for (i = 0; i < process->env_len; i++)
         if (putenv (process->env[i]) < 0)
           libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
+
+      if (getenv ("HOME") == NULL)
+        {
+          ret = set_home_env (container->container_uid);
+          if (UNLIKELY (ret < 0))
+            libcrun_warning ("cannot set HOME environment variable");
+        }
 
       if (process->selinux_label)
         {
