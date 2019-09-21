@@ -611,7 +611,7 @@ container_entrypoint (void *args, const char *notify_socket,
   cleanup_free const char *exec_path = NULL;
   entrypoint_args->sync_socket = sync_socket;
 
-  crun_set_output_handler (log_write_to_sync_socket, args);
+  crun_set_output_handler (log_write_to_sync_socket, args, false);
 
   ret = container_entrypoint_init (args, notify_socket, sync_socket, &exec_path, err);
   if (UNLIKELY (ret < 0))
@@ -657,7 +657,7 @@ container_entrypoint (void *args, const char *notify_socket,
       while (ret == 0);
     }
 
-  crun_set_output_handler (log_write_to_stream, stderr);
+  crun_set_output_handler (log_write_to_stderr, NULL, false);
 
   ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
@@ -1591,7 +1591,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
       TEMP_FAILURE_RETRY (write (pipefd1, &((*err)->status), sizeof ((*err)->status)));
       TEMP_FAILURE_RETRY (write (pipefd1, (*err)->msg, strlen ((*err)->msg) + 1));
 
-      crun_set_output_handler (log_write_to_stderr, NULL);
+      crun_set_output_handler (log_write_to_stderr, NULL, false);
       libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
     }
   exit (ret);
@@ -1676,7 +1676,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (UNLIKELY (ret < 0))
     {
       libcrun_error ((*err)->status, "%s", (*err)->msg);
-      crun_set_output_handler (log_write_to_stderr, NULL);
+      crun_set_output_handler (log_write_to_stderr, NULL, false);
     }
 
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
