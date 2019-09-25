@@ -49,7 +49,7 @@ void oom_handler () __attribute__ ((noreturn));
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
 
-void crun_set_output_handler (crun_output_handler handler, void *arg);
+void crun_set_output_handler (crun_output_handler handler, void *arg, bool log_to_stderr);
 
 void log_write_to_journald (int errno_, const char *msg, bool warning, void *arg);
 

@@ -43,6 +43,7 @@ enum
   };
 
 static int log_format;
+static bool log_also_to_stderr;
 
 int
 crun_make_error (libcrun_error_t *err, int status, const char *msg, ...)
@@ -199,7 +200,7 @@ init_logging (crun_output_handler *new_output_handler, void **new_output_handler
           break;
         }
     }
-  crun_set_output_handler (*new_output_handler, *new_output_handler_arg);
+  crun_set_output_handler (*new_output_handler, *new_output_handler_arg, log != NULL);
   return 0;
 }
 
@@ -270,10 +271,11 @@ libcrun_get_verbosity ()
 }
 
 void
-crun_set_output_handler (crun_output_handler handler, void *arg)
+crun_set_output_handler (crun_output_handler handler, void *arg, bool log_to_stderr)
 {
   output_handler = handler;
   output_handler_arg = arg;
+  log_also_to_stderr = log_to_stderr;
 }
 
 static char *
@@ -335,6 +337,9 @@ write_log (int errno_, bool warning, const char *msg, va_list args_list)
   ret = vasprintf (&output, msg, args_list);
   if (UNLIKELY (ret < 0))
     OOM ();
+
+  if (log_also_to_stderr)
+    log_write_to_stderr (errno_, output, warning, NULL);
 
   switch (log_format)
     {
