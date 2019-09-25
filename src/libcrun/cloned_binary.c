@@ -34,6 +34,8 @@
 #include <sys/sendfile.h>
 #include <sys/syscall.h>
 
+#include "utils.h"
+
 /* Use our own wrapper for memfd_create. */
 #if !defined(SYS_memfd_create) && defined(__NR_memfd_create)
 #  define SYS_memfd_create __NR_memfd_create
@@ -73,15 +75,6 @@ int memfd_create(const char *name, unsigned int flags)
 #define CRUN_MEMFD_COMMENT "crun_cloned:/proc/self/exe"
 #define CRUN_MEMFD_SEALS \
 	(F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE)
-
-static void *must_realloc(void *ptr, size_t size)
-{
-	void *old = ptr;
-	do {
-		ptr = realloc(old, size);
-	} while(!ptr);
-	return ptr;
-}
 
 /*
  * Verify whether we are currently in a self-cloned program (namely, is
@@ -168,7 +161,7 @@ static char *read_file(char *path, size_t *length)
 		if (!n)
 			break;
 
-		copy = must_realloc(copy, (*length + n) * sizeof(*copy));
+		copy = xrealloc(copy, (*length + n) * sizeof(*copy));
 		memcpy(copy + *length, buf, n);
 		*length += n;
 	}
@@ -196,7 +189,7 @@ static int parse_xargs(char *data, int data_length, char ***output)
 
 	while (cur < data + data_length) {
 		num++;
-		*output = must_realloc(*output, (num + 1) * sizeof(**output));
+		*output = xrealloc(*output, (num + 1) * sizeof(**output));
 		(*output)[num - 1] = cur;
 		cur += strlen(cur) + 1;
 	}
