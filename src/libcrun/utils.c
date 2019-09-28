@@ -405,41 +405,30 @@ add_selinux_mount_label (char **ret, const char *data, const char *label, libcru
 }
 
 int
-set_selinux_exec_label (const char *label, libcrun_error_t *err)
+set_selinux_exec_label (int host_proc_fd, const char *label, libcrun_error_t *err)
 {
+  (void) host_proc_fd;
 #ifdef HAVE_SELINUX
   if (is_selinux_enabled () > 0)
-    if (UNLIKELY (setexeccon (label) < 0))
-      {
-        crun_make_error (err, errno, "error setting SELinux exec label");
-        return -1;
-      }
+    {
+      int ret;
+
+      ret = write_file_at (host_proc_fd, "thread-self/attr/exec", label, strlen (label), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 #endif
   return 0;
 }
 
-int
-set_apparmor_profile (const char *profile, libcrun_error_t *err)
-{
-#ifdef HAVE_APPARMOR
-  if (is_apparmor_enabled () == 1)
-    if (UNLIKELY (aa_change_onexec (profile) < 0))
-      {
-        crun_make_error (err, errno, "error setting apparmor profile");
-        return -1;
-      }
-#endif
-  return 0;
-}
-
-int
-is_apparmor_enabled(void)
+static int
+is_apparmor_enabled (int host_sys_fd)
 {
 	int size;
 	cleanup_close int fd;
 	char buf[2];
 
-	fd = open("/sys/module/apparmor/parameters/enabled", O_RDONLY);
+	fd = openat (host_sys_fd, "sys/module/apparmor/parameters/enabled", O_RDONLY);
 	if (fd == -1) {
 		return 0;
 	}
@@ -448,6 +437,24 @@ is_apparmor_enabled(void)
 	if (size > 0 && buf[0] == 'Y')
 		return 1;
 	return 0;
+}
+
+int
+set_apparmor_profile (int host_proc_fd, int host_sys_fd, const char *profile, libcrun_error_t *err)
+{
+  (void) host_sys_fd;
+  (void) host_proc_fd;
+#ifdef HAVE_APPARMOR
+  if (is_apparmor_enabled (host_sys_fd) == 1)
+    {
+      int ret;
+
+      ret = write_file_at (host_proc_fd, "thread-self/attr/exec", profile, strlen (profile), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+#endif
+  return 0;
 }
 
 int
@@ -963,16 +970,23 @@ run_process_with_stdin_timeout_envp (char *path,
 }
 
 int
-close_fds_ge_than (int n, libcrun_error_t *err)
+close_fds_ge_than (int proc_fd, int n, libcrun_error_t *err)
 {
   int fd;
   cleanup_dir DIR *dir = NULL;
   int ret;
   struct dirent *next;
 
-  dir = opendir ("/proc/self/fd");
+  fd = openat (proc_fd, "self/fd", O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open /proc/self/fd");
+
+  dir = fdopendir (fd);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot fdopendir /proc/self/fd");
+    {
+      close (fd);
+      return crun_make_error (err, errno, "cannot fdopendir /proc/self/fd");
+    }
 
   fd = dirfd (dir);
   for (next = readdir (dir); next; next = readdir (dir))

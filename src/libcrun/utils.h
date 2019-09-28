@@ -83,13 +83,11 @@ int create_file_if_missing (const char *file, libcrun_error_t *err);
 
 int check_running_in_user_namespace (libcrun_error_t *err);
 
-int set_selinux_exec_label (const char *label, libcrun_error_t *err);
+int set_selinux_exec_label (int host_root_fd, const char *label, libcrun_error_t *err);
 
 int add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err);
 
-int set_apparmor_profile (const char *profile, libcrun_error_t *err);
-
-int is_apparmor_enabled(void);
+int set_apparmor_profile (int host_proc_fd, int host_sys_fd, const char *profile, libcrun_error_t *err);
 
 int read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_error_t *err);
 
@@ -117,7 +115,7 @@ size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id,
 
 int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp, char *stdin, size_t stdin_len, libcrun_error_t *err);
 
-int close_fds_ge_than (int n, libcrun_error_t *err);
+int close_fds_ge_than (int proc_fd, int n, libcrun_error_t *err);
 
 void get_current_timestamp (char *out);
 

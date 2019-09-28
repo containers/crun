@@ -442,6 +442,8 @@ int unblock_signals (libcrun_error_t *err)
 static int
 container_entrypoint_init (void *args, const char *notify_socket,
                            int sync_socket, const char **exec_path,
+                           int host_proc_fd,
+                           int host_sys_fd,
                            libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
@@ -551,11 +553,11 @@ container_entrypoint_init (void *args, const char *notify_socket,
         }
     }
 
-  ret = libcrun_set_selinux_exec_label (container, err);
+  ret = libcrun_set_selinux_exec_label (container, host_proc_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_apparmor_profile (container, err);
+  ret = libcrun_set_apparmor_profile (container, host_proc_fd, host_sys_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -609,11 +611,22 @@ container_entrypoint (void *args, const char *notify_socket,
   int ret;
   oci_container *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
+  cleanup_close int host_proc_fd = -1;
+  cleanup_close int host_sys_fd = -1;
+
   entrypoint_args->sync_socket = sync_socket;
 
   crun_set_output_handler (log_write_to_sync_socket, args, false);
 
-  ret = container_entrypoint_init (args, notify_socket, sync_socket, &exec_path, err);
+  host_proc_fd = open ("/proc", O_PATH | O_DIRECTORY);
+  if (UNLIKELY (host_proc_fd < 0))
+    return crun_make_error (err, errno, "open host /proc directory");
+
+  host_sys_fd = open ("/sys", O_PATH | O_DIRECTORY);
+  if (UNLIKELY (host_sys_fd < 0))
+    return crun_make_error (err, errno, "open host /sys directory");
+
+  ret = container_entrypoint_init (args, notify_socket, sync_socket, &exec_path, host_proc_fd, host_sys_fd, err);
   if (UNLIKELY (ret < 0))
     {
       /* If it fails to write the error using the sync socket, then fallback
@@ -659,7 +672,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   crun_set_output_handler (log_write_to_stderr, NULL, false);
 
-  ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
+  ret = close_fds_ge_than (host_proc_fd, entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
@@ -1898,6 +1911,8 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
+  cleanup_close int host_proc_fd = -1;
+  cleanup_close int host_sys_fd = -1;
   char b;
 
   memset (&status, 0, sizeof (status));
@@ -1947,6 +1962,14 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
   pipefd0 = container_ret_status[0];
   pipefd1 = container_ret_status[1];
 
+  host_proc_fd = open ("/proc", O_PATH | O_DIRECTORY);
+  if (UNLIKELY (host_proc_fd < 0))
+    return crun_make_error (err, errno, "open host /proc directory");
+
+  host_sys_fd = open ("/sys", O_PATH | O_DIRECTORY);
+  if (UNLIKELY (host_sys_fd < 0))
+    return crun_make_error (err, errno, "open host /sys directory");
+
   pid = libcrun_join_process (container, status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
@@ -1979,13 +2002,13 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
 
       if (process->selinux_label)
         {
-          if (UNLIKELY (set_selinux_exec_label (process->selinux_label, err) < 0))
+          if (UNLIKELY (set_selinux_exec_label (host_proc_fd, process->selinux_label, err) < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
-	  if (process->apparmor_profile)
+      if (process->apparmor_profile)
         {
-          if (UNLIKELY (set_apparmor_profile (process->apparmor_profile, err) < 0))
+          if (UNLIKELY (set_apparmor_profile (host_proc_fd, host_sys_fd, process->apparmor_profile, err) < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
@@ -2034,7 +2057,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
 
-      ret = close_fds_ge_than (context->preserve_fds + 3, err);
+      ret = close_fds_ge_than (host_proc_fd, context->preserve_fds + 3, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
