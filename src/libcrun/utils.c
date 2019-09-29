@@ -757,6 +757,57 @@ run_process (char **args, libcrun_error_t *err)
   _exit (EXIT_FAILURE);
 }
 
+int
+set_home_env (uid_t id)
+{
+#ifdef HAVE_FGETPWENT_R
+  struct passwd pwd;
+  cleanup_free char *buf = NULL;
+  long buf_size;
+  cleanup_file FILE *stream = NULL;
+
+  buf_size = sysconf (_SC_GETPW_R_SIZE_MAX);
+  if (buf_size < 0)
+    buf_size = 1024;
+
+  buf = xmalloc (buf_size);
+
+  stream = fopen ("/etc/passwd", "r");
+  if (stream == NULL)
+    return -1;
+
+  for (;;)
+    {
+      int ret;
+      struct passwd *ret_pw = NULL;
+
+      ret = fgetpwent_r (stream, &pwd, buf, buf_size, &ret_pw);
+      if (UNLIKELY (ret != 0))
+        {
+          if (errno == ENOENT)
+            return 0;
+
+          if (errno != ERANGE)
+            return ret;
+
+          buf_size *= 2;
+          buf = xrealloc (buf, buf_size);
+          continue;
+        }
+
+      if (ret_pw && ret_pw->pw_uid == id)
+        {
+          setenv ("HOME", ret_pw->pw_dir, 1);
+          return 0;
+        }
+    }
+  return 0;
+#else
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
 /*if subuid or subgid exist, take the first range for the user */
 static int
 getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)

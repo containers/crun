@@ -131,4 +131,6 @@ const char *find_executable (const char *executable_path);
 
 int copy_recursive_fd_to_fd (int srcfd, int destfd, const char *srcname, const char *destname, libcrun_error_t *err);
 
+int set_home_env (uid_t uid);
+
 #endif
