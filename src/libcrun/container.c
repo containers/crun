@@ -439,6 +439,30 @@ int unblock_signals (libcrun_error_t *err)
   return 0;
 }
 
+/* must be used on the host before pivot_root(2).  */
+static int
+initialize_security (oci_container_process *proc, libcrun_error_t *err)
+{
+  int ret;
+
+  if (UNLIKELY (proc == NULL))
+    return 0;
+
+  if (proc->apparmor_profile)
+    {
+      ret = libcrun_initialize_apparmor (err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = libcrun_initialize_selinux (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+
 static int
 container_entrypoint_init (void *args, const char *notify_socket,
                            int sync_socket, const char **exec_path,
@@ -454,6 +478,10 @@ container_entrypoint_init (void *args, const char *notify_socket,
   oci_container_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
+
+  ret = initialize_security (def->process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
@@ -1956,6 +1984,10 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
     return crun_make_error (err, errno, "pipe");
   pipefd0 = container_ret_status[0];
   pipefd1 = container_ret_status[1];
+
+  ret = initialize_security (process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   pid = libcrun_join_process (container, status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
