@@ -37,6 +37,8 @@
 #include <sys/time.h>
 #include <sys/xattr.h>
 #include <sys/sysmacros.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 
 #ifdef HAVE_SELINUX
@@ -393,7 +395,7 @@ int
 libcrun_initialize_selinux (libcrun_error_t *err)
 {
   cleanup_free char *out = NULL;
-  cleanup_close int fd;
+  cleanup_close int fd = -1;
   size_t len;
   int ret;
 
@@ -416,8 +418,8 @@ libcrun_initialize_selinux (libcrun_error_t *err)
 int
 libcrun_initialize_apparmor (libcrun_error_t *err)
 {
+  cleanup_close int fd = -1;
   int size;
-  cleanup_close int fd;
   char buf[2];
 
   if (apparmor_enabled >= 0)
@@ -434,24 +436,6 @@ libcrun_initialize_apparmor (libcrun_error_t *err)
   return apparmor_enabled;
 }
 
-int
-add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err arg_unused)
-{
-#ifdef HAVE_SELINUX
-  if (label && is_selinux_enabled () > 0)
-    {
-      if (data && *data)
-        xasprintf (ret, "%s,context=\"%s\"", data, label);
-      else
-        xasprintf (ret, "context=\"%s\"", label);
-      return 0;
-    }
-#endif
-  *ret = xstrdup (data);
-  return 0;
-
-}
-
 #ifdef HAVE_SELINUX
 
 static int
@@ -462,6 +446,55 @@ libcrun_is_selinux_enabled (libcrun_error_t *err)
   return selinux_enabled;
 }
 #endif
+
+int
+add_selinux_mount_label (char **retlabel, const char *data, const char *label, libcrun_error_t *err arg_unused)
+{
+#ifdef HAVE_SELINUX
+  int ret;
+
+  ret = libcrun_is_selinux_enabled (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (label && ret)
+    {
+      if (data && *data)
+        xasprintf (retlabel, "%s,context=\"%s\"", data, label);
+      else
+        xasprintf (retlabel, "context=\"%s\"", label);
+      return 0;
+    }
+#endif
+  *retlabel = xstrdup (data);
+  return 0;
+
+}
+
+static int
+write_file_and_check_fs_type (const char *file, const char *data, size_t len, int type, const char *type_name, libcrun_error_t *err)
+{
+  int ret;
+  struct statfs sfs;
+  cleanup_close int fd = -1;
+
+  fd = open (file, O_WRONLY | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open file '%s'", file);
+
+  ret = fstatfs (fd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs '%s'", file);
+
+  if (sfs.f_type != type)
+    return crun_make_error (err, 0, "the file '%s' is not on file system type '%s'", file, type_name);
+
+  ret = write (fd, data, len);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write file '%s'", file);
+
+  return 0;
+}
 
 int
 set_selinux_exec_label (const char *label, libcrun_error_t *err)
@@ -475,7 +508,7 @@ set_selinux_exec_label (const char *label, libcrun_error_t *err)
 
   if (ret)
     {
-      ret = write_file ("/proc/thread-self/attr/exec", label, strlen (label), err);
+      ret = write_file_and_check_fs_type ("/proc/thread-self/attr/exec", label, strlen (label), PROC_SUPER_MAGIC, "procfs", err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -508,7 +541,7 @@ set_apparmor_profile (const char *profile, libcrun_error_t *err)
 
       xasprintf (&buf, "exec %s", profile);
 
-      ret = write_file ("/proc/thread-self/attr/exec", profile, strlen (profile), err);
+      ret = write_file_and_check_fs_type ("/proc/thread-self/attr/exec", buf, strlen (buf), PROC_SUPER_MAGIC, "procfs", err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1086,11 +1119,19 @@ close_fds_ge_than (int n, libcrun_error_t *err)
   cleanup_dir DIR *dir = NULL;
   int ret;
   int fd;
+  struct statfs sfs;
   struct dirent *next;
 
-  cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY);
+  cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (cfd < 0))
     return crun_make_error (err, errno, "open /proc/self/fd");
+
+  ret = fstatfs (cfd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs '/proc/self/fd'");
+
+  if (sfs.f_type != PROC_SUPER_MAGIC)
+    return crun_make_error (err, 0, "the path '/proc/self/fd' is not on file system type 'procfs'");
 
   dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))
