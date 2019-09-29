@@ -57,7 +57,7 @@ On Ubuntu:
 ```shell
 apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev libapparmor-dev \
-   go-md2man libtool autoconf python3
+   go-md2man libtool autoconf python3 automake
 ```
 
 Unless you are also building the Python bindings, Python is needed
