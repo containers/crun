@@ -33,7 +33,6 @@ addons:
     - cmake
     - pkg-config
     - gcc
-    - libapparmor-dev
     - wget
     - go-md2man
 before_install:

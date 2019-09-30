@@ -16,7 +16,6 @@ BuildRequires: libcap-devel
 BuildRequires: systemd-devel
 BuildRequires: yajl-devel
 BuildRequires: libseccomp-devel
-BuildRequires: libselinux-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
 BuildRequires: go-md2man

@@ -49,14 +49,14 @@ containers, the containers run `/bin/true`:
 On Fedora these dependencies are required for the build:
 ```shell
 dnf install -y make python git gcc automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel libselinux-devel \
+    systemd-devel yajl-devel libseccomp-devel \
     go-md2man glibc-static python3-libmount libtool
 ```
 
 On Ubuntu:
 ```shell
 apt-get install -y make git gcc build-essential pkgconf libtool \
-   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev libselinux1-dev libapparmor-dev \
+   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev \
    go-md2man libtool autoconf python3 automake
 ```
 

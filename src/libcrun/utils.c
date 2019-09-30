@@ -40,16 +40,6 @@
 #include <sys/vfs.h>
 #include <linux/magic.h>
 
-
-#ifdef HAVE_SELINUX
-# include <selinux/selinux.h>
-#endif
-
-#ifdef HAVE_APPARMOR
-# include <sys/apparmor.h>
-#endif
-
-
 int
 close_and_reset (int *fd)
 {
