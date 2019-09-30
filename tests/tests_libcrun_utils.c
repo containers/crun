@@ -94,7 +94,8 @@ test_send_receive_fd ()
       cleanup_close int pipefd1 = -1;
       char buffer[256];
       const char *test_string = "TEST STRING";
-      pipe (pipes);
+      if (pipe (pipes) < 0)
+       return -1;
 
       pipefd0 = pipes[0];
       pipefd1 = pipes[1];
@@ -130,7 +131,8 @@ test_send_receive_fd ()
       ret = read (fd, buffer, sizeof (buffer));
       if (ret <= 0)
         return -1;
-      write (fd0, buffer, ret);
+      if (write (fd0, buffer, ret) < 0)
+       return -1;
 
       _exit (0);
     }
