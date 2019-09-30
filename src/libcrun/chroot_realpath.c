@@ -19,6 +19,7 @@
  *
  * 2005/09/12: Dan Howell (modified from realpath.c to emulate chroot)
  * 2019/04/19: Giuseppe Scrivano (on ENOENT return the part that could be resolved)
+ * 2019/09/30: Giuseppe Scrivano (follow symlinks for the last component)
  */
 
 #ifdef HAVE_CONFIG_H
@@ -56,6 +57,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	int readlinks = 0;
 	int n;
 	int chroot_len;
+	int last_component;
 
 	/* Trivial case. */
 	if (chroot == NULL || *chroot == '\0' ||
@@ -117,9 +119,9 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 			}
 			*new_path++ = *path++;
 		}
-		if (*path == '\0')
-			/* Don't follow symlink for last pathname component. */
-			break;
+
+		last_component = (*path == '\0');
+
 #ifdef S_IFLNK
 		/* Protect against infinite loops. */
 		if (readlinks++ > MAX_READLINKS) {
@@ -132,7 +134,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 		if (n < 0) {
 			/* If a component doesn't exist, then return what we could translate. */
 			if (errno == ENOENT) {
-				sprintf (resolved_path, "%s%s%s", got_path, path[0] == '/' ? "" : "/", path);
+				sprintf (resolved_path, "%s%s%s", got_path, path[0] == '/' || path[0] == '\0' ? "" : "/", path);
 				return resolved_path;
 			}
 			/* EINVAL means the file exists but isn't a symlink. */
@@ -162,7 +164,8 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 			path = copy_path;
 		}
 #endif							/* S_IFLNK */
-		*new_path++ = '/';
+		if (!last_component)
+			*new_path++ = '/';
 	}
 	/* Delete trailing slash but don't whomp a lone slash. */
 	if (new_path != got_path + 1 && new_path[-1] == '/')
