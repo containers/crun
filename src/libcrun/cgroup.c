@@ -494,6 +494,10 @@ int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode,
       subpath = strchr (subsystem, ':') + 1;
       *(subpath - 1) = '\0';
 
+      /* skip named hierarchies that have no cgroup controller */
+      if (strcmp(subsystem, ""))
+        continue;
+
       if (strcmp (subpath, *path))
         {
           ret = enter_cgroup_subsystem (pid, subsystem, *path, 1, err);
