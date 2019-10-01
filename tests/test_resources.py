@@ -27,14 +27,21 @@ def test_resources_pid_limit():
     if os.getuid() != 0:
         return 77
     conf = base_config()
-    conf['process']['args'] = ['/init', 'cat', "/sys/fs/cgroup/pids/pids.max"]
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
     add_all_namespaces(conf)
+
+    fn = "/sys/fs/cgroup/pids/pids.max"
+    if not os.path.exists("/sys/fs/cgroup/pids"):
+        fn = "/sys/fs/cgroup/pids.max"
+        conf['linux']['namespaces'].append({"type" : "cgroup"})
+
+    conf['process']['args'] = ['/init', 'cat', fn]
+
     out, _ = run_and_get_output(conf)
     if "1024" not in out:
         return -1
     return 0
-    
+
 all_tests = {
     "resources-pid-limit" : test_resources_pid_limit,
 }
