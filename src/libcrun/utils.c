@@ -863,7 +863,11 @@ set_home_env (uid_t id)
 
   stream = fopen ("/etc/passwd", "r");
   if (stream == NULL)
-    return -1;
+    {
+      if (errno == ENOENT)
+        return 0;
+      return -1;
+    }
 
   for (;;)
     {
