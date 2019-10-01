@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([crun], [0.9.1], [giuseppe@scrivano.org])
+AC_INIT([crun], [0.10], [giuseppe@scrivano.org])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
