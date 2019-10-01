@@ -37,16 +37,8 @@
 #include <sys/time.h>
 #include <sys/xattr.h>
 #include <sys/sysmacros.h>
-
-
-#ifdef HAVE_SELINUX
-# include <selinux/selinux.h>
-#endif
-
-#ifdef HAVE_APPARMOR
-# include <sys/apparmor.h>
-#endif
-
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 int
 close_and_reset (int *fd)
@@ -386,68 +378,165 @@ check_running_in_user_namespace (libcrun_error_t *err)
   return strstr (buffer, "4294967295") ? 0 : 1;
 }
 
+static int selinux_enabled = -1;
+static int apparmor_enabled = -1;
+
 int
-add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err arg_unused)
+libcrun_initialize_selinux (libcrun_error_t *err)
+{
+  cleanup_free char *out = NULL;
+  cleanup_close int fd = -1;
+  size_t len;
+  int ret;
+
+  if (selinux_enabled >= 0)
+    return selinux_enabled;
+
+  fd = open ("/proc/mounts", O_RDONLY | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open /proc/mounts");
+
+  ret = read_all_fd (fd, "/proc/mounts", &out, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  selinux_enabled = strstr (out, "selinux") ? 1 : 0;
+
+  return selinux_enabled;
+}
+
+int
+libcrun_initialize_apparmor (libcrun_error_t *err)
+{
+  cleanup_close int fd = -1;
+  int size;
+  char buf[2];
+
+  if (apparmor_enabled >= 0)
+    return apparmor_enabled;
+
+  fd = open ("/sys/module/apparmor/parameters/enabled", O_RDONLY | O_CLOEXEC);
+  if (fd == -1)
+    return 0;
+
+  size = TEMP_FAILURE_RETRY (read (fd, &buf, 2));
+
+  apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
+
+  return apparmor_enabled;
+}
+
+#ifdef HAVE_SELINUX
+
+static int
+libcrun_is_selinux_enabled (libcrun_error_t *err)
+{
+  if (selinux_enabled < 0)
+    return crun_make_error (err, 0, "SELinux not initialized correctly");
+  return selinux_enabled;
+}
+#endif
+
+int
+add_selinux_mount_label (char **retlabel, const char *data, const char *label, libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_SELINUX
-  if (label && is_selinux_enabled () > 0)
+  int ret;
+
+  ret = libcrun_is_selinux_enabled (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (label && ret)
     {
       if (data && *data)
-        xasprintf (ret, "%s,context=\"%s\"", data, label);
+        xasprintf (retlabel, "%s,context=\"%s\"", data, label);
       else
-        xasprintf (ret, "context=\"%s\"", label);
+        xasprintf (retlabel, "context=\"%s\"", label);
       return 0;
     }
 #endif
-  *ret = xstrdup (data);
+  *retlabel = xstrdup (data);
   return 0;
 
+}
+
+static int
+write_file_and_check_fs_type (const char *file, const char *data, size_t len, int type, const char *type_name, libcrun_error_t *err)
+{
+  int ret;
+  struct statfs sfs;
+  cleanup_close int fd = -1;
+
+  fd = open (file, O_WRONLY | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open file '%s'", file);
+
+  ret = fstatfs (fd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs '%s'", file);
+
+  if (sfs.f_type != type)
+    return crun_make_error (err, 0, "the file '%s' is not on file system type '%s'", file, type_name);
+
+  ret = write (fd, data, len);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write file '%s'", file);
+
+  return 0;
 }
 
 int
 set_selinux_exec_label (const char *label, libcrun_error_t *err)
 {
 #ifdef HAVE_SELINUX
-  if (is_selinux_enabled () > 0)
-    if (UNLIKELY (setexeccon (label) < 0))
-      {
-        crun_make_error (err, errno, "error setting SELinux exec label");
-        return -1;
-      }
+  int ret;
+
+  ret = libcrun_is_selinux_enabled (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret)
+    {
+      ret = write_file_and_check_fs_type ("/proc/thread-self/attr/exec", label, strlen (label), PROC_SUPER_MAGIC, "procfs", err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 #endif
   return 0;
 }
+
+#ifdef HAVE_APPARMOR
+static int
+libcrun_is_apparmor_enabled (libcrun_error_t *err)
+{
+  if (apparmor_enabled < 0)
+    return crun_make_error (err, 0, "AppArmor not initialized correctly");
+  return apparmor_enabled;
+}
+#endif
 
 int
 set_apparmor_profile (const char *profile, libcrun_error_t *err)
 {
 #ifdef HAVE_APPARMOR
-  if (is_apparmor_enabled () == 1)
-    if (UNLIKELY (aa_change_onexec (profile) < 0))
-      {
-        crun_make_error (err, errno, "error setting apparmor profile");
-        return -1;
-      }
+  int ret;
+
+  ret = libcrun_is_apparmor_enabled (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret)
+    {
+      cleanup_free char *buf = NULL;
+
+      xasprintf (&buf, "exec %s", profile);
+
+      ret = write_file_and_check_fs_type ("/proc/thread-self/attr/exec", buf, strlen (buf), PROC_SUPER_MAGIC, "procfs", err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 #endif
   return 0;
-}
-
-int
-is_apparmor_enabled(void)
-{
-	int size;
-	cleanup_close int fd;
-	char buf[2];
-
-	fd = open("/sys/module/apparmor/parameters/enabled", O_RDONLY);
-	if (fd == -1) {
-		return 0;
-	}
-	size = read(fd, &buf, 2);
-
-	if (size > 0 && buf[0] == 'Y')
-		return 1;
-	return 0;
 }
 
 int
@@ -1016,14 +1105,30 @@ run_process_with_stdin_timeout_envp (char *path,
 int
 close_fds_ge_than (int n, libcrun_error_t *err)
 {
-  int fd;
+  cleanup_close int cfd = -1;
   cleanup_dir DIR *dir = NULL;
   int ret;
+  int fd;
+  struct statfs sfs;
   struct dirent *next;
 
-  dir = opendir ("/proc/self/fd");
+  cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  if (UNLIKELY (cfd < 0))
+    return crun_make_error (err, errno, "open /proc/self/fd");
+
+  ret = fstatfs (cfd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs '/proc/self/fd'");
+
+  if (sfs.f_type != PROC_SUPER_MAGIC)
+    return crun_make_error (err, 0, "the path '/proc/self/fd' is not on file system type 'procfs'");
+
+  dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, errno, "cannot fdopendir /proc/self/fd");
+
+  /* Now it is owned by dir.  */
+  cfd = -1;
 
   fd = dirfd (dir);
   for (next = readdir (dir); next; next = readdir (dir))

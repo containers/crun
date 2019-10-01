@@ -1,7 +1,7 @@
 FROM registry.fedoraproject.org/fedora:latest AS base
-RUN dnf install -y git dnf-utils gcc meson ninja-build libselinux-static libseccomp-static libcap-static \
+RUN dnf install -y git dnf-utils gcc meson ninja-build libseccomp-static libcap-static \
     make python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel cmake \
-    libselinux-devel go-md2man glibc-static python3-libmount libtool
+    go-md2man glibc-static python3-libmount libtool
 
 FROM base AS systemd
 RUN mkdir /out && yum-builddep -y systemd && git clone --depth 1 https://github.com/systemd/systemd.git \
