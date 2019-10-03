@@ -297,9 +297,10 @@ do_mount (libcrun_container_t *container,
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
     {
-      unsigned long flags = mountflags & ~MS_RDONLY;
+      unsigned long flags = mountflags;
       if ((mountflags & MS_BIND) == 0)
         flags &= ~ALL_PROPAGATIONS;
+
       ret = mount (source, target, fstype, flags, data);
       if (UNLIKELY (ret < 0))
         {
