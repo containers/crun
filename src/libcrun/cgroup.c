@@ -322,12 +322,22 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
 }
 
 static int
+is_rootless (libcrun_error_t *err)
+{
+  if (geteuid ())
+    return 1;
+
+  return check_running_in_user_namespace (err);
+}
+
+static int
 enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing, libcrun_error_t *err)
 {
   char pid_str[16];
   int ret;
   size_t i;
   int entered_any = 0;
+  int rootless;
   const cgroups_subsystem_t *subsystems;
 
   sprintf (pid_str, "%d", pid);
@@ -370,6 +380,10 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
+  rootless = is_rootless (err);
+  if (UNLIKELY (rootless < 0))
+    return rootless;
+
   for (i = 0; subsystems[i]; i++)
     {
       char subsystem_path[64];
@@ -387,7 +401,15 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
       entered_any = 1;
       ret = enter_cgroup_subsystem (pid, subsystems[i], path, ensure_missing, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          int errcode = crun_error_get_errno (err);
+          if (rootless && (errcode == EACCES || errcode == EPERM))
+            {
+              crun_error_release (err);
+              continue;
+            }
+          return ret;
+        }
     }
 
   return entered_any ? 0 : -1;
@@ -495,7 +517,7 @@ int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode,
       *(subpath - 1) = '\0';
 
       /* skip named hierarchies that have no cgroup controller */
-      if (strcmp(subsystem, ""))
+      if (strcmp(subsystem, "") == 0)
         continue;
 
       if (strcmp (subpath, *path))
@@ -874,15 +896,6 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
     }
 
   return enter_cgroup (cgroup_mode, pid, *path, true, err);
-}
-
-static int
-is_rootless (libcrun_error_t *err)
-{
-  if (geteuid ())
-    return 1;
-
-  return check_running_in_user_namespace (err);
 }
 
 int
