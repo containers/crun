@@ -443,8 +443,11 @@ int
 libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 {
   int cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
+
+  if (path == NULL || *path == '\0')
+    return 0;
 
   return enter_cgroup (cgroup_mode, pid, path, false, err);
 }
