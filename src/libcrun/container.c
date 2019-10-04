@@ -381,8 +381,8 @@ make_container (oci_container *container_def)
   memset (container, 0, sizeof (*container));
   container->container_def = container_def;
 
-  container->host_uid = getuid ();
-  container->host_gid = getgid ();
+  container->host_uid = geteuid ();
+  container->host_gid = getegid ();
 
   return container;
 }
