@@ -180,7 +180,7 @@ def run_all_tests(all_tests, allowed_tests):
 def get_tests_root():
     return '%s/.testsuite-run-%d' % (os.getcwd(), os.getpid())
 
-def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, command='run', use_popen=False):
+def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, command='run', use_popen=False, hide_stderr=False):
     cwd = os.getcwd()
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
@@ -203,10 +203,13 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, c
 
     args = [crun, command] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
 
+    stderr = subprocess.STDOUT
+    if hide_stderr:
+        stderr = None
     if use_popen:
-        return subprocess.Popen(args, cwd=temp_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=False), id_container
+        return subprocess.Popen(args, cwd=temp_dir, stdout=subprocess.PIPE, stderr=stderr, close_fds=False), id_container
     else:
-        return subprocess.check_output(args, cwd=temp_dir, stderr=subprocess.STDOUT, close_fds=False).decode(), id_container
+        return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, close_fds=False).decode(), id_container
 
 def run_crun_command(args):
     cwd = os.getcwd()
