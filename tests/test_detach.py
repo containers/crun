@@ -28,7 +28,7 @@ def test_detach():
     conf['process']['args'] = ['/init', 'pause']
     add_all_namespaces(conf)
 
-    out, container_id = run_and_get_output(conf, detach=True)
+    out, container_id = run_and_get_output(conf, detach=True, hide_stderr=True)
     if out != "":
         return -1
     try:
