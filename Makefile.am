@@ -20,7 +20,7 @@ srpm: dist-gzip crun.spec
 oci-runtime-validation:
 	RUNTIME=$(CURDIR)/crun tests/oci-runtime-validation
 
-CLEANFILES = crun.spec
+CLEANFILES = crun.spec crun.1
 
 lib_LTLIBRARIES = libcrun.la
 
