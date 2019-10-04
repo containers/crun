@@ -331,6 +331,87 @@ is_rootless (libcrun_error_t *err)
 }
 
 static int
+get_file_owner (const char *path, uid_t *uid, gid_t *gid)
+{
+  struct stat st;
+  int ret;
+
+#ifdef HAVE_STATX
+  struct statx stx;
+
+  ret = statx (AT_FDCWD, path, AT_STATX_DONT_SYNC, STATX_UID|STATX_GID, &stx);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == ENOSYS)
+        goto fallback;
+
+      return ret;
+    }
+  *uid = stx.stx_uid;
+  *gid = stx.stx_gid;
+  return ret;
+
+ fallback:
+#endif
+  ret = stat (path, &st);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  *uid = st.st_uid;
+  *gid = st.st_gid;
+  return ret;
+}
+static int
+chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_dir DIR *dir = NULL;
+  struct dirent *next;
+  int ret;
+  int dfd;
+
+  xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
+
+  dir = opendir (cgroup_path);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, errno, "cannot opendir %s", cgroup_path);
+
+  dfd = dirfd (dir);
+
+  for (next = readdir (dir); next; next = readdir (dir))
+    {
+      const char *name = next->d_name;
+
+      /* do not chown the parent directory, but chown the current one.  */
+      if (name[0] == '.' && name[1] == '.')
+        continue;
+
+      ret = fchownat (dfd, name, uid, gid, AT_SYMLINK_NOFOLLOW);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "cannot chown %s/%s", cgroup_path, name);
+    }
+
+  return 0;
+}
+
+static int
+copy_owner (const char *from, const char *to, libcrun_error_t *err)
+{
+  uid_t uid = 0;
+  gid_t gid = 0;
+  int ret;
+
+  ret = get_file_owner (from, &uid, &gid);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "cannot get file owner for %s", from);
+
+  if (uid == 0 && gid == 0)
+    return 0;
+
+  return chown_cgroups (to, uid, gid, err);
+}
+
+static int
 enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing, libcrun_error_t *err)
 {
   char pid_str[16];
@@ -369,7 +450,11 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
 
               xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
 
-              return enter_cgroup (cgroup_mode, pid, cgroup_crun_exec_path, true, err);
+              ret = enter_cgroup (cgroup_mode, pid, cgroup_crun_exec_path, true, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              return copy_owner (cgroup_path_procs, cgroup_crun_exec_path, err);
             }
           return ret;
         }
@@ -902,7 +987,7 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
 }
 
 int
-libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, uid_t root_uid, gid_t root_gid, const char *id, libcrun_error_t *err)
 {
   libcrun_error_t tmp_err = NULL;
   int rootless;
@@ -924,7 +1009,12 @@ libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode,
 
   ret = libcrun_cgroup_enter_internal (resources, cgroup_mode, path, cgroup_path, manager, pid, id, err);
   if (LIKELY (ret == 0))
-    return ret;
+    {
+      if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != -1 || root_gid != -1))
+        return chown_cgroups (*path, root_uid, root_gid, err);
+
+      return ret;
+    }
 
   rootless = is_rootless (&tmp_err);
   if (UNLIKELY (rootless < 0))

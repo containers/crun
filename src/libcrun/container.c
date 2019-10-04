@@ -1291,6 +1291,45 @@ int open_seccomp_output (const char *id, int *fd, bool readonly, const char *sta
   return 0;
 }
 
+/* Find the uid:gid that is mapped to root inside the container user namespace.  */
+static void
+get_root_in_the_userns_for_cgroups (oci_container *def, uid_t host_uid, gid_t host_gid, uid_t *uid, gid_t *gid)
+{
+  *uid = -1;
+  *gid = -1;
+
+  /* Not root in the namespace.  */
+  if (host_uid)
+    return;
+
+  if (def->linux && def->linux->uid_mappings)
+    {
+      size_t i;
+
+      for (i = 0; i < def->linux->uid_mappings_len; i++)
+        if (def->linux->uid_mappings[i]->container_id == 0)
+          {
+            *uid = def->linux->uid_mappings[i]->host_id;
+            break;
+          }
+    }
+  if (def->linux && def->linux->gid_mappings)
+    {
+      size_t i;
+
+      for (i = 0; i < def->linux->gid_mappings_len; i++)
+        if (def->linux->gid_mappings[i]->container_id == 0)
+          {
+            *gid = def->linux->gid_mappings[i]->host_id;
+            break;
+          }
+    }
+
+  /* If the uid and the gid are not changed, do not attempt any chown.  */
+  if (*uid == host_uid && *gid == host_gid)
+    *uid = *gid = -1;
+}
+
 static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context, int container_ready_fd, libcrun_error_t *err)
 {
@@ -1309,6 +1348,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int console_socket_fd = -1;
   int cgroup_mode, cgroup_manager;
   char created[35];
+  uid_t root_uid = -1;
+  gid_t root_gid = -1;
   struct container_entrypoint_s container_args =
     {
       .container = container,
@@ -1393,7 +1434,12 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   else if (context->force_no_cgroup)
     cgroup_manager = CGROUP_MANAGER_DISABLED;
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, cgroup_mode, &cgroup_path, def->linux ? def->linux->cgroups_path : "", cgroup_manager, pid, context->id, err);
+  /* If we are root (either on the host or in a namespace), then chown the cgroup to root in the container user namespace.  */
+  get_root_in_the_userns_for_cgroups (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
+
+  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, cgroup_mode,
+                              &cgroup_path, def->linux ? def->linux->cgroups_path : "",
+                              cgroup_manager, pid, root_uid, root_gid, context->id, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
