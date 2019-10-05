@@ -284,6 +284,7 @@ do_mount (libcrun_container_t *container,
   int ret = 0;
   cleanup_free char *data_with_label = NULL;
   const char *label = container->container_def->linux->mount_label;
+  bool needs_remount = false;
 
   if (!skip_labelling)
     {
@@ -297,16 +298,14 @@ do_mount (libcrun_container_t *container,
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
     {
-      unsigned long flags = mountflags;
-      if ((mountflags & MS_BIND) == 0)
-        flags &= ~ALL_PROPAGATIONS;
+      unsigned long flags = mountflags & ~(ALL_PROPAGATIONS | MS_RDONLY);
 
       ret = mount (source, target, fstype, flags, data);
       if (UNLIKELY (ret < 0))
         {
-          if (strcmp (fstype ? fstype : "", "sysfs"))
-            return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
-          else
+          int saved_errno = errno;
+
+          if (strcmp (fstype ? fstype : "", "sysfs") == 0)
             {
               /* If we are running in an user namespace, just bind mount /sys if creating
                  sysfs failed.  */
@@ -318,14 +317,12 @@ do_mount (libcrun_container_t *container,
               if (ret == 0)
                 return 0;
             }
+
+          return crun_make_error (err, saved_errno, "mount '%s' to '%s'", source, target);
         }
 
-      if ((flags & MS_BIND) && (flags & ~(MS_BIND | ALL_PROPAGATIONS)))
-        {
-          ret = mount (source, target, fstype, MS_REMOUNT | flags, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "remount '%s'", target);
-        }
+      if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
+        needs_remount = true;
     }
 
   if (mountflags & ALL_PROPAGATIONS)
@@ -345,9 +342,12 @@ do_mount (libcrun_container_t *container,
     }
 
   if (mountflags & MS_RDONLY)
+    needs_remount = true;
+
+  if (needs_remount)
     {
-      unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
-      struct remount_s *r = make_remount (target, remount_flags, NULL, get_private_data (container)->remounts);
+      unsigned long remount_flags = mountflags & ~ALL_PROPAGATIONS;
+      struct remount_s *r = make_remount (target, MS_REMOUNT | MS_BIND | remount_flags, NULL, get_private_data (container)->remounts);
       get_private_data (container)->remounts = r;
     }
 
