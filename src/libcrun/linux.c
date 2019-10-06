@@ -412,7 +412,7 @@ do_mount (libcrun_container_t *container,
 
       if ((remount_flags & MS_RDONLY) == 0)
         {
-          ret = do_remount (target, remount_flags, NULL, err);
+          ret = do_remount (target, remount_flags, data, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -420,7 +420,7 @@ do_mount (libcrun_container_t *container,
         {
           struct remount_s *r;
 
-          r = make_remount (target, remount_flags, NULL, get_private_data (container)->remounts);
+          r = make_remount (target, remount_flags, data, get_private_data (container)->remounts);
           get_private_data (container)->remounts = r;
         }
     }
