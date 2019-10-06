@@ -817,6 +817,15 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
           flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
 
           ret = mount ("none", r->target, "", r->flags | flags, r->data);
+          if (LIKELY (ret == 0))
+            continue;
+
+          /* If it still fails try to add MS_RDONLY.  */
+          if (sfs.f_flags & MS_RDONLY)
+            {
+              flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RDONLY);
+              ret = mount ("none", r->target, "", r->flags | flags, r->data);
+            }
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, errno, "remount '%s'", r->target);
