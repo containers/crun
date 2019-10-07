@@ -1,7 +1,20 @@
+arch:
+  - amd64
+  - arm64
 matrix:
   allow_failures:
   - env: TEST=coverity
-env:
+  include:
+    - arch: arm64
+      env: TEST=make
+    - arch: amd64
+      env: TEST=make
+    - arch: amd64
+      env: TEST=podman
+    - arch: amd64
+      env: TEST=oci-validation
+    - arch: amd64
+      env: TEST=coverity
   matrix:
   - TEST=make
   - TEST=podman
@@ -37,12 +50,12 @@ addons:
     - go-md2man
 before_install:
 - git submodule update --init --recursive
-- if test $TEST = podman; then docker build -t crun-podman tests/podman; fi
-- if test $TEST = oci-validation; then docker build -t crun-oci-validation tests/oci-validation; fi
+- if test $TEST = podman; then sudo docker build -t crun-podman tests/podman; fi
+- if test $TEST = oci-validation; then sudo docker build -t crun-oci-validation tests/oci-validation; fi
 - git clone --depth=1 git://github.com/lloyd/yajl
 - "(cd yajl && ./configure -p /usr && make && sudo make install)"
 script:
 - if test $TEST = make; then ./autogen.sh && ./configure CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi
-- if test $TEST = podman; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman; fi
-- if test $TEST = oci-validation; then sudo docker run --privileged --rm -ti -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi
+- if test $TEST = podman; then sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman; fi
+- if test $TEST = oci-validation; then sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi
 - if test $TEST = coverity; then ./autogen.sh && eval "${COVERITY_SCAN_BUILD}"; fi
