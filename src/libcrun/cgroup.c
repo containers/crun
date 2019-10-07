@@ -1010,7 +1010,7 @@ libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode,
   ret = libcrun_cgroup_enter_internal (resources, cgroup_mode, path, cgroup_path, manager, pid, id, err);
   if (LIKELY (ret == 0))
     {
-      if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != -1 || root_gid != -1))
+      if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
         return chown_cgroups (*path, root_uid, root_gid, err);
 
       return ret;

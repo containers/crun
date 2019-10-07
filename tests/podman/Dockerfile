@@ -12,7 +12,7 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
     mkdir -p /root/go/src/github.com/containers && \
     chmod 755 /root && \
     (cd /root/go/src/github.com/containers && git clone https://github.com/containers/libpod && \
-     cd libpod && git reset --hard v1.4.4 && \
+     cd libpod && git reset --hard v1.6.1 && \
      make install.catatonit && \
      make)
 

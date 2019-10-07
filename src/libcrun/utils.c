@@ -406,7 +406,7 @@ libcrun_initialize_selinux (libcrun_error_t *err)
 }
 
 int
-libcrun_initialize_apparmor (libcrun_error_t *err)
+libcrun_initialize_apparmor (libcrun_error_t *err arg_unused)
 {
   cleanup_close int fd = -1;
   int size;
