@@ -357,10 +357,11 @@ do_mount (libcrun_container_t *container,
     }
 
 #define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
+#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
     {
-      unsigned long flags = mountflags & ~(ALL_PROPAGATIONS | MS_RDONLY);
+      unsigned long flags = mountflags & ~(ALL_PROPAGATIONS_NO_REC | MS_RDONLY);
 
       ret = mount (source, target, fstype, flags, data);
       if (UNLIKELY (ret < 0))
