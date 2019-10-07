@@ -38,6 +38,7 @@ addons:
   apt:
     packages:
     - automake
+    - libtool
     - autotools-dev
     - libseccomp-dev
     - git
