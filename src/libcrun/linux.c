@@ -272,6 +272,68 @@ make_remount (const char *target, unsigned long flags, const char *data, struct 
 }
 
 static int
+do_remount (const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = mount ("none", target, "", flags, data);
+  if (UNLIKELY (ret < 0))
+    {
+      unsigned long remount_flags;
+      struct statfs sfs;
+
+      ret = statfs (target, &sfs);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "statfs '%s'", target);
+
+      remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
+
+      ret = mount ("none", target, "", flags | remount_flags, data);
+      if (LIKELY (ret == 0))
+        return 0;
+
+      /* If it still fails try to add MS_RDONLY.  */
+      if (sfs.f_flags & MS_RDONLY)
+        {
+          remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RDONLY);
+          ret = mount ("none", target, "", flags | remount_flags, data);
+        }
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "remount '%s'", target);
+    }
+  return 0;
+}
+
+static int
+finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
+{
+  int ret = 0;
+  struct remount_s *r = get_private_data (container)->remounts;
+  while (r)
+    {
+      struct remount_s *next = r->next;
+
+      ret = do_remount (r->target, r->flags, r->data, err);
+      if (UNLIKELY (ret < 0))
+        goto cleanup;
+
+      free_remount (r);
+      r = next;
+    }
+
+ cleanup:
+  while (r)
+    {
+      struct remount_s *next = r->next;
+      free_remount (r);
+      r = next;
+    }
+
+  get_private_data (container)->remounts = NULL;
+  return ret;
+}
+
+static int
 do_mount (libcrun_container_t *container,
           const char *source,
           const char *target,
@@ -284,6 +346,7 @@ do_mount (libcrun_container_t *container,
   int ret = 0;
   cleanup_free char *data_with_label = NULL;
   const char *label = container->container_def->linux->mount_label;
+  bool needs_remount = false;
 
   if (!skip_labelling)
     {
@@ -297,16 +360,14 @@ do_mount (libcrun_container_t *container,
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
     {
-      unsigned long flags = mountflags;
-      if ((mountflags & MS_BIND) == 0)
-        flags &= ~ALL_PROPAGATIONS;
+      unsigned long flags = mountflags & ~(ALL_PROPAGATIONS | MS_RDONLY);
 
       ret = mount (source, target, fstype, flags, data);
       if (UNLIKELY (ret < 0))
         {
-          if (strcmp (fstype ? fstype : "", "sysfs"))
-            return crun_make_error (err, errno, "mount '%s' to '%s'", source, target);
-          else
+          int saved_errno = errno;
+
+          if (strcmp (fstype ? fstype : "", "sysfs") == 0)
             {
               /* If we are running in an user namespace, just bind mount /sys if creating
                  sysfs failed.  */
@@ -315,17 +376,15 @@ do_mount (libcrun_container_t *container,
                 return ret;
 
               ret = mount ("/sys", target, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
-              if (ret == 0)
+              if (LIKELY (ret == 0))
                 return 0;
             }
+
+          return crun_make_error (err, saved_errno, "mount '%s' to '%s'", source, target);
         }
 
-      if ((flags & MS_BIND) && (flags & ~(MS_BIND | ALL_PROPAGATIONS)))
-        {
-          ret = mount (source, target, fstype, MS_REMOUNT | flags, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "remount '%s'", target);
-        }
+      if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
+        needs_remount = true;
     }
 
   if (mountflags & ALL_PROPAGATIONS)
@@ -345,10 +404,25 @@ do_mount (libcrun_container_t *container,
     }
 
   if (mountflags & MS_RDONLY)
+    needs_remount = true;
+
+  if (needs_remount)
     {
-      unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
-      struct remount_s *r = make_remount (target, remount_flags, NULL, get_private_data (container)->remounts);
-      get_private_data (container)->remounts = r;
+      unsigned long remount_flags = MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS);
+
+      if ((remount_flags & MS_RDONLY) == 0)
+        {
+          ret = do_remount (target, remount_flags, data, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          struct remount_s *r;
+
+          r = make_remount (target, remount_flags, data, get_private_data (container)->remounts);
+          get_private_data (container)->remounts = r;
+        }
     }
 
   return ret;
@@ -791,53 +865,6 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
       return MS_NOEXEC | MS_NOSUID | MS_NODEV;
 
   return 0;
-}
-
-static int
-finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
-{
-  int ret = 0;
-  struct remount_s *r = get_private_data (container)->remounts;
-  while (r)
-    {
-      struct remount_s *next = r->next;
-      ret = mount ("none", r->target, "", r->flags, r->data);
-      if (UNLIKELY (ret < 0))
-        {
-          unsigned long flags;
-          struct statfs sfs;
-
-          ret = statfs (r->target, &sfs);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "statfs '%s'", r->target);
-              goto cleanup;
-            }
-
-          flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
-
-          ret = mount ("none", r->target, "", r->flags | flags, r->data);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "remount '%s'", r->target);
-              goto cleanup;
-            }
-        }
-
-      free_remount (r);
-      r = next;
-    }
-
- cleanup:
-  while (r)
-    {
-      struct remount_s *next = r->next;
-      free_remount (r);
-      r = next;
-    }
-
-  get_private_data (container)->remounts = NULL;
-  return ret;
 }
 
 static int
