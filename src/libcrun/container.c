@@ -18,6 +18,7 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+#include <oci_runtime_spec.h>
 #include <stdbool.h>
 #include "container.h"
 #include "utils.h"
@@ -75,7 +76,7 @@ struct sync_socket_message_s
   char message[512];
 };
 
-
+typedef oci_container_hooks_prestart_element hook;
 
 static char spec_file[] = "\
   {\n\
@@ -728,21 +729,9 @@ container_entrypoint (void *args, const char *notify_socket,
   return crun_make_error (err, errno, "exec the container process");
 }
 
-struct hook_s
-{
-    char *path;
-    char **args;
-    size_t args_len;
-
-    int timeout;
-    char **env;
-    size_t env_len;
-
-};
-
 static int
 do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
-          const char *cwd, const char *status, struct hook_s **hooks, size_t hooks_len,
+          const char *cwd, const char *status, hook **hooks, size_t hooks_len,
           libcrun_error_t *err)
 {
   size_t i, stdin_len;
@@ -839,7 +828,7 @@ run_poststop_hooks (libcrun_context_t *context, oci_container *def,
   if (def->hooks && def->hooks->poststop_len)
     {
       ret = do_hooks (def, 0, id, true, def->root->path, status->bundle,
-                      "stopped", (struct hook_s **) def->hooks->poststop,
+                      "stopped", (hook **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
@@ -1475,7 +1464,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (def->hooks && def->hooks->prestart_len)
     {
       ret = do_hooks (def, pid, context->id, false, def->root->path, NULL, "created",
-                      (struct hook_s **) def->hooks->prestart,
+                      (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret != 0))
         {
@@ -1535,7 +1524,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (def->hooks && def->hooks->poststart_len)
     {
       ret = do_hooks (def, pid, context->id, true, def->root->path, NULL, "running",
-                      (struct hook_s **) def->hooks->poststart,
+                      (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
         {
