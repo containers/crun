@@ -775,8 +775,16 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
   for (i = 0; i < hooks_len; i++)
     {
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
-      if (!keep_going && UNLIKELY (ret != 0))
-          goto exit;
+      if (UNLIKELY (ret != 0))
+        {
+          if (keep_going)
+            libcrun_warning ("error executing hook %s (exit code: %d)", hooks[i]->path, ret);
+          else
+            {
+              libcrun_error (0, "error executing hook %s (exit code: %d)", hooks[i]->path, ret);
+              goto exit;
+            }
+        }
     }
 
   ret = 0;
@@ -1753,7 +1761,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
     }
 
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-  exit (ret);
+  exit (ret ? EXIT_FAILURE : 0);
 }
 
 int

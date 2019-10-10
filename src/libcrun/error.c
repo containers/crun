@@ -374,7 +374,6 @@ libcrun_error (int errno_, const char *msg, ...)
 
   write_log (errno_, false, msg, args_list);
   va_end (args_list);
-  exit (EXIT_FAILURE);
 }
 
 void __attribute__ ((noreturn))
