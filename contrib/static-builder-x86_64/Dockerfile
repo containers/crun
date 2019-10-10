@@ -5,7 +5,7 @@ RUN dnf install -y git dnf-utils gcc meson ninja-build libseccomp-static libcap-
 
 FROM base AS systemd
 RUN mkdir /out && yum-builddep -y systemd && git clone --depth 1 https://github.com/systemd/systemd.git \
-    && mkdir systemd/build; cd systemd/build; meson ..; ninja version.h; ninja libsystemd.a; cp libsystemd.a /out
+    && mkdir systemd/build; cd systemd/build; meson .. --buildtype minsize --strip; ninja version.h; ninja libsystemd.a; cp libsystemd.a /out
 
 FROM base AS yajl
 RUN mkdir /out && git clone --depth=1 https://github.com/lloyd/yajl.git; cd yajl; ./configure LDFLAGS=-static; cd build; make -j $(nproc); find . -name '*.a' -exec cp \{\} /out \;
