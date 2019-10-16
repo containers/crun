@@ -1225,14 +1225,41 @@ check_access (const char *path)
 }
 
 const char *
-find_executable (const char *executable_path)
+find_executable (const char *executable_path, const char *cwd)
 {
+  cleanup_free char *cwd_executable_path = NULL;
   cleanup_free char *tmp = NULL;
   char path[PATH_MAX + 1];
   int last_error = ENOENT;
   char *it, *end;
   int ret;
 
+  if (executable_path == NULL)
+    {
+      errno = EINVAL;
+      return NULL;
+    }
+
+  if (executable_path[0] == '.')
+    {
+      cleanup_free char *cwd_allocated = NULL;
+
+      if (cwd == NULL)
+        {
+          cwd_allocated = get_current_dir_name ();
+          if (cwd_allocated == NULL)
+            OOM ();
+
+          cwd = cwd_allocated;
+        }
+
+      /* Make sure the path starts with a '/' so it will hit the check
+         for absolute paths.  */
+      xasprintf (&cwd_executable_path, "%s%s/%s", cwd[0] == '/' ? "" : "/", cwd, executable_path);
+      executable_path = cwd_executable_path;
+    }
+
+  /* Absolute path.  It doesn't need to lookup $PATH.  */
   if (executable_path[0] == '/')
     {
       ret = check_access (executable_path);
