@@ -2214,6 +2214,9 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
   for (str = content; str < content + len; str += strlen (str) + 1)
     if (putenv (str) < 0)
         return crun_make_error (err, errno, "putenv '%s'", str);
+
+  free(content);
+
   return ret;
 }
 

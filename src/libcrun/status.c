@@ -214,6 +214,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "cannot rm state directory '%s/%s'", dir, id);
 
+  closedir(d);
   return 0;
 }
 
