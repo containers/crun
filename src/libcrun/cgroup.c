@@ -92,6 +92,36 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
 }
 
 static int
+is_rwm (const char *str, libcrun_error_t *err)
+{
+  const char *it;
+  bool r = false;
+  bool w = false;
+  bool m = false;
+
+  for (it = str; *it; it++)
+    switch (*it)
+      {
+      case 'r':
+        r = true;
+        break;
+
+      case 'w':
+        w = true;
+        break;
+
+      case 'm':
+        m = true;
+        break;
+
+      default:
+        return crun_make_error (err, errno, "invalid mode specified '%s'", str);
+      }
+
+  return r && w && m ? 1 : 0;
+}
+
+static int
 enable_controllers (oci_container_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *tmp_path = NULL;
@@ -1644,7 +1674,13 @@ write_devices_resources_v2 (int dirfd, oci_container_linux_resources_devices_ele
   /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
   for (i = 0; i < devs_len; i++)
     {
-      if (devs[i]->allow || strcmp (devs[i]->access, "rwm"))
+      int rwm;
+
+      rwm = is_rwm (devs[i]->access, err);
+      if (UNLIKELY (rwm < 0))
+        return rwm;
+
+      if (devs[i]->allow || (rwm == 0))
         {
           can_skip = false;
           break;
@@ -2093,7 +2129,13 @@ libcrun_update_cgroup_resources (int cgroup_mode, oci_container_linux_resources 
 
       for (i = 0; i < resources->devices_len; i++)
         {
-          if (resources->devices[i]->allow || strcmp (resources->devices[i]->access, "rwm"))
+          int rwm;
+
+          rwm = is_rwm (resources->devices[i]->access, err);
+          if (UNLIKELY (rwm < 0))
+            return rwm;
+
+          if (resources->devices[i]->allow || (rwm == 0))
             return crun_make_error (err, 0, "cannot set limits without cgroups");
         }
 
