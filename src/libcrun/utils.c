@@ -39,6 +39,7 @@
 #include <sys/sysmacros.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
+#include <limits.h>
 
 int
 close_and_reset (int *fd)
@@ -1514,6 +1515,13 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       ret = fchownat (destdirfd, de->d_name, uid, gid, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chown %s/%s", destname, de->d_name);
+
+      /*
+       * ALLPERMS is not defined by POSIX
+       */
+      #ifndef ALLPERMS
+      #  define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)
+      #endif
 
       ret = fchmodat (destdirfd, de->d_name, mode & ALLPERMS, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
