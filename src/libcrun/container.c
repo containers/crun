@@ -544,9 +544,13 @@ container_entrypoint_init (void *args, const char *notify_socket,
         libcrun_warning ("cannot set HOME environment variable");
     }
 
+  if (def->process && def->process->cwd)
+    if (UNLIKELY (chdir (def->process->cwd) < 0))
+      return crun_make_error (err, errno, "chdir");
+
   if (def->process && def->process->args)
     {
-      *exec_path = find_executable (def->process->args[0]);
+      *exec_path = find_executable (def->process->args[0], def->process->cwd);
       if (UNLIKELY (*exec_path == NULL))
         {
           if (errno == ENOENT)
@@ -623,10 +627,6 @@ container_entrypoint_init (void *args, const char *notify_socket,
   ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  if (def->process && def->process->cwd)
-    if (UNLIKELY (chdir (def->process->cwd) < 0))
-      return crun_make_error (err, errno, "chdir");
 
   if (notify_socket)
     {
@@ -2081,7 +2081,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
           seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
         }
 
-      exec_path = find_executable (process->args[0]);
+      exec_path = find_executable (process->args[0], process->cwd);
       if (UNLIKELY (exec_path == NULL))
         {
           if (errno == ENOENT)
