@@ -23,7 +23,7 @@ AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers n
 
 AC_CHECK_HEADERS([error.h])
 
-AC_CHECK_FUNCS(copy_file_range bpf fgetxattr statx fgetpwent_r)
+AC_CHECK_FUNCS(copy_file_range bpf fgetxattr statx fgetpwent_r issetugid secure_getenv)
 
 AC_SEARCH_LIBS(cap_from_name, [cap], [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])], [AC_MSG_ERROR([*** libcap headers not found])])
 AC_SEARCH_LIBS(seccomp_rule_add, [seccomp], [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])], [AC_MSG_ERROR([*** libseccomp headers not found])])

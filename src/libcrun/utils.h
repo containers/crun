@@ -135,4 +135,8 @@ int libcrun_initialize_selinux (libcrun_error_t *err);
 
 int libcrun_initialize_apparmor (libcrun_error_t *err);
 
+#if !HAVE_SECURE_GETENV
+char *secure_getenv (char const *name);
+#endif
+
 #endif
