@@ -60,6 +60,12 @@ apt-get install -y make git gcc build-essential pkgconf libtool \
    go-md2man libtool autoconf python3 automake
 ```
 
+On Alpine
+```shell
+apk add gcc automake autoconf libtool gettext pkgconf git make musl-dev \
+    python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man
+```
+
 Unless you are also building the Python bindings, Python is needed
 only by libocispec to generate the C parser at build time, it won't be
 used afterwards.

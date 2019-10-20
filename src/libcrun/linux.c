@@ -43,6 +43,7 @@
 #include <libgen.h>
 #include <sys/wait.h>
 #include <sys/vfs.h>
+#include <limits.h>
 
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
