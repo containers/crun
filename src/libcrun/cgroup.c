@@ -784,6 +784,13 @@ int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const 
         }
     }
 
+  sd_err = sd_bus_message_append (m, "(sv)", "CollectMode", "s", "inactive-or-failed");
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, -sd_err, "sd-bus message append CollectMode");
+      goto exit;
+    }
+
   sd_err = sd_bus_message_append (m, "(sv)", "Description", "s", "libcrun container");
   if (UNLIKELY (sd_err < 0))
     {
