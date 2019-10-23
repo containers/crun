@@ -1070,6 +1070,9 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   notify_fd = -1;
   return 1;
 #else
+  (void) context;
+  (void) container;
+  (void) err;
   *notify_socket_out = -1;
   return 0;
 #endif

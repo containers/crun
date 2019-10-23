@@ -1062,6 +1062,8 @@ handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
     }
   return 0;
 #else
+  (void) notify_socketfd;
+  (void) err;
   return 1;
 #endif
 }

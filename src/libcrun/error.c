@@ -246,6 +246,9 @@ log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg arg_un
 void
 log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_unused)
 {
+  (void) errno_;
+  (void) msg;
+  (void) warning;
 #ifdef HAVE_SYSTEMD
   if (errno_ == 0)
     sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s", msg, "ID=%s", arg, NULL);
