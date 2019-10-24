@@ -463,7 +463,7 @@ add_selinux_mount_label (char **retlabel, const char *data, const char *label, l
 }
 
 static int
-write_file_and_check_fs_type (const char *file, const char *data, size_t len, int type, const char *type_name, libcrun_error_t *err)
+write_file_and_check_fs_type (const char *file, const char *data, size_t len, unsigned int type, const char *type_name, libcrun_error_t *err)
 {
   int ret;
   struct statfs sfs;
@@ -897,6 +897,7 @@ set_home_env (uid_t id)
     }
   return 0;
 #else
+  (void) id;
   errno = ENOTSUP;
   return -1;
 #endif

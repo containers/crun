@@ -1185,6 +1185,9 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   int mode;
   const cgroups_subsystem_t *subsystems;
 
+  (void) id;
+  (void) systemd_cgroup;
+
   if (path == NULL || *path == '\0')
     return 0;
 
