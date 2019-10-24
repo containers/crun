@@ -23,7 +23,7 @@ AC_CHECK_HEADERS([sys/capability.h], [], [AC_MSG_ERROR([*** POSIX caps headers n
 
 AC_CHECK_HEADERS([error.h])
 
-AC_CHECK_FUNCS(copy_file_range bpf fgetxattr statx fgetpwent_r issetugid secure_getenv)
+AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid secure_getenv)
 
 AC_SEARCH_LIBS(cap_from_name, [cap], [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])], [AC_MSG_ERROR([*** libcap headers not found])])
 AC_SEARCH_LIBS(seccomp_rule_add, [seccomp], [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])], [AC_MSG_ERROR([*** libseccomp headers not found])])
@@ -35,11 +35,18 @@ AC_DEFINE([HAVE_APPARMOR], 1, [Define if AppArmor is available])
 
 AC_SEARCH_LIBS(yajl_tree_get, [yajl], [AC_DEFINE([HAVE_YAJL], 1, [Define if libyajl is available])], [AC_MSG_ERROR([*** libyajl headers not found])])
 
-
-AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
-#include <linux/bpf.h>
-int program = BPF_PROG_TYPE_CGROUP_DEVICE;
-]])], [AC_DEFINE([HAVE_EBPF], 1, [Define if eBPF is available])], [])
+AC_CHECK_HEADERS([linux/bpf.h])
+AS_IF([test "$ac_cv_header_linux_bpf_h" = "yes"], [
+	AC_MSG_CHECKING(compilation for eBPF)
+	AC_COMPILE_IFELSE(
+		[AC_LANG_SOURCE([[
+			#include <linux/bpf.h>
+			int program = BPF_PROG_TYPE_CGROUP_DEVICE;
+		]])],
+		[AC_MSG_RESULT(yes)
+		 AC_DEFINE([HAVE_EBPF], 1, [Define if eBPF is available])],
+		[AC_MSG_RESULT(no)])
+])
 
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 
