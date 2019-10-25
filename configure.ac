@@ -69,7 +69,7 @@ AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not f
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile rpm/crun.spec])
 
 AC_CONFIG_SUBDIRS([libocispec])
 AC_OUTPUT

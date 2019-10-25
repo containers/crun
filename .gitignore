@@ -57,6 +57,7 @@ m4/ltversion.m4
 m4/lt~obsolete.m4
 Makefile
 Makefile.in
+rpm/crun.spec
 stamp-h
 stamp-h.in
 stamp-h1
