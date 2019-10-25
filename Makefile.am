@@ -4,9 +4,6 @@ ACLOCAL_AMFLAGS = -I m4
 
 WD := $(shell pwd)
 
-crun.spec: $(srcdir)/rpm/crun.spec.template
-	sed -e 's|#VERSION#|$(VERSION)|g' < $< > $@
-
 rpm: dist-gzip crun.spec
 	echo $(VERSION)
 	$(MAKE) -C $(WD) dist-xz
@@ -55,7 +52,7 @@ crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpa
 crun_LDADD = libcrun.la $(FOUND_LIBS)
 crun_LDFLAGS = $(CRUN_LDFLAGS)
 
-EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.template autogen.sh \
+EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.in autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h src/update.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/ebpf.h src/libcrun/cgroup.h \
