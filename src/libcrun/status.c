@@ -180,7 +180,7 @@ int
 libcrun_container_delete_status (const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
-  DIR *d;
+  cleanup_dir DIR *d = NULL;
   struct dirent *de;
   cleanup_close int rundir_dfd = -1;
   cleanup_close int dfd = -1;
