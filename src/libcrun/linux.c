@@ -1374,7 +1374,7 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
     return 0;
   ret = read_all_file ("/proc/self/setgroups", &content, NULL, err);
   if (ret < 0)
-    return -1;
+    return ret;
   return strncmp (content, "deny", 4) == 0 ? 0 : 1;
 }
 
@@ -2124,26 +2124,21 @@ libcrun_run_linux_container (libcrun_container_t *container,
         }
     }
 
-  if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
+  /* If additional gids is not set, maintain the original additional groups for the process.  */
+  if (def->process && def->process->user && def->process->user->additional_gids)
     {
       gid_t *additional_gids = NULL;
       size_t additional_gids_len = 0;
       int can_do_setgroups;
 
-      if (def->process && def->process->user)
-        {
-          additional_gids = def->process->user->additional_gids;
-          additional_gids_len = def->process->user->additional_gids_len;
-        }
+      additional_gids = def->process->user->additional_gids;
+      additional_gids_len = def->process->user->additional_gids_len;
 
-      if (additional_gids_len == 0)
-        {
-          can_do_setgroups = can_setgroups (container, err);
-          if (can_do_setgroups < 0)
-            goto out;
-        }
+      can_do_setgroups = can_setgroups (container, err);
+      if (UNLIKELY (can_do_setgroups < 0))
+        goto out;
 
-      if (additional_gids_len || can_do_setgroups)
+      if (can_do_setgroups)
         {
           ret = setgroups (additional_gids_len, additional_gids);
           if (UNLIKELY (ret < 0))
