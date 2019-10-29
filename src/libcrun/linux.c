@@ -1364,6 +1364,23 @@ deny_setgroups (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
   return ret;
 }
 
+static const char *
+find_annotation (libcrun_container_t *container, const char *name)
+{
+  size_t i;
+
+  if (container->container_def->annotations == NULL)
+    return NULL;
+
+  for (i = 0; i < container->container_def->annotations->len; i++)
+    {
+      if (strcmp (container->container_def->annotations->keys[i], name) == 0)
+        return container->container_def->annotations->values[i];
+    }
+
+  return NULL;
+}
+
 static int
 can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -1372,9 +1389,21 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 
   if (get_private_data (container)->deny_setgroups)
     return 0;
+
+  if (container->container_def->annotations)
+    {
+      const char *annotation;
+
+      /* Skip setgroups if the annotation is set to anything different than "0".  */
+      annotation = find_annotation (container, "io.crun.keep_original_groups");
+      if (annotation)
+        return strcmp (annotation, "0") == 0 ? 1 : 0;
+    }
+
   ret = read_all_file ("/proc/self/setgroups", &content, NULL, err);
   if (ret < 0)
-    return -1;
+    return ret;
+
   return strncmp (content, "deny", 4) == 0 ? 0 : 1;
 }
 
@@ -2124,26 +2153,20 @@ libcrun_run_linux_container (libcrun_container_t *container,
         }
     }
 
-  if (container->host_uid == 0 && !(flags & CLONE_NEWUSER))
+  if (def->process && def->process->user)
     {
       gid_t *additional_gids = NULL;
       size_t additional_gids_len = 0;
       int can_do_setgroups;
 
-      if (def->process && def->process->user)
-        {
-          additional_gids = def->process->user->additional_gids;
-          additional_gids_len = def->process->user->additional_gids_len;
-        }
+      additional_gids = def->process->user->additional_gids;
+      additional_gids_len = def->process->user->additional_gids_len;
 
-      if (additional_gids_len == 0)
-        {
-          can_do_setgroups = can_setgroups (container, err);
-          if (can_do_setgroups < 0)
-            goto out;
-        }
+      can_do_setgroups = can_setgroups (container, err);
+      if (UNLIKELY (can_do_setgroups < 0))
+        goto out;
 
-      if (additional_gids_len || can_do_setgroups)
+      if (can_do_setgroups)
         {
           ret = setgroups (additional_gids_len, additional_gids);
           if (UNLIKELY (ret < 0))
