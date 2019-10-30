@@ -1892,7 +1892,22 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
 
   ret = write_file ("/dev/console", NULL, 0, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      int ret_exists;
+      libcrun_error_t tmp_err = NULL;
+
+      ret_exists = crun_path_exists ("/dev/console", &tmp_err);
+      /* Always ignore errors from crun_path_exists.  */
+      if (UNLIKELY (ret_exists < 0))
+        crun_error_release (&tmp_err);
+
+      /* If the file doesn't exist or crun_path_exists failed, return the original error.  */
+      if (ret_exists <= 0)
+        return ret;
+
+      /* Otherwise ignore errors and try to bind mount on top of it.  */
+      crun_error_release (err);
+    }
 
   ret = do_mount (container, slave, "/dev/console", "devpts", MS_BIND, NULL, 0, err);
   if (UNLIKELY (ret < 0))
