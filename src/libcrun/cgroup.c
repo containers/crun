@@ -1114,12 +1114,13 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
 }
 
 int
-libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
+libcrun_cgroup_read_pids (const char *path, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
   cleanup_free char *buffer = NULL;
   int ret;
   size_t len;
+  size_t n_pids;
   char *it;
   char *saveptr = NULL;
   int mode;
@@ -1130,10 +1131,6 @@ libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
   mode = libcrun_get_cgroup_mode (err);
   if (mode < 0)
     return mode;
-
-  ret = libcrun_cgroup_pause_unpause (path, true, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
 
   switch (mode)
     {
@@ -1152,15 +1149,46 @@ libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
         return ret;
       break;
     }
-  for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
+
+  for (n_pids = 0, it = buffer; it; it = strchr (it + 1, '\n'))
+    n_pids++;
+
+  *pids = xmalloc (sizeof (pid_t) * (n_pids + 1));
+
+  for (n_pids = 0, it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
     {
       pid_t pid = strtoul (it, NULL, 10);
       if (pid > 0)
-        {
-          ret = kill (pid, signal);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "kill process %d", pid);
-        }
+        (*pids)[n_pids++] = pid;
+    }
+  (*pids)[n_pids] = 0;
+
+  return 0;
+}
+
+int
+libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
+{
+  int ret;
+  size_t i;
+  cleanup_free pid_t *pids = NULL;
+
+  if (path == NULL || *path == '\0')
+    return 0;
+
+  ret = libcrun_cgroup_pause_unpause (path, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
+  ret = libcrun_cgroup_read_pids (path, &pids, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (i = 0; pids[i]; i++)
+    {
+      ret = kill (pids[i], signal);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "kill process %d", pids[i]);
     }
 
   ret = libcrun_cgroup_pause_unpause (path, false, err);

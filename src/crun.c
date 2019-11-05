@@ -37,6 +37,7 @@
 #include "spec.h"
 #include "pause.h"
 #include "unpause.h"
+#include "ps.h"
 
 static struct crun_global_arguments arguments;
 
@@ -90,6 +91,7 @@ enum
     COMMAND_UPDATE,
     COMMAND_PAUSE,
     COMMAND_UNPAUSE,
+    COMMAND_PS,
   };
 
 struct commands_s commands[] =
@@ -99,6 +101,7 @@ struct commands_s commands[] =
     { COMMAND_EXEC, "exec", crun_command_exec},
     { COMMAND_LIST, "list", crun_command_list},
     { COMMAND_KILL, "kill", crun_command_kill},
+    { COMMAND_PS, "ps", crun_command_ps},
     { COMMAND_RUN, "run", crun_command_run},
     { COMMAND_SPEC, "spec", crun_command_spec},
     { COMMAND_START, "start", crun_command_start},
@@ -116,6 +119,7 @@ static char doc[] =                                                   \
   "\texec    - exec a command in a running container\n"               \
   "\tlist    - list known containers\n"                               \
   "\tkill    - send a signal to the container init process\n"         \
+  "\tps      - show the processes in the container\n"                 \
   "\trun     - run a container\n"                                     \
   "\tspec    - generate a configuration file\n"                       \
   "\tstart   - start a container\n"                                   \
