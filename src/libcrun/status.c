@@ -32,7 +32,9 @@
 static char *
 get_run_directory (const char *state_root)
 {
+  int ret;
   char *root = NULL;
+  libcrun_error_t err = NULL;
 
   if (state_root)
     root = xstrdup (state_root);
@@ -45,6 +47,9 @@ get_run_directory (const char *state_root)
   if (root == NULL)
     root = xstrdup ("/run/crun");
 
+  ret = crun_ensure_directory (root, 0700, &err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (&err);
   return root;
 }
 
