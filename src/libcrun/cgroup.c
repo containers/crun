@@ -584,7 +584,7 @@ int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode,
 
   if (cgroup_mode == CGROUP_MODE_LEGACY)
     {
-      from = strstr (content, "::memory");
+      from = strstr (content, ":memory");
       if (UNLIKELY (from == NULL))
         return crun_make_error (err, -1, "cannot find memory controller for the current process");
 
