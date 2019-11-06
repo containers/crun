@@ -34,6 +34,9 @@ List known containers.
 Send the specified signal to the container init process.  If no signal
 is specified, SIGTERM is used.
 
+**ps**
+Show the processes running in a container.
+
 **run**
 Create and immediately start a container.
 
@@ -218,6 +221,14 @@ Kill all the processes in the container.
 
 **--regex**=**REGEX**
 Kill all the containers that satisfy the specified regex.
+
+## PS OPTIONS
+
+crun [global options] ps [options]
+
+**--format=FORMAT**
+Specify the output format.  It must be either `table` or `json`.
+By default `table` is used.
 
 ## SPEC OPTIONS
 
