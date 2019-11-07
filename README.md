@@ -53,6 +53,22 @@ dnf install -y make python git gcc automake autoconf libcap-devel \
     go-md2man glibc-static python3-libmount libtool
 ```
 
+On RHEL/CentOS 8
+```shell
+yum --enablerepo='*' install -y make automake autoconf gettext \
+    libtool gcc libcap-devel systemd-devel yajl-devel \
+    libseccomp-devel python36 libtool
+```
+go-md2man is not available on RHEL/CentOS 8, so if you'd like to build
+the man page, you also need to manually install go-md2man.  It can be
+installed with:
+```shell
+yum --enablerepo='*' install -y golang
+export GOPATH=$HOME/go
+go get github.com/cpuguy83/go-md2man
+export PATH=$PATH:$GOPATH/bin
+```
+
 On Ubuntu:
 ```shell
 apt-get install -y make git gcc build-essential pkgconf libtool \

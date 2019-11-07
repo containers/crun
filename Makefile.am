@@ -107,12 +107,13 @@ TESTS = tests/test_capabilities.py \
 
 EXTRA_DIST += $(TESTS) tests/tests_utils.py
 
+if HAVE_MD2MAN
 man1_MANS = crun.1
-
 crun.1: $(abs_srcdir)/crun.1.md
-	go-md2man -in $(abs_srcdir)/crun.1.md -out crun.1
+	$(MD2MAN) -in $(abs_srcdir)/crun.1.md -out crun.1
 
 generate-man: crun.1
+endif HAVE_MD2MAN
 
 sync:
 	(cd libocispec; git pull https://github.com/containers/libocispec)

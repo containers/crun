@@ -19,6 +19,9 @@ AC_PROG_SED
 AC_PROG_CC
 AM_PATH_PYTHON
 
+AC_PATH_PROG(MD2MAN, go-md2man)
+
+AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 
 AC_CHECK_HEADERS([error.h])
 
