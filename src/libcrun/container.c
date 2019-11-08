@@ -1609,16 +1609,12 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
     return crun_make_error (err, 0, "unknown version specified");
 
+  if (def->process && def->process->terminal && detach && context->console_socket == NULL)
+    return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
+
   ret = libcrun_status_check_directories (context->state_root, context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (def->process && def->process->terminal && detach && context->console_socket == NULL)
-    return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
 
   if (!detach && (options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
     return libcrun_container_run_internal (container, context, -1, err);
@@ -1667,6 +1663,11 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
+
+  ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = libcrun_container_run_internal (container, context, -1, err);
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
@@ -1700,16 +1701,12 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (def->process && def->process->terminal && context->console_socket == NULL)
+    return crun_make_error (err, 0, "use --console-socket with create when a terminal is used");
+
   ret = libcrun_status_check_directories (context->state_root, context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = libcrun_copy_config_file (context->id, context->state_root, ".", err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (def->process && def->process->terminal && context->console_socket == NULL)
-    return crun_make_error (err, 0, "use --console-socket with create when a terminal is used");
 
   exec_fifo_fd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
   if (UNLIKELY (exec_fifo_fd < 0))
@@ -1754,6 +1751,10 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
+
+  ret = libcrun_copy_config_file (context->id, context->state_root, ".", err);
+  if (UNLIKELY (ret < 0))
+    libcrun_fail_with_error (errno, "copy config file");
 
   ret = libcrun_container_run_internal (container, context, pipefd1, err);
   if (UNLIKELY (ret < 0))
