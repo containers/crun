@@ -286,6 +286,29 @@ Maximum number of pids allowed in the container.
 **-r**, **--resources**=**FILE**
 Path to the file containing the resources to update.
 
+# Extensions to OCI
+
+## io.crun.keep_original_groups=1
+
+If the annotation `io.crun.keep_original_groups` is present, then crun
+will skip the `setgroups` syscall that is used to either set the
+additional groups specified in the OCI configuration, or to reset the
+list of additional groups if none is specified.
+
+## tmpcopyup mount options
+
+If the `tmpcopyup` option is specified for a tmpfs, then the path that
+is shadowed by the tmpfs mount is recursively copied up to the tmpfs
+itself.
+
+## Automatically create user namespace
+
+When running as user different than root, an user namespace is
+automatically created even if it is not specified in the config file.
+The current user is mapped to the ID 0 in the container, and any
+additional id specified in the files `/etc/subuid` and `/etc/subgid`
+is automatically added starting with ID 1.
+
 # CGROUP v2
 
 crun has some basic support for cgroup v2.  Since the OCI spec is
