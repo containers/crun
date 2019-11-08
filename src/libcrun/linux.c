@@ -828,6 +828,16 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "umount oldroot");
 
+  do
+    {
+      ret = umount2 (".", MNT_DETACH);
+      if (ret < 0 && errno == EINVAL)
+        break;
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "umount oldroot");
+    }
+  while (ret == 0);
+
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chdir to newroot");
