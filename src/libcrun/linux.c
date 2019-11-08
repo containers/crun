@@ -604,10 +604,13 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   const char *fullname = device->path;
   if (binds)
     {
-      cleanup_free char *path_to_container = NULL;
-      xasprintf (&path_to_container, "%s%s", rootfs, device->path);
+      char *path_to_container, buffer[PATH_MAX];
 
-      ret = crun_ensure_file (path_to_container, 0700, err);
+      path_to_container = chroot_realpath (rootfs, device->path, buffer);
+      if (path_to_container == NULL)
+        return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
+
+      ret = crun_ensure_file (path_to_container, 0700, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -645,7 +648,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (tmp != resolved_path)
             {
               *tmp = '\0';
-              ret = crun_ensure_directory (resolved_path, 0700, err);
+              ret = crun_ensure_directory (resolved_path, 0700, true, err);
               if (UNLIKELY (ret < 0))
                 return ret;
               *tmp = '/';
@@ -756,7 +759,7 @@ do_masked_and_readonly_paths (libcrun_container_t *container, const char *rootfs
       if (ret == 0)
         continue;
 
-      dir = crun_dir_p (path, err);
+      dir = crun_dir_p (path, true, err);
       if (UNLIKELY (dir < 0))
         return ret;
 
@@ -945,7 +948,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
       if (def->mounts[i]->source && (flags & MS_BIND))
         {
-          is_dir = crun_dir_p (def->mounts[i]->source, err);
+          is_dir = crun_dir_p (def->mounts[i]->source, true, err);
           if (UNLIKELY (is_dir < 0))
             return is_dir;
 
@@ -970,13 +973,13 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
       if (is_dir)
         {
-          ret = crun_ensure_directory (target, 01755, err);
+          ret = crun_ensure_directory (target, 01755, true, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
-          ret = crun_ensure_file (target, 0755, err);
+          ret = crun_ensure_file (target, 0755, true, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1124,7 +1127,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
   container_notify_socket_path_dir_alloc = xstrdup (container_notify_socket_path);
   container_notify_socket_path_dir = dirname (container_notify_socket_path_dir_alloc);
 
-  ret = crun_ensure_directory (container_notify_socket_path_dir, 0755, err);
+  ret = crun_ensure_directory (container_notify_socket_path_dir, 0755, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

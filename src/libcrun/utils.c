@@ -270,14 +270,26 @@ ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *er
 }
 
 int
-crun_ensure_directory (const char *path, int mode, libcrun_error_t *err)
+crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_error_t *err)
 {
+  int ret;
   cleanup_free char *tmp = xstrdup (path);
-  return ensure_directory_internal (tmp, strlen (tmp), mode, err);
+  ret = ensure_directory_internal (tmp, strlen (tmp), mode, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = crun_dir_p (path, nofollow, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret == 0)
+    return crun_make_error (err, ENOTDIR, "The path '%s' is not a directory", path);
+
+  return 0;
 }
 
 int
-crun_ensure_file (const char *path, int mode, libcrun_error_t *err)
+crun_ensure_file (const char *path, int mode, bool nofollow, libcrun_error_t *err)
 {
   cleanup_free char *tmp = xstrdup (path);
   size_t len = strlen (tmp);
@@ -289,7 +301,7 @@ crun_ensure_file (const char *path, int mode, libcrun_error_t *err)
   if (it > tmp)
     {
       *it = '\0';
-      ret = crun_ensure_directory (tmp, mode, err);
+      ret = crun_ensure_directory (tmp, mode, nofollow, err);
       if (UNLIKELY (ret < 0))
         return ret;
       *it = '/';
@@ -358,12 +370,12 @@ get_file_type (mode_t *mode, bool nofollow, const char *path)
 }
 
 int
-crun_dir_p (const char *path, libcrun_error_t *err)
+crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err)
 {
   mode_t mode;
   int ret;
 
-  ret = get_file_type (&mode, true, path);
+  ret = get_file_type (&mode, nofollow, path);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error stat'ing file '%s'", path);
 
@@ -1205,7 +1217,7 @@ check_access (const char *path)
   if (ret < 0)
     return ret;
 
-  ret = get_file_type (&mode, true, path);
+  ret = get_file_type (&mode, false, path);
   if (UNLIKELY (ret < 0))
     return ret;
 

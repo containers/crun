@@ -173,11 +173,11 @@ static int
 test_dir_p ()
 {
   libcrun_error_t err;
-  if (crun_dir_p ("/usr", &err) <= 0)
+  if (crun_dir_p ("/usr", false, &err) <= 0)
     return -1;
-  if (crun_dir_p ("/dev/zero", &err) != 0)
+  if (crun_dir_p ("/dev/zero", false, &err) != 0)
     return -1;
-  if (crun_dir_p ("/hopefully/does/not/really/exist", &err) >= 0)
+  if (crun_dir_p ("/hopefully/does/not/really/exist", false, &err) >= 0)
     return -1;
   return 0;
 }

@@ -310,7 +310,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
   xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystem, path ? path : "");
   if (ensure_missing)
     {
-      ret = crun_ensure_directory (cgroup_path, 0755, err);
+      ret = crun_ensure_directory (cgroup_path, 0755, false, err);
       if (UNLIKELY (ret < 0))
         {
           if (errno != EROFS)
@@ -461,7 +461,7 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
       xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
       if (ensure_missing)
         {
-          ret = crun_ensure_directory (cgroup_path, 0755, err);
+          ret = crun_ensure_directory (cgroup_path, 0755, false, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
