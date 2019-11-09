@@ -1399,7 +1399,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
       if (UNLIKELY (console_socket_fd < 0))
-        return ret;
+        return console_socket_fd;
       container_args.console_socket_fd = console_socket_fd;
     }
 
