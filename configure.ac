@@ -17,7 +17,7 @@ AM_SILENT_RULES([yes])
 AC_PROG_AWK
 AC_PROG_SED
 AC_PROG_CC
-AM_PATH_PYTHON
+AM_PATH_PYTHON(3)
 
 AC_PATH_PROG(MD2MAN, go-md2man)
 
@@ -82,7 +82,7 @@ PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 
 AC_ARG_WITH([python-bindings], AS_HELP_STRING([--with-python-bindings], [build the Python bindings]))
 AS_IF([test "x$with_python_bindings" = "xyes"], [
-            PKG_CHECK_MODULES([PYTHON], [python], [], [AC_MSG_ERROR([*** python headers not found])])
+            PKG_CHECK_MODULES([PYTHON], [python3], [], [AC_MSG_ERROR([*** python headers not found])])
             # configure should not touch CFLAGS/LDFLAGS but we need it to propagate it
             # to libocispec.
             CFLAGS+=" -fPIC "
