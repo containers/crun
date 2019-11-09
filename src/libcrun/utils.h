@@ -69,11 +69,11 @@ int write_file (const char *name, const void *data, size_t len, libcrun_error_t 
 
 int write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err);
 
-int crun_ensure_directory (const char *path, int mode, libcrun_error_t *err);
+int crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
-int crun_ensure_file (const char *path, int mode, libcrun_error_t *err);
+int crun_ensure_file (const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
-int crun_dir_p (const char *path, libcrun_error_t *err);
+int crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err);
 
 int detach_process ();
 

@@ -1617,7 +1617,12 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
     return ret;
 
   if (!detach && (options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
-    return libcrun_container_run_internal (container, context, -1, err);
+    {
+      ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      return libcrun_container_run_internal (container, context, -1, err);
+    }
 
   ret = pipe (container_ret_status);
   if (UNLIKELY (ret < 0))
