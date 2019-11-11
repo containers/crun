@@ -1857,7 +1857,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 static int
-open_terminal (char **slave, libcrun_error_t *err)
+open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *err)
 {
   int ret;
   cleanup_close int fd = -1;
@@ -1869,6 +1869,15 @@ open_terminal (char **slave, libcrun_error_t *err)
   ret = libcrun_set_stdio (*slave, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (container->container_def->process
+      && container->container_def->process->user
+      && container->container_def->process->user->uid)
+    {
+      ret = chown (*slave, container->container_def->process->user->uid, -1);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "chown %s", *slave);
+    }
 
   ret = fd;
   fd = -1;
@@ -1886,13 +1895,9 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
   if (def->process == NULL || !def->process->terminal)
     return 0;
 
-  fd = open_terminal (&slave, err);
+  fd = open_terminal (container, &slave, err);
   if (UNLIKELY (fd < 0))
     return fd;
-
-  ret = libcrun_set_stdio (slave, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   if (def->process->console_size)
     {
@@ -2448,7 +2453,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
           if (setsid () < 0)
             libcrun_fail_with_error (errno, "setsid");
 
-          master_fd = open_terminal (&slave, err);
+          master_fd = open_terminal (container, &slave, err);
           if (UNLIKELY (master_fd < 0))
             {
               crun_error_write_warning_and_release (stderr, &err);
