@@ -1551,9 +1551,9 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       /*
        * ALLPERMS is not defined by POSIX
        */
-      #ifndef ALLPERMS
-      #  define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)
-      #endif
+#ifndef ALLPERMS
+# define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)
+#endif
 
       ret = fchmodat (destdirfd, de->d_name, mode & ALLPERMS, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
