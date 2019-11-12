@@ -42,7 +42,7 @@ libcrun_new_terminal (char **slave, libcrun_error_t *err)
 {
   char buf[64];
   int ret;
-  cleanup_close int fd = open ("/dev/ptmx", O_RDWR, O_NOCTTY | O_CLOEXEC);
+  cleanup_close int fd = open ("/dev/ptmx", O_RDWR | O_NOCTTY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open /dev/ptmx");
 
