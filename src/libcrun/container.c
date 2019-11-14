@@ -1254,8 +1254,8 @@ cleanup_watch (libcrun_context_t *context, pid_t init_pid, oci_container *def, c
     flush_fd_to_err (context, terminal_fd);
 }
 
-static
-int open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_root, libcrun_error_t *err)
+static int
+open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_root, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *dest_path = NULL;
