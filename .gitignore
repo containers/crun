@@ -61,3 +61,6 @@ rpm/crun.spec
 stamp-h
 stamp-h.in
 stamp-h1
+tests/init
+tests/tests_libcrun_errors
+tests/tests_libcrun_utils
