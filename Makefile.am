@@ -105,7 +105,14 @@ TESTS = tests/test_capabilities.py \
 	tests/test_exec.py \
 	$(UNIT_TESTS)
 
-EXTRA_DIST += $(TESTS) tests/tests_utils.py
+.version:
+	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@
+
+dist-hook:
+	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
+
+EXTRA_DIST += $(TESTS) tests/tests_utils.py build-aux/git-version-gen $(top_srcdir)/.version
+BUILT_SOURCES = $(top_srcdir)/.version
 
 if HAVE_MD2MAN
 man1_MANS = crun.1

@@ -14,6 +14,7 @@
 *.service
 *.socket
 *.swp
+.version
 *~
 .#*
 .color_coded

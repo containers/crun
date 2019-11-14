@@ -1,5 +1,7 @@
 AC_PREREQ([2.69])
-AC_INIT([crun], [0.10.5], [giuseppe@scrivano.org])
+AC_INIT([crun],
+        m4_esyscmd([build-aux/git-version-gen --prefix "" .tarball-version]),
+        [giuseppe@scrivano.org])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -9,7 +11,7 @@ AC_CONFIG_SRCDIR([src/crun.c])
 AC_PROG_RANLIB
 LT_INIT([disable-shared])
 
-AM_INIT_AUTOMAKE([1.11 -Wno-portability foreign tar-ustar no-dist-gzip dist-xz subdir-objects])
+AM_INIT_AUTOMAKE([1.11.2 -Wno-portability foreign tar-ustar no-dist-gzip dist-xz subdir-objects])
 
 AM_MAINTAINER_MODE([enable])
 AM_SILENT_RULES([yes])
