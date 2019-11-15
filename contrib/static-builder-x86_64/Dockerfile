@@ -14,8 +14,8 @@ FROM base AS seccomp
 RUN mkdir /out && git clone --depth=1 https://github.com/seccomp/libseccomp.git; cd libseccomp; ./autogen.sh; ./configure --enable-static; make -j $(nproc); find . -name '*.a' -exec cp \{\} /out \;
 
 FROM base
-COPY --from=systemd /out/* /usr/lib64
-COPY --from=yajl /out/* /usr/lib64
-COPY --from=seccomp /out/* /usr/lib64
+COPY --from=systemd /out/* /usr/lib64/
+COPY --from=yajl /out/* /usr/lib64/
+COPY --from=seccomp /out/* /usr/lib64/
 COPY build.sh /usr/bin/build.sh
 CMD /usr/bin/build.sh
