@@ -958,7 +958,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
       if (def->mounts[i]->source && (flags & MS_BIND))
         {
-          is_dir = crun_dir_p (def->mounts[i]->source, true, err);
+          is_dir = crun_dir_p (def->mounts[i]->source, false, err);
           if (UNLIKELY (is_dir < 0))
             return is_dir;
 
