@@ -52,8 +52,8 @@ ifeq ($(_have-git-version-gen)0,yes$(MAKELEVEL))
   _is-install-target ?= $(filter-out %check, $(filter install%,$(MAKECMDGOALS)))
   ifneq (,$(_is-dist-target)$(_is-install-target))
     _curr-ver := $(shell cd $(srcdir)				\
-                   && $(_build-aux)/git-version-gen		\
-                         .tarball-version			\
+                   && $(_build-aux)/git-version-gen --prefix "" \
+                          .tarball-version		        \
                          $(git-version-gen-tag-sed-script))
     ifneq ($(_curr-ver),$(VERSION))
       ifeq ($(_curr-ver),UNKNOWN)
