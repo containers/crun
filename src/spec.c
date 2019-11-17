@@ -56,7 +56,6 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
   switch (key)
     {
     case OPTION_ROOTLESS:
-      /* Ignored.  */
       spec_options.rootless = true;
       break;
 
@@ -94,7 +93,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (f == NULL)
     return crun_make_error (err, 0, "cannot open config.json", err);
 
-  ret = libcrun_container_spec (geteuid (), f, err);
+  ret = libcrun_container_spec (!spec_options.rootless, f, err);
 
   return ret >= 0 ? 0 : ret;
 }
