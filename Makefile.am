@@ -112,7 +112,7 @@ dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 
 EXTRA_DIST += $(TESTS) tests/tests_utils.py build-aux/git-version-gen $(top_srcdir)/.version
-BUILT_SOURCES = $(top_srcdir)/.version
+BUILT_SOURCES = .version
 
 if HAVE_MD2MAN
 man1_MANS = crun.1
