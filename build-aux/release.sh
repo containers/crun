@@ -32,6 +32,7 @@ make distclean
 make -C contrib/static-builder-x86_64 build-image
 make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd)
 
+strip static-build/crun
 mv static-build/crun $OUTDIR/crun-$VERSION-static-x86_64
 
 if test x$SKIP_GPG = x; then
