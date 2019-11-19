@@ -730,7 +730,10 @@ container_init (void *args, const char *notify_socket, int sync_socket,
 
   execv (exec_path, def->process->args);
 
-  return crun_make_error (err, errno, "exec the container process");
+  if (errno == ENOENT)
+    return crun_make_error (err, errno, "exec container process (missing dynamic library?) `%s`", exec_path);
+
+  return crun_make_error (err, errno, "exec container process `%s`", exec_path);
 }
 
 static int
