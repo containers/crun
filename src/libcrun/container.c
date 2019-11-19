@@ -64,7 +64,10 @@ struct container_entrypoint_s
   libcrun_context_t *context;
   int has_terminal_socket_pair;
   int terminal_socketpair[2];
+
+  /* Used by log_write_to_sync_socket.  */
   int sync_socket;
+
   int seccomp_fd;
   int console_socket_fd;
 };
@@ -463,11 +466,12 @@ initialize_security (oci_container_process *proc, libcrun_error_t *err)
   return 0;
 }
 
-
+/* Initialize the environment where the container process runs.
+   It is used by the container init process.  */
 static int
-container_entrypoint_init (void *args, const char *notify_socket,
-                           int sync_socket, const char **exec_path,
-                           libcrun_error_t *err)
+container_init_setup (void *args, const char *notify_socket,
+                      int sync_socket, const char **exec_path,
+                      libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -641,8 +645,8 @@ container_entrypoint_init (void *args, const char *notify_socket,
 
 /* Entrypoint to the container.  */
 static int
-container_entrypoint (void *args, const char *notify_socket,
-                      int sync_socket, libcrun_error_t *err)
+container_init (void *args, const char *notify_socket, int sync_socket,
+                libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
@@ -652,7 +656,7 @@ container_entrypoint (void *args, const char *notify_socket,
 
   crun_set_output_handler (log_write_to_sync_socket, args, false);
 
-  ret = container_entrypoint_init (args, notify_socket, sync_socket, &exec_path, err);
+  ret = container_init_setup (args, notify_socket, sync_socket, &exec_path, err);
   if (UNLIKELY (ret < 0))
     {
       /* If it fails to write the error using the sync socket, then fallback
@@ -726,7 +730,10 @@ container_entrypoint (void *args, const char *notify_socket,
 
   execv (exec_path, def->process->args);
 
-  return crun_make_error (err, errno, "exec the container process");
+  if (errno == ENOENT)
+    return crun_make_error (err, errno, "exec container process (missing dynamic library?) `%s`", exec_path);
+
+  return crun_make_error (err, errno, "exec container process `%s`", exec_path);
 }
 
 static int
@@ -1404,7 +1411,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   pid = libcrun_run_linux_container (container, context->detach,
-                                     container_entrypoint, &container_args,
+                                     container_init, &container_args,
                                      &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
