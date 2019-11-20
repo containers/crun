@@ -1783,7 +1783,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
   if (memory->reservation)
     {
       len = sprintf (fmt_buf, "%lu", memory->reservation);
-      ret = write_file_at (dirfd, cgroup2 ? "memory.high" : "memory.soft_limit_in_bytes", fmt_buf, len, err);
+      ret = write_file_at (dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
