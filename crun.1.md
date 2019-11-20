@@ -324,7 +324,7 @@ they are converted when needed from the cgroup v1 configuration.
 |---|---|---|---|
 | limit | memory.max | y = x ||
 | swap | memory.swap_max | y = x ||
-| reservation | memory.high | y = x ||
+| reservation | memory.low | y = x ||
 
 ## PIDs controller
 
