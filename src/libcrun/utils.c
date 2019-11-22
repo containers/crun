@@ -322,7 +322,7 @@ get_file_size (int fd, off_t *size)
   ret = statx (fd, "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC, STATX_SIZE, &stx);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == ENOSYS)
+      if (errno == ENOSYS || errno == EINVAL)
         goto fallback;
       return ret;
     }
@@ -349,7 +349,7 @@ get_file_type (mode_t *mode, bool nofollow, const char *path)
   ret = statx (AT_FDCWD, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == ENOSYS)
+      if (errno == ENOSYS || errno == EINVAL)
         goto fallback;
 
       return ret;
@@ -1400,7 +1400,7 @@ int copy_rec_stat_file_at (int dfd, const char *path, mode_t *mode, off_t *size,
   ret = statx (dfd, path, AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC, STATX_TYPE | STATX_MODE | STATX_SIZE | STATX_UID | STATX_GID, &stx);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == ENOSYS)
+      if (errno == ENOSYS || errno == EINVAL)
         goto fallback;
 
       return ret;
