@@ -372,7 +372,7 @@ get_file_owner (const char *path, uid_t *uid, gid_t *gid)
   ret = statx (AT_FDCWD, path, AT_STATX_DONT_SYNC, STATX_UID|STATX_GID, &stx);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == ENOSYS)
+      if (errno == ENOSYS || errno == EINVAL)
         goto fallback;
 
       return ret;
