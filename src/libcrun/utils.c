@@ -359,12 +359,7 @@ get_file_type (mode_t *mode, bool nofollow, const char *path)
 
  fallback:
 #endif
-  if (nofollow)
-    ret = lstat (path, &st);
-  else
-    ret = stat (path, &st);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  ret = fstatat (AT_FDCWD, path, &st, nofollow ? AT_SYMLINK_NOFOLLOW : 0);
   *mode = st.st_mode;
   return ret;
 }
