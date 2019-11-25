@@ -207,12 +207,55 @@ detach_process ()
   return 0;
 }
 
+static int
+get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path)
+{
+  struct stat st;
+  int ret;
+
+#ifdef HAVE_STATX
+  struct statx stx;
+
+  ret = statx (dirfd, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == ENOSYS || errno == EINVAL)
+        goto fallback;
+
+      return ret;
+    }
+  *mode = stx.stx_mode;
+  return ret;
+
+ fallback:
+#endif
+  ret = fstatat (dirfd, path, &st, nofollow ? AT_SYMLINK_NOFOLLOW : 0);
+  *mode = st.st_mode;
+  return ret;
+}
+
+static int
+get_file_type (mode_t *mode, bool nofollow, const char *path)
+{
+  return get_file_type_at (AT_FDCWD, mode, nofollow, path);
+}
+
 int
 create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 {
   cleanup_close int fd_write = openat (dirfd, file, O_CREAT | O_WRONLY, 0700);
   if (fd_write < 0)
-    return crun_make_error (err, errno, "creating file '%s'", file);
+    {
+      mode_t mode;
+      int ret;
+
+      /* On errors, check if the file already exists.  */
+      ret = get_file_type_at (dirfd, &mode, false, file);
+      if (ret == 0 && S_ISREG (mode))
+        return 0;
+
+      return crun_make_error (err, errno, "creating file '%s'", file);
+    }
   return 0;
 }
 
@@ -221,7 +264,17 @@ create_file_if_missing (const char *file, libcrun_error_t *err)
 {
   cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
   if (fd_write < 0)
-    return crun_make_error (err, errno, "creating file '%s'", file);
+    {
+      mode_t mode;
+      int ret;
+
+      /* On errors, check if the file already exists.  */
+      ret = get_file_type (&mode, false, file);
+      if (ret == 0 && S_ISREG (mode))
+        return 0;
+
+      return crun_make_error (err, errno, "creating file '%s'", file);
+    }
   return 0;
 }
 
@@ -245,7 +298,14 @@ ensure_directory_internal (char *path, size_t len, int mode, libcrun_error_t *er
         }
 
       if (errno != ENOENT || parent_created)
-        return crun_make_error (err, errno, "creating file '%s'", path);
+        {
+          /* On errors check if the directory already exists.  */
+          ret = crun_dir_p (path, false, err);
+          if (ret > 0)
+            break;
+
+          return crun_make_error (err, errno, "creating file '%s'", path);
+        }
       else
         {
           while (it > path && *it != '/')
@@ -334,38 +394,6 @@ get_file_size (int fd, off_t *size)
 #endif
   ret = fstat (fd, &st);
   *size = st.st_size;
-  return ret;
-}
-
-static int
-get_file_type (mode_t *mode, bool nofollow, const char *path)
-{
-  struct stat st;
-  int ret;
-
-#ifdef HAVE_STATX
-  struct statx stx;
-
-  ret = statx (AT_FDCWD, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
-  if (UNLIKELY (ret < 0))
-    {
-      if (errno == ENOSYS || errno == EINVAL)
-        goto fallback;
-
-      return ret;
-    }
-  *mode = stx.stx_mode;
-  return ret;
-
- fallback:
-#endif
-  if (nofollow)
-    ret = lstat (path, &st);
-  else
-    ret = stat (path, &st);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  *mode = st.st_mode;
   return ret;
 }
 
