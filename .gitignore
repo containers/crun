@@ -15,6 +15,7 @@
 *.socket
 *.swp
 .version
+git-version.h
 *~
 .#*
 .color_coded
