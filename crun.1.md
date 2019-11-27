@@ -357,3 +357,9 @@ they are converted when needed from the cgroup v1 configuration.
 |---|---|---|---|
 | cpus | cpuset.cpus | y = x ||
 | mems | cpuset.mems | y = x ||
+
+## hugetlb controller
+
+| OCI (x) | cgroup 2 value (y) | conversion  |   comment |
+|---|---|---|---|
+| <PAGE_SIZE>.limit_in_bytes | hugetlb.<PAGE_SIZE>.max | y = x ||
