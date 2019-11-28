@@ -124,20 +124,30 @@ is_rwm (const char *str, libcrun_error_t *err)
 static int
 enable_controllers (oci_container_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
+  cleanup_free char *controllers = NULL;
   cleanup_free char *tmp_path = NULL;
+  bool has_hugetlb = false;
+  bool has_memory = false;
+  bool has_cpuset = false;
+  bool has_pids = false;
+  bool has_cpu = false;
+  bool has_io = false;
   char *it;
   int ret;
-  cleanup_free char *controllers = NULL;
-  bool has_cpuset, has_cpu, has_io, has_memory, has_pids, has_hugetlb;
 
-  has_cpu = resources && resources->cpu && (resources->cpu->shares || resources->cpu->period
-                                            || resources->cpu->quota || resources->cpu->realtime_period
-                                            || resources->cpu->realtime_runtime);
-  has_cpuset = resources && resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
-  has_io = resources && resources->block_io;
-  has_memory = resources && resources->memory;
-  has_pids = resources && resources->pids;
-  has_hugetlb = resources && resources->hugepage_limits_len;
+  if (resources)
+    {
+      has_cpu = resources->cpu && (resources->cpu->shares
+                                   || resources->cpu->period
+                                   || resources->cpu->quota
+                                   || resources->cpu->realtime_period
+                                   || resources->cpu->realtime_runtime);
+      has_cpuset = resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
+      has_io = resources->block_io;
+      has_memory = resources->memory;
+      has_pids = resources->pids;
+      has_hugetlb = resources->hugepage_limits_len;
+    }
 
   xasprintf (&controllers, "%s %s %s %s %s %s",
              has_cpu ? "+cpu" : "",
