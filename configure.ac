@@ -97,6 +97,10 @@ LIBS=""
 AC_SUBST([FOUND_LIBS])
 AC_SUBST([CRUN_LDFLAGS])
 
+[RPM_VERSION=$(echo $VERSION | sed -e's,^\([^-]*\).*$,\1,g')]
+
+AC_SUBST([RPM_VERSION])
+
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])

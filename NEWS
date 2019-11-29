@@ -1,0 +1,94 @@
+* FUTURE
+
+- cgroups2: map memory reservation to memory.low
+- statx fallbacks to stat on EINVAL
+- utils: do not fail if the path we are trying to create already
+  exists
+
+* crun-0.10.6
+
+- when running with a terminal, change the ownership for the terminal
+  to the specified user
+- spec: honor the --rootless flag
+- linux: make sure the source path is resolved when checking the file
+  type.  Regression introduced with 0.10.5.
+
+* crun-0.10.5
+
+- fix CVE-2019-18837
+- fix running on CentOS/RHEL 8
+- report errors opening the console socket
+- not leave config.json around if the container could not be created
+
+* crun-0.10.4
+
+- ignore errors creating /dev/console
+- add an annotation "io.crun.keep_original_groups", if it is set then
+  crun won't drop additional groups when creating the container
+
+* crun-0.10.3
+
+- systemd: set collectmode=inactive-or-failed
+- fix build on Alpine
+- use the current working directory to lookup local paths
+- improve the error message when a hook fails
+- add granular enable/disable configure options
+
+* crun-0.10.2
+
+- fix a regression in 0.10.1 where cgroups v1 could not be created
+- correctly chown cgroups when using a user namespace so that systemd
+  can run in a container that uses a user namespace
+
+* crun-0.10.1
+
+- linux: Keep MS_RDONLY when remounting bind mount of a read-only
+  source.  It solves an issue on Fedora Silverblue where /usr is
+  mounted read only.
+- fix exec of rootless containers when cgroups are not available
+
+* crun-0.10
+
+- support for AppArmor
+- fix for CVE-2019-16884, make sure writes to /proc for the SELinux
+  and AppArmor labels are on procfs.
+- exec supports --preserve-fds
+- seccomp: fix lookup for pseudo syscalls, seccomp now works fine on
+  non native archs
+- cgroup: ignore rootless errors if manager != systemd
+- error: always write errors to stderr
+- chroot: follow symlinks for the last component
+- set $HOME if it is not already defined
+
+* crun-0.9.1
+
+- fix an issue with tmpcopyup that didn't work correctly with symlinks
+- create a new cgroup namespace before mounting the cgroup file
+  system, so that it uses the correct namespace
+
+* crun-0.9
+
+- fix exec into containers running systemd on cgroups v2
+- kill: honor --all
+- kill: when not using a PID namespace, use the freezer controller to
+  prevent the container forking new processes
+- linux: handle tmpcopyup option to copy files from the rootfs to the
+  new mounted tmpfs.
+- OCI: honor seccomp options.  If not specified any seccomp option,
+  now crun will default to using SECCOMP_FILTER_FLAG_SPEC_ALLOW |
+  SECCOMP_FILTER_FLAG_LOG when using the seccomp(2)
+  syscall
+
+* crun-0.8
+
+- executable lookup. Now create fails immediately if the specified
+  executable doesn't exist
+- subreaper enabled only when crun is attached
+- fix notify socket when used from create and prevent it hanging
+  indefinitely when the container exits
+- correctly write cpu controller resources when using cgroups v2
+- support for the freezer controller when using cgroups v2
+- honor unspecified minor/major number for devices when using cgroups v2
+- reintroduce --no-pivot
+- do not add a cgroup path again if it was already specified in the
+  OCI configuration

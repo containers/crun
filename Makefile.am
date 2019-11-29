@@ -4,15 +4,15 @@ ACLOCAL_AMFLAGS = -I m4
 
 WD := $(shell pwd)
 
-rpm: dist-gzip crun.spec
+rpm: dist-gzip rpm/crun.spec
 	echo $(VERSION)
-	$(MAKE) -C $(WD) dist-xz
-	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" crun.spec
+	$(MAKE) -C $(WD) dist-gzip
+	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
-srpm: dist-gzip crun.spec
+srpm: dist-gzip rpm/crun.spec
 	echo $(VERSION)
-	$(MAKE) -C $(WD) dist-xz
-	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" crun.spec
+	$(MAKE) -C $(WD) dist-gzip
+	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
 oci-runtime-validation:
 	RUNTIME=$(CURDIR)/crun tests/oci-runtime-validation
@@ -52,7 +52,7 @@ crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpa
 crun_LDADD = libcrun.la $(FOUND_LIBS)
 crun_LDFLAGS = $(CRUN_LDFLAGS)
 
-EXTRA_DIST = COPYING COPYING.libcrun README.md rpm/crun.spec.in autogen.sh \
+EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS rpm/crun.spec.in autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h src/update.h src/ps.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/ebpf.h src/libcrun/cgroup.h \
