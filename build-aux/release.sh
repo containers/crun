@@ -12,6 +12,8 @@ make -j $(nproc)
 
 VERSION=$($(dirname $0)/git-version-gen --prefix "" .)
 
+grep $VERSION NEWS
+
 OUTDIR=release-$VERSION
 
 SKIP_GPG=${SKIP_GPG:-}
