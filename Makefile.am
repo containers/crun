@@ -4,15 +4,15 @@ ACLOCAL_AMFLAGS = -I m4
 
 WD := $(shell pwd)
 
-rpm: dist-gzip crun.spec
+rpm: dist-gzip rpm/crun.spec
 	echo $(VERSION)
 	$(MAKE) -C $(WD) dist-xz
-	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" crun.spec
+	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
-srpm: dist-gzip crun.spec
+srpm: dist-gzip rpm/crun.spec
 	echo $(VERSION)
 	$(MAKE) -C $(WD) dist-xz
-	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" crun.spec
+	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
 oci-runtime-validation:
 	RUNTIME=$(CURDIR)/crun tests/oci-runtime-validation
