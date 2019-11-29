@@ -1,8 +1,8 @@
 Summary: OCI runtime written in C
 Name: crun
-Version: @VERSION@
+Version: @RPM_VERSION@
 Release: 1%{?dist}
-Source0: https://github.com/containers/crun/releases/download/%{version}/%{name}-%{version}.tar.gz
+Source0: https://github.com/containers/crun/releases/download/%{version}/%{name}-@VERSION@.tar.gz
 License: GPLv3+
 URL: https://github.com/containers/crun
 
@@ -24,7 +24,7 @@ BuildRequires: go-md2man
 crun is a OCI runtime
 
 %prep
-%autosetup -n %{name}-%{version}
+%autosetup -n %{name}-@VERSION@
 
 %build
 ./autogen.sh

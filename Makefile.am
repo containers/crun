@@ -6,12 +6,12 @@ WD := $(shell pwd)
 
 rpm: dist-gzip rpm/crun.spec
 	echo $(VERSION)
-	$(MAKE) -C $(WD) dist-xz
+	$(MAKE) -C $(WD) dist-gzip
 	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
 srpm: dist-gzip rpm/crun.spec
 	echo $(VERSION)
-	$(MAKE) -C $(WD) dist-xz
+	$(MAKE) -C $(WD) dist-gzip
 	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
 oci-runtime-validation:
