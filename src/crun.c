@@ -17,6 +17,7 @@
  */
 
 #include <config.h>
+#include <git-version.h>
 #include <stdlib.h>
 #include <argp.h>
 #include <string.h>
@@ -171,6 +172,7 @@ static void
 print_version (FILE *stream, struct argp_state *state arg_unused)
 {
   fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
+  fprintf (stream, "commit: %s\n", GIT_VERSION);
   fprintf (stream, "spec: 1.0.0\n");
 #ifdef HAVE_SYSTEMD
   fprintf (stream, "+SYSTEMD ");
