@@ -44,6 +44,26 @@ containers, the containers run `/bin/true`:
 | 100 /bin/true (no network namespace)  | 0:05.70        | 0:10.95 | -47.9% |
 | 100 /bin/true (new network namespace) | 0:06.16        | 0:11.17 | -44.8%  |
 
+crun requires fewer resources, so it is also possible to set stricter
+limits on the memory and number of PIDs allowed in the container:
+
+```
+# podman --runtime /usr/bin/runc run --rm --pids-limit 1 fedora echo it works
+Error: container_linux.go:346: starting container process caused "process_linux.go:319: getting the final child's pid from pipe caused \"EOF\"": OCI runtime error
+
+# podman --runtime /usr/bin/crun run --rm --pids-limit 1 fedora echo it works
+it works
+
+# podman --runtime /usr/bin/runc run --rm --memory 4M fedora echo it works
+Error: container_linux.go:346: starting container process caused "process_linux.go:327: getting pipe fds for pid 13859 caused \"readlink /proc/13859/fd/0: no such file or directory\"": OCI runtime command not found error
+
+# podman --runtime /usr/bin/crun run --rm --memory 4M fedora echo it works
+it works
+```
+
+crun could go much lower than that, and require < 1M.  The used 4MB is
+a hard limit set directly in Podman before calling the OCI runtime.
+
 ## Build
 
 On Fedora these dependencies are required for the build:
