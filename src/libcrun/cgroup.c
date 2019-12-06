@@ -1182,9 +1182,15 @@ libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
 
   ret = libcrun_cgroup_read_pids (path, &pids, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      if (crun_error_get_errno (err) != ENOENT)
+        return ret;
 
-  for (i = 0; pids[i]; i++)
+      /* If the file doesn't exist then the container was already killed.  */
+      crun_error_release (err);
+    }
+
+  for (i = 0; pids && pids[i]; i++)
     {
       ret = kill (pids[i], signal);
       if (UNLIKELY (ret < 0))
