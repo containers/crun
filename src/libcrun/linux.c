@@ -1408,7 +1408,7 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
       const char *annotation;
 
       /* Skip setgroups if the annotation is set to anything different than "0".  */
-      annotation = find_annotation (container, "io.crun.keep_original_groups");
+      annotation = find_annotation (container, "run.oci.keep_original_groups");
       if (annotation)
         return strcmp (annotation, "0") == 0 ? 1 : 0;
     }
