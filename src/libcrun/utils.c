@@ -1119,15 +1119,27 @@ run_process_with_stdin_timeout_envp (char *path,
       r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
       if (r < 0)
         return crun_make_error (err, errno, "waitpid");
-      if (WIFEXITED (status) || WIFSIGNALED (status))
+      if (WIFEXITED (status))
         return WEXITSTATUS (status);
+      if (WIFSIGNALED (status))
+        return 127 + WTERMSIG (status);
     }
   else
     {
       char *tmp_args[] = {path, NULL};
+      int out = open ("/dev/null", O_WRONLY);
+
+      if (UNLIKELY (out < 0))
+        _exit (EXIT_FAILURE);
+
       close (pipe_w);
       dup2 (pipe_r, 0);
       close (pipe_r);
+
+      dup2 (out, 1);
+      dup2 (out, 2);
+      close (out);
+
       if (args == NULL)
         args = tmp_args;
 
