@@ -288,9 +288,9 @@ Path to the file containing the resources to update.
 
 # Extensions to OCI
 
-## io.crun.keep_original_groups=1
+## run.oci.keep_original_groups=1
 
-If the annotation `io.crun.keep_original_groups` is present, then crun
+If the annotation `run.oci.keep_original_groups` is present, then crun
 will skip the `setgroups` syscall that is used to either set the
 additional groups specified in the OCI configuration, or to reset the
 list of additional groups if none is specified.
