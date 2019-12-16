@@ -16,6 +16,8 @@ matrix:
     - arch: amd64
       env: TEST=make-amd64-nosystemd
     - arch: amd64
+      env: TEST=make-check-amd64
+    - arch: amd64
       env: TEST=podman
     - arch: amd64
       env: TEST=containerd
@@ -46,7 +48,7 @@ services:
 - docker
 language: c
 sudo: required
-dist: xenial
+dist: bionic
 addons:
   apt:
     packages:
@@ -74,6 +76,7 @@ before_install:
 script:
 - if test $TEST = make-arm64 || test $TEST = make-amd64 || test $TEST = make-ppc64le || test $TEST = make-s390x; then ./autogen.sh && ./configure CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi
 - if test $TEST = make-amd64-nosystemd; then ./autogen.sh && ./configure --disable-systemd CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi
+- if test $TEST = make-check-amd64; then ./autogen.sh && ./configure CFLAGS='-Wall -Werror' && make -j $(nproc) && make check; fi
 - if test $TEST = podman; then sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-podman; fi
 - if test $TEST = containerd; then sudo mkdir -p /var/lib/var-containerd; sudo docker run --privileged --net host --rm -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave -v $(pwd):/crun crun-containerd; fi
 - if test $TEST = oci-validation; then sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi
