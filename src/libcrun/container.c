@@ -728,6 +728,9 @@ container_init (void *args, const char *notify_socket, int sync_socket,
   if (UNLIKELY (exec_path == NULL))
     return crun_make_error (err, errno, "executable path not specified");
 
+  if (def->process->user)
+    umask (def->process->user->umask);
+
   execv (exec_path, def->process->args);
 
   if (errno == ENOENT)
@@ -2158,6 +2161,9 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
           if (UNLIKELY (ret < 0))
             return ret;
         }
+
+      if (process->user)
+        umask (process->user->umask);
 
       TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
       close (pipefd1);
