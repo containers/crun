@@ -44,6 +44,7 @@
 #include <sys/wait.h>
 #include <sys/vfs.h>
 #include <limits.h>
+#include <inttypes.h>
 
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
@@ -1440,6 +1441,8 @@ libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error
 int
 libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
+#define MAPPING_FMT_SIZE ("%" PRIu32 " %" PRIu32 " %" PRIu32 "\n")
+#define MAPPING_FMT_1 ("%" PRIu32 " %" PRIu32 " 1\n")
   cleanup_free char *uid_map_file = NULL;
   cleanup_free char *gid_map_file = NULL;
   cleanup_free char *uid_map = NULL;
@@ -1457,9 +1460,9 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
       if (uid_map == NULL)
         {
           if (container->host_uid)
-            uid_map_len = xasprintf (&uid_map, "%d %d 1", 0, container->host_uid);
+            uid_map_len = xasprintf (&uid_map, MAPPING_FMT_1, 0, container->host_uid);
           else
-            uid_map_len = xasprintf (&uid_map, "%d %d %d", 0, container->host_uid, container->container_uid + 1);
+            uid_map_len = xasprintf (&uid_map, MAPPING_FMT_SIZE, 0, container->host_uid, container->container_uid + 1);
         }
     }
   else
@@ -1471,7 +1474,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
         {
           size_t len;
 
-          len = sprintf (buffer, "%d %d %d\n",
+          len = sprintf (buffer, MAPPING_FMT_SIZE,
                          def->linux->uid_mappings[s]->container_id,
                          def->linux->uid_mappings[s]->host_id,
                          def->linux->uid_mappings[s]->size);
@@ -1488,9 +1491,9 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
       if (gid_map == NULL)
         {
           if (container->host_gid)
-            gid_map_len = xasprintf (&gid_map, "%d %d 1", container->container_gid, container->host_gid);
+            gid_map_len = xasprintf (&gid_map, MAPPING_FMT_1, container->container_gid, container->host_gid);
           else
-            gid_map_len = xasprintf (&gid_map, "%d %d %d", 0, container->host_gid, container->container_gid + 1);
+            gid_map_len = xasprintf (&gid_map, MAPPING_FMT_SIZE, 0, container->host_gid, container->container_gid + 1);
         }
     }
   else
@@ -1502,7 +1505,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
         {
           size_t len;
 
-          len = sprintf (buffer, "%d %d %d\n",
+          len = sprintf (buffer, MAPPING_FMT_SIZE,
                          def->linux->gid_mappings[s]->container_id,
                          def->linux->gid_mappings[s]->host_id,
                          def->linux->gid_mappings[s]->size);
@@ -1531,7 +1534,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           if (UNLIKELY (ret < 0))
             return ret;
 
-          single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_gid, container->host_gid);
+          single_mapping_len = sprintf (single_mapping, MAPPING_FMT_1, container->container_gid, container->host_gid);
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
         }
     }
@@ -1559,13 +1562,16 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
                 return ret;
             }
 
-          single_mapping_len = sprintf (single_mapping, "%d %d 1", container->container_uid, container->host_uid);
+          single_mapping_len = sprintf (single_mapping, MAPPING_FMT_1, container->container_uid, container->host_uid);
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
     }
   if (UNLIKELY (ret < 0))
     return ret;
   return 0;
+
+#undef MAPPING_FMT_SIZE
+#undef MAPPING_FMT_1
 }
 
 #define CAP_TO_MASK_0(x) (1L << ((x) & 31))

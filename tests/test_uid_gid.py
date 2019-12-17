@@ -23,6 +23,34 @@ import shutil
 import sys
 from tests_utils import *
 
+def test_userns_full_mapping():
+    if os.getuid() != 0:
+        return 77
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    fullMapping = [
+        {
+            "containerID": 0,
+            "hostID": 0,
+            "size": 4294967295
+        }
+    ]
+
+    conf['linux']['uidMappings'] = fullMapping
+    conf['linux']['gidMappings'] = fullMapping
+
+    for filename in ['uid_map', 'gid_map']:
+        conf['process']['args'] = ['/init', 'cat', '/proc/self/%s' % filename]
+        out, _ = run_and_get_output(conf)
+        proc_status = parse_proc_status(out)
+
+        if "4294967295" not in out:
+            return -1
+
+    return 0
+
+
 def test_uid():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
@@ -54,6 +82,7 @@ def test_gid():
 all_tests = {
     "uid" : test_uid,
     "gid" : test_gid,
+    "userns-full-mapping" : test_userns_full_mapping,
 }
 
 if __name__ == "__main__":
