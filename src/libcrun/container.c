@@ -2084,6 +2084,19 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
             libcrun_warning ("cannot set HOME environment variable");
         }
 
+      /* If the new process block doesn't specify a SELinux label or AppArmor profile, then
+         use the configuration from the original config file.  */
+      if (container->container_def->process)
+        {
+          if (process->selinux_label == NULL && container->container_def->process->selinux_label)
+            process->selinux_label = container->container_def->process->selinux_label;
+        }
+      if (container->container_def->process)
+        {
+          if (process->apparmor_profile == NULL && container->container_def->process->apparmor_profile)
+            process->apparmor_profile = container->container_def->process->apparmor_profile;
+        }
+
       if (UNLIKELY (libcrun_set_selinux_exec_label (process, err) < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
