@@ -25,6 +25,7 @@
 # include "error.h"
 # include <dirent.h>
 # include <oci_runtime_spec.h>
+# include "container.h"
 
 # ifndef TEMP_FAILURE_RETRY
 #  define TEMP_FAILURE_RETRY(expression)                                \
@@ -138,5 +139,8 @@ int libcrun_initialize_apparmor (libcrun_error_t *err);
 #if !HAVE_SECURE_GETENV
 char *secure_getenv (char const *name);
 #endif
+
+const char *find_annotation (libcrun_container_t *container, const char *name);
+
 
 #endif

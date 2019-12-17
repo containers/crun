@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+#include "seccomp.h"
 #include "linux.h"
 #include "utils.h"
 #include <string.h>
@@ -169,7 +170,7 @@ libcrun_apply_seccomp (int infd, char **seccomp_flags, size_t seccomp_flags_len,
 }
 
 int
-libcrun_generate_seccomp (libcrun_container_t *container, int outfd, libcrun_error_t *err)
+libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;
@@ -233,7 +234,13 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, libcrun_err
           int syscall = seccomp_syscall_resolve_name (seccomp->syscalls[i]->names[j]);
 
           if (UNLIKELY (syscall == __NR_SCMP_ERROR))
-            return crun_make_error (err, 0, "invalid seccomp syscall '%s'", seccomp->syscalls[i]->names[j]);
+            {
+              if (options & LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL)
+                return crun_make_error (err, 0, "invalid seccomp syscall '%s'", seccomp->syscalls[i]->names[j]);
+
+              libcrun_warning ("unknown seccomp syscall '%s' ignored", seccomp->syscalls[i]->names[j]);
+              continue;
+            }
 
           if (seccomp->syscalls[i]->args == NULL)
             {

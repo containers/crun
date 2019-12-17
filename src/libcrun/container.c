@@ -1461,7 +1461,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (seccomp_fd >= 0)
     {
-      ret = libcrun_generate_seccomp (container, seccomp_fd, err);
+       unsigned int seccomp_gen_options = 0;
+       const char *annotation;
+
+       annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
+       if (annotation && strcmp (annotation, "0") != 0)
+         seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
+
+       ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
       if (UNLIKELY (ret < 0))
         {
           cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
@@ -1469,7 +1476,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         }
       close_and_reset (&seccomp_fd);
     }
-
 
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))

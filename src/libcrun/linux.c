@@ -1378,23 +1378,6 @@ deny_setgroups (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
   return ret;
 }
 
-static const char *
-find_annotation (libcrun_container_t *container, const char *name)
-{
-  size_t i;
-
-  if (container->container_def->annotations == NULL)
-    return NULL;
-
-  for (i = 0; i < container->container_def->annotations->len; i++)
-    {
-      if (strcmp (container->container_def->annotations->keys[i], name) == 0)
-        return container->container_def->annotations->values[i];
-    }
-
-  return NULL;
-}
-
 static int
 can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 {

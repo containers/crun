@@ -288,7 +288,12 @@ Path to the file containing the resources to update.
 
 # Extensions to OCI
 
-## run.oci.keep_original_groups=1
+## `run.oci.seccomp_fail_unknown_syscall=1`
+
+If the annotation `run.oci.seccomp_fail_unknown_syscall` is present, then crun
+will fail when an unknown syscall is encountered in the seccomp configuration.
+
+## `run.oci.keep_original_groups=1`
 
 If the annotation `run.oci.keep_original_groups` is present, then crun
 will skip the `setgroups` syscall that is used to either set the
