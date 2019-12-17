@@ -124,26 +124,38 @@ is_rwm (const char *str, libcrun_error_t *err)
 static int
 enable_controllers (oci_container_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
+  cleanup_free char *controllers = NULL;
   cleanup_free char *tmp_path = NULL;
+  bool has_hugetlb = false;
+  bool has_memory = false;
+  bool has_cpuset = false;
+  bool has_pids = false;
+  bool has_cpu = false;
+  bool has_io = false;
   char *it;
   int ret;
-  cleanup_free char *controllers = NULL;
-  bool has_cpuset, has_cpu, has_io, has_memory, has_pids;
 
-  has_cpu = resources && resources->cpu && (resources->cpu->shares || resources->cpu->period
-                                            || resources->cpu->quota || resources->cpu->realtime_period
-                                            || resources->cpu->realtime_runtime);
-  has_cpuset = resources && resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
-  has_io = resources && resources->block_io;
-  has_memory = resources && resources->memory;
-  has_pids = resources && resources->pids;
+  if (resources)
+    {
+      has_cpu = resources->cpu && (resources->cpu->shares
+                                   || resources->cpu->period
+                                   || resources->cpu->quota
+                                   || resources->cpu->realtime_period
+                                   || resources->cpu->realtime_runtime);
+      has_cpuset = resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
+      has_io = resources->block_io;
+      has_memory = resources->memory;
+      has_pids = resources->pids;
+      has_hugetlb = resources->hugepage_limits_len;
+    }
 
-  xasprintf (&controllers, "%s %s %s %s %s",
+  xasprintf (&controllers, "%s %s %s %s %s %s",
              has_cpu ? "+cpu" : "",
              has_io ? "+io" : "",
              has_memory ? "+memory" : "",
              has_pids ? "+pids" : "",
-             has_cpuset ? "+cpuset" : "");
+             has_cpuset ? "+cpuset" : "",
+             has_hugetlb ? "+hugetlb" : "");
 
   xasprintf (&tmp_path, "%s/", path);
 
@@ -1546,17 +1558,20 @@ write_network_resources (int dirfd, oci_container_linux_resources_network *net, 
 }
 
 static int
-write_hugetlb_resources (int dirfd, oci_container_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
+write_hugetlb_resources (int dirfd, bool cgroup2, oci_container_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
   for (i = 0; i < htlb_len; i++)
     {
       cleanup_free char *filename = NULL;
+      const char *suffix;
       size_t len;
       int ret;
 
-      xasprintf (&filename, "hugetlb.%s.limit_in_bytes", htlb[i]->page_size);
+      suffix = cgroup2 ? "max" : "limit_in_bytes";
+
+      xasprintf (&filename, "hugetlb.%s.%s", htlb[i]->page_size, suffix);
 
       len = sprintf (fmt_buf, "%lu", htlb[i]->limit);
       ret = write_file_at (dirfd, filename, fmt_buf, len, err);
@@ -1994,7 +2009,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
       if (UNLIKELY (dirfd_htlb < 0))
         return crun_make_error (err, errno, "open %s", path_to_htlb);
 
-      ret = write_hugetlb_resources (dirfd_htlb,
+      ret = write_hugetlb_resources (dirfd_htlb, false,
                                      resources->hugepage_limits,
                                      resources->hugepage_limits_len,
                                      err);
@@ -2097,8 +2112,6 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
 
   if (resources->network)
     return crun_make_error (err, 0, "network limits not supported on cgroupv2");
-  if (resources->hugepage_limits_len)
-    return crun_make_error (err, 0, "hugepages not supported on cgroupv2");
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup%s", path);
 
@@ -2149,6 +2162,16 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
   if (resources->block_io)
     {
       ret = write_blkio_resources (cgroup_dirfd, true, resources->block_io, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (resources->hugepage_limits_len)
+    {
+      ret = write_hugetlb_resources (cgroup_dirfd, true,
+                                     resources->hugepage_limits,
+                                     resources->hugepage_limits_len,
+                                     err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
