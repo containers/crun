@@ -130,5 +130,5 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
 
-  return libcrun_container_create (&crun_context, container, err);
+  return libcrun_container_create (&crun_context, container, 0, err);
 }

@@ -192,7 +192,7 @@ container_create (PyObject *self, PyObject *args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS;
-  ret = libcrun_container_create (ctx, ctr, &err);
+  ret = libcrun_container_create (ctx, ctr, LIBCRUN_RUN_OPTIONS_PREFORK, &err);
   Py_END_ALLOW_THREADS;
   if (ret < 0)
     return set_error (&err);

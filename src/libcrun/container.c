@@ -1694,7 +1694,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 }
 
 int
-libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, libcrun_error_t *err)
+libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err)
 {
   oci_container *def = container->container_def;
   int ret;
@@ -1723,6 +1723,17 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   exec_fifo_fd = libcrun_status_create_exec_fifo (context->state_root, context->id, err);
   if (UNLIKELY (exec_fifo_fd < 0))
     return exec_fifo_fd;
+
+  context->fifo_exec_wait_fd = exec_fifo_fd;
+  exec_fifo_fd = -1;
+
+  if ((options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
+    {
+      ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      return libcrun_container_run_internal (container, context, -1, err);
+    }
 
   ret = pipe (container_ready_pipe);
   if (UNLIKELY (ret < 0))
@@ -1755,9 +1766,6 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
         }
       return 1;
     }
-
-  context->fifo_exec_wait_fd = exec_fifo_fd;
-  exec_fifo_fd = -1;
 
   /* forked process.  */
   ret = detach_process ();
