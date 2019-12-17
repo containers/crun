@@ -646,15 +646,20 @@ int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode,
       subpath = strchr (subsystem, ':') + 1;
       *(subpath - 1) = '\0';
 
-      /* skip named hierarchies that have no cgroup controller */
-      if (strchr (subsystem, '=') == 0)
-        continue;
-
       if (strcmp (subpath, *path))
         {
           ret = enter_cgroup_subsystem (pid, subsystem, *path, 1, err);
           if (UNLIKELY (ret < 0))
-            return ret;
+            {
+              /* If it is a named hierarchy, skip the error.  */
+              /* skip named hierarchies that have no cgroup controller */
+              if (strchr (subsystem, '='))
+                {
+                  crun_error_release (err);
+                  continue;
+                }
+              return ret;
+            }
         }
     }
 
