@@ -621,7 +621,7 @@ container_init_setup (void *args, const char *notify_socket,
           seccomp_flags_len = def->linux->seccomp->flags_len;
         }
 
-      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
+      ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -717,7 +717,7 @@ container_init (void *args, const char *notify_socket, int sync_socket,
           seccomp_flags_len = def->linux->seccomp->flags_len;
         }
 
-      ret = libcrun_generate_and_load_seccomp (entrypoint_args->container, entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
+      ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1424,9 +1424,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         return ret;
     }
 
-  if (seccomp_fd >= 0)
-    close_and_reset (&seccomp_fd);
-
   if (container_args.terminal_socketpair[1] >= 0)
     close_and_reset (&socket_pair_1);
 
@@ -1461,6 +1458,18 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
           return ret;
         }
     }
+
+  if (seccomp_fd >= 0)
+    {
+      ret = libcrun_generate_seccomp (container, seccomp_fd, err);
+      if (UNLIKELY (ret < 0))
+        {
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+          return ret;
+        }
+      close_and_reset (&seccomp_fd);
+    }
+
 
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))

@@ -125,6 +125,9 @@ libcrun_apply_seccomp (int infd, char **seccomp_flags, size_t seccomp_flags_len,
   if (infd < 0)
     return 0;
 
+  if (UNLIKELY (lseek (infd, 0, SEEK_SET) == (off_t) -1))
+    return crun_make_error (err, 0, "lseek");
+
 
   /* if no seccomp flag was specified use a sane default.  */
   if (seccomp_flags == NULL)
@@ -166,7 +169,7 @@ libcrun_apply_seccomp (int infd, char **seccomp_flags, size_t seccomp_flags_len,
 }
 
 int
-libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, char **flags, size_t flags_len, libcrun_error_t *err)
+libcrun_generate_seccomp (libcrun_container_t *container, int outfd, libcrun_error_t *err)
 {
   oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;
@@ -271,8 +274,5 @@ libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, ch
         return crun_make_error (err, 0, "seccomp_export_bpf");
     }
 
-  if (UNLIKELY (lseek (outfd, 0, SEEK_SET) == (off_t) -1))
-    return crun_make_error (err, 0, "lseek");
-
-  return libcrun_apply_seccomp (outfd, flags, flags_len, err);
+  return 0;
 }

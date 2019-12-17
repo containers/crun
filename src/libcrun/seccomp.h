@@ -26,7 +26,7 @@
 # include <oci_runtime_spec.h>
 # include "container.h"
 
-int libcrun_generate_and_load_seccomp (libcrun_container_t *container, int outfd, char **flags, size_t flags_len, libcrun_error_t *err);
+int libcrun_generate_seccomp (libcrun_container_t *container, int outfd, libcrun_error_t *err);
 int libcrun_apply_seccomp (int infd, char **flags, size_t flags_len, libcrun_error_t *err);
 
 #endif
