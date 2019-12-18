@@ -84,7 +84,7 @@ int libcrun_container_kill (libcrun_context_t *context, const char *id, int sign
 
 int libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
 
-int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err);
 
 int libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
