@@ -114,7 +114,7 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
   if (status.cgroup_path == NULL || status.cgroup_path[0] == '\0')
     error (EXIT_FAILURE, 0, "the container is not using cgroups");
 
-  ret = libcrun_cgroup_read_pids (status.cgroup_path, &pids, err);
+  ret = libcrun_cgroup_read_pids (status.cgroup_path, true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       crun_error_write_warning_and_release (stderr, &err);
