@@ -45,6 +45,7 @@
 #include <sys/vfs.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <sys/personality.h>
 
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
@@ -2544,6 +2545,26 @@ int
 libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err)
 {
   return libcrun_container_pause_unpause_linux (status, false, err);
+}
+
+int
+libcrun_set_personality (oci_container_linux_personality *p, libcrun_error_t *err)
+{
+  unsigned long persona = 0;
+  int ret;
+
+  if (strcmp (p->domain, "LINUX") == 0)
+      persona = PER_LINUX;
+  else if (strcmp (p->domain, "LINUX32") == 0)
+      persona = PER_LINUX32;
+  else
+    return crun_make_error (err, 0, "unknown persona specified '%s'", p->domain);
+
+  ret = personality (persona);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "set personality to '%s'", p->domain);
+
+  return 0;
 }
 
 /* Protection for attacks like CVE-2019-5736.  */

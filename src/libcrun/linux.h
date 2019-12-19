@@ -55,5 +55,6 @@ int libcrun_create_keyring (const char *name, libcrun_error_t *err);
 int libcrun_container_pause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_set_personality (oci_container_linux_personality *p, libcrun_error_t *err);
 
 #endif

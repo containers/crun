@@ -610,6 +610,13 @@ container_init_setup (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (container->container_def->linux && container->container_def->linux->personality)
+    {
+      ret = libcrun_set_personality (container->container_def->linux->personality, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (def->process && !def->process->no_new_privileges)
     {
       char **seccomp_flags = NULL;
@@ -2121,6 +2128,13 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
             crun_make_error (err, errno, "open executable");
 
           libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
+
+      if (container->container_def->linux && container->container_def->linux->personality)
+        {
+          ret = libcrun_set_personality (container->container_def->linux->personality, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
         }
 
       if (!process->no_new_privileges)
