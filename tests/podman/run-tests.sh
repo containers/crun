@@ -13,6 +13,8 @@ export OCI_RUNTIME=/crun/crun
 export CGROUP_MANAGER=cgroupfs
 export STORAGE_OPTIONS="--storage-driver=vfs"
 
+export GO111MODULE=off
+
 ulimit -u unlimited
 export TMPDIR=/var/tmp
 
