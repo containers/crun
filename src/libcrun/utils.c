@@ -1618,3 +1618,20 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
 
   return 0;
 }
+
+const char *
+find_annotation (libcrun_container_t *container, const char *name)
+{
+  size_t i;
+
+  if (container->container_def->annotations == NULL)
+    return NULL;
+
+  for (i = 0; i < container->container_def->annotations->len; i++)
+    {
+      if (strcmp (container->container_def->annotations->keys[i], name) == 0)
+        return container->container_def->annotations->values[i];
+    }
+
+  return NULL;
+}
