@@ -1130,16 +1130,84 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
   return libcrun_cgroup_pause_unpause_with_mode (cgroup_path, cgroup_mode, pause, err);
 }
 
-int
-libcrun_cgroup_read_pids (const char *path, pid_t **pids, libcrun_error_t *err)
+static
+int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
-  cleanup_free char *cgroup_path_procs = NULL;
+  cleanup_close int clean_dfd = dfd;
+  cleanup_close int tasksfd = -1;
   cleanup_free char *buffer = NULL;
-  int ret;
-  size_t len;
-  size_t n_pids;
-  char *it;
   char *saveptr = NULL;
+  size_t n_new_pids;
+  size_t len;
+  char *it;
+  int ret;
+
+  tasksfd = openat (dfd, "cgroup.procs", O_RDONLY|O_CLOEXEC);
+  if (tasksfd < 0)
+    return crun_make_error (err, errno, "open cgroup.procs");
+
+  ret = read_all_fd (tasksfd, "cgroup.procs", &buffer, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (n_new_pids = 0, it = buffer; it; it = strchr (it + 1, '\n'))
+    n_new_pids++;
+
+  if (*allocated < *n_pids + n_new_pids + 1)
+    {
+      *allocated = *n_pids + n_new_pids + 1;
+      *pids = xrealloc (*pids, sizeof (pid_t) * *allocated);
+    }
+
+  for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
+    {
+      pid_t pid = strtoul (it, NULL, 10);
+
+      if (pid > 0)
+        (*pids)[(*n_pids)++] = pid;
+    }
+  (*pids)[*n_pids] = 0;
+
+  if (recurse)
+    {
+      cleanup_dir DIR *dir = NULL;
+      struct dirent *de;
+
+      dir = fdopendir (dfd);
+      if (UNLIKELY (dir == NULL))
+          return crun_make_error (err, errno, "open cgroup sub-directory");
+      /* Now dir owns the dfd descriptor.  */
+      clean_dfd = -1;
+
+      for (de = readdir (dir); de; de = readdir (dir))
+        {
+          int nfd;
+
+          if (strcmp (de->d_name, ".") == 0 ||
+              strcmp (de->d_name, "..") == 0)
+            continue;
+
+          if (de->d_type != DT_DIR)
+            continue;
+
+          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC);
+          if (UNLIKELY (dir == NULL))
+            return crun_make_error (err, errno, "open cgroup directory %s", de->d_name);
+          ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+  return 0;
+}
+
+int
+libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *buffer = NULL;
+  size_t n_pids, allocated;
+  int dirfd;
   int mode;
 
   if (path == NULL || *path == '\0')
@@ -1152,35 +1220,26 @@ libcrun_cgroup_read_pids (const char *path, pid_t **pids, libcrun_error_t *err)
   switch (mode)
     {
     case CGROUP_MODE_UNIFIED:
-      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/cgroup.procs", path);
-      ret = read_all_file (cgroup_path_procs, &buffer, &len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
       break;
 
     case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
-      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/pids/%s/cgroup.procs", path);
-      ret = read_all_file (cgroup_path_procs, &buffer, &len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/pids/%s", path);
       break;
+
+    default:
+      return crun_make_error (err, errno, "invalid cgroup mode %d", mode);
     }
 
-  for (n_pids = 0, it = buffer; it; it = strchr (it + 1, '\n'))
-    n_pids++;
+  dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+  if (dirfd < 0)
+    return crun_make_error (err, errno, "open %s", cgroup_path);
 
-  *pids = xmalloc (sizeof (pid_t) * (n_pids + 1));
+  n_pids = 0;
+  allocated = 0;
 
-  for (n_pids = 0, it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
-    {
-      pid_t pid = strtoul (it, NULL, 10);
-      if (pid > 0)
-        (*pids)[n_pids++] = pid;
-    }
-  (*pids)[n_pids] = 0;
-
-  return 0;
+  return read_pids_cgroup (dirfd, recurse, pids, &n_pids, &allocated, err);
 }
 
 int
@@ -1197,7 +1256,7 @@ libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
-  ret = libcrun_cgroup_read_pids (path, &pids, err);
+  ret = libcrun_cgroup_read_pids (path, true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) != ENOENT)

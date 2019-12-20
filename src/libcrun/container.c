@@ -2108,9 +2108,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
         {
           if (process->selinux_label == NULL && container->container_def->process->selinux_label)
             process->selinux_label = container->container_def->process->selinux_label;
-        }
-      if (container->container_def->process)
-        {
+
           if (process->apparmor_profile == NULL && container->container_def->process->apparmor_profile)
             process->apparmor_profile = container->container_def->process->apparmor_profile;
         }

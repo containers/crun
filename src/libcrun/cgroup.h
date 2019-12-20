@@ -44,7 +44,7 @@ int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 int libcrun_update_cgroup_resources (int cgroup_mode, oci_container_linux_resources *resources, char *path, libcrun_error_t *err);
 int libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err);
 int libcrun_cgroup_pause_unpause (const char *path, const bool pause, libcrun_error_t *err);
-int libcrun_cgroup_read_pids (const char *path, pid_t **pids, libcrun_error_t *err);
+int libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);
 
 typedef const char * cgroups_subsystem_t;
 
