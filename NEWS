@@ -1,9 +1,27 @@
 * FUTURE
 
+* crun-0.11
+
 - cgroups2: map memory reservation to memory.low
 - statx fallbacks to stat on EINVAL
 - utils: do not fail if the path we are trying to create already
   exists
+- generate seccomp profile in the parent process, not in the container
+  init process.  Memory usage is more reliable now and a container can
+  run with ~250K of max memory.
+- support for Linux personality.
+- support for umask.
+- support for the hugetlb controller on cgroup v2.
+- PIDs from a cgroup are read recursively.
+- do not fork on "create".
+- now by default seccomp doesn't fail on an unknown syscall.  The
+  previous behavior can be enabled with an annotation.
+- fix joining cgroup on cgroup v2 when a named hierarchy is also
+  present.
+- fix creating user namespaces with more than 2^32 IDs mapped.
+- on exec, keep the SELinux label or AppArmor profile from the
+- container configuration.
+- runtime specific annotation are prefixed with run.oci.
 
 * crun-0.10.6
 
