@@ -598,7 +598,7 @@ struct device_s needed_devs[] =
   };
 
 static int
-create_dev (libcrun_container_t *container, int devfd, struct device_s *device, const char *rootfs, int binds, libcrun_error_t *err)
+create_dev (libcrun_container_t *container, int devfd, struct device_s *device, const char *rootfs, bool binds, bool ensure_parent_dir, libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
@@ -639,21 +639,25 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
         }
       else
         {
-          char *tmp;
           char *resolved_path, buffer[PATH_MAX];
 
           resolved_path = chroot_realpath (rootfs, device->path, buffer);
           if (resolved_path == NULL)
             return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
 
-          tmp = strrchr (resolved_path, '/');
-          if (tmp != resolved_path)
+          if (ensure_parent_dir)
             {
-              *tmp = '\0';
-              ret = crun_ensure_directory (resolved_path, 0700, true, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              *tmp = '/';
+              char *tmp;
+
+              tmp = strrchr (resolved_path, '/');
+              if (tmp != resolved_path)
+                {
+                  *tmp = '\0';
+                  ret = crun_ensure_directory (resolved_path, 0700, true, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+                  *tmp = '/';
+                }
             }
 
           ret = mknod (resolved_path, device->mode | type, dev);
@@ -690,7 +694,7 @@ static struct symlink_s symlinks[] =
   };
 
 static int
-create_missing_devs (libcrun_container_t *container, const char *rootfs, int binds, libcrun_error_t *err)
+create_missing_devs (libcrun_container_t *container, const char *rootfs, bool binds, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -713,14 +717,15 @@ create_missing_devs (libcrun_container_t *container, const char *rootfs, int bin
                                      def->linux->devices[i]->major,
                                      def->linux->devices[i]->minor,
                                      def->linux->devices[i]->file_mode};
-      ret = create_dev (container, devfd, &device, rootfs, binds, err);
+      ret = create_dev (container, devfd, &device, rootfs, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
   for (it = needed_devs; it->path; it++)
     {
-      ret = create_dev (container, devfd, it, rootfs, binds, err);
+      /* make sure the parent directory exists only on the first iteration.  */
+      ret = create_dev (container, devfd, it, rootfs, binds, it == needed_devs, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1242,7 +1247,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   if (!get_private_data (container)->mount_dev_from_host)
     {
-      ret = create_missing_devs (container, rootfs, is_user_ns, err);
+      ret = create_missing_devs (container, rootfs, is_user_ns ? true : false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
