@@ -617,6 +617,9 @@ container_init_setup (void *args, const char *notify_socket,
         return ret;
     }
 
+  if (def->process->user)
+    umask (def->process->user->umask);
+
   if (def->process && !def->process->no_new_privileges)
     {
       char **seccomp_flags = NULL;
@@ -734,9 +737,6 @@ container_init (void *args, const char *notify_socket, int sync_socket,
 
   if (UNLIKELY (exec_path == NULL))
     return crun_make_error (err, errno, "executable path not specified");
-
-  if (def->process->user)
-    umask (def->process->user->umask);
 
   execv (exec_path, def->process->args);
 
