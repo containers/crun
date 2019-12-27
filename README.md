@@ -39,10 +39,9 @@ crun is faster than runc and has a much lower memory footprint.
 This is the elapsed time on my machine for running sequentially 100
 containers, the containers run `/bin/true`:
 
-|                                       | crun           | runc    | %      |
-| -------------                         | -------------: | -----:  | -----: |
-| 100 /bin/true (no network namespace)  | 0:05.70        | 0:10.95 | -47.9% |
-| 100 /bin/true (new network namespace) | 0:06.16        | 0:11.17 | -44.8%  |
+|               | crun           | runc   | %       |
+| ------------- | -------------: | -----: | -----:  |
+| 100 /bin/true | 0:01.69        | 0:3.34 | -49.4%  |
 
 crun requires fewer resources, so it is also possible to set stricter
 limits on the memory and number of PIDs allowed in the container:
