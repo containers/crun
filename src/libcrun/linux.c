@@ -279,7 +279,7 @@ do_remount (const char *target, unsigned long flags, const char *data, libcrun_e
 {
   int ret;
 
-  ret = mount ("none", target, "", flags, data);
+  ret = mount (NULL, target, NULL, flags, data);
   if (UNLIKELY (ret < 0))
     {
       unsigned long remount_flags;
@@ -291,7 +291,7 @@ do_remount (const char *target, unsigned long flags, const char *data, libcrun_e
 
       remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
 
-      ret = mount ("none", target, "", flags | remount_flags, data);
+      ret = mount (NULL, target, NULL, flags | remount_flags, data);
       if (LIKELY (ret == 0))
         return 0;
 
@@ -401,7 +401,7 @@ do_mount (libcrun_container_t *container,
         {
           if (!(propagations & all_propagations[s]))
             continue;
-          ret = mount ("none", target, "", rec | all_propagations[s], NULL);
+          ret = mount (NULL, target, NULL, rec | all_propagations[s], NULL);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "set propagation for '%s'", target);
         }
@@ -1166,7 +1166,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
     {
       int ret;
 
-      ret = mount ("", tmp, "", MS_PRIVATE, NULL);
+      ret = mount (NULL, tmp, NULL, MS_PRIVATE, NULL);
       if (ret == 0)
         return 0;
 
@@ -1182,7 +1182,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
             }
           else
             {
-              ret = mount ("", "/", "", MS_PRIVATE, NULL);
+              ret = mount (NULL, "/", NULL, MS_PRIVATE, NULL);
               if (ret == 0)
                 return 0;
             }
