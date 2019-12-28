@@ -1811,7 +1811,7 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   fd = open ("/proc/self/oom_score_adj", O_RDWR);
   if (fd < 0)
     return crun_make_error (err, errno, "open /proc/self/oom_score_adj");
-  ret = write (fd, oom_buffer, strlen (oom_buffer));
+  ret = TEMP_FAILURE_RETRY (write (fd, oom_buffer, strlen (oom_buffer)));
   if (ret < 0)
     return crun_make_error (err, errno, "write to /proc/self/oom_score_adj");
   return 0;
@@ -1845,7 +1845,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "open /proc/sys/%s", name);
 
-      ret = write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i]));
+      ret = TEMP_FAILURE_RETRY (write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i])));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write to /proc/sys/%s", name);
     }
@@ -2472,12 +2472,12 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
  exit:
   if (sync_socket_fd[0] >= 0)
-    close (sync_socket_fd[0]);
+    TEMP_FAILURE_RETRY (close (sync_socket_fd[0]));
   if (sync_socket_fd[1] >= 0)
-    close (sync_socket_fd[1]);
+    TEMP_FAILURE_RETRY (close (sync_socket_fd[1]));
   for (i = 0; all_namespaces[i]; i++)
     if (fds[i] >= 0)
-      close (fds[i]);
+      TEMP_FAILURE_RETRY (close (fds[i]));
   return ret;
 }
 

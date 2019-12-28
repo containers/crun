@@ -342,7 +342,7 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "unlink '%s'", fifo_path);
 
-  ret = write (fd, buffer, 1);
+  ret = TEMP_FAILURE_RETRY (write (fd, buffer, 1));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "read from exec.fifo");
 

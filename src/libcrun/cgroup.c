@@ -1396,7 +1396,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, struct throttl
                      throttling[i]->minor,
                      throttling[i]->rate);
 
-      ret = write (fd, fmt_buf, len);
+      ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write %s", name);
     }
@@ -1422,7 +1422,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, struct throttling
                      name,
                      throttling[i]->rate);
 
-      ret = write (fd, fmt_buf, len);
+      ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write %s", name);
     }
@@ -1477,7 +1477,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
                              blkio->weight_device[i]->major,
                              blkio->weight_device[i]->minor,
                              w);
-              ret = write (wfd, fmt_buf, len);
+              ret = TEMP_FAILURE_RETRY (write (wfd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write io.weight");
 
@@ -1504,7 +1504,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
                              blkio->weight_device[i]->major,
                              blkio->weight_device[i]->minor,
                              blkio->weight_device[i]->weight);
-              ret = write (w_device_fd, fmt_buf, len);
+              ret = TEMP_FAILURE_RETRY (write (w_device_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write blkio.weight_device");
 
@@ -1512,7 +1512,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
                              blkio->weight_device[i]->major,
                              blkio->weight_device[i]->minor,
                              blkio->weight_device[i]->leaf_weight);
-              ret = write (w_leafdevice_fd, fmt_buf, len);
+              ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write blkio.leaf_weight_device");
             }
@@ -1611,7 +1611,7 @@ write_network_resources (int dirfd, oci_container_linux_resources_network *net, 
       for (i = 0; i < net->priorities_len; i++)
         {
           len = sprintf (fmt_buf, "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
-          ret = write (fd, fmt_buf, len);
+          ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write net_prio.ifpriomap");
         }
