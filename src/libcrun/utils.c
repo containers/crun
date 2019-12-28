@@ -47,7 +47,7 @@ close_and_reset (int *fd)
   int ret = 0;
   if (*fd >= 0)
     {
-      ret = close (*fd);
+      ret = TEMP_FAILURE_RETRY (close (*fd));
       if (LIKELY (ret == 0))
         *fd = -1;
     }
@@ -74,7 +74,7 @@ cleanup_closep (void *p)
 {
   int *pp = p;
   if (*pp >= 0)
-    close (*pp);
+    TEMP_FAILURE_RETRY (close (*pp));
 }
 
 void
@@ -84,7 +84,7 @@ cleanup_close_vecp (int **p)
   int i;
 
   for (i = 0; pp[i] >= 0; i++)
-    close (pp[i]);
+    TEMP_FAILURE_RETRY (close (pp[i]));
 }
 
 void
@@ -170,7 +170,7 @@ write_file_at (int dirfd, const char *name, const void *data, size_t len, libcru
 
   if (len)
     {
-      ret = write (fd, data, len);
+      ret = TEMP_FAILURE_RETRY (write (fd, data, len));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "writing file '%s'", name);
     }
@@ -186,7 +186,7 @@ write_file (const char *name, const void *data, size_t len, libcrun_error_t *err
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "writing file '%s'", name);
 
-  ret = write (fd, data, len);
+  ret = TEMP_FAILURE_RETRY (write (fd, data, len));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "writing file '%s'", name);
 
@@ -518,7 +518,7 @@ write_file_and_check_fs_type (const char *file, const char *data, size_t len, un
   if (sfs.f_type != type)
     return crun_make_error (err, 0, "the file '%s' is not on file system type '%s'", file, type_name);
 
-  ret = write (fd, data, len);
+  ret = TEMP_FAILURE_RETRY (write (fd, data, len));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "write file '%s'", file);
 
@@ -1084,7 +1084,7 @@ run_process_with_stdin_timeout_envp (char *path,
 
       close_and_reset (&pipe_r);
 
-      ret = write (pipe_w, stdin, stdin_len);
+      ret = TEMP_FAILURE_RETRY (write (pipe_w, stdin, stdin_len));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "writing to pipe");
 
@@ -1132,13 +1132,13 @@ run_process_with_stdin_timeout_envp (char *path,
       if (UNLIKELY (out < 0))
         _exit (EXIT_FAILURE);
 
-      close (pipe_w);
+      TEMP_FAILURE_RETRY (close (pipe_w));
       dup2 (pipe_r, 0);
-      close (pipe_r);
+      TEMP_FAILURE_RETRY (close (pipe_r));
 
       dup2 (out, 1);
       dup2 (out, 2);
-      close (out);
+      TEMP_FAILURE_RETRY (close (out));
 
       if (args == NULL)
         args = tmp_args;
@@ -1477,7 +1477,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
   dsrcfd = fdopendir (srcdirfd);
   if (UNLIKELY (dsrcfd == NULL))
     {
-      close (srcdirfd);
+      TEMP_FAILURE_RETRY (close (srcdirfd));
       return crun_make_error (err, errno, "cannot open directory %s", destname);
     }
 
@@ -1524,7 +1524,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
             return ret;
 #endif
 
-          close (destfd);
+          TEMP_FAILURE_RETRY (close (destfd));
           destfd = -1;
           break;
 

@@ -4,6 +4,7 @@ arch:
 matrix:
   allow_failures:
   - env: TEST=coverity
+  - env: TEST=make-ppc64le
   include:
     - arch: ppc64le
       env: TEST=make-ppc64le

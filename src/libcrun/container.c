@@ -617,6 +617,9 @@ container_init_setup (void *args, const char *notify_socket,
         return ret;
     }
 
+  if (def->process->user)
+    umask (def->process->user->umask);
+
   if (def->process && !def->process->no_new_privileges)
     {
       char **seccomp_flags = NULL;
@@ -734,9 +737,6 @@ container_init (void *args, const char *notify_socket, int sync_socket,
 
   if (UNLIKELY (exec_path == NULL))
     return crun_make_error (err, errno, "executable path not specified");
-
-  if (def->process->user)
-    umask (def->process->user->umask);
 
   execv (exec_path, def->process->args);
 
@@ -1236,7 +1236,7 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
 
   for (;;)
     {
-      int ret = read (terminal_fd, buf, sizeof (buf) - 1);
+      int ret = TEMP_FAILURE_RETRY (read (terminal_fd, buf, sizeof (buf) - 1));
       if (ret <= 0)
         break;
       buf[ret] = '\0';
@@ -2095,7 +2095,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       char **seccomp_flags = NULL;
       size_t seccomp_flags_len = 0;
 
-      close (pipefd0);
+      TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
 
       cwd = process->cwd ? process->cwd : "/";
@@ -2201,7 +2201,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
         umask (process->user->umask);
 
       TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
-      close (pipefd1);
+      TEMP_FAILURE_RETRY (close (pipefd1));
       pipefd1 = -1;
 
       execv (exec_path, process->args);
@@ -2209,7 +2209,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       _exit (EXIT_FAILURE);
     }
 
-  close (pipefd1);
+  TEMP_FAILURE_RETRY (close (pipefd1));
   pipefd1 = -1;
 
   if (seccomp_fd >= 0)
@@ -2252,7 +2252,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
     }
 
   TEMP_FAILURE_RETRY (read (pipefd0, &b, sizeof (b)));
-  close (pipefd0);
+  TEMP_FAILURE_RETRY (close (pipefd0));
   pipefd0 = -1;
   if (b != '0')
     ret = -1;
