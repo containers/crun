@@ -466,6 +466,73 @@ initialize_security (oci_container_process *proc, libcrun_error_t *err)
   return 0;
 }
 
+static int
+do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
+          const char *cwd, const char *status, hook **hooks, size_t hooks_len,
+          libcrun_error_t *err)
+{
+  size_t i, stdin_len;
+  int ret;
+  cleanup_free char *stdin = NULL;
+  const unsigned char *annotations = (const unsigned char *) "{}";
+  cleanup_free char *cwd_allocated = NULL;
+  yajl_gen gen = NULL;
+
+  if (cwd == NULL)
+    {
+      cwd = cwd_allocated = get_current_dir_name ();
+      if (cwd == NULL)
+        OOM ();
+    }
+
+  if (def && def->annotations && def->annotations->len)
+    {
+      size_t len;
+
+      gen = yajl_gen_alloc (NULL);
+      if (gen == NULL)
+        return crun_make_error (err, 0, "yajl_gen_alloc failed");
+
+      yajl_gen_map_open (gen);
+      for (i = 0; i < def->annotations->len; i++)
+        {
+          const char *key = def->annotations->keys[i];
+          const char *val = def->annotations->values[i];
+
+          yajl_gen_string (gen, YAJL_STR (key), strlen (key));
+          yajl_gen_string (gen, YAJL_STR (val), strlen (val));
+        }
+      yajl_gen_map_close (gen);
+
+      yajl_gen_get_buf (gen, &annotations, &len);
+    }
+
+  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", \"status\":\"%s\", \"annotations\":%s}", id, pid, rootfs, cwd, status, annotations);
+
+  for (i = 0; i < hooks_len; i++)
+    {
+      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
+      if (UNLIKELY (ret != 0))
+        {
+          if (keep_going)
+            libcrun_warning ("error executing hook %s (exit code: %d)", hooks[i]->path, ret);
+          else
+            {
+              libcrun_error (0, "error executing hook %s (exit code: %d)", hooks[i]->path, ret);
+              goto exit;
+            }
+        }
+    }
+
+  ret = 0;
+
+ exit:
+  if (gen)
+    yajl_gen_free (gen);
+
+  return ret;
+}
+
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
@@ -524,6 +591,15 @@ container_init_setup (void *args, const char *notify_socket,
   ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (def->hooks && def->hooks->create_container_len)
+    {
+      ret = do_hooks (def, 0, container->context->id, false, def->root->path, NULL, "created",
+                      (hook **) def->hooks->create_container,
+                      def->hooks->create_container_len, err);
+      if (UNLIKELY (ret != 0))
+        return ret;
+    }
 
   ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
   if (UNLIKELY (ret < 0))
@@ -738,79 +814,23 @@ container_init (void *args, const char *notify_socket, int sync_socket,
   if (UNLIKELY (exec_path == NULL))
     return crun_make_error (err, errno, "executable path not specified");
 
+  if (def->hooks && def->hooks->start_container_len)
+    {
+      libcrun_container_t *container = entrypoint_args->container;
+
+      ret = do_hooks (def, 0, container->context->id, false, def->root->path, NULL, "starting",
+                      (hook **) def->hooks->start_container,
+                      def->hooks->start_container_len, err);
+      if (UNLIKELY (ret != 0))
+        return ret;
+    }
+
   execv (exec_path, def->process->args);
 
   if (errno == ENOENT)
     return crun_make_error (err, errno, "exec container process (missing dynamic library?) `%s`", exec_path);
 
   return crun_make_error (err, errno, "exec container process `%s`", exec_path);
-}
-
-static int
-do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
-          const char *cwd, const char *status, hook **hooks, size_t hooks_len,
-          libcrun_error_t *err)
-{
-  size_t i, stdin_len;
-  int ret;
-  cleanup_free char *stdin = NULL;
-  const unsigned char *annotations = (const unsigned char *) "{}";
-  cleanup_free char *cwd_allocated = NULL;
-  yajl_gen gen = NULL;
-
-  if (cwd == NULL)
-    {
-      cwd = cwd_allocated = get_current_dir_name ();
-      if (cwd == NULL)
-        OOM ();
-    }
-
-  if (def && def->annotations && def->annotations->len)
-    {
-      size_t len;
-
-      gen = yajl_gen_alloc (NULL);
-      if (gen == NULL)
-        return crun_make_error (err, 0, "yajl_gen_alloc failed");
-
-      yajl_gen_map_open (gen);
-      for (i = 0; i < def->annotations->len; i++)
-        {
-          const char *key = def->annotations->keys[i];
-          const char *val = def->annotations->values[i];
-
-          yajl_gen_string (gen, YAJL_STR (key), strlen (key));
-          yajl_gen_string (gen, YAJL_STR (val), strlen (val));
-        }
-      yajl_gen_map_close (gen);
-
-      yajl_gen_get_buf (gen, &annotations, &len);
-    }
-
-  stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", \"status\":\"%s\", \"annotations\":%s}", id, pid, rootfs, cwd, status, annotations);
-
-  for (i = 0; i < hooks_len; i++)
-    {
-      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
-      if (UNLIKELY (ret != 0))
-        {
-          if (keep_going)
-            libcrun_warning ("error executing hook %s (exit code: %d)", hooks[i]->path, ret);
-          else
-            {
-              libcrun_error (0, "error executing hook %s (exit code: %d)", hooks[i]->path, ret);
-              goto exit;
-            }
-        }
-    }
-
-  ret = 0;
-
- exit:
-  if (gen)
-    yajl_gen_free (gen);
-
-  return ret;
 }
 
 static int
@@ -1508,6 +1528,17 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       ret = do_hooks (def, pid, context->id, false, def->root->path, NULL, "created",
                       (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
+      if (UNLIKELY (ret != 0))
+        {
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+          return ret;
+        }
+    }
+  if (def->hooks && def->hooks->create_runtime_len)
+    {
+      ret = do_hooks (def, pid, context->id, false, def->root->path, NULL, "created",
+                      (hook **) def->hooks->create_runtime,
+                      def->hooks->create_runtime_len, err);
       if (UNLIKELY (ret != 0))
         {
           cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
