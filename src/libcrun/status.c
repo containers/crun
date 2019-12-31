@@ -173,10 +173,10 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
     return ret;
 
   if (ret)
-    return crun_make_error (err, 0, "container '%s' already exists", id);
+    return crun_make_error (err, 0, "container `%s` already exists", id);
 
   if (UNLIKELY (mkdir (dir, 0700) < 0))
-    return crun_make_error (err, 0, "cannot create state directory for '%s'", id);
+    return crun_make_error (err, 0, "cannot create state directory for `%s`", id);
 
   return 0;
 }
@@ -197,7 +197,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   rundir_dfd = open (dir, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (rundir_dfd < 0))
-    return crun_make_error (err, errno, "cannot open run directory '%s'", dir);
+    return crun_make_error (err, errno, "cannot open run directory `%s`", dir);
 
   dfd = openat (rundir_dfd, id, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dfd < 0))
@@ -205,7 +205,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   d = fdopendir (dfd);
   if (d == NULL)
-    return crun_make_error (err, errno, "cannot open directory '%s'", dir);
+    return crun_make_error (err, errno, "cannot open directory `%s`", dir);
 
   /* Now d owns the file descriptor.  */
   dfd = -1;
@@ -245,7 +245,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
   *ret = NULL;
   dir = opendir (path);
   if (UNLIKELY (dir == NULL))
-      return crun_make_error (err, errno, "cannot opendir '%s'", path);
+      return crun_make_error (err, errno, "cannot opendir `%s`", path);
 
   for (next = readdir (dir); next; next = readdir (dir))
     {
@@ -318,7 +318,7 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
 
   fd = open (fifo_path, O_NONBLOCK);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "cannot open pipe '%s'", fifo_path);
+    return crun_make_error (err, errno, "cannot open pipe `%s`", fifo_path);
 
   return fd;
 }
@@ -336,11 +336,11 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 
   fd = open (fifo_path, O_WRONLY);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "cannot open '%s'", fifo_path);
+    return crun_make_error (err, errno, "cannot open `%s`", fifo_path);
 
   ret = unlink (fifo_path);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "unlink '%s'", fifo_path);
+    return crun_make_error (err, errno, "unlink `%s`", fifo_path);
 
   ret = TEMP_FAILURE_RETRY (write (fd, buffer, 1));
   if (UNLIKELY (ret < 0))

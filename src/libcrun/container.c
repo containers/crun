@@ -413,7 +413,7 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   container_def = oci_container_parse_file (path, NULL, &oci_error);
   if (container_def == NULL)
     {
-      crun_make_error (err, 0, "load '%s': %s", path, oci_error);
+      crun_make_error (err, 0, "load `%s`: %s", path, oci_error);
       return NULL;
     }
   return make_container (container_def);
@@ -515,10 +515,10 @@ do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const 
       if (UNLIKELY (ret != 0))
         {
           if (keep_going)
-            libcrun_warning ("error executing hook %s (exit code: %d)", hooks[i]->path, ret);
+            libcrun_warning ("error executing hook `%s` (exit code: %d)", hooks[i]->path, ret);
           else
             {
-              libcrun_error (0, "error executing hook %s (exit code: %d)", hooks[i]->path, ret);
+              libcrun_error (0, "error executing hook `%s` (exit code: %d)", hooks[i]->path, ret);
               goto exit;
             }
         }
@@ -614,7 +614,7 @@ container_init_setup (void *args, const char *notify_socket,
 
       for (i = 0; i < def->process->env_len; i++)
         if (putenv (def->process->env[i]) < 0)
-          return crun_make_error (err, errno, "putenv '%s'", def->process->env[i]);
+          return crun_make_error (err, errno, "putenv `%s`", def->process->env[i]);
     }
 
   if (getenv ("HOME") == NULL)
@@ -723,7 +723,7 @@ container_init_setup (void *args, const char *notify_socket,
       char *notify_socket_env;
       xasprintf (&notify_socket_env, "NOTIFY_SOCKET=%s", notify_socket);
       if (putenv (notify_socket_env) < 0)
-        return crun_make_error (err, errno, "putenv '%s'", notify_socket_env);
+        return crun_make_error (err, errno, "putenv `%s`", notify_socket_env);
     }
 
   return 0;
@@ -843,12 +843,12 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 
   dir = libcrun_get_state_directory (state_root, id);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory from %s", state_root);
+    return crun_make_error (err, 0, "cannot get state directory from `%s`", state_root);
 
   xasprintf (&config_file, "%s/config.json", dir);
   *container = libcrun_container_load_from_file (config_file, err);
   if (*container == NULL)
-    return crun_make_error (err, 0, "error loading %s", config_file);
+    return crun_make_error (err, 0, "error loading `%s`", config_file);
 
   return 0;
 }
@@ -930,7 +930,7 @@ container_delete_internal (libcrun_context_t *context, oci_container *def, const
           if (UNLIKELY (ret < 0))
             return ret;
           if (ret == 1)
-            return crun_make_error (err, 0, "the container '%s' is not in 'stopped' state", id);
+            return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
         }
       else
         {
@@ -1861,7 +1861,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
     return ret;
 
   if (!ret)
-    return crun_make_error (err, errno, "container '%s' is not running", id);
+    return crun_make_error (err, errno, "container `%s` is not running", id);
 
   if (context->notify_socket)
     {
@@ -2079,7 +2079,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
     return crun_make_error (err, 0, "error loading config.json");
 
   if (ret == 0)
-    return crun_make_error (err, 0, "the container '%s' is not running.", id);
+    return crun_make_error (err, 0, "the container `%s` is not running.", id);
 
   if (!context->detach)
     {
@@ -2139,7 +2139,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
 
       for (i = 0; i < process->env_len; i++)
         if (putenv (process->env[i]) < 0)
-          libcrun_fail_with_error ( errno, "putenv '%s'", process->env[i]);
+          libcrun_fail_with_error ( errno, "putenv `%s`", process->env[i]);
 
       if (getenv ("HOME") == NULL)
         {
@@ -2371,7 +2371,7 @@ libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_err
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
-    return crun_make_error (err, errno, "the container %s is not running", id);
+    return crun_make_error (err, errno, "the container `%s` is not running", id);
 
   return libcrun_container_pause_linux (&status, err);
 }
@@ -2392,7 +2392,7 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
-    return crun_make_error (err, errno, "the container %s is not running", id);
+    return crun_make_error (err, errno, "the container `%s` is not running", id);
 
   return libcrun_container_unpause_linux (&status, err);
 }

@@ -137,7 +137,7 @@ libcrun_create_keyring (const char *name, libcrun_error_t *err)
 {
   int ret = syscall_keyctl_join (name);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "create keyring '%s'", name);
+    return crun_make_error (err, errno, "create keyring `%s`", name);
   return 0;
 }
 
@@ -287,7 +287,7 @@ do_remount (const char *target, unsigned long flags, const char *data, libcrun_e
 
       ret = statfs (target, &sfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "statfs '%s'", target);
+        return crun_make_error (err, errno, "statfs `%s`", target);
 
       remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
 
@@ -302,7 +302,7 @@ do_remount (const char *target, unsigned long flags, const char *data, libcrun_e
           ret = mount ("none", target, "", flags | remount_flags, data);
         }
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "remount '%s'", target);
+        return crun_make_error (err, errno, "remount `%s`", target);
     }
   return 0;
 }
@@ -384,7 +384,7 @@ do_mount (libcrun_container_t *container,
                 return 0;
             }
 
-          return crun_make_error (err, saved_errno, "mount '%s' to '%s'", source, target);
+          return crun_make_error (err, saved_errno, "mount `%s` to '%s'", source, target);
         }
 
       if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
@@ -403,7 +403,7 @@ do_mount (libcrun_container_t *container,
             continue;
           ret = mount (NULL, target, NULL, rec | all_propagations[s], NULL);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for '%s'", target);
+            return crun_make_error (err, errno, "set propagation for `%s`", target);
         }
     }
 
@@ -530,7 +530,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
 
       ret = mkdir (subsystem_path, 0755);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
+        return crun_make_error (err, errno, "mkdir for `%s` failed", subsystem_path);
 
       ret = do_mount (container, source_path, subsystem_path, NULL, MS_BIND | mountflags, NULL, 0, err);
       if (UNLIKELY (ret < 0))
@@ -610,7 +610,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
 
       path_to_container = chroot_realpath (rootfs, device->path, buffer);
       if (path_to_container == NULL)
-        return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
+        return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
 
       ret = crun_ensure_file (path_to_container, 0700, true, err);
       if (UNLIKELY (ret < 0))
@@ -631,11 +631,11 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknod '%s'", device->path);
+            return crun_make_error (err, errno, "mknod `%s`", device->path);
 
           ret = fchmodat (devfd, device->path, device->mode, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat '%s'", device->path);
+            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
         }
       else
         {
@@ -643,7 +643,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
 
           resolved_path = chroot_realpath (rootfs, device->path, buffer);
           if (resolved_path == NULL)
-            return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
+            return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
 
           if (ensure_parent_dir)
             {
@@ -665,11 +665,11 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknod '%s'", device->path);
+            return crun_make_error (err, errno, "mknod `%s`", device->path);
 
           ret = chmod (resolved_path, device->mode);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat '%s'", device->path);
+            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
         }
 
     }
@@ -704,11 +704,11 @@ create_missing_devs (libcrun_container_t *container, const char *rootfs, bool bi
   oci_container *def = container->container_def;
 
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open rootfs directory '%s'", rootfs);
+    return crun_make_error (err, errno, "open rootfs directory `%s`", rootfs);
 
   devfd = openat (dirfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
-    return crun_make_error (err, errno, "open /dev directory in '%s'", rootfs);
+    return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
 
   for (i = 0; i < def->linux->devices_len; i++)
     {
@@ -813,11 +813,11 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   if (UNLIKELY (oldrootfd < 0))
     return crun_make_error (err, errno, "open '/'");
   if (UNLIKELY (newrootfd < 0))
-    return crun_make_error (err, errno, "open '%s'", rootfs);
+    return crun_make_error (err, errno, "open `%s`", rootfs);
 
   ret = fchdir (newrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fchdir '%s'", rootfs);
+    return crun_make_error (err, errno, "fchdir `%s`", rootfs);
 
   ret = pivot_root (".", ".");
   if (UNLIKELY (ret < 0))
@@ -825,7 +825,7 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
 
   ret = fchdir (oldrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fchdir '%s'", rootfs);
+    return crun_make_error (err, errno, "fchdir `%s`", rootfs);
 
   ret = do_mount (container, NULL, ".", NULL, MS_REC | MS_PRIVATE, NULL, 0, err);
   if (UNLIKELY (ret < 0))
@@ -914,7 +914,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       else
         {
           if (errno != ENOENT)
-            return crun_make_error (err, errno, "cannot resolve %s", def->mounts[i]->destination);
+            return crun_make_error (err, errno, "cannot resolve `%s`", def->mounts[i]->destination);
 
           resolved_path = def->mounts[i]->destination;
           if (!rootfs)
@@ -953,7 +953,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
         }
 
       if (type == NULL)
-        return crun_make_error (err, 0, "invalid mount type for %s", def->mounts[i]->destination);
+        return crun_make_error (err, 0, "invalid mount type for `%s`", def->mounts[i]->destination);
 
       if (strcmp (type, "bind") == 0)
         {
@@ -1083,7 +1083,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
     return notify_fd;
 
   if (UNLIKELY (chmod (host_path, 0777) < 0))
-    return crun_make_error (err, errno, "chmod %s", host_path);
+    return crun_make_error (err, errno, "chmod `%s`", host_path);
 
   *notify_socket_out = notify_fd;
   notify_fd = -1;
@@ -1117,7 +1117,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
 
   ret = mkdir (host_notify_socket_path_dir, 0700);
   if (ret < 0)
-    return crun_make_error (err, errno, "mkdir %s", host_notify_socket_path_dir);
+    return crun_make_error (err, errno, "mkdir `%s`", host_notify_socket_path_dir);
 
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
@@ -1186,7 +1186,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
                 return 0;
             }
         }
-      return crun_make_error (err, errno, "make %s private", tmp);
+      return crun_make_error (err, errno, "make `%s` private", tmp);
     }
   return 0;
 }
@@ -1273,7 +1273,7 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = chdir (rootfs);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to '%s'", rootfs);
+    return crun_make_error (err, errno, "chdir to `%s`", rootfs);
 
   ret = umount2 ("/sys", MNT_DETACH);
   if (UNLIKELY (ret < 0))
@@ -1289,11 +1289,11 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = chroot (".");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chroot to '%s'", rootfs);
+    return crun_make_error (err, errno, "chroot to `%s`", rootfs);
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to '%s'", rootfs);
+    return crun_make_error (err, errno, "chdir to `%s`", rootfs);
 
   return 0;
 }
@@ -1325,7 +1325,7 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
     {
       ret = chroot (rootfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chroot to '%s'", rootfs);
+        return crun_make_error (err, errno, "chroot to `%s`", rootfs);
     }
 
   ret = chdir ("/");
@@ -1651,7 +1651,7 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
     {
       cap_value_t cap;
       if (cap_from_name (values[i], &cap) < 0)
-        return crun_make_error (err, 0, "unknown cap: %s", values[i]);
+        return crun_make_error (err, 0, "unknown cap: `%s`", values[i]);
       if (cap < 32)
           caps[0] |= CAP_TO_MASK_0 (cap);
       else
@@ -1772,11 +1772,11 @@ libcrun_set_rlimits (oci_container_process_rlimits_element **new_rlimits, size_t
       char *type = new_rlimits[i]->type;
       int resource = get_rlimit_resource (type);
       if (UNLIKELY (resource < 0))
-        return crun_make_error (err, errno, "invalid rlimit '%s'", type);
+        return crun_make_error (err, errno, "invalid rlimit `%s`", type);
       limit.rlim_cur = new_rlimits[i]->soft;
       limit.rlim_max = new_rlimits[i]->hard;
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
-        return crun_make_error (err, errno, "setrlimit '%s'", type);
+        return crun_make_error (err, errno, "setrlimit `%s`", type);
     }
   return 0;
 }
@@ -1871,7 +1871,7 @@ open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *er
     {
       ret = chown (*slave, container->container_def->process->user->uid, -1);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chown %s", *slave);
+        return crun_make_error (err, errno, "chown `%s`", *slave);
     }
 
   ret = fd;
@@ -1958,7 +1958,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
     {
       int value = find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
       if (def->linux->namespaces[i]->path == NULL)
         {
@@ -1974,7 +1974,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
           fd = open (def->linux->namespaces[i]->path, O_RDONLY);
           if (UNLIKELY (fd < 0))
-              return crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+              return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
 
           if (value == CLONE_NEWUSER)
             userns_join_index = n_namespaces_to_join;
@@ -2096,7 +2096,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
           ret = setns (namespaces_to_join[userns_join_index], CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
             {
-              crun_make_error (err, errno, "cannot setns '%s'", def->linux->namespaces[userns_join_index]->path);
+              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[userns_join_index]->path);
               goto out;
             }
         }
@@ -2139,7 +2139,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
       ret = setns (namespaces_to_join[i], value);
       if (UNLIKELY (ret < 0))
         {
-          crun_make_error (err, errno, "cannot setns '%s'", def->linux->namespaces[orig_index]->path);
+          crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[orig_index]->path);
           goto out;
         }
       if (value == CLONE_NEWNS)
@@ -2286,7 +2286,7 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
 
   for (str = content; str < content + len; str += strlen (str) + 1)
     if (putenv (str) < 0)
-        return crun_make_error (err, errno, "putenv '%s'", str);
+        return crun_make_error (err, errno, "putenv `%s`", str);
   return ret;
 }
 
@@ -2360,7 +2360,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
       fds[i] = open (ns_join, O_RDONLY);
       if (UNLIKELY (fds[i] < 0))
         {
-          ret = crun_make_error (err, errno, "open '%s'", ns_join);
+          ret = crun_make_error (err, errno, "open `%s`", ns_join);
           goto exit;
         }
     }
@@ -2394,7 +2394,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
               fds_joined[i] = 1;
               continue;
             }
-          crun_make_error (err, errno, "setns '%s'", all_namespaces[i]);
+          crun_make_error (err, errno, "setns `%s`", all_namespaces[i]);
           goto exit;
         }
       fds_joined[i] = 1;
@@ -2546,11 +2546,11 @@ libcrun_set_personality (oci_container_linux_personality *p, libcrun_error_t *er
   else if (strcmp (p->domain, "LINUX32") == 0)
       persona = PER_LINUX32;
   else
-    return crun_make_error (err, 0, "unknown persona specified '%s'", p->domain);
+    return crun_make_error (err, 0, "unknown persona specified `%s`", p->domain);
 
   ret = personality (persona);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "set personality to '%s'", p->domain);
+    return crun_make_error (err, 0, "set personality to `%s`", p->domain);
 
   return 0;
 }
