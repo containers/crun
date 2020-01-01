@@ -360,14 +360,35 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 static int
+check_fd_under_rootfs (libcrun_container_t *container, int fd, const char *target, libcrun_error_t *err)
+{
+  int ret;
+  char link[PATH_MAX];
+  char fdpath[64];
+  const char *rootfs = get_private_data (container)->rootfs;
+  size_t rootfslen = get_private_data (container)->rootfslen;
+
+  sprintf (fdpath, "/proc/self/fd/%d", fd);
+  ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "readlink `%s`", target);
+
+  if (ret <= rootfslen || memcmp (link, rootfs, rootfslen) != 0)
+    return crun_make_error (err, 0, "target `%s` not under the rootfs", target);
+
+  return 0;
+}
+
+static int
 open_mount_target (libcrun_container_t *container, const char *target, libcrun_error_t *err)
 {
+  int ret;
   const char *rootfs = get_private_data (container)->rootfs;
   int rootfsfd = get_private_data (container)->rootfsfd;
   size_t rootfslen = get_private_data (container)->rootfslen;
   size_t targetlen = strlen (target);
   const char *target_rel;
-  int targetfd;
+  cleanup_close int targetfd = -1;
 
   if (rootfsfd < 0)
    return crun_make_error (err, 0, "invalid rootfs state");
@@ -381,7 +402,13 @@ open_mount_target (libcrun_container_t *container, const char *target, libcrun_e
   if (UNLIKELY (targetfd < 0))
     return crun_make_error (err, errno, "open target `%s`", target);
 
-  return targetfd;
+  ret = check_fd_under_rootfs (container, targetfd, target, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = targetfd;
+  targetfd = -1;
+  return ret;
 }
 
 static int
@@ -711,6 +738,8 @@ struct device_s needed_devs[] =
     {NULL, '\0', 0, 0, 0}
   };
 
+/* Check if the specified path is a direct child of /dev.  If it is
+ return a pointer to the basename.  */
 static const char *
 relative_path_under_dev (const char *path)
 {
@@ -731,9 +760,13 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   int ret;
   dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
+  char fd_buffer[64];
   const char *fullname = device->path;
+  cleanup_close int fd = -1;
+
   if (binds)
     {
+      cleanup_close int fd = - 1;
       char *path_to_container, buffer[PATH_MAX];
 
       path_to_container = chroot_realpath (rootfs, device->path, buffer);
@@ -744,7 +777,11 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_mount (container, fullname, -1, path_to_container, NULL, MS_BIND | MS_PRIVATE, NULL, 0, err);
+      fd = open_mount_target (container, path_to_container, err);
+      if (UNLIKELY (fd < 0))
+        return ret;
+
+      ret = do_mount (container, fullname, fd, path_to_container, NULL, MS_BIND | MS_PRIVATE, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -754,9 +791,15 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
 
       dev = makedev (device->major, device->minor);
 
+      /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
+         fails when the destination already exists or is a symlink, it is safe to use it directly.
+         If it is not a direct child, then first get a fd to the dirfd.
+      */
       rel_dev = relative_path_under_dev (device->path);
       if (rel_dev)
         {
+          cleanup_free char *dev_target = NULL;
+
           ret = mknodat (devfd, rel_dev, device->mode | type, dev);
           /* We don't fail when the file already exists.  */
           if (UNLIKELY (ret < 0 && errno == EEXIST))
@@ -764,41 +807,69 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          ret = fchmodat (devfd, device->path, device->mode, 0);
+          fd = openat (devfd, rel_dev, O_CLOEXEC | O_PATH);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "open `/dev/%s`", rel_dev);
+
+          sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+
+          xasprintf (&dev_target, "%s%s", rootfs, rel_dev);
+          ret = check_fd_under_rootfs (container, fd, dev_target, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmodat `%s`", device->path);
         }
       else
         {
           char *resolved_path, buffer[PATH_MAX];
+          cleanup_close int dirfd = -1;
+          char *basename, *tmp;
 
           resolved_path = chroot_realpath (rootfs, device->path, buffer);
           if (resolved_path == NULL)
             return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
 
+          tmp = strrchr (resolved_path, '/');
+          *tmp = '\0';
+          basename = tmp + 1;
+
           if (ensure_parent_dir)
             {
-              char *tmp;
-
-              tmp = strrchr (resolved_path, '/');
-              if (tmp != resolved_path)
-                {
-                  *tmp = '\0';
-                  ret = crun_ensure_directory (resolved_path, 0700, true, err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-                  *tmp = '/';
-                }
+              ret = crun_ensure_directory (resolved_path, 0700, true, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
             }
 
-          ret = mknod (resolved_path, device->mode | type, dev);
+          dirfd = open (resolved_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+          if (UNLIKELY (dirfd < 0))
+            return crun_make_error (err, errno, "open `%s`", resolved_path);
+
+          ret = check_fd_under_rootfs (container, dirfd, resolved_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = mknodat (dirfd, basename, device->mode | type, dev);
+
           /* We don't fail when the file already exists.  */
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          ret = chmod (resolved_path, device->mode);
+          fd = openat (dirfd, basename, O_CLOEXEC | O_PATH);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "open `%s/%s`", resolved_path, basename);
+
+          sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+
+          ret = check_fd_under_rootfs (container, fd, resolved_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmodat `%s`", device->path);
         }
@@ -840,10 +911,10 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
   for (i = 0; i < def->linux->devices_len; i++)
     {
       struct device_s device = {def->linux->devices[i]->path,
-                                     def->linux->devices[i]->type,
-                                     def->linux->devices[i]->major,
-                                     def->linux->devices[i]->minor,
-                                     def->linux->devices[i]->file_mode};
+                                def->linux->devices[i]->type,
+                                def->linux->devices[i]->major,
+                                def->linux->devices[i]->minor,
+                                def->linux->devices[i]->file_mode};
       ret = create_dev (container, devfd, &device, rootfs, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
