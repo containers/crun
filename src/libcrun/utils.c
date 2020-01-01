@@ -331,7 +331,7 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
           if (ret > 0)
             break;
 
-          return crun_make_error (err, errno, "creating file `%s`", path);
+          return crun_make_error (err, errno, "create directory `%s`", path);
         }
       else
         {

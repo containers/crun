@@ -212,8 +212,10 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   for (de = readdir (d); de; de = readdir (d))
     {
-      /* Ignore errors here and keep deleting, the unlinkat (AT_REMOVEDIR) will fail anyway.  */
-      unlinkat (dirfd (d), de->d_name, 0);
+      /* Ignore errors here and keep deleting, the final unlinkat (AT_REMOVEDIR) will fail anyway.  */
+      ret = unlinkat (dirfd (d), de->d_name, 0);
+      if (ret < 0)
+        unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
     }
   ret = unlinkat (rundir_dfd, id, AT_REMOVEDIR);
   if (UNLIKELY (ret < 0))

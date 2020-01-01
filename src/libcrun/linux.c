@@ -80,6 +80,9 @@ struct private_data_s
   const char *rootfs;
   int rootfsfd;
   size_t rootfslen;
+
+  char *tmpmountdir;
+  char *tmpmountfile;
 };
 
 struct linux_namespace_s
@@ -394,16 +397,42 @@ do_mount (libcrun_container_t *container,
 {
   const char *label = container->container_def->linux->mount_label;
   cleanup_free char *data_with_label = NULL;
+  const char *temporary_mount = NULL;
+  bool use_temporary_mount = false;
   const char *real_target = target;
   bool needs_remount = false;
   cleanup_close int fd = -1;
   char target_buffer[64];
   int ret = 0;
 
+#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
+#define ALL_PROPAGATIONS (MS_REC | ALL_PROPAGATIONS_NO_REC)
+
   if (targetfd >= 0)
     {
+      use_temporary_mount =                                             \
+        (get_private_data (container)->unshare_flags & CLONE_NEWNS)     \
+        && get_private_data (container)->tmpmountdir                    \
+        && (mountflags & (ALL_PROPAGATIONS | MS_BIND | MS_RDONLY));
       sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
       real_target = target_buffer;
+    }
+
+  /* The temporary mount is used to solve a race condition where the mount point we created
+     on top of volumes that are accessible also from other containers.  The temporary mount
+     once configured is moved to its destination under the rootfs.  */
+  if (use_temporary_mount)
+    {
+      mode_t mode;
+
+      ret = get_file_type_fd (targetfd, &mode);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if ((mode & S_IFMT) == S_IFDIR)
+        temporary_mount = get_private_data (container)->tmpmountdir;
+      else
+        temporary_mount = get_private_data (container)->tmpmountfile;
     }
 
   if (!skip_labelling)
@@ -414,14 +443,12 @@ do_mount (libcrun_container_t *container,
       data = data_with_label;
     }
 
-#define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
-#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
-
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
     {
+      const char *to = use_temporary_mount ? temporary_mount : real_target;
       unsigned long flags = mountflags & ~(ALL_PROPAGATIONS_NO_REC | MS_RDONLY);
 
-      ret = mount (source, real_target, fstype, flags, data);
+      ret = mount (source, to, fstype, flags, data);
       if (UNLIKELY (ret < 0))
         {
           int saved_errno = errno;
@@ -434,7 +461,7 @@ do_mount (libcrun_container_t *container,
               if (UNLIKELY (ret < 0))
                 return ret;
 
-              ret = mount ("/sys", real_target, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
+              ret = mount ("/sys", to, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
               if (LIKELY (ret == 0))
                 return 0;
             }
@@ -447,11 +474,31 @@ do_mount (libcrun_container_t *container,
 
       if (targetfd >= 0)
         {
-          /* we need to reopen the path as the previous targetfd is under the new mountpoint  .*/
-          targetfd = fd = open_mount_target (container, target, err);
-          if (UNLIKELY (targetfd < 0))
-            return fd;
+          /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
+          if (use_temporary_mount)
+            fd = open (temporary_mount, O_CLOEXEC | O_PATH);
+          else
+            fd = open_mount_target (container, target, err);
+          if (UNLIKELY (fd < 0))
+            {
+              if (use_temporary_mount)
+                umount (temporary_mount);
+              return fd;
+            }
 
+          /* We have a fd pointing to the new mountpoint (done in a safe location).  We can move
+             the mount to the destination under the rootfs.  */
+          if (use_temporary_mount)
+            {
+              ret = mount (temporary_mount, real_target, NULL, MS_MOVE, NULL);
+              if (UNLIKELY (ret < 0))
+                {
+                  umount (temporary_mount);
+                  return crun_make_error (err, errno, "move mount to '%s'", target);
+                }
+            }
+
+          targetfd = fd;
           sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
           real_target = target_buffer;
         }
@@ -1300,6 +1347,100 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
   return 0;
 }
 
+static int
+allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out,
+                     char **tmpdir_out, char **tmpfile_out, libcrun_error_t *err)
+{
+  cleanup_free char *state_dir = NULL;
+  cleanup_free char *tmpdir = NULL;
+  cleanup_free char *tmpfile = NULL;
+  char *where = NULL;
+  int ret;
+
+  state_dir = libcrun_get_state_directory (container->context->state_root,
+                                           container->context->id);
+
+  where = state_dir;
+
+ repeat:
+  xasprintf (&tmpdir, "%s/tmp-dir", where);
+  ret = crun_ensure_directory (tmpdir, 0700, true, err);
+  if (UNLIKELY (ret < 0))
+    {
+      /*If the current user has no access to the state directory (e.g. running in an
+        user namespace), then try with a temporary directory.  */
+      if (crun_error_get_errno (err) == EPERM           \
+          || crun_error_get_errno (err) == EROFS        \
+          || crun_error_get_errno (err) == EACCES)
+        {
+          char tmp_dir[32];
+          char *d;
+
+          if (*parent_tmpdir_out == NULL)
+            {
+              strcpy (tmp_dir, "/tmp/libcrun.XXXXXX");
+              d = mkdtemp (tmp_dir);
+              if (d)
+                {
+                  crun_error_release (err);
+                  *parent_tmpdir_out = xstrdup (d);
+                  where = *parent_tmpdir_out;
+                  goto repeat;
+                }
+            }
+
+          return ret;
+        }
+
+      return ret;
+    }
+
+  xasprintf (&tmpfile, "%s/tmp-file", where);
+  ret = crun_ensure_file (tmpfile, 0700, true, err);
+  if (UNLIKELY (ret < 0))
+    {
+      rmdir (tmpdir);
+      return ret;
+    }
+
+  *tmpdir_out = tmpdir;
+  *tmpfile_out = tmpfile;
+  tmpdir = tmpfile = NULL;
+  return 0;
+}
+
+static int
+cleanup_rmdir (void *p)
+{
+  int ret;
+  char **pp = (char **) p;
+  if (*pp)
+    {
+      cleanup_dir DIR *d = NULL;
+      struct dirent *de;
+      cleanup_close int dfd = open (*pp, O_DIRECTORY | O_RDONLY);
+      if (dfd < 0)
+        goto exit;
+      d = fdopendir (dfd);
+      if (d == NULL)
+        goto exit;
+
+      for (de = readdir (d); de; de = readdir (d))
+        {
+          if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
+            continue;
+          ret = unlinkat (dirfd (d), de->d_name, 0);
+          if (ret < 0)
+            unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
+        }
+      unlinkat (AT_FDCWD, *pp, AT_REMOVEDIR);
+    }
+    exit:
+  free (*pp);
+  return 0;
+}
+
+
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
@@ -1307,6 +1448,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   int ret = 0, is_user_ns = 0;
   unsigned long rootfs_propagation = 0;
   cleanup_close int rootfsfd_cleanup = -1;
+  __attribute__((cleanup (cleanup_rmdir))) char *tmpdirparent = NULL;
   int rootfsfd = -1;
 
   if (def->linux->rootfs_propagation)
@@ -1319,6 +1461,16 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
     {
+      char *tmpdir = NULL;
+      char *tmpfile = NULL;
+
+      ret = allocate_tmp_mounts (container, &tmpdirparent, &tmpdir, &tmpfile, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      get_private_data (container)->tmpmountdir = tmpdir;
+      get_private_data (container)->tmpmountfile = tmpfile;
+
       ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1327,9 +1479,15 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
       if (UNLIKELY (ret < 0))
         return ret;
 
+      ret = make_parent_mount_private (tmpdirparent ? tmpdirparent : tmpdir, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = do_mount (container, rootfs, -1, rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      do_mount (container, NULL, -1, "/tmp", NULL, MS_PRIVATE, NULL, 0, err);
     }
 
   if (rootfs == NULL)
@@ -1387,6 +1545,24 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (get_private_data (container)->tmpmountdir)
+    {
+      rmdir (get_private_data (container)->tmpmountdir);
+      free (get_private_data (container)->tmpmountdir);
+      get_private_data (container)->tmpmountdir = NULL;
+    }
+  if (get_private_data (container)->tmpmountfile)
+    {
+      unlink (get_private_data (container)->tmpmountfile);
+      free (get_private_data (container)->tmpmountfile);
+      get_private_data (container)->tmpmountfile = NULL;
+    }
+  if (tmpdirparent)
+    {
+      rmdir (tmpdirparent);
+      free (tmpdirparent);
+      tmpdirparent = NULL;
+    }
   get_private_data (container)->rootfsfd = -1;
 
   return 0;
