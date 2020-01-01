@@ -289,7 +289,7 @@ create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 int
 create_file_if_missing (const char *file, libcrun_error_t *err)
 {
-  cleanup_close int fd_write = open (file, O_CREAT | O_WRONLY, 0700);
+  cleanup_close int fd_write = open (file, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
   if (fd_write < 0)
     {
       mode_t mode;
@@ -373,6 +373,110 @@ crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, 
     return crun_make_error (err, ENOTDIR, "The path `%s` is not a directory", path);
 
   return 0;
+}
+
+int
+check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *fdname, libcrun_error_t *err)
+{
+  int ret;
+  char link[PATH_MAX];
+  char fdpath[64];
+
+  sprintf (fdpath, "/proc/self/fd/%d", fd);
+  ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "readlink `%s`", fdname);
+
+  if (((size_t) ret) <= rootfslen || memcmp (link, rootfs, rootfslen) != 0)
+    return crun_make_error (err, 0, "target `%s` not under the directory `%s`", fdname, rootfs);
+
+  return 0;
+}
+
+static int
+crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path,
+                     int mode, libcrun_error_t *err)
+{
+  cleanup_free char *npath = xstrdup (path);
+  cleanup_close int wd_file_cleanup = -1;
+  cleanup_close int wd_cleanup = -1;
+  bool last_component = false;
+  const char *cur;
+  char *it;
+  int cwd;
+  int ret;
+
+  it = npath + strlen (npath) - 1;
+  while (*it == '/' && it > npath && ((size_t) (it - path)) > dirpath_len)
+    *it-- = '\0';
+  if (((size_t) (it - path)) == dirpath_len)
+    return crun_make_error (err, 0, "invalid path `%s`", path);
+
+  cwd = dirfd;
+  cur = npath;
+  it = strchr (npath, '/');
+  while (cur && cur[0])
+    {
+      if (it)
+        *it = '\0';
+      else
+        last_component = true;
+
+      if (!last_component || dir)
+        ret = mkdirat (cwd, cur, mode);
+      else
+        {
+          ret = wd_file_cleanup = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "create `%s`", path);
+
+          ret = check_fd_under_path (dirpath, dirpath_len, wd_file_cleanup, path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      if (ret < 0)
+        {
+          if (errno != EEXIST)
+            return crun_make_error (err, errno, "mkdir `%s`", cur);
+        }
+
+      cwd = openat (cwd, cur, O_CLOEXEC | O_PATH);
+      if (wd_cleanup >= 0)
+        {
+          TEMP_FAILURE_RETRY (close (wd_cleanup));
+          wd_cleanup = -1;
+        }
+      wd_cleanup = cwd;
+      if (UNLIKELY (cwd < 0))
+        return crun_make_error (err, errno, "open `%s`", cur);
+
+      ret = check_fd_under_path (dirpath, dirpath_len, cwd, cur, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if (it == NULL)
+        break;
+
+      cur = it + 1;
+      it = strchr (cur, '/');
+    }
+
+  return 0;
+}
+
+int
+crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+                               libcrun_error_t *err)
+{
+  return crun_safe_ensure_at (true, dirfd, dirpath, dirpath_len, path, mode, err);
+}
+
+int
+crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+                          libcrun_error_t *err)
+{
+  return crun_safe_ensure_at (false, dirfd, dirpath, dirpath_len, path, mode, err);
 }
 
 int
@@ -683,7 +787,7 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
 
   memset (&addr, 0, sizeof (addr));
   if (strlen (path) >= sizeof (addr.sun_path))
-    return crun_make_error (err, errno, "invalid path %s specified", path);
+    return crun_make_error (err, 0, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
@@ -707,7 +811,7 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
 
   memset (&addr, 0, sizeof (addr));
   if (strlen (path) >= sizeof (addr.sun_path))
-    return crun_make_error (err, errno, "invalid path %s specified", path);
+    return crun_make_error (err, 0, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));

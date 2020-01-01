@@ -362,21 +362,10 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
 static int
 check_fd_under_rootfs (libcrun_container_t *container, int fd, const char *target, libcrun_error_t *err)
 {
-  int ret;
-  char link[PATH_MAX];
-  char fdpath[64];
   const char *rootfs = get_private_data (container)->rootfs;
   size_t rootfslen = get_private_data (container)->rootfslen;
 
-  sprintf (fdpath, "/proc/self/fd/%d", fd);
-  ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "readlink `%s`", target);
-
-  if (ret <= rootfslen || memcmp (link, rootfs, rootfslen) != 0)
-    return crun_make_error (err, 0, "target `%s` not under the rootfs", target);
-
-  return 0;
+  return check_fd_under_path (rootfs, rootfslen, fd, target, err);
 }
 
 static int
@@ -1204,13 +1193,13 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
       if (is_dir)
         {
-          ret = crun_ensure_directory_at (rootfsfd, target_rel, 01755, true, err);
+          ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfslen, target_rel, 01755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
-          ret = crun_ensure_file_at (rootfsfd, target_rel, 0755, true, err);
+          ret = crun_safe_ensure_file_at (rootfsfd, rootfs, rootfslen, target_rel, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
