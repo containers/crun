@@ -208,6 +208,33 @@ detach_process ()
 }
 
 int
+get_file_type_fd (int fd, mode_t *mode)
+{
+  struct stat st;
+  int ret;
+
+#ifdef HAVE_STATX
+  struct statx stx;
+
+  ret = statx (fd, "", AT_EMPTY_PATH | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == ENOSYS || errno == EINVAL)
+        goto fallback;
+
+      return ret;
+    }
+  *mode = stx.stx_mode;
+  return ret;
+
+ fallback:
+#endif
+  ret = fstat (fd, &st);
+  *mode = st.st_mode;
+  return ret;
+}
+
+int
 get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path)
 {
   struct stat st;
@@ -1186,10 +1213,10 @@ close_fds_ge_than (int n, libcrun_error_t *err)
 
   ret = fstatfs (cfd, &sfs);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "statfs '/proc/self/fd'");
+    return crun_make_error (err, errno, "statfs `/proc/self/fd`");
 
   if (sfs.f_type != PROC_SUPER_MAGIC)
-    return crun_make_error (err, 0, "the path '/proc/self/fd' is not on file system type 'procfs'");
+    return crun_make_error (err, 0, "the path `/proc/self/fd` is not on file system type `procfs`");
 
   dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))

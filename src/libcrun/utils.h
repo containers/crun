@@ -152,4 +152,6 @@ int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);
 
 int get_file_type (mode_t *mode, bool nofollow, const char *path);
 
+int get_file_type_fd (int fd, mode_t *mode);
+
 #endif
