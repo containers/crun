@@ -1209,7 +1209,7 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
               if (UNLIKELY (ret < 0))
                 return ret;
               if (ret && context->detach)
-                    return 0;
+                return 0;
             }
           else if (events[i].data.fd == signalfd)
             {
