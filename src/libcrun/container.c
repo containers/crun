@@ -601,6 +601,17 @@ container_init_setup (void *args, const char *notify_socket,
         return ret;
     }
 
+  if (def->process)
+    {
+      ret = libcrun_set_selinux_exec_label (def->process, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = libcrun_set_apparmor_profile (def->process, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -669,17 +680,6 @@ container_init_setup (void *args, const char *notify_socket,
 
           close_and_reset (&console_socketpair);
         }
-    }
-
-  if (def->process)
-    {
-      ret = libcrun_set_selinux_exec_label (def->process, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = libcrun_set_apparmor_profile (def->process, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
     }
 
   ret = libcrun_set_hostname (container, err);
