@@ -1196,9 +1196,32 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
       if (is_dir)
         {
+          /* Enforce /proc and /sys to be directories without any symlink under rootfs.  */
+          bool must_be_dir_under_root = strcmp (type, "sysfs") == 0
+            || strcmp (type, "proc") == 0;
+
           ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfslen, target_rel, 01755, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
+          if (must_be_dir_under_root)
+            {
+              mode_t mode;
+              const char *target_not_resolved = def->mounts[i]->destination;
+
+              while (*target_not_resolved == '/')
+                target_not_resolved++;
+
+              ret = get_file_type_at (rootfsfd, &mode, true, target_not_resolved);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              if (! S_ISDIR (mode))
+                return crun_make_error (err, ENOTDIR, "invalid target for `%s`", type);
+
+              if (strchr (target_not_resolved, '/'))
+                return crun_make_error (err, EINVAL, "target for `%s` must be under the rootfs", type);
+            }
         }
       else
         {
