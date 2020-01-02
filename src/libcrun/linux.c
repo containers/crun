@@ -1123,7 +1123,10 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
             target = def->mounts[i]->destination;
           else
             {
-              xasprintf (&target_buffer, "%s/%s", rootfs, resolved_path + 1);
+              const char *basename = resolved_path;
+              while (*basename == '/')
+                basename++;
+              xasprintf (&target_buffer, "%s/%s", rootfs, basename);
               target = target_buffer;
             }
         }
