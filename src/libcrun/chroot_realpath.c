@@ -20,6 +20,7 @@
  * 2005/09/12: Dan Howell (modified from realpath.c to emulate chroot)
  * 2019/04/19: Giuseppe Scrivano (on ENOENT return the part that could be resolved)
  * 2019/09/30: Giuseppe Scrivano (follow symlinks for the last component)
+ * 2020/02/02: Giuseppe Scrivano (don't lose terminal '/' if an absolute symlink is found)
  */
 
 #ifdef HAVE_CONFIG_H
@@ -149,9 +150,11 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 
 			/* Note: readlink doesn't add the null byte. */
 			link_path[n] = '\0';
-			if (*link_path == '/')
+			if (*link_path == '/') {
 				/* Start over for an absolute symlink. */
 				new_path = got_path_root;
+				*new_path++ = '/';
+			}
 			else
 				/* Otherwise back up over this component. */
 				while (*(--new_path) != '/');
