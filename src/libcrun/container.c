@@ -612,6 +612,10 @@ container_init_setup (void *args, const char *notify_socket,
         return ret;
     }
 
+  ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
+
   ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -787,10 +791,6 @@ container_init (void *args, const char *notify_socket, int sync_socket,
     }
 
   crun_set_output_handler (log_write_to_stderr, NULL, false);
-
-  ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
   if (def->process && def->process->no_new_privileges)
     {
