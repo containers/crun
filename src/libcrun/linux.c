@@ -416,6 +416,7 @@ do_mount (libcrun_container_t *container,
   const char *temporary_mount = NULL;
   bool use_temporary_mount = false;
   const char *real_target = target;
+  bool single_instance = false;
   bool needs_remount = false;
   cleanup_close int fd = -1;
   char target_buffer[64];
@@ -531,21 +532,31 @@ do_mount (libcrun_container_t *container,
 
   if (mountflags & MS_RDONLY)
     needs_remount = true;
+  if (data && fstype && strcmp (fstype, "proc") == 0)
+    {
+      single_instance = true;
+      needs_remount = true;
+    }
 
   if (needs_remount)
     {
-      unsigned long remount_flags = MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS);
+      unsigned long remount_flags = \
+        MS_REMOUNT                        \
+        | (single_instance ? 0 : MS_BIND) \
+        | (mountflags & ~ALL_PROPAGATIONS);
 
       if ((remount_flags & MS_RDONLY) == 0)
         {
-          ret = do_remount (fd, target, remount_flags, NULL, err);
+          ret = do_remount (fd, target, remount_flags, data, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
           struct remount_s *r;
-          r = make_remount (fd, target, remount_flags, NULL, get_private_data (container)->remounts);
+
+          r = make_remount (fd, target, remount_flags, data,
+                            get_private_data (container)->remounts);
           fd = -1; /* The remount owns the fd.  */
           get_private_data (container)->remounts = r;
         }
