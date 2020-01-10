@@ -2751,6 +2751,9 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
       fds[i] = open (ns_join, O_RDONLY);
       if (UNLIKELY (fds[i] < 0))
         {
+          /* If the namespace doesn't exist, just ignore it.  */
+          if (errno == ENOENT)
+            continue;
           ret = crun_make_error (err, errno, "open `%s`", ns_join);
           goto exit;
         }
