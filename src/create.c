@@ -116,7 +116,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
 
   if (bundle != NULL)
     if (chdir (bundle) < 0)
-      libcrun_fail_with_error (errno, "chdir '%s' failed", bundle);
+      libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
 
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))

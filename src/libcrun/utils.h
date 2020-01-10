@@ -74,7 +74,19 @@ int crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_er
 
 int crun_ensure_file (const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
+int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
+
+int crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
+
+int check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *fdname, libcrun_error_t *err);
+
+int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+
+int crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+
 int crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err);
+
+int crun_dir_p_at (int dirfd, const char *path, bool nofollow, libcrun_error_t *err);
 
 int detach_process ();
 
@@ -142,5 +154,10 @@ char *secure_getenv (char const *name);
 
 const char *find_annotation (libcrun_container_t *container, const char *name);
 
+int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);
+
+int get_file_type (mode_t *mode, bool nofollow, const char *path);
+
+int get_file_type_fd (int fd, mode_t *mode);
 
 #endif

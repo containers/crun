@@ -115,7 +115,7 @@ is_rwm (const char *str, libcrun_error_t *err)
         break;
 
       default:
-        return crun_make_error (err, errno, "invalid mode specified '%s'", str);
+        return crun_make_error (err, errno, "invalid mode specified `%s`", str);
       }
 
   return r && w && m ? 1 : 0;
@@ -170,7 +170,7 @@ enable_controllers (oci_container_linux_resources *resources, const char *path, 
       xasprintf (&cgroup_path, "/sys/fs/cgroup%s", tmp_path);
       ret = mkdir (cgroup_path, 0755);
       if (ret < 0 && errno != EEXIST) {
-        return crun_make_error (err, errno, "create '%s'", cgroup_path);
+        return crun_make_error (err, errno, "create `%s`", cgroup_path);
       }
 
       if (next_slash)
@@ -205,7 +205,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open '%s'", path);
+    return crun_make_error (err, errno, "open `%s`", path);
 
   if (cpus[0] == '\0')
     {
@@ -292,7 +292,7 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open '%s'", path);
+    return crun_make_error (err, errno, "open `%s`", path);
 
   for (i = 0; files[i]; i++)
     {
@@ -326,7 +326,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
       if (UNLIKELY (ret < 0))
         {
           if (errno != EROFS)
-            return crun_make_error (err, errno, "creating cgroup directory '%s'", cgroup_path);
+            return crun_make_error (err, errno, "creating cgroup directory `%s`", cgroup_path);
 
          crun_error_release (err);
          return 0;

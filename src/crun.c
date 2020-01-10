@@ -262,9 +262,9 @@ void
 crun_assert_n_args (int n, int min, int max)
 {
   if (min >= 0 && n < min)
-    error (EXIT_FAILURE, 0, "'%s' requires a minimum of %d arguments", command->name, min);
+    error (EXIT_FAILURE, 0, "`%s` requires a minimum of %d arguments", command->name, min);
   if (max >= 0 && n > max)
-    error (EXIT_FAILURE, 0, "'%s' requires a maximum of %d arguments", command->name, max);
+    error (EXIT_FAILURE, 0, "`%s` requires a maximum of %d arguments", command->name, max);
 }
 
 static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };

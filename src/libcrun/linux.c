@@ -58,6 +58,7 @@ struct remount_s
 {
   struct remount_s *next;
   char *target;
+  int targetfd;
   unsigned long flags;
   char *data;
 };
@@ -75,6 +76,13 @@ struct private_data_s
   bool mount_dev_from_host;
   unsigned long rootfs_propagation;
   bool deny_setgroups;
+
+  const char *rootfs;
+  int rootfsfd;
+  size_t rootfslen;
+
+  char *tmpmountdir;
+  char *tmpmountfile;
 };
 
 struct linux_namespace_s
@@ -91,6 +99,7 @@ get_private_data (struct libcrun_container_s *container)
       struct private_data_s *p = xmalloc (sizeof (*p));
       memset (p, 0, sizeof (*p));
       container->private_data = p;
+      p->rootfsfd = -1;
     }
   return container->private_data;
 }
@@ -137,7 +146,7 @@ libcrun_create_keyring (const char *name, libcrun_error_t *err)
 {
   int ret = syscall_keyctl_join (name);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "create keyring '%s'", name);
+    return crun_make_error (err, errno, "create keyring `%s`", name);
   return 0;
 }
 
@@ -258,51 +267,65 @@ pivot_root (const char * new_root, const char * put_old)
 static void
 free_remount (struct remount_s *r)
 {
+  if (r->targetfd >= 0)
+    close (r->targetfd);
   free (r->data);
   free (r->target);
   free (r);
 }
 
 static struct remount_s *
-make_remount (const char *target, unsigned long flags, const char *data, struct remount_s *next)
+make_remount (int targetfd, const char *target, unsigned long flags, const char *data, struct remount_s *next)
 {
   struct remount_s *ret = xmalloc (sizeof (*ret));
   ret->target = xstrdup (target);
   ret->flags = flags;
   ret->data = data ? xstrdup (data) : NULL;
   ret->next = next;
+  ret->targetfd = targetfd;
   return ret;
 }
 
 static int
-do_remount (const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
+do_remount (int targetfd, const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
 {
   int ret;
+  char target_buffer[64];
+  const char *real_target = target;
 
-  ret = mount (NULL, target, NULL, flags, data);
+  if (targetfd >= 0)
+    {
+      sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+      real_target = target_buffer;
+    }
+
+  ret = mount (NULL, real_target, NULL, flags, data);
   if (UNLIKELY (ret < 0))
     {
       unsigned long remount_flags;
       struct statfs sfs;
 
-      ret = statfs (target, &sfs);
+      ret = statfs (real_target, &sfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "statfs '%s'", target);
+        return crun_make_error (err, errno, "statfs `%s`", real_target);
 
       remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
 
-      ret = mount (NULL, target, NULL, flags | remount_flags, data);
-      if (LIKELY (ret == 0))
-        return 0;
-
-      /* If it still fails try to add MS_RDONLY.  */
-      if (sfs.f_flags & MS_RDONLY)
+      if ((flags | remount_flags) != flags)
         {
-          remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RDONLY);
-          ret = mount ("none", target, "", flags | remount_flags, data);
+          ret = mount (NULL, real_target, NULL, flags | remount_flags, data);
+          if (LIKELY (ret == 0))
+            return 0;
+
+          /* If it still fails try to add MS_RDONLY.  */
+          if ((sfs.f_flags & MS_RDONLY) && ((flags & MS_RDONLY) == 0))
+            {
+              remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RDONLY);
+              ret = mount ("none", real_target, "", flags | remount_flags, data);
+            }
         }
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "remount '%s'", target);
+        return crun_make_error (err, errno, "remount `%s`", target);
     }
   return 0;
 }
@@ -316,7 +339,7 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
     {
       struct remount_s *next = r->next;
 
-      ret = do_remount (r->target, r->flags, r->data, err);
+      ret = do_remount (r->targetfd, r->target, r->flags, r->data, err);
       if (UNLIKELY (ret < 0))
         goto cleanup;
 
@@ -337,19 +360,97 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 static int
+check_fd_under_rootfs (libcrun_container_t *container, int fd, const char *target, libcrun_error_t *err)
+{
+  const char *rootfs = get_private_data (container)->rootfs;
+  size_t rootfslen = get_private_data (container)->rootfslen;
+
+  return check_fd_under_path (rootfs, rootfslen, fd, target, err);
+}
+
+static int
+open_mount_target (libcrun_container_t *container, const char *target, libcrun_error_t *err)
+{
+  int ret;
+  const char *rootfs = get_private_data (container)->rootfs;
+  int rootfsfd = get_private_data (container)->rootfsfd;
+  size_t rootfslen = get_private_data (container)->rootfslen;
+  size_t targetlen = strlen (target);
+  const char *target_rel;
+  cleanup_close int targetfd = -1;
+
+  if (rootfsfd < 0)
+   return crun_make_error (err, 0, "invalid rootfs state");
+
+  if (targetlen <= rootfslen || memcmp (target, rootfs, rootfslen) != 0)
+    return crun_make_error (err, 0, "target `%s` is not under the rootfs", target);
+
+  target_rel = target + rootfslen + 1;
+
+  targetfd = openat (rootfsfd, target_rel, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (targetfd < 0))
+    return crun_make_error (err, errno, "open target `%s`", target);
+
+  ret = check_fd_under_rootfs (container, targetfd, target, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = targetfd;
+  targetfd = -1;
+  return ret;
+}
+
+static int
 do_mount (libcrun_container_t *container,
           const char *source,
+          int targetfd,
           const char *target,
           const char *fstype,
           unsigned long mountflags,
           const void *data,
-          int skip_labelling,
+          bool skip_labelling,
           libcrun_error_t *err)
 {
-  int ret = 0;
-  cleanup_free char *data_with_label = NULL;
   const char *label = container->container_def->linux->mount_label;
+  cleanup_free char *data_with_label = NULL;
+  const char *temporary_mount = NULL;
+  bool use_temporary_mount = false;
+  const char *real_target = target;
+  bool single_instance = false;
   bool needs_remount = false;
+  cleanup_close int fd = -1;
+  char target_buffer[64];
+  int ret = 0;
+
+#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
+#define ALL_PROPAGATIONS (MS_REC | ALL_PROPAGATIONS_NO_REC)
+
+  if (targetfd >= 0)
+    {
+      use_temporary_mount =                                             \
+        (get_private_data (container)->unshare_flags & CLONE_NEWNS)     \
+        && get_private_data (container)->tmpmountdir                    \
+        && (mountflags & (ALL_PROPAGATIONS | MS_BIND | MS_RDONLY));
+      sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+      real_target = target_buffer;
+    }
+
+  /* The temporary mount is used to solve a race condition where the mount point we created
+     on top of volumes that are accessible also from other containers.  The temporary mount
+     once configured is moved to its destination under the rootfs.  */
+  if (use_temporary_mount)
+    {
+      mode_t mode;
+
+      ret = get_file_type_fd (targetfd, &mode);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if ((mode & S_IFMT) == S_IFDIR)
+        temporary_mount = get_private_data (container)->tmpmountdir;
+      else
+        temporary_mount = get_private_data (container)->tmpmountfile;
+    }
 
   if (!skip_labelling)
     {
@@ -359,19 +460,17 @@ do_mount (libcrun_container_t *container,
       data = data_with_label;
     }
 
-#define ALL_PROPAGATIONS (MS_REC | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
-#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
-
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
     {
+      const char *to = use_temporary_mount ? temporary_mount : real_target;
       unsigned long flags = mountflags & ~(ALL_PROPAGATIONS_NO_REC | MS_RDONLY);
 
-      ret = mount (source, target, fstype, flags, data);
+      ret = mount (source, to, fstype, flags, data);
       if (UNLIKELY (ret < 0))
         {
           int saved_errno = errno;
 
-          if (strcmp (fstype ? fstype : "", "sysfs") == 0)
+          if (fstype && strcmp (fstype, "sysfs") == 0)
             {
               /* If we are running in an user namespace, just bind mount /sys if creating
                  sysfs failed.  */
@@ -379,44 +478,76 @@ do_mount (libcrun_container_t *container,
               if (UNLIKELY (ret < 0))
                 return ret;
 
-              ret = mount ("/sys", target, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
+              ret = mount ("/sys", to, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
               if (LIKELY (ret == 0))
                 return 0;
             }
 
-          return crun_make_error (err, saved_errno, "mount '%s' to '%s'", source, target);
+          return crun_make_error (err, saved_errno, "mount `%s` to '%s'", source, target);
         }
 
       if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
         needs_remount = true;
+
+      if (targetfd >= 0)
+        {
+          /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
+          if (use_temporary_mount)
+            fd = open (temporary_mount, O_CLOEXEC | O_PATH);
+          else
+            fd = open_mount_target (container, target, err);
+          if (UNLIKELY (fd < 0))
+            {
+              if (use_temporary_mount)
+                umount (temporary_mount);
+              return fd;
+            }
+
+          /* We have a fd pointing to the new mountpoint (done in a safe location).  We can move
+             the mount to the destination under the rootfs.  */
+          if (use_temporary_mount)
+            {
+              ret = mount (temporary_mount, real_target, NULL, MS_MOVE, NULL);
+              if (UNLIKELY (ret < 0))
+                {
+                  umount (temporary_mount);
+                  return crun_make_error (err, errno, "move mount to '%s'", target);
+                }
+            }
+
+          targetfd = fd;
+          sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+          real_target = target_buffer;
+        }
     }
 
   if (mountflags & ALL_PROPAGATIONS)
     {
       unsigned long rec = mountflags & MS_REC;
-      unsigned long propagations = mountflags & (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE);
-      unsigned long all_propagations[] = {MS_SHARED, MS_PRIVATE, MS_SLAVE, MS_UNBINDABLE, 0};
-      size_t s;
-      for (s = 0; all_propagations[s]; s++)
-        {
-          if (!(propagations & all_propagations[s]))
-            continue;
-          ret = mount (NULL, target, NULL, rec | all_propagations[s], NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for '%s'", target);
-        }
+      unsigned long propagation = mountflags & (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE);
+      ret = mount (NULL, real_target, NULL, rec | propagation, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set propagation for `%s`", target);
     }
 
   if (mountflags & MS_RDONLY)
     needs_remount = true;
+  if (data && fstype && strcmp (fstype, "proc") == 0)
+    {
+      single_instance = true;
+      needs_remount = true;
+    }
 
   if (needs_remount)
     {
-      unsigned long remount_flags = MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS);
+      unsigned long remount_flags = \
+        MS_REMOUNT                        \
+        | (single_instance ? 0 : MS_BIND) \
+        | (mountflags & ~ALL_PROPAGATIONS);
 
       if ((remount_flags & MS_RDONLY) == 0)
         {
-          ret = do_remount (target, remount_flags, NULL, err);
+          ret = do_remount (fd, target, remount_flags, data, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -424,7 +555,9 @@ do_mount (libcrun_container_t *container,
         {
           struct remount_s *r;
 
-          r = make_remount (target, remount_flags, NULL, get_private_data (container)->remounts);
+          r = make_remount (fd, target, remount_flags, data,
+                            get_private_data (container)->remounts);
+          fd = -1; /* The remount owns the fd.  */
           get_private_data (container)->remounts = r;
         }
     }
@@ -434,6 +567,7 @@ do_mount (libcrun_container_t *container,
 
 static int
 do_mount_cgroup_v2 (libcrun_container_t *container,
+                    int targetfd,
                     const char *target,
                     unsigned long mountflags,
                     libcrun_error_t *err)
@@ -445,14 +579,14 @@ do_mount_cgroup_v2 (libcrun_container_t *container,
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  ret = do_mount (container, "cgroup2", target, "cgroup2", mountflags, NULL, 1, err);
+  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, 1, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) == EPERM || crun_error_get_errno (err) == EBUSY)
         {
           crun_error_release (err);
 
-          ret = do_mount (container, "/sys/fs/cgroup", target, "", MS_BIND | mountflags, NULL, 0, err);
+          ret = do_mount (container, "/sys/fs/cgroup", targetfd, target, NULL, MS_BIND | mountflags, NULL, 0, err);
         }
       return ret;
     }
@@ -477,6 +611,7 @@ has_mount_for (libcrun_container_t *container, const char *destination)
 static int
 do_mount_cgroup_v1 (libcrun_container_t *container,
                     const char *source,
+                    int targetfd,
                     const char *target,
                     unsigned long mountflags,
                     libcrun_error_t *err)
@@ -491,7 +626,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
-  ret = do_mount (container, source, target, "tmpfs", mountflags, "size=1024k", 0, err);
+  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags, "size=1024k", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -508,6 +643,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
       cleanup_free char *source_subsystem = NULL;
       cleanup_free char *subsystem_path = NULL;
       char *subpath, *subsystem, *it;
+      cleanup_close int subsystemfd = -1;
       subsystem = strchr (from, ':') + 1;
       subpath = strchr (subsystem, ':') + 1;
       *(subpath - 1) = '\0';
@@ -528,11 +664,15 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
       xasprintf (&source_path, "%s/%s", source_subsystem, subpath);
       xasprintf (&subsystem_path, "%s/%s", target, subsystem);
 
-      ret = mkdir (subsystem_path, 0755);
+      ret = mkdirat (targetfd, subsystem, 0755);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mkdir for '%s' failed", subsystem_path);
+        return crun_make_error (err, errno, "mkdir `%s`", subsystem_path);
 
-      ret = do_mount (container, source_path, subsystem_path, "", MS_BIND | mountflags, NULL, 0, err);
+      subsystemfd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open `%s`", subsystem_path);
+
+      ret = do_mount (container, source_path, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         {
           if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
@@ -555,6 +695,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
 static int
 do_mount_cgroup (libcrun_container_t *container,
                  const char *source,
+                 int targetfd,
                  const char *target,
                  unsigned long mountflags,
                  libcrun_error_t *err)
@@ -568,10 +709,10 @@ do_mount_cgroup (libcrun_container_t *container,
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return do_mount_cgroup_v2 (container, target, mountflags, err);
+      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, err);
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
-      return do_mount_cgroup_v1 (container, source, target, mountflags, err);
+      return do_mount_cgroup_v1 (container, source, targetfd, target, mountflags, err);
     }
 
   return crun_make_error (err, 0, "unknown cgroups mode %d", cgroup_mode);
@@ -597,79 +738,140 @@ struct device_s needed_devs[] =
     {NULL, '\0', 0, 0, 0}
   };
 
+/* Check if the specified path is a direct child of /dev.  If it is
+ return a pointer to the basename.  */
+static const char *
+relative_path_under_dev (const char *path)
+{
+  if (path[0] != '/')
+    return path;
+  if (strncmp (path, "/dev/", 5) == 0)
+    {
+      if (strchr (path + 5, '/'))
+        return NULL;
+      return path + 5;
+    }
+  return NULL;
+}
+
 static int
 create_dev (libcrun_container_t *container, int devfd, struct device_s *device, const char *rootfs, bool binds, bool ensure_parent_dir, libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
+  char fd_buffer[64];
   const char *fullname = device->path;
+  cleanup_close int fd = -1;
+
   if (binds)
     {
+      cleanup_close int fd = - 1;
       char *path_to_container, buffer[PATH_MAX];
 
       path_to_container = chroot_realpath (rootfs, device->path, buffer);
       if (path_to_container == NULL)
-        return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
+        return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
 
       ret = crun_ensure_file (path_to_container, 0700, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_mount (container, fullname, path_to_container, "", MS_BIND | MS_PRIVATE, NULL, 0, err);
+      fd = open_mount_target (container, path_to_container, err);
+      if (UNLIKELY (fd < 0))
+        return ret;
+
+      ret = do_mount (container, fullname, fd, path_to_container, NULL, MS_BIND | MS_PRIVATE, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
+      const char *rel_dev;
+
       dev = makedev (device->major, device->minor);
 
-      if (device->path[0] != '/')
+      /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
+         fails when the destination already exists or is a symlink, it is safe to use it directly.
+         If it is not a direct child, then first get a fd to the dirfd.
+      */
+      rel_dev = relative_path_under_dev (device->path);
+      if (rel_dev)
         {
-          ret = mknodat (devfd, device->path, device->mode | type, dev);
+          cleanup_free char *dev_target = NULL;
+
+          ret = mknodat (devfd, rel_dev, device->mode | type, dev);
           /* We don't fail when the file already exists.  */
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknod '%s'", device->path);
+            return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          ret = fchmodat (devfd, device->path, device->mode, 0);
+          fd = openat (devfd, rel_dev, O_CLOEXEC | O_PATH);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "open `/dev/%s`", rel_dev);
+
+          sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+
+          xasprintf (&dev_target, "%s%s", rootfs, rel_dev);
+          ret = check_fd_under_rootfs (container, fd, dev_target, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat '%s'", device->path);
+            return ret;
+
+          ret = chmod (fd_buffer, device->mode);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
         }
       else
         {
           char *resolved_path, buffer[PATH_MAX];
+          cleanup_close int dirfd = -1;
+          char *basename, *tmp;
 
           resolved_path = chroot_realpath (rootfs, device->path, buffer);
           if (resolved_path == NULL)
-            return crun_make_error (err, errno, "cannot resolve '%s'", device->path);
+            return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
+
+          tmp = strrchr (resolved_path, '/');
+          *tmp = '\0';
+          basename = tmp + 1;
 
           if (ensure_parent_dir)
             {
-              char *tmp;
-
-              tmp = strrchr (resolved_path, '/');
-              if (tmp != resolved_path)
-                {
-                  *tmp = '\0';
-                  ret = crun_ensure_directory (resolved_path, 0700, true, err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-                  *tmp = '/';
-                }
+              ret = crun_ensure_directory (resolved_path, 0700, true, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
             }
 
-          ret = mknod (resolved_path, device->mode | type, dev);
+          dirfd = open (resolved_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+          if (UNLIKELY (dirfd < 0))
+            return crun_make_error (err, errno, "open `%s`", resolved_path);
+
+          ret = check_fd_under_rootfs (container, dirfd, resolved_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = mknodat (dirfd, basename, device->mode | type, dev);
+
           /* We don't fail when the file already exists.  */
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknod '%s'", device->path);
+            return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          ret = chmod (resolved_path, device->mode);
+          fd = openat (dirfd, basename, O_CLOEXEC | O_PATH);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "open `%s/%s`", resolved_path, basename);
+
+          sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+
+          ret = check_fd_under_rootfs (container, fd, resolved_path, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat '%s'", device->path);
+            return ret;
+
+          ret = chmod (fd_buffer, device->mode);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
         }
 
     }
@@ -694,29 +896,25 @@ static struct symlink_s symlinks[] =
   };
 
 static int
-create_missing_devs (libcrun_container_t *container, const char *rootfs, bool binds, libcrun_error_t *err)
+create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *rootfs, bool binds, libcrun_error_t *err)
 {
   int ret;
   size_t i;
   struct device_s *it;
-  cleanup_close int dirfd = open (rootfs, O_DIRECTORY | O_RDONLY);
   cleanup_close int devfd = -1;
   oci_container *def = container->container_def;
 
-  if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open rootfs directory '%s'", rootfs);
-
-  devfd = openat (dirfd, "dev", O_RDONLY | O_DIRECTORY);
+  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
-    return crun_make_error (err, errno, "open /dev directory in '%s'", rootfs);
+    return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
 
   for (i = 0; i < def->linux->devices_len; i++)
     {
       struct device_s device = {def->linux->devices[i]->path,
-                                     def->linux->devices[i]->type,
-                                     def->linux->devices[i]->major,
-                                     def->linux->devices[i]->minor,
-                                     def->linux->devices[i]->file_mode};
+                                def->linux->devices[i]->type,
+                                def->linux->devices[i]->major,
+                                def->linux->devices[i]->minor,
+                                def->linux->devices[i]->file_mode};
       ret = create_dev (container, devfd, &device, rootfs, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -741,7 +939,60 @@ create_missing_devs (libcrun_container_t *container, const char *rootfs, bool bi
 }
 
 static int
-do_masked_and_readonly_paths (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
+do_masked_or_readonly_path (libcrun_container_t *container,
+                            int rootfsfd,
+                            const char *rootfs,
+                            const char *rel_path,
+                            bool readonly,
+                            libcrun_error_t *err)
+{
+  cleanup_free char *path = NULL;
+  cleanup_close int pathfd = -1;
+  int ret;
+  mode_t mode;
+
+  if (rel_path[0] == '/')
+    rel_path++;
+
+  xasprintf (&path, "%s/%s", rootfs, rel_path);
+
+  pathfd = openat (rootfsfd, rel_path, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (pathfd < 0))
+    {
+      if (errno != ENOENT && errno != EACCES)
+        return crun_make_error (err, errno, "open `%s`", path);
+
+      crun_error_release (err);
+      return 0;
+    }
+
+  if (readonly)
+    {
+      char source_buffer[64];
+      sprintf (source_buffer, "/proc/self/fd/%d", pathfd);
+
+      ret = do_mount (container, source_buffer, pathfd, path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      ret = get_file_type_fd (pathfd, &mode);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if ((mode & S_IFMT) == S_IFDIR)
+        ret = do_mount (container, "tmpfs", pathfd, path, "tmpfs", MS_RDONLY, "size=0k", 0, err);
+      else
+        ret = do_mount (container, "/dev/null", pathfd, path, NULL, MS_BIND | MS_UNBINDABLE | MS_REC, NULL, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+static int
+do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -749,54 +1000,13 @@ do_masked_and_readonly_paths (libcrun_container_t *container, const char *rootfs
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
-      cleanup_free char *path = NULL;
-      int dir;
-      xasprintf (&path, "%s/%s", rootfs, def->linux->masked_paths[i]);
-
-      ret = crun_path_exists (path, err);
-      if (UNLIKELY (ret < 0))
-        {
-          if (errno != EACCES)
-            return ret;
-
-          crun_error_release (err);
-          continue;
-        }
-
-      if (ret == 0)
-        continue;
-
-      dir = crun_dir_p (path, true, err);
-      if (UNLIKELY (dir < 0))
-        return ret;
-
-      if (dir)
-        ret = do_mount (container, "tmpfs", path, "tmpfs", MS_RDONLY, "size=0k", 0, err);
-      else
-        ret = do_mount (container, "/dev/null", path, "", MS_BIND | MS_UNBINDABLE | MS_REC, NULL, 0, err);
+      ret = do_masked_or_readonly_path (container, rootfsfd, rootfs, def->linux->masked_paths[i], false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   for (i = 0; i < def->linux->readonly_paths_len; i++)
     {
-      cleanup_free char *path = NULL;
-
-      xasprintf (&path, "%s/%s", rootfs, def->linux->readonly_paths[i]);
-
-      ret = crun_path_exists (path, err);
-      if (UNLIKELY (ret < 0))
-        {
-          if (errno != EACCES)
-            return ret;
-
-          crun_error_release (err);
-          continue;
-        }
-
-      if (ret == 0)
-        continue;
-
-      ret = do_mount (container, path, path, "", MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL, 0, err);
+      ret = do_masked_or_readonly_path (container, rootfsfd, rootfs, def->linux->readonly_paths[i], true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -813,11 +1023,11 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   if (UNLIKELY (oldrootfd < 0))
     return crun_make_error (err, errno, "open '/'");
   if (UNLIKELY (newrootfd < 0))
-    return crun_make_error (err, errno, "open '%s'", rootfs);
+    return crun_make_error (err, errno, "open `%s`", rootfs);
 
   ret = fchdir (newrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fchdir '%s'", rootfs);
+    return crun_make_error (err, errno, "fchdir `%s`", rootfs);
 
   ret = pivot_root (".", ".");
   if (UNLIKELY (ret < 0))
@@ -825,9 +1035,9 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
 
   ret = fchdir (oldrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fchdir '%s'", rootfs);
+    return crun_make_error (err, errno, "fchdir `%s`", rootfs);
 
-  ret = do_mount (container, "", ".", "", MS_REC | MS_PRIVATE, NULL, 0, err);
+  ret = do_mount (container, NULL, -1, ".", NULL, MS_REC | MS_PRIVATE, NULL, 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -890,11 +1100,12 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
 }
 
 static int
-do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
+do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
   oci_container *def = container->container_def;
+  size_t rootfslen = get_private_data (container)->rootfslen;
   for (i = 0; i < def->mounts_len; i++)
     {
       cleanup_free char *target_buffer = NULL;
@@ -903,11 +1114,12 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       char *source;
       unsigned long flags = 0;
       unsigned long extra_flags = 0;
-      int skip_labelling;
       int is_dir = 1;
       char *resolved_path, buffer_resolved_path[PATH_MAX];
       char *target = NULL;
+      char *target_rel = NULL;
       cleanup_close int copy_from_fd = -1;
+      cleanup_close int targetfd = -1;
 
       resolved_path = chroot_realpath (rootfs, def->mounts[i]->destination, buffer_resolved_path);
       if (resolved_path != NULL)
@@ -915,17 +1127,22 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       else
         {
           if (errno != ENOENT)
-            return crun_make_error (err, errno, "cannot resolve %s", def->mounts[i]->destination);
+            return crun_make_error (err, errno, "cannot resolve `%s`", def->mounts[i]->destination);
 
           resolved_path = def->mounts[i]->destination;
           if (!rootfs)
             target = def->mounts[i]->destination;
           else
             {
-              xasprintf (&target_buffer, "%s/%s", rootfs, resolved_path + 1);
+              const char *basename = resolved_path;
+              while (*basename == '/')
+                basename++;
+              xasprintf (&target_buffer, "%s/%s", rootfs, basename);
               target = target_buffer;
             }
         }
+
+      target_rel = target + rootfslen + 1;
 
       type = def->mounts[i]->type;
 
@@ -954,7 +1171,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
         }
 
       if (type == NULL)
-        return crun_make_error (err, 0, "invalid mount type for %s", def->mounts[i]->destination);
+        return crun_make_error (err, 0, "invalid mount type for `%s`", def->mounts[i]->destination);
 
       if (strcmp (type, "bind") == 0)
         {
@@ -990,13 +1207,36 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
       if (is_dir)
         {
-          ret = crun_ensure_directory (target, 01755, true, err);
+          /* Enforce /proc and /sys to be directories without any symlink under rootfs.  */
+          bool must_be_dir_under_root = strcmp (type, "sysfs") == 0
+            || strcmp (type, "proc") == 0;
+
+          ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfslen, target_rel, 01755, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
+          if (must_be_dir_under_root)
+            {
+              mode_t mode;
+              const char *target_not_resolved = def->mounts[i]->destination;
+
+              while (*target_not_resolved == '/')
+                target_not_resolved++;
+
+              ret = get_file_type_at (rootfsfd, &mode, true, target_not_resolved);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              if (! S_ISDIR (mode))
+                return crun_make_error (err, ENOTDIR, "invalid target for `%s`", type);
+
+              if (strchr (target_not_resolved, '/'))
+                return crun_make_error (err, EINVAL, "target for `%s` must be under the rootfs", type);
+            }
         }
       else
         {
-          ret = crun_ensure_file (target, 0755, true, err);
+          ret = crun_safe_ensure_file_at (rootfsfd, rootfs, rootfslen, target_rel, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1006,7 +1246,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
           if (strcmp (type, "tmpfs") != 0)
             return crun_make_error (err, errno, "tmpcopyup can be used only with tmpfs");
 
-          copy_from_fd = open (target, O_DIRECTORY);
+          copy_from_fd = openat (rootfsfd, target, O_DIRECTORY);
           if (UNLIKELY (copy_from_fd < 0))
             {
               if (errno != ENOTDIR)
@@ -1016,19 +1256,23 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
-      skip_labelling = strcmp (type, "sysfs") == 0
-        || strcmp (type, "proc") == 0
-        || strcmp (type, "mqueue") == 0;
+      targetfd = open_mount_target (container, target, err);
+      if (UNLIKELY (targetfd < 0))
+        return targetfd;
 
       if (strcmp (type, "cgroup") == 0)
         {
-          ret = do_mount_cgroup (container, source, target, flags, err);
+          ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
-          ret = do_mount (container, source, target, type, flags, data, skip_labelling, err);
+          bool skip_labelling = strcmp (type, "sysfs") == 0
+            || strcmp (type, "proc") == 0
+            || strcmp (type, "mqueue") == 0;
+
+          ret = do_mount (container, source, targetfd, target, type, flags, data, skip_labelling, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1037,7 +1281,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
         {
           int destfd, tmpfd;
 
-          destfd = open (target, O_DIRECTORY);
+          destfd = openat (rootfsfd, target, O_DIRECTORY);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open target to write for tmpcopyup");
 
@@ -1084,7 +1328,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
     return notify_fd;
 
   if (UNLIKELY (chmod (host_path, 0777) < 0))
-    return crun_make_error (err, errno, "chmod %s", host_path);
+    return crun_make_error (err, errno, "chmod `%s`", host_path);
 
   *notify_socket_out = notify_fd;
   notify_fd = -1;
@@ -1118,7 +1362,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
 
   ret = mkdir (host_notify_socket_path_dir, 0700);
   if (ret < 0)
-    return crun_make_error (err, errno, "mkdir %s", host_notify_socket_path_dir);
+    return crun_make_error (err, errno, "mkdir `%s`", host_notify_socket_path_dir);
 
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
@@ -1148,7 +1392,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mount (container, host_notify_socket_path, container_notify_socket_path_dir, "",
+  ret = do_mount (container, host_notify_socket_path, -1, container_notify_socket_path_dir, NULL,
                   MS_BIND | MS_REC | MS_PRIVATE, NULL, 0, err);
   if (UNLIKELY (ret < 0))
    return ret;
@@ -1187,10 +1431,104 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
                 return 0;
             }
         }
-      return crun_make_error (err, errno, "make %s private", tmp);
+      return crun_make_error (err, errno, "make `%s` private", tmp);
     }
   return 0;
 }
+
+static int
+allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out,
+                     char **tmpdir_out, char **tmpfile_out, libcrun_error_t *err)
+{
+  cleanup_free char *state_dir = NULL;
+  cleanup_free char *tmpdir = NULL;
+  cleanup_free char *tmpfile = NULL;
+  char *where = NULL;
+  int ret;
+
+  state_dir = libcrun_get_state_directory (container->context->state_root,
+                                           container->context->id);
+
+  where = state_dir;
+
+ repeat:
+  xasprintf (&tmpdir, "%s/tmp-dir", where);
+  ret = crun_ensure_directory (tmpdir, 0700, true, err);
+  if (UNLIKELY (ret < 0))
+    {
+      /*If the current user has no access to the state directory (e.g. running in an
+        user namespace), then try with a temporary directory.  */
+      if (crun_error_get_errno (err) == EPERM           \
+          || crun_error_get_errno (err) == EROFS        \
+          || crun_error_get_errno (err) == EACCES)
+        {
+          char tmp_dir[32];
+          char *d;
+
+          if (*parent_tmpdir_out == NULL)
+            {
+              strcpy (tmp_dir, "/tmp/libcrun.XXXXXX");
+              d = mkdtemp (tmp_dir);
+              if (d)
+                {
+                  crun_error_release (err);
+                  *parent_tmpdir_out = xstrdup (d);
+                  where = *parent_tmpdir_out;
+                  goto repeat;
+                }
+            }
+
+          return ret;
+        }
+
+      return ret;
+    }
+
+  xasprintf (&tmpfile, "%s/tmp-file", where);
+  ret = crun_ensure_file (tmpfile, 0700, true, err);
+  if (UNLIKELY (ret < 0))
+    {
+      rmdir (tmpdir);
+      return ret;
+    }
+
+  *tmpdir_out = tmpdir;
+  *tmpfile_out = tmpfile;
+  tmpdir = tmpfile = NULL;
+  return 0;
+}
+
+static int
+cleanup_rmdir (void *p)
+{
+  int ret;
+  char **pp = (char **) p;
+  if (*pp)
+    {
+      cleanup_dir DIR *d = NULL;
+      struct dirent *de;
+      cleanup_close int dfd = open (*pp, O_DIRECTORY | O_RDONLY);
+      if (dfd < 0)
+        goto exit;
+      d = fdopendir (dfd);
+      if (d == NULL)
+        goto exit;
+
+      for (de = readdir (d); de; de = readdir (d))
+        {
+          if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
+            continue;
+          ret = unlinkat (dirfd (d), de->d_name, 0);
+          if (ret < 0)
+            unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
+        }
+      unlinkat (AT_FDCWD, *pp, AT_REMOVEDIR);
+    }
+    exit:
+  free (*pp);
+  return 0;
+}
+
 
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
@@ -1198,6 +1536,9 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   oci_container *def = container->container_def;
   int ret = 0, is_user_ns = 0;
   unsigned long rootfs_propagation = 0;
+  cleanup_close int rootfsfd_cleanup = -1;
+  __attribute__((cleanup (cleanup_rmdir))) char *tmpdirparent = NULL;
+  int rootfsfd = -1;
 
   if (def->linux->rootfs_propagation)
     rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL);
@@ -1209,7 +1550,17 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
     {
-      ret = do_mount (container, "", "/", "", rootfs_propagation, NULL, 0, err);
+      char *tmpdir = NULL;
+      char *tmpfile = NULL;
+
+      ret = allocate_tmp_mounts (container, &tmpdirparent, &tmpdir, &tmpfile, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      get_private_data (container)->tmpmountdir = tmpdir;
+      get_private_data (container)->tmpmountfile = tmpfile;
+
+      ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1217,15 +1568,34 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_mount (container, rootfs, rootfs, "", MS_BIND | MS_REC | MS_PRIVATE, NULL, 0, err);
+      ret = make_parent_mount_private (tmpdirparent ? tmpdirparent : tmpdir, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      ret = do_mount (container, rootfs, -1, rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      do_mount (container, NULL, -1, "/tmp", NULL, MS_PRIVATE, NULL, 0, err);
     }
+
+  if (rootfs == NULL)
+    rootfsfd = AT_FDCWD;
+  else
+    {
+      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH|O_CLOEXEC);
+      if (UNLIKELY (rootfsfd < 0))
+        return crun_make_error (err, errno, "open `%s`", rootfs);
+    }
+
+  get_private_data (container)->rootfs = rootfs;
+  get_private_data (container)->rootfsfd = rootfsfd;
+  get_private_data (container)->rootfslen = rootfs ? strlen (rootfs) : 0;
 
   if (def->root->readonly)
     {
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
-      struct remount_s *r = make_remount (rootfs, remount_flags, NULL, get_private_data (container)->remounts);
+      struct remount_s *r = make_remount (rootfsfd, rootfs, remount_flags, NULL, get_private_data (container)->remounts);
       get_private_data (container)->remounts = r;
     }
 
@@ -1233,7 +1603,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mounts (container, rootfs, err);
+  ret = do_mounts (container, rootfsfd, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1247,7 +1617,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   if (!get_private_data (container)->mount_dev_from_host)
     {
-      ret = create_missing_devs (container, rootfs, is_user_ns ? true : false, err);
+      ret = create_missing_devs (container, rootfsfd, rootfs, is_user_ns ? true : false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1256,13 +1626,33 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_masked_and_readonly_paths (container, rootfs, err);
+  ret = do_masked_and_readonly_paths (container, rootfsfd, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   ret = finalize_mounts (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (get_private_data (container)->tmpmountdir)
+    {
+      rmdir (get_private_data (container)->tmpmountdir);
+      free (get_private_data (container)->tmpmountdir);
+      get_private_data (container)->tmpmountdir = NULL;
+    }
+  if (get_private_data (container)->tmpmountfile)
+    {
+      unlink (get_private_data (container)->tmpmountfile);
+      free (get_private_data (container)->tmpmountfile);
+      get_private_data (container)->tmpmountfile = NULL;
+    }
+  if (tmpdirparent)
+    {
+      rmdir (tmpdirparent);
+      free (tmpdirparent);
+      tmpdirparent = NULL;
+    }
+  get_private_data (container)->rootfsfd = -1;
 
   return 0;
 }
@@ -1274,7 +1664,7 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = chdir (rootfs);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to '%s'", rootfs);
+    return crun_make_error (err, errno, "chdir to `%s`", rootfs);
 
   ret = umount2 ("/sys", MNT_DETACH);
   if (UNLIKELY (ret < 0))
@@ -1290,11 +1680,11 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = chroot (".");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chroot to '%s'", rootfs);
+    return crun_make_error (err, errno, "chroot to `%s`", rootfs);
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to '%s'", rootfs);
+    return crun_make_error (err, errno, "chdir to `%s`", rootfs);
 
   return 0;
 }
@@ -1318,7 +1708,7 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
             return ret;
         }
 
-      ret = do_mount (container, "", "/", "", get_private_data (container)->rootfs_propagation, NULL, 0, err);
+      ret = do_mount (container, NULL, -1, "/", NULL, get_private_data (container)->rootfs_propagation, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1326,7 +1716,7 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
     {
       ret = chroot (rootfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chroot to '%s'", rootfs);
+        return crun_make_error (err, errno, "chroot to `%s`", rootfs);
     }
 
   ret = chdir ("/");
@@ -1652,7 +2042,7 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
     {
       cap_value_t cap;
       if (cap_from_name (values[i], &cap) < 0)
-        return crun_make_error (err, 0, "unknown cap: %s", values[i]);
+        return crun_make_error (err, 0, "unknown cap: `%s`", values[i]);
       if (cap < 32)
           caps[0] |= CAP_TO_MASK_0 (cap);
       else
@@ -1773,11 +2163,11 @@ libcrun_set_rlimits (oci_container_process_rlimits_element **new_rlimits, size_t
       char *type = new_rlimits[i]->type;
       int resource = get_rlimit_resource (type);
       if (UNLIKELY (resource < 0))
-        return crun_make_error (err, errno, "invalid rlimit '%s'", type);
+        return crun_make_error (err, errno, "invalid rlimit `%s`", type);
       limit.rlim_cur = new_rlimits[i]->soft;
       limit.rlim_max = new_rlimits[i]->hard;
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
-        return crun_make_error (err, errno, "setrlimit '%s'", type);
+        return crun_make_error (err, errno, "setrlimit `%s`", type);
     }
   return 0;
 }
@@ -1872,7 +2262,7 @@ open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *er
     {
       ret = chown (*slave, container->container_def->process->user->uid, -1);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chown %s", *slave);
+        return crun_make_error (err, errno, "chown `%s`", *slave);
     }
 
   ret = fd;
@@ -1923,7 +2313,7 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
       crun_error_release (err);
     }
 
-  ret = do_mount (container, slave, "/dev/console", "devpts", MS_BIND, NULL, 0, err);
+  ret = do_mount (container, slave, -1, "/dev/console", NULL, MS_BIND, NULL, 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1959,7 +2349,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
     {
       int value = find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: %s", def->linux->namespaces[i]->type);
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
       if (def->linux->namespaces[i]->path == NULL)
         {
@@ -1975,7 +2365,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
           fd = open (def->linux->namespaces[i]->path, O_RDONLY);
           if (UNLIKELY (fd < 0))
-              return crun_make_error (err, errno, "open '%s'", def->linux->namespaces[i]->path);
+              return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
 
           if (value == CLONE_NEWUSER)
             userns_join_index = n_namespaces_to_join;
@@ -2097,7 +2487,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
           ret = setns (namespaces_to_join[userns_join_index], CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
             {
-              crun_make_error (err, errno, "cannot setns '%s'", def->linux->namespaces[userns_join_index]->path);
+              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[userns_join_index]->path);
               goto out;
             }
         }
@@ -2140,7 +2530,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
       ret = setns (namespaces_to_join[i], value);
       if (UNLIKELY (ret < 0))
         {
-          crun_make_error (err, errno, "cannot setns '%s'", def->linux->namespaces[orig_index]->path);
+          crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[orig_index]->path);
           goto out;
         }
       if (value == CLONE_NEWNS)
@@ -2287,7 +2677,7 @@ inherit_env (pid_t pid_to_join, libcrun_error_t *err)
 
   for (str = content; str < content + len; str += strlen (str) + 1)
     if (putenv (str) < 0)
-        return crun_make_error (err, errno, "putenv '%s'", str);
+        return crun_make_error (err, errno, "putenv `%s`", str);
   return ret;
 }
 
@@ -2361,7 +2751,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
       fds[i] = open (ns_join, O_RDONLY);
       if (UNLIKELY (fds[i] < 0))
         {
-          ret = crun_make_error (err, errno, "open '%s'", ns_join);
+          ret = crun_make_error (err, errno, "open `%s`", ns_join);
           goto exit;
         }
     }
@@ -2395,7 +2785,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
               fds_joined[i] = 1;
               continue;
             }
-          crun_make_error (err, errno, "setns '%s'", all_namespaces[i]);
+          crun_make_error (err, errno, "setns `%s`", all_namespaces[i]);
           goto exit;
         }
       fds_joined[i] = 1;
@@ -2547,11 +2937,11 @@ libcrun_set_personality (oci_container_linux_personality *p, libcrun_error_t *er
   else if (strcmp (p->domain, "LINUX32") == 0)
       persona = PER_LINUX32;
   else
-    return crun_make_error (err, 0, "unknown persona specified '%s'", p->domain);
+    return crun_make_error (err, 0, "unknown persona specified `%s`", p->domain);
 
   ret = personality (persona);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "set personality to '%s'", p->domain);
+    return crun_make_error (err, 0, "set personality to `%s`", p->domain);
 
   return 0;
 }

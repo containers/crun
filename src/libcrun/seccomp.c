@@ -191,7 +191,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 
   default_action = get_seccomp_action (def_action, err);
   if (UNLIKELY (default_action == 0))
-    return crun_make_error (err, 0, "invalid seccomp action '%s'", seccomp->default_action);
+    return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->default_action);
 
   ctx = seccomp_init (default_action);
   if (ctx == NULL)
@@ -224,7 +224,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
       size_t j;
       action = get_seccomp_action (seccomp->syscalls[i]->action, err);
       if (UNLIKELY (action == 0))
-        return crun_make_error (err, 0, "invalid seccomp action '%s'", seccomp->syscalls[i]->action);
+        return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->syscalls[i]->action);
 
       if (action == default_action)
         continue;
@@ -236,9 +236,9 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
           if (UNLIKELY (syscall == __NR_SCMP_ERROR))
             {
               if (options & LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL)
-                return crun_make_error (err, 0, "invalid seccomp syscall '%s'", seccomp->syscalls[i]->names[j]);
+                return crun_make_error (err, 0, "invalid seccomp syscall `%s`", seccomp->syscalls[i]->names[j]);
 
-              libcrun_warning ("unknown seccomp syscall '%s' ignored", seccomp->syscalls[i]->names[j]);
+              libcrun_warning ("unknown seccomp syscall `%s` ignored", seccomp->syscalls[i]->names[j]);
               continue;
             }
 
@@ -246,7 +246,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
             {
               ret = seccomp_rule_add (ctx, action, syscall, 0);
               if (UNLIKELY (ret < 0))
-                return crun_make_error (err, -ret, "seccomp_rule_add '%s'", seccomp->syscalls[i]->names[j]);
+                return crun_make_error (err, -ret, "seccomp_rule_add `%s`", seccomp->syscalls[i]->names[j]);
             }
           else
             {
