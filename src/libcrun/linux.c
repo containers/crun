@@ -635,7 +635,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, errno, "invalid content from /proc/self/cgroup");
+    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -2163,7 +2163,7 @@ libcrun_set_rlimits (oci_container_process_rlimits_element **new_rlimits, size_t
       char *type = new_rlimits[i]->type;
       int resource = get_rlimit_resource (type);
       if (UNLIKELY (resource < 0))
-        return crun_make_error (err, errno, "invalid rlimit `%s`", type);
+        return crun_make_error (err, 0, "invalid rlimit `%s`", type);
       limit.rlim_cur = new_rlimits[i]->soft;
       limit.rlim_max = new_rlimits[i]->hard;
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
