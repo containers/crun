@@ -1852,7 +1852,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
       char swap_buf[32];
       size_t swap_buf_len;
 
-      swap_buf_len = sprintf (swap_buf, "%lu", memory->swap);
+      swap_buf_len = sprintf (swap_buf, "%lu", cgroup2 ? memory->swap - memory->limit : memory->swap);
 
       ret = write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
       if (UNLIKELY (ret < 0))
