@@ -151,7 +151,7 @@ libcrun_create_keyring (const char *name, libcrun_error_t *err)
 }
 
 static void
-get_uid_gid_from_def (oci_container *def, uid_t *uid, gid_t *gid)
+get_uid_gid_from_def (runtime_spec_schema_config_schema *def, uid_t *uid, gid_t *gid)
 {
   *uid = 0;
   *gid = 0;
@@ -598,7 +598,7 @@ static bool
 has_mount_for (libcrun_container_t *container, const char *destination)
 {
   size_t i;
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
   for (i = 0; i < def->mounts_len; i++)
     {
@@ -902,7 +902,7 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
   size_t i;
   struct device_s *it;
   cleanup_close int devfd = -1;
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
   devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
@@ -996,7 +996,7 @@ do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, cons
 {
   size_t i;
   int ret;
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
@@ -1104,7 +1104,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 {
   size_t i;
   int ret;
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   size_t rootfslen = get_private_data (container)->rootfslen;
   for (i = 0; i < def->mounts_len; i++)
     {
@@ -1533,7 +1533,7 @@ cleanup_rmdir (void *p)
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   int ret = 0, is_user_ns = 0;
   unsigned long rootfs_propagation = 0;
   cleanup_close int rootfsfd_cleanup = -1;
@@ -1829,7 +1829,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
   int ret;
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
     return 0;
@@ -2052,7 +2052,7 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
 }
 
 int
-libcrun_set_selinux_exec_label (oci_container_process *proc, libcrun_error_t *err)
+libcrun_set_selinux_exec_label (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
 {
   if (proc->selinux_label)
     return set_selinux_exec_label (proc->selinux_label, err);
@@ -2061,7 +2061,7 @@ libcrun_set_selinux_exec_label (oci_container_process *proc, libcrun_error_t *er
 }
 
 int
-libcrun_set_apparmor_profile (oci_container_process *proc, libcrun_error_t *err)
+libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
 {
   if (proc->apparmor_profile)
     return set_apparmor_profile (proc->apparmor_profile, err);
@@ -2069,7 +2069,7 @@ libcrun_set_apparmor_profile (oci_container_process *proc, libcrun_error_t *err)
 }
 
 int
-libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
+libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
 {
   int ret;
   struct all_caps_s caps;
@@ -2154,7 +2154,7 @@ get_rlimit_resource (const char *name)
 }
 
 int
-libcrun_set_rlimits (oci_container_process_rlimits_element **new_rlimits, size_t len, libcrun_error_t *err)
+libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element **new_rlimits, size_t len, libcrun_error_t *err)
 {
   size_t i;
   for (i = 0; i < len; i++)
@@ -2175,7 +2175,7 @@ libcrun_set_rlimits (oci_container_process_rlimits_element **new_rlimits, size_t
 int
 libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   int has_uts = get_private_data (container)->unshare_flags & CLONE_NEWUTS;
   int ret;
   if (def->hostname == NULL || def->hostname[0] == '\0')
@@ -2191,7 +2191,7 @@ libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err)
 int
 libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int fd = -1;
   int ret;
   char oom_buffer[16];
@@ -2210,7 +2210,7 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
 int
 libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
   cleanup_close int dirfd = -1;
 
@@ -2276,7 +2276,7 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
   int ret;
   cleanup_close int fd = -1;
   cleanup_free char *slave = NULL;
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
   if (def->process == NULL || !def->process->terminal)
     return 0;
@@ -2331,7 +2331,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
                              int *sync_socket_out,
                              libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
   int ret;
   int flags_unshare = 0, flags = 0;
@@ -2695,7 +2695,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 #endif
                                   "user",
                                   NULL};
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
   cleanup_close int sync_fd = -1;
 
@@ -2880,7 +2880,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   int ret;
   yajl_val tree = NULL;
   parser_error parser_err = NULL;
-  oci_container_linux_resources *resources = NULL;
+  runtime_spec_schema_config_linux_resources *resources = NULL;
   struct parser_context ctx = {0, stderr};
   int cgroup_mode;
 
@@ -2892,7 +2892,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   if (UNLIKELY (ret < 0))
     return -1;
 
-  resources = make_oci_container_linux_resources (tree, &ctx, &parser_err);
+  resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
   if (UNLIKELY (resources == NULL))
     {
       ret = crun_make_error (err, errno, "cannot parse resources");
@@ -2906,7 +2906,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
     yajl_tree_free (tree);
   free (parser_err);
   if (resources)
-    free_oci_container_linux_resources (resources);
+    free_runtime_spec_schema_config_linux_resources (resources);
 
   return ret;
 }
@@ -2930,7 +2930,7 @@ libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_err
 }
 
 int
-libcrun_set_personality (oci_container_linux_personality *p, libcrun_error_t *err)
+libcrun_set_personality (runtime_spec_schema_defs_linux_personality *p, libcrun_error_t *err)
 {
   unsigned long persona = 0;
   int ret;

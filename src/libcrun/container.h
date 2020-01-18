@@ -20,7 +20,7 @@
 # define CONTAINER_H
 
 # include <config.h>
-# include <oci_runtime_spec.h>
+# include <runtime_spec_schema_config_schema.h>
 # include "error.h"
 
 struct libcrun_context_s
@@ -54,7 +54,7 @@ enum
 struct libcrun_container_s
 {
   /* Container parsed from the runtime json file.  */
-  oci_container *container_def;
+  runtime_spec_schema_config_schema *container_def;
 
   uid_t host_uid;
   gid_t host_gid;
@@ -78,7 +78,7 @@ libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcr
 
 int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *error);
 
-int libcrun_container_delete (libcrun_context_t *context, oci_container *def, const char *id, bool force, libcrun_error_t *err);
+int libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, libcrun_error_t *err);
 
 int libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
 
@@ -92,7 +92,7 @@ int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *o
 
 int libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status, const char *state_root, const char **container_status, int *running, libcrun_error_t *err);
 
-int libcrun_container_exec (libcrun_context_t *context, const char *id, oci_container_process *process, libcrun_error_t *err);
+int libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
 
 int libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err);
 

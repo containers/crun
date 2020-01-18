@@ -172,7 +172,7 @@ libcrun_apply_seccomp (int infd, char **seccomp_flags, size_t seccomp_flags_len,
 int
 libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err)
 {
-  oci_container_linux_seccomp *seccomp = container->container_def->linux->seccomp;
+  runtime_spec_schema_config_linux_seccomp *seccomp = container->container_def->linux->seccomp;
   int ret;
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;

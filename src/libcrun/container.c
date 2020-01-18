@@ -18,7 +18,7 @@
 #define _GNU_SOURCE
 
 #include <config.h>
-#include <oci_runtime_spec.h>
+#include <runtime_spec_schema_config_schema.h>
 #include <stdbool.h>
 #include "container.h"
 #include "utils.h"
@@ -79,7 +79,7 @@ struct sync_socket_message_s
   char message[512];
 };
 
-typedef oci_container_hooks_prestart_element hook;
+typedef runtime_spec_schema_defs_hook hook;
 
 static char spec_file[] = "\
   {\n\
@@ -379,7 +379,7 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
 }
 
 static libcrun_container_t *
-make_container (oci_container *container_def)
+make_container (runtime_spec_schema_config_schema *container_def)
 {
   libcrun_container_t *container = xmalloc (sizeof (*container));
   memset (container, 0, sizeof (*container));
@@ -394,9 +394,9 @@ make_container (oci_container *container_def)
 libcrun_container_t *
 libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 {
-  oci_container *container_def;
+  runtime_spec_schema_config_schema *container_def;
   cleanup_free char *oci_error = NULL;
-  container_def = oci_container_parse_data (json, NULL, &oci_error);
+  container_def = runtime_spec_schema_config_schema_parse_data (json, NULL, &oci_error);
   if (container_def == NULL)
     {
       crun_make_error (err, 0, "load: %s", oci_error);
@@ -408,9 +408,9 @@ libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 libcrun_container_t *
 libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 {
-  oci_container *container_def;
+  runtime_spec_schema_config_schema *container_def;
   cleanup_free char *oci_error = NULL;
-  container_def = oci_container_parse_file (path, NULL, &oci_error);
+  container_def = runtime_spec_schema_config_schema_parse_file (path, NULL, &oci_error);
   if (container_def == NULL)
     {
       crun_make_error (err, 0, "load `%s`: %s", path, oci_error);
@@ -445,7 +445,7 @@ int unblock_signals (libcrun_error_t *err)
 
 /* must be used on the host before pivot_root(2).  */
 static int
-initialize_security (oci_container_process *proc, libcrun_error_t *err)
+initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
 {
   int ret;
 
@@ -467,7 +467,7 @@ initialize_security (oci_container_process *proc, libcrun_error_t *err)
 }
 
 static int
-do_hooks (oci_container *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
+do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
           const char *cwd, const char *status, hook **hooks, size_t hooks_len,
           libcrun_error_t *err)
 {
@@ -546,8 +546,8 @@ container_init_setup (void *args, const char *notify_socket,
   int has_terminal;
   cleanup_close int console_socket = -1;
   cleanup_close int console_socketpair = -1;
-  oci_container *def = container->container_def;
-  oci_container_process_capabilities *capabilities;
+  runtime_spec_schema_config_schema *def = container->container_def;
+  runtime_spec_schema_config_schema_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
 
@@ -740,7 +740,7 @@ container_init (void *args, const char *notify_socket, int sync_socket,
 {
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
-  oci_container *def = entrypoint_args->container->container_def;
+  runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
   entrypoint_args->sync_socket = sync_socket;
 
@@ -854,7 +854,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 }
 
 static int
-run_poststop_hooks (libcrun_context_t *context, oci_container *def,
+run_poststop_hooks (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
                     libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
@@ -879,12 +879,12 @@ run_poststop_hooks (libcrun_context_t *context, oci_container *def,
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
   if (container && container->container_def)
-    free_oci_container (container->container_def);
+    free_runtime_spec_schema_config_schema (container->container_def);
   return 0;
 }
 
 static bool
-has_namespace_in_definition (oci_container *def, const char *namespace)
+has_namespace_in_definition (runtime_spec_schema_config_schema *def, const char *namespace)
 {
   size_t i;
 
@@ -900,7 +900,7 @@ has_namespace_in_definition (oci_container *def, const char *namespace)
 }
 
 static int
-container_delete_internal (libcrun_context_t *context, oci_container *def, const char *id, bool force, bool only_cleanup, libcrun_error_t *err)
+container_delete_internal (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, bool only_cleanup, libcrun_error_t *err)
 {
   int ret;
   cleanup_container_status libcrun_container_status_t status;
@@ -984,7 +984,7 @@ container_delete_internal (libcrun_context_t *context, oci_container *def, const
 }
 
 int
-libcrun_container_delete (libcrun_context_t *context, oci_container *def, const char *id, bool force, libcrun_error_t *err)
+libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, libcrun_error_t *err)
 {
   return container_delete_internal (context, def, id, force, false, err);
 }
@@ -1270,7 +1270,7 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
 }
 
 static void
-cleanup_watch (libcrun_context_t *context, pid_t init_pid, oci_container *def, const char *id, int sync_socket, int terminal_fd)
+cleanup_watch (libcrun_context_t *context, pid_t init_pid, runtime_spec_schema_config_schema *def, const char *id, int sync_socket, int terminal_fd)
 {
   libcrun_error_t err = NULL;
   container_delete_internal (context, def, id, 1, true, &err);
@@ -1329,7 +1329,7 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
 
 /* Find the uid:gid that is mapped to root inside the container user namespace.  */
 static void
-get_root_in_the_userns_for_cgroups (oci_container *def, uid_t host_uid, gid_t host_gid, uid_t *uid, gid_t *gid)
+get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid, uid_t *uid, gid_t *gid)
 {
   *uid = -1;
   *gid = -1;
@@ -1369,7 +1369,7 @@ get_root_in_the_userns_for_cgroups (oci_container *def, uid_t host_uid, gid_t ho
 static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context, int container_ready_fd, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
   pid_t pid;
   int detach = context->detach;
@@ -1614,7 +1614,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 }
 
 static
-int check_config_file (oci_container *def, libcrun_error_t *err)
+int check_config_file (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
   if (UNLIKELY (def->root == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
@@ -1656,7 +1656,7 @@ int libcrun_copy_config_file (const char *id, const char *state_root, const char
 int
 libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
   int detach = context->detach;
   int container_ret_status[2];
@@ -1752,7 +1752,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 int
 libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err)
 {
-  oci_container *def = container->container_def;
+  runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
   int container_ready_pipe[2];
   cleanup_close int pipefd0 = -1;
@@ -2025,7 +2025,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
           }
         yajl_gen_map_close (gen);
       }
-   free_oci_container (container->container_def);
+   free_runtime_spec_schema_config_schema (container->container_def);
   }
 
   yajl_gen_map_close (gen);
@@ -2042,7 +2042,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 }
 
 int
-libcrun_container_exec (libcrun_context_t *context, const char *id, oci_container_process *process, libcrun_error_t *err)
+libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err)
 {
   int ret;
   pid_t pid;
@@ -2122,7 +2122,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, oci_containe
       uid_t container_uid = process->user ? process->user->uid : 0;
       gid_t container_gid = process->user ? process->user->gid : 0;
       const char *cwd;
-      oci_container_process_capabilities *capabilities = NULL;
+      runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
       char **seccomp_flags = NULL;
       size_t seccomp_flags_len = 0;
 
@@ -2303,7 +2303,7 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
   struct parser_context ctx = {0, stderr};
   yajl_val tree = NULL;
   parser_error parser_err = NULL;
-  oci_container_process *process = NULL;
+  runtime_spec_schema_config_schema_process *process = NULL;
 
   ret = read_all_file (path, &content, &len, err);
   if (UNLIKELY (ret < 0))
@@ -2313,7 +2313,7 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  process = make_oci_container_process (tree, &ctx, &parser_err);
+  process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
   if (UNLIKELY (process == NULL))
     {
       ret = crun_make_error (err, errno, "cannot parse process file");
@@ -2329,7 +2329,7 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
     yajl_tree_free (tree);
 
   if (process)
-    free_oci_container_process (process);
+    free_runtime_spec_schema_config_schema_process (process);
 
   return ret;
 }

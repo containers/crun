@@ -24,7 +24,7 @@
 # include <argp.h>
 # include "error.h"
 # include <dirent.h>
-# include <oci_runtime_spec.h>
+# include <runtime_spec_schema_config_schema.h>
 # include "container.h"
 
 # ifndef TEMP_FAILURE_RETRY

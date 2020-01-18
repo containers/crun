@@ -166,17 +166,17 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
 static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
-static oci_container_process_user *
+static runtime_spec_schema_config_schema_process_user *
 make_oci_process_user (const char *userspec)
 {
-  oci_container_process_user *u;
+  runtime_spec_schema_config_schema_process_user *u;
   char *endptr = NULL;
 
   if (userspec == NULL)
     return NULL;
 
-  u = xmalloc (sizeof (oci_container_process_user));
-  memset (u, 0, sizeof (oci_container_process_user));
+  u = xmalloc (sizeof (runtime_spec_schema_config_schema_process_user));
+  memset (u, 0, sizeof (runtime_spec_schema_config_schema_process_user));
 
   errno = 0;
   u->uid = strtol (userspec, &endptr, 10);
@@ -224,7 +224,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
     return libcrun_container_exec_process_file (&crun_context, argv[first_arg], exec_options.process, err);
   else
     {
-      oci_container_process *process = xmalloc (sizeof (*process));
+      runtime_spec_schema_config_schema_process *process = xmalloc (sizeof (*process));
       int i;
 
       memset (process, 0, sizeof (*process));
@@ -242,7 +242,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->user = make_oci_process_user (exec_options.user);
       if (exec_options.cap_size > 0)
         {
-          oci_container_process_capabilities *capabilities = xmalloc (sizeof (oci_container_process_capabilities));
+          runtime_spec_schema_config_schema_process_capabilities *capabilities = xmalloc (sizeof (runtime_spec_schema_config_schema_process_capabilities));
 
           capabilities->effective = exec_options.cap;
           capabilities->effective_len = exec_options.cap_size;
@@ -263,7 +263,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
         }
       process->no_new_privileges = 1;
       ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
-      free_oci_container_process (process);
+      free_runtime_spec_schema_config_schema_process (process);
       return ret;
     }
 }

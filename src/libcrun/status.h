@@ -20,7 +20,7 @@
 # define STATUS_H
 
 # include <config.h>
-# include <oci_runtime_spec.h>
+# include <runtime_spec_schema_config_schema.h>
 # include "error.h"
 # include "container.h"
 

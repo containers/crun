@@ -23,7 +23,7 @@
 # include "error.h"
 # include <errno.h>
 # include <argp.h>
-# include <oci_runtime_spec.h>
+# include <runtime_spec_schema_config_schema.h>
 # include "container.h"
 
 enum
