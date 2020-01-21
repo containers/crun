@@ -23,7 +23,7 @@
 # include "error.h"
 # include <errno.h>
 # include <argp.h>
-# include <oci_runtime_spec.h>
+# include <runtime_spec_schema_config_schema.h>
 # include "container.h"
 # include "status.h"
 
@@ -41,10 +41,10 @@ int get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, i
 int libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char *rootfs, libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
-int libcrun_set_caps (oci_container_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err);
-int libcrun_set_rlimits (oci_container_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err);
-int libcrun_set_selinux_exec_label (oci_container_process *proc, libcrun_error_t *err);
-int libcrun_set_apparmor_profile (oci_container_process *proc, libcrun_error_t *err);
+int libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err);
+int libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element **rlimits, size_t len, libcrun_error_t *err);
+int libcrun_set_selinux_exec_label (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
+int libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
@@ -55,6 +55,6 @@ int libcrun_create_keyring (const char *name, libcrun_error_t *err);
 int libcrun_container_pause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err);
-int libcrun_set_personality (oci_container_linux_personality *p, libcrun_error_t *err);
+int libcrun_set_personality (runtime_spec_schema_defs_linux_personality *p, libcrun_error_t *err);
 
 #endif

@@ -122,7 +122,7 @@ is_rwm (const char *str, libcrun_error_t *err)
 }
 
 static int
-enable_controllers (oci_container_linux_resources *resources, const char *path, libcrun_error_t *err)
+enable_controllers (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *controllers = NULL;
   cleanup_free char *tmp_path = NULL;
@@ -581,7 +581,7 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 
 #ifdef HAVE_SYSTEMD
 static
-int systemd_finalize (oci_container_linux_resources *resources, int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
+int systemd_finalize (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int ret;
@@ -690,7 +690,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
 }
 
 static
-int enter_systemd_cgroup_scope (oci_container_linux_resources *resources, const char *id, const char *slice, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources, const char *id, const char *slice, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -997,7 +997,7 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
 {
   if (manager == CGROUP_MANAGER_DISABLED)
     {
@@ -1041,7 +1041,7 @@ libcrun_cgroup_enter_internal (oci_container_linux_resources *resources, int cgr
 }
 
 int
-libcrun_cgroup_enter (oci_container_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, uid_t root_uid, gid_t root_gid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, uid_t root_uid, gid_t root_gid, const char *id, libcrun_error_t *err)
 {
   libcrun_error_t tmp_err = NULL;
   int rootless;
@@ -1430,7 +1430,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, struct throttling
 }
 
 static int
-write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_block_io *blkio, libcrun_error_t *err)
+write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_block_io *blkio, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t len;
@@ -1588,7 +1588,7 @@ write_blkio_resources (int dirfd, bool cgroup2, oci_container_linux_resources_bl
 }
 
 static int
-write_network_resources (int dirfd, oci_container_linux_resources_network *net, libcrun_error_t *err)
+write_network_resources (int dirfd, runtime_spec_schema_config_linux_resources_network *net, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t len;
@@ -1622,7 +1622,7 @@ write_network_resources (int dirfd, oci_container_linux_resources_network *net, 
 }
 
 static int
-write_hugetlb_resources (int dirfd, bool cgroup2, oci_container_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
+write_hugetlb_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
@@ -1647,7 +1647,7 @@ write_hugetlb_resources (int dirfd, bool cgroup2, oci_container_linux_resources_
 
 
 static int
-write_devices_resources_v1 (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
 {
   size_t i, len;
   int ret;
@@ -1716,7 +1716,7 @@ write_devices_resources_v1 (int dirfd, oci_container_linux_resources_devices_ele
 }
 
 static int
-write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
 {
   int i, ret;
   cleanup_free struct bpf_program *program = NULL;
@@ -1784,7 +1784,7 @@ write_devices_resources_v2_internal (int dirfd, oci_container_linux_resources_de
 }
 
 static int
-write_devices_resources_v2 (int dirfd, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -1821,7 +1821,7 @@ write_devices_resources_v2 (int dirfd, oci_container_linux_resources_devices_ele
 
 
 static int
-write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_devices_element **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
 {
   if (cgroup2)
     return write_devices_resources_v2 (dirfd, devs, devs_len, err);
@@ -1830,7 +1830,7 @@ write_devices_resources (int dirfd, bool cgroup2, oci_container_linux_resources_
 }
 
 static int
-write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_memory *memory, libcrun_error_t *err)
+write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
 {
   size_t len;
   int ret;
@@ -1906,7 +1906,7 @@ write_memory_resources (int dirfd, bool cgroup2, oci_container_linux_resources_m
 }
 
 static int
-write_pids_resources (int dirfd, bool cgroup2 arg_unused, oci_container_linux_resources_pids *pids, libcrun_error_t *err)
+write_pids_resources (int dirfd, bool cgroup2 arg_unused, runtime_spec_schema_config_linux_resources_pids *pids, libcrun_error_t *err)
 {
   if (pids->limit)
     {
@@ -1924,7 +1924,7 @@ write_pids_resources (int dirfd, bool cgroup2 arg_unused, oci_container_linux_re
 }
 
 static int
-write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
+write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err)
 {
   size_t len;
   int ret;
@@ -2007,7 +2007,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, oci_container_linux_resources_
 }
 
 static int
-write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, oci_container_linux_resources_cpu *cpu, libcrun_error_t *err)
+write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err)
 {
   int ret;
 
@@ -2027,7 +2027,7 @@ write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, oci_container_
 }
 
 static int
-update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path, libcrun_error_t *err)
+update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err)
 {
   int ret;
 
@@ -2035,7 +2035,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
     {
       cleanup_free char *path_to_blkio = NULL;
       cleanup_close int dirfd_blkio = -1;
-      oci_container_linux_resources_block_io *blkio = resources->block_io;
+      runtime_spec_schema_config_linux_resources_block_io *blkio = resources->block_io;
 
       xasprintf (&path_to_blkio, "/sys/fs/cgroup/blkio%s/", path);
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
@@ -2051,7 +2051,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
     {
       cleanup_free char *path_to_network = NULL;
       cleanup_close int dirfd_network = -1;
-      oci_container_linux_resources_network *network = resources->network;
+      runtime_spec_schema_config_linux_resources_network *network = resources->network;
 
       xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
       dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
@@ -2168,7 +2168,7 @@ update_cgroup_v1_resources (oci_container_linux_resources *resources, char *path
 }
 
 static int
-update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path, libcrun_error_t *err)
+update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int cgroup_dirfd = -1;
@@ -2244,7 +2244,7 @@ update_cgroup_v2_resources (oci_container_linux_resources *resources, char *path
 }
 
 int
-libcrun_update_cgroup_resources (int cgroup_mode, oci_container_linux_resources *resources, char *path, libcrun_error_t *err)
+libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err)
 {
   if (path == NULL)
     {
