@@ -110,7 +110,7 @@ int
 main (int argc, char **argv)
 {
   char buf[8192];
-  int ret, fd, socket;
+  int ret, socket;
   if (argc < 2)
     error (EXIT_FAILURE, 0, "usage %s PATH\n", argv[0]);
 
@@ -120,7 +120,7 @@ main (int argc, char **argv)
   while (1)
     {
       struct termios tset;
-      int conn;
+      int conn, fd;
 
       do
         conn = accept (socket, NULL, NULL);

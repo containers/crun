@@ -76,7 +76,7 @@ libcrun_container_t *libcrun_container_load_from_file (const char *path, libcrun
 
 libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
 
-int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *error);
+int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err);
 
 int libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, libcrun_error_t *err);
 

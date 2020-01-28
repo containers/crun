@@ -1175,7 +1175,7 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
   if (container_id > 0)
     {
       uint32_t used = MIN (container_id, available);
-      written += sprintf (buffer + written, "%d %u %u\n", 0, from, used);
+      written += sprintf (buffer + written, "%d %d %d\n", 0, from, used);
       from += used;
       available -= used;
     }
@@ -1185,7 +1185,7 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
 
   /* Last mapping: use any id that is left.  */
   if (available)
-    written += sprintf (buffer + written, "%d %u %u\n", container_id + 1, from, available);
+    written += sprintf (buffer + written, "%d %d %d\n", container_id + 1, from, available);
 
   *ret = buffer;
   buffer = NULL;
@@ -1208,7 +1208,7 @@ run_process_with_stdin_timeout_envp (char *path,
   int ret;
   cleanup_close int pipe_r = -1;
   cleanup_close int pipe_w = -1;
-  sigset_t mask;
+  sigset_t mask = new sigset_t;
   sigemptyset(&mask);
 
   ret = pipe (stdin_pipe);

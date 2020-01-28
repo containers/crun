@@ -77,8 +77,8 @@ void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((
 
 int crun_set_log_format (const char *format, libcrun_error_t *err);
 
-int init_logging (crun_output_handler *output_handler, void **output_handler_arg,
-                  const char *id, const char *log, libcrun_error_t *err);
+int init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg,
+        const char *id, const char *log, libcrun_error_t *err);
 
 enum
   {
