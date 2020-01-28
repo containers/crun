@@ -234,37 +234,37 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
 
   if (has_type)
     {
-      struct bpf_insn i[] = {
+      struct bpf_insn bpf_i[] = {
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_2, bpf_type, number_instructions)
       };
       number_instructions--;
-      program = bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, bpf_i, sizeof (i));
     }
   if (has_access)
     {
-      struct bpf_insn i[] = {
+      struct bpf_insn bpf_i[] = {
                              BPF_MOV32_REG (BPF_REG_1, BPF_REG_3),
                              BPF_ALU32_IMM (BPF_AND, BPF_REG_1, bpf_access),
                              BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
       };
       number_instructions -= 3;
-      program = bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, bpf_i, sizeof (i));
     }
   if (has_major)
     {
-      struct bpf_insn i[] = {
+      struct bpf_insn bpf_i[] = {
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_4, major, number_instructions)
       };
       number_instructions--;
-      program = bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, bpf_i, sizeof (i));
     }
   if (has_minor)
     {
-      struct bpf_insn i[] = {
+      struct bpf_insn bpf_i[] = {
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_5, minor, number_instructions)
       };
       number_instructions--;
-      program = bpf_program_append (program, i, sizeof (i));
+      program = bpf_program_append (program, bpf_i, sizeof (i));
     }
 
   if (has_type == 0 && has_access == 0 && has_major == 0 && has_minor == 0)
@@ -279,7 +279,7 @@ struct bpf_program *
 bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_EBPF
-  struct bpf_insn i[] = {
+  struct bpf_insn bpf_i[] = {
                          BPF_MOV64_IMM (BPF_REG_0, 0),
                          BPF_EXIT_INSN (),
   };
@@ -287,7 +287,7 @@ bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err arg_
   if (program->private & HAS_WILDCARD)
     return program;
 
-  program = bpf_program_append (program, &i, sizeof (i));
+  program = bpf_program_append (program, &bpf_i, sizeof (i));
 #endif
   return program;
 }

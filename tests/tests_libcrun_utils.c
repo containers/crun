@@ -95,7 +95,7 @@ test_send_receive_fd ()
       char buffer[256];
       const char *test_string = "TEST STRING";
       if (pipe (pipes) < 0)
-       return -1;
+        return -1;
 
       pipefd0 = pipes[0];
       pipefd1 = pipes[1];
@@ -121,7 +121,7 @@ test_send_receive_fd ()
   else
     {
       char buffer[256];
-      int ret, fd = receive_fd_from_socket (fd0, &err);
+      int fd = receive_fd_from_socket (fd0, &err);
       if (fd < 0)
         _exit (1);
 
@@ -129,10 +129,8 @@ test_send_receive_fd ()
       fd1 = -1;
 
       ret = read (fd, buffer, sizeof (buffer));
-      if (ret <= 0)
+      if ((ret <= 0) || (write (fd0, buffer, ret) < 0))
         return -1;
-      if (write (fd0, buffer, ret) < 0)
-       return -1;
 
       _exit (0);
     }

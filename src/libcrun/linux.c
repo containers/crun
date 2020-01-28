@@ -754,15 +754,12 @@ static int
 create_dev (libcrun_container_t *container, int devfd, struct device_s *device, const char *rootfs, bool binds, bool ensure_parent_dir, libcrun_error_t *err)
 {
   int ret;
-  dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
-  char fd_buffer[64];
   const char *fullname = device->path;
   cleanup_close int fd = -1;
 
   if (binds)
     {
-      cleanup_close int fd = - 1;
       char *path_to_container, buffer[PATH_MAX];
 
       path_to_container = chroot_realpath (rootfs, device->path, buffer);
@@ -784,8 +781,8 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   else
     {
       const char *rel_dev;
-
-      dev = makedev (device->major, device->minor);
+      char fd_buffer[64];
+      dev_t dev = makedev (device->major, device->minor);
 
       /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
          fails when the destination already exists or is a symlink, it is safe to use it directly.
@@ -1532,7 +1529,6 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret = 0, is_user_ns = 0;
   unsigned long rootfs_propagation = 0;
-  cleanup_close int rootfsfd_cleanup = -1;
   __attribute__((cleanup (cleanup_rmdir))) char *tmpdirparent = NULL;
   int rootfsfd = -1;
 
@@ -1579,6 +1575,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
     rootfsfd = AT_FDCWD;
   else
     {
+      cleanup_close int rootfsfd_cleanup = -1;
       rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH|O_CLOEXEC);
       if (UNLIKELY (rootfsfd < 0))
         return crun_make_error (err, errno, "open `%s`", rootfs);
@@ -2067,12 +2064,11 @@ libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, l
 int
 libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
 {
-  int ret;
   struct all_caps_s caps;
-
   memset (&caps, 0, sizeof (caps));
   if (capabilities)
     {
+      int ret;
       ret = read_caps (caps.effective,
                        capabilities->effective,
                        capabilities->effective_len,
