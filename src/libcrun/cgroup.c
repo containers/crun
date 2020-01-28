@@ -1169,15 +1169,12 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
 
   if (recurse)
     {
-      cleanup_dir DIR *dir = NULL;
-      struct dirent *de;
+      while (cleanup_dir DIR *dir = fdopendir (dfd)) {
 
-      dir = fdopendir (dfd);
-      if (UNLIKELY (dir == NULL))
+        if (UNLIKELY (dir == NULL))
           return crun_make_error (err, errno, "open cgroup sub-directory");
-      /* Now dir owns the dfd descriptor.  */
 
-      while (de = readdir (dir))
+        while (struct dirent *de = readdir (dir))
         {
           if (strcmp (de->d_name, ".") == 0 ||
               strcmp (de->d_name, "..") == 0)
@@ -1196,6 +1193,7 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
           if (UNLIKELY (ret < 0))
             return ret;
         }
+      }
     }
   return 0;
 }
