@@ -420,7 +420,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   dfd = dirfd (dir);
 
-  while ((next = readdir (dir) != NULL)
+  while ((next = readdir (dir)) != NULL)
     {
       const char *name = next->d_name;
 
