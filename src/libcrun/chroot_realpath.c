@@ -81,7 +81,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	new_path += chroot_len;
 	while (*new_path == '/' && new_path > got_path)
 		new_path--;
-	got_path_root = new_path;
+	strcpy(got_path_root, new_path);
 	*new_path++ = '/';
 
 	/* Expand each slash-separated pathname component. */
@@ -162,7 +162,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 				__set_errno(ENAMETOOLONG);
 				return NULL;
 			}
-			path = copy_path;
+			strcpy(path, copy_path);
 		}
 #endif							/* S_IFLNK */
 		if (!last_component)
