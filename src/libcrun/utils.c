@@ -399,7 +399,6 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
                      int mode, libcrun_error_t *err)
 {
   cleanup_free char *npath = xstrdup (path);
-  cleanup_close int wd_file_cleanup = -1;
   cleanup_close int wd_cleanup = -1;
   bool last_component = false;
   const char *cur;
@@ -427,10 +426,10 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         ret = mkdirat (cwd, cur, mode);
       else
         {
+          cleanup_close int wd_file_cleanup = -1;
           ret = wd_file_cleanup = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "create `%s`", path);
-
           ret = check_fd_under_path (dirpath, dirpath_len, wd_file_cleanup, path, err);
           if (UNLIKELY (ret < 0))
             return ret;

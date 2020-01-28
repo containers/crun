@@ -98,7 +98,7 @@ int check_running_in_user_namespace (libcrun_error_t *err);
 
 int set_selinux_exec_label (const char *label, libcrun_error_t *err);
 
-int add_selinux_mount_label (char **ret, const char *data, const char *label, libcrun_error_t *err);
+int add_selinux_mount_label (char **retlabel, const char *data, const char *label, libcrun_error_t *err arg_unused);
 
 int set_apparmor_profile (const char *profile, libcrun_error_t *err);
 
@@ -140,9 +140,9 @@ int has_prefix (const char *str, const char *prefix);
 
 const char *find_executable (const char *executable_path, const char *cwd);
 
-int copy_recursive_fd_to_fd (int srcfd, int destfd, const char *srcname, const char *destname, libcrun_error_t *err);
+int copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const char *destname, libcrun_error_t *err);
 
-int set_home_env (uid_t uid);
+int set_home_env (uid_t id);
 
 int libcrun_initialize_selinux (libcrun_error_t *err);
 
