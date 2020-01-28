@@ -620,6 +620,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   const cgroups_subsystem_t *subsystems = NULL;
   cleanup_free char *content = NULL;
   char *from;
+  cleanup_close int tmpfsdirfd = -1;
   char *saveptr = NULL;
 
   subsystems = libcrun_get_cgroups_subsystems (err);
@@ -629,6 +630,11 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags, "size=1024k", 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  tmpfsdirfd = open_mount_target (container, target, err);
+  if (UNLIKELY (tmpfsdirfd < 0))
+    return tmpfsdirfd;
+  targetfd = tmpfsdirfd;
 
   ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
   if (UNLIKELY (ret < 0))
