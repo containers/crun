@@ -187,7 +187,7 @@ test_write_read_file ()
   cleanup_free char *name = NULL;
   size_t len;
   size_t i;
-  int ret, failed = 0;
+  int failed = 0;
   size_t max = 1 << 10;
   cleanup_free char *written = xmalloc (max);
 
@@ -198,6 +198,7 @@ test_write_read_file ()
 
   for (i = 1; i <= max; i *= 2)
     {
+      int ret;
       cleanup_free char *read_buf = NULL;
 
       ret = write_file (name, written, i, &err);
