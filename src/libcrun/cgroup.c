@@ -419,7 +419,8 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   dfd = dirfd (dir);
 
-  while (struct dirent *next = readdir (dir))
+  struct dirent *next;
+  while (next = readdir (dir))
     {
       const char *name = next->d_name;
 
@@ -1168,12 +1169,14 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
 
   if (recurse)
     {
-      while (cleanup_dir DIR *dir = fdopendir (dfd)) {
+      cleanup_dir DIR *dir;
+      while (dir = fdopendir (dfd)) {
 
         if (UNLIKELY (dir == NULL))
           return crun_make_error (err, errno, "open cgroup sub-directory");
 
-        while (struct dirent *de = readdir (dir))
+        struct dirent *de;
+        while (de = readdir (dir))
         {
           if (strcmp (de->d_name, ".") == 0 ||
               strcmp (de->d_name, "..") == 0)
