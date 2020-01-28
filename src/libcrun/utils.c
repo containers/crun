@@ -1209,7 +1209,7 @@ run_process_with_stdin_timeout_envp (char *path,
   int ret;
   cleanup_close int pipe_r = -1;
   cleanup_close int pipe_w = -1;
-  sigset_t mask = new sigset_t;
+  sigset_t mask;
   sigemptyset(&mask);
 
   ret = pipe (stdin_pipe);
@@ -1333,7 +1333,7 @@ close_fds_ge_than (int n, libcrun_error_t *err)
   cfd = -1;
 
   fd = dirfd (dir);
-  while (next = readdir_r (dir))
+  while (next = readdir (dir))
     {
       int val;
       const char *name = next->d_name;
@@ -1633,7 +1633,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       return crun_make_error (err, errno, "cannot open directory `%s`", destname);
     }
 
-  while (de = readdir_r (dsrcfd))
+  while (de = readdir (dsrcfd))
     {
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;
