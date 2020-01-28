@@ -420,7 +420,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   dfd = dirfd (dir);
 
-  while ((next = readdir (dir)) != NULL)
+  while (next = readdir (dir))
     {
       const char *name = next->d_name;
 
@@ -1133,7 +1133,6 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
 static
 int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
-  cleanup_close int clean_dfd = dfd;
   cleanup_close int tasksfd = -1;
   cleanup_free char *buffer = NULL;
   char *saveptr = NULL;
@@ -1177,12 +1176,9 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
       if (UNLIKELY (dir == NULL))
           return crun_make_error (err, errno, "open cgroup sub-directory");
       /* Now dir owns the dfd descriptor.  */
-      clean_dfd = -1;
 
-      while ((de = readdir (dir)) != NULL)
+      while (de = readdir (dir))
         {
-          int nfd;
-
           if (strcmp (de->d_name, ".") == 0 ||
               strcmp (de->d_name, "..") == 0)
             continue;
@@ -1190,10 +1186,13 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
           if (de->d_type != DT_DIR)
             continue;
 
-          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC);
           if (UNLIKELY (dir == NULL))
             return crun_make_error (err, errno, "open cgroup directory %s", de->d_name);
-          ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
+
+          ret = read_pids_cgroup (
+            openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC)
+            , recurse, pids, n_pids, allocated, err);
+
           if (UNLIKELY (ret < 0))
             return ret;
         }

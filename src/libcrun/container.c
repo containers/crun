@@ -1780,7 +1780,6 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
     return exec_fifo_fd;
 
   context->fifo_exec_wait_fd = exec_fifo_fd;
-  exec_fifo_fd = -1;
 
   if ((options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
     {
@@ -2235,7 +2234,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
       execv (exec_path, process->args);
       libcrun_fail_with_error (errno, "exec");
-      _exit (EXIT_FAILURE);
     }
 
   TEMP_FAILURE_RETRY (close (pipefd1));

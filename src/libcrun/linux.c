@@ -244,17 +244,13 @@ static unsigned long
 get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option)
 {
   int found;
-  cleanup_free char *prev = NULL;
   unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags);
   if (found)
     return flags;
-
-  prev = *option;
   if (*option && **option)
     xasprintf (option, "%s,%s", *option, name);
   else
     *option = xstrdup (name);
-
   return 0;
 }
 
