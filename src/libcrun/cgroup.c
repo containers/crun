@@ -1835,20 +1835,25 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   size_t len;
   int ret;
   char fmt_buf[32];
-  char swap_buf[32];
-  char limit_buf[32];
-  size_t swap_buf_len, limit_buf_len;
-  swap_buf_len = sprintf (swap_buf, "%lu", memory->swap);
-  limit_buf_len = sprintf (limit_buf, "%lu", memory->limit);
 
   if (memory->limit)
     {
+      char limit_buf[32];
+      size_t limit_buf_len;
+
+      limit_buf_len = sprintf (limit_buf, "%lu", memory->limit);
+
       ret = write_file_at (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   if (memory->swap)
     {
+      char swap_buf[32];
+      size_t swap_buf_len;
+
+      swap_buf_len = sprintf (swap_buf, "%lu", cgroup2 ? memory->swap - memory->limit : memory->swap);
+
       ret = write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
