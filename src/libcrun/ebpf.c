@@ -287,7 +287,7 @@ bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err arg_
   if (program->private & HAS_WILDCARD)
     return program;
 
-  program = bpf_program_append (program, &bpf_i, sizeof (bpf_insn bpf_i));
+  program = bpf_program_append (program, &bpf_i, sizeof (bpf_i));
 #endif
   return program;
 }
