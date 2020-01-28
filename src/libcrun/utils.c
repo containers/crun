@@ -493,12 +493,12 @@ crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcr
   cleanup_free char *tmp = xstrdup (path);
   size_t len = strlen (tmp);
   char *it = tmp + len - 1;
-  int ret;
 
   while (*it != '/' && it > tmp)
     it--;
   if (it > tmp)
     {
+      int ret;
       *it = '\0';
       ret = crun_ensure_directory_at (dirfd, tmp, mode, nofollow, err);
       if (UNLIKELY (ret < 0))
