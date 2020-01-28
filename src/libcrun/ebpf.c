@@ -238,7 +238,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_2, bpf_type, number_instructions)
       };
       number_instructions--;
-      program = bpf_program_append (program, bpf_i, sizeof (bpf_insn bpf_i));
+      program = bpf_program_append (program, bpf_i, sizeof (bpf_i));
     }
   if (has_access)
     {
@@ -248,7 +248,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
       };
       number_instructions -= 3;
-      program = bpf_program_append (program, bpf_i, sizeof (bpf_insn bpf_i));
+      program = bpf_program_append (program, bpf_i, sizeof (bpf_i));
     }
   if (has_major)
     {
@@ -256,7 +256,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_4, major, number_instructions)
       };
       number_instructions--;
-      program = bpf_program_append (program, bpf_i, sizeof (bpf_insn bpf_i));
+      program = bpf_program_append (program, bpf_i, sizeof (bpf_i));
     }
   if (has_minor)
     {
@@ -264,7 +264,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_5, minor, number_instructions)
       };
       number_instructions--;
-      program = bpf_program_append (program, bpf_i, sizeof (bpf_insn bpf_i));
+      program = bpf_program_append (program, bpf_i, sizeof (bpf_i));
     }
 
   if (has_type == 0 && has_access == 0 && has_major == 0 && has_minor == 0)
