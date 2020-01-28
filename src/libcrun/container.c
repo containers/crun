@@ -2258,7 +2258,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
       if (context->console_socket)
         {
-          int ret;
           cleanup_close int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
           if (UNLIKELY (console_socket_fd < 0))
             return console_socket_fd;

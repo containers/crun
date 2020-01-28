@@ -392,7 +392,6 @@ open_mount_target (libcrun_container_t *container, const char *target, libcrun_e
     return ret;
 
   ret = targetfd;
-  targetfd = -1;
   return ret;
 }
 
@@ -553,7 +552,7 @@ do_mount (libcrun_container_t *container,
 
           r = make_remount (fd, target, remount_flags, data,
                             get_private_data (container)->remounts);
-          fd = -1; /* The remount owns the fd.  */
+          /* The remount owns the fd.  */
           get_private_data (container)->remounts = r;
         }
     }
@@ -1143,16 +1142,12 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         flags = get_default_flags (container, def->mounts[i]->destination, &data);
       else
         {
-          size_t j;
-
-          for (j = 0; j < def->mounts[i]->options_len; j++)
+          for (size_t j = 0; j < def->mounts[i]->options_len; j++)
             flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data);
 
           if (type == NULL)
             {
-              size_t j;
-
-              for (j = 0; j < def->mounts[i]->options_len; j++)
+              for (size_t j = 0; j < def->mounts[i]->options_len; j++)
                 {
                   if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
                     {
@@ -1324,7 +1319,6 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
     return crun_make_error (err, errno, "chmod `%s`", host_path);
 
   *notify_socket_out = notify_fd;
-  notify_fd = -1;
   return 1;
 #else
   (void) context;
@@ -2258,7 +2252,6 @@ open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *er
     }
 
   ret = fd;
-  fd = -1;
   return ret;
 }
 
@@ -2310,8 +2303,6 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
     return ret;
 
   ret = fd;
-  fd = -1;
-
   return ret;
 }
 

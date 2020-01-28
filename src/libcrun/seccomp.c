@@ -176,7 +176,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   int ret;
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
-  int action, default_action;
+  int default_action;
   const char *def_action = "SCMP_ACT_ALLOW";
 
   if (seccomp == NULL)
@@ -221,6 +221,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 
   for (i = 0; i < seccomp->syscalls_len; i++)
     {
+      int action;
       size_t j;
       action = get_seccomp_action (seccomp->syscalls[i]->action, err);
       if (UNLIKELY (action == 0))
