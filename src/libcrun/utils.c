@@ -1209,6 +1209,7 @@ run_process_with_stdin_timeout_envp (char *path,
   cleanup_close int pipe_r = -1;
   cleanup_close int pipe_w = -1;
   sigset_t mask;
+  sigemptyset(&mask);
 
   ret = pipe (stdin_pipe);
   if (UNLIKELY (ret < 0))
