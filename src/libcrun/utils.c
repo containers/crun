@@ -1333,7 +1333,7 @@ close_fds_ge_than (int n, libcrun_error_t *err)
   cfd = -1;
 
   fd = dirfd (dir);
-  for (next = readdir (dir); next; next = readdir (dir))
+  while (next = readdir_r (dir))
     {
       int val;
       const char *name = next->d_name;
@@ -1633,7 +1633,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       return crun_make_error (err, errno, "cannot open directory `%s`", destname);
     }
 
-  for (de = readdir (dsrcfd); de; de = readdir (dsrcfd))
+  while (de = readdir_r (dsrcfd))
     {
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;

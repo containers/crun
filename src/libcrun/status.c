@@ -186,7 +186,6 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 {
   int ret;
   cleanup_dir DIR *d = NULL;
-  struct dirent *de;
   cleanup_close int rundir_dfd = -1;
   cleanup_close int dfd = -1;
   cleanup_free char *dir = NULL;
@@ -210,7 +209,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   /* Now d owns the file descriptor.  */
   dfd = -1;
 
-  for (de = readdir (d); de; de = readdir (d))
+  while (struct dirent *de = readdir_r (d))
     {
       /* Ignore errors here and keep deleting, the final unlinkat (AT_REMOVEDIR) will fail anyway.  */
       ret = unlinkat (dirfd (d), de->d_name, 0);
@@ -238,7 +237,6 @@ libcrun_free_container_status (libcrun_container_status_t *status)
 int
 libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err)
 {
-  struct dirent *next;
   libcrun_container_list_t *tmp = NULL;
   cleanup_free char *path = get_run_directory (state_root);
   cleanup_dir DIR *dir;
@@ -249,7 +247,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
   if (UNLIKELY (dir == NULL))
       return crun_make_error (err, errno, "cannot opendir `%s`", path);
 
-  for (next = readdir (dir); next; next = readdir (dir))
+  while (struct dirent *next = readdir_r (dir))
     {
       int exists;
       cleanup_free char *status_file = NULL;

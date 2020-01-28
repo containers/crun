@@ -408,7 +408,6 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_dir DIR *dir = NULL;
-  struct dirent *next;
   int ret;
   int dfd;
 
@@ -420,7 +419,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   dfd = dirfd (dir);
 
-  while (next = readdir_r (dir))
+  while (struct dirent *next = readdir_r (dir))
     {
       const char *name = next->d_name;
 

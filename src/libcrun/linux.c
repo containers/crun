@@ -1493,7 +1493,6 @@ cleanup_rmdir (void *p)
   if (*pp)
     {
       cleanup_dir DIR *d = NULL;
-      struct dirent *de;
       cleanup_close int dfd = open (*pp, O_DIRECTORY | O_RDONLY);
       if (dfd < 0)
         goto exit;
@@ -1501,7 +1500,7 @@ cleanup_rmdir (void *p)
       if (d == NULL)
         goto exit;
 
-      for (de = readdir (d); de; de = readdir (d))
+      while (struct dirent *de = readdir_r (d))
         {
           if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
             continue;

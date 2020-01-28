@@ -111,7 +111,7 @@ ls (char *path)
     {
       struct dirent *de;
       errno = 0;
-      de = readdir (dir);
+      de = readdir_r (dir);
       if (de == NULL && errno)
         error (EXIT_FAILURE, errno, "readdir");
       if (de == NULL)
