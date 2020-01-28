@@ -52,8 +52,8 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	char copy_path[PATH_MAX];
 	char link_path[PATH_MAX];
 	char got_path[PATH_MAX];
-	char *got_path_root = got_path;
-	char *new_path = got_path;
+	char *got_path_root;
+	char *new_path;
 	char *max_path;
 	int readlinks = 0;
 	int n;

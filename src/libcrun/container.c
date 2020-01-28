@@ -1381,7 +1381,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int socket_pair_0 = -1;
   cleanup_close int socket_pair_1 = -1;
   cleanup_close int seccomp_fd = -1;
-  cleanup_close int console_socket_fd = -1;
   int cgroup_mode, cgroup_manager;
   char created[35];
   uid_t root_uid = -1;
@@ -1434,7 +1433,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (context->console_socket)
     {
-      console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
+      cleanup_close int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
       if (UNLIKELY (console_socket_fd < 0))
         return console_socket_fd;
       container_args.console_socket_fd = console_socket_fd;
@@ -1998,7 +1997,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   yajl_gen_string (gen, YAJL_STR (""), strlen (""));
 
   {
-    size_t i;
     cleanup_free char *config_file;
     cleanup_free libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
@@ -2016,7 +2014,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
       {
         yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
         yajl_gen_map_open (gen);
-        for (i = 0; i < container->container_def->annotations->len; i++)
+        for (size_t i = 0; i < container->container_def->annotations->len; i++)
           {
             const char *key = container->container_def->annotations->keys[i];
             const char *val = container->container_def->annotations->values[i];

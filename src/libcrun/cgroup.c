@@ -420,7 +420,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   dfd = dirfd (dir);
 
-  for (next = readdir (dir); next; next = readdir (dir))
+  while ((next = readdir (dir) != NULL)
     {
       const char *name = next->d_name;
 
@@ -1179,7 +1179,7 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
       /* Now dir owns the dfd descriptor.  */
       clean_dfd = -1;
 
-      for (de = readdir (dir); de; de = readdir (dir))
+      while ((de = readdir (dir)) != NULL)
         {
           int nfd;
 
@@ -1685,6 +1685,7 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           char fmt_buf_major[16];
           char fmt_buf_minor[16];
 
+/* This macro confuses cppcheck: revisit at some point? */
 #define FMT_DEV(x, b)                           \
           {                                     \
             if (x ## _present)                  \
