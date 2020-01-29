@@ -397,8 +397,7 @@ open_mount_target (libcrun_container_t *container, const char *target, libcrun_e
 
   ret = targetfd;
 
-  /* Reset targetfd, but keep for use by other functions? */
-  targetfd = -1;
+  targetfd = -1; /* Reset targetfd, but keep for use by other functions? */
 
   return ret;
 }
@@ -1495,7 +1494,6 @@ allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out,
 static int
 cleanup_rmdir (void *p)
 {
-  int ret;
   char **pp = (char **) p;
   if (*pp) {
     cleanup_close int dfd = open (*pp, O_DIRECTORY | O_RDONLY);
@@ -1505,6 +1503,7 @@ cleanup_rmdir (void *p)
       if (d != NULL) {
         struct dirent *de;
         while ((de = readdir (d)) != NULL) {
+          int ret;
           if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
             continue;
           ret = unlinkat (dirfd (d), de->d_name, 0);

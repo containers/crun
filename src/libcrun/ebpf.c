@@ -263,7 +263,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
       struct bpf_insn bpf_i[] = {
                              BPF_JMP_IMM (BPF_JNE, BPF_REG_5, minor, number_instructions)
       };
-      number_instructions--;
+      number_instructions--; /* Might still be needed */
       program = bpf_program_append (program, bpf_i, sizeof (bpf_i));
     }
 

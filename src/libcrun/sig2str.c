@@ -279,6 +279,9 @@ str2signum (char const *signame)
         int rtmin = SIGRTMIN;
         int rtmax = SIGRTMAX;
 
+        /* cppcheck says "Condition '0<rtmin' is always false" here.
+           It says its because of the SIGRTMIN/SIGRTMAX values.*/
+
         if (0 < rtmin && strncmp (signame, "RTMIN", 5) == 0)
           {
             long int n = strtol (signame + 5, &endp, 10);
