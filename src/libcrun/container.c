@@ -41,6 +41,7 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <grp.h>
+#include "sig2str.h"
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -434,12 +435,24 @@ int block_signals (libcrun_error_t *err)
 static
 int unblock_signals (libcrun_error_t *err)
 {
+  int i;
   int ret;
   sigset_t mask;
+  struct sigaction act;
+
   sigfillset (&mask);
   ret = sigprocmask (SIG_UNBLOCK, &mask, NULL);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
+
+  act.sa_handler = SIG_DFL;
+  for (i = 0; i < SIGNUM_BOUND; i++)
+    {
+      ret = sigaction (i, &act, NULL);
+      if (ret < 0 && errno != EINVAL)
+        return crun_make_error (err, errno, "sigaction");
+    }
+
   return 0;
 }
 
