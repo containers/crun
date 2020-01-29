@@ -1170,7 +1170,7 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
   if (recurse)
     {
       cleanup_dir DIR *dir;
-      while (dir = fdopendir (dfd)) {
+      while ((dir = fdopendir (dfd)) != NULL) {
 
         if (UNLIKELY (dir == NULL))
           return crun_make_error (err, errno, "open cgroup sub-directory");

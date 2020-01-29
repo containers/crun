@@ -207,7 +207,6 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
     return crun_make_error (err, errno, "cannot open directory `%s`", dir);
 
   /* Now d owns the file descriptor.  */
-  dfd = -1;
 
   struct dirent *de;
   while ((de = readdir (d)) != NULL)

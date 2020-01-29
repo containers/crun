@@ -1490,32 +1490,28 @@ cleanup_rmdir (void *p)
 {
   int ret;
   char **pp = (char **) p;
-  if (*pp)
-    {
+  if (*pp) {
+    cleanup_close int dfd = open (*pp, O_DIRECTORY | O_RDONLY);
+    if (dfd >= 0) {
       cleanup_dir DIR *d = NULL;
-      cleanup_close int dfd = open (*pp, O_DIRECTORY | O_RDONLY);
-      if (dfd < 0)
-        goto exit;
       d = fdopendir (dfd);
-      if (d == NULL)
-        goto exit;
-
-      struct dirent *de;
-      while ((de = readdir (d)) != NULL)
-        {
+      if (d != NULL) {
+        struct dirent *de;
+        while ((de = readdir (d)) != NULL) {
           if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
-            continue;
+          continue;
           ret = unlinkat (dirfd (d), de->d_name, 0);
-          if (ret < 0)
+          if (ret < 0) {
             unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
+          }
         }
-      unlinkat (AT_FDCWD, *pp, AT_REMOVEDIR);
+        unlinkat (AT_FDCWD, *pp, AT_REMOVEDIR);
+      }
     }
-    exit:
+  }
   free (*pp);
   return 0;
 }
-
 
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)

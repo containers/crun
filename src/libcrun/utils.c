@@ -1309,9 +1309,8 @@ close_fds_ge_than (int n, libcrun_error_t *err)
 {
   cleanup_close int cfd = -1;
   cleanup_dir DIR *dir = NULL;
-  int ret;
-  int fd;
-  struct statfs sfs;  
+  int ret, fd;
+  struct statfs sfs;
 
   cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (cfd < 0))
