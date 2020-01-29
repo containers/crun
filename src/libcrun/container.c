@@ -166,8 +166,8 @@ static char spec_file[] = "\
 				\"noexec\",\n\
 				\"newinstance\",\n\
 				\"ptmxmode=0666\",\n\
-				\"mode=0620\",\n\
-				\"gid=5\"\n\
+				\"mode=0620\"\
+%s\
 			]\n\
 		},\n\
 		{\n\
@@ -255,6 +255,9 @@ static char spec_file[] = "\
 		]\n\
 	}\n\
 }\n";
+
+static const char *spec_pts_tty_group = ",\n\
+				\"gid=5\"\n";
 
 static const char *spec_user = "\
 			{\n\
@@ -2365,7 +2368,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
 int
 libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
 {
-  return fprintf (out, spec_file, root ? "" : spec_user);
+  return fprintf (out, spec_file, root ? spec_pts_tty_group : "\n", root ? "" : spec_user);
 }
 
 int
