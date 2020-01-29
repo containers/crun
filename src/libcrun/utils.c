@@ -1311,8 +1311,7 @@ close_fds_ge_than (int n, libcrun_error_t *err)
   cleanup_dir DIR *dir = NULL;
   int ret;
   int fd;
-  struct statfs sfs;
-  struct dirent *next;
+  struct statfs sfs;  
 
   cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (cfd < 0))
@@ -1331,9 +1330,10 @@ close_fds_ge_than (int n, libcrun_error_t *err)
 
   /* Now it is owned by dir.  */
   cfd = -1;
-
   fd = dirfd (dir);
-  while (next = readdir (dir))
+
+  struct dirent *next;
+  while ((next = readdir (dir)) != NULL)
     {
       int val;
       const char *name = next->d_name;
@@ -1633,7 +1633,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       return crun_make_error (err, errno, "cannot open directory `%s`", destname);
     }
 
-  while (de = readdir (dsrcfd))
+  while ((de = readdir (dsrcfd)) != NULL)
     {
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;

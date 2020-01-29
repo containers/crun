@@ -1501,7 +1501,7 @@ cleanup_rmdir (void *p)
         goto exit;
 
       struct dirent *de;
-      while (de = readdir (d))
+      while ((de = readdir (d)) != NULL)
         {
           if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
             continue;

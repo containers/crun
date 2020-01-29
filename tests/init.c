@@ -107,6 +107,7 @@ ls (char *path)
   if (dir == NULL)
     error (EXIT_FAILURE, errno, "opendir");
 
+  /* Question: should this be a while-readdir loop? */
   for (;;)
     {
       struct dirent *de;

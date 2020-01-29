@@ -210,7 +210,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   dfd = -1;
 
   struct dirent *de;
-  while (de = readdir (d))
+  while ((de = readdir (d)) != NULL)
     {
       /* Ignore errors here and keep deleting, the final unlinkat (AT_REMOVEDIR) will fail anyway.  */
       ret = unlinkat (dirfd (d), de->d_name, 0);
@@ -249,7 +249,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       return crun_make_error (err, errno, "cannot opendir `%s`", path);
 
   struct dirent *next;
-  while (next = readdir (dir))
+  while ((next = readdir (dir)) != NULL)
     {
       int exists;
       cleanup_free char *status_file = NULL;
