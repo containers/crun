@@ -787,6 +787,8 @@ container_init (void *args, const char *notify_socket, int sync_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  close_and_reset (&sync_socket);
+
   if (entrypoint_args->context->fifo_exec_wait_fd >= 0)
     {
       char buffer[1];
@@ -807,6 +809,8 @@ container_init (void *args, const char *notify_socket, int sync_socket,
             return crun_make_error (err, errno, "read from the exec fifo");
         }
       while (ret == 0);
+
+      close_and_reset (&entrypoint_args->context->fifo_exec_wait_fd);
     }
 
   crun_set_output_handler (log_write_to_stderr, NULL, false);
