@@ -448,6 +448,7 @@ int unblock_signals (libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
 
+  memset (&act, 0, sizeof (act));
   act.sa_handler = SIG_DFL;
   for (i = 0; i < SIGNUM_BOUND; i++)
     {
