@@ -166,8 +166,7 @@ static char spec_file[] = "\
 				\"noexec\",\n\
 				\"newinstance\",\n\
 				\"ptmxmode=0666\",\n\
-				\"mode=0620\",\n\
-				\"gid=5\"\n\
+				\"mode=0620\"\n\
 			]\n\
 		},\n\
 		{\n\
