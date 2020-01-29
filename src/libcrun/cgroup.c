@@ -408,18 +408,17 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_dir DIR *dir = NULL;
-  int ret;
-  int dfd;
+  struct dirent *next;
+  int ret, dfd;
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
-
   dir = opendir (cgroup_path);
+
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, errno, "cannot opendir %s", cgroup_path);
 
   dfd = dirfd (dir);
-
-  struct dirent *next;
+  
   while ((next = readdir (dir)) != NULL)
     {
       const char *name = next->d_name;

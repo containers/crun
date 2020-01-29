@@ -1433,7 +1433,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (context->console_socket)
     {
-      cleanup_close int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
+      int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
       if (UNLIKELY (console_socket_fd < 0))
         return console_socket_fd;
       container_args.console_socket_fd = console_socket_fd;
@@ -2011,9 +2011,10 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
     if (container->container_def->annotations && container->container_def->annotations->len)
       {
+        size_t i;
         yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
         yajl_gen_map_open (gen);
-        for (size_t i = 0; i < container->container_def->annotations->len; i++)
+        for (i = 0; i < container->container_def->annotations->len; i++)
           {
             const char *key = container->container_def->annotations->keys[i];
             const char *val = container->container_def->annotations->values[i];
@@ -2234,6 +2235,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
       execv (exec_path, process->args);
       libcrun_fail_with_error (errno, "exec");
+      _exit (EXIT_FAILURE);
     }
 
   TEMP_FAILURE_RETRY (close (pipefd1));
@@ -2258,7 +2260,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
       if (context->console_socket)
         {
-          cleanup_close int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
+          int console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
           if (UNLIKELY (console_socket_fd < 0))
             return console_socket_fd;
           ret = send_fd_to_socket (console_socket_fd, terminal_fd, err);

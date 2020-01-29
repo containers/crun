@@ -244,6 +244,10 @@ static unsigned long
 get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option)
 {
   int found;
+
+  /* giuseppe says this is needed; maybe its being called via **option? */
+  cleanup_free char *prev = NULL;
+
   unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags);
   if (found)
     return flags;
@@ -392,6 +396,10 @@ open_mount_target (libcrun_container_t *container, const char *target, libcrun_e
     return ret;
 
   ret = targetfd;
+
+  /* Reset targetfd, but keep for use by other functions? */
+  targetfd = -1;
+
   return ret;
 }
 
@@ -549,10 +557,9 @@ do_mount (libcrun_container_t *container,
       else
         {
           struct remount_s *r;
-
           r = make_remount (fd, target, remount_flags, data,
                             get_private_data (container)->remounts);
-          /* The remount owns the fd.  */
+          fd = -1; /* The remount owns the fd. Variable remains. */
           get_private_data (container)->remounts = r;
         }
     }
@@ -1499,11 +1506,10 @@ cleanup_rmdir (void *p)
         struct dirent *de;
         while ((de = readdir (d)) != NULL) {
           if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
-          continue;
+            continue;
           ret = unlinkat (dirfd (d), de->d_name, 0);
-          if (ret < 0) {
+          if (ret < 0)
             unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
-          }
         }
         unlinkat (AT_FDCWD, *pp, AT_REMOVEDIR);
       }
@@ -2299,6 +2305,7 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
     return ret;
 
   ret = fd;
+  fd = -1; /* Supposed to be cleaned up later / re-used */
   return ret;
 }
 

@@ -52,8 +52,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	char copy_path[PATH_MAX];
 	char link_path[PATH_MAX];
 	char got_path[PATH_MAX];
-	char got_path_root[PATH_MAX];
-	char *new_path, *max_path;
+	char *got_path_root, *new_path, *max_path;
 	int n, chroot_len, last_component;
 	int readlinks = 0;
 
@@ -81,7 +80,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	new_path += chroot_len;
 	while (*new_path == '/' && new_path > got_path)
 		new_path--;
-	strcpy(got_path_root, new_path);
+	got_path_root = new_path;
 	*new_path++ = '/';
 
 	/* Expand each slash-separated pathname component. */
