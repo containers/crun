@@ -442,7 +442,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
 
           close_and_replace (&wd_cleanup, ret);
 
-          ret = check_fd_under_path (dirpath, dirpath_len, wd_file_cleanup, path, err);
+          ret = check_fd_under_path (dirpath, dirpath_len, ret, path, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
