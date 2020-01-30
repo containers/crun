@@ -393,6 +393,16 @@ check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *f
   return 0;
 }
 
+/* Check if *oldfd is a valid fd and close it.  Then store newfd into *oldfd.  */
+static void
+close_and_replace (int *oldfd, int newfd)
+{
+  if (*oldfd >= 0)
+    TEMP_FAILURE_RETRY (close (*oldfd));
+
+  *oldfd = newfd;
+}
+
 static int
 crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path,
                      int mode, libcrun_error_t *err)
@@ -426,13 +436,17 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         ret = mkdirat (cwd, cur, mode);
       else
         {
-          ret = wd_file_cleanup = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
+          ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "create `%s`", path);
+
+          close_and_replace (&wd_cleanup, ret);
 
           ret = check_fd_under_path (dirpath, dirpath_len, wd_file_cleanup, path, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
+          return 0;
         }
 
       if (ret < 0)
@@ -442,14 +456,10 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         }
 
       cwd = openat (cwd, cur, O_CLOEXEC | O_PATH);
-      if (wd_cleanup >= 0)
-        {
-          TEMP_FAILURE_RETRY (close (wd_cleanup));
-          wd_cleanup = -1;
-        }
-      wd_cleanup = cwd;
       if (UNLIKELY (cwd < 0))
         return crun_make_error (err, errno, "open `%s`", cur);
+
+      close_and_replace (&wd_cleanup, cwd);
 
       ret = check_fd_under_path (dirpath, dirpath_len, cwd, cur, err);
       if (UNLIKELY (ret < 0))

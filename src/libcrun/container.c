@@ -448,6 +448,7 @@ int unblock_signals (libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
 
+  memset (&act, 0, sizeof (act));
   act.sa_handler = SIG_DFL;
   for (i = 0; i < SIGNUM_BOUND; i++)
     {
@@ -730,6 +731,8 @@ container_init_setup (void *args, const char *notify_socket,
       ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      close_and_reset (&entrypoint_args->seccomp_fd);
     }
 
   capabilities = def->process ? def->process->capabilities : NULL;
@@ -784,6 +787,8 @@ container_init (void *args, const char *notify_socket, int sync_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  close_and_reset (&sync_socket);
+
   if (entrypoint_args->context->fifo_exec_wait_fd >= 0)
     {
       char buffer[1];
@@ -804,6 +809,8 @@ container_init (void *args, const char *notify_socket, int sync_socket,
             return crun_make_error (err, errno, "read from the exec fifo");
         }
       while (ret == 0);
+
+      close_and_reset (&entrypoint_args->context->fifo_exec_wait_fd);
     }
 
   crun_set_output_handler (log_write_to_stderr, NULL, false);
@@ -822,6 +829,7 @@ container_init (void *args, const char *notify_socket, int sync_socket,
       ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
+      close_and_reset (&entrypoint_args->seccomp_fd);
     }
 
   if (UNLIKELY (def->process == NULL))
@@ -2210,6 +2218,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
           ret = libcrun_apply_seccomp (seccomp_fd, seccomp_flags, seccomp_flags_len, err);
           if (UNLIKELY (ret < 0))
             return ret;
+          close_and_reset (&seccomp_fd);
         }
 
       if (process->user && process->user->additional_gids_len)
@@ -2242,6 +2251,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
           ret = libcrun_apply_seccomp (seccomp_fd, seccomp_flags, seccomp_flags_len, err);
           if (UNLIKELY (ret < 0))
             return ret;
+          close_and_reset (&seccomp_fd);
         }
 
       if (process->user)
