@@ -572,6 +572,10 @@ container_init_setup (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_configure_network (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   rootfs = realpath (def->root->path, NULL);
   if (UNLIKELY (rootfs == NULL))
     {
