@@ -525,9 +525,13 @@ do_mount (libcrun_container_t *container,
     {
       unsigned long rec = mountflags & MS_REC;
       unsigned long propagation = mountflags & (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE);
-      ret = mount (NULL, real_target, NULL, rec | propagation, NULL);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "set propagation for `%s`", target);
+
+      if (propagation)
+        {
+          ret = mount (NULL, real_target, NULL, rec | propagation, NULL);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "set propagation for `%s`", target);
+        }
     }
 
   if (mountflags & MS_RDONLY)
