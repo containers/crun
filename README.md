@@ -72,13 +72,21 @@ dnf install -y make python git gcc automake autoconf libcap-devel \
     go-md2man glibc-static python3-libmount libtool
 ```
 
+On RHEL/CentOS 7
+
+* ```shell yum --enablerepo='*' install -y make automake autoconf gettext libtool gcc libcap-devel systemd-devel libseccomp-devel python36 libtool```
+* [YAJL](https://lloyd.github.io/yajl/) was last updated in 2014, but the required 2.10+ version is not in RHEL/CentOS 7. It is in 8, and in the
+"Cheese" repository for RHEL/CentOS 6: [Library x86-64 RPM](http://www.nosuchhost.net/~cheese/fedora/packages/epel-6/x86_64//yajl-devel-2.1.0-4.el6.x86_64.rpm) & [Devel x86-64 RPM](http://www.nosuchhost.net/~cheese/fedora/packages/epel-6/x86_64//yajl-devel-2.1.0-4.el6.x86_64.rpm)
+* Systemd 2.21 & later has support for related functions needed in crun. RHEL/CentOS 7 uses Systemd 2.19; you'll need to disable compilation for it with ```./configure --disable-systemd```
+
 On RHEL/CentOS 8
 ```shell
 yum --enablerepo='*' install -y make automake autoconf gettext \
     libtool gcc libcap-devel systemd-devel yajl-devel \
     libseccomp-devel python36 libtool
 ```
-go-md2man is not available on RHEL/CentOS 8, so if you'd like to build
+
+go-md2man is not available on RHEL/CentOS, so if you'd like to build
 the man page, you also need to manually install go-md2man.  It can be
 installed with:
 ```shell
@@ -88,7 +96,7 @@ go get github.com/cpuguy83/go-md2man
 export PATH=$PATH:$GOPATH/bin
 ```
 
-On Ubuntu:
+On Debian & Ubuntu:
 ```shell
 apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libcap-dev libseccomp-dev libyajl-dev \
