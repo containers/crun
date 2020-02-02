@@ -283,7 +283,6 @@ create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
 
       return crun_make_error (err, errno, "creating file `%s`", file);
     }
-
   return 0;
 }
 
@@ -394,11 +393,22 @@ check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *f
   return 0;
 }
 
+/* Check if *oldfd is a valid fd and close it.  Then store newfd into *oldfd.  */
+static void
+close_and_replace (int *oldfd, int newfd)
+{
+  if (*oldfd >= 0)
+    TEMP_FAILURE_RETRY (close (*oldfd));
+
+  *oldfd = newfd;
+}
+
 static int
 crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path,
                      int mode, libcrun_error_t *err)
 {
   cleanup_free char *npath = xstrdup (path);
+  cleanup_close int wd_file_cleanup = -1;
   cleanup_close int wd_cleanup = -1;
   bool last_component = false;
   const char *cur;
@@ -426,13 +436,17 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         ret = mkdirat (cwd, cur, mode);
       else
         {
-          cleanup_close int wd_file_cleanup = -1;
-          ret = wd_file_cleanup = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
+          ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "create `%s`", path);
-          ret = check_fd_under_path (dirpath, dirpath_len, wd_file_cleanup, path, err);
+
+          close_and_replace (&wd_cleanup, ret);
+
+          ret = check_fd_under_path (dirpath, dirpath_len, ret, path, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
+          return 0;
         }
 
       if (ret < 0)
@@ -442,16 +456,10 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         }
 
       cwd = openat (cwd, cur, O_CLOEXEC | O_PATH);
-      if (wd_cleanup >= 0)
-        {
-          TEMP_FAILURE_RETRY (close (wd_cleanup));
-          wd_cleanup = -1;
-        }
-      else {
-        wd_cleanup = cwd;
-      }
       if (UNLIKELY (cwd < 0))
         return crun_make_error (err, errno, "open `%s`", cur);
+
+      close_and_replace (&wd_cleanup, cwd);
 
       ret = check_fd_under_path (dirpath, dirpath_len, cwd, cur, err);
       if (UNLIKELY (ret < 0))
@@ -493,12 +501,12 @@ crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcr
   cleanup_free char *tmp = xstrdup (path);
   size_t len = strlen (tmp);
   char *it = tmp + len - 1;
+  int ret;
 
   while (*it != '/' && it > tmp)
     it--;
   if (it > tmp)
     {
-      int ret;
       *it = '\0';
       ret = crun_ensure_directory_at (dirfd, tmp, mode, nofollow, err);
       if (UNLIKELY (ret < 0))
@@ -1176,7 +1184,7 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
   if (container_id > 0)
     {
       uint32_t used = MIN (container_id, available);
-      written += sprintf (buffer + written, "%d %u %u\n", 0, from, used);
+      written += sprintf (buffer + written, "%d %d %d\n", 0, from, used);
       from += used;
       available -= used;
     }
@@ -1186,7 +1194,7 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
 
   /* Last mapping: use any id that is left.  */
   if (available)
-    written += sprintf (buffer + written, "%d %u %u\n", container_id + 1, from, available);
+    written += sprintf (buffer + written, "%d %d %d\n", container_id + 1, from, available);
 
   *ret = buffer;
   buffer = NULL;
@@ -1210,7 +1218,6 @@ run_process_with_stdin_timeout_envp (char *path,
   cleanup_close int pipe_r = -1;
   cleanup_close int pipe_w = -1;
   sigset_t mask;
-  sigemptyset(&mask);
 
   ret = pipe (stdin_pipe);
   if (UNLIKELY (ret < 0))
@@ -1309,8 +1316,10 @@ close_fds_ge_than (int n, libcrun_error_t *err)
 {
   cleanup_close int cfd = -1;
   cleanup_dir DIR *dir = NULL;
-  int ret, fd;
+  int ret;
+  int fd;
   struct statfs sfs;
+  struct dirent *next;
 
   cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (cfd < 0))
@@ -1329,10 +1338,9 @@ close_fds_ge_than (int n, libcrun_error_t *err)
 
   /* Now it is owned by dir.  */
   cfd = -1;
-  fd = dirfd (dir);
 
-  struct dirent *next;
-  while ((next = readdir (dir)) != NULL)
+  fd = dirfd (dir);
+  for (next = readdir (dir); next; next = readdir (dir))
     {
       int val;
       const char *name = next->d_name;
@@ -1632,7 +1640,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const
       return crun_make_error (err, errno, "cannot open directory `%s`", destname);
     }
 
-  while ((de = readdir (dsrcfd)) != NULL)
+  for (de = readdir (dsrcfd); de; de = readdir (dsrcfd))
     {
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;

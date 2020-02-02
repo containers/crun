@@ -413,7 +413,6 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
   dir = opendir (cgroup_path);
-
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, errno, "cannot opendir %s", cgroup_path);
 
@@ -1169,31 +1168,25 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
   if (recurse)
     {
       cleanup_dir DIR *dir;
-      while ((dir = fdopendir (dfd)) != NULL) {
+      struct dirent *de;
+      dir = fdopendir (dfd);
 
+      if (UNLIKELY (dir == NULL))
+        return crun_make_error (err, errno, "open cgroup sub-directory");
+
+      while ((de = readdir (dir)) != NULL)
+      {
+        if (strcmp (de->d_name, ".") == 0 ||
+            strcmp (de->d_name, "..") == 0)
+          continue;
+        if (de->d_type != DT_DIR)
+          continue;
         if (UNLIKELY (dir == NULL))
-          return crun_make_error (err, errno, "open cgroup sub-directory");
-
-        struct dirent *de;
-        while ((de = readdir (dir)) != NULL)
-        {
-          if (strcmp (de->d_name, ".") == 0 ||
-              strcmp (de->d_name, "..") == 0)
-            continue;
-
-          if (de->d_type != DT_DIR)
-            continue;
-
-          if (UNLIKELY (dir == NULL))
-            return crun_make_error (err, errno, "open cgroup directory %s", de->d_name);
-
-          ret = read_pids_cgroup (
-            openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC)
-            , recurse, pids, n_pids, allocated, err);
-
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+          return crun_make_error (err, errno, "open cgroup directory %s", de->d_name);
+        ret = read_pids_cgroup (
+          openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC), recurse, pids, n_pids, allocated, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
       }
     }
   return 0;
