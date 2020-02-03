@@ -1,4 +1,16 @@
-* FUTURE
+* crun-0.12
+
+- masked paths use only MS_UNBINDABLE
+- mount doesn't specify mount data when there are no options
+- support new hook types: createRuntime, createContainer and startContainer
+- safer mount options.  A temporary mount is prepared outside of the
+  rootfs before being moved to it.
+- apply selinux/apparmor before the pivot_root.
+- handle correctly proc remounts.  It is now supported to specify hidepid=
+- fix exec if a namespace is not available.
+- handle swap limit with the same semantic as on cgroup v1.
+- bring network device up.
+- reset all signal handlers to default.
 
 * crun-0.11
 
