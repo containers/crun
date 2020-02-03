@@ -46,6 +46,7 @@
 #include <limits.h>
 #include <inttypes.h>
 #include <sys/personality.h>
+#include <net/if.h>
 
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
@@ -2955,6 +2956,46 @@ libcrun_set_personality (runtime_spec_schema_defs_linux_personality *p, libcrun_
   ret = personality (persona);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "set personality to `%s`", p->domain);
+
+  return 0;
+}
+
+int
+libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
+{
+  int ret;
+  size_t i;
+  bool configure_network = false;
+  struct ifreq ifr_lo = {
+                         .ifr_name = "lo",
+                         .ifr_flags = IFF_UP | IFF_RUNNING
+  };
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int sockfd = -1;
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value = find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0))
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
+
+      if (value == CLONE_NEWNET && def->linux->namespaces[i]->path == NULL)
+        {
+          configure_network = true;
+          break;
+        }
+    }
+
+  if (! configure_network)
+    return 0;
+
+  sockfd = socket (AF_INET, SOCK_DGRAM, 0);
+  if (sockfd < 0)
+    return crun_make_error (err, errno, "socket");
+
+  ret = ioctl (sockfd, SIOCSIFFLAGS, &ifr_lo);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "ioctl(SIOCSIFFLAGS)");
 
   return 0;
 }
