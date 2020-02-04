@@ -387,6 +387,8 @@ open_mount_target (libcrun_container_t *container, const char *target, libcrun_e
     return crun_make_error (err, 0, "target `%s` is not under the rootfs", target);
 
   target_rel = target + rootfslen + 1;
+  while (*target_rel == '/')
+    target_rel++;
 
   targetfd = openat (rootfsfd, target_rel, O_PATH | O_CLOEXEC);
   if (UNLIKELY (targetfd < 0))
@@ -1170,6 +1172,8 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         }
 
       target_rel = target + rootfslen + 1;
+      while (*target_rel == '/')
+        target_rel++;
 
       type = def->mounts[i]->type;
 
