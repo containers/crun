@@ -849,7 +849,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
 
           if (ensure_parent_dir)
             {
-              ret = crun_ensure_directory (resolved_path, 0700, true, err);
+              ret = crun_ensure_directory (resolved_path, 0755, true, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
@@ -926,6 +926,9 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
                                 def->linux->devices[i]->major,
                                 def->linux->devices[i]->minor,
                                 def->linux->devices[i]->file_mode};
+
+      if (! def->linux->devices[i]->file_mode_present)
+        device.mode = 0666;
       ret = create_dev (container, devfd, &device, rootfs, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
