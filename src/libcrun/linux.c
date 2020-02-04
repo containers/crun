@@ -736,17 +736,19 @@ struct device_s
   int major;
   int minor;
   int mode;
+  uid_t uid;
+  gid_t gid;
 };
 
 struct device_s needed_devs[] =
   {
-    {"/dev/null", "c", 1, 3, 0666},
-    {"/dev/zero", "c", 1, 5, 0666},
-    {"/dev/full", "c", 1, 7, 0666},
-    {"/dev/tty", "c", 5, 0, 0666},
-    {"/dev/random", "c", 1, 8, 0666},
-    {"/dev/urandom", "c", 1, 9, 0666},
-    {NULL, '\0', 0, 0, 0}
+   {"/dev/null", "c", 1, 3, 0666, 0, 0},
+   {"/dev/zero", "c", 1, 5, 0666, 0, 0},
+   {"/dev/full", "c", 1, 7, 0666, 0, 0},
+   {"/dev/tty", "c", 5, 0, 0666, 0, 0},
+   {"/dev/random", "c", 1, 8, 0666, 0, 0},
+   {"/dev/urandom", "c", 1, 9, 0666, 0, 0},
+   {NULL, '\0', 0, 0, 0, 0, 0}
   };
 
 /* Check if the specified path is a direct child of /dev.  If it is
@@ -832,6 +834,10 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmodat `%s`", device->path);
+
+          ret = chown (fd_buffer, device->uid, device->gid);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "chown `%s`", device->path);
         }
       else
         {
@@ -883,6 +889,10 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmodat `%s`", device->path);
+
+          ret = chown (fd_buffer, device->uid, device->gid);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "chown `%s`", device->path);
         }
 
     }
@@ -925,7 +935,10 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
                                 def->linux->devices[i]->type,
                                 def->linux->devices[i]->major,
                                 def->linux->devices[i]->minor,
-                                def->linux->devices[i]->file_mode};
+                                def->linux->devices[i]->file_mode,
+                                def->linux->devices[i]->uid,
+                                def->linux->devices[i]->gid,
+      };
 
       if (! def->linux->devices[i]->file_mode_present)
         device.mode = 0666;
