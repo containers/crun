@@ -425,12 +425,15 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
   cwd = dirfd;
   cur = npath;
   it = strchr (npath, '/');
-  while (cur && cur[0])
+  while (cur)
     {
       if (it)
         *it = '\0';
       else
         last_component = true;
+
+      if (cur[0] == '\0')
+        break;
 
       if (!last_component || dir)
         ret = mkdirat (cwd, cur, mode);
