@@ -104,7 +104,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 				if (path[2] == '\0' || path[2] == '/') {
 					path += 2;
 					/* Ignore ".." at root. */
-					if (new_path == got_path_root || new_path[-1] != '/')
+					if (new_path == got_path_root + 1)
 						continue;
 					/* Handle ".." by backing up. */
 					while ((--new_path)[-1] != '/');
@@ -146,8 +146,6 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 				return NULL;
 			}
 		} else {
-			size_t sprintf_len;
-
 			/* Note: readlink doesn't add the null byte. */
 			link_path[n] = '\0';
 			if (*link_path == '/') {
@@ -158,13 +156,14 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 			else
 				/* Otherwise back up over this component. */
 				while (*(--new_path) != '/');
-
-			/* Insert symlink contents into path. */
-			sprintf_len = snprintf(copy_path, PATH_MAX - 2, "%s%s", link_path, path);
-                        if (sprintf_len >= PATH_MAX - 2) {
+			/* Safe sex check. */
+			if (strlen(path) + n >= PATH_MAX - 2) {
 				__set_errno(ENAMETOOLONG);
 				return NULL;
 			}
+			/* Insert symlink contents into path. */
+			strcat(link_path, path);
+			strcpy(copy_path, link_path);
 			path = copy_path;
 		}
 #endif							/* S_IFLNK */
