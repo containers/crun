@@ -1,4 +1,8 @@
-* FUTURE
+* crun-0.12.1
+- fix the order of clone syscall arguments on s390 and cris.
+- if no mode is specified use 0666 for devices.
+- fix running with a relative bundle directory.
+- fix some regressions in the mounts path resolution.
 
 * crun-0.12
 
