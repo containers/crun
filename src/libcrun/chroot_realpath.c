@@ -104,7 +104,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 				if (path[2] == '\0' || path[2] == '/') {
 					path += 2;
 					/* Ignore ".." at root. */
-					if (new_path == got_path_root || new_path[-1] != '/')
+					if (new_path == got_path_root + 1)
 						continue;
 					/* Handle ".." by backing up. */
 					while ((--new_path)[-1] != '/');
