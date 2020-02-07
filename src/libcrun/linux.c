@@ -1050,7 +1050,7 @@ static int
 do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
-  cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_RDONLY);
+  cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_PATH);
   cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY);
 
   if (UNLIKELY (oldrootfd < 0))
