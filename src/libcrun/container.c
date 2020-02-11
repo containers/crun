@@ -719,7 +719,7 @@ container_init_setup (void *args, const char *notify_socket,
     }
 
   if (def->process->user)
-    umask (def->process->user->umask);
+    umask (def->process->user->umask_present ? def->process->user->umask : 0022);
 
   if (def->process && !def->process->no_new_privileges)
     {
@@ -2259,7 +2259,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
         }
 
       if (process->user)
-        umask (process->user->umask);
+        umask (process->user->umask_present ? process->user->umask : 0022);
 
       TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
       TEMP_FAILURE_RETRY (close (pipefd1));
