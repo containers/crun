@@ -300,6 +300,11 @@ will skip the `setgroups` syscall that is used to either set the
 additional groups specified in the OCI configuration, or to reset the
 list of additional groups if none is specified.
 
+## `run.oci.timens_offset=ID SEC NSEC`
+
+Specify the offset to be written to /proc/self/timens_offsets when creating
+a time namespace.
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that

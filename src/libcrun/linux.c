@@ -116,6 +116,9 @@ static struct linux_namespace_s namespaces[] =
 #ifdef CLONE_NEWCGROUP
     {"cgroup", CLONE_NEWCGROUP},
 #endif
+#ifdef CLONE_NEWTIME
+    {"time", CLONE_NEWTIME},
+#endif
     {NULL, 0}
   };
 
@@ -2379,6 +2382,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
   int namespaces_to_join_index[MAX_NAMESPACES];
   size_t n_namespaces_to_join = 0;
   int userns_join_index = -1;
+  bool must_fork = false;
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -2455,6 +2459,13 @@ libcrun_run_linux_container (libcrun_container_t *container,
   if (UNLIKELY (ret < 0))
       goto out;
 
+  if (flags & CLONE_NEWPID)
+    must_fork = true;
+#ifdef CLONE_NEWTIME
+  if (flags & CLONE_NEWTIME)
+    must_fork = true;
+#endif
+
   /* If we create a new user namespace, create it as part of the clone.  */
   pid = syscall_clone ((flags & ((userns_join_index >= 0) ? 0 : CLONE_NEWUSER)) | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
@@ -2480,7 +2491,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
             return crun_make_error (err, errno, "write to sync socket");
         }
 
-      if (flags & CLONE_NEWPID)
+      if (must_fork)
         {
           ret = TEMP_FAILURE_RETRY (read (sync_socket_host, &grandchild, sizeof (grandchild)));
           if (UNLIKELY (ret < 0))
@@ -2587,9 +2598,34 @@ libcrun_run_linux_container (libcrun_container_t *container,
         goto out;
     }
 
-  if (flags & CLONE_NEWPID)
+#ifdef CLONE_NEWTIME
+  if (flags & CLONE_NEWTIME)
     {
-      /* A PID namespace is joined when a new process is created.  */
+      cleanup_close int fd = open ("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+      if (container->container_def->annotations)
+        {
+          size_t i;
+
+          for (i = 0; i < container->container_def->annotations->len; i++)
+            {
+              if (strcmp (container->container_def->annotations->keys[i], "run.oci.timens_offset") == 0)
+                {
+                  const char *v;
+
+                  v = container->container_def->annotations->values[i];
+
+                  ret = write (fd, v, strlen (v));
+                  if (UNLIKELY (ret < 0))
+                    goto out;
+                }
+            }
+        }
+    }
+#endif
+
+  if (must_fork)
+    {
+      /* A PID and a time namespace is joined when a new process is created.  */
       pid_container = fork ();
       if (UNLIKELY (ret < 0))
         {
