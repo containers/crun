@@ -2916,12 +2916,6 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
   for (i = 0; all_namespaces[i]; i++)
     close_and_reset (&fds[i]);
 
-  if (detach && setsid () < 0)
-    {
-      crun_make_error (err, errno, "setsid");
-      goto exit;
-    }
-
   /* We need to fork once again to join the PID namespace.  */
   pid = fork ();
   if (UNLIKELY (pid < 0))

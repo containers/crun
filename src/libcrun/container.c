@@ -680,13 +680,13 @@ container_init_setup (void *args, const char *notify_socket,
         }
     }
 
+  ret = setsid ();
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "setsid");
+
   if (has_terminal)
     {
       cleanup_close int terminal_fd = -1;
-
-      ret = setsid ();
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "setsid");
 
       fflush (stderr);
 
