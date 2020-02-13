@@ -29,7 +29,6 @@
 #include "libcrun/container.h"
 #include "libcrun/status.h"
 #include "libcrun/utils.h"
-#include "libcrun/sig2str.h"
 
 static char doc[] = "OCI runtime";
 

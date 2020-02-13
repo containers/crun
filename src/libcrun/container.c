@@ -41,7 +41,6 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <grp.h>
-#include "sig2str.h"
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -450,7 +449,7 @@ int unblock_signals (libcrun_error_t *err)
 
   memset (&act, 0, sizeof (act));
   act.sa_handler = SIG_DFL;
-  for (i = 0; i < SIGNUM_BOUND; i++)
+  for (i = 0; i < NSIG; i++)
     {
       ret = sigaction (i, &act, NULL);
       if (ret < 0 && errno != EINVAL)

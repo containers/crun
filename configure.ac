@@ -112,6 +112,12 @@ AC_SUBST([CRUN_LDFLAGS])
 
 AC_SUBST([RPM_VERSION])
 
+AC_CHECK_TOOL(GPERF, gperf)
+if test -z "$GPERF"; then
+       AC_MSG_NOTICE(gperf not found, cannot rebuild signal parser code)
+fi
+
+
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
