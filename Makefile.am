@@ -33,8 +33,7 @@ libcrun_la_SOURCES = src/libcrun/utils.c \
 			src/libcrun/status.c \
 			src/libcrun/terminal.c \
 			src/libcrun/sig2str.c \
-			src/libcrun/chroot_realpath.c \
-			src/libcrun/secure_getenv.c
+			src/libcrun/chroot_realpath.c
 
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 libcrun_la_LIBADD = libocispec/libocispec.la

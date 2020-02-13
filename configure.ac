@@ -27,7 +27,7 @@ AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 
 AC_CHECK_HEADERS([error.h])
 
-AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid secure_getenv)
+AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid)
 
 dnl libcap
 AC_ARG_ENABLE([caps],

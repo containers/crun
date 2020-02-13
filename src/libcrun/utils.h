@@ -148,10 +148,6 @@ int libcrun_initialize_selinux (libcrun_error_t *err);
 
 int libcrun_initialize_apparmor (libcrun_error_t *err);
 
-#if !HAVE_SECURE_GETENV
-char *secure_getenv (char const *name);
-#endif
-
 const char *find_annotation (libcrun_container_t *container, const char *name);
 
 int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);
