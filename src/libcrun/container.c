@@ -641,6 +641,10 @@ container_init_setup (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_reopen_dev_null (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (clearenv ())
     return crun_make_error (err, errno, "clearenv");
 
