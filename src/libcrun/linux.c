@@ -1347,7 +1347,14 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   char *host_path = NULL;
 
   if (container)
-    host_path = get_private_data (container)->host_notify_socket_path;
+    {
+      const char *parent_dir;
+
+      parent_dir = get_private_data (container)->host_notify_socket_path;
+
+      xasprintf (&host_notify_socket_path, "%s/notify", parent_dir);
+      host_path = host_notify_socket_path;
+    }
 
   *notify_socket_out = -1;
 

@@ -1424,7 +1424,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   container->context = context;
 
-  if (!detach)
+  if (!detach || context->notify_socket)
     {
       ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
       if (UNLIKELY (ret < 0))
