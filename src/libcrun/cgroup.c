@@ -62,6 +62,8 @@ static struct symlink_s cgroup_symlinks[] = {
   { NULL, NULL }
 };
 
+#define SYSTEMD_PROPERTY_PREFIX "org.systemd.property."
+
 #ifndef CGROUP2_SUPER_MAGIC
 # define CGROUP2_SUPER_MAGIC 0x63677270
 #endif
@@ -694,8 +696,149 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
   return 0;
 }
 
+/* Parse a gvariant string.  Support only a subset of types, just enough for systemd .  */
+static int
+append_systemd_annotation (sd_bus_message *m,
+                           const char *name,
+                           size_t name_len,
+                           const char *value,
+                           libcrun_error_t *err)
+{
+  cleanup_free char *tmp_name = NULL;
+  uint32_t factor = 1;
+  const char *it;
+  int sd_err;
+
+  while (*value == ' ')
+    value++;
+
+  it = value;
+
+  /* If the name has the form NameSec, convert it to NameUSec.  */
+  if (name_len > 4
+      && name[name_len - 4] != 'U'
+      && name[name_len - 3] == 'S'
+      && name[name_len - 2] == 'e'
+      && name[name_len - 1] == 'c')
+    {
+      factor = 1000000;
+
+      tmp_name = xmalloc (name_len + 2);
+      memcpy (tmp_name, name, name_len - 3);
+      memcpy (tmp_name + name_len - 3, "USec", 5);
+
+      name = tmp_name;
+    }
+
+
+  if ((strcmp (it, "true") == 0) || (strcmp (it, "false") == 0))
+    {
+      bool b = *it == 't';
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "b", b);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+  else if (*it == '\'')
+    {
+      cleanup_free char *v_start = NULL;
+      char *end;
+
+      it = v_start = xstrdup (value);
+
+      end = strchr (it + 1, '\'');
+      if (end == NULL)
+        return crun_make_error (err, 0, "invalid variant `%s`", value);
+      *end = '\0';
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "s", it + 1);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+  else if (has_prefix (it, "uint64 "))
+    {
+      char *endptr = NULL;
+      uint64_t v;
+
+      errno = 0;
+      v = strtoull (it + sizeof ("uint64"), &endptr, 10);
+      if (UNLIKELY (errno != 0 || *endptr))
+        return crun_make_error (err, errno, "invalid value for `%s`", name);
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "t", (uint64_t)(v * factor));
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+  else if (has_prefix (it, "int64 "))
+    {
+      char *endptr = NULL;
+      int64_t v;
+
+      errno = 0;
+      v = strtoll (it + sizeof ("int64"), &endptr, 10);
+      if (UNLIKELY (errno != 0 || *endptr))
+        return crun_make_error (err, errno, "invalid value for `%s`", name);
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "x", (int64_t)(v * factor));
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+  else if (has_prefix (it, "uint32 "))
+    {
+      char *endptr = NULL;
+      uint32_t v;
+
+      errno = 0;
+      v = strtoul (it + sizeof ("uint32"), &endptr, 10);
+      if (UNLIKELY (errno != 0 || *endptr))
+        return crun_make_error (err, errno, "invalid value for `%s`", name);
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "u", (uint32_t)(v * factor));
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+  else if (has_prefix (it, "int32 ") || strchr (it, ' ') == NULL)
+    {
+      char *endptr = NULL;
+      int32_t v;
+
+      /* If no type is specified, try to parse it as int32.  */
+
+      errno = 0;
+      if (has_prefix (it, "int32 "))
+        v = strtol (it + sizeof ("int32"), &endptr, 10);
+      else
+        v = strtol (it, &endptr, 10);
+      if (UNLIKELY (errno != 0 || *endptr))
+        return crun_make_error (err, errno, "invalid value for `%s`", name);
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "i", (int32_t)(v * factor));
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+
+  return crun_make_error (err, errno, "unknown type for `%s`", name);
+}
+
 static
-int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources, const char *id, const char *slice, pid_t pid, libcrun_error_t *err)
+int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
+                                json_map_string_string *annotations,
+                                const char *id,
+                                const char *slice,
+                                pid_t pid,
+                                libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -803,6 +946,34 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
         {
           ret = crun_make_error (err, -sd_err, "sd-bus message append Slice");
           goto exit;
+        }
+    }
+
+  if (annotations)
+    {
+      size_t prefix_len = sizeof (SYSTEMD_PROPERTY_PREFIX) - 1;
+      size_t i;
+
+      for (i = 0; i < annotations->len; i++)
+        {
+          size_t len;
+
+          if (! has_prefix (annotations->keys[i], SYSTEMD_PROPERTY_PREFIX))
+            continue;
+
+          len = strlen (annotations->keys[i]);
+          if (len < prefix_len + 3)
+            {
+              ret = crun_make_error (err, EINVAL, "invalid systemd property name `%s`",
+                                     annotations->keys[i]);
+              goto exit;
+            }
+
+          ret = append_systemd_annotation (m, annotations->keys[i] + prefix_len,
+                                           len - prefix_len,
+                                           annotations->values[i], err);
+          if (UNLIKELY (ret < 0))
+            goto exit;
         }
     }
 
@@ -1002,7 +1173,10 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resources,
+                               json_map_string_string *annotations arg_unused, int cgroup_mode,
+                               char **path, const char *cgroup_path, int manager, pid_t pid,
+                               const char *id, libcrun_error_t *err)
 {
   if (manager == CGROUP_MANAGER_DISABLED)
     {
@@ -1015,7 +1189,7 @@ libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resou
     {
       int ret;
 
-      ret = enter_systemd_cgroup_scope (resources, id, cgroup_path, pid, err);
+      ret = enter_systemd_cgroup_scope (resources, annotations, id, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1046,7 +1220,17 @@ libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resou
 }
 
 int
-libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, uid_t root_uid, gid_t root_gid, const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources,
+                      json_map_string_string *annotations,
+                      int cgroup_mode,
+                      char **path,
+                      const char *cgroup_path,
+                      int manager,
+                      pid_t pid,
+                      uid_t root_uid,
+                      gid_t root_gid,
+                      const char *id,
+                      libcrun_error_t *err)
 {
   libcrun_error_t tmp_err = NULL;
   int rootless;
@@ -1066,7 +1250,7 @@ libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources, int
         return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = libcrun_cgroup_enter_internal (resources, cgroup_mode, path, cgroup_path, manager, pid, id, err);
+  ret = libcrun_cgroup_enter_internal (resources, annotations, cgroup_mode, path, cgroup_path, manager, pid, id, err);
   if (LIKELY (ret == 0))
     {
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))

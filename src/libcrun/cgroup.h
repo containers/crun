@@ -36,12 +36,15 @@ enum
   };
 
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
-int libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, uid_t root_uid, gid_t root_gid, const char *id, libcrun_error_t *err);
+int libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources, json_map_string_string *annotations,
+                          int cgroup_mode, char **path, const char *cgroup_path, int manager, pid_t pid, uid_t root_uid,
+                          gid_t root_gid, const char *id, libcrun_error_t *err);
 int libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err);
 int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
 int libcrun_cgroup_destroy (const char *id, char *path, int manager, libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err);
-int libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err);
+int libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources,
+                                     char *path, libcrun_error_t *err);
 int libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err);
 int libcrun_cgroup_pause_unpause (const char *path, const bool pause, libcrun_error_t *err);
 int libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);
