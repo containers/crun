@@ -126,6 +126,7 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
 {
   cleanup_free char *controllers = NULL;
   cleanup_free char *tmp_path = NULL;
+  size_t controllers_len = 0;
   bool has_hugetlb = false;
   bool has_memory = false;
   bool has_cpuset = false;
@@ -149,13 +150,13 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
       has_hugetlb = resources->hugepage_limits_len;
     }
 
-  xasprintf (&controllers, "%s %s %s %s %s %s",
-             has_cpu ? "+cpu" : "",
-             has_io ? "+io" : "",
-             has_memory ? "+memory" : "",
-             has_pids ? "+pids" : "",
-             has_cpuset ? "+cpuset" : "",
-             has_hugetlb ? "+hugetlb" : "");
+  controllers_len = xasprintf (&controllers, "%s %s %s %s %s %s",
+                               has_cpu ? "+cpu" : "",
+                               has_io ? "+io" : "",
+                               has_memory ? "+memory" : "",
+                               has_pids ? "+pids" : "",
+                               has_cpuset ? "+cpuset" : "",
+                               has_hugetlb ? "+hugetlb" : "");
 
   xasprintf (&tmp_path, "%s/", path);
 
@@ -176,7 +177,7 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
       if (next_slash)
         {
           xasprintf (&subtree_control, "%s/cgroup.subtree_control", cgroup_path);
-          ret = write_file (subtree_control, controllers, strlen (controllers), err);
+          ret = write_file (subtree_control, controllers, controllers_len, err);
           if (ret < 0)
             {
               int e = crun_error_get_errno (err);
