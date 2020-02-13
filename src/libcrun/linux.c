@@ -1779,6 +1779,40 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
   return 0;
 }
 
+/* If one of stdin, stdout, stderr are pointing to /dev/null on
+ * the outside of the container, this moves it to /dev/null inside
+ * of the container. This needs to run afer pivot/chroot-ing. */
+int
+libcrun_reopen_dev_null (libcrun_error_t * err)
+{
+  struct stat dev_null;
+  struct stat statbuf;
+  cleanup_close int fd;
+  int i;
+
+  /* Open /dev/null inside of the container. */
+  fd = open ("/dev/null", O_RDWR);
+  if (UNLIKELY (fd == -1))
+    return crun_make_error (err, errno, "failed open()ing /dev/null");
+
+  if (UNLIKELY (fstat (fd, &dev_null) == -1))
+      return crun_make_error (err, errno, "failed stat()ing /dev/null");
+
+  for (i = 0; i <= 2; i++)
+    {
+      if (UNLIKELY (fstat (i, &statbuf) == -1))
+	  return crun_make_error (err, errno, "failed stat()ing fd %d", i);
+      if (statbuf.st_rdev == dev_null.st_rdev)
+	{
+	  /* This FD is pointing to /dev/null. Point it to /dev/null inside
+	   * of the container. */
+	  if (UNLIKELY (dup2 (fd, i) == -1))
+	    return crun_make_error (err, errno, "failed dup2()ing %d", i);
+	}
+    }
+  return 0;
+}
+
 static int
 uidgidmap_helper (char *helper, pid_t pid, char *map_file, libcrun_error_t *err)
 {
