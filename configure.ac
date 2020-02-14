@@ -91,6 +91,17 @@ AS_IF([test "x$with_python_bindings" = "xyes"], [
             LDFLAGS+=" -fPIC "
 ])
 
+dnl criu
+AC_ARG_ENABLE([criu], AS_HELP_STRING([--disable-criu], [Disable CRIU based checkpoint/restore support]))
+AS_IF([test "x$enable_criu" != "xno"], [
+            PKG_CHECK_MODULES([CRIU], [criu >= 3.13], [have_criu="yes"], [have_criu="no"
+			       AC_MSG_RESULT([CRIU headers not found, building without CRIU support])])
+	    AS_IF([test "$have_criu" = "yes"], [
+		   AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
+		   AC_SEARCH_LIBS(criu_init_opts, [criu])
+	    ])
+], [AC_MSG_RESULT([CRIU support disabled per user request])])
+
 FOUND_LIBS=$LIBS
 LIBS=""
 
@@ -104,6 +115,7 @@ AC_SUBST([RPM_VERSION])
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
+AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])
 
 AC_CONFIG_FILES([Makefile rpm/crun.spec])
 
