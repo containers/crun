@@ -59,4 +59,8 @@ int libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_e
 int libcrun_set_personality (runtime_spec_schema_defs_linux_personality *p, libcrun_error_t *err);
 int libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err);
 
+int libcrun_container_checkpoint_linux (libcrun_container_status_t *status,
+                                        libcrun_container_t *container,
+                                        libcrun_checkpoint_restore_t *cr_options,
+                                        libcrun_error_t *err);
 #endif

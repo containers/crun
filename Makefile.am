@@ -25,6 +25,7 @@ libcrun_la_SOURCES = src/libcrun/utils.c \
 			src/libcrun/cloned_binary.c \
 			src/libcrun/container.c \
 			src/libcrun/cgroup.c \
+			src/libcrun/criu.c \
 			src/libcrun/linux.c \
 			src/libcrun/seccomp.c \
 			src/libcrun/ebpf.c \
@@ -48,15 +49,17 @@ endif
 
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
-		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c
+		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \
+		src/checkpoint.c
 crun_LDADD = libcrun.la $(FOUND_LIBS)
 crun_LDFLAGS = $(CRUN_LDFLAGS)
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/spec.h src/update.h src/ps.h \
+	src/checkpoint.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/ebpf.h src/libcrun/cgroup.h \
-	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h \
+	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h\
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/sig2str.h \
 	src/libcrun/intprops.h crun.1.md
 

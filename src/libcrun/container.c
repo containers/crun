@@ -2430,3 +2430,32 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
 
   return libcrun_container_unpause_linux (&status, err);
 }
+
+int
+libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
+                              libcrun_checkpoint_restore_t *cr_options,
+                              libcrun_error_t *err)
+{
+  int ret;
+  const char *state_root = context->state_root;
+  libcrun_container_status_t status;
+  cleanup_free libcrun_container_t *container = NULL;
+
+  memset (&status, 0, sizeof (status));
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_is_container_running (&status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret == 0)
+    return crun_make_error (err, errno, "the container `%s` is not running",
+                            id);
+
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  return libcrun_container_checkpoint_linux (&status, container, cr_options,
+                                             err);
+}
