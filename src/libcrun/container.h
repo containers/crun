@@ -72,6 +72,17 @@ typedef struct libcrun_container_status_s libcrun_container_status_t;
 typedef struct libcrun_container_s libcrun_container_t;
 typedef struct libcrun_context_s libcrun_context_t;
 
+struct libcrun_checkpoint_restore_s
+{
+  char *image_path;
+  char *work_path;
+  bool leave_running;
+  bool tcp_established;
+  bool shell_job;
+  bool ext_unix_sk;
+};
+typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
+
 libcrun_container_t *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
 
 libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
@@ -103,5 +114,7 @@ int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
 int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
 int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
+
+int libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
 
 #endif

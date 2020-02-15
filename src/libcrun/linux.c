@@ -39,6 +39,7 @@
 #include "terminal.h"
 #include "cgroup.h"
 #include "status.h"
+#include "criu.h"
 #include <sys/socket.h>
 #include <libgen.h>
 #include <sys/wait.h>
@@ -3112,4 +3113,14 @@ __attribute__((constructor)) static void libcrun_rexec(void)
       fprintf (stderr, "Failed to re-execute libcrun via memory file descriptor\n");
       _exit (EXIT_FAILURE);
     }
+}
+
+int
+libcrun_container_checkpoint_linux (libcrun_container_status_t *status,
+                                    libcrun_container_t *container,
+                                    libcrun_checkpoint_restore_t *cr_options,
+                                    libcrun_error_t *err)
+{
+  return libcrun_container_checkpoint_linux_criu (status, container,
+                                                  cr_options, err);
 }
