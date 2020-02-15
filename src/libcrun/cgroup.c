@@ -160,6 +160,11 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
 
   xasprintf (&tmp_path, "%s/", path);
 
+  /* Activate the needed controllers in the root cgroup, but ignore errors here.  */
+  ret = write_file ("/sys/fs/cgroup/cgroup.subtree_control", controllers, controllers_len, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
   for (it = strchr (tmp_path + 1, '/'); it;)
     {
       cleanup_free char *cgroup_path = NULL;
@@ -170,14 +175,14 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
 
       xasprintf (&cgroup_path, "/sys/fs/cgroup%s", tmp_path);
       ret = mkdir (cgroup_path, 0755);
-      if (ret < 0 && errno != EEXIST)
+      if (UNLIKELY (ret < 0 && errno != EEXIST))
         return crun_make_error (err, errno, "create `%s`", cgroup_path);
 
       if (next_slash)
         {
           xasprintf (&subtree_control, "%s/cgroup.subtree_control", cgroup_path);
           ret = write_file (subtree_control, controllers, controllers_len, err);
-          if (ret < 0)
+          if (UNLIKELY (ret < 0))
             {
               int e = crun_error_get_errno (err);
               if (e == EPERM || e == EACCES || e == EBUSY)
