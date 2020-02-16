@@ -194,6 +194,9 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
 #ifdef HAVE_EBPF
   fprintf (stream, "+EBPF ");
 #endif
+#ifdef HAVE_CRIU
+  fprintf (stream, "+CRIU ");
+#endif
   fprintf (stream, "+YAJL\n");
 }
 
