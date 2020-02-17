@@ -160,6 +160,11 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
 
   xasprintf (&tmp_path, "%s/", path);
 
+  /* Activate the needed controllers in the root cgroup, but ignore errors here.  */
+  ret = write_file ("/sys/fs/cgroup/cgroup.subtree_control", controllers, controllers_len, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
   for (it = strchr (tmp_path + 1, '/'); it;)
     {
       cleanup_free char *cgroup_path = NULL;
@@ -170,15 +175,14 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
 
       xasprintf (&cgroup_path, "/sys/fs/cgroup%s", tmp_path);
       ret = mkdir (cgroup_path, 0755);
-      if (ret < 0 && errno != EEXIST) {
+      if (UNLIKELY (ret < 0 && errno != EEXIST))
         return crun_make_error (err, errno, "create `%s`", cgroup_path);
-      }
 
       if (next_slash)
         {
           xasprintf (&subtree_control, "%s/cgroup.subtree_control", cgroup_path);
           ret = write_file (subtree_control, controllers, controllers_len, err);
-          if (ret < 0)
+          if (UNLIKELY (ret < 0))
             {
               int e = crun_error_get_errno (err);
               if (e == EPERM || e == EACCES || e == EBUSY)
@@ -1289,7 +1293,6 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
 {
   int ret;
   size_t i;
-  ssize_t path_len;
   int mode;
   const cgroups_subsystem_t *subsystems;
 
@@ -1320,45 +1323,27 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
-  path_len = strlen (path);
-  while (1)
+  if (mode == CGROUP_MODE_UNIFIED)
     {
-      if (mode == CGROUP_MODE_UNIFIED)
+      cleanup_free char *cgroup_path = NULL;
+
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
+      rmdir (cgroup_path);
+    }
+  else
+    {
+      for (i = 0; subsystems[i]; i++)
         {
           cleanup_free char *cgroup_path = NULL;
 
-          xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
-          if (rmdir (cgroup_path) < 0)
-            break;
+          if (mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
+            continue;
+
+          xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
+
+          rmdir (cgroup_path);
         }
-      else
-        {
-          bool cleaned_any = false;
-
-          for (i = 0; subsystems[i]; i++)
-            {
-              cleanup_free char *cgroup_path = NULL;
-
-              if (mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
-                continue;
-
-              xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
-
-              if (rmdir (cgroup_path) == 0)
-                cleaned_any = true;
-            }
-
-          if (!cleaned_any)
-            break;
-        }
-
-      if (path_len <= 1)
-       break;
-
-      for (; path_len > 1 && path[path_len] != '/'; path_len--);
-      if (path_len > 1)
-       path[path_len] = '\0';
-   }
+    }
 
   return 0;
 }
