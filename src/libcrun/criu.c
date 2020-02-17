@@ -120,9 +120,18 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (strcmp (def->mounts[i]->type, "bind") == 0)
-        criu_add_ext_mount (def->mounts[i]->destination,
-                            def->mounts[i]->destination);
+      size_t j;
+
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        {
+          if (strcmp (def->mounts[i]->options[j], "bind") == 0
+              || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+            {
+              criu_add_ext_mount (def->mounts[i]->destination,
+                                  def->mounts[i]->destination);
+              break;
+            }
+        }
     }
 
   /* Set boolean options . */
