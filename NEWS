@@ -1,4 +1,16 @@
+* crun-0.12.2
+
+- do not require read permissions on /
+- add support for the "time" namespace via a custom annotation
+- fix mount of cgroup v1 when using a cgroup namespace
+- set default umask to 0022
+- use the correct path for notify socket with "crun run -d"
+- always use setsid
+- use correct indices for seccomp generation
+- fixed several issues with cgroup v2 and the cgroupfs driver
+
 * crun-0.12.1
+
 - fix the order of clone syscall arguments on s390 and cris.
 - if no mode is specified use 0666 for devices.
 - fix running with a relative bundle directory.
