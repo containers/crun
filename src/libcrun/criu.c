@@ -31,7 +31,7 @@
 #include "status.h"
 #include "utils.h"
 
-#define CRIU_LOG_FILE "dump.log"
+#define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
@@ -133,13 +133,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
 
   /* Set up logging. */
   criu_set_log_level (4);
-  criu_set_log_file (CRIU_LOG_FILE);
+  criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
   ret = criu_dump ();
   if (UNLIKELY (ret != 0))
     return crun_make_error (err, 0,
                             "CRIU checkpointing failed %d\n"
                             "Please check CRIU logfile %s/%s\n", ret,
-                            cr_options->work_path, CRIU_LOG_FILE);
+                            cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
 
   return 0;
 }
