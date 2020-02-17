@@ -637,6 +637,11 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   char *from;
   cleanup_close int tmpfsdirfd = -1;
   char *saveptr = NULL;
+  bool has_cgroupns = false;
+
+#ifdef CLONE_NEWCGROUP
+  has_cgroupns = get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
+#endif
 
   subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
@@ -696,19 +701,20 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
-      ret = do_mount (container, source_path, subsystemfd, subsystem_path, "cgroup", mountflags, subsystem_fqn, 0, err);
-      if (UNLIKELY (ret < 0))
+      if (! has_cgroupns)
+        ret = do_mount (container, source_path, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 0, err);
+      else
         {
-          if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
+          ret = do_mount (container, source_path, subsystemfd, subsystem_path, "cgroup", mountflags, subsystem_fqn, 0, err);
+          if (UNLIKELY (ret < 0))
             {
-              /* We are trying to mount a subsystem that is not present.  */
-              crun_error_release (err);
-              continue;
+              if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
+                {
+                  /* We are trying to mount a subsystem that is not present.  */
+                  crun_error_release (err);
+                  continue;
+                }
             }
-
-          /* On failure attempt to bind mount.  Do it only if we are not running in a cgroupns as it bind mounts the root.  */
-          if ((get_private_data (container)->unshare_flags & CLONE_NEWCGROUP) == 0)
-            ret = do_mount (container, source_path, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 0, err);
         }
       if (UNLIKELY (ret < 0))
         return ret;

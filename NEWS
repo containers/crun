@@ -1,3 +1,7 @@
+* crun-0.12.2.1
+
+- when not using a cgroup namespace, mount only the cgroup v1 subpath.
+
 * crun-0.12.2
 
 - do not require read permissions on /
