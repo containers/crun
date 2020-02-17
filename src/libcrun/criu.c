@@ -35,9 +35,9 @@
 
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
-					 libcrun_container_t *container,
-					 libcrun_checkpoint_restore_t *
-					 cr_options, libcrun_error_t *err)
+                                         libcrun_container_t *container,
+                                         libcrun_checkpoint_restore_t *
+                                         cr_options, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *path = NULL;
