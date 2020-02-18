@@ -74,6 +74,8 @@ before_install:
 - if test $TEST = alpine-build; then sudo docker build -t crun-alpine-build tests/alpine-build; fi
 - git clone --depth=1 git://github.com/lloyd/yajl
 - "(cd yajl && ./configure -p /usr && make && sudo make install)"
+# CRIU supports armhfp, aarch64, ppc64le, s390x and x86_64. The PPA has only packages for x86_64
+- if test $TRAVIS_CPU_ARCH = amd64; then sudo add-apt-repository -y ppa:criu/ppa; sudo apt-get -q update; sudo apt-get -y install criu; fi
 script:
 - if test $TEST = make-arm64 || test $TEST = make-amd64 || test $TEST = make-ppc64le || test $TEST = make-s390x; then ./autogen.sh && ./configure CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi
 - if test $TEST = make-amd64-nosystemd; then ./autogen.sh && ./configure --disable-systemd CFLAGS='-Wall -Werror' && make -j $(nproc) && make syntax-check; fi

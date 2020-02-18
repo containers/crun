@@ -89,6 +89,7 @@ LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver
 
 TESTS = tests/test_capabilities.py \
 	tests/test_cwd.py \
+	tests/test_checkpoint_restore.py \
 	tests/test_devices.py \
 	tests/test_hostname.py \
 	tests/test_limits.py \
