@@ -2459,3 +2459,97 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
   return libcrun_container_checkpoint_linux (&status, container, cr_options,
                                              err);
 }
+
+int
+libcrun_container_restore (libcrun_context_t *context, const char *id,
+                           libcrun_checkpoint_restore_t *cr_options,
+                           libcrun_error_t *err)
+{
+  cleanup_free libcrun_container_t *container = NULL;
+  runtime_spec_schema_config_schema *def = NULL;
+  const char *state_root = context->state_root;
+  cleanup_free char *cgroup_path = NULL;
+  libcrun_container_status_t status;
+  int cgroup_mode, cgroup_manager;
+  uid_t root_uid = -1;
+  gid_t root_gid = -1;
+  int ret;
+
+  memset (&status, 0, sizeof (status));
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_is_container_running (&status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret == 1)
+    return crun_make_error (err, 0,
+                            "the container `%s` is not in 'stopped' state",
+                            id);
+
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Now that the process has been restored, moved it into is cgroup again.
+   * The whole cgroup code is copied from libcrun_container_run_internal(). */
+  def = container->container_def;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  cgroup_manager = CGROUP_MANAGER_CGROUPFS;
+  if (context->systemd_cgroup)
+    cgroup_manager = CGROUP_MANAGER_SYSTEMD;
+  else if (context->force_no_cgroup)
+    cgroup_manager = CGROUP_MANAGER_DISABLED;
+
+  /* If we are root (either on the host or in a namespace),
+   * then chown the cgroup to root in the container user namespace. */
+  get_root_in_the_userns_for_cgroups (def, container->host_uid,
+                                      container->host_gid, &root_uid,
+                                      &root_gid);
+
+  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL,
+                              cgroup_mode, &cgroup_path,
+                              def->linux ? def->linux->cgroups_path : "",
+                              cgroup_manager, status.pid, root_uid, root_gid,
+                              context->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (def->linux && def->linux->resources)
+    {
+      ret =
+        libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources,
+                                         cgroup_path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = write_container_status (container, context, status.pid,
+                                status.cgroup_path, status.created, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (!cr_options->detach)
+    {
+      int wait_status;
+      ret = waitpid (status.pid, &wait_status, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno,
+                                "waitpid failed for container '%s' with %d",
+                                id, ret);
+
+      if (WEXITSTATUS (wait_status))
+        return WEXITSTATUS (wait_status);
+    }
+
+  return 0;
+}

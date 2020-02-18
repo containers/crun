@@ -80,6 +80,7 @@ struct libcrun_checkpoint_restore_s
   bool tcp_established;
   bool shell_job;
   bool ext_unix_sk;
+  bool detach;
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 
@@ -116,5 +117,7 @@ int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun
 int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
 int libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
+
+int libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
 
 #endif
