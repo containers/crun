@@ -158,7 +158,8 @@ bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err arg_unus
   /* taken from systemd.  */
   struct bpf_insn pre_insn[] = {
                                 /* type -> R2.  */
-                                BPF_LDX_MEM (BPF_H, BPF_REG_2, BPF_REG_1, 0),
+                                BPF_LDX_MEM (BPF_W, BPF_REG_2, BPF_REG_1, 0),
+                                BPF_ALU32_IMM(BPF_AND, BPF_REG_2, 0xFFFF),
 
                                 /* access -> R3.  */
                                 BPF_LDX_MEM (BPF_W, BPF_REG_3, BPF_REG_1, 0),
