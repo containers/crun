@@ -3149,3 +3149,13 @@ libcrun_container_checkpoint_linux (libcrun_container_status_t *status,
   return libcrun_container_checkpoint_linux_criu (status, container,
                                                   cr_options, err);
 }
+
+int
+libcrun_container_restore_linux (libcrun_container_status_t *status,
+                                 libcrun_container_t *container,
+                                 libcrun_checkpoint_restore_t *cr_options,
+                                 libcrun_error_t *err)
+{
+  return libcrun_container_restore_linux_criu (status, container,
+                                               cr_options, err);
+}

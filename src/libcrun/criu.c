@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <criu/criu.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <fcntl.h>
 
 #include "container.h"
@@ -32,6 +33,7 @@
 #include "utils.h"
 
 #define CRIU_CHECKPOINT_LOG_FILE "dump.log"
+#define CRIU_RESTORE_LOG_FILE "restore.log"
 
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
@@ -153,4 +155,139 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
   return 0;
 }
 
+int
+libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
+                                      libcrun_container_t *container,
+                                      libcrun_checkpoint_restore_t *
+                                      cr_options, libcrun_error_t *err)
+{
+
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int image_fd = -1;
+  cleanup_free char *path = NULL;
+  cleanup_free char *root = NULL;
+  cleanup_close int work_fd = -1;
+  size_t i;
+  int ret;
+
+  if (geteuid ())
+    return crun_make_error (err, 0, "Restoring requires root");
+
+  ret = criu_init_opts ();
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "CRIU init failed with %d\n", ret);
+
+  if (UNLIKELY (cr_options->image_path == NULL))
+    return crun_make_error (err, 0, "image path not set\n");
+
+  image_fd = open (cr_options->image_path, O_DIRECTORY);
+  if (UNLIKELY (image_fd == -1))
+    return crun_make_error (err, 0, "error opening checkpoint directory %s\n",
+                            cr_options->image_path);
+
+  criu_set_images_dir_fd (image_fd);
+
+  /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
+   * CRIU will put the logfiles into the images_dir from above. No need for
+   * crun to set it if the user has not selected a specific directory. */
+  if (cr_options->work_path != NULL)
+    {
+      work_fd = open (cr_options->work_path, O_DIRECTORY);
+      if (UNLIKELY (work_fd == -1))
+        return crun_make_error (err, 0,
+                                "error opening CRIU work directory %s\n",
+                                cr_options->work_path);
+
+      criu_set_work_dir_fd (work_fd);
+    }
+  else
+    {
+      /* This is only for the error message later. */
+      cr_options->work_path = cr_options->image_path;
+    }
+
+  /* Tell CRIU about external bind mounts. */
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      size_t j;
+
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        {
+          if (strcmp (def->mounts[i]->options[j], "bind") == 0
+              || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+            {
+              criu_add_ext_mount (def->mounts[i]->destination,
+                                  def->mounts[i]->source);
+              break;
+          }
+        }
+    }
+
+  ret = xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
+  if (UNLIKELY (ret == -1))
+    libcrun_fail_with_error (0, "xasprintf failed");
+
+  /* Mount the container rootfs for CRIU. */
+  ret = xasprintf (&root, "%s/criu-root", status->bundle);
+  if (UNLIKELY (ret == -1))
+    libcrun_fail_with_error (0, "xasprintf failed");
+
+  ret = mkdir (root, 0755);
+  if (UNLIKELY (ret == -1))
+    return crun_make_error (err, errno,
+                            "error creating restore directory %s\n", root);
+  /* do realpath on root */
+  ret = mount (path, root, NULL, MS_BIND | MS_REC, NULL);
+  if (UNLIKELY (ret == -1))
+    {
+      ret = crun_make_error (err, errno,
+                             "error mounting restore directory %s\n", root);
+      goto out;
+    }
+
+  ret = criu_set_root (root);
+  if (UNLIKELY (ret != 0))
+    {
+      ret = crun_make_error (err, 0, "error setting CRIU root to %s\n", path);
+      goto out_umount;
+    }
+
+  /* Set boolean options . */
+  criu_set_ext_unix_sk (cr_options->ext_unix_sk);
+  criu_set_shell_job (cr_options->shell_job);
+  criu_set_tcp_established (cr_options->tcp_established);
+
+  criu_set_log_level (4);
+  criu_set_log_file (CRIU_RESTORE_LOG_FILE);
+  ret = criu_restore_child ();
+
+  /* criu_restore() returns the PID of the process of the restored process
+   * tree. This PID will not be the same as status->pid if the container is
+   * running in a PID namespace. But it will always be > 0. */
+
+  if (UNLIKELY (ret <= 0))
+    {
+      ret = crun_make_error (err, 0,
+                             "CRIU restoring failed %d\n"
+                             "Please check CRIU logfile %s/%s\n", ret,
+                             cr_options->work_path, CRIU_RESTORE_LOG_FILE);
+      goto out_umount;
+    }
+
+  /* Update the status struct with the newly allocated PID. This will
+   * be necessary later when moving the process into its cgroup. */
+  status->pid = ret;
+
+out_umount:
+  ret = umount (root);
+  if (UNLIKELY (ret == -1))
+    return crun_make_error (err, errno,
+                            "error unmounting restore directory %s\n", root);
+out:
+  ret = rmdir (root);
+  if (UNLIKELY (ret == -1))
+    return crun_make_error (err, errno,
+                            "error removing restore directory %s\n", root);
+  return ret;
+}
 #endif

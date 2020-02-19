@@ -180,7 +180,9 @@ def run_all_tests(all_tests, allowed_tests):
 def get_tests_root():
     return '%s/.testsuite-run-%d' % (os.getcwd(), os.getpid())
 
-def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, command='run', use_popen=False, hide_stderr=False):
+def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
+                       command='run', use_popen=False, hide_stderr=False,
+                       all_dev_null=False):
     cwd = os.getcwd()
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
@@ -206,8 +208,20 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None, c
     stderr = subprocess.STDOUT
     if hide_stderr:
         stderr = None
+    stdin = None
+    stdout = None
+    # For the initial limited checkpoint/restore support everything
+    # has to be redirect to /dev/null
+    if all_dev_null:
+        stdin = subprocess.DEVNULL
+        stdout = subprocess.DEVNULL
+        stderr = subprocess.DEVNULL
     if use_popen:
-        return subprocess.Popen(args, cwd=temp_dir, stdout=subprocess.PIPE, stderr=stderr, close_fds=False), id_container
+        if not stdout:
+            stdout=subprocess.PIPE
+        return subprocess.Popen(args, cwd=temp_dir, stdout=stdout,
+                                stderr=stderr, stdin=stdin,
+                                close_fds=False), id_container
     else:
         return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, close_fds=False).decode(), id_container
 
@@ -225,3 +239,10 @@ def tests_main(all_tests):
         run_all_tests(all_tests, os.getenv("RUN_TESTS"))
     finally:
         shutil.rmtree(tests_root)
+
+
+def get_crun_feature_string():
+    for i in run_crun_command(['--version']).split('\n'):
+        if i.startswith('+'):
+            return i
+    return ''

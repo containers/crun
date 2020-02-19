@@ -40,6 +40,7 @@
 #include "unpause.h"
 #include "ps.h"
 #include "checkpoint.h"
+#include "restore.h"
 
 static struct crun_global_arguments arguments;
 
@@ -95,6 +96,7 @@ enum
     COMMAND_UNPAUSE,
     COMMAND_PS,
     COMMAND_CHECKPOINT,
+    COMMAND_RESTORE,
   };
 
 struct commands_s commands[] =
@@ -116,6 +118,7 @@ struct commands_s commands[] =
      * testing for checkpoint support like Podman does.
      * Once it is ready for Podman, this can be renamed to 'checkpoint' */
     { COMMAND_CHECKPOINT, "_checkpoint", crun_command_checkpoint},
+    { COMMAND_RESTORE, "_restore", crun_command_restore},
     { 0, }
   };
 
