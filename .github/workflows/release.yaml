@@ -1,0 +1,27 @@
+name: Main
+on: [push, pull_request]
+jobs:
+  artifact:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - run: sudo apt-get install -y make git gcc build-essential pkgconf libtool libsystemd-dev libcap-dev libseccomp-dev libyajl-dev  go-md2man libtool autoconf python3 automake
+    - run: sudo RUNTIME=docker SKIP_CHECKS=1 SKIP_GPG=1 build-aux/release.sh
+    - run: |
+        (cd release-*; sha256sum *)
+        sudo mv release-* /tmp/artifact
+        sudo mv /tmp/artifact/*static-x86_64 /tmp/artifact/crun-static-x86_64
+        sudo mv /tmp/artifact/*.tar.gz /tmp/artifact/crun.tar.gz
+        sudo mv /tmp/artifact/*.tar.xz /tmp/artifact/crun.tar.xz
+    - uses: actions/upload-artifact@v1
+      with:
+        name: crun-static-x86_64
+        path: /tmp/artifact/crun-static-x86_64
+    - uses: actions/upload-artifact@v1
+      with:
+        name: crun.tar.gz
+        path: /tmp/artifact/crun.tar.gz
+    - uses: actions/upload-artifact@v1
+      with:
+        name: crun.tar.xz
+        path: /tmp/artifact/crun.tar.xz

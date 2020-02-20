@@ -2,6 +2,9 @@
 
 set -xeuo pipefail
 
+SKIP_GPG=${SKIP_GPG:-}
+SKIP_CHECKS=${SKIP_CHECKS:-}
+
 test -e Makefile && make distclean
 
 ./autogen.sh
@@ -12,11 +15,11 @@ make -j $(nproc)
 
 VERSION=$($(dirname $0)/git-version-gen --prefix "" .)
 
-grep $VERSION NEWS
+if test x$SKIP_CHECKS = x; then
+    grep $VERSION NEWS
+fi
 
 OUTDIR=release-$VERSION
-
-SKIP_GPG=${SKIP_GPG:-}
 
 rm -rf $OUTDIR
 mkdir $OUTDIR
@@ -31,8 +34,8 @@ mv crun-*.tar.xz $OUTDIR
 
 make distclean
 
-make -C contrib/static-builder-x86_64 build-image
-make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd)
+make -C contrib/static-builder-x86_64 build-image RUNTIME=$RUNTIME
+make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd) RUNTIME=$RUNTIME
 
 strip static-build/crun
 mv static-build/crun $OUTDIR/crun-$VERSION-static-x86_64

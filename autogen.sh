@@ -6,4 +6,4 @@ fi
 
 git submodule update --init --recursive
 
-exec autoreconf -fis
+exec autoreconf -fi
