@@ -2,6 +2,9 @@
 
 set -xeuo pipefail
 
+SKIP_GPG=${SKIP_GPG:-}
+SKIP_CHECKS=${SKIP_CHECKS:-}
+
 test -e Makefile && make distclean
 
 ./autogen.sh
@@ -12,11 +15,11 @@ make -j $(nproc)
 
 VERSION=$($(dirname $0)/git-version-gen --prefix "" .)
 
-grep $VERSION NEWS
+if test x$SKIP_CHECKS = x; then
+    grep $VERSION NEWS
+fi
 
 OUTDIR=release-$VERSION
-
-SKIP_GPG=${SKIP_GPG:-}
 
 rm -rf $OUTDIR
 mkdir $OUTDIR
