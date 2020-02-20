@@ -34,8 +34,8 @@ mv crun-*.tar.xz $OUTDIR
 
 make distclean
 
-make -C contrib/static-builder-x86_64 build-image
-make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd)
+make -C contrib/static-builder-x86_64 build-image RUNTIME=$RUNTIME
+make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd) RUNTIME=$RUNTIME
 
 strip static-build/crun
 mv static-build/crun $OUTDIR/crun-$VERSION-static-x86_64
