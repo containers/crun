@@ -2170,9 +2170,27 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
       if (UNLIKELY (ret < 0))
         return ret;
 
-      for (i = 0; i < process->env_len; i++)
-        if (putenv (process->env[i]) < 0)
-          libcrun_fail_with_error ( errno, "putenv `%s`", process->env[i]);
+      ret = clearenv ();
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, 0, "clearenv");
+
+      if (process->env_len)
+        {
+          for (i = 0; i < process->env_len; i++)
+            if (putenv (process->env[i]) < 0)
+              libcrun_fail_with_error ( errno, "putenv `%s`", process->env[i]);
+        }
+      else if (container->container_def->process->env_len)
+        {
+          char *e;
+
+          for (i = 0; i < container->container_def->process->env_len; i++)
+            {
+              e = container->container_def->process->env[i];
+              if (putenv (e) < 0)
+                libcrun_fail_with_error ( errno, "putenv `%s`", e);
+            }
+        }
 
       if (getenv ("HOME") == NULL)
         {
