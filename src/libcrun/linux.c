@@ -2799,28 +2799,6 @@ join_process_parent_helper (pid_t child_pid,
   return pid;
 }
 
-static int
-inherit_env (pid_t pid_to_join, libcrun_error_t *err)
-{
-  int ret = 0;
-  size_t len;
-  char *str;
-  cleanup_free char *path;
-  /* Not a memory leak here.  The data used by putenv must not be freed.  */
-  char *content = NULL;
-
-  xasprintf (&path, "/proc/%d/environ", pid_to_join);
-
-  ret = read_all_file (path, &content, &len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  for (str = content; str < content + len; str += strlen (str) + 1)
-    if (putenv (str) < 0)
-        return crun_make_error (err, errno, "putenv `%s`", str);
-  return ret;
-}
-
 int
 libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status, int detach, int *terminal_fd, libcrun_error_t *err)
 {
@@ -2865,17 +2843,6 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
   close_and_reset (&sync_socket_fd[0]);
   sync_fd = sync_socket_fd[1];
-
-  ret = clearenv ();
-  if (UNLIKELY (ret < 0))
-    {
-      crun_make_error (err, 0, "clearenv");
-      goto exit;
-    }
-
-  ret = inherit_env (pid_to_join, err);
-  if (UNLIKELY (ret < 0))
-    goto exit;
 
   if (def->linux->namespaces_len >= 10)
     {
