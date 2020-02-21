@@ -1502,7 +1502,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   /* If we are root (either on the host or in a namespace), then chown the cgroup to root in the container user namespace.  */
   get_root_in_the_userns_for_cgroups (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, cgroup_mode,
+  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, def->annotations,
+                              cgroup_mode,
                               &cgroup_path, def->linux ? def->linux->cgroups_path : "",
                               cgroup_manager, pid, root_uid, root_gid, context->id, err);
   if (UNLIKELY (ret < 0))
@@ -2517,6 +2518,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
                                       &root_gid);
 
   ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL,
+                              def->annotations,
                               cgroup_mode, &cgroup_path,
                               def->linux ? def->linux->cgroups_path : "",
                               cgroup_manager, status.pid, root_uid, root_gid,
