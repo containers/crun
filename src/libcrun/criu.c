@@ -136,6 +136,14 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
         }
     }
 
+  for (i = 0; i < def->linux->masked_paths_len; i++)
+    {
+      struct stat statbuf;
+      ret = stat (def->linux->masked_paths[i], &statbuf);
+      if (ret == 0 && S_ISREG (statbuf.st_mode))
+        criu_add_ext_mount (def->linux->masked_paths[i], def->linux->masked_paths[i]);
+    }
+
   /* Set boolean options . */
   criu_set_leave_running (cr_options->leave_running);
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
@@ -221,6 +229,14 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
               break;
           }
         }
+    }
+
+  for (i = 0; i < def->linux->masked_paths_len; i++)
+    {
+      struct stat statbuf;
+      ret = stat (def->linux->masked_paths[i], &statbuf);
+      if (ret == 0 && S_ISREG (statbuf.st_mode))
+        criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
     }
 
   ret = xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
