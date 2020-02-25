@@ -1533,15 +1533,10 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
 }
 
 /* The parser generates different structs but they are really all the same.  */
-struct throttling_s
-{
-    int64_t major;
-    int64_t minor;
-    uint64_t rate;
-};
+typedef runtime_spec_schema_defs_linux_block_io_device_throttle throttling_s;
 
 static int
-write_blkio_v1_resources_throttling (int dirfd, const char *name, struct throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
+write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
@@ -1571,7 +1566,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, struct throttl
 }
 
 static int
-write_blkio_v2_resources_throttling (int fd, const char *name, struct throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
+write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
@@ -1694,28 +1689,28 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
         return crun_make_error (err, errno, "open io.max");
 
       ret = write_blkio_v2_resources_throttling (wfd, "rbps",
-                                                 (struct throttling_s **) blkio->throttle_read_bps_device,
+                                                 (throttling_s **) blkio->throttle_read_bps_device,
                                                  blkio->throttle_read_bps_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v2_resources_throttling (wfd, "wbps",
-                                                 (struct throttling_s **) blkio->throttle_write_bps_device,
+                                                 (throttling_s **) blkio->throttle_write_bps_device,
                                                  blkio->throttle_write_bps_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v2_resources_throttling (wfd, "riops",
-                                                 (struct throttling_s **) blkio->throttle_read_iops_device,
+                                                 (throttling_s **) blkio->throttle_read_iops_device,
                                                  blkio->throttle_read_iops_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v2_resources_throttling (wfd, "wiops",
-                                                 (struct throttling_s **) blkio->throttle_write_iops_device,
+                                                 (throttling_s **) blkio->throttle_write_iops_device,
                                                  blkio->throttle_write_iops_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
@@ -1724,28 +1719,28 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
   else
     {
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.read_bps_device",
-                                                 (struct throttling_s **) blkio->throttle_read_bps_device,
+                                                 (throttling_s **) blkio->throttle_read_bps_device,
                                                  blkio->throttle_read_bps_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.write_bps_device",
-                                                 (struct throttling_s **) blkio->throttle_write_bps_device,
+                                                 (throttling_s **) blkio->throttle_write_bps_device,
                                                  blkio->throttle_write_bps_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.read_iops_device",
-                                                 (struct throttling_s **) blkio->throttle_read_iops_device,
+                                                 (throttling_s **) blkio->throttle_read_iops_device,
                                                  blkio->throttle_read_iops_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.write_iops_device",
-                                                 (struct throttling_s **) blkio->throttle_write_iops_device,
+                                                 (throttling_s **) blkio->throttle_write_iops_device,
                                                  blkio->throttle_write_iops_device_len,
                                                  err);
       if (UNLIKELY (ret < 0))
