@@ -441,15 +441,18 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         {
           ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "create `%s`", path);
+            {
+              int saved_errno = errno;
+
+              /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
+              ret = openat (cwd, cur, O_CLOEXEC | O_PATH);
+              if (ret < 0)
+                return crun_make_error (err, saved_errno, "create `%s`", path);
+            }
 
           close_and_replace (&wd_cleanup, ret);
 
-          ret = check_fd_under_path (dirpath, dirpath_len, ret, path, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          return 0;
+          return check_fd_under_path (dirpath, dirpath_len, ret, path, err);
         }
 
       if (ret < 0)
