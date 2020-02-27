@@ -2315,9 +2315,8 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 int
-libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
+libcrun_set_sysctl_from_schema (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
   cleanup_close int dirfd = -1;
 
@@ -2347,6 +2346,12 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
         return crun_make_error (err, errno, "write to /proc/sys/%s", name);
     }
   return 0;
+}
+
+int
+libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
+{
+  return libcrun_set_sysctl_from_schema (container->container_def, err);
 }
 
 static int
