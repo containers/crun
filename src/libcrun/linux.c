@@ -1035,7 +1035,7 @@ do_masked_or_readonly_path (libcrun_container_t *container,
       char source_buffer[64];
       sprintf (source_buffer, "/proc/self/fd/%d", pathfd);
 
-      ret = do_mount (container, source_buffer, pathfd, path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL, 0, err);
+      ret = do_mount (container, source_buffer, pathfd, path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1046,9 +1046,9 @@ do_masked_or_readonly_path (libcrun_container_t *container,
         return ret;
 
       if ((mode & S_IFMT) == S_IFDIR)
-        ret = do_mount (container, "tmpfs", pathfd, path, "tmpfs", MS_RDONLY, "size=0k", 0, err);
+        ret = do_mount (container, "tmpfs", pathfd, path, "tmpfs", MS_RDONLY, "size=0k", false, err);
       else
-        ret = do_mount (container, "/dev/null", pathfd, path, NULL, MS_BIND | MS_UNBINDABLE | MS_REC, NULL, 0, err);
+        ret = do_mount (container, "/dev/null", pathfd, path, NULL, MS_BIND | MS_UNBINDABLE | MS_REC, NULL, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
