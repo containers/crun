@@ -4,7 +4,7 @@
  * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation; either version 2.1 of the License, or
  * (at your option) any later version.
  *
  * crun is distributed in the hope that it will be useful,
@@ -41,7 +41,6 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <grp.h>
-#include "sig2str.h"
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-daemon.h>
@@ -450,7 +449,7 @@ int unblock_signals (libcrun_error_t *err)
 
   memset (&act, 0, sizeof (act));
   act.sa_handler = SIG_DFL;
-  for (i = 0; i < SIGNUM_BOUND; i++)
+  for (i = 0; i < NSIG; i++)
     {
       ret = sigaction (i, &act, NULL);
       if (ret < 0 && errno != EINVAL)

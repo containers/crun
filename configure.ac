@@ -27,7 +27,7 @@ AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 
 AC_CHECK_HEADERS([error.h])
 
-AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid secure_getenv)
+AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid)
 
 dnl libcap
 AC_ARG_ENABLE([caps],
@@ -111,6 +111,12 @@ AC_SUBST([CRUN_LDFLAGS])
 [RPM_VERSION=$(echo $VERSION | sed -e's,^\([^-]*\).*$,\1,g')]
 
 AC_SUBST([RPM_VERSION])
+
+AC_CHECK_TOOL(GPERF, gperf)
+if test -z "$GPERF"; then
+       AC_MSG_NOTICE(gperf not found, cannot rebuild signal parser code)
+fi
+
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 

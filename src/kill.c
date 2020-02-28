@@ -4,7 +4,7 @@
  * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
  * crun is distributed in the hope that it will be useful,
@@ -30,7 +30,6 @@
 #include "libcrun/container.h"
 #include "libcrun/status.h"
 #include "libcrun/utils.h"
-#include "libcrun/sig2str.h"
 
 static char doc[] = "OCI runtime";
 
@@ -102,8 +101,8 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
   signal = SIGTERM;
   if (argc - first_arg > 1)
     {
-      int res = str2sig (argv[first_arg + 1], &signal);
-      if (UNLIKELY (res < 0))
+      signal = str2sig (argv[first_arg + 1]);
+      if (UNLIKELY (signal < 0))
         libcrun_fail_with_error (0, "unknown signal %s", argv[first_arg + 1]);
     }
 

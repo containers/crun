@@ -4,7 +4,7 @@
  * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation; either version 2.1 of the License, or
  * (at your option) any later version.
  *
  * crun is distributed in the hope that it will be useful,
@@ -148,10 +148,6 @@ int libcrun_initialize_selinux (libcrun_error_t *err);
 
 int libcrun_initialize_apparmor (libcrun_error_t *err);
 
-#if !HAVE_SECURE_GETENV
-char *secure_getenv (char const *name);
-#endif
-
 const char *find_annotation (libcrun_container_t *container, const char *name);
 
 int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);
@@ -159,5 +155,7 @@ int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);
 int get_file_type (mode_t *mode, bool nofollow, const char *path);
 
 int get_file_type_fd (int fd, mode_t *mode);
+
+int str2sig (const char *name);
 
 #endif
