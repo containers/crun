@@ -1404,7 +1404,7 @@ libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_
 
     case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/pids/%s", path);
+      xasprintf (&cgroup_path, "/sys/fs/cgroup/memory/%s", path);
       break;
 
     default:
