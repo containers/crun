@@ -66,6 +66,7 @@ addons:
     - wget
     - go-md2man
     - libsystemd-dev
+    - gperf
 before_install:
 - git submodule update --init --recursive
 - if test $TEST = podman; then sudo docker build -t crun-podman tests/podman; fi
