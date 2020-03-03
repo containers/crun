@@ -1272,6 +1272,36 @@ libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources,
   return ret;
 }
 
+int
+libcrun_cgroup_is_container_paused (const char *cgroup_path, int cgroup_mode, bool *paused, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  cleanup_free char *path = NULL;
+  const char *state;
+  int ret;
+
+  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+    return 0;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    {
+      state = "1";
+      xasprintf (&path, "/sys/fs/cgroup/%s/cgroup.freeze", cgroup_path);
+    }
+  else
+    {
+      state = "FROZEN";
+      xasprintf (&path, "/sys/fs/cgroup/freezer/%s/freezer.state", cgroup_path);
+    }
+
+  ret = read_all_file (path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  *paused = strstr (content, state) != NULL;
+  return 0;
+}
+
 static int
 libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode, const bool pause, libcrun_error_t *err)
 {
