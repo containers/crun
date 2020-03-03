@@ -1951,6 +1951,7 @@ int
 libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status, const char *state_root, const char **container_status, int *running, libcrun_error_t *err)
 {
   int ret, has_fifo = 0;
+  bool paused = false;
 
   ret = libcrun_is_container_running (status, err);
   if (UNLIKELY (ret < 0))
@@ -1965,10 +1966,25 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
       has_fifo = ret;
     }
 
+  if (*running && !has_fifo)
+    {
+      int cgroup_mode;
+
+      cgroup_mode = libcrun_get_cgroup_mode (err);
+      if (cgroup_mode < 0)
+        return cgroup_mode;
+
+      ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (! *running)
     *container_status = "stopped";
   else if (has_fifo)
     *container_status = "created";
+  else if (paused)
+    *container_status = "paused";
   else
     *container_status = "running";
 
