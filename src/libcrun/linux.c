@@ -1935,11 +1935,47 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
+  const char *annotation;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
     return 0;
+
+
+  annotation = find_annotation (container, "run.oci.fsgid");
+  if (annotation)
+    {
+      char *it;
+      cleanup_free char *fsgid_map_file = NULL;
+      cleanup_free char *fsgid_map = NULL;
+
+      fsgid_map = xstrdup (annotation);
+      for (it = strchr (fsgid_map, ';'); it; it = strchr (it, ';'))
+        *it = '\n';
+
+      xasprintf (&fsgid_map_file, "/proc/%d/fsgid_map", pid);
+      ret = write_file (fsgid_map_file, fsgid_map, strlen (fsgid_map), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  annotation = find_annotation (container, "run.oci.fsuid");
+  if (annotation)
+    {
+      char *it;
+      cleanup_free char *fsuid_map_file = NULL;
+      cleanup_free char *fsuid_map = NULL;
+
+      fsuid_map = xstrdup (annotation);
+      for (it = strchr (fsuid_map, ';'); it; it = strchr (it, ';'))
+        *it = '\n';
+
+      xasprintf (&fsuid_map_file, "/proc/%d/fsuid_map", pid);
+      ret = write_file (fsuid_map_file, fsuid_map, strlen (fsuid_map), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (!def->linux->uid_mappings_len)
     {

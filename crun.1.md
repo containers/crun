@@ -305,6 +305,14 @@ list of additional groups if none is specified.
 Specify the offset to be written to /proc/self/timens_offsets when creating
 a time namespace.
 
+## `run.oci.fsuid=ID ID_HOST LEN; ID2 ID_HOST2 LEN2`
+
+Specify the fs_uid mapping to use for the user namespace.
+
+## `run.oci.fsgid=ID ID_HOST LEN; ID2 ID_HOST2 LEN2`
+
+Specify the fs_gid mapping to use for the user namespace.
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that
