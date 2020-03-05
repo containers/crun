@@ -1,3 +1,21 @@
+* crun-0.13
+
+- license: change license to gplv2+ and lgpl2.1+.
+- criu: initial support for `container restore`.
+- state: If a container is paused, report its state as 'paused'.
+- cgroup: use the memory controller to ready PIDs.  The pid controller
+  is not available on kernels older than 4.3.
+- linux: drop context= for remount.  Older linux versions complain
+  when the selinux label is specified on a remount.
+- utils: fix mount on not writeable path.
+- cgroup: support systemd properties via annotations.
+- systemd: do not set hard-code collectmode value.  It can be set
+  through an annotation.
+- cgroup: write the correct blkio settings.
+- exec: do not inherit env variables from main pid.
+- ebpf: fix endianess issue on s390x.
+- linux: fix recursive mount on cgroup v1.
+
 * crun-0.12.2.1
 
 - when not using a cgroup namespace, mount only the cgroup v1 subpath.
