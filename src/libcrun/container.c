@@ -961,7 +961,13 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
           if (UNLIKELY (ret < 0))
             return ret;
           if (ret == 1)
-            return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
+            {
+              ret = libcrun_status_has_read_exec_fifo (state_root, id, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              if (! ret)
+                return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
+            }
         }
       else
         {
