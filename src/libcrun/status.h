@@ -34,6 +34,7 @@ typedef struct libcrun_container_list_s libcrun_container_list_t;
 struct libcrun_container_status_s
 {
   pid_t pid;
+  unsigned long long process_start_time;
   char *bundle;
   char *rootfs;
   char *cgroup_path;

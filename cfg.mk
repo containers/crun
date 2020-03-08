@@ -13,7 +13,8 @@ local-checks-to-skip = \
     sc_prohibit_always_true_header_tests \
     sc_prohibit_intprops_without_use \
     sc_error_message_uppercase \
-    sc_GPL_version
+    sc_GPL_version \
+    sc_prohibit_atoi_atof
 
 
 #SHELL=bash -x

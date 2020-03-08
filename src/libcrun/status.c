@@ -29,6 +29,32 @@
 #include <dirent.h>
 #include <signal.h>
 
+struct pid_stat
+{
+  int pid;
+  char comm[256];
+  char state;
+  int ppid;
+  int pgrp;
+  int session;
+  int tty_nr;
+  int tpgid;
+  unsigned flags;
+  unsigned long minflt;
+  unsigned long cminflt;
+  unsigned long majflt;
+  unsigned long cmajflt;
+  unsigned long utime;
+  unsigned long stime;
+  long cutime;
+  long cstime;
+  long priority;
+  long nice;
+  long num_threads;
+  long itrealvalue;
+  unsigned long long starttime;
+};
+
 static char *
 get_run_directory (const char *state_root)
 {
@@ -71,22 +97,58 @@ get_state_directory_status_file (const char *state_root, const char *id)
   return ret;
 }
 
+static int
+read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_file FILE *f = NULL;
+  cleanup_free char *pid_stat_file = NULL;
+
+  ret = xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
+  if (UNLIKELY (ret == -1))
+    return crun_make_error (err, errno, "xasprintf failed");
+
+  f = fopen (pid_stat_file, "r");
+  if (f == NULL)
+    return crun_make_error (err, errno, "open state file %s", pid_stat_file);
+
+  ret = fscanf (f,"%d %255s %c %d %d %d %d %d %u %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %llu",
+    &(st->pid), st->comm, &(st->state), &(st->ppid), &(st->pgrp), &(st->session),
+    &(st->tty_nr), &(st->tpgid), &(st->flags), &(st->minflt), &(st->cminflt),
+    &(st->majflt), &(st->cmajflt), &(st->utime), &(st->stime), &(st->cutime),
+    &(st->cstime), &(st->priority), &(st->nice), &(st->num_threads), &(st->itrealvalue),
+    &(st->starttime));
+  if (UNLIKELY (ret != 22))
+    return crun_make_error (err, errno, "fscanf failed");
+
+  return 0;
+}
+
 int
 libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status, libcrun_error_t *err)
 {
+  int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
   cleanup_free char *file_tmp = NULL;
   size_t len;
   cleanup_close int fd_write = -1;
   cleanup_free char *data;
+  struct pid_stat st;
+
+  ret = read_pid_stat (status->pid, &st, err);
+  if (UNLIKELY (ret))
+    return crun_make_error (err, errno, "parse state file");
+
+  status->process_start_time = st.starttime;
 
   xasprintf (&file_tmp, "%s.tmp", file);
   fd_write = open (file_tmp, O_CREAT | O_WRONLY, 0700);
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, 0, "cannot open status file");
 
-  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : \"%s\",\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : \"%s\"\n}\n",
+  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : \"%s\",\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : \"%s\"\n}\n",
                    status->pid,
+                   status->process_start_time,
                    status->cgroup_path ? status->cgroup_path : "",
                    status->rootfs,
                    status->systemd_cgroup ? "true" : "false",
@@ -111,7 +173,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   char err_buffer[256];
   int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
-  yajl_val tree;
+  yajl_val tree, tmp;
 
   ret = read_all_file (file, &buffer, NULL, err);
   if (UNLIKELY (ret < 0))
@@ -124,6 +186,14 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   {
     const char *pid_path[] = { "pid", NULL };
     status->pid = strtoull (YAJL_GET_NUMBER (yajl_tree_get (tree, pid_path, yajl_t_number)), NULL, 10);
+  }
+  {
+    const char *process_start_time_path[] = { "process-start-time", NULL };
+    tmp = yajl_tree_get (tree, process_start_time_path, yajl_t_number);
+    if (UNLIKELY (tmp == NULL))
+      status->process_start_time = 0; /* backwards compatability */
+    else
+      status->process_start_time = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
   }
   {
     const char *cgroup_path[] = { "cgroup-path", NULL };
@@ -339,9 +409,21 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
     return crun_make_error (err, errno, "kill");
 
   if (ret == 0)
-    return 1;
+    {
+      /* For backwards compatability, check start time only if available. */
+      if (status->process_start_time)
+        {
+          struct pid_stat st;
+          ret = read_pid_stat (status->pid, &st, err);
+          if (UNLIKELY (ret))
+            return crun_make_error (err, errno, "parse state file");
 
-  return 0;
+          if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
+            return 0; /* stopped */
+        }
+      return 1; /* running, created, or paused */
+    }
+  return 0; /* stopped */
 }
 
 int
