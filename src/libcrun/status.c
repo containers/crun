@@ -146,7 +146,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, 0, "cannot open status file");
 
-  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : \"%s\",\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : \"%s\"\n}\n",
+  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : %s,\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : %s\n}\n",
                    status->pid,
                    status->process_start_time,
                    status->cgroup_path ? status->cgroup_path : "",
