@@ -185,7 +185,10 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 
   {
     const char *pid_path[] = { "pid", NULL };
-    status->pid = strtoull (YAJL_GET_NUMBER (yajl_tree_get (tree, pid_path, yajl_t_number)), NULL, 10);
+    tmp = yajl_tree_get (tree, pid_path, yajl_t_number);
+    if (UNLIKELY (tmp == NULL))
+      return crun_make_error (err, 0, "'pid' missing in %s", file);
+    status->pid = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
   }
   {
     const char *process_start_time_path[] = { "process-start-time", NULL };
@@ -197,27 +200,39 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   }
   {
     const char *cgroup_path[] = { "cgroup-path", NULL };
-    status->cgroup_path = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, cgroup_path, yajl_t_string)));
+    tmp = yajl_tree_get (tree, cgroup_path, yajl_t_string);
+    if (UNLIKELY (tmp == NULL))
+      return crun_make_error (err, 0, "'cgroup-path' missing in %s", file);
+    status->cgroup_path = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
     const char *rootfs[] = { "rootfs", NULL };
-    status->rootfs = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, rootfs, yajl_t_string)));
+    tmp = yajl_tree_get (tree, rootfs, yajl_t_string);
+    if (UNLIKELY (tmp == NULL))
+      return crun_make_error (err, 0, "'rootfs' missing in %s", file);
+    status->rootfs = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
-    const char *bundle[] = { "systemd-cgroup", NULL };
-    status->systemd_cgroup = YAJL_IS_TRUE (yajl_tree_get (tree, bundle, yajl_t_true));
+    const char *systemd_cgroup[] = { "systemd-cgroup", NULL };
+    status->systemd_cgroup = YAJL_IS_TRUE (yajl_tree_get (tree, systemd_cgroup, yajl_t_true));
   }
   {
     const char *bundle[] = { "bundle", NULL };
-    status->bundle = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, bundle, yajl_t_string)));
+    tmp = yajl_tree_get (tree, bundle, yajl_t_string);
+    if (UNLIKELY (tmp == NULL))
+      return crun_make_error (err, 0, "'bundle' missing in %s", file);
+    status->bundle = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
     const char *created[] = { "created", NULL };
-    status->created = xstrdup (YAJL_GET_STRING (yajl_tree_get (tree, created, yajl_t_string)));
+    tmp = yajl_tree_get (tree, created, yajl_t_string);
+    if (UNLIKELY (tmp == NULL))
+      return crun_make_error (err, 0, "'created' missing in %s", file);
+    status->created = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
-    const char *bundle[] = { "detached", NULL };
-    status->detached = YAJL_IS_TRUE (yajl_tree_get (tree, bundle, yajl_t_true));
+    const char *detached[] = { "detached", NULL };
+    status->detached = YAJL_IS_TRUE (yajl_tree_get (tree, detached, yajl_t_true));
   }
   yajl_tree_free (tree);
   return 0;

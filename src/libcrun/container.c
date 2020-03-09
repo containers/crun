@@ -953,17 +953,18 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
       goto delete;
     }
 
+  if (! force)
+    {
+      ret = libcrun_is_container_running (&status, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (ret == 1)
+        return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
+    }
+
   if (!only_cleanup && !status.detached)
     {
-      if (! force)
-        {
-          ret = libcrun_is_container_running (&status, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          if (ret == 1)
-            return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
-        }
-      else
+      if (force)
         {
           cleanup_free libcrun_container_t *container = NULL;
 
