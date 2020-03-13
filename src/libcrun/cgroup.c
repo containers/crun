@@ -904,7 +904,7 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
     }
 
   if (slice == NULL || slice[0] == '\0')
-      xasprintf (&scope, "%s-%d.scope", id, getpid ());
+      xasprintf (&scope, "crun-%s.scope", id);
   else
     {
       char *n = strchr (slice, ':');
