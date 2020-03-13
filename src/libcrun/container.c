@@ -1502,25 +1502,40 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   /* If we are root (either on the host or in a namespace), then chown the cgroup to root in the container user namespace.  */
   get_root_in_the_userns_for_cgroups (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, def->annotations,
-                              cgroup_mode,
-                              &cgroup_path, def->linux ? def->linux->cgroups_path : "",
-                              cgroup_manager, pid, root_uid, root_gid, context->id, err);
-  if (UNLIKELY (ret < 0))
-    {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
-      return ret;
-    }
+  {
+    struct libcrun_cgroup_args cg =
+      {
+       .resources = def->linux ? def->linux->resources : NULL,
+       .annotations = def->annotations,
+       .cgroup_mode = cgroup_mode,
+       .path = &cgroup_path,
+       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
+       .manager = cgroup_manager,
+       .pid = pid,
+       .root_uid = root_uid,
+       .root_gid = root_gid,
+       .id = context->id,
+      };
 
-  if (def->linux && def->linux->resources)
-    {
-      ret = libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources, cgroup_path, err);
-      if (UNLIKELY (ret < 0))
-        {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
-          return ret;
-        }
-    }
+    ret = libcrun_cgroup_enter (&cg, err);
+    if (UNLIKELY (ret < 0))
+      {
+        cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+        return ret;
+      }
+
+    if (def->linux && def->linux->resources)
+      {
+        ret = libcrun_update_cgroup_resources (cgroup_mode,
+                                               def->linux->resources,
+                                               cgroup_path, err);
+        if (UNLIKELY (ret < 0))
+          {
+            cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+            return ret;
+          }
+      }
+  }
 
   if (seccomp_fd >= 0)
     {
@@ -2544,23 +2559,34 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
                                       container->host_gid, &root_uid,
                                       &root_gid);
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL,
-                              def->annotations,
-                              cgroup_mode, &cgroup_path,
-                              def->linux ? def->linux->cgroups_path : "",
-                              cgroup_manager, status.pid, root_uid, root_gid,
-                              context->id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  {
+    struct libcrun_cgroup_args cg =
+      {
+       .resources = def->linux ? def->linux->resources : NULL,
+       .annotations = def->annotations,
+       .cgroup_mode = cgroup_mode,
+       .path = &cgroup_path,
+       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
+       .manager = cgroup_manager,
+       .pid = status.pid,
+       .root_uid = root_uid,
+       .root_gid = root_gid,
+       .id = context->id,
+      };
 
-  if (def->linux && def->linux->resources)
-    {
-      ret =
-        libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources,
-                                         cgroup_path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+    ret = libcrun_cgroup_enter (&cg, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    if (def->linux && def->linux->resources)
+      {
+        ret = libcrun_update_cgroup_resources (cgroup_mode,
+                                               def->linux->resources,
+                                               cgroup_path, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+      }
+  }
 
   ret = write_container_status (container, context, status.pid,
                                 status.cgroup_path, status.created, err);

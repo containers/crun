@@ -1166,11 +1166,16 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resources,
-                               json_map_string_string *annotations arg_unused, int cgroup_mode,
-                               char **path, const char *cgroup_path, int manager, pid_t pid,
-                               const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter_internal (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
+  int cgroup_mode = args->cgroup_mode;
+  char **path = args->path;
+  const char *cgroup_path = args->cgroup_path;
+  int manager = args->manager;
+  pid_t pid = args->pid;
+  const char *id = args->id;
+
   if (manager == CGROUP_MANAGER_DISABLED)
     {
       *path = NULL;
@@ -1182,7 +1187,7 @@ libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resou
     {
       int ret;
 
-      ret = enter_systemd_cgroup_scope (resources, annotations, id, cgroup_path, pid, err);
+      ret = enter_systemd_cgroup_scope (resources, args->annotations, id, cgroup_path, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1213,18 +1218,13 @@ libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resou
 }
 
 int
-libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources,
-                      json_map_string_string *annotations,
-                      int cgroup_mode,
-                      char **path,
-                      const char *cgroup_path,
-                      int manager,
-                      pid_t pid,
-                      uid_t root_uid,
-                      gid_t root_gid,
-                      const char *id,
-                      libcrun_error_t *err)
+libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
+  int cgroup_mode = args->cgroup_mode;
+  char **path = args->path;
+  int manager = args->manager;
+  uid_t root_uid = args->root_uid;
+  uid_t root_gid = args->root_gid;
   libcrun_error_t tmp_err = NULL;
   int rootless;
   int ret;
@@ -1243,7 +1243,7 @@ libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources,
         return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = libcrun_cgroup_enter_internal (resources, annotations, cgroup_mode, path, cgroup_path, manager, pid, id, err);
+  ret = libcrun_cgroup_enter_internal (args, err);
   if (LIKELY (ret == 0))
     {
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
