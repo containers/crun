@@ -317,14 +317,23 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 }
 
 static int
-enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
-  cleanup_free char *cgroup_path = NULL;
   char pid_str[16];
-  int ret;
 
   sprintf (pid_str, "%d", pid);
+
+  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystem ? subsystem : "", path ? path : "");
+
+  return write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+}
+
+static int
+enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  int ret;
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystem, path ? path : "");
   if (ensure_missing)
@@ -361,13 +370,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
         return 0;
     }
 
-  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystem, path ? path : "");
-
-  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  return 0;
+  return move_process_to_cgroup (pid, subsystem, path, err);
 }
 
 static int
@@ -588,9 +591,13 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 
 #ifdef HAVE_SYSTEMD
 static
-int systemd_finalize (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
+int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
   cleanup_free char *content = NULL;
+  int cgroup_mode = args->cgroup_mode;
+  char **path = args->path;
+  pid_t pid = args->pid;
   int ret;
   char *from, *to;
   char *saveptr = NULL;
@@ -638,6 +645,29 @@ int systemd_finalize (runtime_spec_schema_config_linux_resources *resources, int
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
+      if (suffix)
+        {
+          cleanup_free char *dir = NULL;
+
+          xasprintf (&dir, "/sys/fs/cgroup%s", *path);
+
+          /* On cgroup v2, processes can be only in leaf nodes.  If a suffix is used,
+             move the process immediately to the new location before enabling
+             the controllers.
+          */
+          ret = crun_ensure_directory (dir, 0755, true, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = chown_cgroups (*path, args->root_uid, args->root_gid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = move_process_to_cgroup (pid, NULL, *path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
       ret = enable_controllers (resources, *path, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1192,7 +1222,7 @@ libcrun_cgroup_enter_internal (struct libcrun_cgroup_args *args, libcrun_error_t
       if (UNLIKELY (ret < 0))
         return ret;
 
-      return systemd_finalize (resources, cgroup_mode, path, pid, NULL, err);
+      return systemd_finalize (args, args->systemd_subgroup, err);
     }
 #endif
 

@@ -1399,6 +1399,25 @@ get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_
     *uid = *gid = -1;
 }
 
+static
+const char *find_systemd_subgroup (libcrun_container_t *container, int cgroup_mode)
+{
+  const char *annotation;
+
+  annotation = find_annotation (container, "run.oci.systemd.subgroup");
+  if (annotation)
+    {
+      if (annotation[0] == '\0')
+        return NULL;
+      return annotation;
+    }
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    return "container";
+
+  return NULL;
+}
+
 static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context, int container_ready_fd, libcrun_error_t *err)
 {
@@ -1518,6 +1537,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
        .root_uid = root_uid,
        .root_gid = root_gid,
        .id = context->id,
+       .systemd_subgroup = find_systemd_subgroup (container, cgroup_mode),
       };
 
     ret = libcrun_cgroup_enter (&cg, err);
@@ -2577,6 +2597,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
        .root_uid = root_uid,
        .root_gid = root_gid,
        .id = context->id,
+       .systemd_subgroup = find_systemd_subgroup (container, cgroup_mode),
       };
 
     ret = libcrun_cgroup_enter (&cg, err);

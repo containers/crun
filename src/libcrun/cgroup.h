@@ -48,6 +48,7 @@ struct libcrun_cgroup_args
   uid_t root_uid;
   gid_t root_gid;
   const char *id;
+  const char *systemd_subgroup;
 };
 
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
