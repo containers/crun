@@ -1061,11 +1061,12 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
 
 static int
 write_container_status (libcrun_container_t *container, libcrun_context_t *context, pid_t pid,
-                        char *cgroup_path, char *created, libcrun_error_t *err)
+                        char *cgroup_path, char *scope, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
   libcrun_container_status_t status = {.pid = pid,
                                        .cgroup_path = cgroup_path,
+                                       .scope = scope,
                                        .rootfs = container->container_def->root->path,
                                        .bundle = cwd,
                                        .created = created,
@@ -1406,6 +1407,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   pid_t pid;
   int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *scope = NULL;
   cleanup_close int terminal_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_close int sync_socket = -1;
@@ -1509,6 +1511,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
        .annotations = def->annotations,
        .cgroup_mode = cgroup_mode,
        .path = &cgroup_path,
+       .scope = &scope,
        .cgroup_path = def->linux ? def->linux->cgroups_path : "",
        .manager = cgroup_manager,
        .pid = pid,
@@ -1635,7 +1638,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   get_current_timestamp (created);
-  ret = write_container_status (container, context, pid, cgroup_path, created, err);
+  ret = write_container_status (container, context, pid, cgroup_path, scope, created, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
@@ -2514,6 +2517,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   cleanup_free char *cgroup_path = NULL;
   libcrun_container_status_t status;
   int cgroup_mode, cgroup_manager;
+  cleanup_free char *scope = NULL;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
   int ret;
@@ -2565,6 +2569,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
        .resources = def->linux ? def->linux->resources : NULL,
        .annotations = def->annotations,
        .cgroup_mode = cgroup_mode,
+       .scope = &scope,
        .path = &cgroup_path,
        .cgroup_path = def->linux ? def->linux->cgroups_path : "",
        .manager = cgroup_manager,
@@ -2589,7 +2594,8 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   }
 
   ret = write_container_status (container, context, status.pid,
-                                status.cgroup_path, status.created, err);
+                                status.cgroup_path, status.scope,
+                                status.created, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

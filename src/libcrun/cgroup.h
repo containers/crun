@@ -41,6 +41,7 @@ struct libcrun_cgroup_args
   json_map_string_string *annotations;
   int cgroup_mode;
   char **path;
+  char **scope;
   const char *cgroup_path;
   int manager;
   pid_t pid;

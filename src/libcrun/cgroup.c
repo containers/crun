@@ -835,7 +835,7 @@ append_systemd_annotation (sd_bus_message *m,
 static
 int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                                 json_map_string_string *annotations,
-                                const char *id,
+                                const char *scope,
                                 const char *slice,
                                 pid_t pid,
                                 libcrun_error_t *err)
@@ -850,7 +850,6 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
   struct systemd_job_removed_s userdata;
   int i;
   const char *boolean_opts[10];
-  cleanup_free char *scope = NULL;
 
   i = 0;
   boolean_opts[i++] = "Delegate";
@@ -903,22 +902,6 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
       goto exit;
     }
 
-  if (slice == NULL || slice[0] == '\0')
-      xasprintf (&scope, "crun-%s.scope", id);
-  else
-    {
-      char *n = strchr (slice, ':');
-      if (n == NULL)
-        xasprintf (&scope, "%s.scope", slice);
-      else
-        {
-          xasprintf (&scope, "%s.scope", n + 1);
-          n = strchr (scope, ':');
-          if (n)
-            *n = '-';
-        }
-    }
-
   sd_err = sd_bus_message_append (m, "ss", scope, "fail");
   if (UNLIKELY (sd_err < 0))
     {
@@ -933,15 +916,9 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
       goto exit;
     }
 
-  if (slice && slice[0])
+  if (slice)
     {
-      cleanup_free char *slice_name = xstrdup (slice);
-      char *endptr = strchr (slice_name, ':');
-
-      if (endptr)
-        *endptr = '\0';
-
-      sd_err = sd_bus_message_append (m, "(sv)", "Slice", "s", slice_name);
+      sd_err = sd_bus_message_append (m, "(sv)", "Slice", "s", slice);
       if (UNLIKELY (sd_err < 0))
         {
           ret = crun_make_error (err, -sd_err, "sd-bus message append Slice");
@@ -1186,8 +1163,32 @@ libcrun_cgroup_enter_internal (struct libcrun_cgroup_args *args, libcrun_error_t
   if (manager == CGROUP_MANAGER_SYSTEMD)
     {
       int ret;
+      char *scope = NULL;
+      cleanup_free char *slice = NULL;
 
-      ret = enter_systemd_cgroup_scope (resources, args->annotations, id, cgroup_path, pid, err);
+      if (cgroup_path == NULL || cgroup_path[0] == '\0')
+        xasprintf (&scope, "crun-%s.scope", id);
+      else
+        {
+          char *n = strchr (cgroup_path, ':');
+          if (n == NULL)
+            xasprintf (&scope, "%s.scope", cgroup_path);
+          else
+            {
+              xasprintf (&scope, "%s.scope", n + 1);
+              n = strchr (scope, ':');
+              if (n)
+                *n = '-';
+            }
+          slice = xstrdup (cgroup_path);
+          n = strchr (slice, ':');
+          if (n)
+            *n = '\0';
+        }
+
+      *args->scope = scope;
+
+      ret = enter_systemd_cgroup_scope (resources, args->annotations, scope, slice, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
