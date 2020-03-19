@@ -2130,13 +2130,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
   if (ret == 0)
     return crun_make_error (err, 0, "the container `%s` is not running.", id);
 
-  if (!context->detach)
-    {
-      ret = block_signals (err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
     return ret;
