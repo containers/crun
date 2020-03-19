@@ -231,6 +231,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
 
       process->args_len = argc;
       process->args = xmalloc ((argc + 1) * sizeof (*process->args));
+      memset (process->args, 0, (argc + 1) * sizeof (*process->args));
       for (i = 0; i < argc - first_arg; i++)
         process->args[i] = xstrdup (argv[first_arg + i + 1]);
       process->args[i] = NULL;
