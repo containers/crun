@@ -896,7 +896,7 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
     }
   boolean_opts[i++] = NULL;
 
-  sd_err = sd_bus_default (&bus);
+  sd_err = sd_bus_default_user (&bus);
   if (sd_err < 0)
     {
       sd_err = sd_bus_default_system (&bus);
