@@ -1,7 +1,7 @@
 FROM fedora AS base
 RUN dnf install -y git dnf-utils gcc meson ninja-build libcap-static \
     make python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel cmake \
-    go-md2man glibc-static python3-libmount libtool diffutils
+    go-md2man glibc-static python3-libmount libtool diffutils gperf
 
 FROM base AS systemd
 RUN mkdir /out && yum-builddep -y systemd && git clone --depth 1 https://github.com/systemd/systemd.git \
