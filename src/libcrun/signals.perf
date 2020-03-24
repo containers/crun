@@ -101,7 +101,7 @@ str2sig (const char *name)
   if (has_prefix (name, "SIG"))
     name += 3;
 
-  s = in_word_set (name, strlen (name));
+  s = libcrun_signal_in_word_set (name, strlen (name));
   if (s == NULL)
     {
       long int value;

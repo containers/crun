@@ -117,7 +117,7 @@ git-version.h:
 	fi
 
 src/libcrun/signals.c: src/libcrun/signals.perf
-	${GPERF} -m 100 --null-strings --pic -tCEG -S1 $< > $@
+	${GPERF} --lookup-function-name libcrun_signal_in_word_set -m 100 --null-strings --pic -tCEG -S1 $< > $@
 
 dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
