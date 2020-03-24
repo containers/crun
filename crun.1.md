@@ -124,6 +124,9 @@ crun [global options] create [options] CONTAINER
 **--bundle**=**BUNDLE**
 Path to the OCI bundle, by default it is the current directory.
 
+**--config**=**FILE**
+Override the configuration file to use.  The default value is **config.json**.
+
 **--console-socket**=**SOCKET**
 Path to a UNIX socket that will receive the master end of the tty for
 the container.
@@ -143,6 +146,9 @@ crun [global options] run [options] CONTAINER
 
 **--bundle**=**BUNDLE**
 Path to the OCI bundle, by default it is the current directory.
+
+**--config**=**FILE**
+Override the configuration file to use.  The default value is **config.json**.
 
 **--console-socket**=**SOCKET**
 Path to a UNIX socket that will receive the master end of the tty for
