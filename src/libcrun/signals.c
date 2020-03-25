@@ -1,5 +1,5 @@
 /* ANSI-C code produced by gperf version 3.1 */
-/* Command-line: gperf -m 100 --null-strings --pic -tCEG -S1 src/libcrun/signals.perf  */
+/* Command-line: gperf --lookup-function-name libcrun_signal_in_word_set -m 100 --null-strings --pic -tCEG -S1 src/libcrun/signals.perf  */
 /* Computed positions: -k'2,4,$' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
@@ -369,7 +369,7 @@ static const struct signal_s wordlist[] =
   };
 
 const struct signal_s *
-in_word_set (register const char *str, register size_t len)
+libcrun_signal_in_word_set (register const char *str, register size_t len)
 {
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)
     {
@@ -590,7 +590,7 @@ str2sig (const char *name)
   if (has_prefix (name, "SIG"))
     name += 3;
 
-  s = in_word_set (name, strlen (name));
+  s = libcrun_signal_in_word_set (name, strlen (name));
   if (s == NULL)
     {
       long int value;
