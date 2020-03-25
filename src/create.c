@@ -1,7 +1,7 @@
 /*
  * crun - OCI runtime written in C
  *
- * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
+ * Copyright (C) 2017, 2018, 2019, 2020 Giuseppe Scrivano <giuseppe@scrivano.org>
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -45,6 +45,7 @@ static libcrun_context_t crun_context;
 static struct argp_option options[] =
   {
    {"bundle", 'b', 0, 0, "container bundle (default \".\")", 0},
+   {"config", 'f', "FILE", 0, "override the config file name", 0},
    {"console-socket", OPTION_CONSOLE_SOCKET, "SOCK", 0, "path to a socket that will receive the master end of the tty", 0},
    {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0},
    {"no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root", 0},
@@ -58,6 +59,8 @@ static char doc[] = "OCI runtime";
 
 static char args_doc[] = "create [OPTION]... CONTAINER";
 
+static const char *config_file = "config.json";
+
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
@@ -65,6 +68,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
     {
     case 'b':
       bundle = crun_context.bundle = argp_mandatory_argument (arg, state);
+      break;
+
+    case 'f':
+      config_file = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_CONSOLE_SOCKET:
@@ -134,7 +141,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   if (UNLIKELY (ret < 0))
     return ret;
 
-  container = libcrun_container_load_from_file ("config.json", err);
+  container = libcrun_container_load_from_file (config_file, err);
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
 
