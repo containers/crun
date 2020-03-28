@@ -1173,58 +1173,21 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+{
+  *args->path = NULL;
+  return 0;
+}
+
+static int
+libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
   runtime_spec_schema_config_linux_resources *resources = args->resources;
   int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
   const char *cgroup_path = args->cgroup_path;
-  int manager = args->manager;
   pid_t pid = args->pid;
   const char *id = args->id;
-
-  if (manager == CGROUP_MANAGER_DISABLED)
-    {
-      *path = NULL;
-      return 0;
-    }
-
-#ifdef HAVE_SYSTEMD
-  if (manager == CGROUP_MANAGER_SYSTEMD)
-    {
-      int ret;
-      char *scope = NULL;
-      cleanup_free char *slice = NULL;
-
-      if (cgroup_path == NULL || cgroup_path[0] == '\0')
-        xasprintf (&scope, "crun-%s.scope", id);
-      else
-        {
-          char *n = strchr (cgroup_path, ':');
-          if (n == NULL)
-            xasprintf (&scope, "%s.scope", cgroup_path);
-          else
-            {
-              xasprintf (&scope, "%s.scope", n + 1);
-              n = strchr (scope, ':');
-              if (n)
-                *n = '-';
-            }
-          slice = xstrdup (cgroup_path);
-          n = strchr (slice, ':');
-          if (n)
-            *n = '\0';
-        }
-
-      *args->scope = scope;
-
-      ret = enter_systemd_cgroup_scope (resources, args->annotations, scope, slice, pid, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      return systemd_finalize (args, args->systemd_subgroup, err);
-    }
-#endif
 
   if (cgroup_path == NULL)
       xasprintf (path, "/%s", id);
@@ -1246,6 +1209,50 @@ libcrun_cgroup_enter_internal (struct libcrun_cgroup_args *args, libcrun_error_t
     }
 
   return enter_cgroup (cgroup_mode, pid, *path, true, err);
+}
+
+static int
+libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+{
+#ifdef HAVE_SYSTEMD
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
+  const char *cgroup_path = args->cgroup_path;
+  cleanup_free char *slice = NULL;
+  const char *id = args->id;
+  pid_t pid = args->pid;
+  char *scope = NULL;
+  int ret;
+
+  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+    xasprintf (&scope, "crun-%s.scope", id);
+  else
+    {
+      char *n = strchr (cgroup_path, ':');
+      if (n == NULL)
+        xasprintf (&scope, "%s.scope", cgroup_path);
+      else
+        {
+          xasprintf (&scope, "%s.scope", n + 1);
+          n = strchr (scope, ':');
+          if (n)
+            *n = '-';
+        }
+      slice = xstrdup (cgroup_path);
+      n = strchr (slice, ':');
+      if (n)
+        *n = '\0';
+    }
+
+  *args->scope = scope;
+
+  ret = enter_systemd_cgroup_scope (resources, args->annotations, scope, slice, pid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return systemd_finalize (args, args->systemd_subgroup, err);
+#else
+  return libcrun_cgroup_enter_cgroupfs (args, err);
+#endif
 }
 
 int
@@ -1274,7 +1281,23 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
         return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = libcrun_cgroup_enter_internal (args, err);
+  switch (manager)
+    {
+    case CGROUP_MANAGER_DISABLED:
+      ret = libcrun_cgroup_enter_no_manager (args, err);
+      break;
+
+    case CGROUP_MANAGER_SYSTEMD:
+      ret = libcrun_cgroup_enter_systemd (args, err);
+      break;
+
+    case CGROUP_MANAGER_CGROUPFS:
+      ret = libcrun_cgroup_enter_cgroupfs (args, err);
+      break;
+
+    default:
+      return crun_make_error (err, EINVAL, "unknown cgroup manager specified %d", manager);
+    }
   if (LIKELY (ret == 0))
     {
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
