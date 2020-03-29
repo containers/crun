@@ -158,4 +158,6 @@ int get_file_type_fd (int fd, mode_t *mode);
 
 int str2sig (const char *name);
 
+int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode, libcrun_error_t *err);
+
 #endif

@@ -41,6 +41,35 @@
 #include <linux/magic.h>
 #include <limits.h>
 
+#ifndef RESOLVE_BENEATH
+# define RESOLVE_BENEATH		0x08
+#endif
+#ifndef RESOLVE_IN_ROOT
+# define RESOLVE_IN_ROOT		0x10
+#endif
+#ifndef __NR_openat2
+# define __NR_openat2 437
+#endif
+
+static int
+syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uint64_t resolve)
+{
+  struct openat2_open_how
+    {
+      uint64_t flags;
+      uint64_t mode;
+      uint64_t resolve;
+    }
+  how =
+    {
+     .flags = flags,
+     .mode = mode,
+     .resolve = resolve,
+    };
+
+  return (int) syscall (__NR_openat2, dirfd, path, &how, sizeof (how), 0);
+}
+
 int
 close_and_reset (int *fd)
 {
@@ -403,18 +432,65 @@ close_and_replace (int *oldfd, int newfd)
   *oldfd = newfd;
 }
 
+int
+safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags,
+             int mode, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_close int fd = -1;
+  static bool openat2_supported = true;
+
+  if (openat2_supported)
+    {
+      ret = syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT | RESOLVE_BENEATH);
+      if (ret < 0)
+        {
+          if (errno == ENOSYS)
+            openat2_supported = false;
+          if (errno == ENOSYS || errno == EINVAL)
+            goto fallback;
+          return crun_make_error (err, errno, "openat2 `%s`", path);
+        }
+
+      return ret;
+    }
+
+ fallback:
+  while (*path == '/')
+    path++;
+
+  ret = openat (dirfd, path, flags, mode);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "open `%s`", path);
+
+  fd = ret;
+
+  ret = check_fd_under_path (rootfs, rootfs_len, fd, path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = fd;
+  fd = - 1;
+  return ret;
+}
+
 static int
 crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path,
                      int mode, libcrun_error_t *err)
 {
-  cleanup_free char *npath = xstrdup (path);
   cleanup_close int wd_file_cleanup = -1;
   cleanup_close int wd_cleanup = -1;
+  cleanup_free char *npath = NULL;
   bool last_component = false;
   const char *cur;
   char *it;
   int cwd;
   int ret;
+
+  while (*path == '/')
+    path++;
+
+  npath = xstrdup (path);
 
   it = npath + strlen (npath) - 1;
   while (*it == '/' && it > npath && ((size_t) (it - path)) > dirpath_len)
@@ -435,24 +511,27 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
       if (cur[0] == '\0')
         break;
 
+      if (strcmp (cur, "..") == 0)
+        return crun_make_error (err, 0, "invalid path `%s`", path);
+
       if (!last_component || dir)
         ret = mkdirat (cwd, cur, mode);
       else
         {
-          ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
+          ret = safe_openat (cwd, dirpath, dirpath_len, cur, O_CLOEXEC | O_CREAT | O_WRONLY, 0700, err);
           if (UNLIKELY (ret < 0))
             {
-              int saved_errno = errno;
+              crun_error_release (err);
 
               /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
-              ret = openat (cwd, cur, O_CLOEXEC | O_PATH);
+              ret = safe_openat (cwd, dirpath, dirpath_len, cur, O_CLOEXEC | O_PATH, 0, err);
               if (ret < 0)
-                return crun_make_error (err, saved_errno, "create `%s`", path);
+                return ret;
             }
 
           close_and_replace (&wd_cleanup, ret);
 
-          return check_fd_under_path (dirpath, dirpath_len, ret, path, err);
+          return 0;
         }
 
       if (ret < 0)
@@ -461,15 +540,11 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
             return crun_make_error (err, errno, "mkdir `%s`", cur);
         }
 
-      cwd = openat (cwd, cur, O_CLOEXEC | O_PATH);
+      cwd = safe_openat (cwd, dirpath, dirpath_len, cur, O_CLOEXEC | O_PATH, 0, err);
       if (UNLIKELY (cwd < 0))
-        return crun_make_error (err, errno, "open `%s`", cur);
+        return cwd;
 
       close_and_replace (&wd_cleanup, cwd);
-
-      ret = check_fd_under_path (dirpath, dirpath_len, cwd, cur, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
 
       if (it == NULL)
         break;
