@@ -1061,11 +1061,12 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
 
 static int
 write_container_status (libcrun_container_t *container, libcrun_context_t *context, pid_t pid,
-                        char *cgroup_path, char *created, libcrun_error_t *err)
+                        char *cgroup_path, char *scope, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
   libcrun_container_status_t status = {.pid = pid,
                                        .cgroup_path = cgroup_path,
+                                       .scope = scope,
                                        .rootfs = container->container_def->root->path,
                                        .bundle = cwd,
                                        .created = created,
@@ -1398,6 +1399,25 @@ get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_
     *uid = *gid = -1;
 }
 
+static
+const char *find_systemd_subgroup (libcrun_container_t *container, int cgroup_mode)
+{
+  const char *annotation;
+
+  annotation = find_annotation (container, "run.oci.systemd.subgroup");
+  if (annotation)
+    {
+      if (annotation[0] == '\0')
+        return NULL;
+      return annotation;
+    }
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    return "container";
+
+  return NULL;
+}
+
 static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context, int container_ready_fd, libcrun_error_t *err)
 {
@@ -1406,6 +1426,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   pid_t pid;
   int detach = context->detach;
   cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *scope = NULL;
   cleanup_close int terminal_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_close int sync_socket = -1;
@@ -1502,25 +1523,42 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   /* If we are root (either on the host or in a namespace), then chown the cgroup to root in the container user namespace.  */
   get_root_in_the_userns_for_cgroups (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL, def->annotations,
-                              cgroup_mode,
-                              &cgroup_path, def->linux ? def->linux->cgroups_path : "",
-                              cgroup_manager, pid, root_uid, root_gid, context->id, err);
-  if (UNLIKELY (ret < 0))
-    {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
-      return ret;
-    }
+  {
+    struct libcrun_cgroup_args cg =
+      {
+       .resources = def->linux ? def->linux->resources : NULL,
+       .annotations = def->annotations,
+       .cgroup_mode = cgroup_mode,
+       .path = &cgroup_path,
+       .scope = &scope,
+       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
+       .manager = cgroup_manager,
+       .pid = pid,
+       .root_uid = root_uid,
+       .root_gid = root_gid,
+       .id = context->id,
+       .systemd_subgroup = find_systemd_subgroup (container, cgroup_mode),
+      };
 
-  if (def->linux && def->linux->resources)
-    {
-      ret = libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources, cgroup_path, err);
-      if (UNLIKELY (ret < 0))
-        {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
-          return ret;
-        }
-    }
+    ret = libcrun_cgroup_enter (&cg, err);
+    if (UNLIKELY (ret < 0))
+      {
+        cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+        return ret;
+      }
+
+    if (def->linux && def->linux->resources)
+      {
+        ret = libcrun_update_cgroup_resources (cgroup_mode,
+                                               def->linux->resources,
+                                               cgroup_path, err);
+        if (UNLIKELY (ret < 0))
+          {
+            cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+            return ret;
+          }
+      }
+  }
 
   if (seccomp_fd >= 0)
     {
@@ -1620,7 +1658,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   get_current_timestamp (created);
-  ret = write_container_status (container, context, pid, cgroup_path, created, err);
+  ret = write_container_status (container, context, pid, cgroup_path, scope, created, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
@@ -2499,6 +2537,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   cleanup_free char *cgroup_path = NULL;
   libcrun_container_status_t status;
   int cgroup_mode, cgroup_manager;
+  cleanup_free char *scope = NULL;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
   int ret;
@@ -2544,26 +2583,40 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
                                       container->host_gid, &root_uid,
                                       &root_gid);
 
-  ret = libcrun_cgroup_enter (def->linux ? def->linux->resources : NULL,
-                              def->annotations,
-                              cgroup_mode, &cgroup_path,
-                              def->linux ? def->linux->cgroups_path : "",
-                              cgroup_manager, status.pid, root_uid, root_gid,
-                              context->id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  {
+    struct libcrun_cgroup_args cg =
+      {
+       .resources = def->linux ? def->linux->resources : NULL,
+       .annotations = def->annotations,
+       .cgroup_mode = cgroup_mode,
+       .scope = &scope,
+       .path = &cgroup_path,
+       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
+       .manager = cgroup_manager,
+       .pid = status.pid,
+       .root_uid = root_uid,
+       .root_gid = root_gid,
+       .id = context->id,
+       .systemd_subgroup = find_systemd_subgroup (container, cgroup_mode),
+      };
 
-  if (def->linux && def->linux->resources)
-    {
-      ret =
-        libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources,
-                                         cgroup_path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+    ret = libcrun_cgroup_enter (&cg, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    if (def->linux && def->linux->resources)
+      {
+        ret = libcrun_update_cgroup_resources (cgroup_mode,
+                                               def->linux->resources,
+                                               cgroup_path, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+      }
+  }
 
   ret = write_container_status (container, context, status.pid,
-                                status.cgroup_path, status.created, err);
+                                status.cgroup_path, status.scope,
+                                status.created, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

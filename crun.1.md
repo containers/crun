@@ -311,6 +311,26 @@ list of additional groups if none is specified.
 Specify the offset to be written to /proc/self/timens_offsets when creating
 a time namespace.
 
+## `run.oci.systemd.subgroup=SUBGROUP`
+
+Override the name for the systemd sub cgroup created under the systemd
+scope, so the final cgroup will be like:
+
+```
+/sys/fs/cgroup/$PATH/$SUBGROUP
+```
+
+When it is set to the empty string, a sub cgroup is not created.
+
+If not specified, it defaults to `container` on cgroup v2, and to `""`
+on cgroup v1.
+
+e.g.
+
+```
+/sys/fs/cgroup//system.slice/foo-352700.scope/container
+```
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that

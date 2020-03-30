@@ -317,14 +317,23 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 }
 
 static int
-enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
-  cleanup_free char *cgroup_path = NULL;
   char pid_str[16];
-  int ret;
 
   sprintf (pid_str, "%d", pid);
+
+  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystem ? subsystem : "", path ? path : "");
+
+  return write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+}
+
+static int
+enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  int ret;
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystem, path ? path : "");
   if (ensure_missing)
@@ -361,13 +370,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int 
         return 0;
     }
 
-  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s%s/cgroup.procs", subsystem, path ? path : "");
-
-  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  return 0;
+  return move_process_to_cgroup (pid, subsystem, path, err);
 }
 
 static int
@@ -588,9 +591,13 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
 
 #ifdef HAVE_SYSTEMD
 static
-int systemd_finalize (runtime_spec_schema_config_linux_resources *resources, int cgroup_mode, char **path, pid_t pid, const char *suffix, libcrun_error_t *err)
+int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
   cleanup_free char *content = NULL;
+  int cgroup_mode = args->cgroup_mode;
+  char **path = args->path;
+  pid_t pid = args->pid;
   int ret;
   char *from, *to;
   char *saveptr = NULL;
@@ -638,6 +645,29 @@ int systemd_finalize (runtime_spec_schema_config_linux_resources *resources, int
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
+      if (suffix)
+        {
+          cleanup_free char *dir = NULL;
+
+          xasprintf (&dir, "/sys/fs/cgroup%s", *path);
+
+          /* On cgroup v2, processes can be only in leaf nodes.  If a suffix is used,
+             move the process immediately to the new location before enabling
+             the controllers.
+          */
+          ret = crun_ensure_directory (dir, 0755, true, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = chown_cgroups (*path, args->root_uid, args->root_gid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = move_process_to_cgroup (pid, NULL, *path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
       ret = enable_controllers (resources, *path, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -835,7 +865,7 @@ append_systemd_annotation (sd_bus_message *m,
 static
 int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                                 json_map_string_string *annotations,
-                                const char *id,
+                                const char *scope,
                                 const char *slice,
                                 pid_t pid,
                                 libcrun_error_t *err)
@@ -850,7 +880,6 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
   struct systemd_job_removed_s userdata;
   int i;
   const char *boolean_opts[10];
-  cleanup_free char *scope = NULL;
 
   i = 0;
   boolean_opts[i++] = "Delegate";
@@ -867,7 +896,7 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
     }
   boolean_opts[i++] = NULL;
 
-  sd_err = sd_bus_default (&bus);
+  sd_err = sd_bus_default_user (&bus);
   if (sd_err < 0)
     {
       sd_err = sd_bus_default_system (&bus);
@@ -903,22 +932,6 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
       goto exit;
     }
 
-  if (slice == NULL || slice[0] == '\0')
-      xasprintf (&scope, "%s-%d.scope", id, getpid ());
-  else
-    {
-      char *n = strchr (slice, ':');
-      if (n == NULL)
-        xasprintf (&scope, "%s.scope", slice);
-      else
-        {
-          xasprintf (&scope, "%s.scope", n + 1);
-          n = strchr (scope, ':');
-          if (n)
-            *n = '-';
-        }
-    }
-
   sd_err = sd_bus_message_append (m, "ss", scope, "fail");
   if (UNLIKELY (sd_err < 0))
     {
@@ -933,15 +946,9 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
       goto exit;
     }
 
-  if (slice && slice[0])
+  if (slice)
     {
-      cleanup_free char *slice_name = xstrdup (slice);
-      char *endptr = strchr (slice_name, ':');
-
-      if (endptr)
-        *endptr = '\0';
-
-      sd_err = sd_bus_message_append (m, "(sv)", "Slice", "s", slice_name);
+      sd_err = sd_bus_message_append (m, "(sv)", "Slice", "s", slice);
       if (UNLIKELY (sd_err < 0))
         {
           ret = crun_make_error (err, -sd_err, "sd-bus message append Slice");
@@ -1166,29 +1173,21 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resources,
-                               json_map_string_string *annotations arg_unused, int cgroup_mode,
-                               char **path, const char *cgroup_path, int manager, pid_t pid,
-                               const char *id, libcrun_error_t *err)
+libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
-  if (manager == CGROUP_MANAGER_DISABLED)
-    {
-      *path = NULL;
-      return 0;
-    }
+  *args->path = NULL;
+  return 0;
+}
 
-#ifdef HAVE_SYSTEMD
-  if (manager == CGROUP_MANAGER_SYSTEMD)
-    {
-      int ret;
-
-      ret = enter_systemd_cgroup_scope (resources, annotations, id, cgroup_path, pid, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      return systemd_finalize (resources, cgroup_mode, path, pid, NULL, err);
-    }
-#endif
+static int
+libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
+  int cgroup_mode = args->cgroup_mode;
+  char **path = args->path;
+  const char *cgroup_path = args->cgroup_path;
+  pid_t pid = args->pid;
+  const char *id = args->id;
 
   if (cgroup_path == NULL)
       xasprintf (path, "/%s", id);
@@ -1212,19 +1211,58 @@ libcrun_cgroup_enter_internal (runtime_spec_schema_config_linux_resources *resou
   return enter_cgroup (cgroup_mode, pid, *path, true, err);
 }
 
-int
-libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources,
-                      json_map_string_string *annotations,
-                      int cgroup_mode,
-                      char **path,
-                      const char *cgroup_path,
-                      int manager,
-                      pid_t pid,
-                      uid_t root_uid,
-                      gid_t root_gid,
-                      const char *id,
-                      libcrun_error_t *err)
+static int
+libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
+#ifdef HAVE_SYSTEMD
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
+  const char *cgroup_path = args->cgroup_path;
+  cleanup_free char *slice = NULL;
+  const char *id = args->id;
+  pid_t pid = args->pid;
+  char *scope = NULL;
+  int ret;
+
+  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+    xasprintf (&scope, "crun-%s.scope", id);
+  else
+    {
+      char *n = strchr (cgroup_path, ':');
+      if (n == NULL)
+        xasprintf (&scope, "%s.scope", cgroup_path);
+      else
+        {
+          xasprintf (&scope, "%s.scope", n + 1);
+          n = strchr (scope, ':');
+          if (n)
+            *n = '-';
+        }
+      slice = xstrdup (cgroup_path);
+      n = strchr (slice, ':');
+      if (n)
+        *n = '\0';
+    }
+
+  *args->scope = scope;
+
+  ret = enter_systemd_cgroup_scope (resources, args->annotations, scope, slice, pid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return systemd_finalize (args, args->systemd_subgroup, err);
+#else
+  return libcrun_cgroup_enter_cgroupfs (args, err);
+#endif
+}
+
+int
+libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+{
+  int cgroup_mode = args->cgroup_mode;
+  char **path = args->path;
+  int manager = args->manager;
+  uid_t root_uid = args->root_uid;
+  uid_t root_gid = args->root_gid;
   libcrun_error_t tmp_err = NULL;
   int rootless;
   int ret;
@@ -1243,7 +1281,23 @@ libcrun_cgroup_enter (runtime_spec_schema_config_linux_resources *resources,
         return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = libcrun_cgroup_enter_internal (resources, annotations, cgroup_mode, path, cgroup_path, manager, pid, id, err);
+  switch (manager)
+    {
+    case CGROUP_MANAGER_DISABLED:
+      ret = libcrun_cgroup_enter_no_manager (args, err);
+      break;
+
+    case CGROUP_MANAGER_SYSTEMD:
+      ret = libcrun_cgroup_enter_systemd (args, err);
+      break;
+
+    case CGROUP_MANAGER_CGROUPFS:
+      ret = libcrun_cgroup_enter_cgroupfs (args, err);
+      break;
+
+    default:
+      return crun_make_error (err, EINVAL, "unknown cgroup manager specified %d", manager);
+    }
   if (LIKELY (ret == 0))
     {
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))

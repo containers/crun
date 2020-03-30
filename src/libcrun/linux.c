@@ -2701,7 +2701,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
     {
       /* A PID and a time namespace is joined when a new process is created.  */
       pid_container = fork ();
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (pid_container < 0))
         {
           crun_make_error (err, errno, "cannot fork");
           goto out;

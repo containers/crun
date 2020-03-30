@@ -146,10 +146,11 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, 0, "cannot open status file");
 
-  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : %s,\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : %s\n}\n",
+  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"scope\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : %s,\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : %s\n}\n",
                    status->pid,
                    status->process_start_time,
                    status->cgroup_path ? status->cgroup_path : "",
+                   status->scope ? status->scope : "",
                    status->rootfs,
                    status->systemd_cgroup ? "true" : "false",
                    status->bundle,
@@ -204,6 +205,11 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "'cgroup-path' missing in %s", file);
     status->cgroup_path = xstrdup (YAJL_GET_STRING (tmp));
+  }
+  {
+    const char *scope[] = { "scope", NULL };
+    tmp = yajl_tree_get (tree, scope, yajl_t_string);
+    status->scope = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
   }
   {
     const char *rootfs[] = { "rootfs", NULL };
