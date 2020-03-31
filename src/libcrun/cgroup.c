@@ -1173,7 +1173,7 @@ exit:
 #endif
 
 static int
-libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error_t *err arg_unused)
 {
   *args->path = NULL;
   return 0;
