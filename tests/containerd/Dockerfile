@@ -16,7 +16,7 @@ RUN apt-get update \
     && (cd /root/go/src/github.com/containerd \
         && git clone https://github.com/containerd/containerd \
         && cd containerd \
-        && git reset --hard f01665aa02d8b26c581fdfcc93d837ce3b275edd \
+        && git reset --hard v1.3.3 \
         && make \
         && make binaries \
         && make install \
