@@ -1,11 +1,11 @@
-FROM ubuntu:bionic
+FROM ubuntu:eoan
 
 ENV GOPATH=/root/go
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/bin
 
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get install -y bash golang btrfs-tools libnl-3-dev libnet-dev \
+    && apt-get install -y bash golang libbtrfs-dev libnl-3-dev libnet1-dev \
             protobuf-c-compiler python-minimal libcap-dev libaio-dev \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
             pigz lsof make git gcc build-essential pkgconf libtool \
@@ -16,7 +16,7 @@ RUN apt-get update \
     && (cd /root/go/src/github.com/containerd \
         && git clone https://github.com/containerd/containerd \
         && cd containerd \
-        && git reset --hard f01665aa02d8b26c581fdfcc93d837ce3b275edd \
+        && git reset --hard v1.3.3 \
         && make \
         && make binaries \
         && make install \
