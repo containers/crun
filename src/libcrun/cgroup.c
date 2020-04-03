@@ -1152,12 +1152,6 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
             }
           continue;
         }
-
-      if (UNLIKELY (ret < 0))
-        {
-          ret = crun_make_error (err, 0, "sd-bus wait");
-          break;
-        }
     }
 exit:
   if (bus)
