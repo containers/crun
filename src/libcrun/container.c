@@ -840,10 +840,10 @@ container_init (void *args, const char *notify_socket, int sync_socket,
     }
 
   if (UNLIKELY (def->process == NULL))
-    return crun_make_error (err, errno, "block 'process' not found");
+    return crun_make_error (err, 0, "block 'process' not found");
 
   if (UNLIKELY (exec_path == NULL))
-    return crun_make_error (err, errno, "executable path not specified");
+    return crun_make_error (err, 0, "executable path not specified");
 
   if (def->hooks && def->hooks->start_container_len)
     {
@@ -1126,7 +1126,7 @@ handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
     {
       ret = sd_notify (0, ready_str);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "sd_notify");
+        return crun_make_error (err, -ret, "sd_notify");
 
       return 1;
     }
@@ -1345,7 +1345,7 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
         {
           if (errno == ENOENT)
             return 0;
-          return crun_make_error (err, 0, "open seccomp.bpf");
+          return crun_make_error (err, errno, "open seccomp.bpf");
         }
       *fd = ret;
     }
@@ -1353,7 +1353,7 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
     {
       ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDWR | O_CREAT, 0700));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "open seccomp.bpf");
+        return crun_make_error (err, errno, "open seccomp.bpf");
       *fd = ret;
     }
 
@@ -1932,7 +1932,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
     return ret;
 
   if (!ret)
-    return crun_make_error (err, errno, "container `%s` is not running", id);
+    return crun_make_error (err, 0, "container `%s` is not running", id);
 
   if (context->notify_socket)
     {

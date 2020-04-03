@@ -127,7 +127,7 @@ libcrun_apply_seccomp (int infd, char **seccomp_flags, size_t seccomp_flags_len,
     return 0;
 
   if (UNLIKELY (lseek (infd, 0, SEEK_SET) == (off_t) -1))
-    return crun_make_error (err, 0, "lseek");
+    return crun_make_error (err, errno, "lseek");
 
 
   /* if no seccomp flag was specified use a sane default.  */
@@ -210,13 +210,13 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 #ifdef SECCOMP_ARCH_RESOLVE_NAME
       arch_token = seccomp_arch_resolve_name (lowercase_arch);
       if (arch_token == 0)
-        return crun_make_error (err, 0, "seccomp unknown architecture %s", arch);
+        return crun_make_error (err, -ret, "seccomp unknown architecture %s", arch);
 #else
       arch_token = SCMP_ARCH_NATIVE;
 #endif
       ret = seccomp_arch_add (ctx, arch_token);
       if (ret < 0 && ret != -EEXIST)
-        return crun_make_error (err, 0, "seccomp adding architecture");
+        return crun_make_error (err, -ret, "seccomp adding architecture");
     }
 
   for (i = 0; i < seccomp->syscalls_len; i++)
@@ -293,7 +293,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
                                                 k,
                                                 arg_cmp);
                   if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, 0, "seccomp_rule_add_array");
+                    return crun_make_error (err, -ret, "seccomp_rule_add_array");
                 }
               else
                 {
@@ -307,7 +307,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
                                                     1,
                                                     &arg_cmp[r]);
                       if (UNLIKELY (ret < 0))
-                        return crun_make_error (err, 0, "seccomp_rule_add_array");
+                        return crun_make_error (err, -ret, "seccomp_rule_add_array");
                     }
                 }
             }
@@ -318,7 +318,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
     {
       ret = seccomp_export_bpf (ctx, outfd);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "seccomp_export_bpf");
+        return crun_make_error (err, -ret, "seccomp_export_bpf");
     }
 
   return 0;

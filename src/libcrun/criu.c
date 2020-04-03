@@ -77,13 +77,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
 
   ret = mkdir (cr_options->image_path, 0700);
   if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-    return crun_make_error (err, 0,
+    return crun_make_error (err, errno,
                             "error creating checkpoint directory %s\n",
                             cr_options->image_path);
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, 0, "error opening checkpoint directory %s\n",
+    return crun_make_error (err, errno, "error opening checkpoint directory %s\n",
                             cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
@@ -95,7 +95,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, 0,
+        return crun_make_error (err, errno,
                                 "error opening CRIU work directory %s\n",
                                 cr_options->work_path);
 
@@ -188,7 +188,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, 0, "error opening checkpoint directory %s\n",
+    return crun_make_error (err, errno, "error opening checkpoint directory %s\n",
                             cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
@@ -200,7 +200,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, 0,
+        return crun_make_error (err, errno,
                                 "error opening CRIU work directory %s\n",
                                 cr_options->work_path);
 
