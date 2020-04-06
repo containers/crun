@@ -84,7 +84,7 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
   if (stat.f_type == CGROUP2_SUPER_MAGIC)
     return CGROUP_MODE_UNIFIED;
   if (stat.f_type != TMPFS_MAGIC)
-    return crun_make_error (err, errno, "invalid file system type on '/sys/fs/cgroup'");
+    return crun_make_error (err, 0, "invalid file system type on '/sys/fs/cgroup'");
   ret = statfs ("/sys/fs/cgroup/unified", &stat);
   if (ret < 0 && errno != ENOENT)
     return crun_make_error (err, errno, "statfs '/sys/fs/cgroup/unified'");
@@ -117,7 +117,7 @@ is_rwm (const char *str, libcrun_error_t *err)
         break;
 
       default:
-        return crun_make_error (err, errno, "invalid mode specified `%s`", str);
+        return crun_make_error (err, 0, "invalid mode specified `%s`", str);
       }
 
   return r && w && m ? 1 : 0;
@@ -1098,23 +1098,25 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
                           systemd_job_removed, &userdata);
   if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message read");
+      ret = crun_make_error (err, -ret, "sd-bus message read");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_new_method_call (bus, &m,
-                                                "org.freedesktop.systemd1",
-                                                "/org/freedesktop/systemd1",
-                                                "org.freedesktop.systemd1.Manager",
-                                                "StopUnit") < 0))
+  ret = sd_bus_message_new_method_call (bus, &m,
+                                        "org.freedesktop.systemd1",
+                                        "/org/freedesktop/systemd1",
+                                        "org.freedesktop.systemd1.Manager",
+                                        "StopUnit");
+  if (UNLIKELY (ret  < 0))
     {
-      ret = crun_make_error (err, 0, "set up dbus message");
+      ret = crun_make_error (err, -ret, "set up dbus message");
       goto exit;
     }
 
-  if (UNLIKELY (sd_bus_message_append (m, "ss", scope, "replace") < 0))
+  ret = sd_bus_message_append (m, "ss", scope, "replace");
+  if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message append");
+      ret = crun_make_error (err, -ret, "sd-bus message append");
       goto exit;
     }
 
@@ -1127,7 +1129,7 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
   ret = sd_bus_message_read (reply, "o", &object);
   if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, 0, "sd-bus message read");
+      ret = crun_make_error (err, -ret, "sd-bus message read");
       goto exit;
     }
 
@@ -1138,7 +1140,7 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
       ret = sd_bus_process (bus, NULL);
       if (UNLIKELY (ret < 0))
         {
-          ret = crun_make_error (err, 0, "sd-bus process");
+          ret = crun_make_error (err, -ret, "sd-bus process");
           break;
         }
 
@@ -1147,16 +1149,10 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
           ret = sd_bus_wait (bus, (uint64_t) -1);
           if (UNLIKELY (ret < 0))
             {
-              ret = crun_make_error (err, 0, "sd-bus wait");
+              ret = crun_make_error (err, -ret, "sd-bus wait");
               break;
             }
           continue;
-        }
-
-      if (UNLIKELY (ret < 0))
-        {
-          ret = crun_make_error (err, 0, "sd-bus wait");
-          break;
         }
     }
 exit:
@@ -1278,7 +1274,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
       if (len > 0)
-        return crun_make_error (err, errno, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
+        return crun_make_error (err, 0, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
   switch (manager)
@@ -1492,7 +1488,7 @@ libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_
       break;
 
     default:
-      return crun_make_error (err, errno, "invalid cgroup mode %d", mode);
+      return crun_make_error (err, 0, "invalid cgroup mode %d", mode);
     }
 
   dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
@@ -1692,7 +1688,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
   if (blkio->leaf_weight)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "cannot set leaf_weight with cgroupv2");
+        return crun_make_error (err, 0, "cannot set leaf_weight with cgroupv2");
       len = sprintf (fmt_buf, "%d", blkio->leaf_weight);
       ret = write_file_at (dirfd, "blkio.leaf_weight", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
@@ -2101,7 +2097,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   if (memory->kernel)
     {
       if (cgroup2)
-        return crun_make_error (err, errno, "cannot set kernel memory with cgroupv2");
+        return crun_make_error (err, 0, "cannot set kernel memory with cgroupv2");
 
       len = sprintf (fmt_buf, "%lu", memory->kernel);
       ret = write_file_at (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);

@@ -1310,7 +1310,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       if (extra_flags & OPTION_TMPCOPYUP)
         {
           if (strcmp (type, "tmpfs") != 0)
-            return crun_make_error (err, errno, "tmpcopyup can be used only with tmpfs");
+            return crun_make_error (err, 0, "tmpcopyup can be used only with tmpfs");
 
           copy_from_fd = openat (rootfsfd, target, O_DIRECTORY);
           if (UNLIKELY (copy_from_fd < 0))

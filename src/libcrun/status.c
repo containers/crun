@@ -104,9 +104,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   cleanup_file FILE *f = NULL;
   cleanup_free char *pid_stat_file = NULL;
 
-  ret = xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
-  if (UNLIKELY (ret == -1))
-    return crun_make_error (err, errno, "xasprintf failed");
+  xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
 
   f = fopen (pid_stat_file, "r");
   if (f == NULL)
@@ -119,7 +117,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
     &(st->cstime), &(st->priority), &(st->nice), &(st->num_threads), &(st->itrealvalue),
     &(st->starttime));
   if (UNLIKELY (ret != 22))
-    return crun_make_error (err, errno, "fscanf failed");
+    return crun_make_error (err, 0, "fscanf failed");
 
   return 0;
 }
@@ -137,14 +135,14 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
 
   ret = read_pid_stat (status->pid, &st, err);
   if (UNLIKELY (ret))
-    return crun_make_error (err, errno, "parse state file");
+    return ret;
 
   status->process_start_time = st.starttime;
 
   xasprintf (&file_tmp, "%s.tmp", file);
   fd_write = open (file_tmp, O_CREAT | O_WRONLY, 0700);
   if (UNLIKELY (fd_write < 0))
-    return crun_make_error (err, 0, "cannot open status file");
+    return crun_make_error (err, errno, "cannot open status file");
 
   len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"scope\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : %s,\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : %s\n}\n",
                    status->pid,
@@ -157,12 +155,12 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
                    status->created,
                    status->detached ? "true" : "false");
   if (UNLIKELY (write (fd_write, data, len) < 0))
-    return crun_make_error (err, 0, "cannot write status file");
+    return crun_make_error (err, errno, "cannot write status file");
 
   close_and_reset (&fd_write);
 
   if (UNLIKELY (rename (file_tmp, file) < 0))
-    return crun_make_error (err, 0, "cannot rename status file");
+    return crun_make_error (err, errno, "cannot rename status file");
 
   return 0;
 }
@@ -437,7 +435,7 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
           struct pid_stat st;
           ret = read_pid_stat (status->pid, &st, err);
           if (UNLIKELY (ret))
-            return crun_make_error (err, errno, "parse state file");
+            return ret;
 
           if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
             return 0; /* stopped */
