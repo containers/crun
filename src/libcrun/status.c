@@ -135,7 +135,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
 
   ret = read_pid_stat (status->pid, &st, err);
   if (UNLIKELY (ret))
-    return crun_make_error (err, errno, "parse state file");
+    return ret;
 
   status->process_start_time = st.starttime;
 
@@ -435,7 +435,7 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
           struct pid_stat st;
           ret = read_pid_stat (status->pid, &st, err);
           if (UNLIKELY (ret))
-            return crun_make_error (err, errno, "parse state file");
+            return ret;
 
           if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
             return 0; /* stopped */
