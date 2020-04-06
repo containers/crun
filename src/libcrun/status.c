@@ -104,9 +104,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   cleanup_file FILE *f = NULL;
   cleanup_free char *pid_stat_file = NULL;
 
-  ret = xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
-  if (UNLIKELY (ret == -1))
-    return crun_make_error (err, errno, "xasprintf failed");
+  xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
 
   f = fopen (pid_stat_file, "r");
   if (f == NULL)

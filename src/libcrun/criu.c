@@ -111,9 +111,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
    * and all of its children. */
   criu_set_pid (status->pid);
 
-  ret = xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
-  if (UNLIKELY (ret == -1))
-    libcrun_fail_with_error (0, "xasprintf failed");
+  xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
 
   ret = criu_set_root (path);
   if (UNLIKELY (ret != 0))
@@ -239,14 +237,10 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
         criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
     }
 
-  ret = xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
-  if (UNLIKELY (ret == -1))
-    libcrun_fail_with_error (0, "xasprintf failed");
+  xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
 
   /* Mount the container rootfs for CRIU. */
-  ret = xasprintf (&root, "%s/criu-root", status->bundle);
-  if (UNLIKELY (ret == -1))
-    libcrun_fail_with_error (0, "xasprintf failed");
+  xasprintf (&root, "%s/criu-root", status->bundle);
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))
