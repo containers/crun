@@ -37,10 +37,10 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-static const cgroups_subsystem_t cgroups_subsystems[] = { "cpuset", "cpu", "devices", "pids", "memory",
-                                                          "net_cls,net_prio", "freezer", "blkio",
-                                                          "hugetlb", "cpu,cpuacct", "perf_event",
-                                                          "unified", NULL};
+static const cgroups_subsystem_t cgroups_subsystems[] = {"cpuset", "cpu", "devices", "pids", "memory",
+                                                         "net_cls,net_prio", "freezer", "blkio",
+                                                         "hugetlb", "cpu,cpuacct", "perf_event",
+                                                         "unified", NULL};
 
 const cgroups_subsystem_t *
 libcrun_get_cgroups_subsystems (libcrun_error_t *err arg_unused)
@@ -2071,7 +2071,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   int ret;
   char fmt_buf[32];
 
-  if (memory->limit)
+  if (memory->limit_present)
     {
       char limit_buf[32];
       size_t limit_buf_len;
@@ -2082,7 +2082,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (memory->swap)
+  if (memory->swap_present)
     {
       char swap_buf[32];
       size_t swap_buf_len;
@@ -2094,7 +2094,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
         return ret;
     }
 
-  if (memory->kernel)
+  if (memory->kernel_present)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set kernel memory with cgroupv2");
@@ -2105,14 +2105,14 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
         return ret;
     }
 
-  if (memory->reservation)
+  if (memory->reservation_present)
     {
       len = sprintf (fmt_buf, "%lu", memory->reservation);
       ret = write_file_at (dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (memory->disable_oom_killer)
+  if (memory->disable_oom_killer_present)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "cannot disable OOM killer with cgroupv2");
@@ -2121,7 +2121,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (memory->kernel_tcp)
+  if (memory->kernel_tcp_present)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set kernel TCP with cgroupv2");
@@ -2175,7 +2175,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       /* convert linearly from 2-262144 to 1-10000.  */
 #define CONVERT_SHARES_TO_CGROUPS_V2(x) (1 + (((x) - 2) * 9999) / 262142)
 
-  if (cpu->shares)
+  if (cpu->shares_present)
     {
       uint32_t val = cpu->shares;
 
@@ -2188,7 +2188,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (cpu->period)
+  if (cpu->period_present)
     {
       if (cgroup2)
         period = cpu->period;
@@ -2212,7 +2212,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
             return ret;
         }
     }
-  if (cpu->realtime_period)
+  if (cpu->realtime_period_present)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime period not supported on cgroupv2");
@@ -2221,7 +2221,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (cpu->realtime_runtime)
+  if (cpu->realtime_runtime_present)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime runtime not supported on cgroupv2");
