@@ -2064,6 +2064,17 @@ write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux
   return write_devices_resources_v1 (dirfd, devs, devs_len, err);
 }
 
+/* use for cgroupv2 files with .min, .max, .low, or .high suffix */
+static int
+cg_itoa (char *buf, int64_t value, bool cgroup2)
+{
+  if (!(cgroup2 && value == -1))
+    return sprintf (buf, "%lu", value);
+
+  memcpy(buf, "max", 4);
+  return 3;
+}
+
 static int
 write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
 {
@@ -2076,7 +2087,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       char limit_buf[32];
       size_t limit_buf_len;
 
-      limit_buf_len = sprintf (limit_buf, "%lu", memory->limit);
+      limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
 
       ret = write_file_at (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
       if (UNLIKELY (ret < 0))
@@ -2090,7 +2101,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2 && memory->swap_present && !memory->limit_present)
         return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
 
-      swap_buf_len = sprintf (swap_buf, "%lu", cgroup2 ? memory->swap - memory->limit : memory->swap);
+      swap_buf_len = cg_itoa (swap_buf, cgroup2 ? memory->swap - memory->limit : memory->swap, cgroup2);
 
       ret = write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
       if (UNLIKELY (ret < 0))
@@ -2149,7 +2160,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
 }
 
 static int
-write_pids_resources (int dirfd, bool cgroup2 arg_unused, runtime_spec_schema_config_linux_resources_pids *pids, libcrun_error_t *err)
+write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_pids *pids, libcrun_error_t *err)
 {
   if (pids->limit)
     {
@@ -2157,7 +2168,7 @@ write_pids_resources (int dirfd, bool cgroup2 arg_unused, runtime_spec_schema_co
       size_t len;
       int ret;
 
-      len = sprintf (fmt_buf, "%lu", pids->limit);
+      len = cg_itoa (fmt_buf, pids->limit, cgroup2);
       ret = write_file_at (dirfd, "pids.max", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
