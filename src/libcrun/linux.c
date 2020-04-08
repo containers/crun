@@ -602,7 +602,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container,
         {
           crun_error_release (err);
 
-          ret = do_mount (container, "/sys/fs/cgroup", targetfd, target, NULL, MS_BIND | mountflags, NULL, 0, err);
+          ret = do_mount (container, "/sys/fs/cgroup", targetfd, target, NULL, MS_BIND | mountflags, NULL, 1, err);
         }
       return ret;
     }
@@ -648,7 +648,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
-  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags, "size=1024k", 0, err);
+  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags, "size=1024k", 1, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -704,7 +704,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
 
       if (has_cgroupns)
         {
-          ret = do_mount (container, source_path, subsystemfd, subsystem_path, "cgroup", mountflags, subsystem_fqn, 0, err);
+          ret = do_mount (container, source_path, subsystemfd, subsystem_path, "cgroup", mountflags, subsystem_fqn, 1, err);
           if (UNLIKELY (ret < 0))
             {
               if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
@@ -718,7 +718,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
         }
       else
         {
-          ret = do_mount (container, source_path, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 0, err);
+          ret = do_mount (container, source_path, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 1, err);
           if (UNLIKELY (ret < 0))
             {
               if (crun_error_get_errno (err) != ENOENT)
@@ -727,7 +727,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
               crun_error_release (err);
 
               /* We might already be in a container.  Mount the source subsystem.  */
-              ret = do_mount (container, source_subsystem, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 0, err);
+              ret = do_mount (container, source_subsystem, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL, 1, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
