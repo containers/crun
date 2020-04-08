@@ -90,6 +90,7 @@ struct private_data_s
 struct linux_namespace_s
 {
   const char *name;
+  const char *ns_file;
   int value;
 };
 
@@ -108,19 +109,19 @@ get_private_data (struct libcrun_container_s *container)
 
 static struct linux_namespace_s namespaces[] =
   {
-    {"mount", CLONE_NEWNS},
-    {"network", CLONE_NEWNET},
-    {"ipc", CLONE_NEWIPC},
-    {"pid", CLONE_NEWPID},
-    {"uts", CLONE_NEWUTS},
-    {"user", CLONE_NEWUSER},
+   {"mount", "mnt", CLONE_NEWNS},
+   {"network", "net", CLONE_NEWNET},
+   {"ipc", "ipc", CLONE_NEWIPC},
+   {"pid", "pid", CLONE_NEWPID},
+   {"uts", "uts", CLONE_NEWUTS},
+   {"user", "user", CLONE_NEWUSER},
 #ifdef CLONE_NEWCGROUP
-    {"cgroup", CLONE_NEWCGROUP},
+   {"cgroup", "cgroup",CLONE_NEWCGROUP},
 #endif
 #ifdef CLONE_NEWTIME
-    {"time", CLONE_NEWTIME},
+   {"time", "time", CLONE_NEWTIME},
 #endif
-    {NULL, 0}
+   {NULL, NULL, 0}
   };
 
 static int
@@ -2812,12 +2813,6 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
   int sync_socket_fd[2];
   int fds[10] = {-1, };
   int fds_joined[10] = {0, };
-  const char *all_namespaces[] = {"ipc", "mnt",  "net", "pid", "uts",
-#ifdef CLONE_NEWCGROUP
-                                  "cgroup",
-#endif
-                                  "user",
-                                  NULL};
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
   cleanup_close int sync_fd = -1;
@@ -2855,11 +2850,11 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
       goto exit;
     }
 
-  for (i = 0; all_namespaces[i]; i++)
+  for (i = 0; namespaces[i].ns_file; i++)
     {
       cleanup_close int fd = -1;
       cleanup_free char *ns_join;
-      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, all_namespaces[i]);
+      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
       fds[i] = open (ns_join, O_RDONLY);
       if (UNLIKELY (fds[i] < 0))
         {
@@ -2870,13 +2865,13 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
           goto exit;
         }
     }
-  for (i = 0; all_namespaces[i]; i++)
+  for (i = 0; namespaces[i].ns_file; i++)
     {
       ret = setns (fds[i], 0);
       if (ret == 0)
         fds_joined[i] = 1;
     }
-  for (i = 0; all_namespaces[i]; i++)
+  for (i = 0; namespaces[i].ns_file; i++)
     {
       if (fds_joined[i])
         continue;
@@ -2888,7 +2883,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
           for (j = 0; j < def->linux->namespaces_len; j++)
             {
-              if (strcmp (all_namespaces[i], def->linux->namespaces[j]->type) == 0)
+              if (strcmp (namespaces[i].ns_file, def->linux->namespaces[j]->type) == 0)
                 {
                   found = true;
                   break;
@@ -2900,12 +2895,12 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
               fds_joined[i] = 1;
               continue;
             }
-          crun_make_error (err, errno, "setns `%s`", all_namespaces[i]);
+          crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
           goto exit;
         }
       fds_joined[i] = 1;
     }
-  for (i = 0; all_namespaces[i]; i++)
+  for (i = 0; namespaces[i].ns_file; i++)
     close_and_reset (&fds[i]);
 
   if (setsid () < 0)
@@ -2980,7 +2975,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
     TEMP_FAILURE_RETRY (close (sync_socket_fd[0]));
   if (sync_socket_fd[1] >= 0)
     TEMP_FAILURE_RETRY (close (sync_socket_fd[1]));
-  for (i = 0; all_namespaces[i]; i++)
+  for (i = 0; namespaces[i].ns_file; i++)
     if (fds[i] >= 0)
       TEMP_FAILURE_RETRY (close (fds[i]));
   return ret;
