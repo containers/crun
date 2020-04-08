@@ -81,7 +81,7 @@ struct private_data_s
 
   const char *rootfs;
   int rootfsfd;
-  size_t rootfslen;
+  size_t rootfs_len;
 
   char *tmpmountdir;
   char *tmpmountfile;
@@ -370,46 +370,16 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 static int
-check_fd_under_rootfs (libcrun_container_t *container, int fd, const char *target, libcrun_error_t *err)
+open_mount_target (libcrun_container_t *container, const char *target_rel, libcrun_error_t *err)
 {
   const char *rootfs = get_private_data (container)->rootfs;
-  size_t rootfslen = get_private_data (container)->rootfslen;
-
-  return check_fd_under_path (rootfs, rootfslen, fd, target, err);
-}
-
-static int
-open_mount_target (libcrun_container_t *container, const char *target, libcrun_error_t *err)
-{
-  int ret;
-  const char *rootfs = get_private_data (container)->rootfs;
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
   int rootfsfd = get_private_data (container)->rootfsfd;
-  size_t rootfslen = get_private_data (container)->rootfslen;
-  size_t targetlen = strlen (target);
-  const char *target_rel;
-  cleanup_close int targetfd = -1;
 
   if (rootfsfd < 0)
    return crun_make_error (err, 0, "invalid rootfs state");
 
-  if (targetlen <= rootfslen || memcmp (target, rootfs, rootfslen) != 0)
-    return crun_make_error (err, 0, "target `%s` is not under the rootfs", target);
-
-  target_rel = target + rootfslen + 1;
-  while (*target_rel == '/')
-    target_rel++;
-
-  targetfd = openat (rootfsfd, target_rel, O_PATH | O_CLOEXEC);
-  if (UNLIKELY (targetfd < 0))
-    return crun_make_error (err, errno, "open target `%s`", target);
-
-  ret = check_fd_under_rootfs (container, targetfd, target, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = targetfd;
-  targetfd = -1;
-  return ret;
+  return safe_openat (rootfsfd, rootfs, rootfs_len, target_rel, O_PATH | O_CLOEXEC, 0, err);
 }
 
 static int
@@ -806,7 +776,7 @@ relative_path_under_dev (const char *path)
 }
 
 static int
-create_dev (libcrun_container_t *container, int devfd, struct device_s *device, const char *rootfs, bool binds, bool ensure_parent_dir, libcrun_error_t *err)
+create_dev (libcrun_container_t *container, int devfd, struct device_s *device, bool binds, bool ensure_parent_dir, libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
@@ -814,25 +784,29 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   char fd_buffer[64];
   const char *fullname = device->path;
   cleanup_close int fd = -1;
+  int rootfsfd = get_private_data (container)->rootfsfd;
+  const char *rootfs = get_private_data (container)->rootfs;
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
 
   if (binds)
     {
       cleanup_close int fd = - 1;
-      char *path_to_container, buffer[PATH_MAX];
+      const char *rel_path = device->path;
 
-      path_to_container = chroot_realpath (rootfs, device->path, buffer);
-      if (path_to_container == NULL)
-        return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
+      while (*rel_path == '/')
+        rel_path++;
 
-      ret = crun_ensure_file (path_to_container, 0700, true, err);
+      ret = crun_ensure_file_at (rootfsfd, rel_path, 0700, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      fd = open_mount_target (container, path_to_container, err);
+      fd = open_mount_target (container, rel_path, err);
       if (UNLIKELY (fd < 0))
-        return ret;
+        return fd;
 
-      ret = do_mount (container, fullname, fd, path_to_container, NULL, MS_BIND | MS_PRIVATE, NULL, 0, err);
+      sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+
+      ret = do_mount (container, fullname, fd, fd_buffer, NULL, MS_BIND | MS_PRIVATE, NULL, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -858,16 +832,11 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          fd = openat (devfd, rel_dev, O_CLOEXEC | O_PATH);
+          fd = safe_openat (devfd, rootfs, rootfs_len, rel_dev, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
-            return crun_make_error (err, errno, "open `/dev/%s`", rel_dev);
+            return fd;
 
           sprintf (fd_buffer, "/proc/self/fd/%d", fd);
-
-          xasprintf (&dev_target, "%s%s", rootfs, rel_dev);
-          ret = check_fd_under_rootfs (container, fd, dev_target, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
@@ -879,32 +848,32 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
         }
       else
         {
-          char *resolved_path, buffer[PATH_MAX];
+          char *dirname;
+          cleanup_free char *buffer;
           cleanup_close int dirfd = -1;
           char *basename, *tmp;
 
-          resolved_path = chroot_realpath (rootfs, device->path, buffer);
-          if (resolved_path == NULL)
-            return crun_make_error (err, errno, "cannot resolve `%s`", device->path);
+          buffer = xstrdup (device->path);
+          dirname = buffer;
 
-          tmp = strrchr (resolved_path, '/');
+          tmp = strrchr (buffer, '/');
           *tmp = '\0';
           basename = tmp + 1;
 
-          if (ensure_parent_dir)
+          dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname, O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
+          if (dirfd < 0 && ensure_parent_dir)
             {
-              ret = crun_ensure_directory (resolved_path, 0755, true, err);
+              crun_error_release (err);
+
+              ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfs_len, dirname, 0755, err);
+
               if (UNLIKELY (ret < 0))
                 return ret;
+
+              dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname, O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
             }
-
-          dirfd = open (resolved_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
           if (UNLIKELY (dirfd < 0))
-            return crun_make_error (err, errno, "open `%s`", resolved_path);
-
-          ret = check_fd_under_rootfs (container, dirfd, resolved_path, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
+            return dirfd;
 
           ret = mknodat (dirfd, basename, device->mode | type, dev);
 
@@ -914,19 +883,15 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          fd = openat (dirfd, basename, O_CLOEXEC | O_PATH);
+          fd = safe_openat (dirfd, rootfs, rootfs_len, basename, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
-            return crun_make_error (err, errno, "open `%s/%s`", resolved_path, basename);
+            return crun_make_error (err, errno, "open `%s`", device->path);
 
           sprintf (fd_buffer, "/proc/self/fd/%d", fd);
 
-          ret = check_fd_under_rootfs (container, fd, resolved_path, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
+            return crun_make_error (err, errno, "chmod `%s`", device->path);
 
           ret = chown (fd_buffer, device->uid, device->gid);
           if (UNLIKELY (ret < 0))
@@ -955,13 +920,15 @@ static struct symlink_s symlinks[] =
   };
 
 static int
-create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *rootfs, bool binds, libcrun_error_t *err)
+create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t *err)
 {
   int ret;
   size_t i;
   struct device_s *it;
   cleanup_close int devfd = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
+  const char *rootfs = get_private_data (container)->rootfs;
+  int rootfsfd = get_private_data (container)->rootfsfd;
 
   devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
@@ -980,7 +947,7 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
 
       if (! def->linux->devices[i]->file_mode_present)
         device.mode = 0666;
-      ret = create_dev (container, devfd, &device, rootfs, binds, true, err);
+      ret = create_dev (container, devfd, &device, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -988,7 +955,7 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
   for (it = needed_devs; it->path; it++)
     {
       /* make sure the parent directory exists only on the first iteration.  */
-      ret = create_dev (container, devfd, it, rootfs, binds, it == needed_devs, err);
+      ret = create_dev (container, devfd, it, binds, it == needed_devs, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1006,12 +973,10 @@ create_missing_devs (libcrun_container_t *container, int rootfsfd, const char *r
 static int
 do_masked_or_readonly_path (libcrun_container_t *container,
                             int rootfsfd,
-                            const char *rootfs,
                             const char *rel_path,
                             bool readonly,
                             libcrun_error_t *err)
 {
-  cleanup_free char *path = NULL;
   cleanup_close int pathfd = -1;
   int ret;
   mode_t mode;
@@ -1019,13 +984,11 @@ do_masked_or_readonly_path (libcrun_container_t *container,
   if (rel_path[0] == '/')
     rel_path++;
 
-  xasprintf (&path, "%s/%s", rootfs, rel_path);
-
   pathfd = openat (rootfsfd, rel_path, O_PATH | O_CLOEXEC);
   if (UNLIKELY (pathfd < 0))
     {
       if (errno != ENOENT && errno != EACCES)
-        return crun_make_error (err, errno, "open `%s`", path);
+        return crun_make_error (err, errno, "open `%s`", rel_path);
 
       crun_error_release (err);
       return 0;
@@ -1036,7 +999,7 @@ do_masked_or_readonly_path (libcrun_container_t *container,
       char source_buffer[64];
       sprintf (source_buffer, "/proc/self/fd/%d", pathfd);
 
-      ret = do_mount (container, source_buffer, pathfd, path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL, true, err);
+      ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1047,9 +1010,9 @@ do_masked_or_readonly_path (libcrun_container_t *container,
         return ret;
 
       if ((mode & S_IFMT) == S_IFDIR)
-        ret = do_mount (container, "tmpfs", pathfd, path, "tmpfs", MS_RDONLY, "size=0k", false, err);
+        ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "size=0k", false, err);
       else
-        ret = do_mount (container, "/dev/null", pathfd, path, NULL, MS_BIND | MS_UNBINDABLE | MS_REC, NULL, false, err);
+        ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_UNBINDABLE | MS_REC, NULL, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1057,7 +1020,7 @@ do_masked_or_readonly_path (libcrun_container_t *container,
 }
 
 static int
-do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
+do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -1065,13 +1028,13 @@ do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, cons
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
-      ret = do_masked_or_readonly_path (container, rootfsfd, rootfs, def->linux->masked_paths[i], false, err);
+      ret = do_masked_or_readonly_path (container, rootfsfd, def->linux->masked_paths[i], false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   for (i = 0; i < def->linux->readonly_paths_len; i++)
     {
-      ret = do_masked_or_readonly_path (container, rootfsfd, rootfs, def->linux->readonly_paths[i], true, err);
+      ret = do_masked_or_readonly_path (container, rootfsfd, def->linux->readonly_paths[i], true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1170,7 +1133,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
   size_t i;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
-  size_t rootfslen = get_private_data (container)->rootfslen;
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
   for (i = 0; i < def->mounts_len; i++)
     {
       cleanup_free char *target_buffer = NULL;
@@ -1180,36 +1143,14 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       unsigned long flags = 0;
       unsigned long extra_flags = 0;
       int is_dir = 1;
-      char *resolved_path, buffer_resolved_path[PATH_MAX];
       char *target = NULL;
-      char *target_rel = NULL;
       cleanup_close int copy_from_fd = -1;
       cleanup_close int targetfd = -1;
 
-      resolved_path = chroot_realpath (rootfs, def->mounts[i]->destination, buffer_resolved_path);
-      if (resolved_path != NULL)
-        target = resolved_path;
-      else
-        {
-          if (errno != ENOENT)
-            return crun_make_error (err, errno, "cannot resolve `%s`", def->mounts[i]->destination);
+      target = def->mounts[i]->destination;
 
-          resolved_path = def->mounts[i]->destination;
-          if (!rootfs)
-            target = def->mounts[i]->destination;
-          else
-            {
-              const char *basename = resolved_path;
-              while (*basename == '/')
-                basename++;
-              xasprintf (&target_buffer, "%s/%s", rootfs, basename);
-              target = target_buffer;
-            }
-        }
-
-      target_rel = target + rootfslen + 1;
-      while (*target_rel == '/')
-        target_rel++;
+      while (*target == '/')
+        target++;
 
       type = def->mounts[i]->type;
 
@@ -1278,32 +1219,28 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           bool must_be_dir_under_root = strcmp (type, "sysfs") == 0
             || strcmp (type, "proc") == 0;
 
-          ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfslen, target_rel, 01755, err);
+          ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfs_len, target, 01755, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
           if (must_be_dir_under_root)
             {
               mode_t mode;
-              const char *target_not_resolved = def->mounts[i]->destination;
 
-              while (*target_not_resolved == '/')
-                target_not_resolved++;
-
-              ret = get_file_type_at (rootfsfd, &mode, true, target_not_resolved);
+              ret = get_file_type_at (rootfsfd, &mode, true, target);
               if (UNLIKELY (ret < 0))
                 return ret;
 
               if (! S_ISDIR (mode))
                 return crun_make_error (err, ENOTDIR, "invalid target for `%s`", type);
 
-              if (strchr (target_not_resolved, '/'))
+              if (strchr (target, '/'))
                 return crun_make_error (err, EINVAL, "target for `%s` must be under the rootfs", type);
             }
         }
       else
         {
-          ret = crun_safe_ensure_file_at (rootfsfd, rootfs, rootfslen, target_rel, 0755, err);
+          ret = crun_safe_ensure_file_at (rootfsfd, rootfs, rootfs_len, target, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1313,11 +1250,13 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           if (strcmp (type, "tmpfs") != 0)
             return crun_make_error (err, 0, "tmpcopyup can be used only with tmpfs");
 
-          copy_from_fd = openat (rootfsfd, target, O_DIRECTORY);
+          copy_from_fd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY | O_CLOEXEC, 0, err);
           if (UNLIKELY (copy_from_fd < 0))
             {
               if (errno != ENOTDIR)
-                return crun_make_error (err, errno, "open target for tmpcopyup");
+                return copy_from_fd;
+
+              crun_error_release (err);
             }
         }
 
@@ -1603,7 +1542,6 @@ cleanup_rmdir (void *p)
   return 0;
 }
 
-
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
@@ -1664,7 +1602,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   get_private_data (container)->rootfs = rootfs;
   get_private_data (container)->rootfsfd = rootfsfd;
-  get_private_data (container)->rootfslen = rootfs ? strlen (rootfs) : 0;
+  get_private_data (container)->rootfs_len = rootfs ? strlen (rootfs) : 0;
 
   if (def->root->readonly)
     {
@@ -1691,7 +1629,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   if (!get_private_data (container)->mount_dev_from_host)
     {
-      ret = create_missing_devs (container, rootfsfd, rootfs, is_user_ns ? true : false, err);
+      ret = create_missing_devs (container, is_user_ns ? true : false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1700,7 +1638,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_masked_and_readonly_paths (container, rootfsfd, rootfs, err);
+  ret = do_masked_and_readonly_paths (container, rootfsfd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
