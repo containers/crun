@@ -2522,8 +2522,15 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-  return libcrun_container_checkpoint_linux (&status, container, cr_options,
-                                             err);
+  ret = libcrun_container_checkpoint_linux (&status, container, cr_options,
+                                            err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (!cr_options->leave_running)
+    return container_delete_internal (context, NULL, id, true, true, err);
+
+  return 0;
 }
 
 int
