@@ -2098,7 +2098,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       char swap_buf[32];
       size_t swap_buf_len;
 
-      if (cgroup2 && memory->swap_present && !memory->limit_present)
+      if (cgroup2 && memory->swap != -1 && !memory->limit_present)
         return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
 
       swap_buf_len = cg_itoa (swap_buf, cgroup2 ? memory->swap - memory->limit : memory->swap, cgroup2);
