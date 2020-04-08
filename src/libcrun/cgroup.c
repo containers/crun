@@ -2095,18 +2095,22 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
     }
   if (memory->swap_present)
     {
+      int64_t swap;
       char swap_buf[32];
       size_t swap_buf_len;
 
+      swap = memory->swap;
       if (cgroup2 && memory->swap != -1)
         {
           if (!memory->limit_present)
             return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
           if (memory->swap < memory->limit)
             return crun_make_error (err, 0, "cannot set memory+swap limit less than the memory limit");
+
+          swap -= memory->limit;
         }
 
-      swap_buf_len = cg_itoa (swap_buf, cgroup2 ? memory->swap - memory->limit : memory->swap, cgroup2);
+      swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
 
       ret = write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
       if (UNLIKELY (ret < 0))
