@@ -2522,8 +2522,15 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-  return libcrun_container_checkpoint_linux (&status, container, cr_options,
-                                             err);
+  ret = libcrun_container_checkpoint_linux (&status, container, cr_options,
+                                            err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (!cr_options->leave_running)
+    return container_delete_internal (context, NULL, id, true, true, err);
+
+  return 0;
 }
 
 int
@@ -2532,8 +2539,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
                            libcrun_error_t *err)
 {
   cleanup_free libcrun_container_t *container = NULL;
-  runtime_spec_schema_config_schema *def = NULL;
-  const char *state_root = context->state_root;
+  runtime_spec_schema_config_schema *def;
   cleanup_free char *cgroup_path = NULL;
   libcrun_container_status_t status;
   int cgroup_mode, cgroup_manager;
@@ -2542,22 +2548,32 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   gid_t root_gid = -1;
   int ret;
 
+  container = libcrun_container_load_from_file ("config.json", err);
+  if (container == NULL)
+    return -1;
+
+  container->context = context;
+  def = container->container_def;
+
+  if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
+    return crun_make_error (err, 0, "unknown version specified");
+
+  ret = check_config_file (def, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_status_check_directories (context->state_root, context->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_copy_config_file (context->id, context->state_root, context->bundle, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* The CRIU restore code uses bundle and rootfs of status. */
   memset (&status, 0, sizeof (status));
-  ret = libcrun_read_container_status (&status, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = libcrun_is_container_running (&status, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret == 1)
-    return crun_make_error (err, 0,
-                            "the container `%s` is not in 'stopped' state",
-                            id);
-
-  ret = read_container_config_from_state (&container, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  status.bundle = xstrdup(context->bundle);
+  status.rootfs = xstrdup (def->root->path);
 
   ret = libcrun_container_restore_linux (&status, container, cr_options, err);
   if (UNLIKELY (ret < 0))
@@ -2619,6 +2635,15 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
                                 status.created, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (context->pid_file)
+    {
+      char buf[12];
+      size_t buf_len = sprintf (buf, "%d", status.pid);
+      ret = write_file (context->pid_file, buf, buf_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (!cr_options->detach)
     {

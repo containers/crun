@@ -38,14 +38,20 @@ enum
   OPTION_WORK_PATH,
   OPTION_TCP_ESTABLISHED,
   OPTION_SHELL_JOB,
-  OPTION_EXT_UNIX_SK
+  OPTION_EXT_UNIX_SK,
+  OPTION_PID_FILE
 };
 
 static char doc[] = "OCI runtime";
 
+static const char *bundle = NULL;
+
+static libcrun_context_t crun_context;
+
 static libcrun_checkpoint_restore_t cr_options;
 
 static struct argp_option options[] = {
+  {"bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0},
   {"image-path", OPTION_IMAGE_PATH, "DIR", 0,
    "path for saving criu image files", 0},
   {"work-path", OPTION_WORK_PATH, "DIR", 0,
@@ -55,6 +61,8 @@ static struct argp_option options[] = {
   {"ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0},
   {"shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0},
   {"detach", 'd', 0, 0, "detach from the container's process", 0},
+  {"pid-file", OPTION_PID_FILE, "FILE", 0,
+   "where to write the PID of the container", 0},
   {0,}
 };
 
@@ -76,6 +84,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
       cr_options.work_path = argp_mandatory_argument (arg, state);
       break;
 
+    case 'b':
+      bundle = argp_mandatory_argument (arg, state);
+      break;
+
     case OPTION_TCP_ESTABLISHED:
       cr_options.tcp_established = true;
       break;
@@ -92,6 +104,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
       cr_options.detach = true;
       break;
 
+    case OPTION_PID_FILE:
+      crun_context.pid_file = argp_mandatory_argument (arg, state);
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -106,14 +122,28 @@ int
 crun_command_restore (struct crun_global_arguments *global_args, int argc,
                       char **argv, libcrun_error_t *err)
 {
+  cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *cr_path = NULL;
   int first_arg;
   int ret;
 
-  libcrun_context_t crun_context = { 0, };
-
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
+
+  /* Make sure the bundle is an absolute path.  */
+  if (bundle)
+    {
+      if (bundle[0] != '/')
+        {
+          bundle_cleanup = realpath (bundle, NULL);
+          if (bundle_cleanup == NULL)
+            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
+          bundle = bundle_cleanup;
+        }
+
+      if (chdir (bundle) < 0)
+        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
+    }
 
   ret =
     init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
@@ -133,6 +163,7 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc,
       cr_options.image_path = cr_path;
     }
 
+  crun_context.bundle = bundle ? bundle : ".";
   return libcrun_container_restore (&crun_context, argv[first_arg],
                                     &cr_options, err);
 }

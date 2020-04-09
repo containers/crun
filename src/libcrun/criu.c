@@ -170,9 +170,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int image_fd = -1;
-  cleanup_free char *path = NULL;
   cleanup_free char *root = NULL;
   cleanup_close int work_fd = -1;
+  int ret_out;
   size_t i;
   int ret;
 
@@ -237,8 +237,6 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
         criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
     }
 
-  xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
-
   /* Mount the container rootfs for CRIU. */
   xasprintf (&root, "%s/criu-root", status->bundle);
 
@@ -247,7 +245,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     return crun_make_error (err, errno,
                             "error creating restore directory %s\n", root);
   /* do realpath on root */
-  ret = mount (path, root, NULL, MS_BIND | MS_REC, NULL);
+  ret = mount (status->rootfs, root, NULL, MS_BIND | MS_REC, NULL);
   if (UNLIKELY (ret == -1))
     {
       ret = crun_make_error (err, errno,
@@ -258,7 +256,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
   ret = criu_set_root (root);
   if (UNLIKELY (ret != 0))
     {
-      ret = crun_make_error (err, 0, "error setting CRIU root to %s\n", path);
+      ret = crun_make_error (err, 0, "error setting CRIU root to %s\n", root);
       goto out_umount;
     }
 
@@ -294,8 +292,10 @@ out_umount:
     return crun_make_error (err, errno,
                             "error unmounting restore directory %s\n", root);
 out:
-  ret = rmdir (root);
+  ret_out = rmdir (root);
   if (UNLIKELY (ret == -1))
+    return ret;
+  if (UNLIKELY (ret_out == -1))
     return crun_make_error (err, errno,
                             "error removing restore directory %s\n", root);
   return ret;

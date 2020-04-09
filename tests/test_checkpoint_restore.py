@@ -59,11 +59,19 @@ def test_cr1():
         cmdline_fd.close()
 
         run_crun_command(["_checkpoint", "--image-path=%s" % cr_dir, cid])
-        s = json.loads(run_crun_command(["state", cid]))
-        if s['status'] != "stopped":
-            return -1
 
-        run_crun_command(["_restore", "-d", "--image-path=%s" % cr_dir, cid])
+        bundle = os.path.join(
+            get_tests_root(),
+            cid.split('-')[1]
+        )
+
+        run_crun_command([
+            "_restore",
+            "-d",
+            "--image-path=%s" % cr_dir,
+            "--bundle=%s" % bundle,
+            cid
+        ])
 
         s = json.loads(run_crun_command(["state", cid]))
         if s['status'] != "running":
