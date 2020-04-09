@@ -124,8 +124,8 @@ static struct linux_namespace_s namespaces[] =
    {NULL, NULL, 0}
   };
 
-static int
-find_namespace (const char *name)
+int
+libcrun_find_namespace (const char *name)
 {
   struct linux_namespace_s *it;
   for (it = namespaces; it->name; it++)
@@ -2399,7 +2399,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
-      int value = find_namespace (def->linux->namespaces[i]->type);
+      int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
@@ -2570,7 +2570,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
     {
       cleanup_free char *cwd = NULL;
       int orig_index = namespaces_to_join_index[i];
-      int value = find_namespace (def->linux->namespaces[orig_index]->type);
+      int value = libcrun_find_namespace (def->linux->namespaces[orig_index]->type);
 
       /* The user namespace is handled differently and already joined at this point.  */
       if (value == CLONE_NEWUSER)
@@ -3009,7 +3009,7 @@ libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
-      int value = find_namespace (def->linux->namespaces[i]->type);
+      int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 

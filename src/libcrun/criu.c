@@ -24,11 +24,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <criu/criu.h>
+#include <sched.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <fcntl.h>
 
 #include "container.h"
+#include "linux.h"
 #include "status.h"
 #include "utils.h"
 
@@ -42,6 +44,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
                                          cr_options, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_free char *external = NULL;
   cleanup_free char *path = NULL;
   cleanup_close int image_fd = -1;
   cleanup_close int work_fd = -1;
@@ -142,6 +145,41 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
         criu_add_ext_mount (def->linux->masked_paths[i], def->linux->masked_paths[i]);
     }
 
+  /* CRIU tries to checkpoint and restore all namespaces. The network
+   * namespace, however, is usually a bit special as it requires
+   * connecting network interfaces into the namespace. CRIU has support
+   * to reconnect veth devices, but as we are mainly targeting Podman
+   * right now, only Podman's way of creating network namespaces via
+   * CNI is handled here. We are looking at config.json and if there
+   * is a path configured for the network namespace we are telling CRIU
+   * to ignore the network namespace and just restore the container
+   * into the existing network namespace.
+   *
+   * CRIU expects the information about an external namespace like this:
+   * --external net[<inode>]:<key>
+   * For key we are using the string: 'extRootNetNS'. */
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0))
+        return crun_make_error (err, 0, "invalid namespace type: `%s`",
+                                def->linux->namespaces[i]->type);
+
+      if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
+        {
+          struct stat statbuf;
+          ret = stat (def->linux->namespaces[i]->path, &statbuf);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "unable to stat(): `%s`",
+                                    def->linux->namespaces[i]->path);
+
+          xasprintf (&external, "net[%ld]:extRootNetNS", statbuf.st_ino);
+          criu_add_external (external);
+          break;
+        }
+    }
+
   /* Set boolean options . */
   criu_set_leave_running (cr_options->leave_running);
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
@@ -169,6 +207,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 {
 
   runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int inherit_fd = -1;
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
   cleanup_close int work_fd = -1;
@@ -260,6 +299,30 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
       goto out_umount;
     }
 
+  /* If there is network namespace defined in config.json we are telling
+   * CRIU to restore the process into that network namespace.
+   * CRIU expects the information about the network namespace like this:
+   * --inherit-fd fd[<fd>]:<key>
+   * The <key> needs to be the same as during checkpointing (extRootNetNS). */
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0))
+        return crun_make_error (err, 0, "invalid namespace type: `%s`",
+                                def->linux->namespaces[i]->type);
+
+      if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
+        {
+          inherit_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "unable to open(): `%s`",
+                                    def->linux->namespaces[i]->path);
+
+          criu_add_inherit_fd (inherit_fd, "extRootNetNS");
+          break;
+        }
+    }
+
   /* Set boolean options . */
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   criu_set_shell_job (cr_options->shell_job);
@@ -287,8 +350,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
   status->pid = ret;
 
 out_umount:
-  ret = umount (root);
-  if (UNLIKELY (ret == -1))
+  ret_out = umount (root);
+  if (UNLIKELY (ret_out == -1))
     return crun_make_error (err, errno,
                             "error unmounting restore directory %s\n", root);
 out:
