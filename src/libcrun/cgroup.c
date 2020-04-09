@@ -553,13 +553,9 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
 }
 
 int
-libcrun_cgroups_create_symlinks (const char *target, libcrun_error_t *err)
+libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
 {
   int i;
-  cleanup_close int dirfd = open (target, O_DIRECTORY | O_RDONLY);
-
-  if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "cannot open /sys/fs/cgroup");
 
   for (i = 0; cgroup_symlinks[i].name; i++)
     {
