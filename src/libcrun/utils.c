@@ -41,9 +41,6 @@
 #include <linux/magic.h>
 #include <limits.h>
 
-#ifndef RESOLVE_BENEATH
-# define RESOLVE_BENEATH		0x08
-#endif
 #ifndef RESOLVE_IN_ROOT
 # define RESOLVE_IN_ROOT		0x10
 #endif
@@ -404,7 +401,7 @@ crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, 
   return 0;
 }
 
-int
+static int
 check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *fdname, libcrun_error_t *err)
 {
   int ret;
@@ -432,6 +429,9 @@ close_and_replace (int *oldfd, int newfd)
   *oldfd = newfd;
 }
 
+/* Defined in chroot_realpath.c  */
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
+
 int
 safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags,
              int mode, libcrun_error_t *err)
@@ -439,10 +439,11 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
   int ret;
   cleanup_close int fd = -1;
   static bool openat2_supported = true;
+  char buffer[PATH_MAX], *path_in_chroot;
 
   if (openat2_supported)
     {
-      ret = syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT | RESOLVE_BENEATH);
+      ret = syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT);
       if (ret < 0)
         {
           if (errno == ENOSYS)
@@ -456,10 +457,15 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
     }
 
  fallback:
-  while (*path == '/')
-    path++;
+  path_in_chroot = chroot_realpath (rootfs, path, buffer);
+  if (path_in_chroot == NULL)
+    return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
 
-  ret = openat (dirfd, path, flags, mode);
+  path_in_chroot += rootfs_len;
+  while (*path_in_chroot == '/')
+    path_in_chroot++;
+
+  ret = openat (dirfd, path_in_chroot, flags, mode);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "open `%s`", path);
 
@@ -540,7 +546,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
             return crun_make_error (err, errno, "mkdir `%s`", cur);
         }
 
-      cwd = safe_openat (cwd, dirpath, dirpath_len, cur, O_CLOEXEC | O_PATH, 0, err);
+      cwd = safe_openat (dirfd, dirpath, dirpath_len, npath, O_CLOEXEC | O_PATH, 0, err);
       if (UNLIKELY (cwd < 0))
         return cwd;
 
@@ -550,6 +556,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
         break;
 
       cur = it + 1;
+      *it = '/';
       it = strchr (cur, '/');
     }
 

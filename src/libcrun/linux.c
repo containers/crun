@@ -53,9 +53,6 @@
 # define RLIMIT_RTTIME 15
 #endif
 
-/* Defined in chroot_realpath.c  */
-char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
-
 struct remount_s
 {
   struct remount_s *next;
