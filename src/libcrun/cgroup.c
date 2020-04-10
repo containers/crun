@@ -72,8 +72,8 @@ static struct symlink_s cgroup_symlinks[] = {
 # define TMPFS_MAGIC 0x01021994
 #endif
 
-int
-libcrun_get_cgroup_mode (libcrun_error_t *err)
+static int
+detect_cgroup_mode (libcrun_error_t *err)
 {
   struct statfs stat;
   int ret;
@@ -91,6 +91,24 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
   if (ret < 0)
     return CGROUP_MODE_LEGACY;
   return stat.f_type == CGROUP2_SUPER_MAGIC ? CGROUP_MODE_HYBRID : CGROUP_MODE_LEGACY;
+}
+
+int
+libcrun_get_cgroup_mode (libcrun_error_t *err)
+{
+  int tmp;
+  static int cgroup_mode = 0;
+
+  if (cgroup_mode)
+    return cgroup_mode;
+
+  tmp = detect_cgroup_mode (err);
+  if (UNLIKELY (tmp < 0))
+    return tmp;
+
+  cgroup_mode = tmp;
+
+  return cgroup_mode;
 }
 
 static int

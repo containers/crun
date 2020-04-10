@@ -1493,6 +1493,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       container_args.console_socket_fd = console_socket_fd;
     }
 
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
   pid = libcrun_run_linux_container (container, context->detach,
                                      container_init, &container_args,
                                      &sync_socket, err);
@@ -1509,10 +1513,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (container_args.terminal_socketpair[1] >= 0)
     close_and_reset (&socket_pair_1);
-
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
-    return cgroup_mode;
 
   cgroup_manager = CGROUP_MANAGER_CGROUPFS;
   if (context->systemd_cgroup)
