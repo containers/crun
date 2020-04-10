@@ -784,6 +784,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   int rootfsfd = get_private_data (container)->rootfsfd;
   const char *rootfs = get_private_data (container)->rootfs;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
+  const char *rel_dev = relative_path_under_dev (device->path);
 
   if (binds)
     {
@@ -793,13 +794,22 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
       while (*rel_path == '/')
         rel_path++;
 
-      ret = crun_ensure_file_at (rootfsfd, rel_path, 0700, true, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (rel_dev)
+        {
+          fd = openat (devfd, rel_dev, O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0700);
+          if (UNLIKELY (fd < 0))
+            return crun_make_error (err, errno, "create device `%s`", device->path);
+        }
+      else
+        {
+          ret = crun_ensure_file_at (rootfsfd, rel_path, 0700, true, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
-      fd = open_mount_target (container, rel_path, err);
-      if (UNLIKELY (fd < 0))
-        return fd;
+          fd = open_mount_target (container, rel_path, err);
+          if (UNLIKELY (fd < 0))
+            return fd;
+        }
 
       sprintf (fd_buffer, "/proc/self/fd/%d", fd);
 
@@ -809,15 +819,12 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
     }
   else
     {
-      const char *rel_dev;
-
       dev = makedev (device->major, device->minor);
 
       /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
          fails when the destination already exists or is a symlink, it is safe to use it directly.
          If it is not a direct child, then first get a fd to the dirfd.
       */
-      rel_dev = relative_path_under_dev (device->path);
       if (rel_dev)
         {
           cleanup_free char *dev_target = NULL;
