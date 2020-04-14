@@ -368,7 +368,6 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
   libcrun_container_list_t *tmp = NULL;
   cleanup_free char *path = get_run_directory (state_root);
   cleanup_dir DIR *dir;
-  cleanup_free char *run_directory = get_run_directory (state_root);
 
   *ret = NULL;
   dir = opendir (path);
@@ -385,7 +384,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       if (next->d_name[0] == '.')
         continue;
 
-      xasprintf (&status_file, "%s/%s/status", run_directory, next->d_name);
+      xasprintf (&status_file, "%s/%s/status", path, next->d_name);
       exists = crun_path_exists (status_file, err);
       if (exists < 0)
        {

@@ -78,8 +78,6 @@ int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofoll
 
 int crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
-int check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *fdname, libcrun_error_t *err);
-
 int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
 
 int crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
@@ -91,8 +89,6 @@ int crun_dir_p_at (int dirfd, const char *path, bool nofollow, libcrun_error_t *
 int detach_process ();
 
 int create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err);
-
-int create_file_if_missing (const char *file, libcrun_error_t *err);
 
 int check_running_in_user_namespace (libcrun_error_t *err);
 
