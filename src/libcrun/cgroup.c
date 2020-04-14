@@ -2072,43 +2072,80 @@ cg_itoa (char *buf, int64_t value, bool cgroup2)
 }
 
 static int
+write_memory (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
+{
+  char limit_buf[32];
+  size_t limit_buf_len;
+
+  if (! memory->limit_present)
+    return 0;
+
+  limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
+
+  return write_file_at (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
+}
+
+static int
+write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
+{
+  int64_t swap;
+  char swap_buf[32];
+  size_t swap_buf_len;
+
+  if (! memory->swap_present)
+    return 0;
+
+  swap = memory->swap;
+  if (cgroup2 && memory->swap != -1)
+    {
+      if (!memory->limit_present)
+        return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
+      if (memory->swap < memory->limit)
+        return crun_make_error (err, 0, "cannot set memory+swap limit less than the memory limit");
+
+      swap -= memory->limit;
+    }
+
+  swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
+
+  return write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+}
+
+static int
 write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
 {
   size_t len;
   int ret;
   char fmt_buf[32];
+  bool memory_limits_written = false;
 
   if (memory->limit_present)
     {
-      char limit_buf[32];
-      size_t limit_buf_len;
-
-      limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
-
-      ret = write_file_at (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-  if (memory->swap_present)
-    {
-      int64_t swap;
-      char swap_buf[32];
-      size_t swap_buf_len;
-
-      swap = memory->swap;
-      if (cgroup2 && memory->swap != -1)
+      ret = write_memory (dirfd, cgroup2, memory, err);
+      if (ret >= 0)
+        memory_limits_written = true;
+      else
         {
-          if (!memory->limit_present)
-            return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
-          if (memory->swap < memory->limit)
-            return crun_make_error (err, 0, "cannot set memory+swap limit less than the memory limit");
+          if (cgroup2 || crun_error_get_errno (err) != EINVAL)
+            return ret;
 
-          swap -= memory->limit;
+          /*
+            If we get an EINVAL error on cgroup v1 we reverse
+            the order we write the memory limit and the swap.
+            Attempt to write again the memory limit once the memory
+            swap is written.
+          */
+          crun_error_release (err);
         }
+    }
 
-      swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
+  ret = write_memory_swap (dirfd, cgroup2, memory, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
-      ret = write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+  if (memory->limit_present && !memory_limits_written)
+    {
+      ret = write_memory (dirfd, cgroup2, memory, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
