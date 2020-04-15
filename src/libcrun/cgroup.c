@@ -720,7 +720,8 @@ int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libc
 struct systemd_job_removed_s
 {
   const char *path;
-  int *terminated;
+  int terminated;
+  int result;
 };
 
 static int
@@ -736,7 +737,10 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
     return -1;
 
   if (strcmp (p->path, path) == 0)
-    *p->terminated = 1;
+    p->terminated = 1;
+
+  p->result = strcmp (result, "done");
+
   return 0;
 }
 
@@ -890,7 +894,6 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
   int sd_err, ret = 0;
   sd_bus_error error = SD_BUS_ERROR_NULL;
   const char *object;
-  int terminated = 0;
   struct systemd_job_removed_s userdata;
   int i;
   const char *boolean_opts[10];
@@ -1051,8 +1054,8 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
     }
 
   userdata.path = object;
-  userdata.terminated = &terminated;
-  while (!terminated)
+  userdata.terminated = 0;
+  while (!userdata.terminated)
     {
       sd_err = sd_bus_process (bus, NULL);
       if (UNLIKELY (sd_err < 0))
@@ -1072,6 +1075,8 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
           continue;
         }
     }
+  if (userdata.result)
+    ret = crun_make_error (err, 0, "could not create systemd scope");
 
 exit:
   if (bus)
@@ -1093,7 +1098,6 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
   int ret = 0;
   sd_bus_error error = SD_BUS_ERROR_NULL;
   const char *object;
-  int terminated = 0;
   struct systemd_job_removed_s userdata;
 
   if (sd_bus_default (&bus) < 0)
@@ -1148,8 +1152,8 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
     }
 
   userdata.path = object;
-  userdata.terminated = &terminated;
-  while (!terminated)
+  userdata.terminated = 0;
+  while (!userdata.terminated)
     {
       ret = sd_bus_process (bus, NULL);
       if (UNLIKELY (ret < 0))
@@ -1169,6 +1173,8 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
           continue;
         }
     }
+  if (userdata.result)
+    ret = crun_make_error (err, 0, "could not create systemd scope");
 exit:
   if (bus)
     sd_bus_unref (bus);
