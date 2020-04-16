@@ -2534,6 +2534,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   cleanup_free char *scope = NULL;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
+  char created[35];
   int ret;
 
   container = libcrun_container_load_from_file ("config.json", err);
@@ -2617,9 +2618,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
       }
   }
 
+  get_current_timestamp (created);
+  context->detach = cr_options->detach;
   ret = write_container_status (container, context, status.pid,
-                                status.cgroup_path, status.scope,
-                                status.created, err);
+                                cgroup_path, scope,
+                                created, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
