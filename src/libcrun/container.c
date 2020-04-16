@@ -2560,8 +2560,8 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
     return ret;
 
   /* The CRIU restore code uses bundle and rootfs of status. */
-  status.bundle = xstrdup(context->bundle);
-  status.rootfs = xstrdup (def->root->path);
+  status.bundle = (char *)context->bundle;
+  status.rootfs = def->root->path;
 
   ret = libcrun_container_restore_linux (&status, container, cr_options, err);
   if (UNLIKELY (ret < 0))
