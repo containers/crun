@@ -3116,6 +3116,13 @@ libcrun_container_restore_linux (libcrun_container_status_t *status,
                                  libcrun_checkpoint_restore_t *cr_options,
                                  libcrun_error_t *err)
 {
-  return libcrun_container_restore_linux_criu (status, container,
-                                               cr_options, err);
+  int ret;
+  ret = libcrun_container_restore_linux_criu (status, container,
+                                              cr_options, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  get_private_data (container)->external_descriptors = status->external_descriptors;
+
+  return 0;
 }

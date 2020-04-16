@@ -36,6 +36,7 @@
 
 #define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 #define CRIU_RESTORE_LOG_FILE "restore.log"
+#define DESCRIPTORS_FILENAME "descriptors.json"
 
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
@@ -44,6 +45,8 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
                                          cr_options, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_free char *descriptors_path = NULL;
+  cleanup_close int descriptors_fd = -1;
   cleanup_free char *external = NULL;
   cleanup_free char *path = NULL;
   cleanup_close int image_fd = -1;
@@ -90,6 +93,22 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
                             cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
+
+  /* descriptors.json is needed during restore to correctly
+   * reconnect stdin, stdout, stderr. */
+  xasprintf (&descriptors_path, "%s/%s", cr_options->image_path,
+             DESCRIPTORS_FILENAME);
+  descriptors_fd = open (descriptors_path, O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR);
+  if (UNLIKELY (descriptors_fd == -1))
+    return crun_make_error (err, errno, "error opening descriptors file %s\n",
+                            descriptors_path);
+  if (status->external_descriptors)
+    {
+      ret = TEMP_FAILURE_RETRY (write (descriptors_fd, status->external_descriptors,
+                                       strlen (status->external_descriptors)));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "write '%s'", DESCRIPTORS_FILENAME);
+    }
 
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
    * CRIU will put the logfiles into the images_dir from above. No need for
@@ -231,6 +250,55 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
                             cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
+
+  /* Load descriptors.json to tell CRIU where those FDs should be connected to. */
+  {
+    cleanup_free char *descriptors_path = NULL;
+    cleanup_free char *buffer = NULL;
+    char err_buffer[256];
+    yajl_val tree;
+
+    xasprintf (&descriptors_path, "%s/%s", cr_options->image_path,
+               DESCRIPTORS_FILENAME);
+    ret = read_all_file (descriptors_path, &buffer, NULL, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    status->external_descriptors = xstrdup (buffer);
+
+    /* descriptors.json contains a JSON array with strings
+     * telling where 0, 1 and 2 have been initially been
+     * pointing to. For each descriptor which points to
+     * a pipe 'pipe:' we tell CRIU to reconnect that pipe
+     * to the corresponding FD to have (especially) stdout
+     * and stderr being correctly redirected. */
+    tree = yajl_tree_parse (buffer, err_buffer, sizeof(err_buffer));
+    if (UNLIKELY (tree == NULL))
+      return crun_make_error (err, 0,
+                              "cannot parse descriptors file %s",
+                              DESCRIPTORS_FILENAME);
+
+    if (tree && YAJL_IS_ARRAY (tree))
+      {
+        size_t len = tree->u.array.len;
+        int i;
+
+        /* len will probably always be 3 as crun is currently only
+         * recording the destination of FD 0, 1 and 2. */
+        for (i = 0; i < len; ++i)
+          {
+            yajl_val s = tree->u.array.values[i];
+            if (s && YAJL_IS_STRING (s))
+              {
+                char *str = YAJL_GET_STRING (s);
+                if (strncmp (str, "pipe:", 5) == 0)
+                  criu_add_inherit_fd (i, str);
+              }
+          }
+      }
+    yajl_tree_free (tree);
+  }
+
 
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
    * CRIU will put the logfiles into the images_dir from above. No need for
