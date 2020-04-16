@@ -42,13 +42,12 @@
 int
 open_unix_domain_socket (const char *path)
 {
-  struct sockaddr_un addr;
+  struct sockaddr_un addr = {};
   int ret;
   int fd = socket (AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0)
     error (EXIT_FAILURE, errno, "error creating UNIX socket");
 
-  memset (&addr, 0, sizeof (addr));
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
@@ -67,13 +66,11 @@ receive_fd_from_socket (int from)
 {
   int fd = -1;
   struct iovec iov[1];
-  struct msghdr msg;
-  char ctrl_buf[CMSG_SPACE (sizeof (int))];
+  struct msghdr msg = {};
+  char ctrl_buf[CMSG_SPACE (sizeof (int))] = {};
   char data[1];
   int ret;
   struct cmsghdr *cmsg;
-  memset (&msg, 0, sizeof (struct msghdr));
-  memset (ctrl_buf, 0, CMSG_SPACE (sizeof (int)));
 
   data[0] = ' ';
   iov[0].iov_base = data;

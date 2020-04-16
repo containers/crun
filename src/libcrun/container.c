@@ -440,14 +440,13 @@ int unblock_signals (libcrun_error_t *err)
   int i;
   int ret;
   sigset_t mask;
-  struct sigaction act;
+  struct sigaction act = {};
 
   sigfillset (&mask);
   ret = sigprocmask (SIG_UNBLOCK, &mask, NULL);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
 
-  memset (&act, 0, sizeof (act));
   act.sa_handler = SIG_DFL;
   for (i = 0; i < NSIG; i++)
     {
@@ -934,10 +933,9 @@ static int
 container_delete_internal (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, bool only_cleanup, libcrun_error_t *err)
 {
   int ret;
-  cleanup_container_status libcrun_container_status_t status;
+  cleanup_container_status libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     {
@@ -1026,9 +1024,7 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, 
 {
   int ret;
   const char *state_root = context->state_root;
-  cleanup_container_status libcrun_container_status_t status;
-
-  memset (&status, 0, sizeof (status));
+  cleanup_container_status libcrun_container_status_t status = {};
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1045,9 +1041,7 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
 {
   int ret;
   const char *state_root = context->state_root;
-  cleanup_container_status libcrun_container_status_t status;
-
-  memset (&status, 0, sizeof (status));
+  cleanup_container_status libcrun_container_status_t status = {};
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1920,9 +1914,8 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
   int ret;
   cleanup_close int fd = -1;
   const char *state_root = context->state_root;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2033,7 +2026,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
   const char *container_status = NULL;
   yajl_gen gen = NULL;
@@ -2042,7 +2035,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   int running;
   size_t len;
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2133,7 +2125,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 {
   int ret;
   pid_t pid;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
   cleanup_close int terminal_fd = -1;
   cleanup_close int seccomp_fd = -1;
@@ -2147,7 +2139,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
   cleanup_close int pipefd1 = -1;
   char b;
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2438,10 +2429,9 @@ int
 libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len, libcrun_error_t *err)
 {
   int ret;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2460,9 +2450,8 @@ libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_err
 {
   int ret;
   const char *state_root = context->state_root;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2481,9 +2470,8 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
 {
   int ret;
   const char *state_root = context->state_root;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2504,10 +2492,9 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
 {
   int ret;
   const char *state_root = context->state_root;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
   cleanup_free libcrun_container_t *container = NULL;
 
-  memset (&status, 0, sizeof (status));
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2541,7 +2528,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   cleanup_free libcrun_container_t *container = NULL;
   runtime_spec_schema_config_schema *def;
   cleanup_free char *cgroup_path = NULL;
-  libcrun_container_status_t status;
+  libcrun_container_status_t status = {};
   int cgroup_mode, cgroup_manager;
   cleanup_free char *scope = NULL;
   uid_t root_uid = -1;
@@ -2571,7 +2558,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
     return ret;
 
   /* The CRIU restore code uses bundle and rootfs of status. */
-  memset (&status, 0, sizeof (status));
   status.bundle = xstrdup(context->bundle);
   status.rootfs = xstrdup (def->root->path);
 

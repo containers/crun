@@ -253,9 +253,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
               size_t k;
               struct scmp_arg_cmp arg_cmp[6];
               bool multiple_args = false;
-              uint32_t count[6];
-
-              memset (count, 0, sizeof (count));
+              uint32_t count[6] = {};
 
               for (k = 0; k < seccomp->syscalls[i]->args_len && k < 6; k++)
                 {

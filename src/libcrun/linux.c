@@ -2122,9 +2122,8 @@ int
 libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
 {
   int ret;
-  struct all_caps_s caps;
+  struct all_caps_s caps = {};
 
-  memset (&caps, 0, sizeof (caps));
   if (capabilities)
     {
       ret = read_caps (caps.effective,
