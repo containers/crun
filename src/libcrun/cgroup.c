@@ -2110,7 +2110,8 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
   char swap_buf[32];
   size_t swap_buf_len;
 
-  if (! memory->swap_present)
+  /* Treat swap == 0 as undefined.  */
+  if (memory->swap == 0)
     return 0;
 
   swap = memory->swap;
