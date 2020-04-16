@@ -720,7 +720,9 @@ int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libc
 struct systemd_job_removed_s
 {
   const char *path;
-  int *terminated;
+  const char *op;
+  int terminated;
+  libcrun_error_t err;
 };
 
 static int
@@ -729,14 +731,74 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
   const char *path, *unit, *result;
   uint32_t id;
   int ret;
-  struct systemd_job_removed_s *p = userdata;
+  struct systemd_job_removed_s *d = userdata;
 
   ret = sd_bus_message_read (m, "uoss", &id, &path, &unit, &result);
   if (ret < 0)
     return -1;
 
-  if (strcmp (p->path, path) == 0)
-    *p->terminated = 1;
+  if (strcmp (d->path, path) == 0)
+    {
+      d->terminated = 1;
+      if (strcmp (result, "done") != 0)
+        crun_make_error (&d->err, 0, "error %s systemd unit `%s`: got `%s`", d->op, unit, result);
+    }
+  return 0;
+}
+
+static int
+systemd_check_job_status_setup (sd_bus *bus,
+                                struct systemd_job_removed_s *data,
+                                libcrun_error_t *err)
+{
+  int ret;
+
+  ret = sd_bus_match_signal_async (bus,
+                                   NULL,
+                                   "org.freedesktop.systemd1",
+                                   "/org/freedesktop/systemd1",
+                                   "org.freedesktop.systemd1.Manager",
+                                   "JobRemoved",
+                                   systemd_job_removed,
+                                   NULL,
+                                   data);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "sd-bus match signal");
+
+  return 0;
+}
+
+static int
+systemd_check_job_status (sd_bus *bus,
+                          struct systemd_job_removed_s *data,
+                          const char *path,
+                          const char *op,
+                          libcrun_error_t *err)
+{
+  int sd_err;
+
+  data->path = path;
+  data->op = op;
+  while (!data->terminated)
+    {
+      sd_err = sd_bus_process (bus, NULL);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus process");
+
+      if (sd_err != 0)
+        continue;
+
+      sd_err = sd_bus_wait (bus, (uint64_t) -1);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus wait");
+    }
+
+  if (data->err != NULL)
+    {
+      *err = data->err;
+      return -1;
+    }
+
   return 0;
 }
 
@@ -890,8 +952,7 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
   int sd_err, ret = 0;
   sd_bus_error error = SD_BUS_ERROR_NULL;
   const char *object;
-  int terminated = 0;
-  struct systemd_job_removed_s userdata;
+  struct systemd_job_removed_s job_data = {};
   int i;
   const char *boolean_opts[10];
 
@@ -922,19 +983,9 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
         }
     }
 
-  sd_err = sd_bus_add_match (bus,
-                          NULL,
-                          "type='signal',"
-                          "sender='org.freedesktop.systemd1',"
-                          "interface='org.freedesktop.systemd1.Manager',"
-                          "member='JobRemoved',"
-                          "path='/org/freedesktop/systemd1'",
-                          systemd_job_removed, &userdata);
-  if (UNLIKELY (sd_err < 0))
-    {
-      ret = crun_make_error (err, -sd_err, "sd-bus add match");
+  ret = systemd_check_job_status_setup (bus, &job_data, err);
+  if (UNLIKELY (ret < 0))
       goto exit;
-    }
 
   sd_err = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1",
                                            "/org/freedesktop/systemd1",
@@ -1050,28 +1101,7 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
       goto exit;
     }
 
-  userdata.path = object;
-  userdata.terminated = &terminated;
-  while (!terminated)
-    {
-      sd_err = sd_bus_process (bus, NULL);
-      if (UNLIKELY (sd_err < 0))
-        {
-          ret = crun_make_error (err, -sd_err, "sd-bus process");
-          break;
-        }
-
-      if (sd_err == 0)
-        {
-          sd_err = sd_bus_wait (bus, (uint64_t) -1);
-          if (UNLIKELY (sd_err < 0))
-            {
-              ret = crun_make_error (err, -sd_err, "sd-bus wait");
-              break;
-            }
-          continue;
-        }
-    }
+  ret = systemd_check_job_status (bus, &job_data, object, "creating", err);
 
 exit:
   if (bus)
@@ -1093,8 +1123,7 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
   int ret = 0;
   sd_bus_error error = SD_BUS_ERROR_NULL;
   const char *object;
-  int terminated = 0;
-  struct systemd_job_removed_s userdata;
+  struct systemd_job_removed_s job_data = {};
 
   if (sd_bus_default (&bus) < 0)
     {
@@ -1102,19 +1131,9 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
       goto exit;
     }
 
-  ret = sd_bus_add_match (bus,
-                          NULL,
-                          "type='signal',"
-                          "sender='org.freedesktop.systemd1',"
-                          "interface='org.freedesktop.systemd1.Manager',"
-                          "member='JobRemoved',"
-                          "path='/org/freedesktop/systemd1'",
-                          systemd_job_removed, &userdata);
+  ret = systemd_check_job_status_setup (bus, &job_data, err);
   if (UNLIKELY (ret < 0))
-    {
-      ret = crun_make_error (err, -ret, "sd-bus message read");
-      goto exit;
-    }
+    goto exit;
 
   ret = sd_bus_message_new_method_call (bus, &m,
                                         "org.freedesktop.systemd1",
@@ -1147,28 +1166,8 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
       goto exit;
     }
 
-  userdata.path = object;
-  userdata.terminated = &terminated;
-  while (!terminated)
-    {
-      ret = sd_bus_process (bus, NULL);
-      if (UNLIKELY (ret < 0))
-        {
-          ret = crun_make_error (err, -ret, "sd-bus process");
-          break;
-        }
+  ret = systemd_check_job_status (bus, &job_data, object, "removing", err);
 
-      if (ret == 0)
-        {
-          ret = sd_bus_wait (bus, (uint64_t) -1);
-          if (UNLIKELY (ret < 0))
-            {
-              ret = crun_make_error (err, -ret, "sd-bus wait");
-              break;
-            }
-          continue;
-        }
-    }
 exit:
   if (bus)
     sd_bus_unref (bus);
