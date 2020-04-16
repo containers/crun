@@ -264,7 +264,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
               criu_add_ext_mount (def->mounts[i]->destination,
                                   def->mounts[i]->source);
               break;
-          }
+            }
         }
     }
 
