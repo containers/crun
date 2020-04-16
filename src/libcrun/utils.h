@@ -56,6 +56,8 @@ int close_and_reset (int *fd);
 
 void *xmalloc (size_t size);
 
+void *xmalloc0 (size_t size);
+
 void *xrealloc (void *ptr, size_t size);
 
 char *xstrdup (const char *str);

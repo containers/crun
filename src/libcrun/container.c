@@ -384,8 +384,7 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
 static libcrun_container_t *
 make_container (runtime_spec_schema_config_schema *container_def)
 {
-  libcrun_container_t *container = xmalloc (sizeof (*container));
-  memset (container, 0, sizeof (*container));
+  libcrun_container_t *container = xmalloc0 (sizeof (*container));
   container->container_def = container_def;
 
   container->host_uid = geteuid ();

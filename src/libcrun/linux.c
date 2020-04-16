@@ -96,8 +96,7 @@ get_private_data (struct libcrun_container_s *container)
 {
   if (container->private_data == NULL)
     {
-      struct private_data_s *p = xmalloc (sizeof (*p));
-      memset (p, 0, sizeof (*p));
+      struct private_data_s *p = xmalloc0 (sizeof (*p));
       container->private_data = p;
       p->rootfsfd = -1;
     }

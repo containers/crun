@@ -175,8 +175,7 @@ make_oci_process_user (const char *userspec)
   if (userspec == NULL)
     return NULL;
 
-  u = xmalloc (sizeof (runtime_spec_schema_config_schema_process_user));
-  memset (u, 0, sizeof (runtime_spec_schema_config_schema_process_user));
+  u = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_user));
 
   errno = 0;
   u->uid = strtol (userspec, &endptr, 10);
@@ -224,14 +223,11 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
     return libcrun_container_exec_process_file (&crun_context, argv[first_arg], exec_options.process, err);
   else
     {
-      runtime_spec_schema_config_schema_process *process = xmalloc (sizeof (*process));
+      runtime_spec_schema_config_schema_process *process = xmalloc0 (sizeof (*process));
       int i;
 
-      memset (process, 0, sizeof (*process));
-
       process->args_len = argc;
-      process->args = xmalloc ((argc + 1) * sizeof (*process->args));
-      memset (process->args, 0, (argc + 1) * sizeof (*process->args));
+      process->args = xmalloc0 ((argc + 1) * sizeof (*process->args));
       for (i = 0; i < argc - first_arg; i++)
         process->args[i] = xstrdup (argv[first_arg + i + 1]);
       process->args[i] = NULL;
