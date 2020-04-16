@@ -42,6 +42,7 @@ struct libcrun_container_status_s
   int systemd_cgroup;
   char *created;
   int detached;
+  char *external_descriptors;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 

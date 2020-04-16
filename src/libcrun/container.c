@@ -1057,6 +1057,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                         char *cgroup_path, char *scope, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
+  char *external_descriptors = libcrun_get_external_descriptors (container);
   libcrun_container_status_t status = {.pid = pid,
                                        .cgroup_path = cgroup_path,
                                        .scope = scope,
@@ -1064,7 +1065,8 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                                        .bundle = cwd,
                                        .created = created,
                                        .systemd_cgroup = context->systemd_cgroup,
-                                       .detached = context->detach};
+                                       .detached = context->detach,
+                                       .external_descriptors = external_descriptors};
   if (cwd == NULL)
     OOM ();
   return libcrun_write_container_status (context->state_root, context->id, &status, err);

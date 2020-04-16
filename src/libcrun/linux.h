@@ -71,4 +71,5 @@ int libcrun_container_restore_linux (libcrun_container_status_t *status,
                                      libcrun_error_t *err);
 
 int libcrun_find_namespace (const char *name);
+char *libcrun_get_external_descriptors (libcrun_container_t *container);
 #endif
