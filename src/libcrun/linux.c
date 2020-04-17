@@ -752,7 +752,7 @@ struct device_s needed_devs[] =
    {"/dev/tty", "c", 5, 0, 0666, 0, 0},
    {"/dev/random", "c", 1, 8, 0666, 0, 0},
    {"/dev/urandom", "c", 1, 9, 0666, 0, 0},
-   {NULL, '\0', 0, 0, 0, 0, 0}
+   {}
   };
 
 /* Check if the specified path is a direct child of /dev.  If it is
@@ -826,8 +826,6 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
       */
       if (rel_dev)
         {
-          cleanup_free char *dev_target = NULL;
-
           ret = mknodat (devfd, rel_dev, device->mode | type, dev);
           /* We don't fail when the file already exists.  */
           if (UNLIKELY (ret < 0 && errno == EEXIST))
@@ -1139,7 +1137,6 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
   size_t rootfs_len = get_private_data (container)->rootfs_len;
   for (i = 0; i < def->mounts_len; i++)
     {
-      cleanup_free char *target_buffer = NULL;
       cleanup_free char *data = NULL;
       char *type;
       char *source;
@@ -2792,7 +2789,6 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
   for (i = 0; namespaces[i].ns_file; i++)
     {
-      cleanup_close int fd = -1;
       cleanup_free char *ns_join;
       xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
       fds[i] = open (ns_join, O_RDONLY);

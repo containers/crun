@@ -473,7 +473,6 @@ static int
 crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path,
                      int mode, libcrun_error_t *err)
 {
-  cleanup_close int wd_file_cleanup = -1;
   cleanup_close int wd_cleanup = -1;
   cleanup_free char *npath = NULL;
   bool last_component = false;
@@ -1695,9 +1694,9 @@ int copy_rec_stat_file_at (int dfd, const char *path, mode_t *mode, off_t *size,
 }
 
 int
-copy_recursive_fd_to_fd (int srcdirfd, int destdirfd, const char *srcname, const char *destname, libcrun_error_t *err)
+copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char *destname, libcrun_error_t *err)
 {
-  cleanup_close int dfd = destdirfd;
+  cleanup_close int destdirfd = dfd;
   cleanup_dir DIR *dsrcfd = NULL;
   struct dirent *de;
 

@@ -1478,7 +1478,6 @@ int
 libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
-  cleanup_free char *buffer = NULL;
   size_t n_pids, allocated;
   int dirfd;
   int mode;
@@ -1934,8 +1933,7 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           char fmt_buf_major[16];
           char fmt_buf_minor[16];
 
-#define FMT_DEV(x, b)                           \
-          {                                     \
+#define FMT_DEV(x, b) do {                      \
             if (x ## _present)                  \
               sprintf (b, "%lu", x);            \
             else                                \
