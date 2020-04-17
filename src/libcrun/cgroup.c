@@ -1478,7 +1478,6 @@ int
 libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
-  cleanup_free char *buffer = NULL;
   size_t n_pids, allocated;
   int dirfd;
   int mode;
