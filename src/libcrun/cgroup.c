@@ -1933,8 +1933,7 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           char fmt_buf_major[16];
           char fmt_buf_minor[16];
 
-#define FMT_DEV(x, b)                           \
-          {                                     \
+#define FMT_DEV(x, b) do {                      \
             if (x ## _present)                  \
               sprintf (b, "%lu", x);            \
             else                                \
