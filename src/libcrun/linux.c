@@ -96,8 +96,7 @@ get_private_data (struct libcrun_container_s *container)
 {
   if (container->private_data == NULL)
     {
-      struct private_data_s *p = xmalloc (sizeof (*p));
-      memset (p, 0, sizeof (*p));
+      struct private_data_s *p = xmalloc0 (sizeof (*p));
       container->private_data = p;
       p->rootfsfd = -1;
     }
@@ -2122,9 +2121,8 @@ int
 libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid, int no_new_privileges, libcrun_error_t *err)
 {
   int ret;
-  struct all_caps_s caps;
+  struct all_caps_s caps = {};
 
-  memset (&caps, 0, sizeof (caps));
   if (capabilities)
     {
       ret = read_caps (caps.effective,

@@ -131,6 +131,14 @@ xmalloc (size_t size)
 }
 
 void *
+xmalloc0 (size_t size)
+{
+  void *res = xmalloc (size);
+  memset (res, 0, size);
+  return res;
+}
+
+void *
 xrealloc (void *ptr, size_t size)
 {
   void *res = realloc (ptr, size);
@@ -857,13 +865,12 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 int
 open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *err)
 {
-  struct sockaddr_un addr;
+  struct sockaddr_un addr = {};
   int ret;
   cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error creating UNIX socket");
 
-  memset (&addr, 0, sizeof (addr));
   if (strlen (path) >= sizeof (addr.sun_path))
     return crun_make_error (err, 0, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
@@ -881,13 +888,12 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
 int
 open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
 {
-  struct sockaddr_un addr;
+  struct sockaddr_un addr = {};
   int ret;
   cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error creating UNIX socket");
 
-  memset (&addr, 0, sizeof (addr));
   if (strlen (path) >= sizeof (addr.sun_path))
     return crun_make_error (err, 0, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
@@ -915,12 +921,9 @@ send_fd_to_socket (int server, int fd, libcrun_error_t *err)
   int ret;
   struct cmsghdr *cmsg = NULL;
   struct iovec iov[1];
-  struct msghdr msg;
-  char ctrl_buf[CMSG_SPACE (sizeof (int))];
+  struct msghdr msg = {};
+  char ctrl_buf[CMSG_SPACE (sizeof (int))] = {};
   char data[1];
-
-  memset (&msg, 0, sizeof (struct msghdr));
-  memset (ctrl_buf, 0, CMSG_SPACE (sizeof (int)));
 
   data[0] = ' ';
   iov[0].iov_base = data;
@@ -952,13 +955,10 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
   cleanup_close int fd = -1;
   int ret;
   struct iovec iov[1];
-  struct msghdr msg;
-  char ctrl_buf[CMSG_SPACE (sizeof (int))];
+  struct msghdr msg = {};
+  char ctrl_buf[CMSG_SPACE (sizeof (int))] = {};
   char data[1];
   struct cmsghdr *cmsg;
-
-  memset (&msg, 0, sizeof (struct msghdr));
-  memset (ctrl_buf, 0, CMSG_SPACE (sizeof (int)));
 
   data[0] = ' ';
   iov[0].iov_base = data;

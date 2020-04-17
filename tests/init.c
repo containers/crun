@@ -172,10 +172,9 @@ int main (int argc, char **argv)
 
   if (strcmp (argv[1], "gethostname") == 0)
     {
-      char buffer[64];
+      char buffer[64] = {};
       int ret;
 
-      memset (buffer, 0, sizeof (buffer));
       ret = gethostname (buffer, sizeof (buffer) - 1);
       if (ret < 0)
         error (EXIT_FAILURE, errno, "gethostname");
