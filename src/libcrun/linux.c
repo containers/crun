@@ -49,6 +49,11 @@
 #include <sys/personality.h>
 #include <net/if.h>
 
+#include <yajl/yajl_tree.h>
+#include <yajl/yajl_gen.h>
+
+#define YAJL_STR(x) ((const unsigned char *) (x))
+
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
 #endif
@@ -82,6 +87,10 @@ struct private_data_s
 
   char *tmpmountdir;
   char *tmpmountfile;
+
+  /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
+   * and needed during restore. */
+  char *external_descriptors;
 };
 
 struct linux_namespace_s
@@ -2320,6 +2329,50 @@ open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *er
   return ret;
 }
 
+char *
+libcrun_get_external_descriptors (libcrun_container_t *container)
+{
+  return get_private_data (container)->external_descriptors;
+}
+
+static int
+save_external_descriptors (libcrun_container_t *container,
+                           pid_t pid,
+                           libcrun_error_t *err)
+{
+  const unsigned char *buf = NULL;
+  yajl_gen gen = NULL;
+  size_t buf_len;
+  int ret;
+  int i;
+
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, errno, "yajl_gen_alloc");
+  yajl_gen_array_open (gen);
+
+  /* Remember original stdin, stdout, stderr for container restore. */
+  for (i = 0; i < 3; i++)
+    {
+      cleanup_free char *fd_path;
+      char link_path[PATH_MAX];
+      xasprintf (&fd_path, "/proc/%d/fd/%d", pid, i);
+      ret = readlink (fd_path, link_path, PATH_MAX - 1);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "readlink");
+      link_path[ret] = 0;
+      yajl_gen_string (gen, YAJL_STR (link_path), strlen (link_path));
+    }
+
+  yajl_gen_array_close (gen);
+  yajl_gen_get_buf (gen, &buf, &buf_len);
+  if (buf)
+    get_private_data (container)->external_descriptors = xstrdup((const char *) buf);
+  yajl_gen_free (gen);
+
+  return 0;
+}
+
 int
 libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -2486,6 +2539,10 @@ libcrun_run_linux_container (libcrun_container_t *container,
   if (pid)
     {
       pid_t grandchild = 0;
+
+      ret = save_external_descriptors (container, pid, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = close_and_reset (&sync_socket_container);
       if (UNLIKELY (ret < 0))
@@ -3059,6 +3116,13 @@ libcrun_container_restore_linux (libcrun_container_status_t *status,
                                  libcrun_checkpoint_restore_t *cr_options,
                                  libcrun_error_t *err)
 {
-  return libcrun_container_restore_linux_criu (status, container,
-                                               cr_options, err);
+  int ret;
+  ret = libcrun_container_restore_linux_criu (status, container,
+                                              cr_options, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  get_private_data (container)->external_descriptors = status->external_descriptors;
+
+  return 0;
 }

@@ -1057,6 +1057,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                         char *cgroup_path, char *scope, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = get_current_dir_name ();
+  char *external_descriptors = libcrun_get_external_descriptors (container);
   libcrun_container_status_t status = {.pid = pid,
                                        .cgroup_path = cgroup_path,
                                        .scope = scope,
@@ -1064,7 +1065,8 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                                        .bundle = cwd,
                                        .created = created,
                                        .systemd_cgroup = context->systemd_cgroup,
-                                       .detached = context->detach};
+                                       .detached = context->detach,
+                                       .external_descriptors = external_descriptors};
   if (cwd == NULL)
     OOM ();
   return libcrun_write_container_status (context->state_root, context->id, &status, err);
@@ -2532,6 +2534,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
   cleanup_free char *scope = NULL;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
+  char created[35];
   int ret;
 
   container = libcrun_container_load_from_file ("config.json", err);
@@ -2557,8 +2560,8 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
     return ret;
 
   /* The CRIU restore code uses bundle and rootfs of status. */
-  status.bundle = xstrdup(context->bundle);
-  status.rootfs = xstrdup (def->root->path);
+  status.bundle = (char *)context->bundle;
+  status.rootfs = def->root->path;
 
   ret = libcrun_container_restore_linux (&status, container, cr_options, err);
   if (UNLIKELY (ret < 0))
@@ -2615,9 +2618,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id,
       }
   }
 
+  get_current_timestamp (created);
+  context->detach = cr_options->detach;
   ret = write_container_status (container, context, status.pid,
-                                status.cgroup_path, status.scope,
-                                status.created, err);
+                                cgroup_path, scope,
+                                created, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
