@@ -753,7 +753,7 @@ struct device_s needed_devs[] =
    {"/dev/tty", "c", 5, 0, 0666, 0, 0},
    {"/dev/random", "c", 1, 8, 0666, 0, 0},
    {"/dev/urandom", "c", 1, 9, 0666, 0, 0},
-   {NULL, '\0', 0, 0, 0, 0, 0}
+   {}
   };
 
 /* Check if the specified path is a direct child of /dev.  If it is
