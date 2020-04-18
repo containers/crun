@@ -1808,9 +1808,6 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
     {
       TEMP_FAILURE_RETRY (write (pipefd1, &((*err)->status), sizeof ((*err)->status)));
       TEMP_FAILURE_RETRY (write (pipefd1, (*err)->msg, strlen ((*err)->msg) + 1));
-
-      crun_set_output_handler (log_write_to_stderr, NULL, false);
-      libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
     }
   exit (ret);
 }
