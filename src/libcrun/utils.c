@@ -133,8 +133,9 @@ xmalloc (size_t size)
 void *
 xmalloc0 (size_t size)
 {
-  void *res = xmalloc (size);
-  memset (res, 0, size);
+  void *res = calloc (1, size);
+  if (UNLIKELY (res == NULL))
+    OOM ();
   return res;
 }
 
