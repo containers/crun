@@ -280,8 +280,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
     if (tree && YAJL_IS_ARRAY (tree))
       {
-        size_t len = tree->u.array.len;
-        int i;
+        size_t i, len = tree->u.array.len;
 
         /* len will probably always be 3 as crun is currently only
          * recording the destination of FD 0, 1 and 2. */
