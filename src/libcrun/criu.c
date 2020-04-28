@@ -218,13 +218,95 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
   return 0;
 }
 
+static int
+prepare_restore_mounts (runtime_spec_schema_config_schema *def,
+                        char *root,
+                        libcrun_error_t *err)
+{
+  int i;
+
+  /* Go through all mountpoints to be able to recreate missing mountpoints. */
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      char *dest = def->mounts[i]->destination;
+      char *type = def->mounts[i]->type;
+      cleanup_close int root_fd = -1;
+      bool on_tmpfs = false;
+      int is_dir = 1;
+      size_t j;
+
+      /* cgroup restore should be handled by CRIU itself */
+      if (strcmp (type, "cgroup") == 0
+          || strcmp (type, "cgroup2") == 0)
+        continue;
+
+      /* Check if the mountpoint is on a tmpfs. CRIU restores
+       * all tmpfs. We do need to recreate directories on a tmpfs. */
+      for (j = 0; j < def->mounts_len; j++)
+        {
+          cleanup_free char *dest_loop = NULL;
+
+          xasprintf (&dest_loop, "%s/", def->mounts[j]->destination);
+          if (strncmp (dest, dest_loop, strlen (dest_loop)) == 0 &&
+              strcmp (def->mounts[j]->type, "tmpfs") == 0)
+            {
+              /* This is a mountpoint which is on a tmpfs.*/
+              on_tmpfs = true;
+              break;
+            }
+        }
+
+      if (on_tmpfs)
+        continue;
+
+      /* For bind mounts check if the source is a file or a directory. */
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        {
+          const char *opt = def->mounts[i]->options[j];
+          if (strcmp (opt, "bind") == 0 || strcmp (opt, "rbind") == 0)
+            {
+              is_dir = crun_dir_p (def->mounts[i]->source, false, err);
+              if (UNLIKELY (is_dir < 0))
+                return is_dir;
+              break;
+            }
+        }
+
+      root_fd = open (root, O_RDONLY | O_CLOEXEC);
+      if (UNLIKELY (root_fd == -1))
+        return crun_make_error (err, errno,
+                                "error opening container root directory %s",
+                                root);
+
+      if (is_dir)
+        {
+          int ret;
+
+          ret = crun_safe_ensure_directory_at (root_fd, root, strlen (root),
+                                               dest, 0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          int ret;
+
+          ret = crun_safe_ensure_file_at (root_fd, root, strlen (root), dest,
+                                          0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
+  return 0;
+}
+
 int
 libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
                                       libcrun_container_t *container,
                                       libcrun_checkpoint_restore_t *
                                       cr_options, libcrun_error_t *err)
 {
-
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int inherit_fd = -1;
   cleanup_close int image_fd = -1;
@@ -358,6 +440,17 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
                              "error mounting restore directory %s\n", root);
       goto out;
     }
+
+  /* During initial container creation, crun will create mountpoints
+   * defined in config.json if they do not exist. If we are restoring
+   * we need to make sure these mountpoints also exist.
+   * This is not perfect, as this means crun will modify a rootfs
+   * even if it marked as read-only, but runc already modifies
+   * the rootfs in the same way. */
+
+  ret = prepare_restore_mounts (def, root, err);
+  if (UNLIKELY (ret < 0))
+    goto out_umount;
 
   ret = criu_set_root (root);
   if (UNLIKELY (ret != 0))
