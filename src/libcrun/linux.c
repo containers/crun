@@ -2447,6 +2447,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
   int namespaces_to_join_index[MAX_NAMESPACES];
   size_t n_namespaces_to_join = 0;
   int userns_join_index = -1;
+  int userns_join_index_origin = -1;
   bool must_fork = false;
 
   for (i = 0; i < def->linux->namespaces_len; i++)
@@ -2472,7 +2473,10 @@ libcrun_run_linux_container (libcrun_container_t *container,
               return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
 
           if (value == CLONE_NEWUSER)
-            userns_join_index = n_namespaces_to_join;
+            {
+              userns_join_index_origin = i;
+              userns_join_index = n_namespaces_to_join;
+            }
 
           namespaces_to_join[n_namespaces_to_join] = fd;
           namespaces_to_join_index[n_namespaces_to_join] = i;
@@ -2602,7 +2606,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
           ret = setns (namespaces_to_join[userns_join_index], CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
             {
-              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[userns_join_index]->path);
+              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[userns_join_index_origin]->path);
               goto out;
             }
         }
