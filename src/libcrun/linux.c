@@ -2792,7 +2792,10 @@ join_process_parent_helper (pid_t child_pid,
     {
       ret = receive_fd_from_socket (sync_fd, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "receive fd");
+        {
+          crun_error_release (err);
+          return crun_make_error (err, errno, "receive fd");
+        }
       *terminal_fd = ret;
     }
 
@@ -2941,6 +2944,14 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
           if (setsid () < 0)
             libcrun_fail_with_error (errno, "setsid");
+
+          ret = setgid (0);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error (errno, "setgid");
+
+          ret = setuid (0);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error (errno, "setuid");
 
           master_fd = open_terminal (container, &slave, err);
           if (UNLIKELY (master_fd < 0))
