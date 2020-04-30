@@ -79,6 +79,11 @@ struct container_entrypoint_s
 
   int hooks_out_fd;
   int hooks_err_fd;
+
+  /* If specified, it is called instead of
+     execve.  */
+  int (*exec_func) (void *container, void *arg, const char *pathname, char *const argv[]);
+  void *exec_func_arg;
 };
 
 struct sync_socket_message_s
@@ -591,11 +596,14 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
   if (UNLIKELY (ret < 0))
     return ret;
 
-  rootfs = realpath (def->root->path, NULL);
-  if (UNLIKELY (rootfs == NULL))
+  if (def->root && def->root->path)
     {
-      /* If realpath failed for any reason, try the relative directory.  */
-      rootfs = xstrdup (def->root->path);
+      rootfs = realpath (def->root->path, NULL);
+      if (UNLIKELY (rootfs == NULL))
+        {
+          /* If realpath failed for any reason, try the relative directory.  */
+          rootfs = xstrdup (def->root->path);
+        }
     }
 
   if (entrypoint_args->terminal_socketpair[0] >= 0)
@@ -655,9 +663,12 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
-  ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (rootfs)
+    {
+      ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = libcrun_reopen_dev_null (err);
   if (UNLIKELY (ret < 0))
@@ -913,6 +924,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       (void) lseek (2, 0, SEEK_END);
     }
 
+  if (entrypoint_args->exec_func)
+    {
+      ret = entrypoint_args->exec_func (entrypoint_args->container, entrypoint_args->exec_func_arg, exec_path,
+                                        def->process->args);
+      _exit (ret);
+    }
+
   execv (exec_path, def->process->args);
 
   if (errno == ENOENT)
@@ -1135,10 +1153,11 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
 {
   cleanup_free char *cwd = get_current_dir_name ();
   char *external_descriptors = libcrun_get_external_descriptors (container);
+  char *rootfs = container->container_def->root ? container->container_def->root->path : "";
   libcrun_container_status_t status = { .pid = pid,
                                         .cgroup_path = cgroup_path,
                                         .scope = scope,
-                                        .rootfs = container->container_def->root->path,
+                                        .rootfs = rootfs,
                                         .bundle = cwd,
                                         .created = created,
                                         .systemd_cgroup = context->systemd_cgroup,
@@ -1598,6 +1617,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .hooks_out_fd = -1,
     .hooks_err_fd = -1,
     .seccomp_receiver_fd = -1,
+    .exec_func = context->exec_func,
+    .exec_func_arg = context->exec_func_arg,
   };
 
   if (def->hooks
@@ -1832,14 +1853,17 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 }
 
 static int
-check_config_file (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
+check_config_file (runtime_spec_schema_config_schema *def, libcrun_context_t *context, libcrun_error_t *err)
 {
-  if (UNLIKELY (def->root == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
   if (UNLIKELY (def->linux == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
-  if (UNLIKELY (def->mounts == NULL))
-    return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
+  if (context->exec_func == NULL)
+    {
+      if (UNLIKELY (def->root == NULL))
+        return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
+      if (UNLIKELY (def->mounts == NULL))
+        return crun_make_error (err, 0, "invalid config file, no 'mounts' block specified");
+    }
   return 0;
 }
 
@@ -1890,7 +1914,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 
   container->context = context;
 
-  ret = check_config_file (def, err);
+  ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1992,7 +2016,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
     return crun_make_error (err, 0, "unknown version specified");
 
-  ret = check_config_file (def, err);
+  ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2788,7 +2812,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
     return crun_make_error (err, 0, "unknown version specified");
 
-  ret = check_config_file (def, err);
+  ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
