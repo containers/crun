@@ -2183,7 +2183,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (memory->disable_oom_killer_present)
+  if (memory->disable_oom_killer)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "cannot disable OOM killer with cgroupv2");
