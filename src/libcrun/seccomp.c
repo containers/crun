@@ -96,17 +96,26 @@ get_seccomp_operator (const char *name, libcrun_error_t *err)
 static unsigned long long
 get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
 {
-  if (strcmp (name, "SCMP_ACT_KILL") == 0)
-    return SCMP_ACT_KILL;
-  if (strcmp (name, "SCMP_ACT_ALLOW") == 0)
+  const char *p;
+
+  p = name;
+  if (strncmp (p, "SCMP_ACT_", 9))
+    goto fail;
+
+  p += 9;
+
+  if (strcmp (p, "ALLOW") == 0)
     return SCMP_ACT_ALLOW;
-  if (strcmp (name, "SCMP_ACT_TRAP") == 0)
-    return SCMP_ACT_TRAP;
-  if (strcmp (name, "SCMP_ACT_ERRNO") == 0)
+  else if (strcmp (p, "ERRNO") == 0)
     return SCMP_ACT_ERRNO (errno_ret);
-  if (strcmp (name, "SCMP_ACT_TRACE") == 0)
+  else if (strcmp (p, "KILL") == 0)
+    return SCMP_ACT_KILL;
+  else if (strcmp (p, "TRAP") == 0)
+    return SCMP_ACT_TRAP;
+  else if (strcmp (p, "TRACE") == 0)
     return SCMP_ACT_TRACE (errno_ret);
 
+ fail:
   crun_make_error (err, 0, "seccomp get action", name);
   return 0;
 }
@@ -206,7 +215,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
     def_action = seccomp->default_action;
 
   default_action = get_seccomp_action (def_action, EPERM, err);
-  if (UNLIKELY (default_action == 0))
+  if (UNLIKELY (err && *err != NULL))
     return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->default_action);
 
   ctx = seccomp_init (default_action);
@@ -244,7 +253,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
         errno_ret = seccomp->syscalls[i]->errno_ret;
 
       action = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, err);
-      if (UNLIKELY (action == 0))
+      if (UNLIKELY (err && *err != NULL))
         return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->syscalls[i]->action);
 
       if (action == default_action)
