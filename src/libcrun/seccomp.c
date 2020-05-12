@@ -71,7 +71,7 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
   return (int) syscall (__NR_seccomp, operation, flags, args);
 }
 
-unsigned long
+static unsigned long
 get_seccomp_operator (const char *name, libcrun_error_t *err)
 {
   if (strcmp (name, "SCMP_CMP_NE") == 0)
@@ -93,20 +93,29 @@ get_seccomp_operator (const char *name, libcrun_error_t *err)
   return 0;
 }
 
-unsigned long long
-get_seccomp_action (const char *name, libcrun_error_t *err)
+static unsigned long long
+get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
 {
-  if (strcmp (name, "SCMP_ACT_KILL") == 0)
-    return SCMP_ACT_KILL;
-  if (strcmp (name, "SCMP_ACT_ALLOW") == 0)
-    return SCMP_ACT_ALLOW;
-  if (strcmp (name, "SCMP_ACT_TRAP") == 0)
-    return SCMP_ACT_TRAP;
-  if (strcmp (name, "SCMP_ACT_ERRNO") == 0)
-    return SCMP_ACT_ERRNO (EPERM);
-  if (strcmp (name, "SCMP_ACT_TRACE") == 0)
-    return SCMP_ACT_TRACE (EPERM);
+  const char *p;
 
+  p = name;
+  if (strncmp (p, "SCMP_ACT_", 9))
+    goto fail;
+
+  p += 9;
+
+  if (strcmp (p, "ALLOW") == 0)
+    return SCMP_ACT_ALLOW;
+  else if (strcmp (p, "ERRNO") == 0)
+    return SCMP_ACT_ERRNO (errno_ret);
+  else if (strcmp (p, "KILL") == 0)
+    return SCMP_ACT_KILL;
+  else if (strcmp (p, "TRAP") == 0)
+    return SCMP_ACT_TRAP;
+  else if (strcmp (p, "TRACE") == 0)
+    return SCMP_ACT_TRACE (errno_ret);
+
+ fail:
   crun_make_error (err, 0, "seccomp get action", name);
   return 0;
 }
@@ -205,8 +214,8 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   if (seccomp->default_action != NULL)
     def_action = seccomp->default_action;
 
-  default_action = get_seccomp_action (def_action, err);
-  if (UNLIKELY (default_action == 0))
+  default_action = get_seccomp_action (def_action, EPERM, err);
+  if (UNLIKELY (err && *err != NULL))
     return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->default_action);
 
   ctx = seccomp_init (default_action);
@@ -238,8 +247,13 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   for (i = 0; i < seccomp->syscalls_len; i++)
     {
       size_t j;
-      action = get_seccomp_action (seccomp->syscalls[i]->action, err);
-      if (UNLIKELY (action == 0))
+      int errno_ret = EPERM;
+
+      if (seccomp->syscalls[i]->errno_ret_present)
+        errno_ret = seccomp->syscalls[i]->errno_ret;
+
+      action = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, err);
+      if (UNLIKELY (err && *err != NULL))
         return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->syscalls[i]->action);
 
       if (action == default_action)
