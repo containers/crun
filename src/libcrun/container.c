@@ -481,8 +481,14 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
 }
 
 static int
-do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *rootfs,
-          const char *cwd, const char *status, hook **hooks, size_t hooks_len,
+do_hooks (runtime_spec_schema_config_schema *def,
+          pid_t pid,
+          const char *id,
+          bool keep_going,
+          const char *cwd,
+          const char *status,
+          hook **hooks,
+          size_t hooks_len,
           libcrun_error_t *err)
 {
   size_t i, stdin_len;
@@ -490,6 +496,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   cleanup_free char *stdin = NULL;
   const unsigned char *annotations = (const unsigned char *) "{}";
   cleanup_free char *cwd_allocated = NULL;
+  const char *rootfs = def->root ? def->root->path : "";
   yajl_gen gen = NULL;
 
   if (cwd == NULL)
@@ -612,7 +619,7 @@ container_init_setup (void *args, const char *notify_socket,
 
   if (def->hooks && def->hooks->create_container_len)
     {
-      ret = do_hooks (def, 0, container->context->id, false, def->root->path, NULL, "created",
+      ret = do_hooks (def, 0, container->context->id, false, NULL, "created",
                       (hook **) def->hooks->create_container,
                       def->hooks->create_container_len, err);
       if (UNLIKELY (ret != 0))
@@ -847,7 +854,7 @@ container_init (void *args, const char *notify_socket, int sync_socket,
     {
       libcrun_container_t *container = entrypoint_args->container;
 
-      ret = do_hooks (def, 0, container->context->id, false, def->root->path, NULL, "starting",
+      ret = do_hooks (def, 0, container->context->id, false, NULL, "starting",
                       (hook **) def->hooks->start_container,
                       def->hooks->start_container_len, err);
       if (UNLIKELY (ret != 0))
@@ -901,7 +908,7 @@ run_poststop_hooks (libcrun_context_t *context, runtime_spec_schema_config_schem
 
   if (def->hooks && def->hooks->poststop_len)
     {
-      ret = do_hooks (def, 0, id, true, def->root->path, status->bundle,
+      ret = do_hooks (def, 0, id, true, status->bundle,
                       "stopped", (hook **) def->hooks->poststop,
                       def->hooks->poststop_len, err);
       if (UNLIKELY (ret < 0))
@@ -1591,7 +1598,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
      prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
-      ret = do_hooks (def, pid, context->id, false, def->root->path, NULL, "created",
+      ret = do_hooks (def, pid, context->id, false, NULL, "created",
                       (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, err);
       if (UNLIKELY (ret != 0))
@@ -1602,7 +1609,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
   if (def->hooks && def->hooks->create_runtime_len)
     {
-      ret = do_hooks (def, pid, context->id, false, def->root->path, NULL, "created",
+      ret = do_hooks (def, pid, context->id, false, NULL, "created",
                       (hook **) def->hooks->create_runtime,
                       def->hooks->create_runtime_len, err);
       if (UNLIKELY (ret != 0))
@@ -1662,7 +1669,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (def->hooks && def->hooks->poststart_len)
     {
-      ret = do_hooks (def, pid, context->id, true, def->root->path, NULL, "running",
+      ret = do_hooks (def, pid, context->id, true, NULL, "running",
                       (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, err);
       if (UNLIKELY (ret < 0))
