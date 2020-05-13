@@ -1278,6 +1278,8 @@ run_process_with_stdin_timeout_envp (char *path,
                                      char **envp,
                                      char *stdin,
                                      size_t stdin_len,
+                                     int out_fd,
+                                     int err_fd,
                                      libcrun_error_t *err)
 {
   int stdin_pipe[2];
@@ -1354,18 +1356,28 @@ run_process_with_stdin_timeout_envp (char *path,
   else
     {
       char *tmp_args[] = {path, NULL};
-      int out = open ("/dev/null", O_WRONLY);
+      int dev_null_fd = -1;
 
-      if (UNLIKELY (out < 0))
-        _exit (EXIT_FAILURE);
+      if (out_fd < 0 || err_fd < 0)
+        {
+          dev_null_fd = open ("/dev/null", O_WRONLY);
+          if (UNLIKELY (dev_null_fd < 0))
+            _exit (EXIT_FAILURE);
+        }
 
       TEMP_FAILURE_RETRY (close (pipe_w));
       dup2 (pipe_r, 0);
       TEMP_FAILURE_RETRY (close (pipe_r));
 
-      dup2 (out, 1);
-      dup2 (out, 2);
-      TEMP_FAILURE_RETRY (close (out));
+      dup2 (out_fd >= 0 ? out_fd : dev_null_fd, 1);
+      dup2 (err_fd >= 0 ? err_fd : dev_null_fd, 2);
+
+      if (dev_null_fd >= 0)
+        TEMP_FAILURE_RETRY (close (dev_null_fd));
+      if (out_fd >= 0)
+        TEMP_FAILURE_RETRY (close (out_fd));
+      if (err_fd >= 0)
+        TEMP_FAILURE_RETRY (close (err_fd));
 
       if (args == NULL)
         args = tmp_args;

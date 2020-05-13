@@ -70,6 +70,9 @@ struct container_entrypoint_s
 
   int seccomp_fd;
   int console_socket_fd;
+
+  int hooks_out_fd;
+  int hooks_err_fd;
 };
 
 struct sync_socket_message_s
@@ -489,6 +492,8 @@ do_hooks (runtime_spec_schema_config_schema *def,
           const char *status,
           hook **hooks,
           size_t hooks_len,
+          int out_fd,
+          int err_fd,
           libcrun_error_t *err)
 {
   size_t i, stdin_len;
@@ -532,7 +537,7 @@ do_hooks (runtime_spec_schema_config_schema *def,
 
   for (i = 0; i < hooks_len; i++)
     {
-      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, err);
+      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, out_fd, err_fd, err);
       if (UNLIKELY (ret != 0))
         {
           if (keep_going)
@@ -621,7 +626,10 @@ container_init_setup (void *args, const char *notify_socket,
     {
       ret = do_hooks (def, 0, container->context->id, false, NULL, "created",
                       (hook **) def->hooks->create_container,
-                      def->hooks->create_container_len, err);
+                      def->hooks->create_container_len,
+                      entrypoint_args->hooks_out_fd,
+                      entrypoint_args->hooks_err_fd,
+                      err);
       if (UNLIKELY (ret != 0))
         return ret;
     }
@@ -764,6 +772,32 @@ container_init_setup (void *args, const char *notify_socket,
   return 0;
 }
 
+static
+int open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, libcrun_error_t *err)
+{
+  const char *annotation;
+
+  *err_fd = *out_fd = -1;
+
+  annotation = find_annotation (container, "run.oci.hooks.stdout");
+  if (annotation)
+    {
+      *out_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND, 0700));
+      if (UNLIKELY (*out_fd < 0))
+        return crun_make_error (err, errno, "open `%s`", annotation);
+    }
+
+  annotation = find_annotation (container, "run.oci.hooks.stderr");
+  if (annotation)
+    {
+      *err_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND, 0700));
+      if (UNLIKELY (*err_fd < 0))
+        return crun_make_error (err, errno, "open `%s`", annotation);
+    }
+
+  return 0;
+}
+
 /* Entrypoint to the container.  */
 static int
 container_init (void *args, const char *notify_socket, int sync_socket,
@@ -773,6 +807,7 @@ container_init (void *args, const char *notify_socket, int sync_socket,
   int ret;
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
+
   entrypoint_args->sync_socket = sync_socket;
 
   crun_set_output_handler (log_write_to_sync_socket, args, false);
@@ -856,7 +891,10 @@ container_init (void *args, const char *notify_socket, int sync_socket,
 
       ret = do_hooks (def, 0, container->context->id, false, NULL, "starting",
                       (hook **) def->hooks->start_container,
-                      def->hooks->start_container_len, err);
+                      def->hooks->start_container_len,
+                      entrypoint_args->hooks_out_fd,
+                      entrypoint_args->hooks_err_fd,
+                      err);
       if (UNLIKELY (ret != 0))
         return ret;
     }
@@ -890,27 +928,48 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 }
 
 static int
-run_poststop_hooks (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
+run_poststop_hooks (libcrun_context_t *context,
+                    libcrun_container_t *container,
+                    runtime_spec_schema_config_schema *def,
                     libcrun_container_status_t *status,
                     const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_free libcrun_container_t *container_cleanup = NULL;
   int ret;
 
   if (def == NULL)
     {
-      ret = read_container_config_from_state (&container, state_root, id, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (container == NULL)
+        {
+          ret = read_container_config_from_state (&container_cleanup, state_root, id, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          container = container_cleanup;
+        }
 
       def = container->container_def;
     }
 
   if (def->hooks && def->hooks->poststop_len)
     {
+      cleanup_close int hooks_out_fd = -1;
+      cleanup_close int hooks_err_fd = -1;
+
+      if (container == NULL)
+        {
+          ret = read_container_config_from_state (&container_cleanup, state_root, id, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          container = container_cleanup;
+        }
+
+      ret = open_hooks_output (container, &hooks_out_fd, &hooks_err_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = do_hooks (def, 0, id, true, status->bundle,
                       "stopped", (hook **) def->hooks->poststop,
-                      def->hooks->poststop_len, err);
+                      def->hooks->poststop_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
@@ -941,6 +1000,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
   int ret;
   cleanup_container_status libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
+  cleanup_free libcrun_container_t *container = NULL;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -970,8 +1030,6 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
     {
       if (force)
         {
-          cleanup_free libcrun_container_t *container = NULL;
-
           if (def == NULL)
             {
               ret = read_container_config_from_state (&container, state_root, id, err);
@@ -1009,7 +1067,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
 
-  ret = run_poststop_hooks (context, def, &status, state_root, id, err);
+  ret = run_poststop_hooks (context, container, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (context->output_handler_arg, &err);
 
@@ -1437,6 +1495,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int socket_pair_1 = -1;
   cleanup_close int seccomp_fd = -1;
   cleanup_close int console_socket_fd = -1;
+  cleanup_close int hooks_out_fd = -1;
+  cleanup_close int hooks_err_fd = -1;
   int cgroup_mode, cgroup_manager;
   char created[35];
   uid_t root_uid = -1;
@@ -1446,8 +1506,23 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       .container = container,
       .context = context,
       .terminal_socketpair = {-1, -1},
-      .console_socket_fd = -1
+      .console_socket_fd = -1,
+      .hooks_out_fd = -1,
+      .hooks_err_fd = -1,
     };
+
+  if (def->hooks && (def->hooks->prestart_len
+                     || def->hooks->poststart_len
+                     || def->hooks->create_runtime_len
+                     || def->hooks->create_container_len
+                     || def->hooks->start_container_len))
+    {
+      ret = open_hooks_output (container, &hooks_out_fd, &hooks_err_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      container_args.hooks_out_fd = hooks_out_fd;
+      container_args.hooks_err_fd = hooks_err_fd;
+    }
 
   container->context = context;
 
@@ -1600,7 +1675,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       ret = do_hooks (def, pid, context->id, false, NULL, "created",
                       (hook **) def->hooks->prestart,
-                      def->hooks->prestart_len, err);
+                      def->hooks->prestart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
         {
           cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
@@ -1611,7 +1686,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       ret = do_hooks (def, pid, context->id, false, NULL, "created",
                       (hook **) def->hooks->create_runtime,
-                      def->hooks->create_runtime_len, err);
+                      def->hooks->create_runtime_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
         {
           cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
@@ -1671,7 +1746,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       ret = do_hooks (def, pid, context->id, true, NULL, "running",
                       (hook **) def->hooks->poststart,
-                      def->hooks->poststart_len, err);
+                      def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
         {
           cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);

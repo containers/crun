@@ -331,6 +331,21 @@ e.g.
 /sys/fs/cgroup//system.slice/foo-352700.scope/container
 ```
 
+## `run.oci.hooks.stdout=FILE`
+
+If the annotation `run.oci.hooks.stdout` is present, then crun
+will open the specified file and use it as the stdout for the hook
+processes.  The file is opened in append mode and it is created if it
+doesn't already exist.
+
+## `run.oci.hooks.stderr=FILE`
+
+If the annotation `run.oci.hooks.stderr` is present, then crun
+will open the specified file and use it as the stderr for the hook
+processes.  The file is opened in append mode and it is created if it
+doesn't already exist.
+
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that
