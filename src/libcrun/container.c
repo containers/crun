@@ -1280,21 +1280,21 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
             {
               ret = copy_from_fd_to_fd (0, terminal_fd, 0, err);
               if (UNLIKELY (ret < 0))
-                return ret;
+                return crun_error_wrap (err, "copy to terminal fd");
             }
           else if (events[i].data.fd == terminal_fd)
             {
               ret = set_blocking_fd (terminal_fd, 0, err);
               if (UNLIKELY (ret < 0))
-                return ret;
+                return crun_error_wrap (err, "set terminal fd not blocking");
 
               ret = copy_from_fd_to_fd (terminal_fd, 1, 1, err);
               if (UNLIKELY (ret < 0))
-                return ret;
+                return crun_error_wrap (err, "copy from terminal fd");
 
               ret = set_blocking_fd (terminal_fd, 1, err);
               if (UNLIKELY (ret < 0))
-                return ret;
+                return crun_error_wrap (err, "set terminal fd blocking");
             }
           else if (events[i].data.fd == notify_socket)
             {
@@ -1545,7 +1545,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       container_args.has_terminal_socket_pair = 1;
       ret = create_socket_pair (container_args.terminal_socketpair, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        return crun_error_wrap (err, "create terminal socket");
+
       socket_pair_0 = container_args.terminal_socketpair[0];
       socket_pair_1 = container_args.terminal_socketpair[1];
     }

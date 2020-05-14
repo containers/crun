@@ -62,6 +62,36 @@ crun_make_error (libcrun_error_t *err, int status, const char *msg, ...)
 }
 
 int
+crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
+{
+  cleanup_free char *msg = NULL;
+  cleanup_free char *tmp = NULL;
+  va_list args_list;
+  char *swap;
+  int ret;
+
+  if (err == NULL || *err == NULL)
+    return 0;
+
+  ret = -(*err)->status -1;
+
+  va_start (args_list, fmt);
+
+  if (vasprintf (&msg, fmt, args_list) < 0)
+    return ret;
+
+  asprintf (&tmp, "%s: %s", msg, (*err)->msg);
+  if (tmp == NULL)
+    return ret;
+
+  swap = tmp;
+  tmp = (*err)->msg;
+  (*err)->msg = swap;
+
+  return ret;
+}
+
+int
 crun_error_release (libcrun_error_t *err)
 {
   libcrun_error_t ptr;
