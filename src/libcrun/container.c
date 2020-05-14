@@ -598,6 +598,7 @@ container_init_setup (void *args, const char *notify_socket,
       console_socketpair = entrypoint_args->terminal_socketpair[1];
     }
 
+  /* sync 1.  */
   ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -614,10 +615,12 @@ container_init_setup (void *args, const char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* sync 2.  */
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* sync 3.  */
   ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -830,6 +833,7 @@ container_init (void *args, const char *notify_socket, int sync_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* sync 4.  */
   ret = sync_socket_send_sync (sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -1567,7 +1571,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
       if (UNLIKELY (console_socket_fd < 0))
-        return console_socket_fd;
+        return crun_error_wrap (err, "open console socket");
       container_args.console_socket_fd = console_socket_fd;
     }
 
@@ -1638,24 +1642,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       }
   }
 
-  if (seccomp_fd >= 0)
-    {
-       unsigned int seccomp_gen_options = 0;
-       const char *annotation;
-
-       annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
-       if (annotation && strcmp (annotation, "0") != 0)
-         seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
-
-       ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
-      if (UNLIKELY (ret < 0))
-        {
-          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
-          return ret;
-        }
-      close_and_reset (&seccomp_fd);
-    }
-
+  /* sync 1.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     {
@@ -1663,6 +1650,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       return ret;
     }
 
+  /* sync 2.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
     {
@@ -1695,14 +1683,26 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         }
     }
 
-  ret = sync_socket_send_sync (sync_socket, true, err);
-  if (UNLIKELY (ret < 0))
+  if (seccomp_fd >= 0)
     {
-      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
-      return ret;
+      unsigned int seccomp_gen_options = 0;
+      const char *annotation;
+
+      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
+      if (annotation && strcmp (annotation, "0") != 0)
+        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
+
+      ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
+      if (UNLIKELY (ret < 0))
+        {
+          cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+          return ret;
+        }
+      close_and_reset (&seccomp_fd);
     }
 
-  ret = sync_socket_wait_sync (context, sync_socket, false, err);
+  /* sync 3.  */
+  ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
@@ -1726,6 +1726,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
           cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
           return terminal_fd;
         }
+    }
+
+  /* sync 4.  */
+  ret = sync_socket_wait_sync (context, sync_socket, false, err);
+  if (UNLIKELY (ret < 0))
+    {
+      cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd);
+      return ret;
     }
 
   ret = close_and_reset (&sync_socket);
