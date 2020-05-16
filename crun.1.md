@@ -306,6 +306,14 @@ will skip the `setgroups` syscall that is used to either set the
 additional groups specified in the OCI configuration, or to reset the
 list of additional groups if none is specified.
 
+## `run.oci.systemd.force_cgroup_v1=/PATH`
+
+If the annotation `run.oci.systemd.force_cgroup_v1=/PATH` is present, then crun
+will override the specified mount point `/PATH` with a cgroup v1 mount
+made of a single hierarchy `none,name=systemd`.
+It is useful to run on a cgroup v2 system containers using older
+versions of systemd that lack support for cgroup v2.
+
 ## `run.oci.timens_offset=ID SEC NSEC`
 
 Specify the offset to be written to /proc/self/timens_offsets when creating
