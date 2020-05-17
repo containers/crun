@@ -699,6 +699,11 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
       if (it)
         subsystem = it + 5;
 
+      if (strcmp (subsystem, "net_prio,net_cls") == 0)
+        subsystem = "net_cls,net_prio";
+      if (strcmp (subsystem, "cpuacct,cpu") == 0)
+        subsystem = "cpu,cpuacct";
+
       xasprintf (&source_subsystem, "/sys/fs/cgroup/%s", subsystem);
 
       /* if there is already a mount specified, do not add a default one.  */
