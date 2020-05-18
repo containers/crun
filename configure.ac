@@ -43,10 +43,13 @@ dnl libseccomp
 AC_ARG_ENABLE([seccomp],
 	AS_HELP_STRING([--disable-seccomp], [Ignore libseccomp and disable support]))
 AS_IF([test "x$enable_seccomp" != "xno"], [
-	AC_CHECK_HEADERS([seccomp.h], [], [AC_MSG_ERROR([*** Missing libseccomp headers])])
-	AS_IF([test "$ac_cv_header_seccomp_h" = "yes"], [
-		AC_SEARCH_LIBS(seccomp_rule_add, [seccomp], [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])], [AC_MSG_ERROR([*** libseccomp headers not found])])
-		AC_SEARCH_LIBS(seccomp_arch_resolve_name, [seccomp], [AC_DEFINE([SECCOMP_ARCH_RESOLVE_NAME], 1, [Define if seccomp_arch_resolve_name is available])], [ ])
+	PKG_CHECK_MODULES([SECCOMP], [libseccomp], [], [
+		AC_CHECK_HEADERS([seccomp.h], [], [AC_MSG_ERROR([*** Missing libseccomp headers])])
+		AS_IF([test "$ac_cv_header_seccomp_h" = "yes"], [
+			AC_SEARCH_LIBS(seccomp_rule_add, [seccomp], [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])], [AC_MSG_ERROR([*** libseccomp headers not found])])
+			AC_SEARCH_LIBS(seccomp_arch_resolve_name, [seccomp], [AC_DEFINE([SECCOMP_ARCH_RESOLVE_NAME], 1, [Define if seccomp_arch_resolve_name is available])], [ ])
+		])
+		AC_SUBST([SECCOMP_LIBS], [-lseccomp])
 	])
 ])
 
