@@ -35,8 +35,9 @@ libcrun_la_SOURCES = src/libcrun/utils.c \
 			src/libcrun/chroot_realpath.c \
 			src/libcrun/signals.c
 
-libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
-libcrun_la_LIBADD = libocispec/libocispec.la
+libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(SECCOMP_CFLAGS)
+
+libcrun_la_LIBADD = libocispec/libocispec.la $(SECCOMP_LIBS)
 
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
