@@ -114,6 +114,10 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
     return SCMP_ACT_TRAP;
   else if (strcmp (p, "TRACE") == 0)
     return SCMP_ACT_TRACE (errno_ret);
+#ifdef SCMP_ACT_KILL_PROCESS
+  else if (strcmp (p, "KILL_PROCESS") == 0)
+    return SCMP_ACT_KILL_PROCESS;
+#endif
 
  fail:
   crun_make_error (err, 0, "seccomp get action", name);
