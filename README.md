@@ -111,3 +111,17 @@ Once all the dependencies are installed:
 make
 sudo make install
 ```
+
+### Install with Ansible
+
+An [Ansible Role](https://github.com/alvistack/ansible-role-crun) is also available to automate the above steps:
+
+``` bash
+sudo su -
+mkdir -p ~/.ansible/roles
+cd ~/.ansible/roles
+git clone https://github.com/alvistack/ansible-role-crun.git crun
+cd ~/.ansible/roles/crun
+pip3 install --upgrade --ignore-installed --requirement requirements.txt
+molecule converge
+molecule verify
