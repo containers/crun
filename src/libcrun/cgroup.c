@@ -348,13 +348,13 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
 }
 
 static int
-enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, int ensure_missing, libcrun_error_t *err)
+enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   int ret;
 
   xasprintf (&cgroup_path, "/sys/fs/cgroup/%s%s", subsystem, path ? path : "");
-  if (ensure_missing)
+  if (create_if_missing)
     {
       ret = crun_ensure_directory (cgroup_path, 0755, false, err);
       if (UNLIKELY (ret < 0))
@@ -482,7 +482,36 @@ copy_owner (const char *from, const char *to, libcrun_error_t *err)
 }
 
 static int
-enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing, libcrun_error_t *err)
+read_unified_cgroup_pid (pid_t pid, char **path, libcrun_error_t *err)
+{
+  int ret;
+  char cgroup_path[32];
+  char *from, *to;
+  cleanup_free char *content = NULL;
+
+  sprintf (cgroup_path, "/proc/%d/cgroup", pid);
+
+  ret = read_all_file (cgroup_path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  from = strstr (content, "0::");
+  if (UNLIKELY (from == NULL))
+    return crun_make_error (err, -1, "cannot find cgroup2 for the process %d", pid);
+
+  from += 3;
+  to = strchr (from, '\n');
+  to = strchr (from, '\n');
+  if (UNLIKELY (to == NULL))
+    return crun_make_error (err, -1, "cannot parse `%s`", cgroup_path);
+  *to = '\0';
+
+  *path = xstrdup (from);
+  return 0;
+}
+
+static int
+enter_cgroup_v1 (int cgroup_mode, pid_t pid, const char *path, bool create_if_missing, libcrun_error_t *err)
 {
   char pid_str[16];
   int ret;
@@ -492,44 +521,6 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
   const cgroups_subsystem_t *subsystems;
 
   sprintf (pid_str, "%d", pid);
-
-  if (cgroup_mode == CGROUP_MODE_UNIFIED)
-    {
-      cleanup_free char *cgroup_path_procs = NULL;
-      cleanup_free char *cgroup_path = NULL;
-
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
-      if (ensure_missing)
-        {
-          ret = crun_ensure_directory (cgroup_path, 0755, false, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/cgroup.procs", path);
-      ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
-      if (UNLIKELY (ret < 0))
-        {
-          if (!ensure_missing && (*err)->status == EBUSY)
-            {
-              /* There are subdirectories so it is not possible to join the initial
-                 cgroup.  Create a subdirectory and use that.
-                 It can still fail if the container creates a subdirectory under
-                 /sys/fs/cgroup/../crun-exec/  */
-              cleanup_free char *cgroup_crun_exec_path = NULL;
-
-              xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
-
-              ret = enter_cgroup (cgroup_mode, pid, cgroup_crun_exec_path, true, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-
-              return copy_owner (cgroup_path_procs, cgroup_crun_exec_path, err);
-            }
-          return ret;
-        }
-      return 0;
-    }
 
   subsystems = libcrun_get_cgroups_subsystems (err);
   if (UNLIKELY (subsystems == NULL))
@@ -554,7 +545,7 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
         continue;
 
       entered_any = 1;
-      ret = enter_cgroup_subsystem (pid, subsystems[i], path, ensure_missing, err);
+      ret = enter_cgroup_subsystem (pid, subsystems[i], path, create_if_missing, err);
       if (UNLIKELY (ret < 0))
         {
           int errcode = crun_error_get_errno (err);
@@ -568,6 +559,91 @@ enter_cgroup (int cgroup_mode, pid_t pid, const char *path, bool ensure_missing,
     }
 
   return entered_any ? 0 : -1;
+}
+
+static int
+enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_missing, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path_procs = NULL;
+  cleanup_free char *cgroup_path = NULL;
+  char pid_str[16];
+  int repeat;
+  int ret;
+
+  sprintf (pid_str, "%d", pid);
+
+  xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
+  if (create_if_missing)
+    {
+      ret = crun_ensure_directory (cgroup_path, 0755, false, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/cgroup.procs", path);
+  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+  if (LIKELY (ret == 0))
+    return ret;
+
+  /* If the cgroup is not being created, try to handle EBUSY.  */
+  if (create_if_missing || crun_error_get_errno (err) != EBUSY)
+    return ret;
+
+  crun_error_release (err);
+
+  /* There are subdirectories so it is not possible to join the initial
+     cgroup.  Create a subdirectory and use that.
+     It can still fail if the container creates a subdirectory under
+     /sys/fs/cgroup/../crun-exec/  */
+  for (repeat = 0;; repeat++)
+    {
+      cleanup_free char *cgroup_crun_exec_path = NULL;
+      cleanup_free char *cgroup_sub_path_procs = NULL;
+
+      /* There is an init pid, try to join its cgroup.  */
+      if (init_pid > 0)
+        {
+          ret = read_unified_cgroup_pid (init_pid, &cgroup_crun_exec_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          /* Make sure the cgroup is below the initial cgroup specified for the container.  */
+          if (strncmp (path, cgroup_crun_exec_path, strlen (path)))
+            {
+              free (cgroup_crun_exec_path);
+              cgroup_crun_exec_path = NULL;
+            }
+        }
+
+      /* There is no init_pid to lookup, try a static path.  */
+      if (cgroup_crun_exec_path == NULL)
+        xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
+
+      xasprintf (&cgroup_sub_path_procs, "/sys/fs/cgroup/%s/cgroup.procs", cgroup_crun_exec_path);
+
+      ret = write_file (cgroup_sub_path_procs, pid_str, strlen (pid_str), err);
+      if (UNLIKELY (ret < 0))
+        {
+          /* The init process might have moved to a different cgroup, try again.  */
+          if (crun_error_get_errno (err) == EBUSY && init_pid && repeat < 20)
+            {
+              crun_error_release (err);
+              continue;
+            }
+          return ret;
+        }
+      return copy_owner (cgroup_path_procs, cgroup_crun_exec_path, err);
+    }
+  return ret;
+}
+
+static int
+enter_cgroup (int cgroup_mode, pid_t pid, pid_t init_pid, const char *path, bool create_if_missing, libcrun_error_t *err)
+{
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    return enter_cgroup_v2 (pid, init_pid, path, create_if_missing, err);
+
+  return enter_cgroup_v1 (cgroup_mode, pid, path, create_if_missing, err);
 }
 
 int
@@ -591,7 +667,7 @@ libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
 }
 
 int
-libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
+libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_error_t *err)
 {
   int cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -600,7 +676,7 @@ libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err)
   if (path == NULL || *path == '\0')
     return 0;
 
-  return enter_cgroup (cgroup_mode, pid, path, false, err);
+  return enter_cgroup (cgroup_mode, pid, init_pid, path, false, err);
 }
 
 #ifdef HAVE_SYSTEMD
@@ -1221,7 +1297,7 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
         return ret;
     }
 
-  return enter_cgroup (cgroup_mode, pid, *path, true, err);
+  return enter_cgroup (cgroup_mode, pid, 0, *path, true, err);
 }
 
 static int
