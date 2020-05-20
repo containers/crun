@@ -37,8 +37,7 @@ make distclean
 make -C contrib/static-builder-x86_64 build-image RUNTIME=$RUNTIME
 make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd) RUNTIME=$RUNTIME
 
-strip static-build/crun
-mv static-build/crun $OUTDIR/crun-$VERSION-static-x86_64
+mv crun $OUTDIR/crun-$VERSION-static-x86_64
 
 if test x$SKIP_GPG = x; then
     for i in $OUTDIR/*; do
