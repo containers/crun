@@ -1615,8 +1615,14 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
 
   if (def->root->readonly)
     {
+      struct remount_s *r;
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
-      struct remount_s *r = make_remount (rootfsfd, rootfs, remount_flags, NULL, get_private_data (container)->remounts);
+      int fd = dup (rootfsfd);
+
+      if (UNLIKELY (fd < 0))
+        return crun_make_error (err, errno, "dup fd for `%s`", rootfs);
+
+      r = make_remount (fd, rootfs, remount_flags, NULL, get_private_data (container)->remounts);
       get_private_data (container)->remounts = r;
     }
 
