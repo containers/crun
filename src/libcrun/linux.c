@@ -2840,7 +2840,7 @@ join_process_parent_helper (pid_t child_pid,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
-  ret = libcrun_move_process_to_cgroup (pid, status->cgroup_path, err);
+  ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

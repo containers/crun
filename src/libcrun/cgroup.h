@@ -56,7 +56,7 @@ int libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err
 int libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err);
 int libcrun_cgroup_killall (char *path, libcrun_error_t *err);
 int libcrun_cgroup_destroy (const char *id, char *path, int manager, libcrun_error_t *err);
-int libcrun_move_process_to_cgroup (pid_t pid, char *path, libcrun_error_t *err);
+int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_error_t *err);
 int libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources,
                                      char *path, libcrun_error_t *err);
 int libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err);
