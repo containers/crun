@@ -63,6 +63,8 @@ void log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg);
 
 int crun_make_error (libcrun_error_t *err, int status, const char *msg, ...);
 
+int crun_error_wrap (libcrun_error_t *err, const char *fmt, ...);
+
 int crun_error_get_errno (libcrun_error_t *err);
 
 int crun_error_release (libcrun_error_t *err);
