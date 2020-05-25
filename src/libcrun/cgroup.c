@@ -444,7 +444,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   dir = opendir (cgroup_path);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot opendir %s", cgroup_path);
+    return crun_make_error (err, errno, "cannot opendir `%s`", cgroup_path);
 
   dfd = dirfd (dir);
 
@@ -458,7 +458,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
       ret = fchownat (dfd, name, uid, gid, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "cannot chown %s/%s", cgroup_path, name);
+        return crun_make_error (err, errno, "cannot chown `%s/%s`", cgroup_path, name);
     }
 
   return 0;
@@ -1839,7 +1839,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
 }
 
 static int
-write_network_resources (int dirfd, runtime_spec_schema_config_linux_resources_network *net, libcrun_error_t *err)
+write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_schema_config_linux_resources_network *net, libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t len;
@@ -1847,7 +1847,7 @@ write_network_resources (int dirfd, runtime_spec_schema_config_linux_resources_n
   if (net->class_id)
     {
       len = sprintf (fmt_buf, "%d", net->class_id);
-      ret = write_file_at (dirfd, "net_cls.classid", fmt_buf, len, err);
+      ret = write_file_at (dirfd_netclass, "net_cls.classid", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1855,9 +1855,9 @@ write_network_resources (int dirfd, runtime_spec_schema_config_linux_resources_n
     {
       size_t i;
       cleanup_close int fd = -1;
-      fd = openat (dirfd, "net_prio.ifpriomap", O_WRONLY);
+      fd = openat (dirfd_netprio, "net_prio.ifpriomap", O_WRONLY);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open net_prio.ifpriomap");
+        return crun_make_error (err, errno, "open `net_prio.ifpriomap`");
 
       for (i = 0; i < net->priorities_len; i++)
         {
@@ -2364,16 +2364,24 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->network)
     {
-      cleanup_free char *path_to_network = NULL;
-      cleanup_close int dirfd_network = -1;
+      cleanup_free char *path_to_netclass = NULL;
+      cleanup_close int dirfd_netclass = -1;
+      cleanup_free char *path_to_netprio = NULL;
+      cleanup_close int dirfd_netprio = -1;
       runtime_spec_schema_config_linux_resources_network *network = resources->network;
 
-      xasprintf (&path_to_network, "/sys/fs/cgroup/net_cls,net_prio%s/", path);
-      dirfd_network = open (path_to_network, O_DIRECTORY | O_RDONLY);
-      if (UNLIKELY (dirfd_network < 0))
-        return crun_make_error (err, errno, "open %s", path_to_network);
+      xasprintf (&path_to_netclass, "/sys/fs/cgroup/net_cls%s/", path);
+      xasprintf (&path_to_netprio, "/sys/fs/cgroup/net_prio%s/", path);
 
-      ret = write_network_resources (dirfd_network, network, err);
+      dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_netclass < 0))
+        return crun_make_error (err, errno, "open `%s`", path_to_netclass);
+
+      dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_RDONLY);
+      if (UNLIKELY (dirfd_netprio < 0))
+        return crun_make_error (err, errno, "open `%s`", path_to_netprio);
+
+      ret = write_network_resources (dirfd_netclass, dirfd_netprio, network, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }

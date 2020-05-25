@@ -600,6 +600,45 @@ has_mount_for (libcrun_container_t *container, const char *destination)
 }
 
 static int
+do_mount_cgroup_systemd_v1 (libcrun_container_t *container,
+                            const char *source,
+                            int targetfd,
+                            const char *target,
+                            unsigned long mountflags,
+                            libcrun_error_t *err)
+{
+  int ret;
+  cleanup_close int fd = -1;
+  const char *subsystem = "systemd";
+  cleanup_free char *subsystem_path = NULL;
+  cleanup_close int tmpfsdirfd = -1;
+
+  mountflags = mountflags & ~MS_BIND;
+
+  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags, "size=1024k", 1, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Get a reference to the newly created cgroup directory.  */
+  tmpfsdirfd = open_mount_target (container, target, err);
+  if (UNLIKELY (tmpfsdirfd < 0))
+    return tmpfsdirfd;
+  targetfd = tmpfsdirfd;
+
+  ret = mkdirat (targetfd, subsystem, 0755);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mkdir `%s`", subsystem);
+
+  fd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "open `%s`", subsystem_path);
+
+  xasprintf (&subsystem_path, "%s/%s", target, subsystem);
+
+  return do_mount (container, "cgroup", fd, subsystem_path, "cgroup", mountflags, "none,name=systemd,xattr", true, err);
+}
+
+static int
 do_mount_cgroup_v1 (libcrun_container_t *container,
                     const char *source,
                     int targetfd,
@@ -623,7 +662,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
-  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags, "size=1024k", 1, err);
+  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -658,7 +697,12 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
 
       it = strstr (subsystem, "name=");
       if (it)
-        subsystem += 5;
+        subsystem = it + 5;
+
+      if (strcmp (subsystem, "net_prio,net_cls") == 0)
+        subsystem = "net_cls,net_prio";
+      if (strcmp (subsystem, "cpuacct,cpu") == 0)
+        subsystem = "cpu,cpuacct";
 
       xasprintf (&source_subsystem, "/sys/fs/cgroup/%s", subsystem);
 
@@ -1144,6 +1188,8 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
+  const char *systemd_cgroup_v1 = find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+
   for (i = 0; i < def->mounts_len; i++)
     {
       cleanup_free char *data = NULL;
@@ -1157,7 +1203,6 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       cleanup_close int targetfd = -1;
 
       target = def->mounts[i]->destination;
-
       while (*target == '/')
         target++;
 
@@ -1275,7 +1320,14 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       if (UNLIKELY (targetfd < 0))
         return targetfd;
 
-      if (strcmp (type, "cgroup") == 0)
+      if (systemd_cgroup_v1 && strcmp (def->mounts[i]->destination, systemd_cgroup_v1) == 0)
+        {
+          /* Override the cgroup mount with a single named cgroup name=systemd.  */
+          ret = do_mount_cgroup_systemd_v1 (container, source, targetfd, target, flags, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else if (strcmp (type, "cgroup") == 0)
         {
           ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
           if (UNLIKELY (ret < 0))
