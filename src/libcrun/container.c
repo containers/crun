@@ -672,7 +672,7 @@ container_init_setup (void *args, const char *notify_socket,
   if (getenv ("HOME") == NULL)
     {
       ret = set_home_env (container->container_uid);
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret < 0 && errno != ENOTSUP))
         libcrun_warning ("cannot set HOME environment variable");
     }
 
@@ -2313,7 +2313,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
       if (getenv ("HOME") == NULL)
         {
           ret = set_home_env (container->container_uid);
-          if (UNLIKELY (ret < 0))
+          if (UNLIKELY (ret < 0 && errno != ENOTSUP))
             libcrun_warning ("cannot set HOME environment variable");
         }
 
