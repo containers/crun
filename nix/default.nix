@@ -3,6 +3,8 @@ let
   pkgs = (import ./nixpkgs.nix {
     config = {
       packageOverrides = pkg: {
+        libseccomp = (static pkg.libseccomp);
+        protobufc = (static pkg.protobufc);
         libcap = (static pkg.libcap).overrideAttrs(x: {
           postInstall = ''
             mkdir -p "$doc/share/doc/${x.pname}-${x.version}"
@@ -11,8 +13,11 @@ let
             mv "$lib"/lib/security "$pam/lib"
           '';
         });
-        libseccomp = (static pkg.libseccomp);
-        protobufc = (static pkg.protobufc);
+        yajl = (static pkg.yajl).overrideAttrs(x: {
+          preConfigure = ''
+            export CMAKE_STATIC_LINKER_FLAGS="-static"
+          '';
+        });
         systemd = pkg.systemd.overrideAttrs(x: {
           mesonFlags = x.mesonFlags ++ [ "-Dstatic-libsystemd=true" ];
           postFixup = ''
@@ -25,7 +30,10 @@ let
   });
 
   static = pkg: pkg.overrideAttrs(x: {
-    configureFlags = (x.configureFlags or []) ++ [ "--disable-shared" ];
+    configureFlags = (x.configureFlags or []) ++
+      [ "--without-shared" "--disable-shared" ];
+    dontDisableStatic = true;
+    enableSharedExecutables = false;
     enableStatic = true;
   });
 
@@ -34,8 +42,15 @@ let
       name = "crun-static";
       src = ./..;
       doCheck = false;
-      nativeBuildInputs = [ autoreconfHook pkgconfig python3 ];
-      buildInputs = x.buildInputs ++ [ criu glibc glibc.static ];
+      buildInputs = [
+        criu
+        glibc
+        glibc.static
+        libcap
+        libseccomp
+        systemd
+        yajl
+      ];
       configureFlags = [ "--enable-static-nss" ];
       prePatch = ''
         export LDFLAGS="-static-libgcc -static"
@@ -52,15 +67,7 @@ let
           ${systemd.lib}/lib/libsystemd.a \
           ${yajl}/lib/libyajl_s.a \
         "
-        echo "Using static libs: $LIBS"
       '';
-    })).override {
-      yajl = yajl.overrideAttrs(x: {
-        buildInputs = [ glibc glibc.static ];
-        preConfigure = ''
-          export CMAKE_STATIC_LINKER_FLAGS="-static"
-        '';
-      });
-    };
+    }));
   };
 in self
