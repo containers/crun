@@ -374,6 +374,14 @@ Path to the file containing the resources to update.
 
 
 .SH Extensions to OCI
+.SH \fB\fCrun.oci.seccomp.receiver=PATH\fR
+.PP
+If the annotation \fB\fCrun.oci.seccomp.receiver=PATH\fR is specified, the
+seccomp listener is sent to the UNIX socket listening on the specified
+path.  It can also set with the \fB\fCRUN\_OCI\_SECCOMP\_RECEIVER\fR environment variable.
+It is an experimental feature, and the annotation will be removed once
+it is supported in the OCI runtime specs.  It must be an absolute path.
+
 .SH \fB\fCrun.oci.seccomp\_fail\_unknown\_syscall=1\fR
 .PP
 If the annotation \fB\fCrun.oci.seccomp\_fail\_unknown\_syscall\fR is present, then crun
