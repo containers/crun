@@ -582,7 +582,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
 
   xasprintf (&cgroup_path_procs, "/sys/fs/cgroup/%s/cgroup.procs", path);
   ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
-  if (LIKELY (ret == 0))
+  if (LIKELY (ret >= 0))
     return ret;
 
   /* If the cgroup is not being created, try to handle EBUSY.  */
