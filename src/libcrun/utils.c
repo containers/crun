@@ -822,7 +822,7 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
   /* NUL terminate the buffer.  */
   allocated = size;
   if (size == 0)
-    allocated = 256;
+    allocated = 4096;
   buf = xmalloc (allocated + 1);
   nread = 0;
   while ((size && nread < (size_t) size) || size == 0)
@@ -836,7 +836,7 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
 
       nread += ret;
 
-      allocated += 256;
+      allocated += 4096;
       buf = xrealloc (buf, allocated + 1);
     }
   buf[nread] = '\0';

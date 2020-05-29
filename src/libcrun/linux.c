@@ -3030,7 +3030,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
             }
         }
 
-      if (r != 0)
+      if (r < 0)
         _exit (EXIT_FAILURE);
     }
 
