@@ -135,7 +135,7 @@ stripped ELF binary for [glibc](https://www.gnu.org/software/libc).
 
 ### Nix
 
-To build the binaries by locally install the nix package manager:
+To build the binaries by locally installing the nix package manager:
 
 ``` shell
 nix build -f nix/
@@ -144,8 +144,8 @@ nix build -f nix/
 ### Ansible
 
 An [Ansible Role](https://github.com/alvistack/ansible-role-crun) is
-also available to automate the installation of above statically linked
-binary on its supported OS:
+also available to automate the installation of the above statically
+linked binary on its supported OS:
 
 ``` shell
 sudo su -
