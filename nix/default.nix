@@ -37,37 +37,33 @@ let
     enableStatic = true;
   });
 
-  self = with pkgs; {
-    crun-static = (crun.overrideAttrs(x: {
-      name = "crun-static";
-      src = ./..;
-      doCheck = false;
-      buildInputs = [
-        criu
-        glibc
-        glibc.static
-        libcap
-        libseccomp
-        systemd
-        yajl
-      ];
-      configureFlags = [ "--enable-static-nss" ];
-      prePatch = ''
-        export LDFLAGS="-static-libgcc -static"
-        export CRUN_LDFLAGS="-all-static"
-        export LIBS="\
-          ${criu}/lib/libcriu.a \
-          ${glibc.static}/lib/libc.a \
-          ${glibc.static}/lib/libpthread.a \
-          ${glibc.static}/lib/librt.a \
-          ${libcap.lib}/lib/libcap.a \
-          ${libseccomp.lib}/lib/libseccomp.a \
-          ${protobufc}/lib/libprotobuf-c.a \
-          ${protobuf}/lib/libprotobuf.a \
-          ${systemd.lib}/lib/libsystemd.a \
-          ${yajl}/lib/libyajl_s.a \
-        "
-      '';
-    }));
+  self = with pkgs; stdenv.mkDerivation rec {
+    name = "crun";
+    src = ./..;
+    doCheck = false;
+    enableParallelBuilding = true;
+    nativeBuildInputs = [ autoreconfHook go-md2man pkg-config python3 ];
+    buildInputs = [ criu glibc glibc.static libcap libseccomp systemd yajl ];
+    configureFlags = [ "--enable-static-nss" ];
+    prePatch = ''
+      export LDFLAGS="-static-libgcc -static -s -w"
+      export CRUN_LDFLAGS="-all-static"
+      export LIBS="\
+        ${criu}/lib/libcriu.a \
+        ${glibc.static}/lib/libc.a \
+        ${glibc.static}/lib/libpthread.a \
+        ${glibc.static}/lib/librt.a \
+        ${libcap.lib}/lib/libcap.a \
+        ${libseccomp.lib}/lib/libseccomp.a \
+        ${protobufc}/lib/libprotobuf-c.a \
+        ${protobuf}/lib/libprotobuf.a \
+        ${systemd.lib}/lib/libsystemd.a \
+        ${yajl}/lib/libyajl_s.a \
+      "
+    '';
+    postPatch = ''
+      cat Makefile | egrep '^VERSION = ' | sed 's/^VERSION = //g' > .tarball-version
+      echo "#define GIT_VERSION \"$(cat .tarball-version)\"" > git-version.h
+    '';
   };
 in self
