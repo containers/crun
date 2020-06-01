@@ -2123,17 +2123,27 @@ write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
   for (i = 0; i < devs_len; i++)
     {
-      int rwm;
-
-      rwm = is_rwm (devs[i]->access, err);
-      if (UNLIKELY (rwm < 0))
-        return rwm;
-
-      if (devs[i]->allow || (rwm == 0))
+      if (devs[i]->allow_present && !devs[i]->allow)
         {
           can_skip = false;
           break;
         }
+    }
+
+  if (! can_skip)
+    {
+      libcrun_error_t tmp_err = NULL;
+      int rootless;
+
+      rootless = is_rootless (&tmp_err);
+      if (UNLIKELY (rootless < 0))
+        {
+          crun_error_release (err);
+          *err = tmp_err;
+          return ret;
+        }
+      if (rootless)
+        can_skip = true;
     }
 
   if (can_skip)
@@ -2665,7 +2675,7 @@ libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_lin
           if (UNLIKELY (rwm < 0))
             return rwm;
 
-          if (resources->devices[i]->allow || (rwm == 0))
+          if (rwm == 0)
             return crun_make_error (err, 0, "cannot set limits without cgroups");
         }
 
