@@ -960,17 +960,18 @@ struct symlink_s
 {
   const char *path;
   const char *target;
+  bool force;
 };
 
 static struct symlink_s symlinks[] =
   {
-    {"/proc/self/fd", "fd"},
-    {"/proc/self/fd/0", "stdin"},
-    {"/proc/self/fd/1", "stdout"},
-    {"/proc/self/fd/2", "stderr"},
-    {"/proc/kcore", "core"},
-    {"pts/ptmx", "ptmx"},
-    {NULL, NULL}
+    {"/proc/self/fd", "fd", false},
+    {"/proc/self/fd/0", "stdin", false},
+    {"/proc/self/fd/1", "stdout", false},
+    {"/proc/self/fd/2", "stderr", false},
+    {"/proc/kcore", "core", false},
+    {"pts/ptmx", "ptmx", true},
+    {NULL, NULL, false}
   };
 
 static int
@@ -1016,9 +1017,39 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
 
   for (i = 0; symlinks[i].target; i++)
     {
+retry_symlink:
       ret = symlinkat (symlinks[i].path, devfd, symlinks[i].target);
-      if (UNLIKELY (ret < 0 && errno != EEXIST))
-        return crun_make_error (err, errno, "creating symlink for /dev/%s", symlinks[i].target);
+      if (UNLIKELY (ret < 0))
+        {
+          int saved_errno = errno;
+
+          if (errno == EEXIST && !symlinks[i].force)
+            continue;
+
+          /* If the symlink should be forced, make sure to unlink any existing file at the same path.  */
+          if (errno == EEXIST)
+            {
+retry_unlink:
+              ret = unlinkat (devfd, symlinks[i].target, 0);
+              if (ret < 0 && errno == EISDIR)
+                ret = unlinkat (devfd, symlinks[i].target, AT_REMOVEDIR);
+              if (ret < 0 && errno == EBUSY)
+                {
+                  cleanup_close int tfd = openat (devfd, symlinks[i].target, O_CLOEXEC | O_PATH | O_NOFOLLOW);
+                  if (tfd >= 0)
+                    {
+                      char procpath[32];
+                      sprintf (procpath, "/proc/self/fd/%d", tfd);
+
+                      if (umount2 (procpath, MNT_DETACH) == 0)
+                          goto retry_unlink;
+                    }
+                }
+              if (ret == 0)
+                goto retry_symlink;
+            }
+          return crun_make_error (err, saved_errno, "creating symlink for /dev/%s", symlinks[i].target);
+        }
     }
 
   return 0;
