@@ -2336,7 +2336,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       /* convert linearly from 2-262144 to 1-10000.  */
 #define CONVERT_SHARES_TO_CGROUPS_V2(x) (1 + (((x) - 2) * 9999) / 262142)
 
-  if (cpu->shares_present)
+  if (cpu->shares)
     {
       uint32_t val = cpu->shares;
 
@@ -2349,7 +2349,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (cpu->period_present)
+  if (cpu->period)
     {
       if (cgroup2)
         period = cpu->period;
@@ -2373,7 +2373,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
             return ret;
         }
     }
-  if (cpu->realtime_period_present)
+  if (cpu->realtime_period)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime period not supported on cgroupv2");
@@ -2382,7 +2382,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (cpu->realtime_runtime_present)
+  if (cpu->realtime_runtime)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime runtime not supported on cgroupv2");
