@@ -132,8 +132,10 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   cleanup_free char *file_tmp = NULL;
   size_t len;
   cleanup_close int fd_write = -1;
-  cleanup_free char *data;
+  const unsigned char *buf = NULL;
   struct pid_stat st;
+  const char *tmp;
+  yajl_gen gen = NULL;
 
   ret = read_pid_stat (status->pid, &st, err);
   if (UNLIKELY (ret))
@@ -146,26 +148,73 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, errno, "cannot open status file");
 
-  len = xasprintf (&data, "{\n    \"pid\" : %d,\n    \"process-start-time\" : %lld,\n    \"cgroup-path\" : \"%s\",\n    \"scope\" : \"%s\",\n    \"rootfs\" : \"%s\",\n    \"systemd-cgroup\" : %s,\n    \"bundle\" : \"%s\",\n    \"created\" : \"%s\",\n    \"detached\" : %s,\n    \"external_descriptors\" : %s\n}\n",
-                   status->pid,
-                   status->process_start_time,
-                   status->cgroup_path ? status->cgroup_path : "",
-                   status->scope ? status->scope : "",
-                   status->rootfs,
-                   status->systemd_cgroup ? "true" : "false",
-                   status->bundle,
-                   status->created,
-                   status->detached ? "true" : "false",
-                   status->external_descriptors);
-  if (UNLIKELY (write (fd_write, data, len) < 0))
-    return crun_make_error (err, errno, "cannot write status file");
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+
+  yajl_gen_config (gen, yajl_gen_beautify, 1);
+  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+
+  yajl_gen_map_open (gen);
+  yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+  yajl_gen_integer (gen, status->pid);
+
+  yajl_gen_string (gen, YAJL_STR ("process-start-time"), strlen ("process-start-time"));
+  yajl_gen_integer (gen, status->process_start_time);
+
+  yajl_gen_string (gen, YAJL_STR ("cgroup-path"), strlen ("cgroup-path"));
+  tmp = status->cgroup_path ? status->cgroup_path : "";
+  yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+
+  yajl_gen_string (gen, YAJL_STR ("scope"), strlen ("scope"));
+  tmp = status->scope ? status->scope : "";
+  yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+
+  yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
+  yajl_gen_string (gen, YAJL_STR (status->rootfs), strlen (status->rootfs));
+
+  yajl_gen_string (gen, YAJL_STR ("systemd-cgroup"), strlen ("systemd-cgroup"));
+  yajl_gen_bool (gen, status->systemd_cgroup);
+
+  yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+  yajl_gen_string (gen, YAJL_STR (status->bundle), strlen (status->bundle));
+
+  yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
+  yajl_gen_string (gen, YAJL_STR (status->created), strlen (status->created));
+
+  yajl_gen_string (gen, YAJL_STR ("detached"), strlen ("detached"));
+  yajl_gen_bool (gen, status->detached);
+
+  yajl_gen_string (gen, YAJL_STR ("external_descriptors"), strlen ("external_descriptors"));
+  yajl_gen_string (gen, YAJL_STR (status->external_descriptors), strlen (status->external_descriptors));
+
+  yajl_gen_map_close (gen);
+
+  if (yajl_gen_get_buf (gen, &buf, &len) != yajl_gen_status_ok)
+    {
+      ret = crun_make_error (err, 0, "cannot generate status file");
+      goto exit;
+    }
+
+  if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
+    {
+      ret = crun_make_error (err, errno, "cannot write status file");
+      goto exit;
+    }
 
   close_and_reset (&fd_write);
 
   if (UNLIKELY (rename (file_tmp, file) < 0))
-    return crun_make_error (err, errno, "cannot rename status file");
+    {
+      ret = crun_make_error (err, errno, "cannot rename status file");
+      goto exit;
+    }
 
-  return 0;
+ exit:
+  if (gen)
+    yajl_gen_free (gen);
+
+  return ret;
 }
 
 int
@@ -183,7 +232,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 
   tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
   if (UNLIKELY (tree == NULL))
-    return crun_make_error (err, 0, "cannot parse status file");
+    return crun_make_error (err, 0, "cannot parse status file: %s", err_buffer);
 
   {
     const char *pid_path[] = { "pid", NULL };
