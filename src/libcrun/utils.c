@@ -1874,3 +1874,26 @@ find_annotation (libcrun_container_t *container, const char *name)
 
   return NULL;
 }
+
+ssize_t
+safe_write (int fd, const void *buf, ssize_t count)
+{
+  ssize_t written = 0;
+  if (count < 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+  while (written < count)
+    {
+      ssize_t w = write (fd, buf + written, count - written);
+      if (UNLIKELY (w < 0))
+        {
+          if (errno == EINTR || errno == EAGAIN)
+            continue;
+          return w;
+        }
+      written += w;
+    }
+  return written;
+}

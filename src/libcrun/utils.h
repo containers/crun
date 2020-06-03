@@ -158,4 +158,6 @@ int str2sig (const char *name);
 
 int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode, libcrun_error_t *err);
 
+ssize_t safe_write (int fd, const void *buf, ssize_t count);
+
 #endif
