@@ -1106,10 +1106,59 @@ run_process (char **args, libcrun_error_t *err)
   _exit (EXIT_FAILURE);
 }
 
+#ifndef HAVE_FGETPWENT_R
+static unsigned atou(char **s)
+{
+	unsigned x;
+	for (x=0; **s-'0'<10U; ++*s) x=10*x+(**s-'0');
+	return x;
+}
+
+int fgetpwent_r(FILE *f, struct passwd *pw, char *line, size_t size, struct passwd **res)
+{
+	char *s;
+	int rv = 0;
+	for (;;) {
+		line[size-1] = '\xff';
+		if ( (fgets(line, size, f) == NULL) || ferror(f) || line[size-1] != '\xff' ) {
+			rv = (line[size-1] != '\xff') ? ERANGE : ENOENT;
+			line = 0;
+			pw = 0;
+			break;
+		}
+		line[strcspn(line, "\n")] = 0;
+
+		s = line;
+		pw->pw_name = s++;
+		if (!(s = strchr(s, ':'))) continue;
+
+		*s++ = 0; pw->pw_passwd = s;
+		if (!(s = strchr(s, ':'))) continue;
+
+		*s++ = 0; pw->pw_uid = atou(&s);
+		if (*s != ':') continue;
+
+		*s++ = 0; pw->pw_gid = atou(&s);
+		if (*s != ':') continue;
+
+		*s++ = 0; pw->pw_gecos = s;
+		if (!(s = strchr(s, ':'))) continue;
+
+		*s++ = 0; pw->pw_dir = s;
+		if (!(s = strchr(s, ':'))) continue;
+
+		*s++ = 0; pw->pw_shell = s;
+		break;
+	}
+	*res = pw;
+	if (rv) errno = rv;
+	return rv;
+}
+#endif
+
 int
 set_home_env (uid_t id)
 {
-#ifdef HAVE_FGETPWENT_R
   struct passwd pwd;
   cleanup_free char *buf = NULL;
   long buf_size;
@@ -1155,11 +1204,6 @@ set_home_env (uid_t id)
         }
     }
   return 0;
-#else
-  (void) id;
-  errno = ENOTSUP;
-  return -1;
-#endif
 }
 
 /*if subuid or subgid exist, take the first range for the user */

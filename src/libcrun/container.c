@@ -676,7 +676,10 @@ container_init_setup (void *args, const char *notify_socket,
     {
       ret = set_home_env (container->container_uid);
       if (UNLIKELY (ret < 0 && errno != ENOTSUP))
-        libcrun_warning ("cannot set HOME environment variable");
+        {
+          setenv("HOME", "/", 1);
+          libcrun_warning ("cannot detect HOME environment variable, setting default");
+        }
     }
 
   if (def->process && def->process->cwd)
@@ -2323,7 +2326,10 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
         {
           ret = set_home_env (container->container_uid);
           if (UNLIKELY (ret < 0 && errno != ENOTSUP))
-            libcrun_warning ("cannot set HOME environment variable");
+            {
+              setenv("HOME", "/", 1);
+              libcrun_warning ("cannot detect HOME environment variable, setting default");
+            }
         }
 
       /* If the new process block doesn't specify a SELinux label or AppArmor profile, then
