@@ -2270,6 +2270,17 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
   pipefd0 = container_ret_status[0];
   pipefd1 = container_ret_status[1];
 
+  /* If the new process block doesn't specify a SELinux label or AppArmor profile, then
+     use the configuration from the original config file.  */
+  if (container->container_def->process)
+    {
+      if (process->selinux_label == NULL && container->container_def->process->selinux_label)
+	process->selinux_label = xstrdup (container->container_def->process->selinux_label);
+
+      if (process->apparmor_profile == NULL && container->container_def->process->apparmor_profile)
+	process->apparmor_profile = xstrdup (container->container_def->process->apparmor_profile);
+    }
+
   ret = initialize_security (process, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2330,17 +2341,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
               setenv("HOME", "/", 1);
               libcrun_warning ("cannot detect HOME environment variable, setting default");
             }
-        }
-
-      /* If the new process block doesn't specify a SELinux label or AppArmor profile, then
-         use the configuration from the original config file.  */
-      if (container->container_def->process)
-        {
-          if (process->selinux_label == NULL && container->container_def->process->selinux_label)
-            process->selinux_label = container->container_def->process->selinux_label;
-
-          if (process->apparmor_profile == NULL && container->container_def->process->apparmor_profile)
-            process->apparmor_profile = container->container_def->process->apparmor_profile;
         }
 
       if (UNLIKELY (libcrun_set_selinux_exec_label (process, err) < 0))
