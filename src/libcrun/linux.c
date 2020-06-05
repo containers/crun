@@ -2839,6 +2839,94 @@ libcrun_run_linux_container (libcrun_container_t *container,
   _exit (EXIT_FAILURE);
 }
 
+static bool
+read_error_from_sync_socket (int sync_socket_fd, int *error, char **str)
+{
+  cleanup_free char *b = NULL;
+  size_t size;
+  int code;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &code, sizeof (code)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  *error = code;
+
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &size, sizeof (size)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  if (size == 0)
+    return false;
+
+  if (size > 1024)
+    size = 1024;
+
+  b = xmalloc (size + 1);
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, b, size));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  b[ret] = '\0';
+
+  *str = b;
+  b = NULL;
+  return true;
+}
+
+static bool
+send_error_to_sync_socket (int sync_socket_fd, libcrun_error_t *err)
+{
+  int ret;
+  int code;
+  size_t size;
+  char *msg;
+
+  if (err == NULL || *err == NULL)
+    return false;
+
+  code = crun_error_get_errno (err);
+
+  /* dummy terminal fd.  */
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, "1", 1));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, &code, sizeof (code)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  msg = (*err)->msg;
+  size = strlen (msg) + 1;
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, &size, sizeof (size)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, msg, size));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  return true;
+}
+
+static  __attribute__ ((noreturn)) void
+send_error_to_sync_socket_and_die (int sync_socket_fd, libcrun_error_t *err)
+{
+  char *msg;
+
+  if (err == NULL || *err == NULL)
+    _exit (EXIT_FAILURE);
+
+  if (send_error_to_sync_socket (sync_socket_fd, err))
+    _exit (EXIT_FAILURE);
+
+  errno = crun_error_get_errno (err);
+  msg = (*err)->msg;
+  libcrun_fail_with_error (errno, msg);
+  _exit (EXIT_FAILURE);
+}
+
 static int
 join_process_parent_helper (pid_t child_pid,
                             int sync_socket_fd,
@@ -2886,8 +2974,13 @@ join_process_parent_helper (pid_t child_pid,
       ret = receive_fd_from_socket (sync_fd, err);
       if (UNLIKELY (ret < 0))
         {
-          crun_error_release (err);
-          return crun_make_error (err, errno, "receive fd");
+          int err_code;
+          cleanup_free char *err_str = NULL;
+
+          if (read_error_from_sync_socket (sync_fd, &err_code, &err_str))
+            return crun_make_error (err, err_code, "%s", err_str);
+
+          return crun_error_wrap (err, "receive fd");
         }
       *terminal_fd = ret;
     }
@@ -3035,30 +3128,35 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
         {
           cleanup_close int master_fd = -1;
 
-          if (setsid () < 0)
-            libcrun_fail_with_error (errno, "setsid");
+          ret = setsid ();
+          if (ret < 0)
+            {
+              crun_make_error (err, errno, "setsid");
+              send_error_to_sync_socket_and_die (sync_fd, err);
+            }
 
           ret = setgid (0);
           if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error (errno, "setgid");
+            {
+              crun_make_error (err, errno, "setgid");
+              send_error_to_sync_socket_and_die (sync_fd, err);
+            }
 
           ret = setuid (0);
           if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error (errno, "setuid");
+            {
+              crun_make_error (err, errno, "setuid");
+              send_error_to_sync_socket_and_die (sync_fd, err);
+            }
 
           master_fd = open_terminal (container, &slave, err);
           if (UNLIKELY (master_fd < 0))
-            {
-              crun_error_write_warning_and_release (stderr, &err);
-              _exit (EXIT_FAILURE);
-            }
+            send_error_to_sync_socket_and_die (sync_fd, err);
+
 
           ret = send_fd_to_socket (sync_fd, master_fd, err);
           if (UNLIKELY (ret < 0))
-            {
-              crun_error_write_warning_and_release (stderr, &err);
-              _exit (EXIT_FAILURE);
-            }
+            send_error_to_sync_socket_and_die (sync_fd, err);
         }
 
       if (r < 0)
