@@ -1164,13 +1164,9 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
     }
 
   sd_err = sd_bus_call (bus, m, 0, &error, &reply);
-  if (UNLIKELY (sd_err < 0  && sd_err != EEXIST))
+  if (UNLIKELY (sd_err < 0))
     {
-      errno = sd_bus_error_get_errno (&error);
-      if (errno == EEXIST)
-        return 0;
-
-      ret = crun_make_error (err, errno, "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
       goto exit;
     }
 
