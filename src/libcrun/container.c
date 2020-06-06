@@ -1069,7 +1069,10 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
 
   if (status.cgroup_path)
     {
-      ret = libcrun_cgroup_destroy (id, status.cgroup_path, status.systemd_cgroup, err);
+      int manager;
+
+      manager = status.systemd_cgroup ? CGROUP_MANAGER_SYSTEMD : CGROUP_MANAGER_CGROUPFS;
+      ret = libcrun_cgroup_destroy (id, status.cgroup_path, status.scope, manager, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }

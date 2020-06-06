@@ -680,6 +680,37 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_e
 }
 
 #ifdef HAVE_SYSTEMD
+
+static
+void get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
+{
+  char *n;
+
+  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+    {
+      xasprintf (scope, "crun-%s.scope", id);
+      return;
+    }
+
+  n = strchr (cgroup_path, ':');
+  if (n == NULL)
+    xasprintf (scope, "%s.scope", cgroup_path);
+  else
+    {
+      xasprintf (scope, "%s.scope", n + 1);
+      n = strchr (*scope, ':');
+      if (n)
+        *n = '-';
+    }
+  if (slice)
+    {
+      *slice = xstrdup (cgroup_path);
+      n = strchr (*slice, ':');
+      if (n)
+        *n = '\0';
+    }
+}
+
 static
 int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
 {
@@ -1014,13 +1045,28 @@ append_systemd_annotation (sd_bus_message *m,
   return crun_make_error (err, errno, "unknown type for `%s`", name);
 }
 
-static
-int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
-                                json_map_string_string *annotations,
-                                const char *scope,
-                                const char *slice,
-                                pid_t pid,
-                                libcrun_error_t *err)
+static int
+open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
+{
+  int sd_err;
+
+  sd_err = sd_bus_default_user (bus);
+  if (sd_err < 0)
+    {
+      sd_err = sd_bus_default_system (bus);
+      if (sd_err < 0)
+        return crun_make_error (err, -sd_err, "cannot open sd-bus");
+    }
+  return 0;
+}
+
+static int
+enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
+                            json_map_string_string *annotations,
+                            const char *scope,
+                            const char *slice,
+                            pid_t pid,
+                            libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -1035,7 +1081,7 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
   i = 0;
   boolean_opts[i++] = "Delegate";
   if (resources)
-    {
+   {
       if (resources->cpu)
         boolean_opts[i++] = "CPUAccounting";
       if (resources->memory)
@@ -1047,17 +1093,9 @@ int enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *reso
     }
   boolean_opts[i++] = NULL;
 
-  sd_err = sd_bus_default_user (&bus);
-  if (sd_err < 0)
-    {
-      sd_err = sd_bus_default_system (&bus);
-      if (sd_err < 0)
-        {
-          crun_make_error (err, -sd_err, "cannot open sd-bus");
-          ret = -1;
-          goto exit;
-        }
-    }
+  ret = open_sd_bus_connection (&bus, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   ret = systemd_check_job_status_setup (bus, &job_data, err);
   if (UNLIKELY (ret < 0))
@@ -1201,11 +1239,9 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
   const char *object;
   struct systemd_job_removed_s job_data = {};
 
-  if (sd_bus_default (&bus) < 0)
-    {
-      ret = crun_make_error (err, 0, "cannot open sd-bus");
-      goto exit;
-    }
+  ret = open_sd_bus_connection (&bus, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   ret = systemd_check_job_status_setup (bus, &job_data, err);
   if (UNLIKELY (ret < 0))
@@ -1235,6 +1271,7 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
       ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
       goto exit;
     }
+
   ret = sd_bus_message_read (reply, "o", &object);
   if (UNLIKELY (ret < 0))
     {
@@ -1308,25 +1345,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
   char *scope = NULL;
   int ret;
 
-  if (cgroup_path == NULL || cgroup_path[0] == '\0')
-    xasprintf (&scope, "crun-%s.scope", id);
-  else
-    {
-      char *n = strchr (cgroup_path, ':');
-      if (n == NULL)
-        xasprintf (&scope, "%s.scope", cgroup_path);
-      else
-        {
-          xasprintf (&scope, "%s.scope", n + 1);
-          n = strchr (scope, ':');
-          if (n)
-            *n = '-';
-        }
-      slice = xstrdup (cgroup_path);
-      n = strchr (slice, ':');
-      if (n)
-        *n = '\0';
-    }
+  get_systemd_scope_and_slice (id, cgroup_path, &scope, &slice);
 
   *args->scope = scope;
 
@@ -1590,7 +1609,7 @@ libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_
 }
 
 int
-libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
+libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -1628,13 +1647,12 @@ libcrun_cgroup_killall_signal (char *path, int signal, libcrun_error_t *err)
 }
 
 int
-libcrun_cgroup_killall (char *path, libcrun_error_t *err)
+libcrun_cgroup_killall (const char *path, libcrun_error_t *err)
 {
   return libcrun_cgroup_killall_signal (path, SIGKILL, err);
 }
 
-int
-libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_error_t *err)
+int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -1642,7 +1660,8 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   const cgroups_subsystem_t *subsystems;
 
   (void) id;
-  (void) systemd_cgroup;
+  (void) manager;
+  (void) scope;
 
   if (path == NULL || *path == '\0')
     return 0;
@@ -1655,18 +1674,18 @@ libcrun_cgroup_destroy (const char *id, char *path, int systemd_cgroup, libcrun_
   if (mode < 0)
     return mode;
 
+  ret = libcrun_cgroup_killall (path, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
 #ifdef HAVE_SYSTEMD
-  if (systemd_cgroup)
+  if (manager == CGROUP_MANAGER_SYSTEMD)
     {
-      ret = destroy_systemd_cgroup_scope (id, err);
+      ret = destroy_systemd_cgroup_scope (scope, err);
       if (UNLIKELY (ret < 0))
         crun_error_release (err);
     }
 #endif
-
-  ret = libcrun_cgroup_killall (path, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
 
   if (mode == CGROUP_MODE_UNIFIED)
     {
