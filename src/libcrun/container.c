@@ -986,7 +986,7 @@ run_poststop_hooks (libcrun_context_t *context,
 }
 
 static bool
-has_namespace_in_definition (runtime_spec_schema_config_schema *def, const char *namespace)
+has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 {
   size_t i;
 
@@ -995,7 +995,8 @@ has_namespace_in_definition (runtime_spec_schema_config_schema *def, const char 
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
-      if (strcmp (def->linux->namespaces[i]->type, namespace) == 0)
+      if (strcmp (def->linux->namespaces[i]->type, "pid") == 0
+          && def->linux->namespaces[i]->path == NULL)
         return true;
     }
   return false;
@@ -1049,7 +1050,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
           /* If the container has a pid namespace, it is enough to kill the first
              process (pid=1 in the namespace).
           */
-          if (has_namespace_in_definition (def, "pid"))
+          if (has_new_pid_namespace (def))
             {
               ret = kill (status.pid, SIGKILL);
               if (UNLIKELY (ret < 0) && errno != ESRCH)
@@ -1058,7 +1059,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
                   return ret;
                 }
             }
-          else
+          else if (status.cgroup_path)
             {
               ret = libcrun_cgroup_killall (status.cgroup_path, err);
               if (UNLIKELY (ret < 0))
