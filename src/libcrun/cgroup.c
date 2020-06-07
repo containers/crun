@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <sys/vfs.h>
 #include <inttypes.h>
+#include <time.h>
 
 #ifdef HAVE_SYSTEMD
 # include <systemd/sd-bus.h>
@@ -453,7 +454,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
       const char *name = next->d_name;
 
       /* do not chown the parent directory, but chown the current one.  */
-      if (name[0] == '.' && name[1] == '.')
+      if (name[0] == '.' && name[1] == '.' && name[2] == '\0')
         continue;
 
       ret = fchownat (dfd, name, uid, gid, AT_SYMLINK_NOFOLLOW);
@@ -1646,6 +1647,59 @@ libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *er
   return 0;
 }
 
+static int
+rmdir_all_fd (int dfd)
+{
+  cleanup_dir DIR *dir = NULL;
+  struct dirent *next;
+
+  dir = fdopendir (dfd);
+  if (dir == NULL)
+    return -1;
+
+  dfd = dirfd (dir);
+
+  for (next = readdir (dir); next; next = readdir (dir))
+    {
+      const char *name = next->d_name;
+      int ret;
+
+      if (name[0] == '.' && name[1] == '\0')
+        continue;
+      if (name[0] == '.' && name[1] == '.' && name[2] == '\0')
+        continue;
+
+      if (next->d_type != DT_DIR)
+        continue;
+
+      ret = unlinkat (dfd, name, AT_REMOVEDIR);
+      if (ret < 0 && errno == EBUSY)
+        {
+          cleanup_close int child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
+          if (child_dfd < 0)
+            return child_dfd;
+
+          return rmdir_all_fd (child_dfd);
+        }
+    }
+  return 0;
+}
+
+static int
+rmdir_all (const char *path)
+{
+  int ret;
+  cleanup_close int dfd = open (path, O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (dfd < 0))
+    return dfd;
+
+  ret = rmdir_all_fd (dfd);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return rmdir (path);
+}
+
 int
 libcrun_cgroup_killall (const char *path, libcrun_error_t *err)
 {
@@ -1658,6 +1712,7 @@ int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope,
   size_t i;
   int mode;
   const cgroups_subsystem_t *subsystems;
+  bool repeat = true;
 
   (void) id;
   (void) manager;
@@ -1687,27 +1742,60 @@ int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope,
     }
 #endif
 
-  if (mode == CGROUP_MODE_UNIFIED)
+  do
     {
-      cleanup_free char *cgroup_path = NULL;
+      repeat = false;
 
-      xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
-      rmdir (cgroup_path);
-    }
-  else
-    {
-      for (i = 0; subsystems[i]; i++)
+      if (mode == CGROUP_MODE_UNIFIED)
         {
           cleanup_free char *cgroup_path = NULL;
 
-          if (mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
-            continue;
+          xasprintf (&cgroup_path, "/sys/fs/cgroup/%s", path);
+          ret = rmdir (cgroup_path);
+          if (ret < 0 && errno == EBUSY)
+            {
+              ret = rmdir_all (cgroup_path);
+              if (ret < 0)
+                repeat = true;
+            }
+        }
+      else
+        {
+          for (i = 0; subsystems[i]; i++)
+            {
+              cleanup_free char *cgroup_path = NULL;
 
-          xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
+              if (mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
+                continue;
 
-          rmdir (cgroup_path);
+              xasprintf (&cgroup_path, "/sys/fs/cgroup/%s/%s", subsystems[i], path);
+
+              ret = rmdir (cgroup_path);
+              if (ret < 0 && errno == EBUSY)
+                {
+                  ret = rmdir_all (cgroup_path);
+                  if (ret < 0)
+                    repeat = true;
+                }
+            }
+        }
+
+      if (repeat)
+        {
+          struct timespec req =
+            {
+             .tv_sec = 0,
+             .tv_nsec = 100000,
+            };
+
+          nanosleep (&req, NULL);
+
+          ret = libcrun_cgroup_killall (path, err);
+          if (UNLIKELY (ret < 0))
+            crun_error_release (err);
         }
     }
+  while (repeat);
 
   return 0;
 }
