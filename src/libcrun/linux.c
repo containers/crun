@@ -1946,6 +1946,35 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 int
+libcrun_container_setgroups (libcrun_container_t *container, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  gid_t *additional_gids = NULL;
+  size_t additional_gids_len = 0;
+  int can_do_setgroups;
+  int ret;
+
+  if (def->process != NULL && def->process->user != NULL)
+    {
+      additional_gids = def->process->user->additional_gids;
+      additional_gids_len = def->process->user->additional_gids_len;
+    }
+
+  can_do_setgroups = can_setgroups (container, err);
+  if (UNLIKELY (can_do_setgroups < 0))
+    return can_do_setgroups;
+
+  if (can_do_setgroups == 0)
+    return 0;
+
+  ret = setgroups (additional_gids_len, additional_gids);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "setgroups");
+
+  return 0;
+}
+
+int
 libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err)
 {
 #ifdef CLONE_NEWCGROUP
@@ -2805,29 +2834,9 @@ libcrun_run_linux_container (libcrun_container_t *container,
         }
     }
 
-  if (def->process && def->process->user)
-    {
-      gid_t *additional_gids = NULL;
-      size_t additional_gids_len = 0;
-      int can_do_setgroups;
-
-      additional_gids = def->process->user->additional_gids;
-      additional_gids_len = def->process->user->additional_gids_len;
-
-      can_do_setgroups = can_setgroups (container, err);
-      if (UNLIKELY (can_do_setgroups < 0))
-        goto out;
-
-      if (can_do_setgroups)
-        {
-          ret = setgroups (additional_gids_len, additional_gids);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "setgroups");
-              goto out;
-            }
-        }
-    }
+  ret = libcrun_container_setgroups (container, err);
+  if (UNLIKELY (ret < 0))
+    goto out;
 
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);
 
