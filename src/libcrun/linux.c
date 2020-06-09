@@ -26,6 +26,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mount.h>
+#ifdef HAVE_FSCONFIG_CMD_CREATE
+# include <linux/mount.h>
+#endif
 #include <sys/syscall.h>
 #include <sys/prctl.h>
 #include <sys/capability.h>
@@ -83,6 +86,7 @@ struct private_data_s
 
   const char *rootfs;
   int rootfsfd;
+  int procfsfd;
   size_t rootfs_len;
 
   char *tmpmountdir;
@@ -108,6 +112,7 @@ get_private_data (struct libcrun_container_s *container)
       struct private_data_s *p = xmalloc0 (sizeof (*p));
       container->private_data = p;
       p->rootfsfd = -1;
+      p->procfsfd = -1;
     }
   return container->private_data;
 }
@@ -146,6 +151,51 @@ syscall_clone (unsigned long flags, void *child_stack)
   return (int) syscall (__NR_clone, child_stack, flags);
 #else
   return (int) syscall (__NR_clone, flags, child_stack);
+#endif
+}
+static int
+syscall_fsopen (const char *fs_name, unsigned int flags)
+{
+#if defined __NR_fsopen
+  return (int) syscall (__NR_fsopen, fs_name, flags);
+#else
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
+static int
+syscall_fsmount (int fsfd, unsigned int flags, unsigned int attr_flags)
+{
+#if defined __NR_fsmount
+  return (int) syscall (__NR_fsmount, fsfd, flags, attr_flags);
+#else
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
+static int
+syscall_fsconfig (int fsfd, unsigned int cmd, const char *key, const void *val, int aux)
+{
+#if defined __NR_fsconfig
+  return (int) syscall (__NR_fsconfig, fsfd, cmd, key, val, aux);
+#else
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
+static int
+syscall_move_mount (int from_dfd, const char *from_pathname, int to_dfd,
+                    const char *to_pathname, unsigned int flags)
+
+{
+#if defined __NR_move_mount
+  return (int) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
+#else
+  errno = ENOTSUP;
+  return -1;
 #endif
 }
 
@@ -387,6 +437,44 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
   return safe_openat (rootfsfd, rootfs, rootfs_len, target_rel, O_PATH | O_CLOEXEC, 0, err);
 }
 
+/* Attempt to open a mount of the specified type.  */
+static int
+fsopen_mount (runtime_spec_schema_defs_mount *mount)
+{
+#ifdef HAVE_FSCONFIG_CMD_CREATE
+  cleanup_close int fsfd = -1;
+  int ret;
+
+  fsfd = syscall_fsopen (mount->type, FSOPEN_CLOEXEC);
+  if (fsfd < 0)
+    return fsfd;
+
+  ret = syscall_fsconfig (fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+  if (ret < 0)
+    return ret;
+
+  return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
+#else
+  (void) syscall_fsopen;
+  (void) syscall_fsconfig;
+  (void) syscall_fsmount;
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
+static int
+fs_move_mount_to (int fd, int dirfd, const char *name)
+{
+#ifdef HAVE_FSCONFIG_CMD_CREATE
+  return syscall_move_mount (fd, "", dirfd, name, MOVE_MOUNT_F_EMPTY_PATH);
+#else
+  (void) syscall_move_mount;
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
 static int
 do_mount (libcrun_container_t *container,
           const char *source,
@@ -548,6 +636,12 @@ do_mount (libcrun_container_t *container,
       else
         {
           struct remount_s *r;
+          if (fd < 0)
+            {
+              fd = dup (targetfd);
+              if (UNLIKELY (fd < 0))
+                return crun_make_error (err, errno, "dup `%d`", targetfd);
+            }
 
           r = make_remount (fd, target, remount_flags, data,
                             get_private_data (container)->remounts);
@@ -1349,6 +1443,22 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         }
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
+
+      if (get_private_data (container)->procfsfd >= 0 && strcmp (type, "proc") == 0)
+        {
+          cleanup_close int mfd = get_private_data (container)->procfsfd;
+          get_private_data (container)->procfsfd = -1;
+          ret = fs_move_mount_to (mfd, rootfsfd, target);
+
+          /* If the mount cannot be moved, attempt to mount it normally.  */
+          if (LIKELY (ret == 0))
+            {
+              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              continue;
+            }
+        }
 
       targetfd = open_mount_target (container, target, err);
       if (UNLIKELY (targetfd < 0))
@@ -2595,6 +2705,8 @@ libcrun_run_linux_container (libcrun_container_t *container,
   int userns_join_index_origin = -1;
   bool must_fork = false;
   bool clone_can_create_userns;
+  cleanup_close int procfsfd = -1;
+  bool join_pidns = false;
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -2682,6 +2794,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
         {
           if (namespaces_to_join_value[i] == CLONE_NEWPID)
             {
+              join_pidns = true;
               if (setns (namespaces_to_join[i], CLONE_NEWPID) == 0)
                 {
                   flags_unshare &= ~CLONE_NEWPID;
@@ -2779,6 +2892,25 @@ libcrun_run_linux_container (libcrun_container_t *container,
       if (UNLIKELY (ret < 0))
         goto out;
 
+      /* If the container needs to join an existing PID namespace, take a reference to it
+         before creating a new user namespace, as we could lose the access to the existing
+         namespace.  */
+      if ((flags & CLONE_NEWUSER) && join_pidns)
+        {
+          for (i = 0; i < def->mounts_len; i++)
+            {
+              if (strcmp (def->mounts[i]->type, "proc") == 0)
+                {
+                  /* If for any reason the mount cannot be opened, ignore errors and continue.
+                     An error will be generated later if it is not possible to join the namespace.
+                  */
+                  procfsfd = fsopen_mount (def->mounts[i]);
+
+                  break;
+                }
+            }
+        }
+
       if ((flags & CLONE_NEWUSER) && userns_join_index < 0)
         {
           char success = 0;
@@ -2846,8 +2978,6 @@ libcrun_run_linux_container (libcrun_container_t *container,
       cleanup_close int fd = open ("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
       if (container->container_def->annotations)
         {
-          size_t i;
-
           for (i = 0; i < container->container_def->annotations->len; i++)
             {
               if (strcmp (container->container_def->annotations->keys[i], "run.oci.timens_offset") == 0)
@@ -2908,6 +3038,9 @@ libcrun_run_linux_container (libcrun_container_t *container,
             }
         }
     }
+
+  get_private_data (container)->procfsfd = procfsfd;
+  procfsfd = -1;
 
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);
 

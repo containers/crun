@@ -105,6 +105,17 @@ AS_IF([test "x$enable_criu" != "xno"], [
 FOUND_LIBS=$LIBS
 LIBS=""
 
+dnl mount API
+AC_COMPILE_IFELSE(
+	[AC_LANG_SOURCE([[
+			#include <linux/mount.h>
+			int cmd = FSCONFIG_CMD_CREATE;
+		]])],
+		[AC_MSG_RESULT(yes)
+		 AC_DEFINE([HAVE_FSCONFIG_CMD_CREATE], 1, [Define if FSCONFIG_CMD_CREATE is available])],
+		[AC_MSG_RESULT(no)])
+
+
 AC_SUBST([FOUND_LIBS])
 AC_SUBST([CRUN_LDFLAGS])
 
