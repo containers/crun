@@ -2518,6 +2518,58 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
   return ret;
 }
 
+static int
+join_namespaces (runtime_spec_schema_config_schema *def,
+                 int *namespaces_to_join,
+                 int n_namespaces_to_join,
+                 int *namespaces_to_join_index,
+                 bool ignore_join_errors,
+                 libcrun_error_t *err)
+{
+  int ret;
+  int i;
+
+  for (i = 0; i < n_namespaces_to_join; i++)
+    {
+      cleanup_free char *cwd = NULL;
+      int orig_index = namespaces_to_join_index[i];
+      int value;
+
+      if (namespaces_to_join[i] < 0)
+        continue;
+
+      /* Skip the user namespace.  */
+      value = libcrun_find_namespace (def->linux->namespaces[orig_index]->type);
+      if (value == CLONE_NEWUSER)
+        continue;
+
+      if (value == CLONE_NEWNS)
+        {
+          cwd = get_current_dir_name ();
+          if (UNLIKELY (cwd == NULL))
+            return crun_make_error (err, errno, "cannot get current working directory");
+        }
+
+      ret = setns (namespaces_to_join[i], value);
+      if (UNLIKELY (ret < 0))
+        {
+          if (ignore_join_errors)
+            continue;
+          return crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[orig_index]->path);
+        }
+
+      close_and_reset (&namespaces_to_join[i]);
+
+      if (value == CLONE_NEWNS)
+        {
+          ret = chdir (cwd);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "chdir(.)");
+        }
+    }
+  return 0;
+}
+
 pid_t
 libcrun_run_linux_container (libcrun_container_t *container,
                              int detach,
@@ -2541,6 +2593,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
   int userns_join_index = -1;
   int userns_join_index_origin = -1;
   bool must_fork = false;
+  bool clone_can_create_userns;
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -2560,7 +2613,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
           if (n_namespaces_to_join >= MAX_NAMESPACES)
             return crun_make_error (err, 0, "too many namespaces to join");
 
-          fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
           if (UNLIKELY (fd < 0))
               return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
 
@@ -2627,8 +2680,10 @@ libcrun_run_linux_container (libcrun_container_t *container,
     must_fork = true;
 #endif
 
+  clone_can_create_userns = n_namespaces_to_join == 0 && userns_join_index < 0;
+
   /* If we create a new user namespace, create it as part of the clone.  */
-  pid = syscall_clone ((flags & ((userns_join_index >= 0) ? 0 : CLONE_NEWUSER)) | (detach ? 0 : SIGCHLD), NULL);
+  pid = syscall_clone ((flags & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
 
@@ -2645,15 +2700,27 @@ libcrun_run_linux_container (libcrun_container_t *container,
         return crun_make_error (err, errno, "close");
       sync_socket_container = -1;
 
-      if ((flags & CLONE_NEWUSER) && (userns_join_index < 0))
+      if (flags & CLONE_NEWUSER)
         {
-          ret = libcrun_set_usernamespace (container, pid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (n_namespaces_to_join > 0 && userns_join_index < 0)
+            {
+              char v = 0;
 
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_host, "1", 1));
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to sync socket");
+              ret = TEMP_FAILURE_RETRY (read (sync_socket_host, &v, 1));
+              if (UNLIKELY (ret != 1 || v != 0))
+                return crun_make_error (err, errno, "read from sync socket");
+            }
+
+          if (userns_join_index < 0)
+            {
+              ret = libcrun_set_usernamespace (container, pid, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              ret = TEMP_FAILURE_RETRY (write (sync_socket_host, "1", 1));
+              if (UNLIKELY (ret < 0))
+                return crun_make_error (err, errno, "write to sync socket");
+            }
         }
 
       if (must_fork)
@@ -2676,11 +2743,30 @@ libcrun_run_linux_container (libcrun_container_t *container,
       crun_make_error (err, errno, "close");
       goto out;
     }
-  sync_socket_host = -1;
 
   ret = libcrun_set_oom (container, err);
   if (UNLIKELY (ret < 0))
       goto out;
+
+  if (n_namespaces_to_join > 0)
+    {
+      ret = join_namespaces (def, namespaces_to_join, n_namespaces_to_join, namespaces_to_join_index, true, err);
+      if (UNLIKELY (ret < 0))
+        goto out;
+
+      if ((flags & CLONE_NEWUSER) && userns_join_index < 0)
+        {
+          char success = 0;
+
+          ret = unshare (CLONE_NEWUSER);
+          if (UNLIKELY (ret < 0))
+            goto out;
+
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          if (UNLIKELY (ret < 0))
+            goto out;
+        }
+    }
 
   if (flags & CLONE_NEWUSER)
     {
@@ -2690,7 +2776,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
           ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "read from sync socket");
+            goto out;
         }
       else
         {
@@ -2702,7 +2788,6 @@ libcrun_run_linux_container (libcrun_container_t *container,
               goto out;
             }
         }
-
       ret = setgid (0);
       if (UNLIKELY (ret < 0))
         {
@@ -2718,42 +2803,9 @@ libcrun_run_linux_container (libcrun_container_t *container,
         }
     }
 
-  for (i = 0; i < n_namespaces_to_join; i++)
-    {
-      cleanup_free char *cwd = NULL;
-      int orig_index = namespaces_to_join_index[i];
-      int value = libcrun_find_namespace (def->linux->namespaces[orig_index]->type);
-
-      /* The user namespace is handled differently and already joined at this point.  */
-      if (value == CLONE_NEWUSER)
-        continue;
-
-      if (value == CLONE_NEWNS)
-        {
-          cwd = get_current_dir_name ();
-          if (UNLIKELY (cwd == NULL))
-            {
-              crun_make_error (err, errno, "cannot get current working directory");
-              goto out;
-            }
-        }
-
-      ret = setns (namespaces_to_join[i], value);
-      if (UNLIKELY (ret < 0))
-        {
-          crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[orig_index]->path);
-          goto out;
-        }
-      if (value == CLONE_NEWNS)
-        {
-          ret = chdir (cwd);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "chdir(.)");
-              goto out;
-            }
-        }
-    }
+  ret = join_namespaces (def, namespaces_to_join, n_namespaces_to_join, namespaces_to_join_index, false, err);
+  if (UNLIKELY (ret < 0))
+    goto out;
 
   if (flags_unshare)
     {
@@ -3049,6 +3101,16 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
           ret = crun_make_error (err, errno, "open `%s`", ns_join);
           goto exit;
         }
+    }
+
+  for (i = 0; namespaces[i].ns_file; i++)
+    {
+      if (namespaces[i].value == CLONE_NEWUSER)
+        continue;
+
+      ret = setns (fds[i], 0);
+      if (ret == 0)
+        fds_joined[i] = 1;
     }
   for (i = 0; namespaces[i].ns_file; i++)
     {
