@@ -465,12 +465,15 @@ do_mount (libcrun_container_t *container,
               if (UNLIKELY (ret < 0))
                 return ret;
 
-              ret = mount ("/sys", to, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
-              if (LIKELY (ret == 0))
-                return 0;
+              if (ret > 0)
+                {
+                  ret = mount ("/sys", to, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
+                  if (LIKELY (ret == 0))
+                    return 0;
+                }
             }
 
-          return crun_make_error (err, saved_errno, "mount `%s` to '%s'", source, target);
+          return crun_make_error (err, saved_errno, "mount `%s` to '/%s'", source, target);
         }
 
       if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
