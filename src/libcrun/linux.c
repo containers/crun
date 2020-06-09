@@ -121,7 +121,7 @@ static struct linux_namespace_s namespaces[] =
    {"uts", "uts", CLONE_NEWUTS},
    {"user", "user", CLONE_NEWUSER},
 #ifdef CLONE_NEWCGROUP
-   {"cgroup", "cgroup",CLONE_NEWCGROUP},
+   {"cgroup", "cgroup", CLONE_NEWCGROUP},
 #endif
 #ifdef CLONE_NEWTIME
    {"time", "time", CLONE_NEWTIME},
@@ -2589,6 +2589,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 #define MAX_NAMESPACES 10
   cleanup_close_vec int *namespaces_to_join = (int[MAX_NAMESPACES+1]){-1};
   int namespaces_to_join_index[MAX_NAMESPACES];
+  int namespaces_to_join_value[MAX_NAMESPACES];
   size_t n_namespaces_to_join = 0;
   int userns_join_index = -1;
   int userns_join_index_origin = -1;
@@ -2625,6 +2626,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
           namespaces_to_join[n_namespaces_to_join] = fd;
           namespaces_to_join_index[n_namespaces_to_join] = i;
+          namespaces_to_join_value[n_namespaces_to_join] = value;
           n_namespaces_to_join++;
           namespaces_to_join[n_namespaces_to_join] = -1;
         }
@@ -2674,7 +2676,30 @@ libcrun_run_linux_container (libcrun_container_t *container,
       goto out;
 
   if (flags & CLONE_NEWPID)
-    must_fork = true;
+    {
+      must_fork = true;
+      for (i = 0; i < n_namespaces_to_join; i++)
+        {
+          if (namespaces_to_join_value[i] == CLONE_NEWPID)
+            {
+              if (setns (namespaces_to_join[i], CLONE_NEWPID) == 0)
+                {
+                  flags_unshare &= ~CLONE_NEWPID;
+                  must_fork = false;
+                  close_and_reset (&namespaces_to_join[i]);
+                }
+              break;
+            }
+        }
+      if (i == n_namespaces_to_join && (flags & CLONE_NEWUSER) == 0)
+        {
+          if (unshare (CLONE_NEWPID) == 0)
+            {
+              flags_unshare &= ~CLONE_NEWPID;
+              must_fork = false;
+            }
+        }
+    }
 #ifdef CLONE_NEWTIME
   if (flags & CLONE_NEWTIME)
     must_fork = true;
