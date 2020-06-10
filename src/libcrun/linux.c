@@ -136,6 +136,14 @@ static struct linux_namespace_s namespaces[] =
    {NULL, NULL, 0}
   };
 
+static int
+get_and_reset (int *old)
+{
+  int tmp = *old;
+  *old = -1;
+  return tmp;
+}
+
 int
 libcrun_find_namespace (const char *name)
 {
@@ -645,9 +653,9 @@ do_mount (libcrun_container_t *container,
                 return crun_make_error (err, errno, "dup `%d`", targetfd);
             }
 
-          r = make_remount (fd, target, remount_flags, data,
+          /* The remount owns the fd.  */
+          r = make_remount (get_and_reset (&fd), target, remount_flags, data,
                             get_private_data (container)->remounts);
-          fd = -1; /* The remount owns the fd.  */
           get_private_data (container)->remounts = r;
         }
     }
@@ -1448,8 +1456,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
       if (get_private_data (container)->procfsfd >= 0 && strcmp (type, "proc") == 0)
         {
-          cleanup_close int mfd = get_private_data (container)->procfsfd;
-          get_private_data (container)->procfsfd = -1;
+          cleanup_close int mfd = get_and_reset (&(get_private_data (container)->procfsfd));
           ret = fs_move_mount_to (mfd, rootfsfd, target);
 
           /* If the mount cannot be moved, attempt to mount it normally.  */
@@ -1463,8 +1470,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         }
       if (get_private_data (container)->mqueuefsfd >= 0 && strcmp (type, "mqueue") == 0)
         {
-          cleanup_close int mfd = get_private_data (container)->mqueuefsfd;
-          get_private_data (container)->mqueuefsfd = -1;
+          cleanup_close int mfd = get_and_reset (&(get_private_data (container)->mqueuefsfd));
           ret = fs_move_mount_to (mfd, rootfsfd, target);
 
           /* If the mount cannot be moved, attempt to mount it normally.  */
@@ -1514,8 +1520,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
             return crun_make_error (err, errno, "open target to write for tmpcopyup");
 
           /* take ownership for the fd.  */
-          tmpfd = copy_from_fd;
-          copy_from_fd = -1;
+          tmpfd = get_and_reset (&copy_from_fd);
 
           ret = copy_recursive_fd_to_fd (tmpfd, destfd, target, target, err);
           if (UNLIKELY (ret < 0))
@@ -1565,8 +1570,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   if (UNLIKELY (chmod (host_path, 0777) < 0))
     return crun_make_error (err, errno, "chmod `%s`", host_path);
 
-  *notify_socket_out = notify_fd;
-  notify_fd = -1;
+  *notify_socket_out = get_and_reset (&notify_fd);
   return 1;
 #else
   (void) context;
@@ -2543,8 +2547,7 @@ open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *er
         return crun_make_error (err, errno, "chown `%s`", *slave);
     }
 
-  ret = fd;
-  fd = -1;
+  ret = get_and_reset (&fd);
   return ret;
 }
 
@@ -2639,10 +2642,7 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = fd;
-  fd = -1;
-
-  return ret;
+  return get_and_reset (&fd);
 }
 
 static int
@@ -2862,7 +2862,6 @@ libcrun_run_linux_container (libcrun_container_t *container,
       ret = close_and_reset (&sync_socket_container);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "close");
-      sync_socket_container = -1;
 
       if (flags & CLONE_NEWUSER)
         {
@@ -2894,8 +2893,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
             return crun_make_error (err, errno, "read pid from sync socket");
         }
 
-      *sync_socket_out = sync_socket_host;
-      sync_socket_host = -1;
+      *sync_socket_out = get_and_reset (&sync_socket_host);
 
       return grandchild ? grandchild : pid;
     }
@@ -3063,10 +3061,8 @@ libcrun_run_linux_container (libcrun_container_t *container,
         }
     }
 
-  get_private_data (container)->procfsfd = procfsfd;
-  procfsfd = -1;
-  get_private_data (container)->mqueuefsfd = mqueuefsfd;
-  mqueuefsfd = -1;
+  get_private_data (container)->procfsfd = get_and_reset (&procfsfd);
+  get_private_data (container)->mqueuefsfd = get_and_reset (&mqueuefsfd);
 
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);
 
