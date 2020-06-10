@@ -2724,6 +2724,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
   bool clone_can_create_userns;
   cleanup_close int mqueuefsfd = -1;
   cleanup_close int procfsfd = -1;
+  bool must_wait_for_userns_creation;
   bool join_pidns = false;
   bool join_ipcns = false;
 
@@ -2846,6 +2847,8 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   clone_can_create_userns = n_namespaces_to_join == 0 && userns_join_index < 0;
 
+  must_wait_for_userns_creation = (flags & CLONE_NEWUSER) && (n_namespaces_to_join > 0) && (userns_join_index < 0);
+
   /* If we create a new user namespace, create it as part of the clone.  */
   pid = syscall_clone ((flags & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
@@ -2865,7 +2868,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
       if (flags & CLONE_NEWUSER)
         {
-          if (n_namespaces_to_join > 0 && userns_join_index < 0)
+          if (must_wait_for_userns_creation)
             {
               char v = 0;
 
@@ -2933,7 +2936,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
             }
         }
 
-      if ((flags & CLONE_NEWUSER) && userns_join_index < 0)
+      if (must_wait_for_userns_creation)
         {
           char success = 0;
 
