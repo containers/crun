@@ -87,6 +87,7 @@ struct private_data_s
   const char *rootfs;
   int rootfsfd;
   int procfsfd;
+  int mqueuefsfd;
   size_t rootfs_len;
 
   char *tmpmountdir;
@@ -113,6 +114,7 @@ get_private_data (struct libcrun_container_s *container)
       container->private_data = p;
       p->rootfsfd = -1;
       p->procfsfd = -1;
+      p->mqueuefsfd = -1;
     }
   return container->private_data;
 }
@@ -1459,6 +1461,21 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
               continue;
             }
         }
+      if (get_private_data (container)->mqueuefsfd >= 0 && strcmp (type, "mqueue") == 0)
+        {
+          cleanup_close int mfd = get_private_data (container)->mqueuefsfd;
+          get_private_data (container)->mqueuefsfd = -1;
+          ret = fs_move_mount_to (mfd, rootfsfd, target);
+
+          /* If the mount cannot be moved, attempt to mount it normally.  */
+          if (LIKELY (ret == 0))
+            {
+              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              continue;
+            }
+        }
 
       targetfd = open_mount_target (container, target, err);
       if (UNLIKELY (targetfd < 0))
@@ -2705,8 +2722,10 @@ libcrun_run_linux_container (libcrun_container_t *container,
   int userns_join_index_origin = -1;
   bool must_fork = false;
   bool clone_can_create_userns;
+  cleanup_close int mqueuefsfd = -1;
   cleanup_close int procfsfd = -1;
   bool join_pidns = false;
+  bool join_ipcns = false;
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -2786,6 +2805,13 @@ libcrun_run_linux_container (libcrun_container_t *container,
   ret = libcrun_set_oom (container, err);
   if (UNLIKELY (ret < 0))
       goto out;
+
+  if ((flags & CLONE_NEWIPC) && (flags & CLONE_NEWUSER))
+    {
+      for (i = 0; i < n_namespaces_to_join; i++)
+        if (namespaces_to_join_value[i] == CLONE_NEWIPC)
+            join_ipcns = true;
+    }
 
   if (flags & CLONE_NEWPID)
     {
@@ -2895,19 +2921,17 @@ libcrun_run_linux_container (libcrun_container_t *container,
       /* If the container needs to join an existing PID namespace, take a reference to it
          before creating a new user namespace, as we could lose the access to the existing
          namespace.  */
-      if ((flags & CLONE_NEWUSER) && join_pidns)
+      if ((flags & CLONE_NEWUSER) && (join_pidns || join_ipcns))
         {
           for (i = 0; i < def->mounts_len; i++)
             {
-              if (strcmp (def->mounts[i]->type, "proc") == 0)
-                {
-                  /* If for any reason the mount cannot be opened, ignore errors and continue.
-                     An error will be generated later if it is not possible to join the namespace.
-                  */
-                  procfsfd = fsopen_mount (def->mounts[i]);
-
-                  break;
-                }
+              /* If for any reason the mount cannot be opened, ignore errors and continue.
+                 An error will be generated later if it is not possible to join the namespace.
+              */
+              if (join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
+                procfsfd = fsopen_mount (def->mounts[i]);
+              if (join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
+                mqueuefsfd = fsopen_mount (def->mounts[i]);
             }
         }
 
@@ -3041,6 +3065,8 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   get_private_data (container)->procfsfd = procfsfd;
   procfsfd = -1;
+  get_private_data (container)->mqueuefsfd = mqueuefsfd;
+  mqueuefsfd = -1;
 
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);
 
