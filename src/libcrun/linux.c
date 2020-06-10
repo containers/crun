@@ -2697,6 +2697,42 @@ join_namespaces (runtime_spec_schema_config_schema *def,
   return 0;
 }
 
+#define MAX_NAMESPACES 10
+
+struct join_namespaces_s
+{
+  /* fd to the namespace to join.  */
+  int fd[MAX_NAMESPACES+1];
+  /* Index into def->linux->namespaces.  */
+  int index[MAX_NAMESPACES];
+  /* CLONE_* value.  */
+  int value[MAX_NAMESPACES];
+  /* How many namespaces to join.  */
+  size_t len;
+
+  bool join_pidns;
+  bool join_ipcns;
+
+  /* fd index for userns.  */
+  int userns_index;
+  /* def->linux->namespaces userns.  */
+  int userns_index_origin;
+};
+
+static void
+reset_join_namespaces (struct join_namespaces_s *ns)
+{
+  size_t i;
+
+  for (i = 0; i < MAX_NAMESPACES + 1; i++)
+    ns->fd[i] = -1;
+  ns->len = 0;
+  ns->join_pidns = false;
+  ns->join_ipcns = false;
+  ns->userns_index = -1;
+  ns->userns_index_origin = -1;
+}
+
 pid_t
 libcrun_run_linux_container (libcrun_container_t *container,
                              int detach,
@@ -2713,20 +2749,15 @@ libcrun_run_linux_container (libcrun_container_t *container,
   cleanup_close int sync_socket_host = -1;
   cleanup_close int sync_socket_container = -1;
   int sync_socket[2];
-#define MAX_NAMESPACES 10
-  cleanup_close_vec int *namespaces_to_join = (int[MAX_NAMESPACES+1]){-1};
-  int namespaces_to_join_index[MAX_NAMESPACES];
-  int namespaces_to_join_value[MAX_NAMESPACES];
-  size_t n_namespaces_to_join = 0;
-  int userns_join_index = -1;
-  int userns_join_index_origin = -1;
   bool must_fork = false;
   bool clone_can_create_userns;
   cleanup_close int mqueuefsfd = -1;
   cleanup_close int procfsfd = -1;
   bool must_wait_for_userns_creation;
-  bool join_pidns = false;
-  bool join_ipcns = false;
+  struct join_namespaces_s ns_to_join;
+  cleanup_close_vec int *cleanup_ns_to_join_fd = ns_to_join.fd;
+
+  reset_join_namespaces (&ns_to_join);
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -2743,7 +2774,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
         {
           int fd;
 
-          if (n_namespaces_to_join >= MAX_NAMESPACES)
+          if (ns_to_join.len >= MAX_NAMESPACES)
             return crun_make_error (err, 0, "too many namespaces to join");
 
           fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
@@ -2752,15 +2783,15 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
           if (value == CLONE_NEWUSER)
             {
-              userns_join_index_origin = i;
-              userns_join_index = n_namespaces_to_join;
+              ns_to_join.userns_index = ns_to_join.len;
+              ns_to_join.userns_index_origin = i;
             }
 
-          namespaces_to_join[n_namespaces_to_join] = fd;
-          namespaces_to_join_index[n_namespaces_to_join] = i;
-          namespaces_to_join_value[n_namespaces_to_join] = value;
-          n_namespaces_to_join++;
-          namespaces_to_join[n_namespaces_to_join] = -1;
+          ns_to_join.fd[ns_to_join.len] = fd;
+          ns_to_join.index[ns_to_join.len] = i;
+          ns_to_join.value[ns_to_join.len] = value;
+          ns_to_join.len++;
+          ns_to_join.fd[ns_to_join.len] = -1;
         }
 
       flags |= value;
@@ -2809,29 +2840,29 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   if ((flags & CLONE_NEWIPC) && (flags & CLONE_NEWUSER))
     {
-      for (i = 0; i < n_namespaces_to_join; i++)
-        if (namespaces_to_join_value[i] == CLONE_NEWIPC)
-            join_ipcns = true;
+      for (i = 0; i < ns_to_join.len; i++)
+        if (ns_to_join.value[i] == CLONE_NEWIPC)
+            ns_to_join.join_ipcns = true;
     }
 
   if (flags & CLONE_NEWPID)
     {
       must_fork = true;
-      for (i = 0; i < n_namespaces_to_join; i++)
+      for (i = 0; i < ns_to_join.len; i++)
         {
-          if (namespaces_to_join_value[i] == CLONE_NEWPID)
+          if (ns_to_join.value[i] == CLONE_NEWPID)
             {
-              join_pidns = true;
-              if (setns (namespaces_to_join[i], CLONE_NEWPID) == 0)
+              ns_to_join.join_pidns = true;
+              if (setns (ns_to_join.fd[i], CLONE_NEWPID) == 0)
                 {
                   flags_unshare &= ~CLONE_NEWPID;
                   must_fork = false;
-                  close_and_reset (&namespaces_to_join[i]);
+                  close_and_reset (&ns_to_join.fd[i]);
                 }
               break;
             }
         }
-      if (i == n_namespaces_to_join && (flags & CLONE_NEWUSER) == 0)
+      if (i == ns_to_join.len && (flags & CLONE_NEWUSER) == 0)
         {
           if (unshare (CLONE_NEWPID) == 0)
             {
@@ -2845,9 +2876,9 @@ libcrun_run_linux_container (libcrun_container_t *container,
     must_fork = true;
 #endif
 
-  clone_can_create_userns = n_namespaces_to_join == 0 && userns_join_index < 0;
+  clone_can_create_userns = ns_to_join.len == 0 && ns_to_join.userns_index < 0;
 
-  must_wait_for_userns_creation = (flags & CLONE_NEWUSER) && (n_namespaces_to_join > 0) && (userns_join_index < 0);
+  must_wait_for_userns_creation = (flags & CLONE_NEWUSER) && (ns_to_join.len > 0) && (ns_to_join.userns_index < 0);
 
   /* If we create a new user namespace, create it as part of the clone.  */
   pid = syscall_clone ((flags & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | (detach ? 0 : SIGCHLD), NULL);
@@ -2877,7 +2908,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
                 return crun_make_error (err, errno, "read from sync socket");
             }
 
-          if (userns_join_index < 0)
+          if (ns_to_join.userns_index < 0)
             {
               ret = libcrun_set_usernamespace (container, pid, err);
               if (UNLIKELY (ret < 0))
@@ -2913,25 +2944,25 @@ libcrun_run_linux_container (libcrun_container_t *container,
   if (UNLIKELY (ret < 0))
       goto out;
 
-  if (n_namespaces_to_join > 0)
+  if (ns_to_join.len > 0)
     {
-      ret = join_namespaces (def, namespaces_to_join, n_namespaces_to_join, namespaces_to_join_index, true, err);
+      ret = join_namespaces (def, ns_to_join.fd, ns_to_join.len, ns_to_join.index, true, err);
       if (UNLIKELY (ret < 0))
         goto out;
 
       /* If the container needs to join an existing PID namespace, take a reference to it
          before creating a new user namespace, as we could lose the access to the existing
          namespace.  */
-      if ((flags & CLONE_NEWUSER) && (join_pidns || join_ipcns))
+      if ((flags & CLONE_NEWUSER) && (ns_to_join.join_pidns || ns_to_join.join_ipcns))
         {
           for (i = 0; i < def->mounts_len; i++)
             {
               /* If for any reason the mount cannot be opened, ignore errors and continue.
                  An error will be generated later if it is not possible to join the namespace.
               */
-              if (join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
+              if (ns_to_join.join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
                 procfsfd = fsopen_mount (def->mounts[i]);
-              if (join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
+              if (ns_to_join.join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
                 mqueuefsfd = fsopen_mount (def->mounts[i]);
             }
         }
@@ -2952,7 +2983,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   if (flags & CLONE_NEWUSER)
     {
-      if (userns_join_index < 0)
+      if (ns_to_join.userns_index < 0)
         {
           char tmp;
 
@@ -2963,10 +2994,10 @@ libcrun_run_linux_container (libcrun_container_t *container,
       else
         {
           /* If we need to join another user namespace, do it immediately before creating any other namespace. */
-          ret = setns (namespaces_to_join[userns_join_index], CLONE_NEWUSER);
+          ret = setns (ns_to_join.fd[ns_to_join.userns_index], CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
             {
-              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[userns_join_index_origin]->path);
+              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[ns_to_join.userns_index_origin]->path);
               goto out;
             }
         }
@@ -2985,7 +3016,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
         }
     }
 
-  ret = join_namespaces (def, namespaces_to_join, n_namespaces_to_join, namespaces_to_join_index, false, err);
+  ret = join_namespaces (def, ns_to_join.fd, ns_to_join.len, ns_to_join.index, false, err);
   if (UNLIKELY (ret < 0))
     goto out;
 
