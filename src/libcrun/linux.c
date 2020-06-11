@@ -2576,12 +2576,21 @@ save_external_descriptors (libcrun_container_t *container,
   /* Remember original stdin, stdout, stderr for container restore. */
   for (i = 0; i < 3; i++)
     {
-      cleanup_free char *fd_path;
+      char fd_path[64];
       char link_path[PATH_MAX];
-      xasprintf (&fd_path, "/proc/%d/fd/%d", pid, i);
+      sprintf (fd_path, "/proc/%d/fd/%d", pid, i);
       ret = readlink (fd_path, link_path, PATH_MAX - 1);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "readlink");
+        {
+          /* The fd could not exist.  */
+          if (errno == ENOENT)
+              strcpy (link_path, "/dev/null");
+          else
+            {
+              yajl_gen_free (gen);
+              return crun_make_error (err, errno, "readlink");
+            }
+        }
       link_path[ret] = 0;
       yajl_gen_string (gen, YAJL_STR (link_path), strlen (link_path));
     }
