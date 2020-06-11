@@ -2883,9 +2883,10 @@ struct init_status_s
   int namespaces_to_unshare;
 };
 
-static void
-reset_join_namespaces (struct init_status_s *ns)
+static int
+configure_init_status (struct init_status_s *ns, libcrun_container_t *container,libcrun_error_t *err)
 {
+  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
 
   for (i = 0; i < MAX_NAMESPACES + 1; i++)
@@ -2899,6 +2900,49 @@ reset_join_namespaces (struct init_status_s *ns)
   ns->must_wait_for_userns_creation = false;
   ns->userns_index = -1;
   ns->userns_index_origin = -1;
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0))
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
+
+      ns->all_namespaces |= value;
+
+      if (def->linux->namespaces[i]->path == NULL)
+        ns->namespaces_to_unshare |= value;
+      else
+        {
+          int fd;
+
+          if (ns->fd_len >= MAX_NAMESPACES)
+            return crun_make_error (err, 0, "too many namespaces to join");
+
+          fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
+          if (UNLIKELY (fd < 0))
+              return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
+
+          if (value == CLONE_NEWUSER)
+            {
+              ns->userns_index = ns->fd_len;
+              ns->userns_index_origin = i;
+            }
+
+          ns->fd[ns->fd_len] = fd;
+          ns->index[ns->fd_len] = i;
+          ns->value[ns->fd_len] = value;
+          ns->fd_len++;
+          ns->fd[ns->fd_len] = -1;
+        }
+    }
+
+  if (container->host_uid && (ns->all_namespaces & CLONE_NEWUSER) == 0)
+    {
+      libcrun_warning ("non root user need to have an 'user' namespace");
+      ns->all_namespaces |= CLONE_NEWUSER;
+    }
+
+  return 0;
 }
 
 static int
@@ -3055,58 +3099,21 @@ libcrun_run_linux_container (libcrun_container_t *container,
                              libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close_vec int *cleanup_init_status_fd = NULL;
+  cleanup_close int sync_socket_container = -1;
+  cleanup_close int sync_socket_host = -1;
+  struct init_status_s init_status;
+  bool clone_can_create_userns;
+  int sync_socket[2];
+  pid_t pid;
   size_t i;
   int ret;
-  pid_t pid;
-  cleanup_close int sync_socket_host = -1;
-  cleanup_close int sync_socket_container = -1;
-  int sync_socket[2];
-  bool clone_can_create_userns;
-  struct init_status_s init_status;
-  cleanup_close_vec int *cleanup_init_status_fd = init_status.fd;
 
-  reset_join_namespaces (&init_status);
+  cleanup_init_status_fd = init_status.fd;
 
-  for (i = 0; i < def->linux->namespaces_len; i++)
-    {
-      int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
-      if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
-
-      init_status.all_namespaces |= value;
-
-      if (def->linux->namespaces[i]->path == NULL)
-        init_status.namespaces_to_unshare |= value;
-      else
-        {
-          int fd;
-
-          if (init_status.fd_len >= MAX_NAMESPACES)
-            return crun_make_error (err, 0, "too many namespaces to join");
-
-          fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
-          if (UNLIKELY (fd < 0))
-              return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
-
-          if (value == CLONE_NEWUSER)
-            {
-              init_status.userns_index = init_status.fd_len;
-              init_status.userns_index_origin = i;
-            }
-
-          init_status.fd[init_status.fd_len] = fd;
-          init_status.index[init_status.fd_len] = i;
-          init_status.value[init_status.fd_len] = value;
-          init_status.fd_len++;
-          init_status.fd[init_status.fd_len] = -1;
-        }
-    }
-
-  if (container->host_uid && (init_status.all_namespaces & CLONE_NEWUSER) == 0)
-    {
-      libcrun_warning ("non root user need to have an 'user' namespace");
-      init_status.all_namespaces |= CLONE_NEWUSER;
-    }
+  ret = configure_init_status (&init_status, container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   get_private_data (container)->unshare_flags = init_status.all_namespaces;
 #ifdef CLONE_NEWCGROUP
