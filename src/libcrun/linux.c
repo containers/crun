@@ -2934,6 +2934,10 @@ libcrun_run_linux_container (libcrun_container_t *container,
           ret = TEMP_FAILURE_RETRY (read (sync_socket_host, &grandchild, sizeof (grandchild)));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "read pid from sync socket");
+
+          /* Cleanup the first process.  */
+          if (! detach)
+            waitpid (pid, NULL, 0);
         }
 
       *sync_socket_out = get_and_reset (&sync_socket_host);
