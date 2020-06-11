@@ -2347,14 +2347,9 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
           close_and_reset (&seccomp_fd);
         }
 
-      if (process->user && process->user->additional_gids_len)
-        {
-          gid_t *additional_gids = process->user->additional_gids;
-          size_t additional_gids_len = process->user->additional_gids_len;
-          ret = setgroups (additional_gids_len, additional_gids);
-          if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error (errno, "%s", "setgroups %d groups", process->user->additional_gids_len);
-        }
+      ret = libcrun_container_setgroups (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       if (process->capabilities)
         capabilities = process->capabilities;

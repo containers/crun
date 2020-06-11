@@ -79,10 +79,49 @@ def test_gid():
             return -1
     return 0
 
+def test_no_groups():
+    if os.getuid() != 0:
+        return 77
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    add_all_namespaces(conf)
+    conf['process']['user']['gid'] = 1000
+    out, _ = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    ids = proc_status['Groups'].split()
+    if len(ids) > 0:
+        return -1
+    return 0
+
+def test_keep_groups():
+    if os.getuid() != 0:
+        return 77
+    oldgroups = os.getgroups()
+    out = ""
+    try:
+        os.setgroups([1,2,3,4,5])
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+        add_all_namespaces(conf)
+        conf['annotations'] = {}
+        conf['annotations']['run.oci.keep_original_groups'] = "1"
+        out, _ = run_and_get_output(conf)
+    finally:
+        os.setgroups(oldgroups)
+
+    proc_status = parse_proc_status(out)
+    ids = proc_status['Groups'].split()
+    if len(ids) == 0:
+        return -1
+    return 0
+
 all_tests = {
     "uid" : test_uid,
     "gid" : test_gid,
     "userns-full-mapping" : test_userns_full_mapping,
+    "no-groups" : test_no_groups,
+    "keep-groups" : test_keep_groups,
 }
 
 if __name__ == "__main__":
