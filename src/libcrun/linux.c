@@ -3196,8 +3196,6 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   if (pid)
     {
-      pid_t grandchild = 0;
-
       ret = save_external_descriptors (container, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -3229,6 +3227,8 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
       if (init_status.must_fork)
         {
+          pid_t grandchild = 0;
+
           ret = expect_success_from_sync_socket (sync_socket_host, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -3240,6 +3240,8 @@ libcrun_run_linux_container (libcrun_container_t *container,
           /* Cleanup the first process.  */
           if (! detach)
             waitpid (pid, NULL, 0);
+
+          pid = grandchild;
         }
 
       ret = expect_success_from_sync_socket (sync_socket_host, err);
@@ -3248,13 +3250,16 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
       *sync_socket_out = get_and_reset (&sync_socket_host);
 
-      return grandchild ? grandchild : pid;
+      return pid;
     }
+
+  /* Inside the container process.  */
 
   ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "close");
 
+  /* Initialize the new process and make sure to join/create all the required namespaces.  */
   ret = init_container (container, sync_socket_container, &init_status, err);
   if (UNLIKELY (ret < 0))
     {
