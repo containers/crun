@@ -21,6 +21,7 @@ import sys
 import os
 import tempfile
 import subprocess
+import time
 
 base_conf = """
 {
@@ -180,6 +181,9 @@ def run_all_tests(all_tests, allowed_tests):
 def get_tests_root():
     return '%s/.testsuite-run-%d' % (os.getcwd(), os.getpid())
 
+def get_crun_path():
+    return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
+
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', use_popen=False, hide_stderr=False,
                        all_dev_null=False):
@@ -197,8 +201,10 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         conf = json.dumps(config)
         config_file.write(conf)
 
-    shutil.copy2("tests/init", os.path.join(rootfs, "init"))
-    crun = os.path.join(cwd, "crun")
+    init = os.getenv("INIT") or "tests/init"
+    crun = get_crun_path()
+
+    shutil.copy2(init, os.path.join(rootfs, "init"))
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
@@ -227,7 +233,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
 
 def run_crun_command(args):
     cwd = os.getcwd()
-    crun = os.path.join(cwd, "crun")
+    crun = get_crun_path()
     args = [crun] + args
     return subprocess.check_output(args, close_fds=False).decode()
 
