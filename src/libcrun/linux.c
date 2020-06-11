@@ -2883,6 +2883,14 @@ struct init_status_s
   int namespaces_to_unshare;
 };
 
+void cleanup_free_init_statusp (struct init_status_s *ns)
+{
+  size_t i;
+
+  for (i = 0; i < ns->fd_len; i++)
+    TEMP_FAILURE_RETRY (close (ns->fd[i]));
+}
+
 static int
 configure_init_status (struct init_status_s *ns, libcrun_container_t *container,libcrun_error_t *err)
 {
@@ -2891,6 +2899,7 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
 
   for (i = 0; i < MAX_NAMESPACES + 1; i++)
     ns->fd[i] = -1;
+
   ns->fd_len = 0;
   ns->all_namespaces = 0;
   ns->namespaces_to_unshare = 0;
@@ -3098,18 +3107,15 @@ libcrun_run_linux_container (libcrun_container_t *container,
                              int *sync_socket_out,
                              libcrun_error_t *err)
 {
+   __attribute__((cleanup (cleanup_free_init_statusp))) struct init_status_s init_status;
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_close_vec int *cleanup_init_status_fd = NULL;
   cleanup_close int sync_socket_container = -1;
   cleanup_close int sync_socket_host = -1;
-  struct init_status_s init_status;
   bool clone_can_create_userns;
   int sync_socket[2];
   pid_t pid;
   size_t i;
   int ret;
-
-  cleanup_init_status_fd = init_status.fd;
 
   ret = configure_init_status (&init_status, container, err);
   if (UNLIKELY (ret < 0))
