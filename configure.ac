@@ -56,7 +56,7 @@ AC_ARG_ENABLE([systemd],
 AS_IF([test "x$enable_systemd" != "xno"], [
 	AC_CHECK_HEADERS([systemd/sd-bus.h], [], [AC_MSG_ERROR([*** Missing libsystemd headers])])
 	AS_IF([test "$ac_cv_header_systemd_sd_bus_h" = "yes"], [
-		AC_SEARCH_LIBS(sd_listen_fds, [systemd], [AC_DEFINE([HAVE_SYSTEMD], 1, [Define if libsystemd is available])], [AC_MSG_ERROR([*** Failed to find libsystemd])])
+		AC_SEARCH_LIBS(sd_bus_match_signal_async, [systemd], [AC_DEFINE([HAVE_SYSTEMD], 1, [Define if libsystemd is available])], [AC_MSG_ERROR([*** Failed to find libsystemd])])
 	])
 ])
 
