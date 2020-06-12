@@ -1322,11 +1322,22 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
 static int
 do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
-  size_t i;
+  size_t i, j;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *systemd_cgroup_v1 = find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+  struct
+  {
+    int *fd;
+    const char *fstype;
+  }
+  fsfd_mounts[] =
+    {
+     {.fstype = "proc", .fd = &(get_private_data (container)->procfsfd)},
+     {.fstype = "mqueue", .fd = &(get_private_data (container)->mqueuefsfd)},
+     {.fd = NULL, .fstype = NULL}
+    };
 
   for (i = 0; i < def->mounts_len; i++)
     {
@@ -1339,6 +1350,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       char *target = NULL;
       cleanup_close int copy_from_fd = -1;
       cleanup_close int targetfd = -1;
+      bool mounted = false;
 
       target = def->mounts[i]->destination;
       while (*target == '/')
@@ -1454,34 +1466,25 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
-      if (get_private_data (container)->procfsfd >= 0 && strcmp (type, "proc") == 0)
-        {
-          cleanup_close int mfd = get_and_reset (&(get_private_data (container)->procfsfd));
-          ret = fs_move_mount_to (mfd, rootfsfd, target);
+      /* Check if there is already a mount for the requested file system.  */
+      for (j = 0; fsfd_mounts[j].fstype; j++)
+        if (*fsfd_mounts[j].fd >= 0 && strcmp (type, fsfd_mounts[j].fstype) == 0)
+          {
+            cleanup_close int mfd = get_and_reset (fsfd_mounts[j].fd);
 
-          /* If the mount cannot be moved, attempt to mount it normally.  */
-          if (LIKELY (ret == 0))
-            {
-              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              continue;
-            }
-        }
-      if (get_private_data (container)->mqueuefsfd >= 0 && strcmp (type, "mqueue") == 0)
-        {
-          cleanup_close int mfd = get_and_reset (&(get_private_data (container)->mqueuefsfd));
-          ret = fs_move_mount_to (mfd, rootfsfd, target);
-
-          /* If the mount cannot be moved, attempt to mount it normally.  */
-          if (LIKELY (ret == 0))
-            {
-              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              continue;
-            }
-        }
+            ret = fs_move_mount_to (mfd, rootfsfd, target);
+            if (LIKELY (ret == 0))
+              {
+                ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
+                if (UNLIKELY (ret < 0))
+                  return ret;
+                mounted = true;
+              }
+            /* If the mount cannot be moved, attempt to mount it normally.  */
+            break;
+          }
+      if (mounted)
+        continue;
 
       targetfd = open_mount_target (container, target, err);
       if (UNLIKELY (targetfd < 0))
@@ -1526,7 +1529,6 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           if (UNLIKELY (ret < 0))
             return ret;
         }
-
     }
   return 0;
 }
