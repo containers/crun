@@ -296,6 +296,7 @@ bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err arg_
 static int
 read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_error_t *err)
 {
+#ifdef HAVE_EBPF
   cleanup_free uint32_t *progs = NULL;
   union bpf_attr attr;
   int ret;
@@ -324,11 +325,21 @@ read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_er
   progs = NULL;
   *n_progs_out = attr.query.prog_cnt;
   return 0;
+#else
+  (void) dirfd;
+  (void) err;
+
+  *progs_out = NULL;
+  *n_progs_out = 0;
+
+  return crun_make_error (err, 0, "eBPF not supported");
+#endif
 }
 
 static int
 remove_all_progs (int dirfd, uint32_t *progs, size_t n_progs, libcrun_error_t *err)
 {
+#ifdef HAVE_EBPF
   union bpf_attr attr;
   size_t i;
 
@@ -365,14 +376,20 @@ remove_all_progs (int dirfd, uint32_t *progs, size_t n_progs, libcrun_error_t *e
         }
     }
   return 0;
+#else
+  return crun_make_error (err, 0, "eBPF not supported");
+#endif
 }
 
 static int
 ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
 {
-#ifdef BPF_F_REPLACE
+#ifndef HAVE_EBPF
+  return crun_make_error (err, 0, "eBPF not supported");
+# else
+# ifdef BPF_F_REPLACE
   bool skip_replace = false;
-#endif
+# endif
   const int MAX_ATTEMPTS = 20;
   int attempt;
 
@@ -388,7 +405,7 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-#ifdef BPF_F_REPLACE
+# ifdef BPF_F_REPLACE
       /* There is just one program installed, let's attempt an atomic replace if supported.  */
       if (!skip_replace && n_progs == 1)
         {
@@ -405,20 +422,20 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
               return crun_make_error (err, errno, "cannot open existing eBPF program");
             }
         }
-#endif
+# endif
 
       memset (&attr, 0, sizeof (attr));
       attr.attach_type = BPF_CGROUP_DEVICE;
       attr.target_fd = dirfd;
       attr.attach_bpf_fd = fd;
       attr.attach_flags = BPF_F_ALLOW_MULTI;
-#ifdef BPF_F_REPLACE
+# ifdef BPF_F_REPLACE
       if (replacefd >= 0)
         {
           attr.attach_flags = BPF_F_ALLOW_MULTI | BPF_F_REPLACE;
           attr.replace_bpf_fd = replacefd;
         }
-#endif
+# endif
 
       ret = bpf (BPF_PROG_ATTACH, &attr, sizeof (attr));
       if (UNLIKELY (ret < 0))
@@ -428,13 +445,13 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
               /* Another update might have already updated the cgroup, try again.  */
               continue;
             }
-#ifdef BPF_F_REPLACE
+# ifdef BPF_F_REPLACE
           if (errno == EINVAL && replacefd >= 0)
             {
               skip_replace = true;
               continue;
             }
-#endif
+# endif
           return crun_make_error (err, errno, "bpf attach");
         }
 
@@ -444,6 +461,7 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
 
       return 0;
     }
+#endif
 }
 
 int
