@@ -3050,22 +3050,12 @@ init_container (libcrun_container_t *container,
 #ifdef CLONE_NEWTIME
   if (init_status->all_namespaces & CLONE_NEWTIME)
     {
-      cleanup_close int fd = open ("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
-      if (container->container_def->annotations)
+      const char *v = find_annotation (container, "run.oci.timens_offset");
+      if (v)
         {
-          for (i = 0; i < container->container_def->annotations->len; i++)
-            {
-              if (strcmp (container->container_def->annotations->keys[i], "run.oci.timens_offset") == 0)
-                {
-                  const char *v;
-
-                  v = container->container_def->annotations->values[i];
-
-                  ret = write (fd, v, strlen (v));
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "write");
-                }
-            }
+          ret = write_file ("/proc/self/timens_offsets", v, strlen (v), err);
+          if (UNLIKELY (ret < 0))
+            return ret;
         }
     }
 #endif
