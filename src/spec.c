@@ -83,15 +83,13 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = crun_path_exists ("config.json", err);
-  if (ret < 0)
-    return ret;
-  if (ret)
-    return crun_make_error (err, 0, "config.json already exists", err);
+  ret = access ("config.json", F_OK);
+  if (ret == 0)
+    return libcrun_make_error (err, 0, "config.json already exists", err);
 
   f = fopen ("config.json", "w+");
   if (f == NULL)
-    return crun_make_error (err, 0, "cannot open config.json", err);
+    return libcrun_make_error (err, 0, "cannot open config.json", err);
 
   ret = libcrun_container_spec (!spec_options.rootless, f, err);
 

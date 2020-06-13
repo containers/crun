@@ -17,6 +17,7 @@
  */
 #ifndef UTILS_H
 # define UTILS_H
+
 # include <config.h>
 # include <stdio.h>
 # include <stdlib.h>
@@ -24,6 +25,7 @@
 # include <argp.h>
 # include "error.h"
 # include <dirent.h>
+# include <unistd.h>
 # include <runtime_spec_schema_config_schema.h>
 # include "container.h"
 
@@ -36,14 +38,6 @@
      __result; }))
 # endif
 
-
-void cleanup_filep (FILE **f);
-void cleanup_freep (void *p);
-void cleanup_closep (void *p);
-void cleanup_close_vecp (int **p);
-void cleanup_dirp (DIR **p);
-int close_and_reset (int *fd);
-
 # define cleanup_file __attribute__((cleanup (cleanup_filep)))
 # define cleanup_free __attribute__((cleanup (cleanup_freep)))
 # define cleanup_close __attribute__((cleanup (cleanup_closep)))
@@ -54,17 +48,102 @@ int close_and_reset (int *fd);
 # define LIKELY(x) __builtin_expect((x),1)
 # define UNLIKELY(x) __builtin_expect((x),0)
 
-void *xmalloc (size_t size);
+static inline void *
+xmalloc (size_t size)
+{
+  void *res = malloc (size);
+  if (UNLIKELY (res == NULL))
+    OOM ();
+  return res;
+}
 
-void *xmalloc0 (size_t size);
+static inline void *
+xmalloc0 (size_t size)
+{
+  void *res = calloc (1, size);
+  if (UNLIKELY (res == NULL))
+    OOM ();
+  return res;
+}
 
-void *xrealloc (void *ptr, size_t size);
+static inline void *
+xrealloc (void *ptr, size_t size)
+{
+  void *res = realloc (ptr, size);
+  if (UNLIKELY (res == NULL))
+    OOM ();
+  return res;
+}
 
-char *xstrdup (const char *str);
+static inline void
+cleanup_freep (void *p)
+{
+  void **pp = (void **) p;
+  free (*pp);
+}
+
+static inline void
+cleanup_filep (FILE **f)
+{
+  FILE *file = *f;
+  if (file)
+    (void) fclose (file);
+}
+
+static inline void
+cleanup_closep (void *p)
+{
+  int *pp = p;
+  if (*pp >= 0)
+    TEMP_FAILURE_RETRY (close (*pp));
+}
+
+static inline void
+cleanup_close_vecp (int **p)
+{
+  int *pp = *p;
+  int i;
+
+  for (i = 0; pp[i] >= 0; i++)
+    TEMP_FAILURE_RETRY (close (pp[i]));
+}
+
+static inline void
+cleanup_dirp (DIR **p)
+{
+  DIR *dir = *p;
+  if (dir)
+    closedir (dir);
+}
+
+static inline int
+close_and_reset (int *fd)
+{
+  int ret = 0;
+  if (*fd >= 0)
+    {
+      ret = TEMP_FAILURE_RETRY (close (*fd));
+      if (LIKELY (ret == 0))
+        *fd = -1;
+    }
+  return ret;
+}
+
+static inline char *
+xstrdup (const char *str)
+{
+  char *ret;
+  if (str == NULL)
+    return NULL;
+
+  ret = strdup (str);
+  if (ret == NULL)
+    OOM ();
+
+  return ret;
+}
 
 int xasprintf (char **str, const char *fmt, ...);
-
-char *argp_mandatory_argument (char *arg, struct argp_state *state);
 
 int crun_path_exists (const char *path, libcrun_error_t *err);
 
@@ -154,10 +233,10 @@ int get_file_type (mode_t *mode, bool nofollow, const char *path);
 
 int get_file_type_fd (int fd, mode_t *mode);
 
-int str2sig (const char *name);
-
 int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode, libcrun_error_t *err);
 
 ssize_t safe_write (int fd, const void *buf, ssize_t count);
+
+LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
 
 #endif

@@ -115,7 +115,7 @@ AC_COMPILE_IFELSE(
 		 AC_DEFINE([HAVE_FSCONFIG_CMD_CREATE], 1, [Define if FSCONFIG_CMD_CREATE is available])],
 		[AC_MSG_RESULT(no)])
 
-
+AC_DEFINE([LIBCRUN_PUBLIC], [__attribute__((visibility("default"))) extern], [LIBCRUN_PUBLIC])
 AC_SUBST([FOUND_LIBS])
 AC_SUBST([CRUN_LDFLAGS])
 

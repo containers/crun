@@ -101,7 +101,9 @@ static char **dup_array (char **arr, size_t len)
   size_t i;
   char **ret;
 
-  ret = xmalloc (sizeof (char *) * (len + 1));
+  ret = malloc (sizeof (char *) * (len + 1));
+  if (ret == NULL)
+    error (EXIT_FAILURE, errno, "cannot allocate memory");
   for (i = 0; i < len; i++)
     ret[i] = xstrdup (arr[i]);
 
@@ -176,7 +178,6 @@ make_oci_process_user (const char *userspec)
     return NULL;
 
   u = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_user));
-
   errno = 0;
   u->uid = strtol (userspec, &endptr, 10);
   if (errno == ERANGE)

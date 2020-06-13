@@ -583,7 +583,7 @@ libcrun_signal_in_word_set (register const char *str, register size_t len)
 #line 95 "src/libcrun/signals.perf"
 
 int
-str2sig (const char *name)
+libcrun_str2sig (const char *name)
 {
   const struct signal_s *s;
 

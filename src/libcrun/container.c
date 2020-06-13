@@ -2495,6 +2495,21 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   return libcrun_linux_container_update (&status, content, len, err);
 }
 
+
+int
+libcrun_container_update_from_file (libcrun_context_t *context, const char *id, const char *file, libcrun_error_t *err)
+{
+  char *content = NULL;
+  size_t len;
+  int ret;
+
+  ret = read_all_file (file, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return libcrun_container_update (context, id, content, len, err);
+}
+
 int
 libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
 {

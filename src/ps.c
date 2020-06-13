@@ -107,7 +107,7 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
   ret = libcrun_read_container_status (&status, crun_context.state_root, argv[first_arg], err);
   if (UNLIKELY (ret < 0))
     {
-      crun_error_write_warning_and_release (stderr, &err);
+      libcrun_error_write_warning_and_release (stderr, &err);
       return ret;
     }
 
@@ -117,7 +117,7 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
   ret = libcrun_cgroup_read_pids (status.cgroup_path, true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
-      crun_error_write_warning_and_release (stderr, &err);
+      libcrun_error_write_warning_and_release (stderr, &err);
       return ret;
     }
 

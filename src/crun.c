@@ -63,13 +63,13 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   con->notify_socket = getenv ("NOTIFY_SOCKET");
   con->fifo_exec_wait_fd = -1;
 
-  ret = init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
+  ret = libcrun_init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (glob->log_format)
     {
-      ret = crun_set_log_format (glob->log_format, err);
+      ret = libcrun_set_log_format (glob->log_format, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -277,6 +277,14 @@ crun_assert_n_args (int n, int min, int max)
     error (EXIT_FAILURE, 0, "`%s` requires a minimum of %d arguments", command->name, min);
   if (max >= 0 && n > max)
     error (EXIT_FAILURE, 0, "`%s` requires a maximum of %d arguments", command->name, max);
+}
+
+char *
+argp_mandatory_argument (char *arg, struct argp_state *state)
+{
+  if (arg)
+    return arg;
+  return state->argv[state->next++];
 }
 
 static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
