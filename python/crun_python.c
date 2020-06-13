@@ -56,7 +56,7 @@ set_error (libcrun_error_t *err)
       PyErr_SetString (PyExc_RuntimeError, msg);
     }
 
-  crun_error_release (err);
+  libcrun_error_release (err);
   return NULL;
 }
 
@@ -64,7 +64,7 @@ static void
 free_container (PyObject *ptr)
 {
   libcrun_container_t *ctr = PyCapsule_GetPointer (ptr, CONTAINER_OBJ_TAG);
-  free_oci_container (ctr->container_def);
+  free_runtime_spec_schema_config_schema (ctr->container_def);
 }
 
 static PyObject *
@@ -357,6 +357,20 @@ container_status (PyObject *self, PyObject *args)
   return PyUnicode_FromString (buffer);
 }
 
+static int
+load_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
+{
+    char errbuf[1024];
+
+    *err = NULL;
+
+    *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
+    if (*out == NULL)
+      return libcrun_make_error (err, 0, "cannot parse the data: `%s`", errbuf);
+
+    return 0;
+}
+
 static PyObject *
 container_update (PyObject *self, PyObject *args)
 {
@@ -369,7 +383,7 @@ container_update (PyObject *self, PyObject *args)
   int ret;
   parser_error parser_err = NULL;
   struct parser_context parser_ctx = { 0, stderr };
-  oci_container_process *process = NULL;
+  runtime_spec_schema_config_schema_process *process = NULL;
 
   if (!PyArg_ParseTuple (args, "Oss", &ctx_obj, &id, &content))
     return NULL;
@@ -378,11 +392,11 @@ container_update (PyObject *self, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  ret = parse_json_file (&tree, content, &parser_ctx, &err);
+  ret = load_json_file (&tree, content, &parser_ctx, &err);
   if (UNLIKELY (ret < 0))
     return set_error (&err);
 
-  process = make_oci_container_process (tree, &parser_ctx, &parser_err);
+  process = make_runtime_spec_schema_config_schema_process (tree, &parser_ctx, &parser_err);
   yajl_tree_free (tree);
   if (process == NULL)
     {
@@ -399,7 +413,7 @@ container_update (PyObject *self, PyObject *args)
   ret = libcrun_container_exec (ctx, id, process, &err);
   Py_END_ALLOW_THREADS;
 
-  free_oci_container_process (process);
+  free_runtime_spec_schema_config_schema_process (process);
   if (ret < 0)
     return set_error (&err);
   Py_RETURN_NONE;
@@ -487,10 +501,23 @@ static PyMethodDef CrunMethods[] = {
   {NULL, NULL, 0, NULL}
 };
 
+struct PyModuleDef crun_mod =
+  {
+   PyModuleDef_HEAD_INIT,
+   "python_crun",
+   NULL,
+   0,
+   CrunMethods,
+  };
+
 PyMODINIT_FUNC
-initpython_crun (void)
+PyInit_python_crun (void)
 {
-  PyObject *module = Py_InitModule ("python_crun", CrunMethods);
-  (void) PyModule_AddIntConstant (module, "VERBOSITY_ERROR", LIBCRUN_VERBOSITY_ERROR);
-  (void) PyModule_AddIntConstant (module, "VERBOSITY_WARNING", LIBCRUN_VERBOSITY_WARNING);
+  PyObject *ret;
+  ret = PyModule_Create (&crun_mod);
+  if (ret == NULL)
+    return ret;
+  (void) PyModule_AddIntConstant (ret, "VERBOSITY_ERROR", LIBCRUN_VERBOSITY_ERROR);
+  (void) PyModule_AddIntConstant (ret, "VERBOSITY_WARNING", LIBCRUN_VERBOSITY_WARNING);
+  return ret;
 }
