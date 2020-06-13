@@ -2996,28 +2996,30 @@ init_container (libcrun_container_t *container,
                 mqueuefsfd = fsopen_mount (def->mounts[i]);
             }
         }
-
-      if (init_status->must_wait_for_userns_creation)
-        {
-          ret = unshare (CLONE_NEWUSER);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
     }
 
   if (init_status->all_namespaces & CLONE_NEWUSER)
     {
+      if (init_status->must_wait_for_userns_creation)
+        {
+          ret = unshare (CLONE_NEWUSER);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "unshare (CLONE_NEWUSER)");
+
+          init_status->namespaces_to_unshare &= ~CLONE_NEWUSER;
+
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to sync socket");
+        }
+
       if (init_status->userns_index < 0)
         {
           char tmp;
 
           ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_make_error (err, errno, "read from sync socket");
         }
       else
         {
@@ -3190,14 +3192,16 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   clone_can_create_userns = init_status.fd_len == 0 && init_status.userns_index < 0;
 
-  init_status.must_wait_for_userns_creation = (init_status.all_namespaces & CLONE_NEWUSER) && (init_status.fd_len > 0) && (init_status.userns_index < 0);
+  if (init_status.all_namespaces & CLONE_NEWUSER)
+    init_status.must_wait_for_userns_creation = !clone_can_create_userns || ((init_status.fd_len > 0) && (init_status.userns_index < 0));
 
   /* If we create a new user namespace, create it as part of the clone.  */
   pid = syscall_clone ((init_status.namespaces_to_unshare & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | (detach ? 0 : SIGCHLD), NULL);
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
 
-  init_status.namespaces_to_unshare &= ~CLONE_NEWUSER;
+  if (clone_can_create_userns)
+    init_status.namespaces_to_unshare &= ~CLONE_NEWUSER;
 
   if (pid)
     {
