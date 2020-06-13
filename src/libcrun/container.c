@@ -1587,8 +1587,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (cgroup_mode < 0)
     return cgroup_mode;
 
-  pid = libcrun_run_linux_container (container, context->detach,
-                                     container_init, &container_args,
+  pid = libcrun_run_linux_container (container, container_init, &container_args,
                                      &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;

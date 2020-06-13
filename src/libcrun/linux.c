@@ -3095,7 +3095,6 @@ init_container (libcrun_container_t *container,
 
 pid_t
 libcrun_run_linux_container (libcrun_container_t *container,
-                             int detach,
                              container_entrypoint_t entrypoint,
                              void *args,
                              int *sync_socket_out,
@@ -3196,7 +3195,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
     init_status.must_wait_for_userns_creation = !clone_can_create_userns || ((init_status.fd_len > 0) && (init_status.userns_index < 0));
 
   /* If we create a new user namespace, create it as part of the clone.  */
-  pid = syscall_clone ((init_status.namespaces_to_unshare & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | (detach ? 0 : SIGCHLD), NULL);
+  pid = syscall_clone ((init_status.namespaces_to_unshare & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | SIGCHLD, NULL);
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
 
@@ -3247,8 +3246,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
             return crun_make_error (err, errno, "read pid from sync socket");
 
           /* Cleanup the first process.  */
-          if (! detach)
-            waitpid (pid, NULL, 0);
+          waitpid (pid, NULL, 0);
 
           pid = grandchild;
         }
