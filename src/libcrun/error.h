@@ -37,6 +37,7 @@
 # include <stdio.h>
 # include <stdbool.h>
 # include <syslog.h>
+# include <unistd.h>
 
 struct libcrun_error_s
 {
@@ -45,7 +46,13 @@ struct libcrun_error_s
 };
 typedef struct libcrun_error_s *libcrun_error_t;
 
-void oom_handler () __attribute__ ((noreturn));
+#define OOM()                                   \
+  do                                            \
+    {                                           \
+      fprintf (stderr, "out of memory");        \
+      _exit (EXIT_FAILURE);                     \
+    }                                           \
+  while (0)
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
 
@@ -59,8 +66,6 @@ void log_write_to_stream (int errno_, const char *msg, bool warning, void *arg);
 
 void log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg);
 
-# define OOM() do {oom_handler ();} while (0)
-
 int crun_make_error (libcrun_error_t *err, int status, const char *msg, ...);
 
 int crun_error_wrap (libcrun_error_t *err, const char *fmt, ...);
@@ -71,16 +76,22 @@ int crun_error_release (libcrun_error_t *err);
 
 void crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err);
 
-void libcrun_warning (const char *msg, ...);
+LIBCRUN_PUBLIC void libcrun_warning (const char *msg, ...);
 
-void libcrun_error (int errno_, const char *msg, ...);
+LIBCRUN_PUBLIC void libcrun_error (int errno_, const char *msg, ...);
 
-void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
+LIBCRUN_PUBLIC int libcrun_make_error (libcrun_error_t *err, int status, const char *msg, ...);
 
-int crun_set_log_format (const char *format, libcrun_error_t *err);
+LIBCRUN_PUBLIC void libcrun_error_write_warning_and_release (FILE *out, libcrun_error_t **err);
 
-int init_logging (crun_output_handler *output_handler, void **output_handler_arg,
-                  const char *id, const char *log, libcrun_error_t *err);
+LIBCRUN_PUBLIC void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn));
+
+LIBCRUN_PUBLIC int libcrun_set_log_format (const char *format, libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, void **output_handler_arg,
+                                         const char *id, const char *log, libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_error_release (libcrun_error_t *err);
 
 enum
   {
@@ -88,7 +99,7 @@ enum
     LIBCRUN_VERBOSITY_WARNING,
   };
 
-void libcrun_set_verbosity (int verbosity);
-int libcrun_get_verbosity ();
+LIBCRUN_PUBLIC void libcrun_set_verbosity (int verbosity);
+LIBCRUN_PUBLIC int libcrun_get_verbosity ();
 
 #endif

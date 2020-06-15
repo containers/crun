@@ -68,95 +68,6 @@ syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uin
 }
 
 int
-close_and_reset (int *fd)
-{
-  int ret = 0;
-  if (*fd >= 0)
-    {
-      ret = TEMP_FAILURE_RETRY (close (*fd));
-      if (LIKELY (ret == 0))
-        *fd = -1;
-    }
-  return ret;
-}
-
-void
-cleanup_freep (void *p)
-{
-  void **pp = (void **) p;
-  free (*pp);
-}
-
-void
-cleanup_filep (FILE **f)
-{
-  FILE *file = *f;
-  if (file)
-    (void) fclose (file);
-}
-
-void
-cleanup_closep (void *p)
-{
-  int *pp = p;
-  if (*pp >= 0)
-    TEMP_FAILURE_RETRY (close (*pp));
-}
-
-void
-cleanup_close_vecp (int **p)
-{
-  int *pp = *p;
-  int i;
-
-  for (i = 0; pp[i] >= 0; i++)
-    TEMP_FAILURE_RETRY (close (pp[i]));
-}
-
-void
-cleanup_dirp (DIR **p)
-{
-  DIR *dir = *p;
-  if (dir)
-    closedir (dir);
-}
-
-void *
-xmalloc (size_t size)
-{
-  void *res = malloc (size);
-  if (UNLIKELY (res == NULL))
-    OOM ();
-  return res;
-}
-
-void *
-xmalloc0 (size_t size)
-{
-  void *res = calloc (1, size);
-  if (UNLIKELY (res == NULL))
-    OOM ();
-  return res;
-}
-
-void *
-xrealloc (void *ptr, size_t size)
-{
-  void *res = realloc (ptr, size);
-  if (UNLIKELY (res == NULL))
-    OOM ();
-  return res;
-}
-
-char *
-argp_mandatory_argument (char *arg, struct argp_state *state)
-{
-  if (arg)
-    return arg;
-  return state->argv[state->next++];
-}
-
-int
 crun_path_exists (const char *path, libcrun_error_t *err arg_unused)
 {
   int ret = access (path, F_OK);
@@ -178,20 +89,6 @@ xasprintf (char **str, const char *fmt, ...)
     OOM ();
 
   va_end (args_list);
-  return ret;
-}
-
-char *
-xstrdup (const char *str)
-{
-  char *ret;
-  if (str == NULL)
-    return NULL;
-
-  ret = strdup (str);
-  if (ret == NULL)
-    OOM ();
-
   return ret;
 }
 

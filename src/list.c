@@ -111,7 +111,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
       ret = libcrun_read_container_status (&status, crun_context.state_root, it->name, err);
       if (UNLIKELY (ret < 0))
         {
-          crun_error_write_warning_and_release (stderr, &err);
+          libcrun_error_write_warning_and_release (stderr, &err);
           continue;
         }
       if (quiet)
@@ -125,7 +125,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           ret = libcrun_get_container_state_string (it->name, &status, crun_context.state_root, &container_status, &running, err);
           if (UNLIKELY (ret < 0))
             {
-              crun_error_write_warning_and_release (stderr, &err);
+              libcrun_error_write_warning_and_release (stderr, &err);
               continue;
             }
 

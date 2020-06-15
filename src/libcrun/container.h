@@ -84,40 +84,42 @@ struct libcrun_checkpoint_restore_s
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 
-libcrun_container_t *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
+LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
 
-libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
+LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
 
-int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *error);
+LIBCRUN_PUBLIC int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *error);
 
-int libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id, bool force, libcrun_error_t *err);
 
-int libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
 
-int libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err);
 
-int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, unsigned int options, libcrun_error_t *err);
 
-int libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
-int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err);
 
-int libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status, const char *state_root, const char **container_status, int *running, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status, const char *state_root, const char **container_status, int *running, libcrun_error_t *err);
 
-int libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
 
-int libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err);
 
-int libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len, libcrun_error_t *err);
 
-int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_update_from_file (libcrun_context_t *context, const char *id, const char *file, libcrun_error_t *err);
 
-int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
 
-int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
-int libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
-int libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t * cr_options, libcrun_error_t *err);
 
 #endif

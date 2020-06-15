@@ -45,21 +45,24 @@ enum
 static int log_format;
 static bool log_also_to_stderr;
 
-int
-crun_make_error (libcrun_error_t *err, int status, const char *msg, ...)
-{
-  va_list args_list;
-  libcrun_error_t ptr;
-  va_start (args_list, msg);
-  *err = xmalloc (sizeof (struct libcrun_error_s));
-  ptr = *err;
-  ptr->status = status;
-  if (vasprintf (&(ptr->msg), msg, args_list) < 0)
-    OOM ();
-
-  va_end (args_list);
-  return -status - 1;
+#define MAKE_ERROR(FUNC_NAME)                                           \
+  int                                                                   \
+ FUNC_NAME (libcrun_error_t *err, int status, const char *msg, ...)     \
+  {                                                                     \
+  va_list args_list;                                                    \
+  libcrun_error_t ptr;                                                  \
+  va_start (args_list, msg);                                            \
+  *err = xmalloc (sizeof (struct libcrun_error_s));                     \
+  ptr = *err;                                                           \
+  ptr->status = status;                                                 \
+  if (vasprintf (&(ptr->msg), msg, args_list) < 0)                      \
+    OOM ();                                                             \
+  va_end (args_list);                                                   \
+  return -status - 1;                                                   \
 }
+
+MAKE_ERROR(crun_make_error);
+MAKE_ERROR(libcrun_make_error);
 
 int
 crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
@@ -108,11 +111,10 @@ crun_error_release (libcrun_error_t *err)
   return 0;
 }
 
-void
-oom_handler ()
+int
+libcrun_error_release (libcrun_error_t *err)
 {
-  fprintf (stderr, "out of memory");
-  exit (EXIT_FAILURE);
+  return crun_error_release (err);
 }
 
 void
@@ -134,6 +136,12 @@ crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
   free (ref->msg);
   free (ref);
   **err = NULL;
+}
+
+void
+libcrun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
+{
+  return crun_error_write_warning_and_release (out, err);
 }
 
 int
@@ -194,8 +202,8 @@ get_log_type (const char *log, const char **data)
 }
 
 int
-init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg,
-              const char *id, const char *log, libcrun_error_t *err)
+libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg,
+                      const char *id, const char *log, libcrun_error_t *err)
 {
   if (log == NULL)
     {
@@ -420,7 +428,7 @@ libcrun_fail_with_error (int errno_, const char *msg, ...)
 }
 
 int
-crun_set_log_format (const char *format, libcrun_error_t *err)
+libcrun_set_log_format (const char *format, libcrun_error_t *err)
 {
   if (strcmp (format, "text") == 0)
     log_format = LOG_FORMAT_TEXT;

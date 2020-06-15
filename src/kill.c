@@ -101,7 +101,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
   signal = SIGTERM;
   if (argc - first_arg > 1)
     {
-      signal = str2sig (argv[first_arg + 1]);
+      signal = libcrun_str2sig (argv[first_arg + 1]);
       if (UNLIKELY (signal < 0))
         libcrun_fail_with_error (0, "unknown signal %s", argv[first_arg + 1]);
     }
@@ -124,7 +124,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
           {
             ret = libcrun_container_kill (&crun_context, it->name, signal, err);
             if (UNLIKELY (ret < 0))
-              crun_error_write_warning_and_release (stderr, &err);
+              libcrun_error_write_warning_and_release (stderr, &err);
           }
 
 

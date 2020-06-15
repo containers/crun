@@ -243,13 +243,10 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
     return ret;
 
   if (resources == NULL)
-    content = (char *) build_file (&len);
-  else
     {
-      ret = read_all_file (resources, &content, &len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      content = (char *) build_file (&len);
+      return libcrun_container_update (&crun_context, argv[first_arg], content, len, err);
     }
 
-  return libcrun_container_update (&crun_context, argv[first_arg], content, len, err);
+  return libcrun_container_update_from_file (&crun_context, argv[first_arg], resources, err);
 }

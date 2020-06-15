@@ -21,7 +21,9 @@ CLEANFILES = crun.spec crun.1
 
 lib_LTLIBRARIES = libcrun.la
 
-libcrun_la_SOURCES = src/libcrun/utils.c \
+check_LIBRARIES = libcrun_testing.a
+
+libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/cloned_binary.c \
 			src/libcrun/container.c \
 			src/libcrun/cgroup.c \
@@ -35,8 +37,15 @@ libcrun_la_SOURCES = src/libcrun/utils.c \
 			src/libcrun/chroot_realpath.c \
 			src/libcrun/signals.c
 
-libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+libcrun_la_SOURCES = $(libcrun_SOURCES)
+libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
 libcrun_la_LIBADD = libocispec/libocispec.la
+libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+
+# build a version with all the symbols visible for testing
+libcrun_testing_a_SOURCES = $(libcrun_SOURCES)
+libcrun_testing_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=default
+libcrun_testing_a_LIBADD = libocispec/libocispec.la
 
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
@@ -67,18 +76,20 @@ UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 bin_PROGRAMS = crun
 noinst_PROGRAMS = tests/init $(UNIT_TESTS)
 
+TESTS_LDADD = libcrun_testing.a $(FOUND_LIBS)
+
 tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
 tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
 
 tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
-tests_tests_libcrun_utils_LDADD = $(crun_LDADD)
+tests_tests_libcrun_utils_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_utils_LDFLAGS = $(crun_LDFLAGS)
 
 tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
-tests_tests_libcrun_errors_LDADD = $(crun_LDADD)
+tests_tests_libcrun_errors_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
 TEST_EXTENSIONS = .py
