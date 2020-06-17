@@ -1720,7 +1720,9 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return cleanup_watch (context, pid, def, context->id, sync_socket, terminal_fd, err);
 
-  if (def->hooks && def->hooks->poststart_len)
+  /* Run poststart hooks here only if the container is created using "run".  For create+start, the
+     hooks will be executed as part of the start command.  */
+  if (context->fifo_exec_wait_fd < 0 && def->hooks && def->hooks->poststart_len)
     {
       ret = do_hooks (def, pid, context->id, true, NULL, "running",
                       (hook **) def->hooks->poststart,
@@ -1969,10 +1971,12 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 int
 libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
-  int ret;
-  cleanup_close int fd = -1;
+  cleanup_free libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
+  runtime_spec_schema_config_schema *def;
   libcrun_container_status_t status = {};
+  cleanup_close int fd = -1;
+  int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1995,6 +1999,12 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
   ret = libcrun_status_write_exec_fifo (context->state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  def = container->container_def;
 
   if (context->notify_socket)
     {
@@ -2033,6 +2043,25 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
             }
         }
     }
+
+  /* The container is considered running only after we got the notification from the
+     notify_socket, if any.  */
+  if (def->hooks && def->hooks->poststart_len)
+    {
+      cleanup_close int hooks_out_fd = -1;
+      cleanup_close int hooks_err_fd = -1;
+
+      ret = open_hooks_output (container, &hooks_out_fd, &hooks_err_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = do_hooks (def, status.pid, context->id, true, status.bundle, "running",
+                      (hook **) def->hooks->poststart,
+                      def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
+    }
+
 
   return 0;
 }
