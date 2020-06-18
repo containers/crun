@@ -58,7 +58,7 @@ it works
 crun could go much lower than that, and require \< 1M. The used 4MB is a
 hard limit set directly in Podman before calling the OCI runtime.
 
-## Depedencies
+## Dependencies
 
 These dependencies are required for the build:
 
