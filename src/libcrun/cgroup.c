@@ -1403,7 +1403,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
     default:
       return crun_make_error (err, EINVAL, "unknown cgroup manager specified %d", manager);
     }
-  if (LIKELY (ret == 0))
+  if (LIKELY (ret >= 0))
     {
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
         return chown_cgroups (*path, root_uid, root_gid, err);
@@ -1416,7 +1416,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
     {
       crun_error_release (err);
       *err = tmp_err;
-      return ret;
+      return rootless;
     }
 
   if (rootless > 0 && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
