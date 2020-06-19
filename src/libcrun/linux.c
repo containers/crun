@@ -700,8 +700,8 @@ has_mount_for (libcrun_container_t *container, const char *destination)
 
   for (i = 0; i < def->mounts_len; i++)
     {
-          if (strcmp (def->mounts[i]->destination, destination) == 0)
-            return true;
+      if (strcmp (def->mounts[i]->destination, destination) == 0)
+        return true;
     }
   return false;
 }
@@ -1322,11 +1322,22 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
 static int
 do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
-  size_t i;
+  size_t i, j;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *systemd_cgroup_v1 = find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+  struct
+  {
+    int *fd;
+    const char *fstype;
+  }
+  fsfd_mounts[] =
+    {
+     {.fstype = "proc", .fd = &(get_private_data (container)->procfsfd)},
+     {.fstype = "mqueue", .fd = &(get_private_data (container)->mqueuefsfd)},
+     {.fd = NULL, .fstype = NULL}
+    };
 
   for (i = 0; i < def->mounts_len; i++)
     {
@@ -1339,6 +1350,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       char *target = NULL;
       cleanup_close int copy_from_fd = -1;
       cleanup_close int targetfd = -1;
+      bool mounted = false;
 
       target = def->mounts[i]->destination;
       while (*target == '/')
@@ -1454,34 +1466,25 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
-      if (get_private_data (container)->procfsfd >= 0 && strcmp (type, "proc") == 0)
-        {
-          cleanup_close int mfd = get_and_reset (&(get_private_data (container)->procfsfd));
-          ret = fs_move_mount_to (mfd, rootfsfd, target);
+      /* Check if there is already a mount for the requested file system.  */
+      for (j = 0; fsfd_mounts[j].fstype; j++)
+        if (*fsfd_mounts[j].fd >= 0 && strcmp (type, fsfd_mounts[j].fstype) == 0)
+          {
+            cleanup_close int mfd = get_and_reset (fsfd_mounts[j].fd);
 
-          /* If the mount cannot be moved, attempt to mount it normally.  */
-          if (LIKELY (ret == 0))
-            {
-              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              continue;
-            }
-        }
-      if (get_private_data (container)->mqueuefsfd >= 0 && strcmp (type, "mqueue") == 0)
-        {
-          cleanup_close int mfd = get_and_reset (&(get_private_data (container)->mqueuefsfd));
-          ret = fs_move_mount_to (mfd, rootfsfd, target);
-
-          /* If the mount cannot be moved, attempt to mount it normally.  */
-          if (LIKELY (ret == 0))
-            {
-              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              continue;
-            }
-        }
+            ret = fs_move_mount_to (mfd, rootfsfd, target);
+            if (LIKELY (ret == 0))
+              {
+                ret = do_mount (container, NULL, mfd, target, NULL, flags, data, true, err);
+                if (UNLIKELY (ret < 0))
+                  return ret;
+                mounted = true;
+              }
+            /* If the mount cannot be moved, attempt to mount it normally.  */
+            break;
+          }
+      if (mounted)
+        continue;
 
       targetfd = open_mount_target (container, target, err);
       if (UNLIKELY (targetfd < 0))
@@ -1526,7 +1529,6 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           if (UNLIKELY (ret < 0))
             return ret;
         }
-
     }
   return 0;
 }
@@ -2683,6 +2685,119 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
   return get_and_reset (&fd);
 }
 
+
+static bool
+read_error_from_sync_socket (int sync_socket_fd, int *error, char **str)
+{
+  cleanup_free char *b = NULL;
+  size_t size;
+  int code;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &code, sizeof (code)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  *error = code;
+
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &size, sizeof (size)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  if (size == 0)
+    return false;
+
+  if (size > 1024)
+    size = 1024;
+
+  b = xmalloc (size + 1);
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, b, size));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  b[ret] = '\0';
+
+  *str = b;
+  b = NULL;
+  return true;
+}
+
+static bool
+send_error_to_sync_socket (int sync_socket_fd, bool has_fd, libcrun_error_t *err)
+{
+  int ret;
+  int code;
+  size_t size;
+  char *msg;
+
+  if (err == NULL || *err == NULL)
+    return false;
+
+  code = crun_error_get_errno (err);
+
+  if (has_fd)
+    {
+      /* dummy terminal fd.  */
+      ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, "1", 1));
+      if (UNLIKELY (ret < 0))
+        return false;
+    }
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, &code, sizeof (code)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  msg = (*err)->msg;
+  size = strlen (msg) + 1;
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, &size, sizeof (size)));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, msg, size));
+  if (UNLIKELY (ret < 0))
+    return false;
+
+  return true;
+}
+
+static  __attribute__ ((noreturn)) void
+send_error_to_sync_socket_and_die (int sync_socket_fd, bool has_terminal, libcrun_error_t *err)
+{
+  char *msg;
+
+  if (err == NULL || *err == NULL)
+    _exit (EXIT_FAILURE);
+
+  if (send_error_to_sync_socket (sync_socket_fd, has_terminal, err))
+    _exit (EXIT_FAILURE);
+
+  errno = crun_error_get_errno (err);
+  msg = (*err)->msg;
+  libcrun_fail_with_error (errno, msg);
+  _exit (EXIT_FAILURE);
+}
+
+static int
+expect_success_from_sync_socket (int sync_fd, libcrun_error_t *err)
+{
+  int err_code;
+  cleanup_free char *err_str = NULL;
+  char res = 1;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (read (sync_fd, &res, 1));
+  if (UNLIKELY (ret != 1))
+    return crun_make_error (err, errno, "read status from sync socket");
+
+  if (res == 0)
+    return 0;
+
+  if (read_error_from_sync_socket (sync_fd, &err_code, &err_str))
+    return crun_make_error (err, err_code, "%s", err_str);
+
+  return crun_error_wrap (err, "read from sync socket");
+}
+
 static int
 join_namespaces (runtime_spec_schema_config_schema *def,
                  int *namespaces_to_join,
@@ -2737,7 +2852,7 @@ join_namespaces (runtime_spec_schema_config_schema *def,
 
 #define MAX_NAMESPACES 10
 
-struct join_namespaces_s
+struct init_status_s
 {
   /* fd to the namespace to join.  */
   int fd[MAX_NAMESPACES+1];
@@ -2746,56 +2861,56 @@ struct join_namespaces_s
   /* CLONE_* value.  */
   int value[MAX_NAMESPACES];
   /* How many namespaces to join.  */
-  size_t len;
+  size_t fd_len;
 
   bool join_pidns;
   bool join_ipcns;
+
+  /* Must create the user namespace after joining
+     some existing namespaces.  */
+  bool must_wait_for_userns_creation;
+
+  /* Need to fork again once in the container.  */
+  bool must_fork;
 
   /* fd index for userns.  */
   int userns_index;
   /* def->linux->namespaces userns.  */
   int userns_index_origin;
+
+  /* All namespaces created/joined by the container.  */
+  int all_namespaces;
+
+  /* What namespaces are still missing to be created.  */
+  int namespaces_to_unshare;
 };
 
-static void
-reset_join_namespaces (struct join_namespaces_s *ns)
+void cleanup_free_init_statusp (struct init_status_s *ns)
 {
+  size_t i;
+
+  for (i = 0; i < ns->fd_len; i++)
+    TEMP_FAILURE_RETRY (close (ns->fd[i]));
+}
+
+static int
+configure_init_status (struct init_status_s *ns, libcrun_container_t *container,libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
 
   for (i = 0; i < MAX_NAMESPACES + 1; i++)
     ns->fd[i] = -1;
-  ns->len = 0;
+
+  ns->fd_len = 0;
+  ns->all_namespaces = 0;
+  ns->namespaces_to_unshare = 0;
   ns->join_pidns = false;
   ns->join_ipcns = false;
+  ns->must_fork = false;
+  ns->must_wait_for_userns_creation = false;
   ns->userns_index = -1;
   ns->userns_index_origin = -1;
-}
-
-pid_t
-libcrun_run_linux_container (libcrun_container_t *container,
-                             int detach,
-                             container_entrypoint_t entrypoint,
-                             void *args,
-                             int *sync_socket_out,
-                             libcrun_error_t *err)
-{
-  runtime_spec_schema_config_schema *def = container->container_def;
-  size_t i;
-  int ret;
-  int flags_unshare = 0, flags = 0;
-  pid_t pid, pid_container = 0;
-  cleanup_close int sync_socket_host = -1;
-  cleanup_close int sync_socket_container = -1;
-  int sync_socket[2];
-  bool must_fork = false;
-  bool clone_can_create_userns;
-  cleanup_close int mqueuefsfd = -1;
-  cleanup_close int procfsfd = -1;
-  bool must_wait_for_userns_creation;
-  struct join_namespaces_s ns_to_join;
-  cleanup_close_vec int *cleanup_ns_to_join_fd = ns_to_join.fd;
-
-  reset_join_namespaces (&ns_to_join);
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
@@ -2803,16 +2918,15 @@ libcrun_run_linux_container (libcrun_container_t *container,
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
+      ns->all_namespaces |= value;
+
       if (def->linux->namespaces[i]->path == NULL)
-        {
-          if (value != CLONE_NEWUSER)
-            flags_unshare |= value;
-        }
+        ns->namespaces_to_unshare |= value;
       else
         {
           int fd;
 
-          if (ns_to_join.len >= MAX_NAMESPACES)
+          if (ns->fd_len >= MAX_NAMESPACES)
             return crun_make_error (err, 0, "too many namespaces to join");
 
           fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
@@ -2821,30 +2935,189 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
           if (value == CLONE_NEWUSER)
             {
-              ns_to_join.userns_index = ns_to_join.len;
-              ns_to_join.userns_index_origin = i;
+              ns->userns_index = ns->fd_len;
+              ns->userns_index_origin = i;
             }
 
-          ns_to_join.fd[ns_to_join.len] = fd;
-          ns_to_join.index[ns_to_join.len] = i;
-          ns_to_join.value[ns_to_join.len] = value;
-          ns_to_join.len++;
-          ns_to_join.fd[ns_to_join.len] = -1;
+          ns->fd[ns->fd_len] = fd;
+          ns->index[ns->fd_len] = i;
+          ns->value[ns->fd_len] = value;
+          ns->fd_len++;
+          ns->fd[ns->fd_len] = -1;
         }
-
-      flags |= value;
     }
 
-  if (container->host_uid && (flags & CLONE_NEWUSER) == 0)
+  if (container->host_uid && (ns->all_namespaces & CLONE_NEWUSER) == 0)
     {
       libcrun_warning ("non root user need to have an 'user' namespace");
-      flags |= CLONE_NEWUSER;
+      ns->all_namespaces |= CLONE_NEWUSER;
     }
 
-  get_private_data (container)->unshare_flags = flags;
+  return 0;
+}
+
+static int
+init_container (libcrun_container_t *container,
+                int sync_socket_container,
+                struct init_status_s *init_status,
+                libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int mqueuefsfd = -1;
+  cleanup_close int procfsfd = -1;
+  pid_t pid_container = 0;
+  size_t i;
+  int ret;
+  char success = 0;
+
+  ret = libcrun_set_oom (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (init_status->fd_len > 0)
+    {
+      ret = join_namespaces (def, init_status->fd, init_status->fd_len, init_status->index, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      /* If the container needs to join an existing PID namespace, take a reference to it
+         before creating a new user namespace, as we could lose the access to the existing
+         namespace.  */
+      if ((init_status->all_namespaces & CLONE_NEWUSER) && (init_status->join_pidns || init_status->join_ipcns))
+        {
+          for (i = 0; i < def->mounts_len; i++)
+            {
+              /* If for any reason the mount cannot be opened, ignore errors and continue.
+                 An error will be generated later if it is not possible to join the namespace.
+              */
+              if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
+                procfsfd = fsopen_mount (def->mounts[i]);
+              if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
+                mqueuefsfd = fsopen_mount (def->mounts[i]);
+            }
+        }
+    }
+
+  if (init_status->all_namespaces & CLONE_NEWUSER)
+    {
+      if (init_status->must_wait_for_userns_creation)
+        {
+          ret = unshare (CLONE_NEWUSER);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "unshare (CLONE_NEWUSER)");
+
+          init_status->namespaces_to_unshare &= ~CLONE_NEWUSER;
+
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to sync socket");
+        }
+
+      if (init_status->userns_index < 0)
+        {
+          char tmp;
+
+          ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "read from sync socket");
+        }
+      else
+        {
+          /* If we need to join another user namespace, do it immediately before creating any other namespace. */
+          ret = setns (init_status->fd[init_status->userns_index], CLONE_NEWUSER);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[init_status->userns_index_origin]->path);
+        }
+      ret = setresuid (0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setresuid(0)");
+
+      ret = setresgid (0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setresgid(0)");
+    }
+
+  ret = join_namespaces (def, init_status->fd, init_status->fd_len, init_status->index, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (init_status->namespaces_to_unshare)
+    {
+      /* New namespaces to create for the container.  */
+      ret = unshare (init_status->namespaces_to_unshare);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "unshare");
+    }
+
+#ifdef CLONE_NEWTIME
+  if (init_status->all_namespaces & CLONE_NEWTIME)
+    {
+      const char *v = find_annotation (container, "run.oci.timens_offset");
+      if (v)
+        {
+          ret = write_file ("/proc/self/timens_offsets", v, strlen (v), err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+#endif
+
+  if (init_status->must_fork)
+    {
+      /* A PID and a time namespace is joined when a new process is created.  */
+      pid_container = fork ();
+      if (UNLIKELY (pid_container < 0))
+        return crun_make_error (err, errno, "cannot fork");
+
+      /* Report back the new PID.  */
+      if (pid_container)
+        {
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &pid_container, sizeof (pid_container)));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to sync socket");
+          _exit (EXIT_SUCCESS);
+        }
+    }
+
+  ret = libcrun_container_setgroups (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  get_private_data (container)->procfsfd = get_and_reset (&procfsfd);
+  get_private_data (container)->mqueuefsfd = get_and_reset (&mqueuefsfd);
+
+  return 0;
+}
+
+pid_t
+libcrun_run_linux_container (libcrun_container_t *container,
+                             container_entrypoint_t entrypoint,
+                             void *args,
+                             int *sync_socket_out,
+                             libcrun_error_t *err)
+{
+   __attribute__((cleanup (cleanup_free_init_statusp))) struct init_status_s init_status;
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int sync_socket_container = -1;
+  cleanup_close int sync_socket_host = -1;
+  bool clone_can_create_userns;
+  int sync_socket[2];
+  pid_t pid;
+  size_t i;
+  int ret;
+
+  ret = configure_init_status (&init_status, container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  get_private_data (container)->unshare_flags = init_status.all_namespaces;
 #ifdef CLONE_NEWCGROUP
-  /* cgroup will be unshared later.  */
-  flags &= ~CLONE_NEWCGROUP;
+  /* cgroup will be unshared later.  Once the process is in the correct cgroup.  */
+  init_status.all_namespaces &= ~CLONE_NEWCGROUP;
 #endif
 
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket);
@@ -2874,59 +3147,63 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
   ret = libcrun_set_oom (container, err);
   if (UNLIKELY (ret < 0))
-      goto out;
+    return ret;
 
-  if ((flags & CLONE_NEWIPC) && (flags & CLONE_NEWUSER))
+  if ((init_status.all_namespaces & CLONE_NEWIPC) && (init_status.all_namespaces & CLONE_NEWUSER))
     {
-      for (i = 0; i < ns_to_join.len; i++)
-        if (ns_to_join.value[i] == CLONE_NEWIPC)
-            ns_to_join.join_ipcns = true;
+      for (i = 0; i < init_status.fd_len; i++)
+        if (init_status.value[i] == CLONE_NEWIPC)
+          init_status.join_ipcns = true;
     }
 
-  if (flags & CLONE_NEWPID)
+  if (init_status.all_namespaces & CLONE_NEWPID)
     {
-      must_fork = true;
-      for (i = 0; i < ns_to_join.len; i++)
+      init_status.must_fork = true;
+      for (i = 0; i < init_status.fd_len; i++)
         {
-          if (ns_to_join.value[i] == CLONE_NEWPID)
+          if (init_status.value[i] == CLONE_NEWPID)
             {
-              ns_to_join.join_pidns = true;
-              if (setns (ns_to_join.fd[i], CLONE_NEWPID) == 0)
+              init_status.join_pidns = true;
+              if (setns (init_status.fd[i], CLONE_NEWPID) == 0)
                 {
-                  flags_unshare &= ~CLONE_NEWPID;
-                  must_fork = false;
-                  close_and_reset (&ns_to_join.fd[i]);
+                  init_status.namespaces_to_unshare &= ~CLONE_NEWPID;
+                  init_status.must_fork = false;
+                  close_and_reset (&init_status.fd[i]);
                 }
               break;
             }
         }
-      if (i == ns_to_join.len && (flags & CLONE_NEWUSER) == 0)
+      /* It creates a new PID namespace, without a user namespace, we can try to
+         join it immediately without another fork.  */
+      if (i == init_status.fd_len && (init_status.all_namespaces & CLONE_NEWUSER) == 0)
         {
           if (unshare (CLONE_NEWPID) == 0)
             {
-              flags_unshare &= ~CLONE_NEWPID;
-              must_fork = false;
+              init_status.namespaces_to_unshare &= ~CLONE_NEWPID;
+              init_status.must_fork = false;
             }
         }
     }
 #ifdef CLONE_NEWTIME
-  if (flags & CLONE_NEWTIME)
-    must_fork = true;
+  if (init_status.all_namespaces & CLONE_NEWTIME)
+    init_status.must_fork = true;
 #endif
 
-  clone_can_create_userns = ns_to_join.len == 0 && ns_to_join.userns_index < 0;
+  clone_can_create_userns = init_status.fd_len == 0 && init_status.userns_index < 0;
 
-  must_wait_for_userns_creation = (flags & CLONE_NEWUSER) && (ns_to_join.len > 0) && (ns_to_join.userns_index < 0);
+  if (init_status.all_namespaces & CLONE_NEWUSER)
+    init_status.must_wait_for_userns_creation = !clone_can_create_userns || ((init_status.fd_len > 0) && (init_status.userns_index < 0));
 
   /* If we create a new user namespace, create it as part of the clone.  */
-  pid = syscall_clone ((flags & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | (detach ? 0 : SIGCHLD), NULL);
+  pid = syscall_clone ((init_status.namespaces_to_unshare & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | SIGCHLD, NULL);
   if (UNLIKELY (pid < 0))
     return crun_make_error (err, errno, "clone");
 
+  if (clone_can_create_userns)
+    init_status.namespaces_to_unshare &= ~CLONE_NEWUSER;
+
   if (pid)
     {
-      pid_t grandchild = 0;
-
       ret = save_external_descriptors (container, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2935,18 +3212,16 @@ libcrun_run_linux_container (libcrun_container_t *container,
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "close");
 
-      if (flags & CLONE_NEWUSER)
+      if (init_status.all_namespaces & CLONE_NEWUSER)
         {
-          if (must_wait_for_userns_creation)
+          if (init_status.must_wait_for_userns_creation)
             {
-              char v = 0;
-
-              ret = TEMP_FAILURE_RETRY (read (sync_socket_host, &v, 1));
-              if (UNLIKELY (ret != 1 || v != 0))
-                return crun_make_error (err, errno, "read from sync socket");
+              ret = expect_success_from_sync_socket (sync_socket_host, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
             }
 
-          if (ns_to_join.userns_index < 0)
+          if (init_status.userns_index < 0)
             {
               ret = libcrun_set_usernamespace (container, pid, err);
               if (UNLIKELY (ret < 0))
@@ -2958,263 +3233,70 @@ libcrun_run_linux_container (libcrun_container_t *container,
             }
         }
 
-      if (must_fork)
+      if (init_status.must_fork)
         {
+          pid_t grandchild = 0;
+
+          ret = expect_success_from_sync_socket (sync_socket_host, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
           ret = TEMP_FAILURE_RETRY (read (sync_socket_host, &grandchild, sizeof (grandchild)));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "read pid from sync socket");
 
           /* Cleanup the first process.  */
-          if (! detach)
-            waitpid (pid, NULL, 0);
+          waitpid (pid, NULL, 0);
+
+          pid = grandchild;
         }
+
+      ret = expect_success_from_sync_socket (sync_socket_host, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       *sync_socket_out = get_and_reset (&sync_socket_host);
 
-      return grandchild ? grandchild : pid;
+      return pid;
     }
 
-  /* In the container.  Join namespaces if asked and jump into the entrypoint function.  */
+  /* Inside the container process.  */
+
   ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
-    {
-      crun_make_error (err, errno, "close");
-      goto out;
-    }
+    return crun_make_error (err, errno, "close");
 
-  ret = libcrun_set_oom (container, err);
+  /* Initialize the new process and make sure to join/create all the required namespaces.  */
+  ret = init_container (container, sync_socket_container, &init_status, err);
   if (UNLIKELY (ret < 0))
-      goto out;
-
-  if (ns_to_join.len > 0)
     {
-      ret = join_namespaces (def, ns_to_join.fd, ns_to_join.len, ns_to_join.index, true, err);
+      char failure = 1;
+
+      ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &failure, 1));
       if (UNLIKELY (ret < 0))
-        goto out;
+        goto localfail;
 
-      /* If the container needs to join an existing PID namespace, take a reference to it
-         before creating a new user namespace, as we could lose the access to the existing
-         namespace.  */
-      if ((flags & CLONE_NEWUSER) && (ns_to_join.join_pidns || ns_to_join.join_ipcns))
-        {
-          for (i = 0; i < def->mounts_len; i++)
-            {
-              /* If for any reason the mount cannot be opened, ignore errors and continue.
-                 An error will be generated later if it is not possible to join the namespace.
-              */
-              if (ns_to_join.join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-                procfsfd = fsopen_mount (def->mounts[i]);
-              if (ns_to_join.join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-                mqueuefsfd = fsopen_mount (def->mounts[i]);
-            }
-        }
+      send_error_to_sync_socket_and_die (sync_socket_container, false, err);
 
-      if (must_wait_for_userns_creation)
-        {
-          char success = 0;
-
-          ret = unshare (CLONE_NEWUSER);
-          if (UNLIKELY (ret < 0))
-            goto out;
-
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
-          if (UNLIKELY (ret < 0))
-            goto out;
-        }
+localfail:
+      libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+      _exit (EXIT_FAILURE);
     }
-
-  if (flags & CLONE_NEWUSER)
+  else
     {
-      if (ns_to_join.userns_index < 0)
-        {
-          char tmp;
+      char success = 0;
 
-          ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
-          if (UNLIKELY (ret < 0))
-            goto out;
-        }
-      else
-        {
-          /* If we need to join another user namespace, do it immediately before creating any other namespace. */
-          ret = setns (ns_to_join.fd[ns_to_join.userns_index], CLONE_NEWUSER);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[ns_to_join.userns_index_origin]->path);
-              goto out;
-            }
-        }
-      ret = setgid (0);
+      ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
       if (UNLIKELY (ret < 0))
-        {
-          crun_make_error (err, errno, "setgid(0)");
-          goto out;
-        }
-
-      ret = setuid (0);
-      if (UNLIKELY (ret < 0))
-        {
-          crun_make_error (err, errno, "setgid(0)");
-          goto out;
-        }
+        return ret;
     }
 
-  ret = join_namespaces (def, ns_to_join.fd, ns_to_join.len, ns_to_join.index, false, err);
-  if (UNLIKELY (ret < 0))
-    goto out;
-
-  if (flags_unshare)
-    {
-      /* New namespaces to create for the container.  */
-      ret = unshare (flags_unshare);
-      if (UNLIKELY (ret < 0))
-        goto out;
-    }
-
-#ifdef CLONE_NEWTIME
-  if (flags & CLONE_NEWTIME)
-    {
-      cleanup_close int fd = open ("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
-      if (container->container_def->annotations)
-        {
-          for (i = 0; i < container->container_def->annotations->len; i++)
-            {
-              if (strcmp (container->container_def->annotations->keys[i], "run.oci.timens_offset") == 0)
-                {
-                  const char *v;
-
-                  v = container->container_def->annotations->values[i];
-
-                  ret = write (fd, v, strlen (v));
-                  if (UNLIKELY (ret < 0))
-                    goto out;
-                }
-            }
-        }
-    }
-#endif
-
-  if (must_fork)
-    {
-      /* A PID and a time namespace is joined when a new process is created.  */
-      pid_container = fork ();
-      if (UNLIKELY (pid_container < 0))
-        {
-          crun_make_error (err, errno, "cannot fork");
-          goto out;
-        }
-
-      /* Report back the new PID.  */
-      if (pid_container)
-        {
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &pid_container, sizeof (pid_container)));
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to sync socket");
-          _exit (EXIT_SUCCESS);
-        }
-    }
-
-  ret = libcrun_container_setgroups (container, err);
-  if (UNLIKELY (ret < 0))
-    goto out;
-
-  get_private_data (container)->procfsfd = get_and_reset (&procfsfd);
-  get_private_data (container)->mqueuefsfd = get_and_reset (&mqueuefsfd);
-
+  /* Jump into the specified entrypoint.  */
   entrypoint (args, container->context->notify_socket, sync_socket_container, err);
 
   /* ENTRYPOINT returns only on an error, fallback here: */
-
- out:
   if (*err)
     libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-  _exit (EXIT_FAILURE);
-}
-
-static bool
-read_error_from_sync_socket (int sync_socket_fd, int *error, char **str)
-{
-  cleanup_free char *b = NULL;
-  size_t size;
-  int code;
-  int ret;
-
-  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &code, sizeof (code)));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  *error = code;
-
-  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &size, sizeof (size)));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  if (size == 0)
-    return false;
-
-  if (size > 1024)
-    size = 1024;
-
-  b = xmalloc (size + 1);
-  ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, b, size));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  b[ret] = '\0';
-
-  *str = b;
-  b = NULL;
-  return true;
-}
-
-static bool
-send_error_to_sync_socket (int sync_socket_fd, libcrun_error_t *err)
-{
-  int ret;
-  int code;
-  size_t size;
-  char *msg;
-
-  if (err == NULL || *err == NULL)
-    return false;
-
-  code = crun_error_get_errno (err);
-
-  /* dummy terminal fd.  */
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, "1", 1));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, &code, sizeof (code)));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  msg = (*err)->msg;
-  size = strlen (msg) + 1;
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, &size, sizeof (size)));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_fd, msg, size));
-  if (UNLIKELY (ret < 0))
-    return false;
-
-  return true;
-}
-
-static  __attribute__ ((noreturn)) void
-send_error_to_sync_socket_and_die (int sync_socket_fd, libcrun_error_t *err)
-{
-  char *msg;
-
-  if (err == NULL || *err == NULL)
-    _exit (EXIT_FAILURE);
-
-  if (send_error_to_sync_socket (sync_socket_fd, err))
-    _exit (EXIT_FAILURE);
-
-  errno = crun_error_get_errno (err);
-  msg = (*err)->msg;
-  libcrun_fail_with_error (errno, msg);
   _exit (EXIT_FAILURE);
 }
 
@@ -3433,31 +3515,30 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
           if (ret < 0)
             {
               crun_make_error (err, errno, "setsid");
-              send_error_to_sync_socket_and_die (sync_fd, err);
+              send_error_to_sync_socket_and_die (sync_fd, true, err);
             }
 
-          ret = setgid (0);
+          ret = setresuid (0, 0, 0);
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, errno, "setgid");
-              send_error_to_sync_socket_and_die (sync_fd, err);
+              send_error_to_sync_socket_and_die (sync_fd, true, err);
             }
 
-          ret = setuid (0);
+          ret = setresgid (0, 0, 0);
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, errno, "setuid");
-              send_error_to_sync_socket_and_die (sync_fd, err);
+              send_error_to_sync_socket_and_die (sync_fd, true, err);
             }
 
           master_fd = open_terminal (container, &slave, err);
           if (UNLIKELY (master_fd < 0))
-            send_error_to_sync_socket_and_die (sync_fd, err);
-
+            send_error_to_sync_socket_and_die (sync_fd, true, err);
 
           ret = send_fd_to_socket (sync_fd, master_fd, err);
           if (UNLIKELY (ret < 0))
-            send_error_to_sync_socket_and_die (sync_fd, err);
+            send_error_to_sync_socket_and_die (sync_fd, true, err);
         }
 
       if (r < 0)

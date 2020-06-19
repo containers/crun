@@ -32,7 +32,6 @@ typedef int (*container_entrypoint_t) (void *args, const char *notify_socket,
                                        libcrun_error_t *err);
 
 pid_t libcrun_run_linux_container (libcrun_container_t *container,
-                                   int detach,
                                    container_entrypoint_t entrypoint,
                                    void *args,
                                    int *sync_socket_out,
