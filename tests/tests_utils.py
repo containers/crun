@@ -187,7 +187,7 @@ def get_crun_path():
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', use_popen=False, hide_stderr=False,
-                       all_dev_null=False):
+                       all_dev_null=False, id_container=None):
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
     os.makedirs(rootfs)
@@ -195,7 +195,9 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         os.makedirs(os.path.join(rootfs, i))
     with open(os.path.join(rootfs, "var", "file"), "w+") as f:
         f.write("file")
-    id_container = 'test-%s' % os.path.basename(temp_dir)
+
+    if id_container is None:
+        id_container = 'test-%s' % os.path.basename(temp_dir)
 
     with open(os.path.join(temp_dir, "config.json"), "w") as config_file:
         conf = json.dumps(config)
