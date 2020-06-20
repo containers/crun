@@ -46,8 +46,23 @@ def test_start():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_run_twice():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'echo', 'hi']
+    add_all_namespaces(conf)
+    try:
+        id_container = "container-%s" % os.getpid()
+        for i in range(2):
+            out, cid = run_and_get_output(conf, command='run', id_container=id_container)
+            if "hi" not in str(out):
+                return -1
+    except:
+        return -1
+    return 0
+
 all_tests = {
     "start" : test_start,
+    "run-twice" : test_run_twice,
 }
 
 if __name__ == "__main__":
