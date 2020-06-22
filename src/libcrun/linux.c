@@ -2868,7 +2868,7 @@ struct init_status_s
 
   /* Must create the user namespace after joining
      some existing namespaces.  */
-  bool must_wait_for_userns_creation;
+  bool delayed_userns_create;
 
   /* Need to fork again once in the container.  */
   bool must_fork;
@@ -2908,7 +2908,7 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
   ns->join_pidns = false;
   ns->join_ipcns = false;
   ns->must_fork = false;
-  ns->must_wait_for_userns_creation = false;
+  ns->delayed_userns_create = false;
   ns->userns_index = -1;
   ns->userns_index_origin = -1;
 
@@ -3000,7 +3000,7 @@ init_container (libcrun_container_t *container,
 
   if (init_status->all_namespaces & CLONE_NEWUSER)
     {
-      if (init_status->must_wait_for_userns_creation)
+      if (init_status->delayed_userns_create)
         {
           ret = unshare (CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
@@ -3028,6 +3028,7 @@ init_container (libcrun_container_t *container,
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[init_status->userns_index_origin]->path);
         }
+
       ret = setresuid (0, 0, 0);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setresuid(0)");
@@ -3189,10 +3190,11 @@ libcrun_run_linux_container (libcrun_container_t *container,
     init_status.must_fork = true;
 #endif
 
-  clone_can_create_userns = init_status.fd_len == 0 && init_status.userns_index < 0;
+  /* If there are no other namespaces to join, we can create the user ns directly with clone(2).  */
+  clone_can_create_userns = init_status.fd_len == 0;
 
-  if (init_status.all_namespaces & CLONE_NEWUSER)
-    init_status.must_wait_for_userns_creation = !clone_can_create_userns || ((init_status.fd_len > 0) && (init_status.userns_index < 0));
+  if ((init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0)
+      init_status.delayed_userns_create = !clone_can_create_userns || init_status.fd_len > 0;
 
   /* If we create a new user namespace, create it as part of the clone.  */
   pid = syscall_clone ((init_status.namespaces_to_unshare & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | SIGCHLD, NULL);
@@ -3214,7 +3216,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
 
       if (init_status.all_namespaces & CLONE_NEWUSER)
         {
-          if (init_status.must_wait_for_userns_creation)
+          if (init_status.delayed_userns_create)
             {
               ret = expect_success_from_sync_socket (sync_socket_host, err);
               if (UNLIKELY (ret < 0))
