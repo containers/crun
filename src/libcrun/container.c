@@ -904,6 +904,11 @@ container_init (void *args, const char *notify_socket, int sync_socket,
                       err);
       if (UNLIKELY (ret != 0))
         return ret;
+
+      /* Seek stdout/stderr to the end.  If the hooks were using the same files,
+         the container process overwrites what was previously written.  */
+      (void) lseek (1, 0, SEEK_END);
+      (void) lseek (2, 0, SEEK_END);
     }
 
   execv (exec_path, def->process->args);
