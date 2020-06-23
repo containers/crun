@@ -186,7 +186,7 @@ def get_crun_path():
     return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
-                       command='run', use_popen=False, hide_stderr=False,
+                       command='run', env=None, use_popen=False, hide_stderr=False,
                        all_dev_null=False, id_container=None):
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
@@ -228,10 +228,10 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         if not stdout:
             stdout=subprocess.PIPE
         return subprocess.Popen(args, cwd=temp_dir, stdout=stdout,
-                                stderr=stderr, stdin=stdin,
+                                stderr=stderr, stdin=stdin, env=env,
                                 close_fds=False), id_container
     else:
-        return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, close_fds=False).decode(), id_container
+        return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False).decode(), id_container
 
 def run_crun_command(args):
     cwd = os.getcwd()

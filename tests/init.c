@@ -141,6 +141,14 @@ int main (int argc, char **argv)
       exit (0);
     }
 
+  if (strcmp (argv[1], "printenv") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'printenv' requires an argument");
+      fputs (getenv (argv[2]), stdout);
+      exit (0);
+    }
+
   if (strcmp (argv[1], "cat") == 0)
     {
       if (argc < 3)

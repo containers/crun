@@ -60,9 +60,54 @@ def test_run_twice():
         return -1
     return 0
 
+def test_sd_notify():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    env = dict(os.environ)
+    env["NOTIFY_SOCKET"] = "/run/notify/the-socket"
+    try:
+        out, cid = run_and_get_output(conf, env=env, command='run')
+        if "/run/notify" not in str(out):
+            return -1
+    except:
+        return -1
+    return 0
+
+def test_sd_notify_file():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'ls', '/tmp/parent-dir']
+    add_all_namespaces(conf)
+    env = dict(os.environ)
+    env["NOTIFY_SOCKET"] = "/tmp/parent-dir/the-socket"
+    try:
+        out, cid = run_and_get_output(conf, env=env, command='run')
+        if "notify" not in str(out):
+            return -1
+    except:
+        return -1
+    return 0
+
+def test_sd_notify_env():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'printenv', 'NOTIFY_SOCKET']
+    add_all_namespaces(conf)
+    env = dict(os.environ)
+    env["NOTIFY_SOCKET"] = "/tmp/parent-dir/the-socket"
+    try:
+        out, cid = run_and_get_output(conf, env=env, command='run')
+        if "/tmp/parent-dir/notify" not in str(out):
+            return -1
+    except:
+        return -1
+    return 0
+
 all_tests = {
     "start" : test_start,
     "run-twice" : test_run_twice,
+    "sd-notify" : test_sd_notify,
+    "sd-notify-file" : test_sd_notify_file,
+    "sd-notify-env" : test_sd_notify_env,
 }
 
 if __name__ == "__main__":
