@@ -1590,7 +1590,6 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   int ret;
   const char *notify_socket = container->context->notify_socket;
   cleanup_free char *host_notify_socket_path = NULL;
-  cleanup_free char *host_notify_socket_path_dir = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
   cleanup_free char *state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
 
@@ -1598,12 +1597,11 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
     return 0;
 
   xasprintf (&container_notify_socket_path, "%s%s", rootfs, notify_socket);
-  xasprintf (&host_notify_socket_path_dir, "%s/notify", state_dir);
   xasprintf (&host_notify_socket_path, "%s/notify", state_dir);
 
-  ret = mkdir (host_notify_socket_path_dir, 0700);
+  ret = mkdir (host_notify_socket_path, 0700);
   if (ret < 0)
-    return crun_make_error (err, errno, "mkdir `%s`", host_notify_socket_path_dir);
+    return crun_make_error (err, errno, "mkdir `%s`", host_notify_socket_path);
 
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
@@ -3104,6 +3102,7 @@ libcrun_run_linux_container (libcrun_container_t *container,
    __attribute__((cleanup (cleanup_free_init_statusp))) struct init_status_s init_status;
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int sync_socket_container = -1;
+  cleanup_free char *notify_socket_env = NULL;
   cleanup_close int sync_socket_host = -1;
   bool clone_can_create_userns;
   int sync_socket[2];
@@ -3294,7 +3293,14 @@ localfail:
     }
 
   /* Jump into the specified entrypoint.  */
-  entrypoint (args, container->context->notify_socket, sync_socket_container, err);
+  if (container->context->notify_socket)
+    {
+      cleanup_free char *tmp = xstrdup (container->context->notify_socket);
+      char *dir = dirname (tmp);
+      xasprintf (&notify_socket_env, "%s/notify", dir);
+    }
+
+  entrypoint (args, notify_socket_env, sync_socket_container, err);
 
   /* ENTRYPOINT returns only on an error, fallback here: */
   if (*err)
