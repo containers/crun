@@ -203,7 +203,8 @@ int main (int argc, char **argv)
     {
       close (1);
       close (2);
-      pause ();
+      /* Make sure the process doesn't hang forever.  */
+      sleep (120);
       exit (0);
     }
   if (strcmp (argv[1], "forkbomb") == 0)
