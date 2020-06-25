@@ -51,6 +51,7 @@
 #include <inttypes.h>
 #include <sys/personality.h>
 #include <net/if.h>
+#include <sys/xattr.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -1546,7 +1547,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   cleanup_free char *state_dir = NULL;
   char *host_path = NULL;
 
-  if (container)
+  if (container && get_private_data (container)->host_notify_socket_path)
     {
       const char *parent_dir;
 
@@ -1571,6 +1572,15 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
 
   if (UNLIKELY (chmod (host_path, 0777) < 0))
     return crun_make_error (err, errno, "chmod `%s`", host_path);
+
+#ifdef HAVE_FGETXATTR
+  if (container && container->container_def->linux->mount_label)
+    {
+      /* Ignore the error, the worse that can happen is that the container fails to notify it is ready.  */
+      (void ) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
+                        strlen (container->container_def->linux->mount_label), 0);
+    }
+#endif
 
   *notify_socket_out = get_and_reset (&notify_fd);
   return 1;
@@ -1632,7 +1642,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
     return ret;
 
   ret = do_mount (container, host_notify_socket_path, -1, container_notify_socket_path_dir, NULL,
-                  MS_BIND | MS_REC | MS_PRIVATE, NULL, 0, err);
+                  MS_BIND | MS_REC | MS_PRIVATE, NULL, false, err);
   if (UNLIKELY (ret < 0))
    return ret;
 

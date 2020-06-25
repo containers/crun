@@ -2007,18 +2007,18 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
   if (!ret)
     return crun_make_error (err, 0, "container `%s` is not running", id);
 
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (context->notify_socket)
     {
-      ret = get_notify_fd (context, NULL, &fd, err);
+      ret = get_notify_fd (context, container, &fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
   ret = libcrun_status_write_exec_fifo (context->state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
