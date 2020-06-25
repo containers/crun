@@ -206,7 +206,10 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     init = os.getenv("INIT") or "tests/init"
     crun = get_crun_path()
 
+    os.makedirs(os.path.join(rootfs, "sbin"))
     shutil.copy2(init, os.path.join(rootfs, "init"))
+    shutil.copy2(init, os.path.join(rootfs, "sbin", "init"))
+
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []

@@ -23,6 +23,45 @@ import shutil
 import sys
 from tests_utils import *
 
+def test_cwd_relative():
+    conf = base_config()
+    conf['process']['args'] = ['./init', 'echo', 'hello']
+    conf['process']['cwd'] = "/sbin"
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf)
+        if "hello" not in str(out):
+            return -1
+    except Exception as e:
+        return -1
+    return 0
+
+def test_cwd_relative_subdir():
+    conf = base_config()
+    conf['process']['args'] = ['sbin/init', 'echo', 'hello']
+    conf['process']['cwd'] = "/"
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf)
+        if "hello" not in str(out):
+            return -1
+    except:
+        return -1
+    return 0
+
+def test_cwd_absolute():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'echo', 'hello']
+    conf['process']['cwd'] = "/sbin"
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf)
+        if "hello" not in str(out):
+            return -1
+    except:
+        return -1
+    return 0
+
 def test_start():
     conf = base_config()
     conf['process']['args'] = ['/init', 'echo', 'hello']
@@ -108,6 +147,9 @@ all_tests = {
     "sd-notify" : test_sd_notify,
     "sd-notify-file" : test_sd_notify_file,
     "sd-notify-env" : test_sd_notify_env,
+    "test-cwd-relative": test_cwd_relative,
+    "test-cwd-relative-subdir": test_cwd_relative_subdir,
+    "test-cwd-absolute": test_cwd_absolute,
 }
 
 if __name__ == "__main__":
