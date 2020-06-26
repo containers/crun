@@ -68,7 +68,7 @@ def test_sd_notify():
     env["NOTIFY_SOCKET"] = "/run/notify/the-socket"
     try:
         out, cid = run_and_get_output(conf, env=env, command='run')
-        if "/run/notify" not in str(out):
+        if "/run/notify/the-socket" not in str(out):
             return -1
     except:
         return -1
@@ -76,7 +76,7 @@ def test_sd_notify():
 
 def test_sd_notify_file():
     conf = base_config()
-    conf['process']['args'] = ['/init', 'ls', '/tmp/parent-dir']
+    conf['process']['args'] = ['/init', 'ls', '/tmp/parent-dir/the-socket/']
     add_all_namespaces(conf)
     env = dict(os.environ)
     env["NOTIFY_SOCKET"] = "/tmp/parent-dir/the-socket"
@@ -96,7 +96,7 @@ def test_sd_notify_env():
     env["NOTIFY_SOCKET"] = "/tmp/parent-dir/the-socket"
     try:
         out, cid = run_and_get_output(conf, env=env, command='run')
-        if "/tmp/parent-dir/notify" not in str(out):
+        if "/tmp/parent-dir/the-socket/notify" not in str(out):
             return -1
     except:
         return -1

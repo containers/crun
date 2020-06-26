@@ -562,7 +562,7 @@ do_hooks (runtime_spec_schema_config_schema *def,
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
-container_init_setup (void *args, const char *notify_socket,
+container_init_setup (void *args, char *notify_socket,
                       int sync_socket, const char **exec_path,
                       libcrun_error_t *err)
 {
@@ -769,10 +769,8 @@ container_init_setup (void *args, const char *notify_socket,
 
   if (notify_socket)
     {
-      char *notify_socket_env;
-      xasprintf (&notify_socket_env, "NOTIFY_SOCKET=%s", notify_socket);
-      if (putenv (notify_socket_env) < 0)
-        return crun_make_error (err, errno, "putenv `%s`", notify_socket_env);
+      if (putenv (notify_socket) < 0)
+        return crun_make_error (err, errno, "putenv `%s`", notify_socket);
     }
 
   return 0;
@@ -806,13 +804,14 @@ int open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd,
 
 /* Entrypoint to the container.  */
 static int
-container_init (void *args, const char *notify_socket, int sync_socket,
+container_init (void *args, char *notify_socket, int sync_socket,
                 libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
+  cleanup_free char *notify_socket_cleanup = notify_socket;
 
   entrypoint_args->sync_socket = sync_socket;
 
