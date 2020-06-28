@@ -14,8 +14,10 @@ let
             mv "$lib"/lib/security "$pam/lib"
           '';
         });
-        systemd = pkg.systemd.overrideAttrs(x: {
-          mesonFlags = x.mesonFlags ++ [ "-Dstatic-libsystemd=true" ];
+        systemd = (static pkg.systemd).overrideAttrs(x: {
+          mesonFlags = x.mesonFlags ++ [
+            "-Dstatic-libsystemd=true"
+          ];
           postFixup = ''
             ${x.postFixup}
             sed -ri "s;$out/(.*);$nukedRef/\1;g" $lib/lib/libsystemd.a
@@ -31,8 +33,11 @@ let
   });
 
   static = pkg: pkg.overrideAttrs(x: {
-    configureFlags = (x.configureFlags or []) ++
-      [ "--without-shared" "--disable-shared" ];
+    doCheck = false;
+    configureFlags = (x.configureFlags or []) ++ [
+      "--without-shared"
+      "--disable-shared"
+    ];
     dontDisableStatic = true;
     enableSharedExecutables = false;
     enableStatic = true;
@@ -46,6 +51,7 @@ let
     nativeBuildInputs = [ autoreconfHook git go-md2man pkg-config python3 ];
     buildInputs = [ criu glibc glibc.static libcap libseccomp protobufc systemd yajl ];
     prePatch = ''
+      export CFLAGS='-static'
       export LDFLAGS='-s -w -static-libgcc -static'
       export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
       export CRUN_LDFLAGS='-all-static'
