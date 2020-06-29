@@ -1477,7 +1477,7 @@ find_executable (const char *executable_path, const char *cwd)
       return NULL;
     }
 
-  if (executable_path[0] == '.')
+  if (executable_path[0] == '.' || (executable_path[0] != '/' && strchr (executable_path, '/')))
     {
       cleanup_free char *cwd_allocated = NULL;
 
