@@ -27,7 +27,7 @@
 # include "container.h"
 # include "status.h"
 
-typedef int (*container_entrypoint_t) (void *args, const char *notify_socket,
+typedef int (*container_entrypoint_t) (void *args, char *notify_socket,
                                        int sync_socket,
                                        libcrun_error_t *err);
 
