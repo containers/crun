@@ -1,3 +1,35 @@
+* crun-0.14
+
+- cgroup, systemd: create container under subcgroup.  Now a "/container"
+  sub-cgroup is created and fully managed by libcrun.  This is a different
+  behaviour than what runc does.
+- libcrun: use the openat2 syscall available since Linux 5.6.
+- container: allow hooks output to file through an annotation.
+- linux: support joining PID/IPC namespace not owned by the user namespace.
+  Requires Linux 5.3.
+- linux: avoid double fork for creating the init process if not needed.
+- linux: fix an issue where the basename for $NOTIFY_SOCKET is different
+  than /notify.
+- rootless: allow /dev/{tty,ptmx} to be present in linux.devices.
+- cgroup: fix an issue on CentOS 7.8 when using net_cls and net_prio.
+- seccomp: honor errnoRet from OCI spec runtime.
+- exec: set setresuid/setresgid before setting up the terminal.
+- cgroup, v2: fix crun update with both --memory -1 --memory-swap -1.
+- cgroup, v2: fixing setting unlimited swap.
+- cgroup, v2: allow to set unlimited swap per se.
+- cgroup, v2: treat negative numbers as "max"
+- cgroup, v2: raise error if swap is set without memory limit.
+- cgroup: ignore cpu resources if set to 0.
+- libcrun: audit errno in crun_make_error calls
+- libcrun: fix read_pid_stat usage.
+- linux: fix double close on the same file descriptor.
+- container: Prevent deletion of not stopped container
+- status: Use process start time for identification
+- CRIU: several improvements.
+- linux: fix path lookups for relative paths containing '/'.
+- linux: use the SELinux mount label for the notify socket.
+- status: delete doesn't fail if the process already exited.
+
 * crun-0.13
 
 - license: change license to gplv2+ and lgpl2.1+.

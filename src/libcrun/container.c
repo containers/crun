@@ -1110,7 +1110,7 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, 
     return ret;
 
   ret = kill (status.pid, signal);
-  if (UNLIKELY (ret < 0 && errno != ESRCH))
+  if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "kill container");
   return 0;
 }
