@@ -1483,7 +1483,6 @@ libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode
   if (ret >= 0)
     return 0;
   return ret;
-
 }
 
 int
@@ -1636,7 +1635,7 @@ libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *er
   for (i = 0; pids && pids[i]; i++)
     {
       ret = kill (pids[i], signal);
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret < 0 && errno != ESRCH))
         return crun_make_error (err, errno, "kill process %d", pids[i]);
     }
 
