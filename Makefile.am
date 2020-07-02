@@ -138,8 +138,8 @@ dist-hook:
 EXTRA_DIST += $(TESTS) tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf
 BUILT_SOURCES = .version git-version.h
 
+man_MANS = crun.1
 if HAVE_MD2MAN
-man1_MANS = crun.1
 crun.1: $(abs_srcdir)/crun.1.md
 	$(MD2MAN) -in $(abs_srcdir)/crun.1.md -out crun.1
 
