@@ -102,17 +102,34 @@ get_state_directory_status_file (const char *state_root, const char *id)
 static int
 read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
 {
-  int ret;
-  cleanup_file FILE *f = NULL;
   cleanup_free char *pid_stat_file = NULL;
+  cleanup_free char *buffer = NULL;
+  cleanup_close int fd = -1;
+  int ret;
 
   xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
 
-  f = fopen (pid_stat_file, "r");
-  if (f == NULL)
-    return crun_make_error (err, errno, "open state file %s", pid_stat_file);
+  fd = open (pid_stat_file, O_RDONLY);
+  if (fd < 0)
+    {
+      /* The process already exited.  */
+      if (errno == ENOENT)
+	{
+	  memset (st, 0, sizeof (*st));
+	  return 0;
+	}
+      return crun_make_error (err, errno, "open state file %s", pid_stat_file);
+    }
 
-  ret = fscanf (f,"%d %255s %c %d %d %d %d %d %u %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %llu",
+  ret = read_all_fd (fd, pid_stat_file, &buffer, NULL, err);
+  if (ret < 0)
+    {
+      /* The process already exited.  */
+      libcrun_error_release (err);
+      return 0;
+    }
+
+  ret = sscanf (buffer, "%d %255s %c %d %d %d %d %d %u %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %llu",
     &(st->pid), st->comm, &(st->state), &(st->ppid), &(st->pgrp), &(st->session),
     &(st->tty_nr), &(st->tpgid), &(st->flags), &(st->minflt), &(st->cminflt),
     &(st->majflt), &(st->cmajflt), &(st->utime), &(st->stime), &(st->cutime),
