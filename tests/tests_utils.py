@@ -191,7 +191,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
     os.makedirs(rootfs)
-    for i in ["usr/bin", "etc", "var", "lib", "lib64"]:
+    for i in ["usr/bin", "etc", "var", "lib", "lib64", "usr/share/zoneinfo/Europe"]:
         os.makedirs(os.path.join(rootfs, i))
     with open(os.path.join(rootfs, "var", "file"), "w+") as f:
         f.write("file")
@@ -209,6 +209,9 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     os.makedirs(os.path.join(rootfs, "sbin"))
     shutil.copy2(init, os.path.join(rootfs, "init"))
     shutil.copy2(init, os.path.join(rootfs, "sbin", "init"))
+
+    open(os.path.join(rootfs, "usr/share/zoneinfo/Europe/Rome"), "w").close()
+    os.symlink("../usr/share/zoneinfo/Europe/Rome", os.path.join(rootfs, "etc/localtime"))
 
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
