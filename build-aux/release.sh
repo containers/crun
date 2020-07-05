@@ -22,7 +22,7 @@ fi
 OUTDIR=release-$VERSION
 
 rm -rf $OUTDIR
-mkdir $OUTDIR
+mkdir -p $OUTDIR
 
 rm -f crun-*.tar*
 
@@ -34,10 +34,17 @@ mv crun-*.tar.xz $OUTDIR
 
 make distclean
 
-make -C contrib/static-builder-x86_64 build-image RUNTIME=$RUNTIME
-make -C contrib/static-builder-x86_64 build-crun CRUN_SOURCE=$(pwd) RUNTIME=$RUNTIME
+RUNTIME=${RUNTIME:-podman}
 
-mv crun $OUTDIR/crun-$VERSION-static-x86_64
+mkdir -p /nix
+
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64
+
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/ --arg disableSystemd true
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64-disable-systemd
 
 if test x$SKIP_GPG = x; then
     for i in $OUTDIR/*; do
