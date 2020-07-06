@@ -1,3 +1,10 @@
+* crun-0.14.1
+
+- fix a regression in crun-0.14 where openat2(2) would fail when bind
+  mounting a symlink.
+- various small fixes to allow running regression tests outside of
+  source tree.
+
 * crun-0.14
 
 - cgroup, systemd: create container under subcgroup.  Now a "/container"
