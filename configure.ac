@@ -125,7 +125,7 @@ AC_SUBST([RPM_VERSION])
 
 AC_CHECK_TOOL(GPERF, gperf)
 if test -z "$GPERF"; then
-       AC_MSG_NOTICE(gperf not found, cannot rebuild signal parser code)
+       AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
 fi
 
 

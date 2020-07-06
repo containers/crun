@@ -3,7 +3,7 @@ TESTS := $(shell find . -name "test_*.py")
 INIT ?= init
 OCI_RUNTIME ?= /usr/bin/crun
 
-check: init tap-driver.sh
+check: $(INIT) tap-driver.sh
 	OCI_RUNTIME=${OCI_RUNTIME} INIT=${INIT} ./run_all_tests.sh
 
 tap-driver.sh:
