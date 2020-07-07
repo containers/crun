@@ -135,7 +135,7 @@ dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 	$(AM__GEN)cp git-version.h $(distdir)/git-version.h
 
-EXTRA_DIST += $(TESTS) tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf
+EXTRA_DIST += $(TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf
 BUILT_SOURCES = .version git-version.h
 
 if HAVE_MD2MAN

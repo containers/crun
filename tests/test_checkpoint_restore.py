@@ -1,4 +1,4 @@
-#!/bin/env $PYTHON
+#!/bin/env python3
 # crun - OCI runtime written in C
 #
 # Copyright (C) 2020 Adrian Reber <areber@redhat.com>
