@@ -29,14 +29,7 @@ def test_exec():
     add_all_namespaces(conf)
     cid = None
     try:
-        proc, cid = run_and_get_output(conf, command='run', use_popen=True)
-        for i in range(50):
-            try:
-                s = run_crun_command(["state", cid])
-                break
-            except Exception as e:
-                time.sleep(0.1)
-
+        _, cid = run_and_get_output(conf, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "echo", "foo"])
         if "foo" not in out:
             return -1
@@ -51,14 +44,7 @@ def test_exec_not_exists_helper(detach):
     add_all_namespaces(conf)
     cid = None
     try:
-        proc, cid = run_and_get_output(conf, command='run', use_popen=True)
-        for i in range(50):
-            try:
-                s = run_crun_command(["state", cid])
-                break
-            except Exception as e:
-                time.sleep(0.1)
-
+        _, cid = run_and_get_output(conf, command='run', detach=True)
         try:
             if detach:
                 out = run_crun_command(["exec", "-d", cid, "/not.here"])
