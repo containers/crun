@@ -2564,16 +2564,16 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 static int
-open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *err)
+open_terminal (libcrun_container_t *container, char **pty, libcrun_error_t *err)
 {
   int ret;
   cleanup_close int fd = -1;
 
-  fd = libcrun_new_terminal (slave, err);
+  fd = libcrun_new_terminal (pty, err);
   if (UNLIKELY (fd < 0))
     return fd;
 
-  ret = libcrun_set_stdio (*slave, err);
+  ret = libcrun_set_stdio (*pty, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2581,9 +2581,9 @@ open_terminal (libcrun_container_t *container, char **slave, libcrun_error_t *er
       && container->container_def->process->user
       && container->container_def->process->user->uid)
     {
-      ret = chown (*slave, container->container_def->process->user->uid, -1);
+      ret = chown (*pty, container->container_def->process->user->uid, -1);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chown `%s`", *slave);
+        return crun_make_error (err, errno, "chown `%s`", *pty);
     }
 
   ret = get_and_reset (&fd);
@@ -2648,13 +2648,13 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
   cleanup_close int fd = -1;
-  cleanup_free char *slave = NULL;
+  cleanup_free char *pty = NULL;
   runtime_spec_schema_config_schema *def = container->container_def;
 
   if (def->process == NULL || !def->process->terminal)
     return 0;
 
-  fd = open_terminal (container, &slave, err);
+  fd = open_terminal (container, &pty, err);
   if (UNLIKELY (fd < 0))
     return fd;
 
@@ -2686,7 +2686,7 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
       crun_error_release (err);
     }
 
-  ret = do_mount (container, slave, -1, "/dev/console", NULL, MS_BIND, NULL, 0, err);
+  ret = do_mount (container, pty, -1, "/dev/console", NULL, MS_BIND, NULL, 0, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3515,7 +3515,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
       /* Inside the grandchild process.  The real process
          used for the container.  */
       int r = -1;
-      cleanup_free char *slave = NULL;
+      cleanup_free char *pty = NULL;
 
       ret = TEMP_FAILURE_RETRY (read (sync_fd, &r, sizeof (r)));
       if (UNLIKELY (ret < 0))
@@ -3523,7 +3523,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
       if (terminal_fd)
         {
-          cleanup_close int master_fd = -1;
+          cleanup_close int ptmx_fd = -1;
 
           ret = setsid ();
           if (ret < 0)
@@ -3546,11 +3546,11 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
               send_error_to_sync_socket_and_die (sync_fd, true, err);
             }
 
-          master_fd = open_terminal (container, &slave, err);
-          if (UNLIKELY (master_fd < 0))
+          ptmx_fd = open_terminal (container, &pty, err);
+          if (UNLIKELY (ptmx_fd < 0))
             send_error_to_sync_socket_and_die (sync_fd, true, err);
 
-          ret = send_fd_to_socket (sync_fd, master_fd, err);
+          ret = send_fd_to_socket (sync_fd, ptmx_fd, err);
           if (UNLIKELY (ret < 0))
             send_error_to_sync_socket_and_die (sync_fd, true, err);
         }

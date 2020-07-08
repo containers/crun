@@ -49,7 +49,7 @@ static struct argp_option options[] =
    {"bundle", 'b', 0, 0, "container bundle (default \".\")", 0},
    {"config", 'f', "FILE", 0, "override the config file name", 0},
    {"detach", 'd', 0, 0, "detach from the parent", 0},
-   {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the master end of the tty", 0},
+   {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the ptmx end of the tty", 0},
    {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0},
    {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0},
    {"no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process", 0},
