@@ -1702,7 +1702,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
       close_and_reset (&socket_pair_0);
 
-      ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
+      ret = libcrun_setup_terminal_ptmx (terminal_fd, &orig_terminal, err);
       if (UNLIKELY (ret < 0))
         return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
     }
@@ -2466,7 +2466,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
         }
       else
         {
-          ret = libcrun_setup_terminal_master (terminal_fd, &orig_terminal, err);
+          ret = libcrun_setup_terminal_ptmx (terminal_fd, &orig_terminal, err);
           if (UNLIKELY (ret < 0))
             {
               flush_fd_to_err (context, terminal_fd);

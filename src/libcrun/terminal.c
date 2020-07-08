@@ -38,7 +38,7 @@ struct terminal_status_s
 
 
 int
-libcrun_new_terminal (char **slave, libcrun_error_t *err)
+libcrun_new_terminal (char **pty, libcrun_error_t *err)
 {
   char buf[64];
   int ret;
@@ -54,7 +54,7 @@ libcrun_new_terminal (char **slave, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "unlockpt");
 
-  *slave = xstrdup (buf);
+  *pty = xstrdup (buf);
 
   ret = fd;
   fd = -1;
@@ -85,13 +85,13 @@ set_raw (int fd, libcrun_error_t *err)
 }
 
 int
-libcrun_set_stdio (char *slave, libcrun_error_t *err)
+libcrun_set_stdio (char *pty, libcrun_error_t *err)
 {
   int ret, i;
-  cleanup_close int fd = open (slave, O_RDWR);
+  cleanup_close int fd = open (pty, O_RDWR);
 
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open %s", slave);
+    return crun_make_error (err, errno, "open %s", pty);
 
   for (i = 0; i < 3; i++)
     {
@@ -108,7 +108,7 @@ libcrun_set_stdio (char *slave, libcrun_error_t *err)
 }
 
 int
-libcrun_setup_terminal_master (int fd, void **current_status, libcrun_error_t *err)
+libcrun_setup_terminal_ptmx (int fd, void **current_status, libcrun_error_t *err)
 {
   int ret;
   struct termios termios;

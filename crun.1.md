@@ -128,7 +128,7 @@ Path to the OCI bundle, by default it is the current directory.
 Override the configuration file to use.  The default value is **config.json**.
 
 **--console-socket**=**SOCKET**
-Path to a UNIX socket that will receive the master end of the tty for
+Path to a UNIX socket that will receive the ptmx end of the tty for
 the container.
 
 **--no-new-keyring**
@@ -151,7 +151,7 @@ Path to the OCI bundle, by default it is the current directory.
 Override the configuration file to use.  The default value is **config.json**.
 
 **--console-socket**=**SOCKET**
-Path to a UNIX socket that will receive the master end of the tty for
+Path to a UNIX socket that will receive the ptmx end of the tty for
 the container.
 
 **--no-new-keyring**
@@ -181,7 +181,7 @@ Delete all the containers that satisfy the specified regex.
 crun [global options] exec [options] CONTAINER CMD
 
 **--console-socket**=**SOCKET**
-Path to a UNIX socket that will receive the master end of the tty for
+Path to a UNIX socket that will receive the ptmx end of the tty for
 the container.
 
 **--cwd**=**PATH**
