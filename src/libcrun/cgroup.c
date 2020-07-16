@@ -142,54 +142,137 @@ is_rwm (const char *str, libcrun_error_t *err)
   return r && w && m ? 1 : 0;
 }
 
+enum
+  {
+   CGROUP_MEMORY  = 1 << 0,
+   CGROUP_CPU     = 1 << 1,
+   CGROUP_HUGETLB = 1 << 2,
+   CGROUP_CPUSET  = 1 << 3,
+   CGROUP_PIDS    = 1 << 4,
+   CGROUP_IO      = 1 << 5,
+  };
+
 static int
-enable_controllers (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
+read_available_controllers (const char *path, libcrun_error_t *err)
 {
+  cleanup_close int fd;
+  char *saveptr = NULL;
+  const char *token;
+  char *controllers;
+  int available = 0;
+  char buf[256];
+  ssize_t ret;
+
+  xasprintf (&controllers, "%s/cgroup.controllers", path);
+
+  fd = TEMP_FAILURE_RETRY (open (controllers, O_RDONLY | O_CLOEXEC));
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "error opening file `%s`", path);
+
+  ret = TEMP_FAILURE_RETRY (read (fd, buf, sizeof (buf) - 1));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "error reading from file `%s`", path);
+  buf[ret] = '\0';
+
+  for (token = strtok_r (buf, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
+    {
+      if (strcmp (token, "memory") == 0)
+        available |= CGROUP_MEMORY;
+      else if (strcmp (token, "cpu") == 0)
+        available |= CGROUP_CPU;
+      else if (strcmp (token, "cpuset") == 0)
+        available |= CGROUP_CPUSET;
+      else if (strcmp (token, "hugetlb") == 0)
+        available |= CGROUP_HUGETLB;
+      else if (strcmp (token, "pids") == 0)
+        available |= CGROUP_PIDS;
+      else if (strcmp (token, "io") == 0)
+        available |= CGROUP_IO;
+    }
+  return available;
+}
+
+static int
+write_controller_file (const char *path, int controllers_to_enable, libcrun_error_t *err)
+{
+  cleanup_free char *subtree_control = NULL;
   cleanup_free char *controllers = NULL;
-  cleanup_free char *tmp_path = NULL;
   size_t controllers_len = 0;
-  bool has_hugetlb = false;
-  bool has_memory = false;
-  bool has_cpuset = false;
-  bool has_pids = false;
-  bool has_cpu = false;
-  bool has_io = false;
-  char *it;
   int ret;
 
-  if (resources)
+  controllers_len = xasprintf (&controllers, "%s %s %s %s %s %s",
+                               (controllers_to_enable & CGROUP_CPU)     ? "+cpu" : "",
+                               (controllers_to_enable & CGROUP_IO)      ? "+io" : "",
+                               (controllers_to_enable & CGROUP_MEMORY)  ? "+memory" : "",
+                               (controllers_to_enable & CGROUP_PIDS)    ? "+pids" : "",
+                               (controllers_to_enable & CGROUP_CPUSET)  ? "+cpuset" : "",
+                               (controllers_to_enable & CGROUP_HUGETLB) ? "+hugetlb" : "");
+
+  xasprintf (&subtree_control, "%s/cgroup.subtree_control", path);
+  ret = write_file (subtree_control, controllers, controllers_len, err);
+  if (UNLIKELY (ret < 0))
     {
-      has_cpu = resources->cpu && (resources->cpu->shares
-                                   || resources->cpu->period
-                                   || resources->cpu->quota
-                                   || resources->cpu->realtime_period
-                                   || resources->cpu->realtime_runtime);
-      has_cpuset = resources->cpu && (resources->cpu->cpus || resources->cpu->mems);
-      has_io = resources->block_io;
-      has_memory = resources->memory;
-      has_pids = resources->pids;
-      has_hugetlb = resources->hugepage_limits_len;
+      char *saveptr = NULL;
+      const char *token;
+      int e;
+
+      e = crun_error_get_errno (err);
+      if (e != EPERM && e != EACCES && e != EBUSY && e != ENOENT)
+        return ret;
+
+      /* ENOENT can mean both that the file doesn't exist or the controller is not present.  */
+      if (e == ENOENT)
+        {
+          libcrun_error_t tmp_err = NULL;
+          int exists;
+
+          exists = crun_path_exists (subtree_control, err);
+          if (UNLIKELY (exists < 0))
+            {
+              crun_error_release (&tmp_err);
+              return ret;
+            }
+          /* If the file doesn't exist, then return the original ENOENT.  */
+          if (exists == 0)
+            return ret;
+        }
+
+      crun_error_release (err);
+
+      /* Fallback to write each one individually.  */
+      for (token = strtok_r (controllers, " ", &saveptr); token; token = strtok_r (NULL, " ", &saveptr))
+        {
+          ret = write_file (subtree_control, token, strlen (token), err);
+          if (ret < 0)
+            crun_error_release (err);
+        }
+
+      /* Refresh what controllers are available.  */
+      return read_available_controllers (path, err);
     }
 
-  controllers_len = xasprintf (&controllers, "%s %s %s %s %s %s",
-                               has_cpu ? "+cpu" : "",
-                               has_io ? "+io" : "",
-                               has_memory ? "+memory" : "",
-                               has_pids ? "+pids" : "",
-                               has_cpuset ? "+cpuset" : "",
-                               has_hugetlb ? "+hugetlb" : "");
+  /* All controllers were enabled successfully.  */
+  return controllers_to_enable;
+}
+
+static int
+enable_controllers (const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *tmp_path = NULL;
+  char *it;
+  int ret, controllers_to_enable;
 
   xasprintf (&tmp_path, "%s/", path);
 
-  /* Activate the needed controllers in the root cgroup, but ignore errors here.  */
-  ret = write_file ("/sys/fs/cgroup/cgroup.subtree_control", controllers, controllers_len, err);
+  ret = read_available_controllers ("/sys/fs/cgroup", err);
   if (UNLIKELY (ret < 0))
-    crun_error_release (err);
+      return ret;
+
+  controllers_to_enable = ret;
 
   for (it = strchr (tmp_path + 1, '/'); it;)
     {
       cleanup_free char *cgroup_path = NULL;
-      cleanup_free char *subtree_control = NULL;
       char *next_slash = strchr (it + 1, '/');
 
       *it = '\0';
@@ -201,20 +284,11 @@ enable_controllers (runtime_spec_schema_config_linux_resources *resources, const
 
       if (next_slash)
         {
-          xasprintf (&subtree_control, "%s/cgroup.subtree_control", cgroup_path);
-          ret = write_file (subtree_control, controllers, controllers_len, err);
+          ret = write_controller_file (cgroup_path, controllers_to_enable, err);
           if (UNLIKELY (ret < 0))
-            {
-              int e = crun_error_get_errno (err);
-              if (e == EPERM || e == EACCES || e == EBUSY)
-                {
-                  crun_error_release (err);
-                  goto next;
-                }
-              return ret;
-            }
+            return ret;
         }
-    next:
+
       *it = '/';
       it = next_slash;
     }
@@ -715,7 +789,6 @@ void get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char 
 static
 int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_linux_resources *resources = args->resources;
   cleanup_free char *content = NULL;
   int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
@@ -790,7 +863,7 @@ int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libc
             return ret;
         }
 
-      ret = enable_controllers (resources, *path, err);
+      ret = enable_controllers (*path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1305,7 +1378,6 @@ libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error
 static int
 libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_linux_resources *resources = args->resources;
   int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
   const char *cgroup_path = args->cgroup_path;
@@ -1326,7 +1398,7 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
     {
       int ret;
 
-      ret = enable_controllers (resources, *path, err);
+      ret = enable_controllers (*path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
