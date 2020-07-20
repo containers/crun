@@ -131,18 +131,23 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc,
   crun_assert_n_args (argc - first_arg, 1, 2);
 
   /* Make sure the bundle is an absolute path.  */
-  if (bundle)
-    {
-      if (bundle[0] != '/')
-        {
-          bundle_cleanup = realpath (bundle, NULL);
-          if (bundle_cleanup == NULL)
-            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
-          bundle = bundle_cleanup;
-        }
 
-      if (chdir (bundle) < 0)
-        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
+  if (bundle == NULL)
+    {
+      bundle = realpath (".", NULL);
+    }
+  else
+    {
+        if (bundle[0] != '/')
+          {
+            bundle_cleanup = realpath (bundle, NULL);
+            if (bundle_cleanup == NULL)
+                libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
+            bundle = bundle_cleanup;
+          }
+
+        if (chdir (bundle) < 0)
+            libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
   ret =
@@ -165,7 +170,7 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc,
       cr_options.image_path = cr_path;
     }
 
-  crun_context.bundle = bundle ? bundle : ".";
+  crun_context.bundle = bundle;
   return libcrun_container_restore (&crun_context, argv[first_arg],
                                     &cr_options, err);
 }
