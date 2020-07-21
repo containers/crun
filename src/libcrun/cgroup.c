@@ -878,9 +878,14 @@ int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libc
       subpath = strchr (subsystem, ':') + 1;
       *(subpath - 1) = '\0';
 
+      /* on cgroup v2, ignore any subsystem except unified,
+         since other subsystems are not supported anyway.  */
+      if (cgroup_mode == CGROUP_MODE_UNIFIED && subsystem[0] != '\0')
+        continue;
+
       if (strcmp (subpath, *path))
         {
-          ret = enter_cgroup_subsystem (pid, subsystem, *path, 1, err);
+          ret = enter_cgroup_subsystem (pid, subsystem, *path, true, err);
           if (UNLIKELY (ret < 0))
             {
               /* If it is a named hierarchy, skip the error.  */
