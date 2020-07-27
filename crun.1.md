@@ -302,6 +302,14 @@ path.  It can also set with the `RUN_OCI_SECCOMP_RECEIVER` environment variable.
 It is an experimental feature, and the annotation will be removed once
 it is supported in the OCI runtime specs.  It must be an absolute path.
 
+## `run.oci.seccomp.plugins=PATH`
+
+If the annotation `run.oci.seccomp.plugins=PLUGIN1[:PLUGIN2]...` is specified, the
+seccomp listener fd is handled through the specified plugins.  The
+plugin must either be an absolute path or a file name that is looked
+up by `ldopen(3)`.  More information on how the lookup is performed
+are available on the `ld.so(8)` man page.
+
 ## `run.oci.seccomp_fail_unknown_syscall=1`
 
 If the annotation `run.oci.seccomp_fail_unknown_syscall` is present, then crun
