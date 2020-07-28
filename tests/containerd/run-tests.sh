@@ -14,4 +14,4 @@ ulimit -u unlimited
 
 export PATH=$PATH:$(pwd)/bin
 
-make TEST_RUNTIME=io.containerd.runc.v2 integration
+make TEST_RUNTIME=io.containerd.runc.v2 TESTFLAGS="-timeout 120m" integration

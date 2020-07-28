@@ -1,4 +1,4 @@
-{ system ? builtins.currentSystem }:
+{ system ? builtins.currentSystem, disableSystemd ? false }:
 let
   pkgs = (import ./nixpkgs.nix {
     config = {
@@ -46,16 +46,27 @@ let
   self = with pkgs; stdenv.mkDerivation rec {
     name = "crun";
     src = ./..;
+    vendorSha256 = null;
     doCheck = false;
     enableParallelBuilding = true;
-    nativeBuildInputs = [ autoreconfHook git go-md2man pkg-config python3 ];
-    buildInputs = [ criu glibc glibc.static libcap libseccomp protobufc systemd yajl ];
+    outputs = [ "out" ];
+    nativeBuildInputs = [ autoreconfHook bash git go-md2man pkg-config python3 which ];
+    buildInputs = [ glibc glibc.static criu libcap libseccomp protobufc systemd yajl ];
+    configureFlags = [ "--enable-static" ]
+      ++ lib.optional disableSystemd [ "--disable-systemd" ];
     prePatch = ''
       export CFLAGS='-static'
       export LDFLAGS='-s -w -static-libgcc -static'
       export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
       export CRUN_LDFLAGS='-all-static'
       export LIBS='${criu}/lib/libcriu.a ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${libcap.lib}/lib/libcap.a ${libseccomp.lib}/lib/libseccomp.a ${protobufc}/lib/libprotobuf-c.a ${protobuf}/lib/libprotobuf.a ${systemd.lib}/lib/libsystemd.a ${yajl}/lib/libyajl_s.a'
+    '';
+    buildPhase = ''
+      patchShebangs .
+      make
+    '';
+    installPhase = ''
+      install -Dm755 crun $out/bin/crun
     '';
   };
 in self
