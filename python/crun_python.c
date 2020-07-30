@@ -50,10 +50,11 @@ set_error (libcrun_error_t *err)
   else
     {
       cleanup_free char *msg = NULL;
-      asprintf (&msg, "%s: %s", (*err)->msg, strerror ((*err)->status));
-      if (msg == NULL)
-	return NULL;
-      PyErr_SetString (PyExc_RuntimeError, msg);
+      int ret;
+
+      ret = asprintf (&msg, "%s: %s", (*err)->msg, strerror ((*err)->status));
+      if (LIKELY (ret >= 0))
+        PyErr_SetString (PyExc_RuntimeError, msg);
     }
 
   libcrun_error_release (err);
@@ -401,11 +402,10 @@ container_update (PyObject *self, PyObject *args)
   if (process == NULL)
     {
       cleanup_free char *msg = NULL;
-      asprintf (&msg, "cannot parse process: %s", parser_err);
-      if (msg == NULL)
-	return NULL;
+      ret = asprintf (&msg, "cannot parse process: %s", parser_err);
+      if (LIKELY (ret >= 0))
+        PyErr_SetString (PyExc_RuntimeError, msg);
       free (parser_err);
-      PyErr_SetString (PyExc_RuntimeError, msg);
       return NULL;
     }
 
