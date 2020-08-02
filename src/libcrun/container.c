@@ -692,7 +692,7 @@ container_init_setup (void *args, char *notify_socket,
       if (UNLIKELY (*exec_path == NULL))
         {
           if (errno == ENOENT)
-            return crun_make_error (err, errno, "executable file not found in $PATH");
+            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
 
           return crun_make_error (err, errno, "open executable");
         }
@@ -2371,7 +2371,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
       if (UNLIKELY (exec_path == NULL))
         {
           if (errno == ENOENT)
-            crun_make_error (err, errno, "executable file not found in $PATH");
+            crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
           else
             crun_make_error (err, errno, "open executable");
 
