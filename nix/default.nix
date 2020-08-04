@@ -45,7 +45,7 @@ let
 
   self = with pkgs; stdenv.mkDerivation rec {
     name = "crun";
-    src = ./..;
+    src = builtins.filterSource (p: t: lib.cleanSourceFilter p t && baseNameOf p != ".cache") ./..;
     vendorSha256 = null;
     doCheck = false;
     enableParallelBuilding = true;
