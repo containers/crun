@@ -14,9 +14,6 @@ srpm: dist-gzip rpm/crun.spec
 	$(MAKE) -C $(WD) dist-gzip
 	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
-oci-runtime-validation:
-	RUNTIME=$(CURDIR)/crun tests/oci-runtime-validation
-
 CLEANFILES = crun.spec crun.1
 
 lib_LTLIBRARIES = libcrun.la
