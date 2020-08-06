@@ -24,7 +24,6 @@ git-version.h
 .gdb_history
 .git
 .git-module-status
-*.1
 .deps
 .dirstamp
 .gdb_history

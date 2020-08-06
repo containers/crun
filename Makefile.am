@@ -66,7 +66,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/ebpf.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/status.h src/libcrun/terminal.h \
-	src/libcrun/intprops.h crun.1.md
+	src/libcrun/intprops.h crun.1.md crun.1
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
@@ -135,13 +135,14 @@ dist-hook:
 EXTRA_DIST += $(TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf
 BUILT_SOURCES = .version git-version.h
 
-if HAVE_MD2MAN
 man1_MANS = crun.1
+
 crun.1: $(abs_srcdir)/crun.1.md
+if HAVE_MD2MAN
 	$(MD2MAN) -in $(abs_srcdir)/crun.1.md -out crun.1
+endif HAVE_MD2MAN
 
 generate-man: crun.1
-endif HAVE_MD2MAN
 
 sync:
 	(cd libocispec; git pull https://github.com/containers/libocispec)

@@ -50,7 +50,7 @@ let
     doCheck = false;
     enableParallelBuilding = true;
     outputs = [ "out" ];
-    nativeBuildInputs = [ autoreconfHook bash git go-md2man pkg-config python3 which ];
+    nativeBuildInputs = [ autoreconfHook bash git pkg-config python3 which ];
     buildInputs = [ glibc glibc.static criu libcap libseccomp protobufc systemd yajl ];
     configureFlags = [ "--enable-static" ]
       ++ lib.optional disableSystemd [ "--disable-systemd" ];
