@@ -4,8 +4,20 @@ let
     config = {
       packageOverrides = pkg: {
         criu = (static pkg.criu);
+        gpgme = (static pkg.gpgme);
+        libassuan = (static pkg.libassuan);
+        libgpgerror = (static pkg.libgpgerror);
         libseccomp = (static pkg.libseccomp);
         protobufc = (static pkg.protobufc);
+        glib = (static pkg.glib).overrideAttrs(x: {
+          outputs = [ "bin" "out" "dev" ];
+          mesonFlags = [
+            "-Ddefault_library=static"
+            "-Ddevbindir=${placeholder ''dev''}/bin"
+            "-Dgtk_doc=false"
+            "-Dnls=disabled"
+          ];
+        });
         libcap = (static pkg.libcap).overrideAttrs(x: {
           postInstall = ''
             mkdir -p "$doc/share/doc/${x.pname}-${x.version}"
@@ -45,7 +57,7 @@ let
 
   self = with pkgs; stdenv.mkDerivation rec {
     name = "crun";
-    src = builtins.filterSource (p: t: lib.cleanSourceFilter p t && baseNameOf p != ".cache") ./..;
+    src = ./..;
     vendorSha256 = null;
     doCheck = false;
     enableParallelBuilding = true;
