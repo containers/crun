@@ -239,7 +239,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 #ifdef SECCOMP_ARCH_RESOLVE_NAME
       arch_token = seccomp_arch_resolve_name (lowercase_arch);
       if (arch_token == 0)
-        return crun_make_error (err, -ret, "seccomp unknown architecture %s", arch);
+        return crun_make_error (err, 0, "seccomp unknown architecture %s", arch);
 #else
       arch_token = SCMP_ARCH_NATIVE;
 #endif
