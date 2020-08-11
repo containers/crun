@@ -1635,7 +1635,7 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
             continue;
 
           nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC);
-          if (UNLIKELY (dir == NULL))
+          if (UNLIKELY (nfd < 0))
             return crun_make_error (err, errno, "open cgroup directory %s", de->d_name);
           ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
           if (UNLIKELY (ret < 0))
