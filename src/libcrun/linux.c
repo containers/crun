@@ -738,7 +738,7 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container,
     return crun_make_error (err, errno, "mkdir `%s`", subsystem);
 
   fd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
   xasprintf (&subsystem_path, "%s/%s", target, subsystem);
@@ -826,7 +826,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container,
         return crun_make_error (err, errno, "mkdir `%s`", subsystem_path);
 
       subsystemfd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (subsystemfd < 0))
         return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
       if (has_cgroupns)
