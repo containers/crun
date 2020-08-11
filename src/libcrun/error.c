@@ -81,7 +81,11 @@ crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
   va_start (args_list, fmt);
 
   if (vasprintf (&msg, fmt, args_list) < 0)
-    return ret;
+    {
+      va_end (args_list);
+      return ret;
+    }
+  va_end (args_list);
 
   xasprintf (&tmp, "%s: %s", msg, (*err)->msg);
   swap = tmp;
