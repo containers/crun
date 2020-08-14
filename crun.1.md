@@ -369,6 +369,14 @@ will open the specified file and use it as the stderr for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
 
+## `run.oci.handler=HANDLER`
+
+It is an experimental feature.
+
+If specified, run the specified handler for execing the container.
+The only supported value is `krun`.  When `krun` is specified, the
+`libkrun.so` shared object is loaded and it is used to launch the
+container using libkrun.
 
 ## tmpcopyup mount options
 

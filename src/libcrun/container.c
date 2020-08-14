@@ -47,6 +47,10 @@
 #  include <dlfcn.h>
 #endif
 
+#ifdef HAVE_LIBKRUN
+#  include <libkrun.h>
+#endif
+
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-daemon.h>
 #endif
@@ -572,6 +576,105 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   return ret;
 }
 
+#if HAVE_DLOPEN && HAVE_LIBKRUN
+static int
+libkrun_do_exec (void *container, void *arg, const char *pathname, char *const argv[])
+{
+  runtime_spec_schema_config_schema *def = ((libcrun_container_t *) container)->container_def;
+  int32_t (*krun_create_ctx) ();
+  int (*krun_start_enter) (uint32_t ctx_id);
+  int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
+  int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
+  int32_t (*krun_set_exec) (uint32_t ctx_id, const char *exec_path, char *const argv[], char *const envp[]);
+  void *handle = arg;
+  uint32_t num_vcpus, ram_mib;
+  int32_t ctx_id, ret;
+  cpu_set_t set;
+
+  krun_create_ctx = dlsym (handle, "krun_create_ctx");
+  krun_start_enter = dlsym (handle, "krun_start_enter");
+  krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
+  krun_set_root = dlsym (handle, "krun_set_root");
+  krun_set_exec = dlsym (handle, "krun_set_exec");
+  if (krun_create_ctx == NULL || krun_start_enter == NULL || krun_set_vm_config == NULL || krun_set_root == NULL
+      || krun_set_exec == NULL)
+    {
+      fprintf (stderr, "could not find symbol in `libkrun.so`");
+      dlclose (handle);
+      return -1;
+    }
+
+  /* If sched_getaffinity fails, default to 1 vcpu.  */
+  num_vcpus = 1;
+  /* If no memory limit is specified, default to 2G.  */
+  ram_mib = 2 * 1024;
+
+  if (def && def->linux && def->linux->resources && def->linux->resources->memory
+      && def->linux->resources->memory->limit_present)
+    ram_mib = def->linux->resources->memory->limit / (1024 * 1024);
+
+  CPU_ZERO (&set);
+  if (sched_getaffinity (getpid (), sizeof (set), &set) == 0)
+    num_vcpus = CPU_COUNT (&set);
+
+  ctx_id = krun_create_ctx ();
+  if (UNLIKELY (ctx_id < 0))
+    error (EXIT_FAILURE, -ret, "could not create krun context");
+
+  ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
+  if (UNLIKELY (ret < 0))
+    error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
+
+  ret = krun_set_root (ctx_id, "/");
+  if (UNLIKELY (ret < 0))
+    error (EXIT_FAILURE, -ret, "could not set krun root");
+
+  ret = krun_set_exec (ctx_id, pathname, &argv[1], NULL);
+  if (UNLIKELY (ret < 0))
+    error (EXIT_FAILURE, -ret, "could not set krun executable");
+
+  return krun_start_enter (ctx_id);
+}
+#endif
+
+static int
+libcrun_configure_libkrun (struct container_entrypoint_s *args, libcrun_error_t *err)
+{
+#if HAVE_DLOPEN && HAVE_LIBKRUN
+  void *handle;
+#endif
+
+#if HAVE_DLOPEN && HAVE_LIBKRUN
+  handle = dlopen ("libkrun.so", RTLD_NOW);
+  if (handle == NULL)
+    return crun_make_error (err, 0, "could not load `libkrun.so`: %s", dlerror ());
+
+  args->exec_func = libkrun_do_exec;
+  args->exec_func_arg = handle;
+
+  return 0;
+#else
+  (void) args;
+  return crun_make_error (err, ENOTSUP, "libkrun or dlopen not present");
+#endif
+}
+
+static int
+libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t *err)
+{
+  const char *annotation;
+
+  annotation = find_annotation (args->container, "run.oci.handler");
+  /*Nothing to do.  */
+  if (annotation == NULL)
+    return 0;
+
+  if (strcmp (annotation, "krun") == 0)
+    return libcrun_configure_libkrun (args, err);
+
+  return crun_make_error (err, EINVAL, "invalid handler specified `%s`", annotation);
+}
+
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
@@ -587,6 +690,10 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
   runtime_spec_schema_config_schema_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
+
+  ret = libcrun_configure_handler (args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = initialize_security (def->process, err);
   if (UNLIKELY (ret < 0))

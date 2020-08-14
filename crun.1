@@ -386,7 +386,9 @@ it is supported in the OCI runtime specs.  It must be an absolute path.
 .PP
 If the annotation \fB\fCrun.oci.seccomp.plugins=PLUGIN1[:PLUGIN2]...\fR is specified, the
 seccomp listener fd is handled through the specified plugins.  The
-plugin must either be an absolute path or a filename.
+plugin must either be an absolute path or a file name that is looked
+up by \fB\fCldopen(3)\fR\&.  More information on how the lookup is performed
+are available on the \fB\fCld.so(8)\fR man page.
 
 .SH \fB\fCrun.oci.seccomp\_fail\_unknown\_syscall=1\fR
 .PP
@@ -459,6 +461,16 @@ If the annotation \fB\fCrun.oci.hooks.stderr\fR is present, then crun
 will open the specified file and use it as the stderr for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
+
+.SH \fB\fCrun.oci.handler=HANDLER\fR
+.PP
+It is an experimental feature.
+
+.PP
+If specified, run the specified handler for execing the container.
+The only supported value is \fB\fCkrun\fR\&.  When \fB\fCkrun\fR is specified, the
+\fB\fClibkrun.so\fR shared object is loaded and it is used to launch the
+container using libkrun.
 
 .SH tmpcopyup mount options
 .PP
