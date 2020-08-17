@@ -581,7 +581,7 @@ libcrun_initialize_selinux (libcrun_error_t *err)
 }
 
 int
-libcrun_initialize_apparmor (libcrun_error_t *err arg_unused)
+libcrun_initialize_apparmor (libcrun_error_t *err)
 {
   cleanup_close int fd = -1;
   int size;
@@ -590,13 +590,16 @@ libcrun_initialize_apparmor (libcrun_error_t *err arg_unused)
   if (apparmor_enabled >= 0)
     return apparmor_enabled;
 
-  fd = open ("/sys/module/apparmor/parameters/enabled", O_RDONLY | O_CLOEXEC);
-  if (fd == -1)
-    return 0;
+  if (crun_dir_p_at (AT_FDCWD, "/sys/kernel/security/apparmor", true, err))
+    {
+      fd = open ("/sys/module/apparmor/parameters/enabled", O_RDONLY | O_CLOEXEC);
+      if (fd == -1)
+        return 0;
 
-  size = TEMP_FAILURE_RETRY (read (fd, &buf, 2));
+      size = TEMP_FAILURE_RETRY (read (fd, &buf, 2));
 
-  apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
+      apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
+    }
 
   return apparmor_enabled;
 }
