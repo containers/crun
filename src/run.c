@@ -46,7 +46,7 @@ static libcrun_context_t crun_context;
 
 static struct argp_option options[] =
   {
-   {"bundle", 'b', 0, 0, "container bundle (default \".\")", 0},
+   {"bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0},
    {"config", 'f', "FILE", 0, "override the config file name", 0},
    {"detach", 'd', 0, 0, "detach from the parent", 0},
    {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the ptmx end of the tty", 0},
