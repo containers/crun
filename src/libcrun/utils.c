@@ -746,18 +746,26 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
 }
 
 int
-read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
+read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_error_t *err)
 {
   cleanup_close int fd;
 
-  if (strcmp (path, "-") == 0)
-    path = "/dev/stdin";
-
-  fd = TEMP_FAILURE_RETRY (open (path, O_RDONLY));
+  fd = TEMP_FAILURE_RETRY (openat (dirfd, path, O_RDONLY));
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error opening file `%s`", path);
 
   return read_all_fd (fd, path, out, len, err);
+}
+
+int
+read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
+{
+  cleanup_close int fd = -1;
+
+  if (strcmp (path, "-") == 0)
+    path = "/dev/stdin";
+
+  return read_all_file_at (AT_FDCWD, path, out, len, err);
 }
 
 int
