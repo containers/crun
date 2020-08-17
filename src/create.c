@@ -44,7 +44,7 @@ static libcrun_context_t crun_context;
 
 static struct argp_option options[] =
   {
-   {"bundle", 'b', 0, 0, "container bundle (default \".\")", 0},
+   {"bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0},
    {"config", 'f', "FILE", 0, "override the config file name", 0},
    {"console-socket", OPTION_CONSOLE_SOCKET, "SOCK", 0, "path to a socket that will receive the ptmx end of the tty", 0},
    {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0},
