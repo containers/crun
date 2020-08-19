@@ -71,7 +71,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'f':
-      config_file = argp_mandatory_argument (arg, state);
+      config_file = crun_context.config_file = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_CONSOLE_SOCKET:
@@ -116,11 +116,26 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   int first_arg, ret;
   libcrun_container_t *container;
   cleanup_free char *bundle_cleanup = NULL;
+  cleanup_free char *config_file_cleanup = NULL;
 
   crun_context.preserve_fds = 0;
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
 
   crun_assert_n_args (argc - first_arg, 1, 1);
+
+
+  /* Make sure the config is an absolute path before changing the directory.  */
+  if ((strcmp("config.json", config_file) != 0))
+    {
+      if (config_file[0] != '/')
+        {
+          config_file_cleanup = realpath (config_file, NULL);
+          if (config_file_cleanup == NULL)
+            libcrun_fail_with_error (errno, "realpath `%s` failed", config_file);
+          config_file = config_file_cleanup;
+          crun_context.config_file = config_file;
+        }
+    }
 
   /* Make sure the bundle is an absolute path.  */
   if (bundle)

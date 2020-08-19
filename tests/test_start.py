@@ -85,6 +85,30 @@ def test_start():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_start_override_config():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'echo', 'hello']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        proc, cid = run_and_get_output(conf, command='create', use_popen=True, relative_config_path="config/config.json")
+        for i in range(50):
+            try:
+                s = run_crun_command(["state", cid])
+                break
+            except Exception as e:
+                time.sleep(0.1)
+
+        run_crun_command(["start", cid])
+        out, _ = proc.communicate()
+        if "hello" not in str(out):
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
 def test_run_twice():
     conf = base_config()
     conf['process']['args'] = ['/init', 'echo', 'hi']
@@ -143,6 +167,7 @@ def test_sd_notify_env():
 
 all_tests = {
     "start" : test_start,
+    "start-override-config" : test_start_override_config,
     "run-twice" : test_run_twice,
     "sd-notify" : test_sd_notify,
     "sd-notify-file" : test_sd_notify_file,

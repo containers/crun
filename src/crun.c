@@ -77,6 +77,9 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   if (con->bundle == NULL)
     con->bundle = ".";
 
+  if (con->config_file == NULL)
+    con->config_file = "./config.json";
+
   return 0;
 }
 
