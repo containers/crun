@@ -187,7 +187,7 @@ def get_crun_path():
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', env=None, use_popen=False, hide_stderr=False,
-                       all_dev_null=False, id_container=None):
+                       all_dev_null=False, id_container=None, relative_config_path="config.json"):
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
     rootfs = os.path.join(temp_dir, "rootfs")
     os.makedirs(rootfs)
@@ -199,7 +199,12 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     if id_container is None:
         id_container = 'test-%s' % os.path.basename(temp_dir)
 
-    with open(os.path.join(temp_dir, "config.json"), "w") as config_file:
+    config_path = os.path.join(temp_dir, relative_config_path)
+    config_dir = os.path.dirname(config_path)
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
+
+    with open(config_path, "w") as config_file:
         conf = json.dumps(config)
         config_file.write(conf)
 
@@ -216,8 +221,9 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
+    relative_config_path = ['--config', relative_config_path] if relative_config_path else []
 
-    args = [crun, command] + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
+    args = [crun, command] + relative_config_path + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:
