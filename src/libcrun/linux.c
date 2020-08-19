@@ -1513,6 +1513,11 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           ret = do_mount (container, source, targetfd, target, type, flags, data, skip_labelling, err);
           if (UNLIKELY (ret < 0))
             return ret;
+	  if (strcmp (type, "mqueue") == 0) {
+	    ret = libcrun_set_selinux_file_label(container, target);
+	    if (UNLIKELY (ret < 0))
+	      return ret;
+	  }
         }
 
       if (copy_from_fd >= 0)
@@ -1573,14 +1578,8 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   if (UNLIKELY (chmod (host_path, 0777) < 0))
     return crun_make_error (err, errno, "chmod `%s`", host_path);
 
-#ifdef HAVE_FGETXATTR
-  if (container && container->container_def->linux->mount_label)
-    {
-      /* Ignore the error, the worse that can happen is that the container fails to notify it is ready.  */
-      (void ) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
-                        strlen (container->container_def->linux->mount_label), 0);
-    }
-#endif
+  /* Ignore the error, the worse that can happen is that the container fails to notify it is ready.  */
+  (void ) libcrun_set_selinux_file_label(container, host_path);
 
   *notify_socket_out = get_and_reset (&notify_fd);
   return 1;
@@ -2365,6 +2364,18 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
       else
           caps[1] |= CAP_TO_MASK_1 (cap);
     }
+  return 0;
+}
+
+int
+libcrun_set_selinux_file_label(libcrun_container_t *container, char *dest_path) {
+#ifdef HAVE_FGETXATTR
+  if (container && container->container_def->linux->mount_label)
+    {
+      return setxattr (dest_path, "security.selinux", container->container_def->linux->mount_label,
+		       strlen (container->container_def->linux->mount_label), 0);
+    }
+#endif
   return 0;
 }
 
