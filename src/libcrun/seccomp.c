@@ -110,8 +110,10 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
     return SCMP_ACT_ERRNO (errno_ret);
   else if (strcmp (p, "KILL") == 0)
     return SCMP_ACT_KILL;
+#ifdef SCMP_ACT_LOG
   else if (strcmp (p, "LOG") == 0)
     return SCMP_ACT_LOG;
+#endif
   else if (strcmp (p, "TRAP") == 0)
     return SCMP_ACT_TRAP;
   else if (strcmp (p, "TRACE") == 0)
