@@ -521,10 +521,10 @@ do_mount (libcrun_container_t *container,
 #define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
 #define ALL_PROPAGATIONS (MS_REC | ALL_PROPAGATIONS_NO_REC)
 
-  if (container->container_def->linux)
+  if (container->container_def->linux && container->container_def->linux->mount_label)
     label = container->container_def->linux->mount_label;
   else
-    label_how = LABEL_MOUNT;
+    label_how = LABEL_NONE;
 
   if (targetfd >= 0)
     {
@@ -614,9 +614,7 @@ do_mount (libcrun_container_t *container,
               sprintf (proc_file, "/proc/self/fd/%d", fd);
 
               /* We need to go through the proc_file since fd itself is opened as O_PATH.  */
-              ret = setxattr (proc_file, "security.selinux", label, strlen (label), 0);
-              if (UNLIKELY (ret < 0 && errno != ENOTSUP))
-                return crun_make_error (err, errno, "set label for `%s` to `%s`", target, label);
+              (void) setxattr (proc_file, "security.selinux", label, strlen (label), 0);
             }
 #endif
           /* We have a fd pointing to the new mountpoint (done in a safe location).  We can move
@@ -1608,8 +1606,8 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   if (container && container->container_def->linux && container->container_def->linux->mount_label)
     {
       /* Ignore the error, the worse that can happen is that the container fails to notify it is ready.  */
-      (void ) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
-                        strlen (container->container_def->linux->mount_label), 0);
+      (void) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
+                       strlen (container->container_def->linux->mount_label), 0);
     }
 #endif
 
