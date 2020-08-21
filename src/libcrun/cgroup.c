@@ -226,7 +226,7 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
           libcrun_error_t tmp_err = NULL;
           int exists;
 
-          exists = crun_path_exists (subtree_control, err);
+          exists = crun_path_exists (subtree_control, &tmp_err);
           if (UNLIKELY (exists < 0))
             {
               crun_error_release (&tmp_err);
@@ -2752,8 +2752,84 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
         return ret;
     }
 
+  if (resources->unified && resources->unified->len > 0)
+        return crun_make_error (err, 0, "invalid configuration: cannot use unified on cgroup v1");
+
   return 0;
 }
+
+static int
+write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+{
+  size_t i;
+  int ret;
+
+  for (i = 0; i < resources->unified->len; i++)
+    {
+      size_t len;
+
+      if (strchr (resources->unified->keys[i], '/'))
+        return crun_make_error (err, 0, "key `%s` must be a file name without any slash", resources->unified->keys[i]);
+
+      len = strlen (resources->unified->values[i]);
+      ret = write_file_at (cgroup_dirfd, resources->unified->keys[i], resources->unified->values[i], len, err);
+      if (UNLIKELY (ret < 0))
+        {
+          errno = crun_error_get_errno (err);
+
+          /* If the file is not found, try to give a more meaningful error message.  */
+          if (errno == ENOENT || errno == EPERM || errno == EACCES)
+            {
+              cleanup_free char *controllers = NULL;
+              libcrun_error_t tmp_err = NULL;
+              cleanup_free char *key = NULL;
+              char *saveptr = NULL;
+              bool found = false;
+              const char *token;
+              char *it;
+
+              /* Check if the specified controller is enabled.  */
+              key = xstrdup (resources->unified->keys[i]);
+
+              it = strchr (key, '.');
+              if (it == NULL)
+                {
+                  crun_error_release (err);
+                  return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`", resources->unified->keys[i]);
+                }
+              *it = '\0';
+
+              /* cgroup. files are not part of a controller.  Return the original error.  */
+              if (strcmp (key, "cgroup") == 0)
+                return ret;
+
+              /* If the cgroup.controllers file cannot be read, return the original error.  */
+              if (read_all_file_at (cgroup_dirfd, "cgroup.controllers", &controllers, NULL, &tmp_err) < 0)
+                {
+                  crun_error_release (&tmp_err);
+                  return ret;
+                }
+              for (token = strtok_r (controllers, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
+                {
+                  if (strcmp (token, key) == 0)
+                    {
+                      found = true;
+                      break;
+                    }
+                }
+              if (! found)
+                {
+                  crun_error_release (err);
+                  return crun_make_error (err, 0, "the requested controller `%s` is not available", key);
+                }
+            }
+          return ret;
+        }
+    }
+
+  return 0;
+}
+
 
 static int
 update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err)
@@ -2824,6 +2900,14 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
                                      resources->hugepage_limits,
                                      resources->hugepage_limits_len,
                                      err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  /* Write unified resources if any.  They have higher precedence and override any previous setting.  */
+  if (resources->unified)
+    {
+      ret = write_unified_resources (cgroup_dirfd, resources, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
