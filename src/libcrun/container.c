@@ -371,13 +371,12 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
     {
       if (flush_errors)
         {
+          int saved_errno = errno;
           ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
-          if (UNLIKELY (ret < 0))
-            goto original_error;
-          if (msg.type == SYNC_SOCKET_ERROR_MESSAGE)
+          if (ret >= 0 && msg.type == SYNC_SOCKET_ERROR_MESSAGE)
             return crun_make_error (err, msg.error_value, "%s", msg.message);
+          errno = saved_errno;
         }
-    original_error:
       return crun_make_error (err, errno, "write to sync socket");
     }
 
@@ -535,6 +534,8 @@ do_hooks (runtime_spec_schema_config_schema *def,
 
   stdin_len = xasprintf (&stdin, "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", \"status\":\"%s\", \"annotations\":%s}", id, pid, rootfs, cwd, status, annotations);
 
+  ret = 0;
+
   for (i = 0; i < hooks_len; i++)
     {
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env, stdin, stdin_len, out_fd, err_fd, err);
@@ -545,14 +546,11 @@ do_hooks (runtime_spec_schema_config_schema *def,
           else
             {
               libcrun_error (0, "error executing hook `%s` (exit code: %d)", hooks[i]->path, ret);
-              goto exit;
+              break;
             }
         }
     }
 
-  ret = 0;
-
- exit:
   if (gen)
     yajl_gen_free (gen);
 
@@ -1026,7 +1024,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
           crun_error_release (&tmp_err);
           return 0;
         }
-      goto delete;
+      return libcrun_container_delete_status (state_root, id, err);
     }
 
   if (! force)
@@ -1086,10 +1084,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (context->output_handler_arg, &err);
 
- delete:
-  ret = libcrun_container_delete_status (state_root, id, err);
-
-  return ret;
+  return libcrun_container_delete_status (state_root, id, err);
 }
 
 int
@@ -2511,15 +2506,11 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
     return ret;
 
   process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
-  if (UNLIKELY (process == NULL))
-    {
-      ret = crun_make_error (err, errno, "cannot parse process file");
-      goto exit;
-    }
+  if (LIKELY (process != NULL))
+    ret = libcrun_container_exec (context, id, process, err);
+  else
+    ret = crun_make_error (err, errno, "cannot parse process file");
 
-  ret = libcrun_container_exec (context, id, process, err);
-
- exit:
   free (parser_err);
 
   if (tree)
