@@ -1056,11 +1056,13 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
           */
           if (has_new_pid_namespace (def))
             {
-              ret = kill (status.pid, SIGKILL);
-              if (UNLIKELY (ret < 0) && errno != ESRCH)
+              ret = libcrun_kill_linux (&status, SIGKILL, err);
+              if (UNLIKELY (ret < 0))
                 {
-                  crun_make_error (err, errno, "kill cannot find process");
-                  return ret;
+                  if (crun_error_get_errno (err) != ESRCH)
+                    return ret;
+
+                  crun_error_release (err);
                 }
             }
           else if (status.cgroup_path)
