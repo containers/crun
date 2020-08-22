@@ -2186,12 +2186,18 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
     dir = libcrun_get_state_directory (state_root, id);
     if (UNLIKELY (dir == NULL))
-      return crun_make_error (err, 0, "cannot get state directory");
+      {
+        ret = crun_make_error (err, 0, "cannot get state directory");
+        goto exit;
+      }
 
     xasprintf (&config_file, "%s/config.json", dir);
     container = libcrun_container_load_from_file (config_file, err);
     if (UNLIKELY (container == NULL))
-      return crun_make_error (err, 0, "error loading config.json");
+      {
+        ret = crun_make_error (err, 0, "error loading config.json");
+        goto exit;
+      }
 
     if (container->container_def->annotations && container->container_def->annotations->len)
       {
@@ -2206,7 +2212,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
           }
         yajl_gen_map_close (gen);
       }
-   free_runtime_spec_schema_config_schema (container->container_def);
+    free_runtime_spec_schema_config_schema (container->container_def);
   }
 
   yajl_gen_map_close (gen);
