@@ -529,7 +529,7 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
 
   if (ret == 0)
     {
-      /* For backwards compatability, check start time only if available. */
+      /* For backwards compatibility, check start time only if available. */
       if (status->process_start_time)
         {
           struct pid_stat st;

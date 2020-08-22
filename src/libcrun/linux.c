@@ -3754,3 +3754,14 @@ libcrun_container_restore_linux (libcrun_container_status_t *status,
 
   return 0;
 }
+
+int
+libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = kill (status->pid, signal);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "kill container");
+  return 0;
+}
