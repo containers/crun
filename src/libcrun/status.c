@@ -155,7 +155,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   yajl_gen gen = NULL;
 
   ret = read_pid_stat (status->pid, &st, err);
-  if (UNLIKELY (ret))
+  if (UNLIKELY (ret < 0))
     return ret;
 
   status->process_start_time = st.starttime;
@@ -518,6 +518,32 @@ libcrun_free_containers_list (libcrun_container_list_t *list)
     }
 }
 
+/* check if the container pid is still valid.
+   Returns:
+   -1: on errors
+    0: pid not valid
+    1: pid valid and container in the running/created/paused state
+*/
+int
+libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t *err)
+{
+  struct pid_stat st;
+  int ret;
+
+  /* For backwards compatibility, check start time only if available. */
+  if (! status->process_start_time)
+    return 1;
+
+  ret = read_pid_stat (status->pid, &st, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
+    return 0; /* stopped */
+
+  return 1; /* running, created, or paused */
+}
+
 int
 libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_t *err)
 {
@@ -528,20 +554,8 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
     return crun_make_error (err, errno, "kill");
 
   if (ret == 0)
-    {
-      /* For backwards compatability, check start time only if available. */
-      if (status->process_start_time)
-        {
-          struct pid_stat st;
-          ret = read_pid_stat (status->pid, &st, err);
-          if (UNLIKELY (ret))
-            return ret;
+    return libcrun_check_pid_valid (status, err);
 
-          if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
-            return 0; /* stopped */
-        }
-      return 1; /* running, created, or paused */
-    }
   return 0; /* stopped */
 }
 

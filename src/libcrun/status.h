@@ -61,4 +61,5 @@ int libcrun_status_check_directories (const char *state_root, const char *id, li
 int libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
+int libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t *err);
 #endif

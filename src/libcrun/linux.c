@@ -164,6 +164,7 @@ syscall_clone (unsigned long flags, void *child_stack)
   return (int) syscall (__NR_clone, flags, child_stack);
 #endif
 }
+
 static int
 syscall_fsopen (const char *fs_name, unsigned int flags)
 {
@@ -215,6 +216,34 @@ syscall_keyctl_join (const char *name)
 {
 #define KEYCTL_JOIN_SESSION_KEYRING 0x1
   return (int) syscall (__NR_keyctl, KEYCTL_JOIN_SESSION_KEYRING, name, 0);
+}
+
+static int
+syscall_pidfd_open (pid_t pid, unsigned int flags)
+{
+#if defined __NR_pidfd_open
+  return (int) syscall (__NR_pidfd_open, pid, flags);
+#else
+  (void) pid;
+  (void) flags;
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
+static int
+syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int flags)
+{
+#if defined __NR_pidfd_send_signal
+  return (int) syscall (__NR_pidfd_send_signal, pidfd, sig, info, flags);
+#else
+  (void) pidfd;
+  (void) sig;
+  (void) info;
+  (void) flags;
+  errno = ENOTSUP;
+  return -1;
+#endif
 }
 
 int
@@ -3751,6 +3780,44 @@ libcrun_container_restore_linux (libcrun_container_status_t *status,
     return ret;
 
   get_private_data (container)->external_descriptors = status->external_descriptors;
+
+  return 0;
+}
+
+int
+libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_close int pidfd = -1;
+
+  pidfd = syscall_pidfd_open (status->pid, 0);
+  if (UNLIKELY (pidfd < 0))
+    {
+      /* If pidfd_open is not supported, fallback to kill.  */
+      if (errno == ENOTSUP)
+        {
+          ret = kill (status->pid, signal);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "kill container");
+          return 0;
+        }
+      return crun_make_error (err, errno, "open pidfd");
+    }
+
+  ret = libcrun_check_pid_valid (status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* The pid is not valid anymore, return an error.  */
+  if (ret == 0)
+    {
+      errno = ESRCH;
+      return crun_make_error (err, errno, "kill container");
+    }
+
+  ret = syscall_pidfd_send_signal (pidfd, signal, NULL, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "send signal to pidfd");
 
   return 0;
 }
