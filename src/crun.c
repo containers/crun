@@ -84,63 +84,60 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
 }
 
 enum
-  {
-    COMMAND_CREATE = 1000,
-    COMMAND_DELETE,
-    COMMAND_EXEC,
-    COMMAND_LIST,
-    COMMAND_KILL,
-    COMMAND_RUN,
-    COMMAND_SPEC,
-    COMMAND_START,
-    COMMAND_STATE,
-    COMMAND_UPDATE,
-    COMMAND_PAUSE,
-    COMMAND_UNPAUSE,
-    COMMAND_PS,
-    COMMAND_CHECKPOINT,
-    COMMAND_RESTORE,
-  };
+{
+  COMMAND_CREATE = 1000,
+  COMMAND_DELETE,
+  COMMAND_EXEC,
+  COMMAND_LIST,
+  COMMAND_KILL,
+  COMMAND_RUN,
+  COMMAND_SPEC,
+  COMMAND_START,
+  COMMAND_STATE,
+  COMMAND_UPDATE,
+  COMMAND_PAUSE,
+  COMMAND_UNPAUSE,
+  COMMAND_PS,
+  COMMAND_CHECKPOINT,
+  COMMAND_RESTORE,
+};
 
-struct commands_s commands[] =
-  {
-    { COMMAND_CREATE, "create", crun_command_create},
-    { COMMAND_DELETE, "delete", crun_command_delete},
-    { COMMAND_EXEC, "exec", crun_command_exec},
-    { COMMAND_LIST, "list", crun_command_list},
-    { COMMAND_KILL, "kill", crun_command_kill},
-    { COMMAND_PS, "ps", crun_command_ps},
-    { COMMAND_RUN, "run", crun_command_run},
-    { COMMAND_SPEC, "spec", crun_command_spec},
-    { COMMAND_START, "start", crun_command_start},
-    { COMMAND_STATE, "state", crun_command_state},
-    { COMMAND_UPDATE, "update", crun_command_update},
-    { COMMAND_PAUSE, "pause", crun_command_pause},
-    { COMMAND_UNPAUSE, "resume", crun_command_unpause},
-    /* Not calling it yet 'checkpoint' as this might confuse tools
-     * testing for checkpoint support like Podman does.
-     * Once it is ready for Podman, this can be renamed to 'checkpoint' */
-    { COMMAND_CHECKPOINT, "_checkpoint", crun_command_checkpoint},
-    { COMMAND_RESTORE, "_restore", crun_command_restore},
-    { 0, }
-  };
+struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create },
+                                 { COMMAND_DELETE, "delete", crun_command_delete },
+                                 { COMMAND_EXEC, "exec", crun_command_exec },
+                                 { COMMAND_LIST, "list", crun_command_list },
+                                 { COMMAND_KILL, "kill", crun_command_kill },
+                                 { COMMAND_PS, "ps", crun_command_ps },
+                                 { COMMAND_RUN, "run", crun_command_run },
+                                 { COMMAND_SPEC, "spec", crun_command_spec },
+                                 { COMMAND_START, "start", crun_command_start },
+                                 { COMMAND_STATE, "state", crun_command_state },
+                                 { COMMAND_UPDATE, "update", crun_command_update },
+                                 { COMMAND_PAUSE, "pause", crun_command_pause },
+                                 { COMMAND_UNPAUSE, "resume", crun_command_unpause },
+                                 /* Not calling it yet 'checkpoint' as this might confuse tools
+                                  * testing for checkpoint support like Podman does.
+                                  * Once it is ready for Podman, this can be renamed to 'checkpoint' */
+                                 { COMMAND_CHECKPOINT, "_checkpoint", crun_command_checkpoint },
+                                 { COMMAND_RESTORE, "_restore", crun_command_restore },
+                                 {
+                                     0,
+                                 } };
 
-static char doc[] =                                                   \
-  "\nCOMMANDS:\n"                                                     \
-  "\tcreate  - create a container\n"                                  \
-  "\tdelete  - remove definition for a container\n"                   \
-  "\texec    - exec a command in a running container\n"               \
-  "\tlist    - list known containers\n"                               \
-  "\tkill    - send a signal to the container init process\n"         \
-  "\tps      - show the processes in the container\n"                 \
-  "\trun     - run a container\n"                                     \
-  "\tspec    - generate a configuration file\n"                       \
-  "\tstart   - start a container\n"                                   \
-  "\tstate   - output the state of a container\n"                     \
-  "\tpause   - pause all the processes in the container\n"            \
-  "\tresume  - unpause the processes in the container\n"              \
-  "\tupdate  - update container resource constraints\n"               \
-  ;
+static char doc[] = "\nCOMMANDS:\n"
+                    "\tcreate  - create a container\n"
+                    "\tdelete  - remove definition for a container\n"
+                    "\texec    - exec a command in a running container\n"
+                    "\tlist    - list known containers\n"
+                    "\tkill    - send a signal to the container init process\n"
+                    "\tps      - show the processes in the container\n"
+                    "\trun     - run a container\n"
+                    "\tspec    - generate a configuration file\n"
+                    "\tstart   - start a container\n"
+                    "\tstate   - output the state of a container\n"
+                    "\tpause   - pause all the processes in the container\n"
+                    "\tresume  - unpause the processes in the container\n"
+                    "\tupdate  - update container resource constraints\n";
 static char args_doc[] = "COMMAND [OPTION...]";
 
 static struct commands_s *
@@ -154,31 +151,29 @@ get_command (const char *arg)
 }
 
 enum
-  {
-    OPTION_DEBUG = 1000,
-    OPTION_SYSTEMD_CGROUP,
-    OPTION_CGROUP_MANAGER,
-    OPTION_LOG,
-    OPTION_LOG_FORMAT,
-    OPTION_ROOT,
-    OPTION_ROOTLESS
-  };
-
+{
+  OPTION_DEBUG = 1000,
+  OPTION_SYSTEMD_CGROUP,
+  OPTION_CGROUP_MANAGER,
+  OPTION_LOG,
+  OPTION_LOG_FORMAT,
+  OPTION_ROOT,
+  OPTION_ROOTLESS
+};
 
 const char *argp_program_version = PACKAGE_STRING;
 const char *argp_program_bug_address = "https://github.com/containers/crun/issues";
 
-static struct argp_option options[] =
-  {
-   {"debug", OPTION_DEBUG, 0, 0, "produce verbose output", 0},
-   {"cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager", 0},
-   {"systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups", 0},
-   {"log", OPTION_LOG, "FILE", 0, NULL, 0},
-   {"log-format", OPTION_LOG_FORMAT, "FORMAT", 0, NULL, 0},
-   {"root", OPTION_ROOT, "DIR",  0, NULL, 0},
-   {"rootless", OPTION_ROOT, "VALUE",  0, NULL, 0},
-   { 0, }
-  };
+static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce verbose output", 0 },
+                                        { "cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager", 0 },
+                                        { "systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups", 0 },
+                                        { "log", OPTION_LOG, "FILE", 0, NULL, 0 },
+                                        { "log-format", OPTION_LOG_FORMAT, "FORMAT", 0, NULL, 0 },
+                                        { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },
+                                        { "rootless", OPTION_ROOT, "VALUE", 0, NULL, 0 },
+                                        {
+                                            0,
+                                        } };
 
 static void
 print_version (FILE *stream, struct argp_state *state arg_unused)

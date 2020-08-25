@@ -26,21 +26,22 @@
 #include <sys/resource.h>
 
 #ifdef HAVE_EBPF
-# include <linux/bpf.h>
+#  include <linux/bpf.h>
 
-# ifndef HAVE_BPF
+#  ifndef HAVE_BPF
 static int
 syscall_bpf (int cmd, union bpf_attr *attr, unsigned int size)
 {
-  return (int) syscall (__NR_bpf, cmd, attr, size);
+  return ( int ) syscall (__NR_bpf, cmd, attr, size);
 }
-#  define bpf syscall_bpf
-# endif
+#    define bpf syscall_bpf
+#  endif
 
 #endif
 
-enum {
-      HAS_WILDCARD = 1
+enum
+{
+  HAS_WILDCARD = 1
 };
 
 struct bpf_program
@@ -53,69 +54,30 @@ struct bpf_program
 
 #ifdef HAVE_EBPF
 
-# define BPF_ALU32_IMM(OP, DST, IMM)            \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_ALU | BPF_OP(OP) | BPF_K,      \
-      .dst_reg = DST,                           \
-      .src_reg = 0,                             \
-      .off   = 0,                               \
-      .imm   = IMM })
+#  define BPF_ALU32_IMM(OP, DST, IMM) \
+    ((struct bpf_insn){ .code = BPF_ALU | BPF_OP (OP) | BPF_K, .dst_reg = DST, .src_reg = 0, .off = 0, .imm = IMM })
 
-# define BPF_LDX_MEM(SIZE, DST, SRC, OFF)               \
-  ((struct bpf_insn) {                                  \
-    .code  = BPF_LDX | BPF_SIZE(SIZE) | BPF_MEM,        \
-      .dst_reg = DST,                                   \
-      .src_reg = SRC,                                   \
-      .off   = OFF,                                     \
-      .imm   = 0 })
+#  define BPF_LDX_MEM(SIZE, DST, SRC, OFF) \
+    ((struct bpf_insn){                    \
+        .code = BPF_LDX | BPF_SIZE (SIZE) | BPF_MEM, .dst_reg = DST, .src_reg = SRC, .off = OFF, .imm = 0 })
 
-# define BPF_MOV64_REG(DST, SRC)                \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_ALU64 | BPF_MOV | BPF_X,       \
-      .dst_reg = DST,                           \
-      .src_reg = SRC,                           \
-      .off   = 0,                               \
-      .imm   = 0 })
+#  define BPF_MOV64_REG(DST, SRC) \
+    ((struct bpf_insn){ .code = BPF_ALU64 | BPF_MOV | BPF_X, .dst_reg = DST, .src_reg = SRC, .off = 0, .imm = 0 })
 
-# define BPF_JMP_A(OFF)                         \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_JMP | BPF_JA,                  \
-      .dst_reg = 0,                             \
-      .src_reg = 0,                             \
-      .off   = OFF,                             \
-      .imm   = 0 })
+#  define BPF_JMP_A(OFF) \
+    ((struct bpf_insn){ .code = BPF_JMP | BPF_JA, .dst_reg = 0, .src_reg = 0, .off = OFF, .imm = 0 })
 
-# define BPF_JMP_IMM(OP, DST, IMM, OFF)         \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_JMP | BPF_OP(OP) | BPF_K,      \
-      .dst_reg = DST,                           \
-      .src_reg = 0,                             \
-      .off   = OFF,                             \
-      .imm   = IMM })
+#  define BPF_JMP_IMM(OP, DST, IMM, OFF) \
+    ((struct bpf_insn){ .code = BPF_JMP | BPF_OP (OP) | BPF_K, .dst_reg = DST, .src_reg = 0, .off = OFF, .imm = IMM })
 
-# define BPF_MOV64_IMM(DST, IMM)                \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_ALU64 | BPF_MOV | BPF_K,       \
-      .dst_reg = DST,                           \
-      .src_reg = 0,                             \
-      .off   = 0,                               \
-      .imm   = IMM })
+#  define BPF_MOV64_IMM(DST, IMM) \
+    ((struct bpf_insn){ .code = BPF_ALU64 | BPF_MOV | BPF_K, .dst_reg = DST, .src_reg = 0, .off = 0, .imm = IMM })
 
-# define BPF_MOV32_REG(DST, SRC)                \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_ALU | BPF_MOV | BPF_X,         \
-      .dst_reg = DST,                           \
-      .src_reg = SRC,                           \
-      .off   = 0,                               \
-      .imm   = 0 })
+#  define BPF_MOV32_REG(DST, SRC) \
+    ((struct bpf_insn){ .code = BPF_ALU | BPF_MOV | BPF_X, .dst_reg = DST, .src_reg = SRC, .off = 0, .imm = 0 })
 
-# define BPF_EXIT_INSN()                        \
-  ((struct bpf_insn) {                          \
-    .code  = BPF_JMP | BPF_EXIT,                \
-      .dst_reg = 0,                             \
-      .src_reg = 0,                             \
-      .off   = 0,                               \
-      .imm   = 0 })
+#  define BPF_EXIT_INSN() \
+    ((struct bpf_insn){ .code = BPF_JMP | BPF_EXIT, .dst_reg = 0, .src_reg = 0, .off = 0, .imm = 0 })
 #endif
 
 #ifdef HAVE_EBPF
@@ -157,19 +119,19 @@ bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err arg_unus
 #ifdef HAVE_EBPF
   /* taken from systemd.  */
   struct bpf_insn pre_insn[] = {
-                                /* type -> R2.  */
-                                BPF_LDX_MEM (BPF_W, BPF_REG_2, BPF_REG_1, 0),
-                                BPF_ALU32_IMM(BPF_AND, BPF_REG_2, 0xFFFF),
+    /* type -> R2.  */
+    BPF_LDX_MEM (BPF_W, BPF_REG_2, BPF_REG_1, 0),
+    BPF_ALU32_IMM (BPF_AND, BPF_REG_2, 0xFFFF),
 
-                                /* access -> R3.  */
-                                BPF_LDX_MEM (BPF_W, BPF_REG_3, BPF_REG_1, 0),
-                                BPF_ALU32_IMM (BPF_RSH, BPF_REG_3, 16),
+    /* access -> R3.  */
+    BPF_LDX_MEM (BPF_W, BPF_REG_3, BPF_REG_1, 0),
+    BPF_ALU32_IMM (BPF_RSH, BPF_REG_3, 16),
 
-                                /* major -> R4.  */
-                                BPF_LDX_MEM (BPF_W, BPF_REG_4, BPF_REG_1, 4),
+    /* major -> R4.  */
+    BPF_LDX_MEM (BPF_W, BPF_REG_4, BPF_REG_1, 4),
 
-                                /* minor -> R5.  */
-                                BPF_LDX_MEM (BPF_W, BPF_REG_5, BPF_REG_1, 8),
+    /* minor -> R5.  */
+    BPF_LDX_MEM (BPF_W, BPF_REG_5, BPF_REG_1, 8),
   };
   program = bpf_program_append (program, pre_insn, sizeof (pre_insn));
 #endif
@@ -177,7 +139,8 @@ bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err arg_unus
 }
 
 struct bpf_program *
-bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err arg_unused)
+bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept,
+                        libcrun_error_t *err arg_unused)
 {
 #ifdef HAVE_EBPF
   int i;
@@ -189,8 +152,8 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
   bool has_access = false;
   int number_instructions = 0;
   struct bpf_insn accept_block[] = {
-                                    BPF_MOV64_IMM (BPF_REG_0, accept ? 1 : 0),
-                                    BPF_EXIT_INSN (),
+    BPF_MOV64_IMM (BPF_REG_0, accept ? 1 : 0),
+    BPF_EXIT_INSN (),
   };
 
   if (program->private & HAS_WILDCARD)
@@ -235,35 +198,29 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
 
   if (has_type)
     {
-      struct bpf_insn i[] = {
-                             BPF_JMP_IMM (BPF_JNE, BPF_REG_2, bpf_type, number_instructions)
-      };
+      struct bpf_insn i[] = { BPF_JMP_IMM (BPF_JNE, BPF_REG_2, bpf_type, number_instructions) };
       number_instructions--;
       program = bpf_program_append (program, i, sizeof (i));
     }
   if (has_access)
     {
       struct bpf_insn i[] = {
-                             BPF_MOV32_REG (BPF_REG_1, BPF_REG_3),
-                             BPF_ALU32_IMM (BPF_AND, BPF_REG_1, bpf_access),
-                             BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
+        BPF_MOV32_REG (BPF_REG_1, BPF_REG_3),
+        BPF_ALU32_IMM (BPF_AND, BPF_REG_1, bpf_access),
+        BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
       };
       number_instructions -= 3;
       program = bpf_program_append (program, i, sizeof (i));
     }
   if (has_major)
     {
-      struct bpf_insn i[] = {
-                             BPF_JMP_IMM (BPF_JNE, BPF_REG_4, major, number_instructions)
-      };
+      struct bpf_insn i[] = { BPF_JMP_IMM (BPF_JNE, BPF_REG_4, major, number_instructions) };
       number_instructions--;
       program = bpf_program_append (program, i, sizeof (i));
     }
   if (has_minor)
     {
-      struct bpf_insn i[] = {
-                             BPF_JMP_IMM (BPF_JNE, BPF_REG_5, minor, number_instructions)
-      };
+      struct bpf_insn i[] = { BPF_JMP_IMM (BPF_JNE, BPF_REG_5, minor, number_instructions) };
       number_instructions--;
       program = bpf_program_append (program, i, sizeof (i));
     }
@@ -281,8 +238,8 @@ bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err arg_
 {
 #ifdef HAVE_EBPF
   struct bpf_insn i[] = {
-                         BPF_MOV64_IMM (BPF_REG_0, 0),
-                         BPF_EXIT_INSN (),
+    BPF_MOV64_IMM (BPF_REG_0, 0),
+    BPF_EXIT_INSN (),
   };
 
   if (program->private & HAS_WILDCARD)
@@ -312,11 +269,12 @@ read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_er
       attr.query.target_fd = dirfd;
       attr.query.attach_type = BPF_CGROUP_DEVICE;
       attr.query.prog_cnt = cur_size;
-      attr.query.prog_ids = (uint64_t) progs;
+      attr.query.prog_ids = ( uint64_t ) progs;
 
       ret = bpf (BPF_PROG_QUERY, &attr, sizeof (attr));
     }
-  while (ret < 0 && errno == ENOSPC);
+  while (ret < 0 && errno == ENOSPC)
+    ;
 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "bpf query");
@@ -326,8 +284,8 @@ read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_er
   *n_progs_out = attr.query.prog_cnt;
   return 0;
 #else
-  (void) dirfd;
-  (void) err;
+  ( void ) dirfd;
+  ( void ) err;
 
   *progs_out = NULL;
   *n_progs_out = 0;
@@ -386,10 +344,10 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
 {
 #ifndef HAVE_EBPF
   return crun_make_error (err, 0, "eBPF not supported");
-# else
-# ifdef BPF_F_REPLACE
+#else
+#  ifdef BPF_F_REPLACE
   bool skip_replace = false;
-# endif
+#  endif
   const int MAX_ATTEMPTS = 20;
   int attempt;
 
@@ -405,9 +363,9 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-# ifdef BPF_F_REPLACE
+#  ifdef BPF_F_REPLACE
       /* There is just one program installed, let's attempt an atomic replace if supported.  */
-      if (!skip_replace && n_progs == 1)
+      if (! skip_replace && n_progs == 1)
         {
           memset (&attr, 0, sizeof (attr));
           attr.prog_id = progs[0];
@@ -422,20 +380,20 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
               return crun_make_error (err, errno, "cannot open existing eBPF program");
             }
         }
-# endif
+#  endif
 
       memset (&attr, 0, sizeof (attr));
       attr.attach_type = BPF_CGROUP_DEVICE;
       attr.target_fd = dirfd;
       attr.attach_bpf_fd = fd;
       attr.attach_flags = BPF_F_ALLOW_MULTI;
-# ifdef BPF_F_REPLACE
+#  ifdef BPF_F_REPLACE
       if (replacefd >= 0)
         {
           attr.attach_flags = BPF_F_ALLOW_MULTI | BPF_F_REPLACE;
           attr.replace_bpf_fd = replacefd;
         }
-# endif
+#  endif
 
       ret = bpf (BPF_PROG_ATTACH, &attr, sizeof (attr));
       if (UNLIKELY (ret < 0))
@@ -445,13 +403,13 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
               /* Another update might have already updated the cgroup, try again.  */
               continue;
             }
-# ifdef BPF_F_REPLACE
+#  ifdef BPF_F_REPLACE
           if (errno == EINVAL && replacefd >= 0)
             {
               skip_replace = true;
               continue;
             }
-# endif
+#  endif
           return crun_make_error (err, errno, "bpf attach");
         }
 
@@ -483,7 +441,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
   memset (&attr, 0, sizeof (attr));
   attr.prog_type = BPF_PROG_TYPE_CGROUP_DEVICE;
-  attr.insns = (uint64_t) program->program;
+  attr.insns = ( uint64_t ) program->program;
   attr.insn_cnt = bpf_program_instructions (program);
   attr.license = (uint64_t) "GPL";
 
@@ -496,7 +454,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
       log[0] = '\0';
       attr.log_level = 1;
-      attr.log_buf = (uint64_t) log;
+      attr.log_buf = ( uint64_t ) log;
       attr.log_size = log_size;
 
       fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
@@ -514,7 +472,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
       unlink (pin);
 
       memset (&attr, 0, sizeof (attr));
-      attr.pathname = (uint64_t) pin;
+      attr.pathname = ( uint64_t ) pin;
       attr.bpf_fd = fd;
       ret = bpf (BPF_OBJ_PIN, &attr, sizeof (attr));
       if (ret < 0)

@@ -16,14 +16,14 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef TERMINAL_H
-# define TERMINAL_H
-# include <config.h>
+#define TERMINAL_H
+#include <config.h>
 
-# include "container.h"
-# include <termios.h>
+#include "container.h"
+#include <termios.h>
 
 void cleanup_terminalp (void *p);
-#define cleanup_terminal __attribute__((cleanup (cleanup_terminalp)))
+#define cleanup_terminal __attribute__ ((cleanup (cleanup_terminalp)))
 
 int libcrun_new_terminal (char **pty, libcrun_error_t *err);
 

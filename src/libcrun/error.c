@@ -30,39 +30,37 @@
 #include <yajl/yajl_gen.h>
 
 #ifdef HAVE_SYSTEMD
-# include <systemd/sd-journal.h>
+#  include <systemd/sd-journal.h>
 #endif
 
-
-#define YAJL_STR(x) ((const unsigned char *) (x))
+#define YAJL_STR(x) (( const unsigned char * ) (x))
 
 enum
-  {
-   LOG_FORMAT_TEXT = 0,
-   LOG_FORMAT_JSON,
-  };
+{
+  LOG_FORMAT_TEXT = 0,
+  LOG_FORMAT_JSON,
+};
 
 static int log_format;
 static bool log_also_to_stderr;
 
-#define MAKE_ERROR(FUNC_NAME)                                           \
-  int                                                                   \
- FUNC_NAME (libcrun_error_t *err, int status, const char *msg, ...)     \
-  {                                                                     \
-  va_list args_list;                                                    \
-  libcrun_error_t ptr;                                                  \
-  va_start (args_list, msg);                                            \
-  *err = xmalloc (sizeof (struct libcrun_error_s));                     \
-  ptr = *err;                                                           \
-  ptr->status = status;                                                 \
-  if (vasprintf (&(ptr->msg), msg, args_list) < 0)                      \
-    OOM ();                                                             \
-  va_end (args_list);                                                   \
-  return -status - 1;                                                   \
-}
+#define MAKE_ERROR(FUNC_NAME)                                            \
+  int FUNC_NAME (libcrun_error_t *err, int status, const char *msg, ...) \
+  {                                                                      \
+    va_list args_list;                                                   \
+    libcrun_error_t ptr;                                                 \
+    va_start (args_list, msg);                                           \
+    *err = xmalloc (sizeof (struct libcrun_error_s));                    \
+    ptr = *err;                                                          \
+    ptr->status = status;                                                \
+    if (vasprintf (&(ptr->msg), msg, args_list) < 0)                     \
+      OOM ();                                                            \
+    va_end (args_list);                                                  \
+    return -status - 1;                                                  \
+  }
 
-MAKE_ERROR(crun_make_error);
-MAKE_ERROR(libcrun_make_error);
+MAKE_ERROR (crun_make_error);
+MAKE_ERROR (libcrun_make_error);
 
 int
 crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
@@ -76,7 +74,7 @@ crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
   if (err == NULL || *err == NULL)
     return 0;
 
-  ret = -(*err)->status -1;
+  ret = -(*err)->status - 1;
 
   va_start (args_list, fmt);
 
@@ -163,8 +161,8 @@ get_timestamp (timestamp_t *timestamp, const char *suffix)
 
   gettimeofday (&tv, NULL);
   gmtime_r (&tv.tv_sec, &now);
-  strftime ((char *) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
-  sprintf (((char *) timestamp) + 19, ".%09ldZ%.8s", tv.tv_usec, suffix);
+  strftime (( char * ) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
+  sprintf ((( char * ) timestamp) + 19, ".%09ldZ%.8s", tv.tv_usec, suffix);
 }
 
 static void *
@@ -175,11 +173,11 @@ init_syslog (const char *id)
 }
 
 enum
-  {
-   LOG_TYPE_FILE = 1,
-   LOG_TYPE_SYSLOG = 2,
-   LOG_TYPE_JOURNALD = 3
-  };
+{
+  LOG_TYPE_FILE = 1,
+  LOG_TYPE_SYSLOG = 2,
+  LOG_TYPE_JOURNALD = 3
+};
 
 static int
 get_log_type (const char *log, const char **data)
@@ -203,8 +201,8 @@ get_log_type (const char *log, const char **data)
 }
 
 int
-libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg,
-                      const char *id, const char *log, libcrun_error_t *err)
+libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg, const char *id,
+                      const char *log, libcrun_error_t *err)
 {
   if (log == NULL)
     {
@@ -246,7 +244,9 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
 void
 log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
 {
-  timestamp_t timestamp = {0, };
+  timestamp_t timestamp = {
+    0,
+  };
   FILE *stream = arg;
   int tty = isatty (fileno (stream));
   const char *color_begin = "";
@@ -285,14 +285,15 @@ log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg arg_un
 void
 log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_unused)
 {
-  (void) errno_;
-  (void) msg;
-  (void) warning;
+  ( void ) errno_;
+  ( void ) msg;
+  ( void ) warning;
 #ifdef HAVE_SYSTEMD
   if (errno_ == 0)
     sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s", msg, "ID=%s", arg, NULL);
   else
-    sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s: %s", msg, strerror (errno_), "ID=%s", arg, NULL);
+    sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s: %s", msg, strerror (errno_), "ID=%s",
+                     arg, NULL);
 #endif
 }
 
@@ -328,7 +329,9 @@ make_json_error (const char *msg, int errno_, bool warning)
   yajl_gen gen = NULL;
   char *ret = NULL;
   size_t buf_len;
-  timestamp_t timestamp = {0, };
+  timestamp_t timestamp = {
+    0,
+  };
 
   gen = yajl_gen_alloc (NULL);
   if (gen == NULL)
@@ -359,7 +362,7 @@ make_json_error (const char *msg, int errno_, bool warning)
 
   yajl_gen_get_buf (gen, &buf, &buf_len);
   if (buf)
-    ret = strdup ((const char *) buf);
+    ret = strdup (( const char * ) buf);
 
   yajl_gen_free (gen);
 
@@ -418,8 +421,7 @@ libcrun_error (int errno_, const char *msg, ...)
   va_end (args_list);
 }
 
-void __attribute__ ((noreturn))
-libcrun_fail_with_error (int errno_, const char *msg, ...)
+void __attribute__ ((noreturn)) libcrun_fail_with_error (int errno_, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);

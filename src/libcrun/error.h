@@ -16,28 +16,31 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef ERROR_H
-# define ERROR_H
-# include <config.h>
-# ifdef HAVE_ERROR_H
+#define ERROR_H
+#include <config.h>
+#ifdef HAVE_ERROR_H
 #  include <error.h>
-# else
-#  define error(status, errno, fmt, ...) do {                           \
-    if (errno == 0)                                                     \
-      fprintf (stderr, "crun: " fmt "\n", ##__VA_ARGS__);               \
-    else                                                                \
-      {                                                                 \
-        fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                  \
-        fprintf (stderr, ": %s\n", strerror (errno));                   \
-      }                                                                 \
-    if (status)                                                         \
-      exit (status);                                                    \
-  } while(0)
-# endif
-# include <stdlib.h>
-# include <stdio.h>
-# include <stdbool.h>
-# include <syslog.h>
-# include <unistd.h>
+#else
+#  define error(status, errno, fmt, ...)                      \
+    do                                                        \
+      {                                                       \
+        if (errno == 0)                                       \
+          fprintf (stderr, "crun: " fmt "\n", ##__VA_ARGS__); \
+        else                                                  \
+          {                                                   \
+            fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);    \
+            fprintf (stderr, ": %s\n", strerror (errno));     \
+          }                                                   \
+        if (status)                                           \
+          exit (status);                                      \
+      }                                                       \
+    while (0)
+#endif
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <syslog.h>
+#include <unistd.h>
 
 struct libcrun_error_s
 {
@@ -46,12 +49,12 @@ struct libcrun_error_s
 };
 typedef struct libcrun_error_s *libcrun_error_t;
 
-#define OOM()                                   \
-  do                                            \
-    {                                           \
-      fprintf (stderr, "out of memory");        \
-      _exit (EXIT_FAILURE);                     \
-    }                                           \
+#define OOM()                            \
+  do                                     \
+    {                                    \
+      fprintf (stderr, "out of memory"); \
+      _exit (EXIT_FAILURE);              \
+    }                                    \
   while (0)
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
@@ -88,16 +91,16 @@ LIBCRUN_PUBLIC void libcrun_fail_with_error (int errno_, const char *msg, ...) _
 
 LIBCRUN_PUBLIC int libcrun_set_log_format (const char *format, libcrun_error_t *err);
 
-LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, void **output_handler_arg,
-                                         const char *id, const char *log, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, void **output_handler_arg, const char *id,
+                                         const char *log, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_error_release (libcrun_error_t *err);
 
 enum
-  {
-    LIBCRUN_VERBOSITY_ERROR,
-    LIBCRUN_VERBOSITY_WARNING,
-  };
+{
+  LIBCRUN_VERBOSITY_ERROR,
+  LIBCRUN_VERBOSITY_WARNING,
+};
 
 LIBCRUN_PUBLIC void libcrun_set_verbosity (int verbosity);
 LIBCRUN_PUBLIC int libcrun_get_verbosity ();

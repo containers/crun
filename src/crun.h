@@ -16,9 +16,9 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef CRUN_H
-# define CRUN_H
+#define CRUN_H
 
-# include "libcrun/container.h"
+#include "libcrun/container.h"
 
 struct crun_global_arguments
 {
@@ -33,6 +33,7 @@ struct crun_global_arguments
 };
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
-int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob, libcrun_error_t *err);
+int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob,
+                          libcrun_error_t *err);
 void crun_assert_n_args (int n, int min, int max);
 #endif

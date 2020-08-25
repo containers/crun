@@ -17,12 +17,12 @@
  */
 
 #ifndef STATUS_H
-# define STATUS_H
+#define STATUS_H
 
-# include <config.h>
-# include <runtime_spec_schema_config_schema.h>
-# include "error.h"
-# include "container.h"
+#include <config.h>
+#include <runtime_spec_schema_config_schema.h>
+#include "error.h"
+#include "container.h"
 
 struct libcrun_container_list_s
 {
@@ -46,16 +46,19 @@ struct libcrun_container_status_s
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
-# define cleanup_container_status __attribute__((cleanup (libcrun_free_container_status)))
+#define cleanup_container_status __attribute__ ((cleanup (libcrun_free_container_status)))
 
 LIBCRUN_PUBLIC void libcrun_free_container_status (libcrun_container_status_t *status);
-LIBCRUN_PUBLIC int libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status, libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_write_container_status (const char *state_root, const char *id,
+                                                   libcrun_container_status_t *status, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root,
+                                                  const char *id, libcrun_error_t *err);
 LIBCRUN_PUBLIC void libcrun_free_containers_list (libcrun_container_list_t *list);
 LIBCRUN_PUBLIC int libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_t *err);
 LIBCRUN_PUBLIC char *libcrun_get_state_directory (const char *state_root, const char *id);
 LIBCRUN_PUBLIC int libcrun_container_delete_status (const char *state_root, const char *id, libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root,
+                                                libcrun_error_t *err);
 
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);

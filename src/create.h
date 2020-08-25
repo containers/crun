@@ -16,9 +16,9 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef CREATE_H
-# define CREATE_H
+#define CREATE_H
 
-# include "crun.h"
+#include "crun.h"
 
 int crun_command_create (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *error);
 

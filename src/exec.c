@@ -48,29 +48,30 @@ struct exec_options_s
 };
 
 enum
-  {
-    OPTION_CONSOLE_SOCKET = 1000,
-    OPTION_PID_FILE,
-    OPTION_CWD,
-    OPTION_PRESERVE_FDS
-  };
+{
+  OPTION_CONSOLE_SOCKET = 1000,
+  OPTION_PID_FILE,
+  OPTION_CWD,
+  OPTION_PRESERVE_FDS
+};
 
 static struct exec_options_s exec_options;
 
-static struct argp_option options[] =
-  {
-   {"console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0, "path to a socket that will receive the ptmx end of the tty", 0},
-   {"tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY", 0},
-   {"process", 'p', "FILE", 0, "path to the process.json", 0},
-   {"cwd", OPTION_CWD, "CWD", 0, "current working directory", 0},
-   {"detach", 'd', 0, 0, "detach the command in the background", 0},
-   {"user", 'u', "USERSPEC", 0, "specify the user in the form UID[:GID]", 0},
-   {"env", 'e', "ENV", 0, "add an environment variable", 0},
-   {"cap", 'c', "CAP", 0, "add a capability", 0},
-   {"pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0},
-   {"preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0},
-   {0,}
-  };
+static struct argp_option options[]
+    = { { "console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0,
+          "path to a socket that will receive the ptmx end of the tty", 0 },
+        { "tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY", 0 },
+        { "process", 'p', "FILE", 0, "path to the process.json", 0 },
+        { "cwd", OPTION_CWD, "CWD", 0, "current working directory", 0 },
+        { "detach", 'd', 0, 0, "detach the command in the background", 0 },
+        { "user", 'u', "USERSPEC", 0, "specify the user in the form UID[:GID]", 0 },
+        { "env", 'e', "ENV", 0, "add an environment variable", 0 },
+        { "cap", 'c', "CAP", 0, "add a capability", 0 },
+        { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
+        { "preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0 },
+        {
+            0,
+        } };
 
 static char args_doc[] = "exec CONTAINER cmd";
 
@@ -96,7 +97,8 @@ append_cap (const char *arg)
   exec_options.cap_size++;
 }
 
-static char **dup_array (char **arr, size_t len)
+static char **
+dup_array (char **arr, size_t len)
 {
   size_t i;
   char **ret;
@@ -133,7 +135,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'p':
-        exec_options.process = arg;
+      exec_options.process = arg;
       break;
 
     case 't':
@@ -201,7 +203,9 @@ int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg, ret = 0;
-  libcrun_context_t crun_context = {0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
 
   crun_context.preserve_fds = 0;
 
@@ -240,7 +244,8 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->user = make_oci_process_user (exec_options.user);
       if (exec_options.cap_size > 0)
         {
-          runtime_spec_schema_config_schema_process_capabilities *capabilities = xmalloc (sizeof (runtime_spec_schema_config_schema_process_capabilities));
+          runtime_spec_schema_config_schema_process_capabilities *capabilities
+              = xmalloc (sizeof (runtime_spec_schema_config_schema_process_capabilities));
 
           capabilities->effective = exec_options.cap;
           capabilities->effective_len = exec_options.cap_size;

@@ -28,6 +28,8 @@ matrix:
       env: TEST=coverity
     - arch: amd64
       env: TEST=alpine-build
+    - arch: amd64
+      env: TEST=clang-format
   matrix:
   - TEST=make-arm64
   - TEST=make-amd64
@@ -35,6 +37,7 @@ matrix:
   - TEST=containerd
   - TEST=oci-validation
   - TEST=coverity
+  - TEST=clang-format
   - TEST=alpine-build
   global:
   - COVERITY_SCAN_PROJECT_NAME="giuseppe/crun"
@@ -49,7 +52,7 @@ services:
 - docker
 language: c
 sudo: required
-dist: bionic
+dist: focal
 addons:
   apt:
     packages:
@@ -67,12 +70,14 @@ addons:
     - go-md2man
     - libsystemd-dev
     - gperf
+    - clang-format
 before_install:
 - git submodule update --init --recursive
 - if test $TEST = podman; then sudo docker build -t crun-podman tests/podman; fi
 - if test $TEST = containerd; then sudo docker build -t crun-containerd tests/containerd; fi
 - if test $TEST = oci-validation; then sudo docker build -t crun-oci-validation tests/oci-validation; fi
 - if test $TEST = alpine-build; then sudo docker build -t crun-alpine-build tests/alpine-build; fi
+- if test $TEST = clang-format; then sudo docker build -t crun-clang-format tests/clang-format; fi
 - git clone --depth=1 git://github.com/lloyd/yajl
 - "(cd yajl && ./configure -p /usr && make && sudo make install)"
 # CRIU supports armhfp, aarch64, ppc64le, s390x and x86_64. The PPA has only packages for x86_64
@@ -86,3 +91,4 @@ script:
 - if test $TEST = oci-validation; then sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-oci-validation; fi
 - if test $TEST = coverity; then ./autogen.sh && eval "${COVERITY_SCAN_BUILD}"; fi
 - if test $TEST = alpine-build; then sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-alpine-build; fi
+- if test $TEST = clang-format; then ./autogen.sh && ./configure && sudo docker run --rm -w /crun -v $(pwd):/crun crun-clang-format make clang-format; fi

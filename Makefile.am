@@ -161,4 +161,8 @@ generate-rust-bindings: libcrun.rs
 generate-signals.c: src/libcrun/signals.perf
 	${GPERF} --lookup-function-name libcrun_signal_in_word_set -m 100 --null-strings --pic -tCEG -S1 $< > src/libcrun/signals.c
 
-.PHONY: coverity sync generate-rust-bindings generate-signals.c
+clang-format:
+# do not format files that were copied into the source directory.
+	git ls-files src | egrep "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c" | xargs clang-format -style=file -i
+
+.PHONY: coverity sync generate-rust-bindings generate-signals.c clang-format

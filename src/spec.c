@@ -36,17 +36,16 @@ struct spec_options_s
 };
 
 enum
-  {
-    OPTION_ROOTLESS = 1000
-  };
+{
+  OPTION_ROOTLESS = 1000
+};
 
 static struct spec_options_s spec_options;
 
-static struct argp_option options[] =
-  {
-   {"rootless", OPTION_ROOTLESS, 0, 0, "spec for the rootless case", 0 },
-   { 0, }
-  };
+static struct argp_option options[] = { { "rootless", OPTION_ROOTLESS, 0, 0, "spec for the rootless case", 0 },
+                                        {
+                                            0,
+                                        } };
 
 static char args_doc[] = "spec";
 
@@ -72,7 +71,9 @@ int
 crun_command_spec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  libcrun_context_t crun_context = {0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
   int ret;
   cleanup_file FILE *f = NULL;
 
@@ -91,7 +92,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (f == NULL)
     return libcrun_make_error (err, 0, "cannot open config.json", err);
 
-  ret = libcrun_container_spec (!spec_options.rootless, f, err);
+  ret = libcrun_container_spec (! spec_options.rootless, f, err);
 
   return ret >= 0 ? 0 : ret;
 }

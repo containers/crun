@@ -16,16 +16,16 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef EBPF_H
-# define EBPF_H
+#define EBPF_H
 
-# include <config.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include "error.h"
-# include <errno.h>
-# include <argp.h>
-# include <runtime_spec_schema_config_schema.h>
-# include "container.h"
+#include <config.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "error.h"
+#include <errno.h>
+#include <argp.h>
+#include <runtime_spec_schema_config_schema.h>
+#include "container.h"
 
 struct bpf_program;
 
@@ -33,9 +33,9 @@ struct bpf_program *bpf_program_new (size_t size);
 struct bpf_program *bpf_program_append (struct bpf_program *p, void *data, size_t size);
 
 struct bpf_program *bpf_program_init_dev (struct bpf_program *program, libcrun_error_t *err);
-struct bpf_program *bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major, int minor, bool accept, libcrun_error_t *err);
+struct bpf_program *bpf_program_append_dev (struct bpf_program *program, const char *access, char type, int major,
+                                            int minor, bool accept, libcrun_error_t *err);
 struct bpf_program *bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err);
-
 
 int libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err);
 

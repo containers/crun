@@ -30,7 +30,7 @@
 #include <time.h>
 
 #ifdef HAVE_SYSTEMD
-# include <systemd/sd-bus.h>
+#  include <systemd/sd-bus.h>
 #endif
 
 #include <sys/stat.h>
@@ -38,10 +38,9 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-static const cgroups_subsystem_t cgroups_subsystems[] = {"cpuset", "cpu", "devices", "pids", "memory",
-                                                         "net_cls,net_prio", "freezer", "blkio",
-                                                         "hugetlb", "cpu,cpuacct", "perf_event",
-                                                         "unified", NULL};
+static const cgroups_subsystem_t cgroups_subsystems[]
+    = { "cpuset",  "cpu",         "devices",    "pids",    "memory", "net_cls,net_prio", "freezer", "blkio",
+        "hugetlb", "cpu,cpuacct", "perf_event", "unified", NULL };
 
 const cgroups_subsystem_t *
 libcrun_get_cgroups_subsystems (libcrun_error_t *err arg_unused)
@@ -55,22 +54,20 @@ struct symlink_s
   const char *target;
 };
 
-static struct symlink_s cgroup_symlinks[] = {
-  { "cpu", "cpu,cpuacct" },
-  { "cpuacct", "cpu,cpuacct" },
-  { "net_cls", "net_cls,net_prio" },
-  { "net_prio", "net_cls,net_prio" },
-  { NULL, NULL }
-};
+static struct symlink_s cgroup_symlinks[] = { { "cpu", "cpu,cpuacct" },
+                                              { "cpuacct", "cpu,cpuacct" },
+                                              { "net_cls", "net_cls,net_prio" },
+                                              { "net_prio", "net_cls,net_prio" },
+                                              { NULL, NULL } };
 
 #define SYSTEMD_PROPERTY_PREFIX "org.systemd.property."
 
 #ifndef CGROUP2_SUPER_MAGIC
-# define CGROUP2_SUPER_MAGIC 0x63677270
+#  define CGROUP2_SUPER_MAGIC 0x63677270
 #endif
 
 #ifndef TMPFS_MAGIC
-# define TMPFS_MAGIC 0x01021994
+#  define TMPFS_MAGIC 0x01021994
 #endif
 
 static int
@@ -143,14 +140,14 @@ is_rwm (const char *str, libcrun_error_t *err)
 }
 
 enum
-  {
-   CGROUP_MEMORY  = 1 << 0,
-   CGROUP_CPU     = 1 << 1,
-   CGROUP_HUGETLB = 1 << 2,
-   CGROUP_CPUSET  = 1 << 3,
-   CGROUP_PIDS    = 1 << 4,
-   CGROUP_IO      = 1 << 5,
-  };
+{
+  CGROUP_MEMORY = 1 << 0,
+  CGROUP_CPU = 1 << 1,
+  CGROUP_HUGETLB = 1 << 2,
+  CGROUP_CPUSET = 1 << 3,
+  CGROUP_PIDS = 1 << 4,
+  CGROUP_IO = 1 << 5,
+};
 
 static int
 read_available_controllers (const char *path, libcrun_error_t *err)
@@ -200,13 +197,11 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
   size_t controllers_len = 0;
   int ret;
 
-  controllers_len = xasprintf (&controllers, "%s %s %s %s %s %s",
-                               (controllers_to_enable & CGROUP_CPU)     ? "+cpu" : "",
-                               (controllers_to_enable & CGROUP_IO)      ? "+io" : "",
-                               (controllers_to_enable & CGROUP_MEMORY)  ? "+memory" : "",
-                               (controllers_to_enable & CGROUP_PIDS)    ? "+pids" : "",
-                               (controllers_to_enable & CGROUP_CPUSET)  ? "+cpuset" : "",
-                               (controllers_to_enable & CGROUP_HUGETLB) ? "+hugetlb" : "");
+  controllers_len = xasprintf (
+      &controllers, "%s %s %s %s %s %s", (controllers_to_enable & CGROUP_CPU) ? "+cpu" : "",
+      (controllers_to_enable & CGROUP_IO) ? "+io" : "", (controllers_to_enable & CGROUP_MEMORY) ? "+memory" : "",
+      (controllers_to_enable & CGROUP_PIDS) ? "+pids" : "", (controllers_to_enable & CGROUP_CPUSET) ? "+cpuset" : "",
+      (controllers_to_enable & CGROUP_HUGETLB) ? "+hugetlb" : "");
 
   xasprintf (&subtree_control, "%s/cgroup.subtree_control", path);
   ret = write_file (subtree_control, controllers, controllers_len, err);
@@ -266,7 +261,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
   ret = read_available_controllers ("/sys/fs/cgroup", err);
   if (UNLIKELY (ret < 0))
-      return ret;
+    return ret;
 
   controllers_to_enable = ret;
 
@@ -341,7 +336,8 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
       size_t parent_path_len;
       int ret;
 
-      for (parent_path_len = path_len -1; parent_path_len > 1 && path[parent_path_len] != '/'; parent_path_len--);
+      for (parent_path_len = path_len - 1; parent_path_len > 1 && path[parent_path_len] != '/'; parent_path_len--)
+        ;
       if (parent_path_len == 1)
         return 0;
 
@@ -386,7 +382,8 @@ initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 static int
 initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 {
-  const char *const files[] = {"memory.limit_in_bytes", "memory.kmem.limit_in_bytes", "memory.memsw.limit_in_bytes", NULL};
+  const char *const files[]
+      = { "memory.limit_in_bytes", "memory.kmem.limit_in_bytes", "memory.memsw.limit_in_bytes", NULL };
   cleanup_close int dirfd = -1;
   int i;
 
@@ -423,7 +420,8 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
 }
 
 static int
-enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing, libcrun_error_t *err)
+enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing,
+                        libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   int ret;
@@ -437,9 +435,9 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool
           if (errno != EROFS)
             return crun_make_error (err, errno, "creating cgroup directory `%s`", cgroup_path);
 
-         crun_error_release (err);
-         return 0;
-       }
+          crun_error_release (err);
+          return 0;
+        }
 
       if (strcmp (subsystem, "cpuset") == 0)
         {
@@ -484,7 +482,7 @@ get_file_owner (const char *path, uid_t *uid, gid_t *gid)
 #ifdef HAVE_STATX
   struct statx stx;
 
-  ret = statx (AT_FDCWD, path, AT_STATX_DONT_SYNC, STATX_UID|STATX_GID, &stx);
+  ret = statx (AT_FDCWD, path, AT_STATX_DONT_SYNC, STATX_UID | STATX_GID, &stx);
   if (UNLIKELY (ret < 0))
     {
       if (errno == ENOSYS || errno == EINVAL)
@@ -496,7 +494,7 @@ get_file_owner (const char *path, uid_t *uid, gid_t *gid)
   *gid = stx.stx_gid;
   return ret;
 
- fallback:
+fallback:
 #endif
   ret = stat (path, &st);
   if (UNLIKELY (ret < 0))
@@ -713,7 +711,8 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
 }
 
 static int
-enter_cgroup (int cgroup_mode, pid_t pid, pid_t init_pid, const char *path, bool create_if_missing, libcrun_error_t *err)
+enter_cgroup (int cgroup_mode, pid_t pid, pid_t init_pid, const char *path, bool create_if_missing,
+              libcrun_error_t *err)
 {
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     return enter_cgroup_v2 (pid, init_pid, path, create_if_missing, err);
@@ -756,8 +755,8 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_e
 
 #ifdef HAVE_SYSTEMD
 
-static
-void get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
+static void
+get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
 {
   char *n;
 
@@ -786,8 +785,8 @@ void get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char 
     }
 }
 
-static
-int systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
+static int
+systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int cgroup_mode = args->cgroup_mode;
@@ -933,21 +932,12 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
 }
 
 static int
-systemd_check_job_status_setup (sd_bus *bus,
-                                struct systemd_job_removed_s *data,
-                                libcrun_error_t *err)
+systemd_check_job_status_setup (sd_bus *bus, struct systemd_job_removed_s *data, libcrun_error_t *err)
 {
   int ret;
 
-  ret = sd_bus_match_signal_async (bus,
-                                   NULL,
-                                   "org.freedesktop.systemd1",
-                                   "/org/freedesktop/systemd1",
-                                   "org.freedesktop.systemd1.Manager",
-                                   "JobRemoved",
-                                   systemd_job_removed,
-                                   NULL,
-                                   data);
+  ret = sd_bus_match_signal_async (bus, NULL, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                                   "org.freedesktop.systemd1.Manager", "JobRemoved", systemd_job_removed, NULL, data);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, -ret, "sd-bus match signal");
 
@@ -955,17 +945,14 @@ systemd_check_job_status_setup (sd_bus *bus,
 }
 
 static int
-systemd_check_job_status (sd_bus *bus,
-                          struct systemd_job_removed_s *data,
-                          const char *path,
-                          const char *op,
+systemd_check_job_status (sd_bus *bus, struct systemd_job_removed_s *data, const char *path, const char *op,
                           libcrun_error_t *err)
 {
   int sd_err;
 
   data->path = path;
   data->op = op;
-  while (!data->terminated)
+  while (! data->terminated)
     {
       sd_err = sd_bus_process (bus, NULL);
       if (UNLIKELY (sd_err < 0))
@@ -974,7 +961,7 @@ systemd_check_job_status (sd_bus *bus,
       if (sd_err != 0)
         continue;
 
-      sd_err = sd_bus_wait (bus, (uint64_t) -1);
+      sd_err = sd_bus_wait (bus, ( uint64_t ) -1);
       if (UNLIKELY (sd_err < 0))
         return crun_make_error (err, -sd_err, "sd-bus wait");
     }
@@ -990,10 +977,7 @@ systemd_check_job_status (sd_bus *bus,
 
 /* Parse a gvariant string.  Support only a subset of types, just enough for systemd .  */
 static int
-append_systemd_annotation (sd_bus_message *m,
-                           const char *name,
-                           size_t name_len,
-                           const char *value,
+append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len, const char *value,
                            libcrun_error_t *err)
 {
   cleanup_free char *tmp_name = NULL;
@@ -1007,10 +991,7 @@ append_systemd_annotation (sd_bus_message *m,
   it = value;
 
   /* If the name has the form NameSec, convert it to NameUSec.  */
-  if (name_len > 4
-      && name[name_len - 4] != 'U'
-      && name[name_len - 3] == 'S'
-      && name[name_len - 2] == 'e'
+  if (name_len > 4 && name[name_len - 4] != 'U' && name[name_len - 3] == 'S' && name[name_len - 2] == 'e'
       && name[name_len - 1] == 'c')
     {
       factor = 1000000;
@@ -1021,7 +1002,6 @@ append_systemd_annotation (sd_bus_message *m,
 
       name = tmp_name;
     }
-
 
   if ((strcmp (it, "true") == 0) || (strcmp (it, "false") == 0))
     {
@@ -1061,7 +1041,7 @@ append_systemd_annotation (sd_bus_message *m,
       if (UNLIKELY (errno != 0 || *endptr))
         return crun_make_error (err, errno, "invalid value for `%s`", name);
 
-      sd_err = sd_bus_message_append (m, "(sv)", name, "t", (uint64_t)(v * factor));
+      sd_err = sd_bus_message_append (m, "(sv)", name, "t", (uint64_t) (v * factor));
       if (UNLIKELY (sd_err < 0))
         return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
 
@@ -1077,7 +1057,7 @@ append_systemd_annotation (sd_bus_message *m,
       if (UNLIKELY (errno != 0 || *endptr))
         return crun_make_error (err, errno, "invalid value for `%s`", name);
 
-      sd_err = sd_bus_message_append (m, "(sv)", name, "x", (int64_t)(v * factor));
+      sd_err = sd_bus_message_append (m, "(sv)", name, "x", (int64_t) (v * factor));
       if (UNLIKELY (sd_err < 0))
         return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
 
@@ -1093,7 +1073,7 @@ append_systemd_annotation (sd_bus_message *m,
       if (UNLIKELY (errno != 0 || *endptr))
         return crun_make_error (err, errno, "invalid value for `%s`", name);
 
-      sd_err = sd_bus_message_append (m, "(sv)", name, "u", (uint32_t)(v * factor));
+      sd_err = sd_bus_message_append (m, "(sv)", name, "u", (uint32_t) (v * factor));
       if (UNLIKELY (sd_err < 0))
         return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
 
@@ -1114,7 +1094,7 @@ append_systemd_annotation (sd_bus_message *m,
       if (UNLIKELY (errno != 0 || *endptr))
         return crun_make_error (err, errno, "invalid value for `%s`", name);
 
-      sd_err = sd_bus_message_append (m, "(sv)", name, "i", (int32_t)(v * factor));
+      sd_err = sd_bus_message_append (m, "(sv)", name, "i", (int32_t) (v * factor));
       if (UNLIKELY (sd_err < 0))
         return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
 
@@ -1140,12 +1120,8 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
 }
 
 static int
-enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
-                            json_map_string_string *annotations,
-                            const char *scope,
-                            const char *slice,
-                            pid_t pid,
-                            libcrun_error_t *err)
+enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources, json_map_string_string *annotations,
+                            const char *scope, const char *slice, pid_t pid, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -1160,7 +1136,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   i = 0;
   boolean_opts[i++] = "Delegate";
   if (resources)
-   {
+    {
       if (resources->cpu)
         boolean_opts[i++] = "CPUAccounting";
       if (resources->memory)
@@ -1178,12 +1154,10 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
 
   ret = systemd_check_job_status_setup (bus, &job_data, err);
   if (UNLIKELY (ret < 0))
-      goto exit;
+    goto exit;
 
-  sd_err = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1",
-                                           "/org/freedesktop/systemd1",
-                                           "org.freedesktop.systemd1.Manager",
-                                           "StartTransientUnit");
+  sd_err = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                                           "org.freedesktop.systemd1.Manager", "StartTransientUnit");
   if (UNLIKELY (sd_err < 0))
     {
       ret = crun_make_error (err, -sd_err, "set up dbus message");
@@ -1229,13 +1203,11 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
           len = strlen (annotations->keys[i]);
           if (len < prefix_len + 3)
             {
-              ret = crun_make_error (err, EINVAL, "invalid systemd property name `%s`",
-                                     annotations->keys[i]);
+              ret = crun_make_error (err, EINVAL, "invalid systemd property name `%s`", annotations->keys[i]);
               goto exit;
             }
 
-          ret = append_systemd_annotation (m, annotations->keys[i] + prefix_len,
-                                           len - prefix_len,
+          ret = append_systemd_annotation (m, annotations->keys[i] + prefix_len, len - prefix_len,
                                            annotations->values[i], err);
           if (UNLIKELY (ret < 0))
             goto exit;
@@ -1307,8 +1279,8 @@ exit:
   return ret;
 }
 
-static
-int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
+static int
+destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
   sd_bus_message *m = NULL;
@@ -1326,12 +1298,9 @@ int destroy_systemd_cgroup_scope (const char *scope, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     goto exit;
 
-  ret = sd_bus_message_new_method_call (bus, &m,
-                                        "org.freedesktop.systemd1",
-                                        "/org/freedesktop/systemd1",
-                                        "org.freedesktop.systemd1.Manager",
-                                        "StopUnit");
-  if (UNLIKELY (ret  < 0))
+  ret = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                                        "org.freedesktop.systemd1.Manager", "StopUnit");
+  if (UNLIKELY (ret < 0))
     {
       ret = crun_make_error (err, -ret, "set up dbus message");
       goto exit;
@@ -1390,7 +1359,7 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
   const char *id = args->id;
 
   if (cgroup_path == NULL)
-      xasprintf (path, "/%s", id);
+    xasprintf (path, "/%s", id);
   else
     {
       if (cgroup_path[0] == '/')
@@ -1482,7 +1451,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
     }
   if (LIKELY (ret >= 0))
     {
-      if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
+      if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != ( uid_t ) -1 || root_gid != ( gid_t ) -1))
         return chown_cgroups (*path, root_uid, root_gid, err);
 
       return ret;
@@ -1539,7 +1508,8 @@ libcrun_cgroup_is_container_paused (const char *cgroup_path, int cgroup_mode, bo
 }
 
 static int
-libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode, const bool pause, libcrun_error_t *err)
+libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode, const bool pause,
+                                        libcrun_error_t *err)
 {
   cleanup_free char *path = NULL;
   const char *state = "";
@@ -1574,8 +1544,8 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
   return libcrun_cgroup_pause_unpause_with_mode (cgroup_path, cgroup_mode, pause, err);
 }
 
-static
-int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
+static int
+read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
   cleanup_close int clean_dfd = dfd;
   cleanup_close int tasksfd = -1;
@@ -1586,7 +1556,7 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
   char *it;
   int ret;
 
-  tasksfd = openat (dfd, "cgroup.procs", O_RDONLY|O_CLOEXEC);
+  tasksfd = openat (dfd, "cgroup.procs", O_RDONLY | O_CLOEXEC);
   if (tasksfd < 0)
     return crun_make_error (err, errno, "open cgroup.procs");
 
@@ -1619,7 +1589,7 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
 
       dir = fdopendir (dfd);
       if (UNLIKELY (dir == NULL))
-          return crun_make_error (err, errno, "open cgroup sub-directory");
+        return crun_make_error (err, errno, "open cgroup sub-directory");
       /* Now dir owns the dfd descriptor.  */
       clean_dfd = -1;
 
@@ -1627,14 +1597,13 @@ int read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_
         {
           int nfd;
 
-          if (strcmp (de->d_name, ".") == 0 ||
-              strcmp (de->d_name, "..") == 0)
+          if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
             continue;
 
           if (de->d_type != DT_DIR)
             continue;
 
-          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY|O_CLOEXEC);
+          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY | O_CLOEXEC);
           if (UNLIKELY (nfd < 0))
             return crun_make_error (err, errno, "open cgroup directory %s", de->d_name);
           ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
@@ -1782,7 +1751,8 @@ libcrun_cgroup_killall (const char *path, libcrun_error_t *err)
   return libcrun_cgroup_killall_signal (path, SIGKILL, err);
 }
 
-int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager, libcrun_error_t *err)
+int
+libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager, libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -1790,9 +1760,9 @@ int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope,
   const cgroups_subsystem_t *subsystems;
   bool repeat = true;
 
-  (void) id;
-  (void) manager;
-  (void) scope;
+  ( void ) id;
+  ( void ) manager;
+  ( void ) scope;
 
   if (path == NULL || *path == '\0')
     return 0;
@@ -1858,11 +1828,10 @@ int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope,
 
       if (repeat)
         {
-          struct timespec req =
-            {
-             .tv_sec = 0,
-             .tv_nsec = 100000,
-            };
+          struct timespec req = {
+            .tv_sec = 0,
+            .tv_nsec = 100000,
+          };
 
           nanosleep (&req, NULL);
 
@@ -1880,7 +1849,8 @@ int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope,
 typedef runtime_spec_schema_defs_linux_block_io_device_throttle throttling_s;
 
 static int
-write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
+write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s **throttling, size_t throttling_len,
+                                     libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
@@ -1897,9 +1867,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
     {
       int ret;
       size_t len;
-      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu64 "\n",
-                     throttling[i]->major,
-                     throttling[i]->minor,
+      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu64 "\n", throttling[i]->major, throttling[i]->minor,
                      throttling[i]->rate);
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
@@ -1910,7 +1878,8 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
 }
 
 static int
-write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **throttling, size_t throttling_len, libcrun_error_t *err)
+write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **throttling, size_t throttling_len,
+                                     libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
@@ -1922,10 +1891,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **th
     {
       int ret;
       size_t len;
-      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %s=%lu\n",
-                     throttling[i]->major,
-                     throttling[i]->minor,
-                     name,
+      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %s=%lu\n", throttling[i]->major, throttling[i]->minor, name,
                      throttling[i]->rate);
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
@@ -1936,13 +1902,14 @@ write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **th
 }
 
 static int
-write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_block_io *blkio, libcrun_error_t *err)
+write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_block_io *blkio,
+                       libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t len;
   int ret;
-      /* convert linearly from 10-1000 to 1-10000.  */
-#define CONVERT_WEIGHT_TO_CGROUPS_V2(x) (1 + ((x) - 10) * 9999 / 990)
+  /* convert linearly from 10-1000 to 1-10000.  */
+#define CONVERT_WEIGHT_TO_CGROUPS_V2(x) (1 + (( x ) -10) * 9999 / 990)
 
   if (blkio->weight)
     {
@@ -1979,10 +1946,8 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
             {
               uint32_t w = CONVERT_WEIGHT_TO_CGROUPS_V2 (blkio->weight_device[i]->weight);
 
-              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %i\n",
-                             blkio->weight_device[i]->major,
-                             blkio->weight_device[i]->minor,
-                             w);
+              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %i\n", blkio->weight_device[i]->major,
+                             blkio->weight_device[i]->minor, w);
               ret = TEMP_FAILURE_RETRY (write (wfd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write io.weight");
@@ -2006,17 +1971,13 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
 
           for (i = 0; i < blkio->weight_device_len; i++)
             {
-              len = sprintf (fmt_buf, "%lu:%lu %i\n",
-                             blkio->weight_device[i]->major,
-                             blkio->weight_device[i]->minor,
+              len = sprintf (fmt_buf, "%lu:%lu %i\n", blkio->weight_device[i]->major, blkio->weight_device[i]->minor,
                              blkio->weight_device[i]->weight);
               ret = TEMP_FAILURE_RETRY (write (w_device_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write blkio.weight_device");
 
-              len = sprintf (fmt_buf, "%lu:%lu %i\n",
-                             blkio->weight_device[i]->major,
-                             blkio->weight_device[i]->minor,
+              len = sprintf (fmt_buf, "%lu:%lu %i\n", blkio->weight_device[i]->major, blkio->weight_device[i]->minor,
                              blkio->weight_device[i]->leaf_weight);
               ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
@@ -2032,61 +1993,49 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       if (UNLIKELY (wfd < 0))
         return crun_make_error (err, errno, "open io.max");
 
-      ret = write_blkio_v2_resources_throttling (wfd, "rbps",
-                                                 (throttling_s **) blkio->throttle_read_bps_device,
-                                                 blkio->throttle_read_bps_device_len,
-                                                 err);
+      ret = write_blkio_v2_resources_throttling (wfd, "rbps", ( throttling_s ** ) blkio->throttle_read_bps_device,
+                                                 blkio->throttle_read_bps_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_blkio_v2_resources_throttling (wfd, "wbps",
-                                                 (throttling_s **) blkio->throttle_write_bps_device,
-                                                 blkio->throttle_write_bps_device_len,
-                                                 err);
+      ret = write_blkio_v2_resources_throttling (wfd, "wbps", ( throttling_s ** ) blkio->throttle_write_bps_device,
+                                                 blkio->throttle_write_bps_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_blkio_v2_resources_throttling (wfd, "riops",
-                                                 (throttling_s **) blkio->throttle_read_iops_device,
-                                                 blkio->throttle_read_iops_device_len,
-                                                 err);
+      ret = write_blkio_v2_resources_throttling (wfd, "riops", ( throttling_s ** ) blkio->throttle_read_iops_device,
+                                                 blkio->throttle_read_iops_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_blkio_v2_resources_throttling (wfd, "wiops",
-                                                 (throttling_s **) blkio->throttle_write_iops_device,
-                                                 blkio->throttle_write_iops_device_len,
-                                                 err);
+      ret = write_blkio_v2_resources_throttling (wfd, "wiops", ( throttling_s ** ) blkio->throttle_write_iops_device,
+                                                 blkio->throttle_write_iops_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.read_bps_device",
-                                                 (throttling_s **) blkio->throttle_read_bps_device,
-                                                 blkio->throttle_read_bps_device_len,
-                                                 err);
+                                                 ( throttling_s ** ) blkio->throttle_read_bps_device,
+                                                 blkio->throttle_read_bps_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.write_bps_device",
-                                                 (throttling_s **) blkio->throttle_write_bps_device,
-                                                 blkio->throttle_write_bps_device_len,
-                                                 err);
+                                                 ( throttling_s ** ) blkio->throttle_write_bps_device,
+                                                 blkio->throttle_write_bps_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.read_iops_device",
-                                                 (throttling_s **) blkio->throttle_read_iops_device,
-                                                 blkio->throttle_read_iops_device_len,
-                                                 err);
+                                                 ( throttling_s ** ) blkio->throttle_read_iops_device,
+                                                 blkio->throttle_read_iops_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
       ret = write_blkio_v1_resources_throttling (dirfd, "blkio.throttle.write_iops_device",
-                                                 (throttling_s **) blkio->throttle_write_iops_device,
-                                                 blkio->throttle_write_iops_device_len,
-                                                 err);
+                                                 ( throttling_s ** ) blkio->throttle_write_iops_device,
+                                                 blkio->throttle_write_iops_device_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2094,7 +2043,8 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
 }
 
 static int
-write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_schema_config_linux_resources_network *net, libcrun_error_t *err)
+write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_schema_config_linux_resources_network *net,
+                         libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t len;
@@ -2121,14 +2071,15 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write net_prio.ifpriomap");
         }
-
     }
 
   return 0;
 }
 
 static int
-write_hugetlb_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_hugepage_limits_element **htlb, size_t htlb_len, libcrun_error_t *err)
+write_hugetlb_resources (int dirfd, bool cgroup2,
+                         runtime_spec_schema_config_linux_resources_hugepage_limits_element **htlb, size_t htlb_len,
+                         libcrun_error_t *err)
 {
   char fmt_buf[128];
   size_t i;
@@ -2151,28 +2102,15 @@ write_hugetlb_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_lin
   return 0;
 }
 
-
 static int
-write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                            libcrun_error_t *err)
 {
   size_t i, len;
   int ret;
-  char *default_devices[] =
-    {
-      "c *:* m",
-      "b *:* m",
-      "c 1:3 rwm",
-      "c 1:8 rwm",
-      "c 1:7 rwm",
-      "c 5:0 rwm",
-      "c 1:5 rwm",
-      "c 1:9 rwm",
-      "c 5:1 rwm",
-      "c 136:* rwm",
-      "c 5:2 rwm",
-      "c 10:200 rwm",
-      NULL
-  };
+  char *default_devices[]
+      = { "c *:* m",   "b *:* m",   "c 1:3 rwm",   "c 1:8 rwm", "c 1:7 rwm",    "c 5:0 rwm", "c 1:5 rwm",
+          "c 1:9 rwm", "c 5:1 rwm", "c 136:* rwm", "c 5:2 rwm", "c 10:200 rwm", NULL };
 
   for (i = 0; i < devs_len; i++)
     {
@@ -2191,17 +2129,21 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           char fmt_buf_major[16];
           char fmt_buf_minor[16];
 
-#define FMT_DEV(x, b) do {                      \
-            if (x ## _present)                  \
-              sprintf (b, "%lu", x);            \
-            else                                \
-              strcpy (b, "*");                  \
-          } while(0)                            \
+#define FMT_DEV(x, b)          \
+  do                           \
+    {                          \
+      if (x##_present)         \
+        sprintf (b, "%lu", x); \
+      else                     \
+        strcpy (b, "*");       \
+    }                          \
+  while (0)
 
           FMT_DEV (devs[i]->major, fmt_buf_major);
           FMT_DEV (devs[i]->minor, fmt_buf_minor);
 
-          len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor, devs[i]->access);
+          len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor,
+                          devs[i]->access);
           /* Make sure it is still a NUL terminated string.  */
           fmt_buf[len] = '\0';
         }
@@ -2221,30 +2163,22 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
 }
 
 static int
-write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                                     libcrun_error_t *err)
 {
   int i, ret;
   cleanup_free struct bpf_program *program = NULL;
-  struct default_dev_s {
+  struct default_dev_s
+  {
     char type;
     int major;
     int minor;
     const char *access;
   };
-  struct default_dev_s default_devices[] =
-    {
-     {'c', -1, -1, "m"},
-     {'b', -1, -1, "m"},
-     {'c', 1, 3, "rwm"},
-     {'c', 1, 8, "rwm"},
-     {'c', 1, 7, "rwm"},
-     {'c', 5, 0, "rwm"},
-     {'c', 1, 5, "rwm"},
-     {'c', 1, 9, "rwm"},
-     {'c', 5, 1, "rwm"},
-     {'c', 136, -1, "rwm"},
-     {'c', 5, 2, "rwm"},
-     {'c', 10, 200, "rwm"},
+  struct default_dev_s default_devices[] = {
+    { 'c', -1, -1, "m" }, { 'b', -1, -1, "m" },    { 'c', 1, 3, "rwm" }, { 'c', 1, 8, "rwm" },
+    { 'c', 1, 7, "rwm" }, { 'c', 5, 0, "rwm" },    { 'c', 1, 5, "rwm" }, { 'c', 1, 9, "rwm" },
+    { 'c', 5, 1, "rwm" }, { 'c', 136, -1, "rwm" }, { 'c', 5, 2, "rwm" }, { 'c', 10, 200, "rwm" },
   };
 
   program = bpf_program_new (2048);
@@ -2253,7 +2187,7 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
   if (UNLIKELY (program == NULL))
     return -1;
 
-  for (i = (sizeof (default_devices) / sizeof (default_devices[0])) - 1; i >= 0 ; i--)
+  for (i = (sizeof (default_devices) / sizeof (default_devices[0])) - 1; i >= 0; i--)
     {
       program = bpf_program_append_dev (program, default_devices[i].access, default_devices[i].type,
                                         default_devices[i].major, default_devices[i].minor, true, err);
@@ -2289,7 +2223,8 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
 }
 
 static int
-write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                            libcrun_error_t *err)
 {
   int ret;
   size_t i;
@@ -2302,7 +2237,7 @@ write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
   for (i = 0; i < devs_len; i++)
     {
-      if (devs[i]->allow_present && !devs[i]->allow)
+      if (devs[i]->allow_present && ! devs[i]->allow)
         {
           can_skip = false;
           break;
@@ -2334,9 +2269,9 @@ write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   return ret;
 }
 
-
 static int
-write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, libcrun_error_t *err)
+write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                         libcrun_error_t *err)
 {
   if (cgroup2)
     return write_devices_resources_v2 (dirfd, devs, devs_len, err);
@@ -2348,10 +2283,10 @@ write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux
 static int
 cg_itoa (char *buf, int64_t value, bool cgroup2)
 {
-  if (!(cgroup2 && value == -1))
+  if (! (cgroup2 && value == -1))
     return sprintf (buf, "%lu", value);
 
-  memcpy(buf, "max", 4);
+  memcpy (buf, "max", 4);
   return 3;
 }
 
@@ -2370,7 +2305,8 @@ write_memory (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resource
 }
 
 static int
-write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
+write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory,
+                   libcrun_error_t *err)
 {
   int64_t swap;
   char swap_buf[32];
@@ -2382,7 +2318,7 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
   swap = memory->swap;
   if (cgroup2 && memory->swap != -1)
     {
-      if (!memory->limit_present)
+      if (! memory->limit_present)
         return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
       if (memory->swap < memory->limit)
         return crun_make_error (err, 0, "cannot set memory+swap limit less than the memory limit");
@@ -2392,11 +2328,13 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
 
   swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
 
-  return write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+  return write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len,
+                        err);
 }
 
 static int
-write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
+write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory,
+                        libcrun_error_t *err)
 {
   size_t len;
   int ret;
@@ -2427,7 +2365,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (memory->limit_present && !memory_limits_written)
+  if (memory->limit_present && ! memory_limits_written)
     {
       ret = write_memory (dirfd, cgroup2, memory, err);
       if (UNLIKELY (ret < 0))
@@ -2486,7 +2424,8 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
 }
 
 static int
-write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_pids *pids, libcrun_error_t *err)
+write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_pids *pids,
+                      libcrun_error_t *err)
 {
   if (pids->limit)
     {
@@ -2504,7 +2443,8 @@ write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_
 }
 
 static int
-write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err)
+write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
+                     libcrun_error_t *err)
 {
   size_t len;
   int ret;
@@ -2512,8 +2452,8 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
   int64_t period = -1;
   int64_t quota = -1;
 
-      /* convert linearly from 2-262144 to 1-10000.  */
-#define CONVERT_SHARES_TO_CGROUPS_V2(x) (1 + (((x) - 2) * 9999) / 262142)
+  /* convert linearly from 2-262144 to 1-10000.  */
+#define CONVERT_SHARES_TO_CGROUPS_V2(x) (1 + ((( x ) -2) * 9999) / 262142)
 
   if (cpu->shares)
     {
@@ -2587,7 +2527,8 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
 }
 
 static int
-write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err)
+write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, runtime_spec_schema_config_linux_resources_cpu *cpu,
+                        libcrun_error_t *err)
 {
   int ret;
 
@@ -2661,9 +2602,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (dirfd_htlb < 0))
         return crun_make_error (err, errno, "open %s", path_to_htlb);
 
-      ret = write_hugetlb_resources (dirfd_htlb, false,
-                                     resources->hugepage_limits,
-                                     resources->hugepage_limits_len,
+      ret = write_hugetlb_resources (dirfd_htlb, false, resources->hugepage_limits, resources->hugepage_limits_len,
                                      err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2679,10 +2618,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (dirfd_devs < 0))
         return crun_make_error (err, errno, "open %s", path_to_devs);
 
-      ret = write_devices_resources (dirfd_devs, false,
-                                     resources->devices,
-                                     resources->devices_len,
-                                     err);
+      ret = write_devices_resources (dirfd_devs, false, resources->devices, resources->devices_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2697,9 +2633,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (dirfd_mem < 0))
         return crun_make_error (err, errno, "open %s", path_to_mem);
 
-      ret = write_memory_resources (dirfd_mem, false,
-                                    resources->memory,
-                                    err);
+      ret = write_memory_resources (dirfd_mem, false, resources->memory, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2714,9 +2648,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (dirfd_pid < 0))
         return crun_make_error (err, errno, "open %s", path_to_pid);
 
-      ret = write_pids_resources (dirfd_pid, false,
-                                  resources->pids,
-                                  err);
+      ret = write_pids_resources (dirfd_pid, false, resources->pids, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2732,9 +2664,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_cpu < 0))
         return crun_make_error (err, errno, "open %s", path_to_cpu);
-      ret = write_cpu_resources (dirfd_cpu, false,
-                                 resources->cpu,
-                                 err);
+      ret = write_cpu_resources (dirfd_cpu, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2745,15 +2675,13 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
       if (UNLIKELY (dirfd_cpuset < 0))
         return crun_make_error (err, errno, "open %s", path_to_cpuset);
-      ret = write_cpuset_resources (dirfd_cpuset, false,
-                                    resources->cpu,
-                                    err);
+      ret = write_cpuset_resources (dirfd_cpuset, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
   if (resources->unified && resources->unified->len > 0)
-        return crun_make_error (err, 0, "invalid configuration: cannot use unified on cgroup v1");
+    return crun_make_error (err, 0, "invalid configuration: cannot use unified on cgroup v1");
 
   return 0;
 }
@@ -2795,7 +2723,8 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
               if (it == NULL)
                 {
                   crun_error_release (err);
-                  return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`", resources->unified->keys[i]);
+                  return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`",
+                                          resources->unified->keys[i]);
                 }
               *it = '\0';
 
@@ -2830,7 +2759,6 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
   return 0;
 }
 
-
 static int
 update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err)
 {
@@ -2849,41 +2777,30 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->devices_len)
     {
-      ret = write_devices_resources (cgroup_dirfd, true,
-                                     resources->devices,
-                                     resources->devices_len,
-                                     err);
+      ret = write_devices_resources (cgroup_dirfd, true, resources->devices, resources->devices_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
   if (resources->memory)
     {
-      ret = write_memory_resources (cgroup_dirfd, true,
-                                    resources->memory,
-                                    err);
+      ret = write_memory_resources (cgroup_dirfd, true, resources->memory, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   if (resources->pids)
     {
-      ret = write_pids_resources (cgroup_dirfd, true,
-                                  resources->pids,
-                                  err);
+      ret = write_pids_resources (cgroup_dirfd, true, resources->pids, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   if (resources->cpu)
     {
-      ret = write_cpu_resources (cgroup_dirfd, true,
-                                 resources->cpu,
-                                 err);
+      ret = write_cpu_resources (cgroup_dirfd, true, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_cpuset_resources (cgroup_dirfd, true,
-                                    resources->cpu,
-                                    err);
+      ret = write_cpuset_resources (cgroup_dirfd, true, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2896,9 +2813,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->hugepage_limits_len)
     {
-      ret = write_hugetlb_resources (cgroup_dirfd, true,
-                                     resources->hugepage_limits,
-                                     resources->hugepage_limits_len,
+      ret = write_hugetlb_resources (cgroup_dirfd, true, resources->hugepage_limits, resources->hugepage_limits_len,
                                      err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2916,18 +2831,15 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
 }
 
 int
-libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources, char *path, libcrun_error_t *err)
+libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources, char *path,
+                                 libcrun_error_t *err)
 {
   if (path == NULL)
     {
       size_t i;
 
-      if (resources->block_io
-          || resources->network
-          || resources->hugepage_limits_len
-          || resources->memory
-          || resources->pids
-          || resources->cpu)
+      if (resources->block_io || resources->network || resources->hugepage_limits_len || resources->memory
+          || resources->pids || resources->cpu)
         return crun_make_error (err, 0, "cannot set limits without cgroups");
 
       for (i = 0; i < resources->devices_len; i++)

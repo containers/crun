@@ -20,7 +20,6 @@
 
 #include "crun.h"
 
-int crun_command_checkpoint (struct crun_global_arguments *global_args,
-                             int argc, char **argv, libcrun_error_t * error);
+int crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *error);
 
 #endif

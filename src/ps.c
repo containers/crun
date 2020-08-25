@@ -33,13 +33,13 @@
 static char doc[] = "OCI runtime";
 
 enum
-  {
-    OPTION_CONSOLE_SOCKET = 1000,
-    OPTION_PID_FILE,
-    OPTION_NO_SUBREAPER,
-    OPTION_NO_NEW_KEYRING,
-    OPTION_PRESERVE_FDS
-  };
+{
+  OPTION_CONSOLE_SOCKET = 1000,
+  OPTION_PID_FILE,
+  OPTION_NO_SUBREAPER,
+  OPTION_NO_NEW_KEYRING,
+  OPTION_PRESERVE_FDS
+};
 
 struct ps_options_s
 {
@@ -47,18 +47,17 @@ struct ps_options_s
 };
 
 enum
-  {
-   PS_TABLE = 100,
-   PS_JSON,
-  };
+{
+  PS_TABLE = 100,
+  PS_JSON,
+};
 
 static struct ps_options_s ps_options;
 
-static struct argp_option options[] =
-  {
-   {"format", 'f', "FORMAT", 0, "select the output format", 0},
-   { 0, }
-  };
+static struct argp_option options[] = { { "format", 'f', "FORMAT", 0, "select the output format", 0 },
+                                        {
+                                            0,
+                                        } };
 
 static char args_doc[] = "ps";
 
@@ -90,7 +89,9 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
 {
   int first_arg;
   int ret;
-  libcrun_context_t crun_context = {0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
   libcrun_container_status_t status;
   cleanup_free pid_t *pids = NULL;
   size_t i;
@@ -136,7 +137,6 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
         printf ("%d\n", pids[i]);
       break;
     }
-
 
   return 0;
 }

@@ -29,7 +29,7 @@
 #include <dirent.h>
 #include <signal.h>
 
-#define YAJL_STR(x) ((const unsigned char *) (x))
+#define YAJL_STR(x) (( const unsigned char * ) (x))
 
 struct pid_stat
 {
@@ -114,10 +114,10 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
     {
       /* The process already exited.  */
       if (errno == ENOENT)
-	{
-	  memset (st, 0, sizeof (*st));
-	  return 0;
-	}
+        {
+          memset (st, 0, sizeof (*st));
+          return 0;
+        }
       return crun_make_error (err, errno, "open state file %s", pid_stat_file);
     }
 
@@ -130,11 +130,10 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
     }
 
   ret = sscanf (buffer, "%d %255s %c %d %d %d %d %d %u %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %llu",
-    &(st->pid), st->comm, &(st->state), &(st->ppid), &(st->pgrp), &(st->session),
-    &(st->tty_nr), &(st->tpgid), &(st->flags), &(st->minflt), &(st->cminflt),
-    &(st->majflt), &(st->cmajflt), &(st->utime), &(st->stime), &(st->cutime),
-    &(st->cstime), &(st->priority), &(st->nice), &(st->num_threads), &(st->itrealvalue),
-    &(st->starttime));
+                &(st->pid), st->comm, &(st->state), &(st->ppid), &(st->pgrp), &(st->session), &(st->tty_nr),
+                &(st->tpgid), &(st->flags), &(st->minflt), &(st->cminflt), &(st->majflt), &(st->cmajflt), &(st->utime),
+                &(st->stime), &(st->cutime), &(st->cstime), &(st->priority), &(st->nice), &(st->num_threads),
+                &(st->itrealvalue), &(st->starttime));
   if (UNLIKELY (ret != 22))
     return crun_make_error (err, 0, "fscanf failed");
 
@@ -142,7 +141,8 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
 }
 
 int
-libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status, libcrun_error_t *err)
+libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status,
+                                libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
@@ -213,7 +213,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
       goto exit;
     }
 
-  if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
+  if (UNLIKELY (safe_write (fd_write, buf, ( ssize_t ) len) < 0))
     {
       ret = crun_make_error (err, errno, "cannot write status file");
       goto exit;
@@ -227,7 +227,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
       goto exit;
     }
 
- exit:
+exit:
   if (gen)
     yajl_gen_free (gen);
 
@@ -235,7 +235,8 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
 }
 
 int
-libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
+libcrun_read_container_status (libcrun_container_status_t *status, const char *state_root, const char *id,
+                               libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
   char err_buffer[256];
@@ -336,7 +337,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     yajl_gen_array_close (gen);
     yajl_gen_get_buf (gen, &buf, &buf_len);
     if (buf)
-      status->external_descriptors = xstrdup ((const char *) buf);
+      status->external_descriptors = xstrdup (( const char * ) buf);
     yajl_gen_free (gen);
   }
   yajl_tree_free (tree);
@@ -356,7 +357,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
 
   dir = libcrun_get_state_directory (state_root, id);
   if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
+    return crun_make_error (err, 0, "cannot get state directory");
 
   ret = crun_path_exists (dir, err);
   if (UNLIKELY (ret < 0))
@@ -426,7 +427,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   dir = get_run_directory (state_root);
   if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
+    return crun_make_error (err, 0, "cannot get state directory");
 
   rundir_dfd = open (dir, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (rundir_dfd < 0))
@@ -473,7 +474,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
   *ret = NULL;
   dir = opendir (path);
   if (UNLIKELY (dir == NULL))
-      return crun_make_error (err, errno, "cannot opendir `%s`", path);
+    return crun_make_error (err, errno, "cannot opendir `%s`", path);
 
   for (next = readdir (dir); next; next = readdir (dir))
     {
@@ -488,12 +489,12 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       xasprintf (&status_file, "%s/%s/status", path, next->d_name);
       exists = crun_path_exists (status_file, err);
       if (exists < 0)
-       {
-         libcrun_free_containers_list (tmp);
-         return exists;
-       }
+        {
+          libcrun_free_containers_list (tmp);
+          return exists;
+        }
 
-      if (!exists)
+      if (! exists)
         continue;
 
       next_container = xmalloc (sizeof (libcrun_container_list_t));
@@ -582,7 +583,9 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
   cleanup_free char *fifo_path;
-  char buffer[1] = {0, };
+  char buffer[1] = {
+    0,
+  };
   int ret;
   cleanup_close int fd = -1;
 

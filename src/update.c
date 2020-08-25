@@ -35,29 +35,29 @@ static char *resources = NULL;
 static libcrun_context_t crun_context;
 
 enum
-  {
-    FIRST_VALUE = 1000,
+{
+  FIRST_VALUE = 1000,
 
-    BLKIO_WEIGHT = FIRST_VALUE,
+  BLKIO_WEIGHT = FIRST_VALUE,
 
-    CPU_PERIOD,
-    CPU_QUOTA,
-    CPU_SHARE,
-    CPU_RT_PERIOD,
-    CPU_RT_RUNTIME,
-    CPUSET_CPUS,
-    CPUSET_MEMS,
+  CPU_PERIOD,
+  CPU_QUOTA,
+  CPU_SHARE,
+  CPU_RT_PERIOD,
+  CPU_RT_RUNTIME,
+  CPUSET_CPUS,
+  CPUSET_MEMS,
 
-    KERNEL_MEMORY,
-    KERNEL_MEMORY_TCP,
-    MEMORY,
-    MEMORY_RESERVATION,
-    MEMORY_SWAP,
+  KERNEL_MEMORY,
+  KERNEL_MEMORY_TCP,
+  MEMORY,
+  MEMORY_RESERVATION,
+  MEMORY_SWAP,
 
-    PIDS_LIMIT,
+  PIDS_LIMIT,
 
-    LAST_VALUE,
-  };
+  LAST_VALUE,
+};
 
 struct description_s
 {
@@ -67,28 +67,26 @@ struct description_s
   int numeric;
 };
 
-static const char *sections[] = {"blockIO", "cpu", "memory", "pids"};
+static const char *sections[] = { "blockIO", "cpu", "memory", "pids" };
 
-static struct description_s descriptors[] = {
-  {BLKIO_WEIGHT, 0, "weight", 1},
+static struct description_s descriptors[] = { { BLKIO_WEIGHT, 0, "weight", 1 },
 
-  {CPU_PERIOD, 1, "period", 1},
-  {CPU_QUOTA, 1, "quota", 1},
-  {CPU_SHARE, 1, "share", 1},
-  {CPU_RT_PERIOD, 1, "realtimePeriod", 1},
-  {CPU_RT_RUNTIME, 1, "realtimeRuntime", 1},
-  {CPUSET_CPUS, 1, "cpus", 0},
-  {CPUSET_MEMS, 1, "mems", 0},
+                                              { CPU_PERIOD, 1, "period", 1 },
+                                              { CPU_QUOTA, 1, "quota", 1 },
+                                              { CPU_SHARE, 1, "share", 1 },
+                                              { CPU_RT_PERIOD, 1, "realtimePeriod", 1 },
+                                              { CPU_RT_RUNTIME, 1, "realtimeRuntime", 1 },
+                                              { CPUSET_CPUS, 1, "cpus", 0 },
+                                              { CPUSET_MEMS, 1, "mems", 0 },
 
-  {KERNEL_MEMORY, 2, "kernel", 1},
-  {KERNEL_MEMORY_TCP, 2, "kernelTCP", 1},
-  {MEMORY, 2, "limit", 1},
-  {MEMORY_RESERVATION, 2, "reservation", 1},
-  {MEMORY_SWAP, 2, "swap", 1},
+                                              { KERNEL_MEMORY, 2, "kernel", 1 },
+                                              { KERNEL_MEMORY_TCP, 2, "kernelTCP", 1 },
+                                              { MEMORY, 2, "limit", 1 },
+                                              { MEMORY_RESERVATION, 2, "reservation", 1 },
+                                              { MEMORY_SWAP, 2, "swap", 1 },
 
-  {PIDS_LIMIT, 3, "limit", 1},
-  {0}
-};
+                                              { PIDS_LIMIT, 3, "limit", 1 },
+                                              { 0 } };
 
 static const char *values[LAST_VALUE - FIRST_VALUE];
 
@@ -98,34 +96,34 @@ set_value (int id, const char *value)
   values[id - FIRST_VALUE] = value;
 }
 
-static struct argp_option options[] =
-  {
-   {"resources", 'r', "FILE", 0, "path to the file containing the resources to update", 0},
-   {"blkio-weight", BLKIO_WEIGHT, "VALUE", 0, "Specifies per cgroup weight", 0},
-   {"cpu-period", CPU_PERIOD, "VALUE", 0, "CPU CFS period to be used for hardcapping", 0},
-   {"cpu-quota", CPU_QUOTA, "VALUE", 0, "CPU CFS hardcap limit", 0},
-   {"cpu-share", CPU_SHARE, "VALUE", 0, "CPU shares", 0},
-   {"cpu-rt-period", CPU_RT_PERIOD, "VALUE", 0, "CPU realtime period to be used for hardcapping", 0},
-   {"cpu-rt-runtime", CPU_RT_RUNTIME, "VALUE", 0, "CPU realtime hardcap limit", 0},
-   {"cpuset-cpus", CPUSET_CPUS, "VALUE", 0, "CPU(s) to use", 0},
-   {"cpuset-mems", CPUSET_MEMS, "VALUE", 0, "Memory node(s) to use", 0},
-   {"kernel-memory", KERNEL_MEMORY, "VALUE", 0, "Kernel memory limit", 0},
-   {"kernel-memory-tcp", KERNEL_MEMORY_TCP, "VALUE", 0, "Kernel memory limit for tcp buffer", 0},
-   {"memory", MEMORY, "VALUE", 0, "Memory limit", 0},
-   {"memory-reservation", MEMORY_RESERVATION, "VALUE", 0, "Memory reservation or soft_limit", 0},
-   {"memory-swap", MEMORY_SWAP, "VALUE", 0, "Total memory usage", 0},
-   {"pids-limit", PIDS_LIMIT, "VALUE", 0, "Maximum number of pids allowed in the container", 0},
-   {0,}
-  };
+static struct argp_option options[]
+    = { { "resources", 'r', "FILE", 0, "path to the file containing the resources to update", 0 },
+        { "blkio-weight", BLKIO_WEIGHT, "VALUE", 0, "Specifies per cgroup weight", 0 },
+        { "cpu-period", CPU_PERIOD, "VALUE", 0, "CPU CFS period to be used for hardcapping", 0 },
+        { "cpu-quota", CPU_QUOTA, "VALUE", 0, "CPU CFS hardcap limit", 0 },
+        { "cpu-share", CPU_SHARE, "VALUE", 0, "CPU shares", 0 },
+        { "cpu-rt-period", CPU_RT_PERIOD, "VALUE", 0, "CPU realtime period to be used for hardcapping", 0 },
+        { "cpu-rt-runtime", CPU_RT_RUNTIME, "VALUE", 0, "CPU realtime hardcap limit", 0 },
+        { "cpuset-cpus", CPUSET_CPUS, "VALUE", 0, "CPU(s) to use", 0 },
+        { "cpuset-mems", CPUSET_MEMS, "VALUE", 0, "Memory node(s) to use", 0 },
+        { "kernel-memory", KERNEL_MEMORY, "VALUE", 0, "Kernel memory limit", 0 },
+        { "kernel-memory-tcp", KERNEL_MEMORY_TCP, "VALUE", 0, "Kernel memory limit for tcp buffer", 0 },
+        { "memory", MEMORY, "VALUE", 0, "Memory limit", 0 },
+        { "memory-reservation", MEMORY_RESERVATION, "VALUE", 0, "Memory reservation or soft_limit", 0 },
+        { "memory-swap", MEMORY_SWAP, "VALUE", 0, "Total memory usage", 0 },
+        { "pids-limit", PIDS_LIMIT, "VALUE", 0, "Maximum number of pids allowed in the container", 0 },
+        {
+            0,
+        } };
 
-#define YAJL_STR(x) ((const unsigned char *) (x))
+#define YAJL_STR(x) (( const unsigned char * ) (x))
 
 static const unsigned char *
 build_file (size_t *len)
 {
   size_t i;
   yajl_gen gen = NULL;
-  size_t n_sections = sizeof(sections) / sizeof(sections[0]);
+  size_t n_sections = sizeof (sections) / sizeof (sections[0]);
   int has_sections[n_sections];
   const unsigned char *buf;
 
@@ -136,8 +134,8 @@ build_file (size_t *len)
     error (EXIT_FAILURE, errno, "yajl_gen_alloc failed");
 
   for (i = 0; i < LAST_VALUE - FIRST_VALUE; i++)
-      if (values[i])
-        has_sections[descriptors[i].section] = 1;
+    if (values[i])
+      has_sections[descriptors[i].section] = 1;
 
   for (i = 0; i < n_sections; i++)
     {
@@ -153,7 +151,7 @@ build_file (size_t *len)
     {
       size_t j;
 
-      if (!has_sections[i])
+      if (! has_sections[i])
         continue;
 
       yajl_gen_string (gen, YAJL_STR (sections[i]), strlen (sections[i]));
@@ -162,11 +160,11 @@ build_file (size_t *len)
       for (j = 0; j < LAST_VALUE - FIRST_VALUE; j++)
         {
           struct description_s *d = &descriptors[j];
-          if(values[j] == NULL || d->section != i)
+          if (values[j] == NULL || d->section != i)
             continue;
 
           yajl_gen_string (gen, YAJL_STR (d->key), strlen (d->key));
-          if (!d->numeric)
+          if (! d->numeric)
             yajl_gen_string (gen, YAJL_STR (values[j]), strlen (values[j]));
           else
             {
@@ -244,7 +242,7 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
 
   if (resources == NULL)
     {
-      content = (char *) build_file (&len);
+      content = ( char * ) build_file (&len);
       return libcrun_container_update (&crun_context, argv[first_arg], content, len, err);
     }
 
