@@ -49,7 +49,7 @@ services:
 - docker
 language: c
 sudo: required
-dist: bionic
+dist: focal
 addons:
   apt:
     packages:
