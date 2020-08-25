@@ -50,21 +50,18 @@ static libcrun_context_t crun_context;
 
 static libcrun_checkpoint_restore_t cr_options;
 
-static struct argp_option options[] = {
-  {"bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0},
-  {"image-path", OPTION_IMAGE_PATH, "DIR", 0,
-   "path for saving criu image files", 0},
-  {"work-path", OPTION_WORK_PATH, "DIR", 0,
-   "path for saving work files and logs", 0},
-  {"tcp-established", OPTION_TCP_ESTABLISHED, 0, 0,
-   "allow open tcp connections", 0},
-  {"ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0},
-  {"shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0},
-  {"detach", 'd', 0, 0, "detach from the container's process", 0},
-  {"pid-file", OPTION_PID_FILE, "FILE", 0,
-   "where to write the PID of the container", 0},
-  {0,}
-};
+static struct argp_option options[]
+    = { { "bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0 },
+        { "image-path", OPTION_IMAGE_PATH, "DIR", 0, "path for saving criu image files", 0 },
+        { "work-path", OPTION_WORK_PATH, "DIR", 0, "path for saving work files and logs", 0 },
+        { "tcp-established", OPTION_TCP_ESTABLISHED, 0, 0, "allow open tcp connections", 0 },
+        { "ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0 },
+        { "shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0 },
+        { "detach", 'd', 0, 0, "detach from the container's process", 0 },
+        { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
+        {
+            0,
+        } };
 
 static char args_doc[] = "restore CONTAINER";
 
@@ -115,12 +112,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
   return 0;
 }
 
-static struct argp run_argp =
-  { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
-crun_command_restore (struct crun_global_arguments *global_args, int argc,
-                      char **argv, libcrun_error_t *err)
+crun_command_restore (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *cr_path = NULL;
@@ -138,20 +133,19 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc,
     }
   else
     {
-        if (bundle[0] != '/')
-          {
-            bundle_cleanup = realpath (bundle, NULL);
-            if (bundle_cleanup == NULL)
-                libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
-            bundle = bundle_cleanup;
-          }
+      if (bundle[0] != '/')
+        {
+          bundle_cleanup = realpath (bundle, NULL);
+          if (bundle_cleanup == NULL)
+            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
+          bundle = bundle_cleanup;
+        }
 
-        if (chdir (bundle) < 0)
-            libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
+      if (chdir (bundle) < 0)
+        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
-  ret =
-    init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -168,6 +162,5 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc,
     }
 
   crun_context.bundle = bundle;
-  return libcrun_container_restore (&crun_context, argv[first_arg],
-                                    &cr_options, err);
+  return libcrun_container_restore (&crun_context, argv[first_arg], &cr_options, err);
 }

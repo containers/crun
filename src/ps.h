@@ -16,9 +16,9 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef PS_H
-# define PS_H
+#define PS_H
 
-# include "crun.h"
+#include "crun.h"
 
 int crun_command_ps (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *error);
 

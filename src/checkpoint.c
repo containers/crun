@@ -46,19 +46,16 @@ static char doc[] = "OCI runtime";
 
 static libcrun_checkpoint_restore_t cr_options;
 
-static struct argp_option options[] = {
-  {"image-path", OPTION_IMAGE_PATH, "DIR", 0,
-   "path for saving criu image files", 0},
-  {"work-path", OPTION_WORK_PATH, "DIR", 0,
-   "path for saving work files and logs", 0},
-  {"leave-running", OPTION_LEAVE_RUNNING, 0, 0,
-   "leave the process running after checkpointing", 0},
-  {"tcp-established", OPTION_TCP_ESTABLISHED, 0, 0,
-   "allow open tcp connections", 0},
-  {"ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0},
-  {"shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0},
-  {0,}
-};
+static struct argp_option options[]
+    = { { "image-path", OPTION_IMAGE_PATH, "DIR", 0, "path for saving criu image files", 0 },
+        { "work-path", OPTION_WORK_PATH, "DIR", 0, "path for saving work files and logs", 0 },
+        { "leave-running", OPTION_LEAVE_RUNNING, 0, 0, "leave the process running after checkpointing", 0 },
+        { "tcp-established", OPTION_TCP_ESTABLISHED, 0, 0, "allow open tcp connections", 0 },
+        { "ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0 },
+        { "shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0 },
+        {
+            0,
+        } };
 
 static char args_doc[] = "checkpoint CONTAINER";
 
@@ -101,24 +98,23 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
   return 0;
 }
 
-static struct argp run_argp =
-  { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
+static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
-crun_command_checkpoint (struct crun_global_arguments *global_args, int argc,
-                         char **argv, libcrun_error_t *err)
+crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   cleanup_free char *cr_path = NULL;
   int first_arg;
   int ret;
 
-  libcrun_context_t crun_context = { 0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
 
-  ret =
-    init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -134,6 +130,5 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc,
       cr_options.image_path = cr_path;
     }
 
-  return libcrun_container_checkpoint (&crun_context, argv[first_arg],
-                                       &cr_options, err);
+  return libcrun_container_checkpoint (&crun_context, argv[first_arg], &cr_options, err);
 }

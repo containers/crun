@@ -31,18 +31,18 @@
 #include "libcrun/utils.h"
 #include "libcrun/status.h"
 
-#define YAJL_STR(x) ((const unsigned char *) (x))
+#define YAJL_STR(x) (( const unsigned char * ) (x))
 
 static char doc[] = "OCI runtime";
 
 enum
-  {
-    OPTION_CONSOLE_SOCKET = 1000,
-    OPTION_PID_FILE,
-    OPTION_NO_SUBREAPER,
-    OPTION_NO_NEW_KEYRING,
-    OPTION_PRESERVE_FDS
-  };
+{
+  OPTION_CONSOLE_SOCKET = 1000,
+  OPTION_PID_FILE,
+  OPTION_NO_SUBREAPER,
+  OPTION_NO_NEW_KEYRING,
+  OPTION_PRESERVE_FDS
+};
 
 struct list_options_s
 {
@@ -51,19 +51,19 @@ struct list_options_s
 };
 
 enum
-  {
-   LIST_TABLE = 100,
-   LIST_JSON,
-  };
+{
+  LIST_TABLE = 100,
+  LIST_JSON,
+};
 
 static struct list_options_s list_options;
 
-static struct argp_option options[] =
-  {
-   {"quiet", 'q', 0, 0, "show only IDs", 0},
-   {"format", 'f', "FORMAT", 0, "select one of: table or json (default: \"table\")", 0},
-   { 0, }
-  };
+static struct argp_option options[]
+    = { { "quiet", 'q', 0, 0, "show only IDs", 0 },
+        { "format", 'f', "FORMAT", 0, "select one of: table or json (default: \"table\")", 0 },
+        {
+            0,
+        } };
 
 static char args_doc[] = "list";
 
@@ -98,7 +98,9 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
 {
   int first_arg;
   int ret, max_length = 4;
-  libcrun_context_t crun_context = {0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
   libcrun_container_list_t *list, *it;
   yajl_gen gen = NULL;
   size_t len;
@@ -130,7 +132,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   if (gen == NULL)
     error (EXIT_FAILURE, 0, "yajl_gen_alloc failed");
 
-  if (!list_options.quiet && list_options.format == LIST_TABLE)
+  if (! list_options.quiet && list_options.format == LIST_TABLE)
     printf ("%-*s%-10s%-8s %-39s\n", max_length, "NAME", "PID", "STATUS", "BUNDLE PATH");
   else if (list_options.format == LIST_JSON)
     {
@@ -156,7 +158,8 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           int pid = status.pid;
           const char *container_status = NULL;
 
-          ret = libcrun_get_container_state_string (it->name, &status, crun_context.state_root, &container_status, &running, err);
+          ret = libcrun_get_container_state_string (it->name, &status, crun_context.state_root, &container_status,
+                                                    &running, err);
           if (UNLIKELY (ret < 0))
             {
               libcrun_error_write_warning_and_release (stderr, &err);
@@ -187,7 +190,6 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
             }
         }
 
-
       libcrun_free_container_status (&status);
     }
   if (list_options.format == LIST_JSON)
@@ -198,10 +200,10 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           ret = libcrun_make_error (err, 0, "cannot generate json list");
           goto exit;
         }
-      printf("%s",buf);
+      printf ("%s", buf);
     }
 
- exit:
+exit:
   if (gen)
     yajl_gen_free (gen);
 

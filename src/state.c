@@ -31,13 +31,13 @@
 static char doc[] = "OCI runtime";
 
 enum
-  {
-    OPTION_CONSOLE_SOCKET = 1000,
-    OPTION_PID_FILE,
-    OPTION_NO_SUBREAPER,
-    OPTION_NO_NEW_KEYRING,
-    OPTION_PRESERVE_FDS
-  };
+{
+  OPTION_CONSOLE_SOCKET = 1000,
+  OPTION_PID_FILE,
+  OPTION_NO_SUBREAPER,
+  OPTION_NO_NEW_KEYRING,
+  OPTION_PRESERVE_FDS
+};
 
 struct state_options_s
 {
@@ -45,10 +45,9 @@ struct state_options_s
 
 static struct state_options_s state_options;
 
-static struct argp_option options[] =
-  {
-   { 0, }
-  };
+static struct argp_option options[] = { {
+    0,
+} };
 
 static char args_doc[] = "state CONTAINER";
 
@@ -73,7 +72,9 @@ int
 crun_command_state (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg, ret;
-  libcrun_context_t crun_context = {0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &state_options);
   crun_assert_n_args (argc - first_arg, 1, 1);

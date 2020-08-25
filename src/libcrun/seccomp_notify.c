@@ -19,21 +19,21 @@
 #include <errno.h>
 
 #if HAVE_SECCOMP_GET_NOTIF_SIZES
-# include <seccomp.h>
-# include <sys/ioctl.h>
-# include <linux/seccomp.h>
-# include <sys/sysmacros.h>
+#  include <seccomp.h>
+#  include <sys/ioctl.h>
+#  include <linux/seccomp.h>
+#  include <sys/sysmacros.h>
 #endif
 
 #ifdef HAVE_DLOPEN
-# include <dlfcn.h>
+#  include <dlfcn.h>
 #endif
 
 #include "utils.h"
 #include "seccomp_notify.h"
 
 #ifndef SECCOMP_USER_NOTIF_FLAG_CONTINUE
-# define SECCOMP_USER_NOTIF_FLAG_CONTINUE (1UL << 0)
+#  define SECCOMP_USER_NOTIF_FLAG_CONTINUE (1UL << 0)
 #endif
 
 struct plugin
@@ -80,7 +80,8 @@ seccomp_syscall (unsigned int op, unsigned int flags, void *args)
 #endif
 
 LIBCRUN_PUBLIC int
-libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, const char *plugins, struct libcrun_load_seccomp_notify_conf_s *conf, libcrun_error_t *err)
+libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, const char *plugins,
+                                     struct libcrun_load_seccomp_notify_conf_s *conf, libcrun_error_t *err)
 {
 #if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES
   cleanup_seccomp_notify_context struct seccomp_notify_context_s *ctx = xmalloc0 (sizeof *ctx);
@@ -115,7 +116,8 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
       if (ctx->plugins[s].handle == NULL)
         return crun_make_error (err, 0, "cannot load `%s`: %s", it, dlerror ());
 
-      version_cb = (run_oci_seccomp_notify_plugin_version_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_version");
+      version_cb = ( run_oci_seccomp_notify_plugin_version_cb ) dlsym (ctx->plugins[s].handle,
+                                                                       "run_oci_seccomp_notify_version");
       if (version_cb != NULL)
         {
           int version;
@@ -125,11 +127,12 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
             return crun_make_error (err, ENOTSUP, "invalid version supported by the plugin `%s`", it);
         }
 
-      ctx->plugins[s].handle_request_cb = (run_oci_seccomp_notify_handle_request_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_handle_request");
+      ctx->plugins[s].handle_request_cb = ( run_oci_seccomp_notify_handle_request_cb ) dlsym (
+          ctx->plugins[s].handle, "run_oci_seccomp_notify_handle_request");
       if (ctx->plugins[s].handle_request_cb == NULL)
         return crun_make_error (err, ENOTSUP, "plugin `%s` doesn't export `run_oci_seccomp_notify_handle_request`", it);
 
-      start_cb = (run_oci_seccomp_notify_start_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_start");
+      start_cb = ( run_oci_seccomp_notify_start_cb ) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_start");
       if (start_cb)
         {
           int ret;
@@ -171,7 +174,8 @@ libcrun_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, int seccom
           int handled = 0;
           int ret;
 
-          ret = ctx->plugins[i].handle_request_cb (ctx->plugins[i].opaque, &ctx->sizes, ctx->sreq, ctx->sresp, seccomp_fd, &handled);
+          ret = ctx->plugins[i].handle_request_cb (ctx->plugins[i].opaque, &ctx->sizes, ctx->sreq, ctx->sresp,
+                                                   seccomp_fd, &handled);
           if (UNLIKELY (ret != 0))
             return crun_make_error (err, -ret, "error handling seccomp notify request");
 
@@ -183,7 +187,7 @@ libcrun_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, int seccom
             case RUN_OCI_SECCOMP_NOTIFY_HANDLE_SEND_RESPONSE:
               goto send_resp;
 
-          /* The plugin will take care of it.  */
+              /* The plugin will take care of it.  */
             case RUN_OCI_SECCOMP_NOTIFY_HANDLE_DELAYED_RESPONSE:
               return 0;
 
@@ -201,7 +205,7 @@ libcrun_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, int seccom
   ctx->sresp->error = -ENOTSUP;
   ctx->sresp->flags = 0;
 
- send_resp:
+send_resp:
   ctx->sresp->id = ctx->sreq->id;
   ret = ioctl (seccomp_fd, SECCOMP_IOCTL_NOTIF_SEND, ctx->sresp);
   if (UNLIKELY (ret < 0))
@@ -233,7 +237,7 @@ libcrun_free_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, libcr
       {
         run_oci_seccomp_notify_stop_cb cb;
 
-        cb = (run_oci_seccomp_notify_stop_cb) dlsym (ctx->plugins[i].handle, "run_oci_seccomp_notify_stop");
+        cb = ( run_oci_seccomp_notify_stop_cb ) dlsym (ctx->plugins[i].handle, "run_oci_seccomp_notify_stop");
         if (cb)
           cb (ctx->plugins[i].opaque);
         dlclose (ctx->plugins[i].handle);

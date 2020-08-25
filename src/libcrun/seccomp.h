@@ -16,20 +16,20 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef SECCOMP_H
-# define SECCOMP_H
-# include <config.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include "error.h"
-# include <errno.h>
-# include <argp.h>
-# include <runtime_spec_schema_config_schema.h>
-# include "container.h"
+#define SECCOMP_H
+#include <config.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "error.h"
+#include <errno.h>
+#include <argp.h>
+#include <runtime_spec_schema_config_schema.h>
+#include "container.h"
 
 enum
-  {
-    LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL = 1 << 0,
-  };
+{
+  LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL = 1 << 0,
+};
 
 int libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err);
 int libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **flags, size_t flags_len, libcrun_error_t *err);

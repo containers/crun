@@ -16,37 +16,39 @@
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef UTILS_H
-# define UTILS_H
+#define UTILS_H
 
-# include <config.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <errno.h>
-# include <argp.h>
-# include "error.h"
-# include <dirent.h>
-# include <unistd.h>
-# include <runtime_spec_schema_config_schema.h>
-# include "container.h"
+#include <config.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <argp.h>
+#include "error.h"
+#include <dirent.h>
+#include <unistd.h>
+#include <runtime_spec_schema_config_schema.h>
+#include "container.h"
 
-# ifndef TEMP_FAILURE_RETRY
-#  define TEMP_FAILURE_RETRY(expression)                                \
-  (__extension__                                                        \
-   ({ long int __result;                                                \
-     do __result = (long int) (expression);                             \
-     while (__result < 0 && errno == EINTR);                            \
-     __result; }))
-# endif
+#ifndef TEMP_FAILURE_RETRY
+#  define TEMP_FAILURE_RETRY(expression)      \
+    (__extension__({                          \
+      long int __result;                      \
+      do                                      \
+        __result = ( long int ) (expression); \
+      while (__result < 0 && errno == EINTR); \
+      __result;                               \
+    }))
+#endif
 
-# define cleanup_file __attribute__((cleanup (cleanup_filep)))
-# define cleanup_free __attribute__((cleanup (cleanup_freep)))
-# define cleanup_close __attribute__((cleanup (cleanup_closep)))
-# define cleanup_close_vec __attribute__((cleanup (cleanup_close_vecp)))
-# define cleanup_dir __attribute__((cleanup (cleanup_dirp)))
-# define arg_unused __attribute__((unused))
+#define cleanup_file __attribute__ ((cleanup (cleanup_filep)))
+#define cleanup_free __attribute__ ((cleanup (cleanup_freep)))
+#define cleanup_close __attribute__ ((cleanup (cleanup_closep)))
+#define cleanup_close_vec __attribute__ ((cleanup (cleanup_close_vecp)))
+#define cleanup_dir __attribute__ ((cleanup (cleanup_dirp)))
+#define arg_unused __attribute__ ((unused))
 
-# define LIKELY(x) __builtin_expect((x),1)
-# define UNLIKELY(x) __builtin_expect((x),0)
+#define LIKELY(x) __builtin_expect ((x), 1)
+#define UNLIKELY(x) __builtin_expect ((x), 0)
 
 static inline void *
 xmalloc (size_t size)
@@ -78,7 +80,7 @@ xrealloc (void *ptr, size_t size)
 static inline void
 cleanup_freep (void *p)
 {
-  void **pp = (void **) p;
+  void **pp = ( void ** ) p;
   free (*pp);
 }
 
@@ -87,7 +89,7 @@ cleanup_filep (FILE **f)
 {
   FILE *file = *f;
   if (file)
-    (void) fclose (file);
+    ( void ) fclose (file);
 }
 
 static inline void
@@ -159,9 +161,11 @@ int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofoll
 
 int crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
-int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+                                   libcrun_error_t *err);
 
-int crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+int crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+                              libcrun_error_t *err);
 
 int crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err);
 
@@ -205,7 +209,8 @@ int run_process (char **args, libcrun_error_t *err);
 
 size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is_uid);
 
-int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp, char *stdin, size_t stdin_len, int out_fd, int err_fd, libcrun_error_t *err);
+int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp,
+                                         char *stdin, size_t stdin_len, int out_fd, int err_fd, libcrun_error_t *err);
 
 int close_fds_ge_than (int n, libcrun_error_t *err);
 
@@ -235,7 +240,8 @@ int get_file_type (mode_t *mode, bool nofollow, const char *path);
 
 int get_file_type_fd (int fd, mode_t *mode);
 
-int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode, libcrun_error_t *err);
+int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
+                 libcrun_error_t *err);
 
 ssize_t safe_write (int fd, const void *buf, ssize_t count);
 

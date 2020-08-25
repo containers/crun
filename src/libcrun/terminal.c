@@ -36,7 +36,6 @@ struct terminal_status_s
   struct termios termios;
 };
 
-
 int
 libcrun_new_terminal (char **pty, libcrun_error_t *err)
 {
@@ -135,7 +134,7 @@ libcrun_setup_terminal_ptmx (int fd, void **current_status, libcrun_error_t *err
 void
 cleanup_terminalp (void *p)
 {
-  struct terminal_status_s **s = (struct terminal_status_s **) p;
+  struct terminal_status_s **s = ( struct terminal_status_s ** ) p;
   if (*s)
     {
       tcsetattr ((*s)->fd, TCSANOW, &(*s)->termios);
@@ -146,7 +145,7 @@ cleanup_terminalp (void *p)
 int
 libcrun_terminal_setup_size (int fd, unsigned short rows, unsigned short cols, libcrun_error_t *err)
 {
-  struct winsize ws = {.ws_row = rows, .ws_col = cols};
+  struct winsize ws = { .ws_row = rows, .ws_col = cols };
   int ret;
 
   if (ws.ws_row == 0 || ws.ws_col == 0)

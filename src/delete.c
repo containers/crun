@@ -33,13 +33,13 @@
 static char doc[] = "OCI runtime";
 
 enum
-  {
-    OPTION_CONSOLE_SOCKET = 1000,
-    OPTION_PID_FILE,
-    OPTION_NO_SUBREAPER,
-    OPTION_NO_NEW_KEYRING,
-    OPTION_PRESERVE_FDS
-  };
+{
+  OPTION_CONSOLE_SOCKET = 1000,
+  OPTION_PID_FILE,
+  OPTION_NO_SUBREAPER,
+  OPTION_NO_NEW_KEYRING,
+  OPTION_PRESERVE_FDS
+};
 
 struct delete_options_s
 {
@@ -49,12 +49,12 @@ struct delete_options_s
 
 static struct delete_options_s delete_options;
 
-static struct argp_option options[] =
-  {
-   {"force", 'f', 0, 0, "delete the container even if it is still running", 0},
-   {"regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (delete multiple containers)", 0},
-   { 0, }
-  };
+static struct argp_option options[]
+    = { { "force", 'f', 0, 0, "delete the container even if it is still running", 0 },
+        { "regex", 'r', 0, 0, "the specified CONTAINER is a regular expression (delete multiple containers)", 0 },
+        {
+            0,
+        } };
 
 static char args_doc[] = "delete CONTAINER";
 
@@ -88,7 +88,9 @@ crun_command_delete (struct crun_global_arguments *global_args, int argc, char *
 {
   int first_arg, ret;
 
-  libcrun_context_t crun_context = {0, };
+  libcrun_context_t crun_context = {
+    0,
+  };
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &delete_options);
   crun_assert_n_args (argc - first_arg, 1, 1);

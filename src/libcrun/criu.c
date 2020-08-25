@@ -21,28 +21,26 @@
 
 #ifdef HAVE_CRIU
 
-#include <unistd.h>
-#include <sys/types.h>
-#include <criu/criu.h>
-#include <sched.h>
-#include <sys/stat.h>
-#include <sys/mount.h>
-#include <fcntl.h>
+#  include <unistd.h>
+#  include <sys/types.h>
+#  include <criu/criu.h>
+#  include <sched.h>
+#  include <sys/stat.h>
+#  include <sys/mount.h>
+#  include <fcntl.h>
 
-#include "container.h"
-#include "linux.h"
-#include "status.h"
-#include "utils.h"
+#  include "container.h"
+#  include "linux.h"
+#  include "status.h"
+#  include "utils.h"
 
-#define CRIU_CHECKPOINT_LOG_FILE "dump.log"
-#define CRIU_RESTORE_LOG_FILE "restore.log"
-#define DESCRIPTORS_FILENAME "descriptors.json"
+#  define CRIU_CHECKPOINT_LOG_FILE "dump.log"
+#  define CRIU_RESTORE_LOG_FILE "restore.log"
+#  define DESCRIPTORS_FILENAME "descriptors.json"
 
 int
-libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
-                                         libcrun_container_t *container,
-                                         libcrun_checkpoint_restore_t *
-                                         cr_options, libcrun_error_t *err)
+libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
+                                         libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *descriptors_path = NULL;
@@ -83,29 +81,24 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
 
   ret = mkdir (cr_options->image_path, 0700);
   if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-    return crun_make_error (err, errno,
-                            "error creating checkpoint directory %s\n",
-                            cr_options->image_path);
+    return crun_make_error (err, errno, "error creating checkpoint directory %s\n", cr_options->image_path);
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory %s\n",
-                            cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory %s\n", cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
 
   /* descriptors.json is needed during restore to correctly
    * reconnect stdin, stdout, stderr. */
-  xasprintf (&descriptors_path, "%s/%s", cr_options->image_path,
-             DESCRIPTORS_FILENAME);
+  xasprintf (&descriptors_path, "%s/%s", cr_options->image_path, DESCRIPTORS_FILENAME);
   descriptors_fd = open (descriptors_path, O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR);
   if (UNLIKELY (descriptors_fd == -1))
-    return crun_make_error (err, errno, "error opening descriptors file %s\n",
-                            descriptors_path);
+    return crun_make_error (err, errno, "error opening descriptors file %s\n", descriptors_path);
   if (status->external_descriptors)
     {
-      ret = TEMP_FAILURE_RETRY (write (descriptors_fd, status->external_descriptors,
-                                       strlen (status->external_descriptors)));
+      ret = TEMP_FAILURE_RETRY (
+          write (descriptors_fd, status->external_descriptors, strlen (status->external_descriptors)));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write '%s'", DESCRIPTORS_FILENAME);
     }
@@ -117,9 +110,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno,
-                                "error opening CRIU work directory %s\n",
-                                cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory %s\n", cr_options->work_path);
 
       criu_set_work_dir_fd (work_fd);
     }
@@ -146,11 +137,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
 
       for (j = 0; j < def->mounts[i]->options_len; j++)
         {
-          if (strcmp (def->mounts[i]->options[j], "bind") == 0
-              || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+          if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
             {
-              criu_add_ext_mount (def->mounts[i]->destination,
-                                  def->mounts[i]->destination);
+              criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->destination);
               break;
             }
         }
@@ -182,16 +171,14 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
     {
       int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: `%s`",
-                                def->linux->namespaces[i]->type);
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
           struct stat statbuf;
           ret = stat (def->linux->namespaces[i]->path, &statbuf);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "unable to stat(): `%s`",
-                                    def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
 
           xasprintf (&external, "net[%ld]:extRootNetNS", statbuf.st_ino);
           criu_add_external (external);
@@ -212,16 +199,14 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
   if (UNLIKELY (ret != 0))
     return crun_make_error (err, 0,
                             "CRIU checkpointing failed %d\n"
-                            "Please check CRIU logfile %s/%s\n", ret,
-                            cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+                            "Please check CRIU logfile %s/%s\n",
+                            ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
 
   return 0;
 }
 
 static int
-prepare_restore_mounts (runtime_spec_schema_config_schema *def,
-                        char *root,
-                        libcrun_error_t *err)
+prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libcrun_error_t *err)
 {
   int i;
 
@@ -236,8 +221,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def,
       size_t j;
 
       /* cgroup restore should be handled by CRIU itself */
-      if (strcmp (type, "cgroup") == 0
-          || strcmp (type, "cgroup2") == 0)
+      if (strcmp (type, "cgroup") == 0 || strcmp (type, "cgroup2") == 0)
         continue;
 
       /* Check if the mountpoint is on a tmpfs. CRIU restores
@@ -247,8 +231,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def,
           cleanup_free char *dest_loop = NULL;
 
           xasprintf (&dest_loop, "%s/", def->mounts[j]->destination);
-          if (strncmp (dest, dest_loop, strlen (dest_loop)) == 0 &&
-              strcmp (def->mounts[j]->type, "tmpfs") == 0)
+          if (strncmp (dest, dest_loop, strlen (dest_loop)) == 0 && strcmp (def->mounts[j]->type, "tmpfs") == 0)
             {
               /* This is a mountpoint which is on a tmpfs.*/
               on_tmpfs = true;
@@ -274,16 +257,13 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def,
 
       root_fd = open (root, O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (root_fd == -1))
-        return crun_make_error (err, errno,
-                                "error opening container root directory %s",
-                                root);
+        return crun_make_error (err, errno, "error opening container root directory %s", root);
 
       if (is_dir)
         {
           int ret;
 
-          ret = crun_safe_ensure_directory_at (root_fd, root, strlen (root),
-                                               dest, 0755, err);
+          ret = crun_safe_ensure_directory_at (root_fd, root, strlen (root), dest, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -291,8 +271,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def,
         {
           int ret;
 
-          ret = crun_safe_ensure_file_at (root_fd, root, strlen (root), dest,
-                                          0755, err);
+          ret = crun_safe_ensure_file_at (root_fd, root, strlen (root), dest, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -302,10 +281,8 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def,
 }
 
 int
-libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
-                                      libcrun_container_t *container,
-                                      libcrun_checkpoint_restore_t *
-                                      cr_options, libcrun_error_t *err)
+libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
+                                      libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int inherit_fd = -1;
@@ -328,8 +305,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory %s\n",
-                            cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory %s\n", cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
 
@@ -340,8 +316,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     char err_buffer[256];
     yajl_val tree;
 
-    xasprintf (&descriptors_path, "%s/%s", cr_options->image_path,
-               DESCRIPTORS_FILENAME);
+    xasprintf (&descriptors_path, "%s/%s", cr_options->image_path, DESCRIPTORS_FILENAME);
     ret = read_all_file (descriptors_path, &buffer, NULL, err);
     if (UNLIKELY (ret < 0))
       return ret;
@@ -354,11 +329,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
      * a pipe 'pipe:' we tell CRIU to reconnect that pipe
      * to the corresponding FD to have (especially) stdout
      * and stderr being correctly redirected. */
-    tree = yajl_tree_parse (buffer, err_buffer, sizeof(err_buffer));
+    tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
     if (UNLIKELY (tree == NULL))
-      return crun_make_error (err, 0,
-                              "cannot parse descriptors file %s",
-                              DESCRIPTORS_FILENAME);
+      return crun_make_error (err, 0, "cannot parse descriptors file %s", DESCRIPTORS_FILENAME);
 
     if (tree && YAJL_IS_ARRAY (tree))
       {
@@ -380,7 +353,6 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     yajl_tree_free (tree);
   }
 
-
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
    * CRIU will put the logfiles into the images_dir from above. No need for
    * crun to set it if the user has not selected a specific directory. */
@@ -388,9 +360,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno,
-                                "error opening CRIU work directory %s\n",
-                                cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory %s\n", cr_options->work_path);
 
       criu_set_work_dir_fd (work_fd);
     }
@@ -407,11 +377,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
       for (j = 0; j < def->mounts[i]->options_len; j++)
         {
-          if (strcmp (def->mounts[i]->options[j], "bind") == 0
-              || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+          if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
             {
-              criu_add_ext_mount (def->mounts[i]->destination,
-                                  def->mounts[i]->source);
+              criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->source);
               break;
             }
         }
@@ -430,14 +398,12 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))
-    return crun_make_error (err, errno,
-                            "error creating restore directory %s\n", root);
+    return crun_make_error (err, errno, "error creating restore directory %s\n", root);
   /* do realpath on root */
   ret = mount (status->rootfs, root, NULL, MS_BIND | MS_REC, NULL);
   if (UNLIKELY (ret == -1))
     {
-      ret = crun_make_error (err, errno,
-                             "error mounting restore directory %s\n", root);
+      ret = crun_make_error (err, errno, "error mounting restore directory %s\n", root);
       goto out;
     }
 
@@ -468,15 +434,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     {
       int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: `%s`",
-                                def->linux->namespaces[i]->type);
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
           inherit_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "unable to open(): `%s`",
-                                    def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
           criu_add_inherit_fd (inherit_fd, "extRootNetNS");
           break;
@@ -500,8 +464,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
     {
       ret = crun_make_error (err, 0,
                              "CRIU restoring failed %d\n"
-                             "Please check CRIU logfile %s/%s\n", ret,
-                             cr_options->work_path, CRIU_RESTORE_LOG_FILE);
+                             "Please check CRIU logfile %s/%s\n",
+                             ret, cr_options->work_path, CRIU_RESTORE_LOG_FILE);
       goto out_umount;
     }
 
@@ -512,15 +476,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 out_umount:
   ret_out = umount (root);
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno,
-                            "error unmounting restore directory %s\n", root);
+    return crun_make_error (err, errno, "error unmounting restore directory %s\n", root);
 out:
   ret_out = rmdir (root);
   if (UNLIKELY (ret == -1))
     return ret;
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno,
-                            "error removing restore directory %s\n", root);
+    return crun_make_error (err, errno, "error removing restore directory %s\n", root);
   return ret;
 }
 #endif

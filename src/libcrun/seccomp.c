@@ -42,33 +42,33 @@
 #include <sys/syscall.h>
 
 #ifndef __NR_seccomp
-# define __NR_seccomp 0xffff //seccomp syscall number unknown for this architecture
+#  define __NR_seccomp 0xffff // seccomp syscall number unknown for this architecture
 #endif
 
 #ifndef SECCOMP_SET_MODE_STRICT
-# define SECCOMP_SET_MODE_STRICT 0
+#  define SECCOMP_SET_MODE_STRICT 0
 #endif
 
 #ifndef SECCOMP_SET_MODE_FILTER
-# define SECCOMP_SET_MODE_FILTER 1
+#  define SECCOMP_SET_MODE_FILTER 1
 #endif
 
 #ifndef SECCOMP_FILTER_FLAG_TSYNC
-# define SECCOMP_FILTER_FLAG_TSYNC (1UL << 0)
+#  define SECCOMP_FILTER_FLAG_TSYNC (1UL << 0)
 #endif
 
 #ifndef SECCOMP_FILTER_FLAG_LOG
-# define SECCOMP_FILTER_FLAG_LOG (1UL << 1)
+#  define SECCOMP_FILTER_FLAG_LOG (1UL << 1)
 #endif
 
 #ifndef SECCOMP_FILTER_FLAG_SPEC_ALLOW
-# define SECCOMP_FILTER_FLAG_SPEC_ALLOW	(1UL << 2)
+#  define SECCOMP_FILTER_FLAG_SPEC_ALLOW (1UL << 2)
 #endif
 
 static int
 syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 {
-  return (int) syscall (__NR_seccomp, operation, flags, args);
+  return ( int ) syscall (__NR_seccomp, operation, flags, args);
 }
 
 static unsigned long
@@ -127,7 +127,7 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
     return SCMP_ACT_NOTIFY;
 #endif
 
- fail:
+fail:
   crun_make_error (err, 0, "seccomp get action", name);
   return 0;
 }
@@ -145,14 +145,15 @@ make_lowercase (char *str)
 static void
 cleanup_seccompp (void *p)
 {
-  scmp_filter_ctx *ctx = (void **) p;
+  scmp_filter_ctx *ctx = ( void ** ) p;
   if (*ctx)
     seccomp_release (*ctx);
 }
-#define cleanup_seccomp __attribute__((cleanup (cleanup_seccompp)))
+#define cleanup_seccomp __attribute__ ((cleanup (cleanup_seccompp)))
 
 int
-libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags, size_t seccomp_flags_len, libcrun_error_t *err)
+libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags, size_t seccomp_flags_len,
+                       libcrun_error_t *err)
 {
   int ret;
   struct sock_fprog seccomp_filter;
@@ -163,20 +164,19 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
   if (infd < 0)
     return 0;
 
-  if (UNLIKELY (lseek (infd, 0, SEEK_SET) == (off_t) -1))
+  if (UNLIKELY (lseek (infd, 0, SEEK_SET) == ( off_t ) -1))
     return crun_make_error (err, errno, "lseek");
-
 
   /* if no seccomp flag was specified use a sane default.  */
   if (seccomp_flags == NULL)
-    flags = SECCOMP_FILTER_FLAG_LOG|SECCOMP_FILTER_FLAG_SPEC_ALLOW;
+    flags = SECCOMP_FILTER_FLAG_LOG | SECCOMP_FILTER_FLAG_SPEC_ALLOW;
   else
     {
       size_t i = 0;
       for (i = 0; i < seccomp_flags_len; i++)
         {
           if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_TSYNC") == 0)
-              flags |= SECCOMP_FILTER_FLAG_TSYNC;
+            flags |= SECCOMP_FILTER_FLAG_TSYNC;
           else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_SPEC_ALLOW") == 0)
             flags |= SECCOMP_FILTER_FLAG_SPEC_ALLOW;
           else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_LOG") == 0)
@@ -191,7 +191,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
     return ret;
 
   seccomp_filter.len = len / 8;
-  seccomp_filter.filter = (struct sock_filter *) bpf;
+  seccomp_filter.filter = ( struct sock_filter * ) bpf;
 
   if (listener_receiver_fd >= 0)
     {
@@ -344,11 +344,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 
               if (! multiple_args)
                 {
-                  ret = seccomp_rule_add_array (ctx,
-                                                action,
-                                                syscall,
-                                                k,
-                                                arg_cmp);
+                  ret = seccomp_rule_add_array (ctx, action, syscall, k, arg_cmp);
                   if (UNLIKELY (ret < 0))
                     return crun_make_error (err, -ret, "seccomp_rule_add_array");
                 }
@@ -358,11 +354,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 
                   for (r = 0; r < k; r++)
                     {
-                      ret = seccomp_rule_add_array (ctx,
-                                                    action,
-                                                    syscall,
-                                                    1,
-                                                    &arg_cmp[r]);
+                      ret = seccomp_rule_add_array (ctx, action, syscall, 1, &arg_cmp[r]);
                       if (UNLIKELY (ret < 0))
                         return crun_make_error (err, -ret, "seccomp_rule_add_array");
                     }
