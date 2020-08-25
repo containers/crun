@@ -122,6 +122,10 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
   else if (strcmp (p, "KILL_PROCESS") == 0)
     return SCMP_ACT_KILL_PROCESS;
 #endif
+#ifdef SCMP_ACT_KILL_THREAD
+  else if (strcmp (p, "KILL_THREAD") == 0)
+    return SCMP_ACT_KILL_THREAD;
+#endif
 #ifdef SCMP_ACT_NOTIFY
   else if (strcmp (p, "NOTIFY") == 0)
     return SCMP_ACT_NOTIFY;
