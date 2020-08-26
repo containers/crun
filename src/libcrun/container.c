@@ -1941,7 +1941,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
             return ret;
           buf[ret] = '\0';
 
-          return crun_make_error (err, errno_, buf);
+          return crun_make_error (err, errno_, "%s", buf);
         }
 
       return status;
