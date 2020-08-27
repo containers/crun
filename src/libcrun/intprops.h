@@ -34,10 +34,10 @@
 
 /* True if the arithmetic type T is an integer type.  bool counts as
    an integer.  */
-#define TYPE_IS_INTEGER(t) (( t ) 1.5 == 1)
+#define TYPE_IS_INTEGER(t) ((t) 1.5 == 1)
 
 /* True if the real type T is signed.  */
-#define TYPE_SIGNED(t) (! (( t ) 0 < ( t ) -1))
+#define TYPE_SIGNED(t) (! ((t) 0 < (t) -1))
 
 /* Return 1 if the real expression E, after promotion, has a
    signed or floating type.  */
@@ -50,8 +50,8 @@
 #define TYPE_WIDTH(t) (sizeof (t) * CHAR_BIT)
 
 /* The maximum and minimum values for the integer type T.  */
-#define TYPE_MINIMUM(t) (( t ) ~TYPE_MAXIMUM (t))
-#define TYPE_MAXIMUM(t) ((t) (! TYPE_SIGNED (t) ? ( t ) -1 : (((( t ) 1 << (TYPE_WIDTH (t) - 2)) - 1) * 2 + 1)))
+#define TYPE_MINIMUM(t) ((t) ~TYPE_MAXIMUM (t))
+#define TYPE_MAXIMUM(t) ((t) (! TYPE_SIGNED (t) ? (t) -1 : ((((t) 1 << (TYPE_WIDTH (t) - 2)) - 1) * 2 + 1)))
 
 /* The maximum and minimum values for the type of the expression E,
    after integer promotion.  E should not have side effects.  */
@@ -90,7 +90,7 @@
 /* Bound on length of the string representing an unsigned integer
    value representable in B bits.  log10 (2.0) < 146/485.  The
    smallest value of B where this bound is not tight is 2621.  */
-#define INT_BITS_STRLEN_BOUND(b) ((( b ) *146 + 484) / 485)
+#define INT_BITS_STRLEN_BOUND(b) (((b) *146 + 484) / 485)
 
 /* Bound on length of the string representing an integer type or expression T.
    Subtract 1 for the sign bit if T is signed, and then add 1 more for
@@ -195,9 +195,9 @@
    (e.g., A and B) have the same type as MIN and MAX.  Instead, they assume
    that the result (e.g., A + B) has that type.  */
 #if _GL_HAS_BUILTIN_OVERFLOW_P
-#  define _GL_ADD_OVERFLOW(a, b, min, max) __builtin_add_overflow_p (a, b, ( __typeof__ ((a) + (b)) ) 0)
-#  define _GL_SUBTRACT_OVERFLOW(a, b, min, max) __builtin_sub_overflow_p (a, b, ( __typeof__ ((a) - (b)) ) 0)
-#  define _GL_MULTIPLY_OVERFLOW(a, b, min, max) __builtin_mul_overflow_p (a, b, ( __typeof__ ((a) * (b)) ) 0)
+#  define _GL_ADD_OVERFLOW(a, b, min, max) __builtin_add_overflow_p (a, b, (__typeof__ ((a) + (b))) 0)
+#  define _GL_SUBTRACT_OVERFLOW(a, b, min, max) __builtin_sub_overflow_p (a, b, (__typeof__ ((a) - (b))) 0)
+#  define _GL_MULTIPLY_OVERFLOW(a, b, min, max) __builtin_mul_overflow_p (a, b, (__typeof__ ((a) * (b))) 0)
 #else
 #  define _GL_ADD_OVERFLOW(a, b, min, max)               \
     ((min) < 0 ? INT_ADD_RANGE_OVERFLOW (a, b, min, max) \
@@ -209,7 +209,7 @@
 #endif
 #define _GL_DIVIDE_OVERFLOW(a, b, min, max)                           \
   ((min) < 0 ? (b) == _GL_INT_NEGATE_CONVERT (min, 1) && (a) < -(max) \
-             : (a) < 0 ? (b) <= (a) + ( b ) -1 : (b) < 0 && (a) + (b) <= (a))
+             : (a) < 0 ? (b) <= (a) + (b) -1 : (b) < 0 && (a) + (b) <= (a))
 #define _GL_REMAINDER_OVERFLOW(a, b, min, max)                        \
   ((min) < 0 ? (b) == _GL_INT_NEGATE_CONVERT (min, 1) && (a) < -(max) \
              : (a) < 0 ? (a) % (b) != ((max) - (b) + 1) % (b) : (b) < 0 && ! _GL_UNSIGNED_NEG_MULTIPLE (a, b, max))
@@ -339,12 +339,12 @@
    is given by OP.  Use the unsigned type UT for calculation to avoid
    overflow problems.  *R's type is T, with extrema TMIN and TMAX.
    T must be a signed integer type.  Return 1 if the result overflows.  */
-#define _GL_INT_OP_CALC(a, b, r, op, overflow, ut, t, tmin, tmax)                                               \
-  (sizeof (( a ) op (b)) < sizeof (t) ? _GL_INT_OP_CALC1 ((t) (a), (t) (b), r, op, overflow, ut, t, tmin, tmax) \
-                                      : _GL_INT_OP_CALC1 (a, b, r, op, overflow, ut, t, tmin, tmax))
-#define _GL_INT_OP_CALC1(a, b, r, op, overflow, ut, t, tmin, tmax)                                         \
-  ((overflow (a, b) || (EXPR_SIGNED (( a ) op (b)) && (( a ) op (b)) < (tmin)) || (tmax) < (( a ) op (b))) \
-       ? (*(r) = _GL_INT_OP_WRAPV_VIA_UNSIGNED (a, b, op, ut, t), 1)                                       \
+#define _GL_INT_OP_CALC(a, b, r, op, overflow, ut, t, tmin, tmax)                                             \
+  (sizeof ((a) op (b)) < sizeof (t) ? _GL_INT_OP_CALC1 ((t) (a), (t) (b), r, op, overflow, ut, t, tmin, tmax) \
+                                    : _GL_INT_OP_CALC1 (a, b, r, op, overflow, ut, t, tmin, tmax))
+#define _GL_INT_OP_CALC1(a, b, r, op, overflow, ut, t, tmin, tmax)                                   \
+  ((overflow (a, b) || (EXPR_SIGNED ((a) op (b)) && ((a) op (b)) < (tmin)) || (tmax) < ((a) op (b))) \
+       ? (*(r) = _GL_INT_OP_WRAPV_VIA_UNSIGNED (a, b, op, ut, t), 1)                                 \
        : (*(r) = _GL_INT_OP_WRAPV_VIA_UNSIGNED (a, b, op, ut, t), 0))
 
 /* Return the low-order bits of A <op> B, where the operation is given
@@ -364,6 +364,6 @@
    As the compiler bug is real, don't try to work around the
    theoretical problem.  */
 
-#define _GL_INT_OP_WRAPV_VIA_UNSIGNED(a, b, op, ut, t) ((t) ((ut) ( a ) op (ut) (b)))
+#define _GL_INT_OP_WRAPV_VIA_UNSIGNED(a, b, op, ut, t) ((t) ((ut) (a) op (ut) (b)))
 
 #endif /* _GL_INTPROPS_H */

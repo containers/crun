@@ -34,7 +34,7 @@
     (__extension__({                          \
       long int __result;                      \
       do                                      \
-        __result = ( long int ) (expression); \
+        __result = (long int) (expression);   \
       while (__result < 0 && errno == EINTR); \
       __result;                               \
     }))
@@ -80,7 +80,7 @@ xrealloc (void *ptr, size_t size)
 static inline void
 cleanup_freep (void *p)
 {
-  void **pp = ( void ** ) p;
+  void **pp = (void **) p;
   free (*pp);
 }
 
@@ -89,7 +89,7 @@ cleanup_filep (FILE **f)
 {
   FILE *file = *f;
   if (file)
-    ( void ) fclose (file);
+    (void) fclose (file);
 }
 
 static inline void

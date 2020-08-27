@@ -54,7 +54,7 @@
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
-#define YAJL_STR(x) (( const unsigned char * ) (x))
+#define YAJL_STR(x) ((const unsigned char *) (x))
 
 enum
 {
@@ -497,7 +497,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   size_t i, stdin_len;
   int ret;
   cleanup_free char *stdin = NULL;
-  const unsigned char *annotations = ( const unsigned char * ) "{}";
+  const unsigned char *annotations = (const unsigned char *) "{}";
   cleanup_free char *cwd_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
   yajl_gen gen = NULL;
@@ -626,7 +626,7 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
 
   if (def->hooks && def->hooks->create_container_len)
     {
-      ret = do_hooks (def, 0, container->context->id, false, NULL, "created", ( hook ** ) def->hooks->create_container,
+      ret = do_hooks (def, 0, container->context->id, false, NULL, "created", (hook **) def->hooks->create_container,
                       def->hooks->create_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
                       err);
       if (UNLIKELY (ret != 0))
@@ -894,7 +894,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
     {
       libcrun_container_t *container = entrypoint_args->container;
 
-      ret = do_hooks (def, 0, container->context->id, false, NULL, "starting", ( hook ** ) def->hooks->start_container,
+      ret = do_hooks (def, 0, container->context->id, false, NULL, "starting", (hook **) def->hooks->start_container,
                       def->hooks->start_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
                       err);
       if (UNLIKELY (ret != 0))
@@ -902,8 +902,8 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
       /* Seek stdout/stderr to the end.  If the hooks were using the same files,
          the container process overwrites what was previously written.  */
-      ( void ) lseek (1, 0, SEEK_END);
-      ( void ) lseek (2, 0, SEEK_END);
+      (void) lseek (1, 0, SEEK_END);
+      (void) lseek (2, 0, SEEK_END);
     }
 
   execv (exec_path, def->process->args);
@@ -972,7 +972,7 @@ run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, 
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_hooks (def, 0, id, true, status->bundle, "stopped", ( hook ** ) def->hooks->poststop,
+      ret = do_hooks (def, 0, id, true, status->bundle, "stopped", (hook **) def->hooks->poststop,
                       def->hooks->poststop_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
@@ -1197,8 +1197,8 @@ handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
     }
   return 0;
 #else
-  ( void ) notify_socketfd;
-  ( void ) err;
+  (void) notify_socketfd;
+  (void) err;
   return 1;
 #endif
 }
@@ -1394,7 +1394,7 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
       if (context->output_handler)
         context->output_handler (0, buf, false, context->output_handler_arg);
     }
-  ( void ) fcntl (terminal_fd, F_SETFL, flags);
+  (void) fcntl (terminal_fd, F_SETFL, flags);
   fflush (stderr);
   fsync (1);
   fsync (2);
@@ -1731,14 +1731,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
      prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)
     {
-      ret = do_hooks (def, pid, context->id, false, NULL, "created", ( hook ** ) def->hooks->prestart,
+      ret = do_hooks (def, pid, context->id, false, NULL, "created", (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
         return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
     }
   if (def->hooks && def->hooks->create_runtime_len)
     {
-      ret = do_hooks (def, pid, context->id, false, NULL, "created", ( hook ** ) def->hooks->create_runtime,
+      ret = do_hooks (def, pid, context->id, false, NULL, "created", (hook **) def->hooks->create_runtime,
                       def->hooks->create_runtime_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
         return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
@@ -1795,7 +1795,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
      hooks will be executed as part of the start command.  */
   if (context->fifo_exec_wait_fd < 0 && def->hooks && def->hooks->poststart_len)
     {
-      ret = do_hooks (def, pid, context->id, true, NULL, "running", ( hook ** ) def->hooks->poststart,
+      ret = do_hooks (def, pid, context->id, true, NULL, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
         return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
@@ -2155,7 +2155,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_hooks (def, status.pid, context->id, true, status.bundle, "running", ( hook ** ) def->hooks->poststart,
+      ret = do_hooks (def, status.pid, context->id, true, status.bundle, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
         crun_error_release (err);
@@ -2785,7 +2785,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     return ret;
 
   /* The CRIU restore code uses bundle and rootfs of status. */
-  status.bundle = ( char * ) context->bundle;
+  status.bundle = (char *) context->bundle;
   status.rootfs = def->root->path;
 
   ret = libcrun_container_restore_linux (&status, container, cr_options, err);

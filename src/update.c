@@ -116,7 +116,7 @@ static struct argp_option options[]
             0,
         } };
 
-#define YAJL_STR(x) (( const unsigned char * ) (x))
+#define YAJL_STR(x) ((const unsigned char *) (x))
 
 static const unsigned char *
 build_file (size_t *len)
@@ -242,7 +242,7 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
 
   if (resources == NULL)
     {
-      content = ( char * ) build_file (&len);
+      content = (char *) build_file (&len);
       return libcrun_container_update (&crun_context, argv[first_arg], content, len, err);
     }
 

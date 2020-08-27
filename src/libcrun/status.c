@@ -29,7 +29,7 @@
 #include <dirent.h>
 #include <signal.h>
 
-#define YAJL_STR(x) (( const unsigned char * ) (x))
+#define YAJL_STR(x) ((const unsigned char *) (x))
 
 struct pid_stat
 {
@@ -213,7 +213,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
       goto exit;
     }
 
-  if (UNLIKELY (safe_write (fd_write, buf, ( ssize_t ) len) < 0))
+  if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
     {
       ret = crun_make_error (err, errno, "cannot write status file");
       goto exit;
@@ -337,7 +337,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     yajl_gen_array_close (gen);
     yajl_gen_get_buf (gen, &buf, &buf_len);
     if (buf)
-      status->external_descriptors = xstrdup (( const char * ) buf);
+      status->external_descriptors = xstrdup ((const char *) buf);
     yajl_gen_free (gen);
   }
   yajl_tree_free (tree);

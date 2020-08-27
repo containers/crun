@@ -68,7 +68,7 @@
 static int
 syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 {
-  return ( int ) syscall (__NR_seccomp, operation, flags, args);
+  return (int) syscall (__NR_seccomp, operation, flags, args);
 }
 
 static unsigned long
@@ -149,7 +149,7 @@ make_lowercase (char *str)
 static void
 cleanup_seccompp (void *p)
 {
-  scmp_filter_ctx *ctx = ( void ** ) p;
+  scmp_filter_ctx *ctx = (void **) p;
   if (*ctx)
     seccomp_release (*ctx);
 }
@@ -168,7 +168,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
   if (infd < 0)
     return 0;
 
-  if (UNLIKELY (lseek (infd, 0, SEEK_SET) == ( off_t ) -1))
+  if (UNLIKELY (lseek (infd, 0, SEEK_SET) == (off_t) -1))
     return crun_make_error (err, errno, "lseek");
 
   /* if no seccomp flag was specified use a sane default.  */
@@ -195,7 +195,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
     return ret;
 
   seccomp_filter.len = len / 8;
-  seccomp_filter.filter = ( struct sock_filter * ) bpf;
+  seccomp_filter.filter = (struct sock_filter *) bpf;
 
   if (listener_receiver_fd >= 0)
     {

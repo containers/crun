@@ -62,7 +62,7 @@ syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uin
     .resolve = resolve,
   };
 
-  return ( int ) syscall (__NR_openat2, dirfd, path, &how, sizeof (how), 0);
+  return (int) syscall (__NR_openat2, dirfd, path, &how, sizeof (how), 0);
 }
 
 int
@@ -298,7 +298,7 @@ check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *f
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "readlink `%s`", fdname);
 
-  if ((( size_t ) ret) <= rootfslen || memcmp (link, rootfs, rootfslen) != 0)
+  if (((size_t) ret) <= rootfslen || memcmp (link, rootfs, rootfslen) != 0)
     return crun_make_error (err, 0, "target `%s` not under the directory `%s`", fdname, rootfs);
 
   return 0;
@@ -724,7 +724,7 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
     allocated = 4096;
   buf = xmalloc (allocated + 1);
   nread = 0;
-  while ((size && nread < ( size_t ) size) || size == 0)
+  while ((size && nread < (size_t) size) || size == 0)
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
@@ -782,7 +782,7 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
     return crun_make_error (err, 0, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
-  ret = connect (fd, ( struct sockaddr * ) &addr, sizeof (addr));
+  ret = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "connect socket to `%s`", path);
 
@@ -805,7 +805,7 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
     return crun_make_error (err, 0, "invalid path %s specified", path);
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
-  ret = bind (fd, ( struct sockaddr * ) &addr, sizeof (addr));
+  ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "bind socket to `%s`", path);
 
@@ -848,7 +848,7 @@ send_fd_to_socket (int server, int fd, libcrun_error_t *err)
   cmsg->cmsg_type = SCM_RIGHTS;
   cmsg->cmsg_len = CMSG_LEN (sizeof (int));
 
-  *(( int * ) CMSG_DATA (cmsg)) = fd;
+  *((int *) CMSG_DATA (cmsg)) = fd;
 
   ret = TEMP_FAILURE_RETRY (sendmsg (server, &msg, 0));
   if (UNLIKELY (ret < 0))
@@ -1549,7 +1549,7 @@ safe_read_xattr (char **ret, int sfd, const char *srcname, const char *name, siz
   ssize_t current_size;
   ssize_t s;
 
-  current_size = ( ssize_t ) initial_size;
+  current_size = (ssize_t) initial_size;
   buffer = xmalloc (current_size + 1);
 
   while (1)
@@ -1717,7 +1717,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
             return ret;
 
 #ifdef HAVE_FGETXATTR
-          ret = ( int ) copy_xattr (srcfd, destfd, de->d_name, de->d_name, err);
+          ret = (int) copy_xattr (srcfd, destfd, de->d_name, de->d_name, err);
           if (UNLIKELY (ret < 0))
             return ret;
 #endif
@@ -1740,7 +1740,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
             return crun_make_error (err, errno, "open directory `%s/%s`", srcname, de->d_name);
 
 #ifdef HAVE_FGETXATTR
-          ret = ( int ) copy_xattr (srcfd, destfd, de->d_name, de->d_name, err);
+          ret = (int) copy_xattr (srcfd, destfd, de->d_name, de->d_name, err);
           if (UNLIKELY (ret < 0))
             return ret;
 #endif

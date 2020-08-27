@@ -31,7 +31,7 @@
 #include "libcrun/utils.h"
 #include "libcrun/status.h"
 
-#define YAJL_STR(x) (( const unsigned char * ) (x))
+#define YAJL_STR(x) ((const unsigned char *) (x))
 
 static char doc[] = "OCI runtime";
 
