@@ -2194,7 +2194,17 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 
       ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          /* The cgroup might have been cleaned up by systemd by the time we try to read it, so ignore ENOENT.  */
+          if (status->systemd_cgroup && crun_error_get_errno (err) == ENOENT)
+            {
+              crun_error_release (err);
+              *container_status = "stopped";
+              return 0;
+            }
+
+          return ret;
+        }
     }
 
   if (! *running)
