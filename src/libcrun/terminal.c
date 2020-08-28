@@ -134,7 +134,7 @@ libcrun_setup_terminal_ptmx (int fd, void **current_status, libcrun_error_t *err
 void
 cleanup_terminalp (void *p)
 {
-  struct terminal_status_s **s = ( struct terminal_status_s ** ) p;
+  struct terminal_status_s **s = (struct terminal_status_s **) p;
   if (*s)
     {
       tcsetattr ((*s)->fd, TCSANOW, &(*s)->termios);

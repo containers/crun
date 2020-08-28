@@ -33,7 +33,7 @@
 #  include <systemd/sd-journal.h>
 #endif
 
-#define YAJL_STR(x) (( const unsigned char * ) (x))
+#define YAJL_STR(x) ((const unsigned char *) (x))
 
 enum
 {
@@ -161,8 +161,8 @@ get_timestamp (timestamp_t *timestamp, const char *suffix)
 
   gettimeofday (&tv, NULL);
   gmtime_r (&tv.tv_sec, &now);
-  strftime (( char * ) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
-  sprintf ((( char * ) timestamp) + 19, ".%09ldZ%.8s", tv.tv_usec, suffix);
+  strftime ((char *) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
+  sprintf (((char *) timestamp) + 19, ".%09ldZ%.8s", tv.tv_usec, suffix);
 }
 
 static void *
@@ -285,9 +285,9 @@ log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg arg_un
 void
 log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_unused)
 {
-  ( void ) errno_;
-  ( void ) msg;
-  ( void ) warning;
+  (void) errno_;
+  (void) msg;
+  (void) warning;
 #ifdef HAVE_SYSTEMD
   if (errno_ == 0)
     sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s", msg, "ID=%s", arg, NULL);
@@ -362,7 +362,7 @@ make_json_error (const char *msg, int errno_, bool warning)
 
   yajl_gen_get_buf (gen, &buf, &buf_len);
   if (buf)
-    ret = strdup (( const char * ) buf);
+    ret = strdup ((const char *) buf);
 
   yajl_gen_free (gen);
 

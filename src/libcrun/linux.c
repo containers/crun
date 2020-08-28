@@ -56,7 +56,7 @@
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
-#define YAJL_STR(x) (( const unsigned char * ) (x))
+#define YAJL_STR(x) ((const unsigned char *) (x))
 
 #ifndef RLIMIT_RTTIME
 #  define RLIMIT_RTTIME 15
@@ -156,9 +156,9 @@ static int
 syscall_clone (unsigned long flags, void *child_stack)
 {
 #if defined __s390__ || defined __CRIS__
-  return ( int ) syscall (__NR_clone, child_stack, flags);
+  return (int) syscall (__NR_clone, child_stack, flags);
 #else
-  return ( int ) syscall (__NR_clone, flags, child_stack);
+  return (int) syscall (__NR_clone, flags, child_stack);
 #endif
 }
 
@@ -166,7 +166,7 @@ static int
 syscall_fsopen (const char *fs_name, unsigned int flags)
 {
 #if defined __NR_fsopen
-  return ( int ) syscall (__NR_fsopen, fs_name, flags);
+  return (int) syscall (__NR_fsopen, fs_name, flags);
 #else
   errno = ENOTSUP;
   return -1;
@@ -177,7 +177,7 @@ static int
 syscall_fsmount (int fsfd, unsigned int flags, unsigned int attr_flags)
 {
 #if defined __NR_fsmount
-  return ( int ) syscall (__NR_fsmount, fsfd, flags, attr_flags);
+  return (int) syscall (__NR_fsmount, fsfd, flags, attr_flags);
 #else
   errno = ENOTSUP;
   return -1;
@@ -188,7 +188,7 @@ static int
 syscall_fsconfig (int fsfd, unsigned int cmd, const char *key, const void *val, int aux)
 {
 #if defined __NR_fsconfig
-  return ( int ) syscall (__NR_fsconfig, fsfd, cmd, key, val, aux);
+  return (int) syscall (__NR_fsconfig, fsfd, cmd, key, val, aux);
 #else
   errno = ENOTSUP;
   return -1;
@@ -200,7 +200,7 @@ syscall_move_mount (int from_dfd, const char *from_pathname, int to_dfd, const c
 
 {
 #if defined __NR_move_mount
-  return ( int ) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
+  return (int) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
 #else
   errno = ENOTSUP;
   return -1;
@@ -211,17 +211,17 @@ static int
 syscall_keyctl_join (const char *name)
 {
 #define KEYCTL_JOIN_SESSION_KEYRING 0x1
-  return ( int ) syscall (__NR_keyctl, KEYCTL_JOIN_SESSION_KEYRING, name, 0);
+  return (int) syscall (__NR_keyctl, KEYCTL_JOIN_SESSION_KEYRING, name, 0);
 }
 
 static int
 syscall_pidfd_open (pid_t pid, unsigned int flags)
 {
 #if defined __NR_pidfd_open
-  return ( int ) syscall (__NR_pidfd_open, pid, flags);
+  return (int) syscall (__NR_pidfd_open, pid, flags);
 #else
-  ( void ) pid;
-  ( void ) flags;
+  (void) pid;
+  (void) flags;
   errno = ENOTSUP;
   return -1;
 #endif
@@ -231,12 +231,12 @@ static int
 syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int flags)
 {
 #if defined __NR_pidfd_send_signal
-  return ( int ) syscall (__NR_pidfd_send_signal, pidfd, sig, info, flags);
+  return (int) syscall (__NR_pidfd_send_signal, pidfd, sig, info, flags);
 #else
-  ( void ) pidfd;
-  ( void ) sig;
-  ( void ) info;
-  ( void ) flags;
+  (void) pidfd;
+  (void) sig;
+  (void) info;
+  (void) flags;
   errno = ENOTSUP;
   return -1;
 #endif
@@ -489,9 +489,9 @@ fsopen_mount (runtime_spec_schema_defs_mount *mount)
 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
 #else
-  ( void ) syscall_fsopen;
-  ( void ) syscall_fsconfig;
-  ( void ) syscall_fsmount;
+  (void) syscall_fsopen;
+  (void) syscall_fsconfig;
+  (void) syscall_fsmount;
   errno = ENOTSUP;
   return -1;
 #endif
@@ -503,7 +503,7 @@ fs_move_mount_to (int fd, int dirfd, const char *name)
 #ifdef HAVE_FSCONFIG_CMD_CREATE
   return syscall_move_mount (fd, "", dirfd, name, MOVE_MOUNT_F_EMPTY_PATH);
 #else
-  ( void ) syscall_move_mount;
+  (void) syscall_move_mount;
   errno = ENOTSUP;
   return -1;
 #endif
@@ -629,7 +629,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd, cons
               sprintf (proc_file, "/proc/self/fd/%d", fd);
 
               /* We need to go through the proc_file since fd itself is opened as O_PATH.  */
-              ( void ) setxattr (proc_file, "security.selinux", label, strlen (label), 0);
+              (void) setxattr (proc_file, "security.selinux", label, strlen (label), 0);
             }
 #endif
           /* We have a fd pointing to the new mountpoint (done in a safe location).  We can move
@@ -1591,17 +1591,17 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   if (container && container->container_def->linux && container->container_def->linux->mount_label)
     {
       /* Ignore the error, the worse that can happen is that the container fails to notify it is ready.  */
-      ( void ) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
-                         strlen (container->container_def->linux->mount_label), 0);
+      (void) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
+                       strlen (container->container_def->linux->mount_label), 0);
     }
 #  endif
 
   *notify_socket_out = get_and_reset (&notify_fd);
   return 1;
 #else
-  ( void ) context;
-  ( void ) container;
-  ( void ) err;
+  (void) context;
+  (void) container;
+  (void) err;
   *notify_socket_out = -1;
   return 0;
 #endif
@@ -1764,7 +1764,7 @@ static int
 cleanup_rmdir (void *p)
 {
   int ret;
-  char **pp = ( char ** ) p;
+  char **pp = (char **) p;
   if (*pp)
     {
       cleanup_dir DIR *d = NULL;
@@ -2281,7 +2281,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
 #undef MAPPING_FMT_1
 }
 
-#define CAP_TO_MASK_0(x) (1L << (( x ) &31))
+#define CAP_TO_MASK_0(x) (1L << ((x) &31))
 #define CAP_TO_MASK_1(x) CAP_TO_MASK_0 (x - 32)
 
 struct all_caps_s
@@ -2628,7 +2628,7 @@ save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_er
   yajl_gen_array_close (gen);
   yajl_gen_get_buf (gen, &buf, &buf_len);
   if (buf)
-    get_private_data (container)->external_descriptors = xstrdup (( const char * ) buf);
+    get_private_data (container)->external_descriptors = xstrdup ((const char *) buf);
   yajl_gen_free (gen);
 
   return 0;

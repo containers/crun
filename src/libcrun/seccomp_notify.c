@@ -116,8 +116,8 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
       if (ctx->plugins[s].handle == NULL)
         return crun_make_error (err, 0, "cannot load `%s`: %s", it, dlerror ());
 
-      version_cb = ( run_oci_seccomp_notify_plugin_version_cb ) dlsym (ctx->plugins[s].handle,
-                                                                       "run_oci_seccomp_notify_version");
+      version_cb
+          = (run_oci_seccomp_notify_plugin_version_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_version");
       if (version_cb != NULL)
         {
           int version;
@@ -127,12 +127,12 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
             return crun_make_error (err, ENOTSUP, "invalid version supported by the plugin `%s`", it);
         }
 
-      ctx->plugins[s].handle_request_cb = ( run_oci_seccomp_notify_handle_request_cb ) dlsym (
+      ctx->plugins[s].handle_request_cb = (run_oci_seccomp_notify_handle_request_cb) dlsym (
           ctx->plugins[s].handle, "run_oci_seccomp_notify_handle_request");
       if (ctx->plugins[s].handle_request_cb == NULL)
         return crun_make_error (err, ENOTSUP, "plugin `%s` doesn't export `run_oci_seccomp_notify_handle_request`", it);
 
-      start_cb = ( run_oci_seccomp_notify_start_cb ) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_start");
+      start_cb = (run_oci_seccomp_notify_start_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_start");
       if (start_cb)
         {
           int ret;
@@ -237,7 +237,7 @@ libcrun_free_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, libcr
       {
         run_oci_seccomp_notify_stop_cb cb;
 
-        cb = ( run_oci_seccomp_notify_stop_cb ) dlsym (ctx->plugins[i].handle, "run_oci_seccomp_notify_stop");
+        cb = (run_oci_seccomp_notify_stop_cb) dlsym (ctx->plugins[i].handle, "run_oci_seccomp_notify_stop");
         if (cb)
           cb (ctx->plugins[i].opaque);
         dlclose (ctx->plugins[i].handle);
