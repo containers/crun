@@ -2301,6 +2301,28 @@ has_cap_on (int cap, long unsigned *caps)
   return (CAP_TO_MASK_1 (cap) & caps[1]);
 }
 
+static unsigned long cap_last_cap;
+
+int
+libcrun_init_caps (libcrun_error_t *err)
+{
+  cleanup_close int fd = -1;
+  int ret;
+  char buffer[16];
+  fd = open ("/proc/sys/kernel/cap_last_cap", O_RDONLY);
+  if (fd < 0)
+    return crun_make_error (err, errno, "open /proc/sys/kernel/cap_last_cap");
+  ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from /proc/sys/kernel/cap_last_cap");
+
+  errno = 0;
+  cap_last_cap = strtoul (buffer, NULL, 10);
+  if (errno != 0)
+    return crun_make_error (err, errno, "strtoul() from /proc/sys/kernel/cap_last_cap");
+  return 0;
+}
+
 static int
 set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_privs, libcrun_error_t *err)
 {
@@ -2309,7 +2331,10 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
   struct __user_cap_header_struct hdr = { _LINUX_CAPABILITY_VERSION_3, 0 };
   struct __user_cap_data_struct data[2] = { { 0 } };
 
-  for (cap = 0; cap <= CAP_LAST_CAP; cap++)
+  if (cap_last_cap == 0)
+    return crun_make_error (err, 0, "internal error: max number of capabilities not initialized");
+
+  for (cap = 0; cap <= cap_last_cap; cap++)
     if (! has_cap_on (cap, caps->bounding))
       {
         ret = prctl (PR_CAPBSET_DROP, cap, 0, 0, 0);
@@ -2345,7 +2370,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
   if (UNLIKELY (ret < 0 && ! (errno == EINVAL || errno == EPERM)))
     return crun_make_error (err, errno, "prctl reset ambient");
 
-  for (cap = 0; cap <= CAP_LAST_CAP; cap++)
+  for (cap = 0; cap <= cap_last_cap; cap++)
     if (has_cap_on (cap, caps->ambient))
       {
         ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, cap, 0, 0);
