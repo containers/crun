@@ -33,27 +33,7 @@
 
 struct pid_stat
 {
-  int pid;
-  char comm[256];
   char state;
-  int ppid;
-  int pgrp;
-  int session;
-  int tty_nr;
-  int tpgid;
-  unsigned flags;
-  unsigned long minflt;
-  unsigned long cminflt;
-  unsigned long majflt;
-  unsigned long cmajflt;
-  unsigned long utime;
-  unsigned long stime;
-  long cutime;
-  long cstime;
-  long priority;
-  long nice;
-  long num_threads;
-  long itrealvalue;
   unsigned long long starttime;
 };
 
@@ -102,12 +82,13 @@ get_state_directory_status_file (const char *state_root, const char *id)
 static int
 read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
 {
-  cleanup_free char *pid_stat_file = NULL;
   cleanup_free char *buffer = NULL;
   cleanup_close int fd = -1;
-  int ret;
+  char pid_stat_file[64];
+  char *it, *s;
+  int i, ret;
 
-  xasprintf (&pid_stat_file, "/proc/%d/stat", pid);
+  sprintf (pid_stat_file, "/proc/%d/stat", pid);
 
   fd = open (pid_stat_file, O_RDONLY);
   if (fd < 0)
@@ -124,18 +105,38 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   ret = read_all_fd (fd, pid_stat_file, &buffer, NULL, err);
   if (ret < 0)
     {
+      st->starttime = 0;
+      st->state = 'X';
       /* The process already exited.  */
       libcrun_error_release (err);
       return 0;
     }
 
-  ret = sscanf (buffer, "%d %255s %c %d %d %d %d %d %u %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %llu",
-                &(st->pid), st->comm, &(st->state), &(st->ppid), &(st->pgrp), &(st->session), &(st->tty_nr),
-                &(st->tpgid), &(st->flags), &(st->minflt), &(st->cminflt), &(st->majflt), &(st->cmajflt), &(st->utime),
-                &(st->stime), &(st->cutime), &(st->cstime), &(st->priority), &(st->nice), &(st->num_threads),
-                &(st->itrealvalue), &(st->starttime));
-  if (UNLIKELY (ret != 22))
-    return crun_make_error (err, 0, "fscanf failed");
+  s = NULL;
+
+  /* Skip the first two arguments.  */
+  for (it = buffer; it; it = strchr (it + 1, ')'))
+    s = it + 1;
+
+  if (s)
+    while (*s == ' ')
+      s++;
+
+  if (s == NULL || *s == '\0')
+    return crun_make_error (err, 0, "could not read process state");
+
+  st->state = *s;
+
+  /* Seek to the starttime argument.  */
+  for (it = s + 1, i = 0; i < 19 && it != NULL; i++, it = strchr (it, ' ') + 1);
+
+  if (it == NULL || i != 19)
+    return crun_make_error (err, 0, "could not read process start time");
+
+  errno = 0;
+  st->starttime = strtoull (it, NULL, 10);
+  if (errno != 0)
+    return crun_make_error (err, errno, "parse process start time");
 
   return 0;
 }
