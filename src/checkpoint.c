@@ -126,7 +126,9 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
       if (UNLIKELY (path == NULL))
         libcrun_fail_with_error (0, "realloc failed");
 
-      xasprintf (&cr_path, "%s/checkpoint", path);
+      ret = asprintf (&cr_path, "%s/checkpoint", path);
+      if (UNLIKELY (ret < 0))
+        OOM ();
       cr_options.image_path = cr_path;
     }
 
