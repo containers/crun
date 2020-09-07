@@ -33,7 +33,8 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/terminal.c \
 			src/libcrun/chroot_realpath.c \
 			src/libcrun/signals.c \
-			src/libcrun/seccomp_notify.c
+			src/libcrun/seccomp_notify.c \
+			src/libcrun/kontain.c
 
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
@@ -57,7 +58,7 @@ endif
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \
-		src/checkpoint.c src/restore.c
+		src/checkpoint.c src/restore.c src/kontain.c src/debug.c
 crun_LDADD = libcrun.la $(FOUND_LIBS)
 crun_LDFLAGS = $(CRUN_LDFLAGS)
 

@@ -1,7 +1,7 @@
 /*
  * crun - OCI runtime written in C
  *
- * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
+ * Copyright (C) 2020 Kontain Inc.
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -15,26 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CRUN_H
-#define CRUN_H
+#ifndef DEBUG_H
+#define DEBUG_H
 
-#include "libcrun/container.h"
+#include "crun.h"
 
-struct crun_global_arguments
-{
-  char *root;
-  char *log;
-  char *log_format;
+void dumpmounts(libcrun_container_t *container);
+void dumpdevices(libcrun_container_t *container);
+void dumpannotations(libcrun_container_t *container);
+void dumpconfig(const char *config_file);
+void runtime_spec_to_file(runtime_spec_schema_config_schema *container);
+void dump_crun_context(libcrun_context_t *context);
+void debug(char *fmt, ...);
 
-  bool command;
-  bool debug;
-  bool option_systemd_cgroup;
-  bool option_force_no_cgroup;
-  bool kontain;
-};
-
-char *argp_mandatory_argument (char *arg, struct argp_state *state);
-int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob,
-                          libcrun_error_t *err);
-void crun_assert_n_args (int n, int min, int max);
 #endif
