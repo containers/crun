@@ -94,7 +94,7 @@ AS_IF([test "x$with_python_bindings" = "xyes"], [
 dnl criu
 AC_ARG_ENABLE([criu], AS_HELP_STRING([--disable-criu], [Disable CRIU based checkpoint/restore support]))
 AS_IF([test "x$enable_criu" != "xno"], [
-            PKG_CHECK_MODULES([CRIU], [criu >= 3.13], [have_criu="yes"], [have_criu="no"
+            PKG_CHECK_MODULES([CRIU], [criu >= 3.15], [have_criu="yes"], [have_criu="no"
 			       AC_MSG_RESULT([CRIU headers not found, building without CRIU support])])
 	    AS_IF([test "$have_criu" = "yes"], [
 		   AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
