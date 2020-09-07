@@ -1,7 +1,7 @@
 FROM fedora:latest
 
 RUN yum install -y golang python git automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel go-md2man \
+    systemd-devel yajl-devel libseccomp-devel go-md2man openssl-devel \
     glibc-static python3-libmount libtool make honggfuzz git
 
 RUN git clone https://github.com/giuseppe/containers-fuzzing-corpus /testcases

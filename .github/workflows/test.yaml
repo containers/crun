@@ -34,7 +34,7 @@ jobs:
 
           install: |
             apt-get update -q -y
-            apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev
+            apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libssl-dev
 
           run: |
             ./autogen.sh
@@ -73,7 +73,7 @@ jobs:
         sudo add-apt-repository -y ppa:criu/ppa
         sudo apt-get update -q -y
 
-        sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev docker.io containerd runc libasan6
+        sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev docker.io containerd runc libasan6 libssl-dev
 
         sudo systemctl unmask docker
         sudo systemctl start docker

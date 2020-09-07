@@ -41,6 +41,7 @@
 #include "ps.h"
 #include "checkpoint.h"
 #include "restore.h"
+#include "debug.h"
 
 static struct crun_global_arguments arguments;
 
@@ -79,6 +80,8 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
 
   if (con->config_file == NULL)
     con->config_file = "./config.json";
+
+  con->kontain = glob->kontain;
 
   return 0;
 }
@@ -298,6 +301,20 @@ main (int argc, char **argv)
 {
   libcrun_error_t err = NULL;
   int ret, first_argument = 0;
+
+  char *cmd = strrchr (argv[0], '/');
+  if (cmd == NULL)
+    {
+      cmd = argv[0];
+    }
+  else
+    {
+      cmd++;
+    }
+  if (strcmp (cmd, "krun") == 0)
+    {
+      arguments.kontain = true;
+    }
 
   argp_program_version_hook = print_version;
 

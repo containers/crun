@@ -1,7 +1,7 @@
 /*
  * crun - OCI runtime written in C
  *
- * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
+ * Copyright (C) 2020-2021 Kontain Inc.
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -15,26 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CRUN_H
-#define CRUN_H
+#ifndef KONTAIN_H
+#define KONTAIN_H
 
-#include "libcrun/container.h"
+#define KM_BIN_PATH "/opt/kontain/bin/km"
+#define DOCKER_INIT_PATH "/sbin/docker-init"
+#define PODMAN_INIT_PATH "/dev/init"
+int libcrun_kontain_argv (char ***argv, const char **execpath);
+int libcrun_kontain_nonkmexec_allowed (const char *execpath, char **execpath_allowed);
+void libcrun_kontain_nonkmexec_clean (void);
 
-struct crun_global_arguments
-{
-  char *root;
-  char *log;
-  char *log_format;
-
-  bool command;
-  bool debug;
-  bool option_systemd_cgroup;
-  bool option_force_no_cgroup;
-  bool kontain;
-};
-
-char *argp_mandatory_argument (char *arg, struct argp_state *state);
-int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob,
-                          libcrun_error_t *err);
-void crun_assert_n_args (int n, int min, int max);
 #endif

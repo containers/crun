@@ -49,6 +49,8 @@ struct libcrun_context_s
 
   int (*exec_func) (void *container, void *arg, const char *pathname, char *const argv[]);
   void *exec_func_arg;
+
+  bool kontain;
 };
 
 enum

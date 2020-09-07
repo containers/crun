@@ -42,6 +42,7 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <grp.h>
+#include "kontain.h"
 
 #ifdef HAVE_DLOPEN
 #  include <dlfcn.h>
@@ -1190,6 +1191,14 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
             return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
 
           return crun_make_error (err, errno, "open executable");
+        }
+      if (entrypoint_args->context->kontain)
+        {
+          int rc = libcrun_kontain_argv (&def->process->args, exec_path);
+          if (rc != 0)
+            {
+              return crun_make_error (err, rc, "init: fixup argv");
+            }
         }
     }
 
@@ -3176,6 +3185,32 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
             crun_make_error (err, errno, "open executable");
 
           libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+        }
+
+      if (context->kontain)
+        {
+          char *new_execpath;
+          int rc = libcrun_kontain_nonkmexec_allowed (exec_path, &new_execpath);
+          if (rc != 0)
+            {
+              libcrun_fail_with_error (rc, "allow non-km executable check failed");
+            }
+          if (new_execpath == NULL)
+            {
+              // Run as a payload
+              rc = libcrun_kontain_argv (&process->args, &exec_path);
+              if (rc != 0)
+                {
+                  libcrun_fail_with_error (rc, "failed to setup %s to run in a kontain VM", exec_path);
+                }
+            }
+          else
+            {
+              // Run the returned path without km.
+              char *pacify_maint_mk = (char *) exec_path;
+              free (pacify_maint_mk);
+              exec_path = new_execpath;
+            }
         }
 
       if (container->container_def->linux && container->container_def->linux->personality)

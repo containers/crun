@@ -25,6 +25,7 @@ AC_PATH_PROG(MD2MAN, go-md2man)
 AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 
 AC_CHECK_HEADERS([error.h linux/openat2.h])
+AC_CHECK_HEADER([bsd/queue.h], [AC_DEFINE([HAVE_BSD_QUEUE], 1, [Define if bsd/queue.h is available])])
 
 AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid)
 
@@ -129,6 +130,10 @@ AS_IF([test "x$enable_criu" != "xno"], [
 		   AC_SEARCH_LIBS(criu_init_opts, [criu])
 	    ])
 ], [AC_MSG_NOTICE([CRIU support disabled per user request])])
+
+AC_SEARCH_LIBS([CRYPTO_new_ex_data], [crypto], [], [AC_MSG_ERROR([crypto library not found])])
+
+AC_SEARCH_LIBS([OPENSSL_init_ssl], [ssl], [], [AC_MSG_ERROR([ssl library not found])])
 
 FOUND_LIBS=$LIBS
 LIBS=""

@@ -4,7 +4,7 @@ ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 
 RUN yum install -y golang python git gcc automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel go-md2man \
+    systemd-devel yajl-devel libseccomp-devel go-md2man openssl-devel \
     glibc-static python3-libmount libtool make podman xz nmap-ncat && \
     dnf install -y 'dnf-command(builddep)' && dnf builddep -y podman && \
     go get github.com/onsi/ginkgo/ginkgo && \

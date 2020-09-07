@@ -9,7 +9,7 @@ RUN apt-get update \
             protobuf-c-compiler libcap-dev libaio-dev \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
             pigz lsof make git gcc build-essential pkgconf libtool \
-            libsystemd-dev libcap-dev libyajl-dev \
+            libsystemd-dev libcap-dev libyajl-dev libssl-dev \
             go-md2man libtool autoconf python3 automake sudo \
     && update-alternatives --install /usr/bin/go go /usr/lib/go-1.13/bin/go 0 \
     && mkdir -p /root/go/src/github.com/containerd \
