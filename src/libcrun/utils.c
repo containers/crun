@@ -761,8 +761,6 @@ read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_
 int
 read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 {
-  cleanup_close int fd = -1;
-
   if (strcmp (path, "-") == 0)
     path = "/dev/stdin";
 

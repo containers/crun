@@ -1573,7 +1573,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int socket_pair_0 = -1;
   cleanup_close int socket_pair_1 = -1;
   cleanup_close int seccomp_fd = -1;
-  cleanup_close int seccomp_receiver_fd = -1;
   cleanup_close int console_socket_fd = -1;
   cleanup_close int hooks_out_fd = -1;
   cleanup_close int hooks_err_fd = -1;
