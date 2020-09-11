@@ -1,5 +1,5 @@
 /*
- * chroot_realpath.c -- reslove pathname as if inside chroot
+ * chroot_realpath.c -- resolve pathname as if inside chroot
  * Based on realpath.c Copyright (C) 1993 Rick Sladkey <jrs@world.std.com>
  *
  * This program is free software; you can redistribute it and/or

@@ -52,7 +52,7 @@
   through an annotation.
 - cgroup: write the correct blkio settings.
 - exec: do not inherit env variables from main pid.
-- ebpf: fix endianess issue on s390x.
+- ebpf: fix endianness issue on s390x.
 - linux: fix recursive mount on cgroup v1.
 
 * crun-0.12.2.1

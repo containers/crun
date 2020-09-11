@@ -265,7 +265,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *process_start_time_path[] = { "process-start-time", NULL };
     tmp = yajl_tree_get (tree, process_start_time_path, yajl_t_number);
     if (UNLIKELY (tmp == NULL))
-      status->process_start_time = 0; /* backwards compatability */
+      status->process_start_time = 0; /* backwards compatibility */
     else
       status->process_start_time = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
   }
