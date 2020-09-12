@@ -209,10 +209,14 @@ int main (int argc, char **argv)
     }
   if (strcmp (argv[1], "pause") == 0)
     {
+      unsigned int remaining = 120;
+
       close (1);
       close (2);
-      /* Make sure the process doesn't hang forever.  */
-      sleep (120);
+
+      while (remaining)
+        remaining = sleep (remaining);
+
       exit (0);
     }
   if (strcmp (argv[1], "forkbomb") == 0)
