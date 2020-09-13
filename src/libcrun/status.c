@@ -128,7 +128,8 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   st->state = *s;
 
   /* Seek to the starttime argument.  */
-  for (it = s + 1, i = 0; i < 19 && it != NULL; i++, it = strchr (it, ' ') + 1);
+  for (it = s + 1, i = 0; i < 19 && it != NULL; i++, it = strchr (it, ' ') + 1)
+    ;
 
   if (it == NULL || i != 19)
     return crun_make_error (err, 0, "could not read process start time");
