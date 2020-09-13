@@ -91,7 +91,7 @@ def test_cr1():
     return 0
 
 all_tests = {
-    "checkpoint restore" : test_cr1,
+    "checkpoint-restore" : test_cr1,
 }
 
 if __name__ == "__main__":
