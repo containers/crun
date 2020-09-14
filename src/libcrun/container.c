@@ -246,15 +246,18 @@ static char spec_file[] = "\
 			}\n\
 		],\n\
 		\"maskedPaths\": [\n\
+			\"/proc/acpi\",\n\
+			\"/proc/asound\",\n\
 			\"/proc/kcore\",\n\
+			\"/proc/keys\",\n\
 			\"/proc/latency_stats\",\n\
 			\"/proc/timer_list\",\n\
 			\"/proc/timer_stats\",\n\
 			\"/proc/sched_debug\",\n\
-			\"/sys/firmware\"\n\
+			\"/sys/firmware\",\n\
+			\"/proc/scsi\"\n\
 		],\n\
 		\"readonlyPaths\": [\n\
-			\"/proc/asound\",\n\
 			\"/proc/bus\",\n\
 			\"/proc/fs\",\n\
 			\"/proc/irq\",\n\
