@@ -1007,7 +1007,7 @@ has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 
 static int
 container_delete_internal (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id,
-                           bool force, bool only_cleanup, libcrun_error_t *err)
+                           bool force, bool killall, libcrun_error_t *err)
 {
   int ret;
   cleanup_container_status libcrun_container_status_t status = {};
@@ -1038,7 +1038,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
     }
 
-  if (! only_cleanup && ! status.detached)
+  if (killall)
     {
       if (force)
         {
@@ -1095,7 +1095,7 @@ int
 libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id,
                           bool force, libcrun_error_t *err)
 {
-  return container_delete_internal (context, def, id, force, false, err);
+  return container_delete_internal (context, def, id, force, true, err);
 }
 
 int
@@ -1873,7 +1873,7 @@ static void
 force_delete_container_status (libcrun_context_t *context, runtime_spec_schema_config_schema *def)
 {
   libcrun_error_t tmp_err = NULL;
-  container_delete_internal (context, def, context->id, 1, true, &tmp_err);
+  container_delete_internal (context, def, context->id, true, false, &tmp_err);
   crun_error_release (&tmp_err);
 }
 

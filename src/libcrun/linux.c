@@ -2984,7 +2984,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   pid_t pid_container = 0;
   size_t i;
   int ret;
-  char success = 0;
+  const char success = 0;
 
   ret = libcrun_set_oom (container, err);
   if (UNLIKELY (ret < 0))
@@ -3097,8 +3097,13 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &pid_container, sizeof (pid_container)));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write to sync socket");
+
           _exit (EXIT_SUCCESS);
         }
+
+      ret = expect_success_from_sync_socket (sync_socket_container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = libcrun_container_setgroups (container, err);
@@ -3121,6 +3126,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   char *notify_socket_env = NULL;
   cleanup_close int sync_socket_host = -1;
   bool clone_can_create_userns;
+  const char failure = 1;
+  const char success = 0;
   int sync_socket[2];
   pid_t pid;
   size_t i;
@@ -3261,6 +3268,10 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "read pid from sync socket");
 
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &success, 1));
+          if (UNLIKELY (ret < 0))
+            return ret;
+
           /* Cleanup the first process.  */
           waitpid (pid, NULL, 0);
 
@@ -3286,8 +3297,6 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   ret = init_container (container, sync_socket_container, &init_status, err);
   if (UNLIKELY (ret < 0))
     {
-      char failure = 1;
-
       ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &failure, 1));
       if (UNLIKELY (ret < 0))
         goto localfail;
@@ -3300,8 +3309,6 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     }
   else
     {
-      char success = 0;
-
       ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
       if (UNLIKELY (ret < 0))
         return ret;
