@@ -1,4 +1,4 @@
-{ system ? builtins.currentSystem, disableSystemd ? false }:
+{ system ? builtins.currentSystem, enableSystemd ? true }:
 let
   pkgs = (import ./nixpkgs.nix {
     config = {
@@ -62,7 +62,7 @@ let
     nativeBuildInputs = [ autoreconfHook bash git pkg-config python3 which ];
     buildInputs = [ glibc glibc.static criu libcap libseccomp protobufc systemd yajl ];
     configureFlags = [ "--enable-static" ]
-      ++ lib.optional disableSystemd [ "--disable-systemd" ];
+      ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
     prePatch = ''
       export CFLAGS='-static'
       export LDFLAGS='-s -w -static-libgcc -static'
