@@ -490,6 +490,10 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_init_caps (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   return 0;
 }
 
