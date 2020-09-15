@@ -1996,7 +1996,7 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
 
 /* If one of stdin, stdout, stderr are pointing to /dev/null on
  * the outside of the container, this moves it to /dev/null inside
- * of the container. This needs to run afer pivot/chroot-ing. */
+ * of the container. This needs to run after pivot/chroot-ing. */
 int
 libcrun_reopen_dev_null (libcrun_error_t *err)
 {
