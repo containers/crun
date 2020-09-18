@@ -48,6 +48,8 @@
 #  define __NR_openat2 437
 #endif
 
+#define MAX_READLINKS 32
+
 static int
 syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uint64_t resolve)
 {
@@ -367,15 +369,19 @@ fallback:
 
 static int
 crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
-                     libcrun_error_t *err)
+                     int max_readlinks, libcrun_error_t *err)
 {
   cleanup_close int wd_cleanup = -1;
   cleanup_free char *npath = NULL;
   bool last_component = false;
+  size_t depth = 0;
   const char *cur;
   char *it;
   int cwd;
   int ret;
+
+  if (max_readlinks <= 0)
+    return crun_make_error (err, ELOOP, "resolve path `%s`", path);
 
   while (*path == '/')
     path++;
@@ -401,8 +407,20 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
       if (cur[0] == '\0')
         break;
 
-      if (strcmp (cur, "..") == 0)
-        return crun_make_error (err, 0, "invalid path `%s`", path);
+      if (strcmp (cur, ".") == 0)
+        goto next;
+      else if (strcmp (cur, ".."))
+        depth++;
+      else
+        {
+          if (depth)
+            depth--;
+          else
+            {
+              close_and_reset (&wd_cleanup);
+              cwd = dirfd;
+            }
+        }
 
       if (! last_component || dir)
         ret = mkdirat (cwd, cur, mode);
@@ -411,6 +429,29 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
           ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW, 0700);
           if (UNLIKELY (ret < 0))
             {
+              /* If the last component is a symlink, repeat the lookup with the resolved path.  */
+              if (errno == ELOOP)
+                {
+                  size_t s, resolved_size = 0;
+                  cleanup_free char *resolved_path = NULL;
+
+                  do
+                    {
+                      resolved_size += 512;
+                      resolved_path = xrealloc (resolved_path, resolved_size);
+
+                      s = readlinkat (dirfd, npath, resolved_path, resolved_size);
+                    }
+                  while (s == resolved_size);
+
+                  if (s > 0)
+                    {
+                      resolved_path[s] = '\0';
+                      crun_error_release (err);
+                      return crun_safe_ensure_at (dir, dirfd, dirpath, dirpath_len, resolved_path, mode,
+                                                  max_readlinks - 1, err);
+                    }
+                }
               /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
               ret = openat (cwd, cur, O_CLOEXEC | O_PATH, 0);
               if (ret < 0)
@@ -434,6 +475,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
 
       close_and_replace (&wd_cleanup, cwd);
 
+    next:
       if (it == NULL)
         break;
 
@@ -449,14 +491,14 @@ int
 crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                                libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (true, dirfd, dirpath, dirpath_len, path, mode, err);
+  return crun_safe_ensure_at (true, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                           libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, dirfd, dirpath, dirpath_len, path, mode, err);
+  return crun_safe_ensure_at (false, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
