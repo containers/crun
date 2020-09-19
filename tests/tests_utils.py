@@ -220,6 +220,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
 
     open(os.path.join(rootfs, "usr/share/zoneinfo/Europe/Rome"), "w").close()
     os.symlink("../usr/share/zoneinfo/Europe/Rome", os.path.join(rootfs, "etc/localtime"))
+    os.symlink("../foo/bar/not/here", os.path.join(rootfs, "etc/not-existing"))
 
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []

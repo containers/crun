@@ -56,6 +56,17 @@ def test_mount_symlink():
         return 0
     return -1
 
+def test_mount_symlink_not_existing():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    mount_opt = {"destination": "/etc/not-existing", "type": "bind", "source": "/etc/localtime", "options": ["bind", "ro"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    if "foo/bar" in out:
+        return 0
+    return -1
+
 def test_mount_ro():
     a = helper_mount("ro")[0]
     if "ro" in a:
@@ -128,6 +139,7 @@ all_tests = {
     "test-mount-sync" : test_mount_sync,
     "test-mount-dirsync" : test_mount_dirsync,
     "test-mount-symlink" : test_mount_symlink,
+    "test-mount-symlink-not-existing" : test_mount_symlink_not_existing,
 }
 
 if __name__ == "__main__":
