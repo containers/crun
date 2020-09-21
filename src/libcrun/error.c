@@ -299,7 +299,7 @@ log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_
 
 static crun_output_handler output_handler = log_write_to_stderr;
 static void *output_handler_arg = NULL;
-static int output_verbosity = LIBCRUN_VERBOSITY_WARNING;
+static int output_verbosity = LIBCRUN_VERBOSITY_ERROR;
 
 void
 libcrun_set_verbosity (int verbosity)
