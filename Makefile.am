@@ -14,7 +14,7 @@ srpm: dist-gzip rpm/crun.spec
 	$(MAKE) -C $(WD) dist-gzip
 	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
-CLEANFILES = crun.spec crun.1
+CLEANFILES = crun.spec
 
 lib_LTLIBRARIES = libcrun.la
 
