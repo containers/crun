@@ -301,6 +301,9 @@ main (int argc, char **argv)
   if (command == NULL)
     libcrun_fail_with_error (0, "unknown command %s", argv[first_argument]);
 
+  if (arguments.debug)
+    libcrun_set_verbosity (LIBCRUN_VERBOSITY_WARNING);
+
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
   if (ret && err)
     libcrun_fail_with_error (err->status, "%s", err->msg);
