@@ -1,3 +1,21 @@
+* crun-0.15
+
+- add support for OCI unified cgroup v2.
+- add json format option to `crun list`.
+- get last kernel capability dynamically instead of using a build
+  time constant.
+- enable all available cgroup controllers.
+- support the seccomp SCMP_ACT_LOG action.
+- support the seccomp SCMP_ACT_KILL_THREAD action.
+- properly set a SELinux label for the mqueue mount.
+- `crun kill` uses pidfd when supported.
+- experimental support for seccomp notifications.
+- fix bundle option for `crun create` and `crun run`.
+- allow to declare path to config file.
+- check /sys/kernel/security/apparmor when using AppArmor.
+- doesn't accept type=bind alone anymore, but require either "bind"
+  or "rbind" to be present in the mount flags.
+
 * crun-0.14.1
 
 - fix a regression in crun-0.14 where openat2(2) would fail when bind
