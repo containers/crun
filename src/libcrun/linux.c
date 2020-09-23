@@ -280,6 +280,7 @@ enum
 };
 
 static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 },
+                                                          { "bind", 0, MS_BIND, 0 },
                                                           { "rbind", 0, MS_REC | MS_BIND, 0 },
                                                           { "ro", 0, MS_RDONLY, 0 },
                                                           { "rw", 1, MS_RDONLY, 0 },
@@ -1378,31 +1379,17 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
             flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data);
-
-          if (type == NULL)
-            {
-              size_t j;
-
-              for (j = 0; j < def->mounts[i]->options_len; j++)
-                {
-                  if (strcmp (def->mounts[i]->options[j], "bind") == 0
-                      || strcmp (def->mounts[i]->options[j], "rbind") == 0)
-                    {
-                      type = "bind";
-                      break;
-                    }
-                }
-            }
         }
 
-      if (type == NULL)
+      if (type == NULL && (flags & MS_BIND) == 0)
         return crun_make_error (err, 0, "invalid mount type for `%s`", def->mounts[i]->destination);
 
-      if (strcmp (type, "bind") == 0)
+      if (flags & MS_BIND)
         {
           if (strcmp (def->mounts[i]->destination, "/dev") == 0)
             get_private_data (container)->mount_dev_from_host = true;
-          flags |= MS_BIND;
+          /* It is used only for error messages.  */
+          type = "bind";
         }
 
       if (def->mounts[i]->source && (flags & MS_BIND))
