@@ -1230,7 +1230,7 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
     {
       char buf[12];
       size_t buf_len = sprintf (buf, "%d", pid);
-      ret = write_file (context->pid_file, buf, buf_len, err);
+      ret = write_file_with_flags (context->pid_file, O_CREAT | O_TRUNC, buf, buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2864,7 +2864,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     {
       char buf[12];
       size_t buf_len = sprintf (buf, "%d", status.pid);
-      ret = write_file (context->pid_file, buf, buf_len, err);
+      ret = write_file_with_flags (context->pid_file, O_CREAT | O_TRUNC, buf, buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
