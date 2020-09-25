@@ -149,6 +149,8 @@ int xasprintf (char **str, const char *fmt, ...);
 
 int crun_path_exists (const char *path, libcrun_error_t *err);
 
+int write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err);
+
 int write_file (const char *name, const void *data, size_t len, libcrun_error_t *err);
 
 int write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err);
