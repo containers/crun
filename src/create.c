@@ -47,7 +47,7 @@ static struct argp_option options[]
         { "config", 'f', "FILE", 0, "override the config file name", 0 },
         { "console-socket", OPTION_CONSOLE_SOCKET, "SOCK", 0,
           "path to a socket that will receive the ptmx end of the tty", 0 },
-        { "preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0 },
+        { "preserve-fds", OPTION_PRESERVE_FDS, "N", 0, "pass additional FDs to the container", 0 },
         { "no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root", 0 },
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
         { "no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process", 0 },

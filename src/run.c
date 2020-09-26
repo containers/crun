@@ -50,7 +50,7 @@ static struct argp_option options[]
         { "detach", 'd', 0, 0, "detach from the parent", 0 },
         { "console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0,
           "path to a socket that will receive the ptmx end of the tty", 0 },
-        { "preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0 },
+        { "preserve-fds", OPTION_PRESERVE_FDS, "N", 0, "pass additional FDs to the container", 0 },
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
         { "no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process", 0 },
         { "no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key", 0 },
