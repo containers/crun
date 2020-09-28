@@ -386,7 +386,9 @@ it is supported in the OCI runtime specs.  It must be an absolute path.
 .PP
 If the annotation \fB\fCrun.oci.seccomp.plugins=PLUGIN1[:PLUGIN2]...\fR is specified, the
 seccomp listener fd is handled through the specified plugins.  The
-plugin must either be an absolute path or a filename.
+plugin must either be an absolute path or a file name that is looked
+up by \fB\fCldopen(3)\fR\&.  More information on how the lookup is performed
+are available on the \fB\fCld.so(8)\fR man page.
 
 .SH \fB\fCrun.oci.seccomp\_fail\_unknown\_syscall=1\fR
 .PP
@@ -491,7 +493,11 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-limit	memory.max	y = x	swap	memory.swap\_max	y = x	reservation	memory.low	y = x	.TE
+limit	memory.max	y = x	swap	memory.swap.max	y = x \- memory\_limit	T{
+the swap limit on cgroup v1 includes the memory usage too
+T}
+reservation	memory.low	y = x	
+.TE
 
 .SH PIDs controller
 .TS
@@ -499,7 +505,8 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-limit	pids.max	y = x	.TE
+limit	pids.max	y = x	
+.TE
 
 .SH CPU controller
 .TS
@@ -519,6 +526,7 @@ T}
 quota	cpu.max	y = x	T{
 period and quota are written together
 T}
+
 .TE
 
 .SH blkio controller
@@ -539,7 +547,8 @@ T}
 	T{
 convert linearly from [10\-1000] to [1\-10000]
 T}
-rbps	io.max	y=x	wbps	io.max	y=x	riops	io.max	y=x	wiops	io.max	y=x	.TE
+rbps	io.max	y=x	wbps	io.max	y=x	riops	io.max	y=x	wiops	io.max	y=x	
+.TE
 
 .SH cpuset controller
 .TS
@@ -547,7 +556,8 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-cpus	cpuset.cpus	y = x	mems	cpuset.mems	y = x	.TE
+cpus	cpuset.cpus	y = x	mems	cpuset.mems	y = x	
+.TE
 
 .SH hugetlb controller
 .TS
@@ -555,4 +565,5 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-\&.limit\_\&in\_\&bytes	hugetlb.\&.max	y = x	.TE
+\&.limit\_\&in\_\&bytes	hugetlb.\&.max	y = x	
+.TE
