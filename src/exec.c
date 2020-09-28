@@ -68,7 +68,7 @@ static struct argp_option options[]
         { "env", 'e', "ENV", 0, "add an environment variable", 0 },
         { "cap", 'c', "CAP", 0, "add a capability", 0 },
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
-        { "preserve-fds", OPTION_PRESERVE_FDS, 0, 0, "pass additional FDs to the container", 0 },
+        { "preserve-fds", OPTION_PRESERVE_FDS, "N", 0, "pass additional FDs to the container", 0 },
         {
             0,
         } };
