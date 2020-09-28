@@ -398,7 +398,7 @@ they are converted when needed from the cgroup v1 configuration.
 | OCI (x) | cgroup 2 value (y) | conversion  |   comment |
 |---|---|---|---|
 | limit | memory.max | y = x ||
-| swap | memory.swap_max | y = x ||
+| swap | memory.swap.max | y = x - memory_limit | the swap limit on cgroup v1 includes the memory usage too |
 | reservation | memory.low | y = x ||
 
 ## PIDs controller
