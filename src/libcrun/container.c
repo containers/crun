@@ -2595,10 +2595,10 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
         }
     }
 
-  TEMP_FAILURE_RETRY (read (pipefd0, &b, sizeof (b)));
+  ret = TEMP_FAILURE_RETRY (read (pipefd0, &b, sizeof (b)));
   TEMP_FAILURE_RETRY (close (pipefd0));
   pipefd0 = -1;
-  if (b != '0')
+  if (ret != 1 || b != '0')
     ret = -1;
   else
     {
