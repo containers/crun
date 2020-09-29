@@ -45,6 +45,9 @@ struct libcrun_context_s
   bool no_new_keyring;
   bool force_no_cgroup;
   bool no_pivot;
+
+  int (*exec_func) (void *container, void *arg, const char *pathname, char *const argv[]);
+  void *exec_func_arg;
 };
 
 enum

@@ -462,6 +462,16 @@ will open the specified file and use it as the stderr for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
 
+.SH \fB\fCrun.oci.handler=HANDLER\fR
+.PP
+It is an experimental feature.
+
+.PP
+If specified, run the specified handler for execing the container.
+The only supported value is \fB\fCkrun\fR\&.  When \fB\fCkrun\fR is specified, the
+\fB\fClibkrun.so\fR shared object is loaded and it is used to launch the
+container using libkrun.
+
 .SH tmpcopyup mount options
 .PP
 If the \fB\fCtmpcopyup\fR option is specified for a tmpfs, then the path that

@@ -1788,6 +1788,9 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   __attribute__ ((cleanup (cleanup_rmdir))) char *tmpdirparent = NULL;
   int rootfsfd = -1;
 
+  if (rootfs == NULL || def->mounts == NULL)
+    return 0;
+
   if (def->linux->rootfs_propagation)
     rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL);
 
@@ -3138,9 +3141,12 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   sync_socket_container = sync_socket[1];
 
 #ifdef HAVE_SYSTEMD
-  ret = do_notify_socket (container, def->root->path, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (def->root)
+    {
+      ret = do_notify_socket (container, def->root->path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 #endif
 
   get_uid_gid_from_def (container->container_def, &container->container_uid, &container->container_gid);
