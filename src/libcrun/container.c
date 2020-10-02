@@ -512,8 +512,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 {
   size_t i, stdin_len;
   int ret;
-  cleanup_free char *stdin = NULL;
-  const unsigned char *annotations = (const unsigned char *) "{}";
+  char *stdin = NULL;
   cleanup_free char *cwd_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
   yajl_gen gen = NULL;
@@ -525,14 +524,32 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
         OOM ();
     }
 
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+
+  yajl_gen_map_open (gen);
+  yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  yajl_gen_string (gen, YAJL_STR ("1.0"), strlen ("1.0"));
+
+  yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
+  yajl_gen_string (gen, YAJL_STR (id), strlen (id));
+
+  yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+  yajl_gen_integer (gen, pid);
+
+  yajl_gen_string (gen, YAJL_STR ("root"), strlen ("root"));
+  yajl_gen_string (gen, YAJL_STR (rootfs), strlen (rootfs));
+
+  yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+  yajl_gen_string (gen, YAJL_STR (cwd), strlen (cwd));
+
+  yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
+  yajl_gen_string (gen, YAJL_STR (status), strlen (status));
+
   if (def && def->annotations && def->annotations->len)
     {
-      size_t len;
-
-      gen = yajl_gen_alloc (NULL);
-      if (gen == NULL)
-        return crun_make_error (err, 0, "yajl_gen_alloc failed");
-
+      yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
       yajl_gen_map_open (gen);
       for (i = 0; i < def->annotations->len; i++)
         {
@@ -543,14 +560,11 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
           yajl_gen_string (gen, YAJL_STR (val), strlen (val));
         }
       yajl_gen_map_close (gen);
-
-      yajl_gen_get_buf (gen, &annotations, &len);
     }
 
-  stdin_len = xasprintf (&stdin,
-                         "{\"ociVersion\":\"1.0\", \"id\":\"%s\", \"pid\":%i, \"root\":\"%s\", \"bundle\":\"%s\", "
-                         "\"status\":\"%s\", \"annotations\":%s}",
-                         id, pid, rootfs, cwd, status, annotations);
+  yajl_gen_map_close (gen);
+
+  yajl_gen_get_buf (gen, (const unsigned char **) &stdin, &stdin_len);
 
   ret = 0;
 
