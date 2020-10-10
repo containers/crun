@@ -2959,6 +2959,7 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
     {
       libcrun_warning ("non root user need to have an 'user' namespace");
       ns->all_namespaces |= CLONE_NEWUSER;
+      ns->namespaces_to_unshare |= CLONE_NEWUSER;
     }
 
   return 0;
