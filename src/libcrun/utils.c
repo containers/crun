@@ -234,21 +234,15 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
   for (parent_created = 0; parent_created < 2; parent_created++)
     {
       ret = mkdirat (dirfd, path, mode);
-      if (ret == 0)
-        break;
-
-      if (errno == EEXIST)
-        {
-          ret = 0;
-          break;
-        }
+      if (ret == 0 || errno == EEXIST)
+        return 0;
 
       if (errno != ENOENT || parent_created)
         {
           /* On errors check if the directory already exists.  */
           ret = crun_dir_p (path, false, err);
           if (ret > 0)
-            break;
+            return 0;
 
           return crun_make_error (err, errno, "create directory `%s`", path);
         }
@@ -260,16 +254,13 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
               len--;
             }
           if (it == path)
-            {
-              ret = 0;
-              break;
-            }
+            return 0;
 
           *it = '\0';
           ret = ensure_directory_internal_at (dirfd, path, len - 1, mode, err);
           *it = '/';
           if (UNLIKELY (ret < 0))
-            break;
+            return ret;
         }
     }
   return ret;
