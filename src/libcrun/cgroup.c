@@ -374,6 +374,74 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 }
 
 static int
+check_cgroup_v2_controller_available_wrapper (int ret, int cgroup_dirfd, const char *name, libcrun_error_t *err)
+{
+  if (ret == 0 || err == NULL)
+    return 0;
+
+  errno = crun_error_get_errno (err);
+
+  /* If the file is not found, try to give a more meaningful error message.  */
+  if (errno == ENOENT || errno == EPERM || errno == EACCES)
+    {
+      cleanup_free char *controllers = NULL;
+      libcrun_error_t tmp_err = NULL;
+      cleanup_free char *key = NULL;
+      char *saveptr = NULL;
+      bool found = false;
+      const char *token;
+      char *it;
+
+      /* Check if the specified controller is enabled.  */
+      key = xstrdup (name);
+
+      it = strchr (key, '.');
+      if (it == NULL)
+        {
+          crun_error_release (err);
+          return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`",
+                                  name);
+        }
+      *it = '\0';
+
+      /* cgroup. files are not part of a controller.  Return the original error.  */
+      if (strcmp (key, "cgroup") == 0)
+        return ret;
+
+      /* If the cgroup.controllers file cannot be read, return the original error.  */
+      if (read_all_file_at (cgroup_dirfd, "cgroup.controllers", &controllers, NULL, &tmp_err) < 0)
+        {
+          crun_error_release (&tmp_err);
+          return ret;
+        }
+      for (token = strtok_r (controllers, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
+        {
+          if (strcmp (token, key) == 0)
+            {
+              found = true;
+              break;
+            }
+        }
+      if (! found)
+        {
+          crun_error_release (err);
+          return crun_make_error (err, 0, "the requested cgroup controller `%s` is not available", key);
+        }
+    }
+  return ret;
+}
+
+static int
+write_file_and_check_controllers_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = write_file_at (dirfd, name, data, len, err);
+
+  return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
+}
+
+static int
 initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 {
   cleanup_free char *tmp_path = xstrdup (path);
@@ -2708,60 +2776,9 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
         return crun_make_error (err, 0, "key `%s` must be a file name without any slash", resources->unified->keys[i]);
 
       len = strlen (resources->unified->values[i]);
-      ret = write_file_at (cgroup_dirfd, resources->unified->keys[i], resources->unified->values[i], len, err);
+      ret = write_file_and_check_controllers_at (cgroup_dirfd, resources->unified->keys[i], resources->unified->values[i], len, err);
       if (UNLIKELY (ret < 0))
-        {
-          errno = crun_error_get_errno (err);
-
-          /* If the file is not found, try to give a more meaningful error message.  */
-          if (errno == ENOENT || errno == EPERM || errno == EACCES)
-            {
-              cleanup_free char *controllers = NULL;
-              libcrun_error_t tmp_err = NULL;
-              cleanup_free char *key = NULL;
-              char *saveptr = NULL;
-              bool found = false;
-              const char *token;
-              char *it;
-
-              /* Check if the specified controller is enabled.  */
-              key = xstrdup (resources->unified->keys[i]);
-
-              it = strchr (key, '.');
-              if (it == NULL)
-                {
-                  crun_error_release (err);
-                  return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`",
-                                          resources->unified->keys[i]);
-                }
-              *it = '\0';
-
-              /* cgroup. files are not part of a controller.  Return the original error.  */
-              if (strcmp (key, "cgroup") == 0)
-                return ret;
-
-              /* If the cgroup.controllers file cannot be read, return the original error.  */
-              if (read_all_file_at (cgroup_dirfd, "cgroup.controllers", &controllers, NULL, &tmp_err) < 0)
-                {
-                  crun_error_release (&tmp_err);
-                  return ret;
-                }
-              for (token = strtok_r (controllers, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
-                {
-                  if (strcmp (token, key) == 0)
-                    {
-                      found = true;
-                      break;
-                    }
-                }
-              if (! found)
-                {
-                  crun_error_release (err);
-                  return crun_make_error (err, 0, "the requested controller `%s` is not available", key);
-                }
-            }
-          return ret;
-        }
+        return ret;
     }
 
   return 0;
