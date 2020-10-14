@@ -168,7 +168,7 @@ syscall_fsopen (const char *fs_name, unsigned int flags)
 #if defined __NR_fsopen
   return (int) syscall (__NR_fsopen, fs_name, flags);
 #else
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -179,7 +179,7 @@ syscall_fsmount (int fsfd, unsigned int flags, unsigned int attr_flags)
 #if defined __NR_fsmount
   return (int) syscall (__NR_fsmount, fsfd, flags, attr_flags);
 #else
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -190,7 +190,7 @@ syscall_fsconfig (int fsfd, unsigned int cmd, const char *key, const void *val, 
 #if defined __NR_fsconfig
   return (int) syscall (__NR_fsconfig, fsfd, cmd, key, val, aux);
 #else
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -202,7 +202,7 @@ syscall_move_mount (int from_dfd, const char *from_pathname, int to_dfd, const c
 #if defined __NR_move_mount
   return (int) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
 #else
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -222,7 +222,7 @@ syscall_pidfd_open (pid_t pid, unsigned int flags)
 #else
   (void) pid;
   (void) flags;
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -237,7 +237,7 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
   (void) sig;
   (void) info;
   (void) flags;
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -493,7 +493,7 @@ fsopen_mount (runtime_spec_schema_defs_mount *mount)
   (void) syscall_fsopen;
   (void) syscall_fsconfig;
   (void) syscall_fsmount;
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -505,7 +505,7 @@ fs_move_mount_to (int fd, int dirfd, const char *name)
   return syscall_move_mount (fd, "", dirfd, name, MOVE_MOUNT_F_EMPTY_PATH);
 #else
   (void) syscall_move_mount;
-  errno = ENOTSUP;
+  errno = ENOSYS;
   return -1;
 #endif
 }
@@ -3736,7 +3736,7 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
   if (UNLIKELY (pidfd < 0))
     {
       /* If pidfd_open is not supported, fallback to kill.  */
-      if (errno == ENOTSUP)
+      if (errno == ENOSYS)
         {
           ret = kill (status->pid, signal);
           if (UNLIKELY (ret < 0))
