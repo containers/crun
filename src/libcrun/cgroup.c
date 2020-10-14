@@ -1520,6 +1520,9 @@ libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode
   const char *state = "";
   int ret;
 
+  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+    return crun_make_error (err, 0, "cannot %s the container without a cgroup", pause ? "pause" : "resume");
+
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       state = pause ? "1" : "0";
