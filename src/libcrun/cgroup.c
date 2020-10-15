@@ -374,6 +374,75 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 }
 
 static int
+check_cgroup_v2_controller_available_wrapper (int ret, int cgroup_dirfd, const char *name, libcrun_error_t *err)
+{
+  if (ret == 0 || err == NULL)
+    return 0;
+
+  errno = crun_error_get_errno (err);
+
+  /* If the file is not found, try to give a more meaningful error message.  */
+  if (errno == ENOENT || errno == EPERM || errno == EACCES)
+    {
+      cleanup_free char *controllers = NULL;
+      libcrun_error_t tmp_err = NULL;
+      cleanup_free char *key = NULL;
+      char *saveptr = NULL;
+      bool found = false;
+      const char *token;
+      char *it;
+
+      /* Check if the specified controller is enabled.  */
+      key = xstrdup (name);
+
+      it = strchr (key, '.');
+      if (it == NULL)
+        {
+          crun_error_release (err);
+          return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`",
+                                  name);
+        }
+      *it = '\0';
+
+      /* cgroup. files are not part of a controller.  Return the original error.  */
+      if (strcmp (key, "cgroup") == 0)
+        return ret;
+
+      /* If the cgroup.controllers file cannot be read, return the original error.  */
+      if (read_all_file_at (cgroup_dirfd, "cgroup.controllers", &controllers, NULL, &tmp_err) < 0)
+        {
+          crun_error_release (&tmp_err);
+          return ret;
+        }
+      for (token = strtok_r (controllers, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
+        {
+          if (strcmp (token, key) == 0)
+            {
+              found = true;
+              break;
+            }
+        }
+      if (! found)
+        {
+          crun_error_release (err);
+          return crun_make_error (err, 0, "the requested cgroup controller `%s` is not available", key);
+        }
+    }
+  return ret;
+}
+
+static int
+write_file_and_check_controllers_at (bool cgroup2, int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = write_file_at (dirfd, name, data, len, err);
+  if (cgroup2)
+    return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
+  return ret;
+}
+
+static int
 initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 {
   cleanup_free char *tmp_path = xstrdup (path);
@@ -1996,10 +2065,14 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
   if (cgroup2)
     {
       cleanup_close int wfd = -1;
+      const char *name = "io.max";
 
-      wfd = openat (dirfd, "io.max", O_WRONLY);
+      wfd = openat (dirfd, name, O_WRONLY);
       if (UNLIKELY (wfd < 0))
-        return crun_make_error (err, errno, "open io.max");
+        {
+          ret = crun_make_error (err, errno, "open `%s`", name);
+          return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
+        }
 
       ret = write_blkio_v2_resources_throttling (wfd, "rbps", (throttling_s **) blkio->throttle_read_bps_device,
                                                  blkio->throttle_read_bps_device_len, err);
@@ -2103,7 +2176,7 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
       xasprintf (&filename, "hugetlb.%s.%s", htlb[i]->page_size, suffix);
 
       len = sprintf (fmt_buf, "%lu", htlb[i]->limit);
-      ret = write_file_at (dirfd, filename, fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2336,8 +2409,7 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
 
   swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
 
-  return write_file_at (dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len,
-                        err);
+  return write_file_and_check_controllers_at (cgroup2, dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
 }
 
 static int
@@ -2394,7 +2466,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   if (memory->reservation_present)
     {
       len = sprintf (fmt_buf, "%lu", memory->reservation);
-      ret = write_file_at (dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes", fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2442,7 +2514,7 @@ write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_
       int ret;
 
       len = cg_itoa (fmt_buf, pids->limit, cgroup2);
-      ret = write_file_at (dirfd, "pids.max", fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd, "pids.max", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2472,7 +2544,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
 
       len = sprintf (fmt_buf, "%u", val);
 
-      ret = write_file_at (dirfd_cpu, cgroup2 ? "cpu.weight" : "cpu.shares", fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, cgroup2 ? "cpu.weight" : "cpu.shares", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2527,7 +2599,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         len = sprintf (fmt_buf, "max %" PRIi64, period);
       else
         len = sprintf (fmt_buf, "%" PRIi64 " %" PRIi64, quota, period);
-      ret = write_file_at (dirfd_cpu, "cpu.max", fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, "cpu.max", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2535,20 +2607,20 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
 }
 
 static int
-write_cpuset_resources (int dirfd_cpuset, int cgroup2 arg_unused, runtime_spec_schema_config_linux_resources_cpu *cpu,
+write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
                         libcrun_error_t *err)
 {
   int ret;
 
   if (cpu->cpus)
     {
-      ret = write_file_at (dirfd_cpuset, "cpuset.cpus", cpu->cpus, strlen (cpu->cpus), err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.cpus", cpu->cpus, strlen (cpu->cpus), err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   if (cpu->mems)
     {
-      ret = write_file_at (dirfd_cpuset, "cpuset.mems", cpu->mems, strlen (cpu->mems), err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.mems", cpu->mems, strlen (cpu->mems), err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2708,60 +2780,9 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
         return crun_make_error (err, 0, "key `%s` must be a file name without any slash", resources->unified->keys[i]);
 
       len = strlen (resources->unified->values[i]);
-      ret = write_file_at (cgroup_dirfd, resources->unified->keys[i], resources->unified->values[i], len, err);
+      ret = write_file_and_check_controllers_at (true, cgroup_dirfd, resources->unified->keys[i], resources->unified->values[i], len, err);
       if (UNLIKELY (ret < 0))
-        {
-          errno = crun_error_get_errno (err);
-
-          /* If the file is not found, try to give a more meaningful error message.  */
-          if (errno == ENOENT || errno == EPERM || errno == EACCES)
-            {
-              cleanup_free char *controllers = NULL;
-              libcrun_error_t tmp_err = NULL;
-              cleanup_free char *key = NULL;
-              char *saveptr = NULL;
-              bool found = false;
-              const char *token;
-              char *it;
-
-              /* Check if the specified controller is enabled.  */
-              key = xstrdup (resources->unified->keys[i]);
-
-              it = strchr (key, '.');
-              if (it == NULL)
-                {
-                  crun_error_release (err);
-                  return crun_make_error (err, 0, "the specified key has not the form CONTROLLER.VALUE `%s`",
-                                          resources->unified->keys[i]);
-                }
-              *it = '\0';
-
-              /* cgroup. files are not part of a controller.  Return the original error.  */
-              if (strcmp (key, "cgroup") == 0)
-                return ret;
-
-              /* If the cgroup.controllers file cannot be read, return the original error.  */
-              if (read_all_file_at (cgroup_dirfd, "cgroup.controllers", &controllers, NULL, &tmp_err) < 0)
-                {
-                  crun_error_release (&tmp_err);
-                  return ret;
-                }
-              for (token = strtok_r (controllers, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
-                {
-                  if (strcmp (token, key) == 0)
-                    {
-                      found = true;
-                      break;
-                    }
-                }
-              if (! found)
-                {
-                  crun_error_release (err);
-                  return crun_make_error (err, 0, "the requested controller `%s` is not available", key);
-                }
-            }
-          return ret;
-        }
+        return ret;
     }
 
   return 0;
