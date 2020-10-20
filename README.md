@@ -75,7 +75,7 @@ $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
 ```console
 $ sudo yum --enablerepo='*' install -y make automake autoconf gettext \
     libtool gcc libcap-devel systemd-devel yajl-devel \
-    libseccomp-devel python36 libtool
+    libseccomp-devel python36
 ```
 
 go-md2man is not available on RHEL/CentOS 8, so if you'd like to build
@@ -92,6 +92,7 @@ $ export PATH=$PATH:$GOPATH/bin
 ### Ubuntu
 
 ```console
+$ sudo apt-get update
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libcap-dev libseccomp-dev libyajl-dev \
    go-md2man libtool autoconf python3 automake
