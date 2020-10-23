@@ -147,7 +147,7 @@ endif HAVE_MD2MAN
 generate-man: crun.1
 
 sync:
-	(cd libocispec; git pull https://github.com/containers/libocispec)
+	(cd libocispec; git pull https://github.com/duguhaotian/libocispec)
 
 coverity:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec
