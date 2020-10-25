@@ -399,6 +399,11 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
       real_target = target_buffer;
     }
 
+  /* Older kernels (seen on 4.18) fail with EINVAL if data is set when
+     setting MS_RDONLY.  */
+  if (flags & (MS_REMOUNT | MS_RDONLY))
+    data = NULL;
+
   ret = mount (NULL, real_target, NULL, flags, data);
   if (UNLIKELY (ret < 0))
     {
@@ -417,15 +422,15 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
           if (LIKELY (ret == 0))
             return 0;
 
-          /* If it still fails try to add MS_RDONLY.  */
-          if ((sfs.f_flags & MS_RDONLY) && ((flags & MS_RDONLY) == 0))
+          /* If it still fails and MS_RDONLY is present in the mount, try adding it.  */
+          if (sfs.f_flags & MS_RDONLY)
             {
               remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RDONLY);
-              ret = mount ("none", real_target, "", flags | remount_flags, data);
+              ret = mount (NULL, real_target, NULL, flags | remount_flags, data);
             }
         }
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "remount `%s`", target);
+	return crun_make_error (err, errno, "remount `%s`", target);
     }
   return 0;
 }
