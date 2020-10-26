@@ -75,7 +75,7 @@ $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
 ```console
 $ sudo yum --enablerepo='*' install -y make automake autoconf gettext \
     libtool gcc libcap-devel systemd-devel yajl-devel \
-    libseccomp-devel python36
+    libseccomp-devel python36 libtool
 ```
 
 go-md2man is not available on RHEL/CentOS 8, so if you'd like to build
@@ -92,7 +92,6 @@ $ export PATH=$PATH:$GOPATH/bin
 ### Ubuntu
 
 ```console
-$ sudo apt-get update
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libcap-dev libseccomp-dev libyajl-dev \
    go-md2man libtool autoconf python3 automake
@@ -103,6 +102,22 @@ $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
 ```console
 # apk add gcc automake autoconf libtool gettext pkgconf git make musl-dev \
     python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man
+```
+
+### Tumbleweed
+
+```console
+# zypper install make automake autoconf gettext libtool gcc libcap-devel \
+systemd-devel yajl-devel libseccomp-devel python3 libtool go-md2man;
+```
+
+Note that Tumbleweed requires you to specify libseccomp's header file location
+as a compiler flag.
+
+```console
+# ./autogen.sh
+# ./configure CFLAGS='-I/usr/include/libseccomp'
+# make
 ```
 
 ## Build
