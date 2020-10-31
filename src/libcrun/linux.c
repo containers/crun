@@ -803,7 +803,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
-  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", LABEL_NONE, err);
+  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
