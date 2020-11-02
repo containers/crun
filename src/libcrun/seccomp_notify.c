@@ -165,7 +165,11 @@ libcrun_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, int seccom
 
   ret = ioctl (seccomp_fd, SECCOMP_IOCTL_NOTIF_RECV, ctx->sreq);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "ioctl");
+    {
+      if (errno == ENOENT)
+        return 0;
+      return crun_make_error (err, errno, "ioctl");
+    }
 
   for (i = 0; i < ctx->n_plugins; i++)
     {

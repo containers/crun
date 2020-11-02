@@ -1420,6 +1420,10 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
       conf.bundle_path = context->bundle;
       conf.oci_config_path = oci_config_path;
 
+      ret = set_blocking_fd (seccomp_notify_fd, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = libcrun_load_seccomp_notify_plugins (&seccomp_notify_ctx, seccomp_notify_plugins, &conf, err);
       if (UNLIKELY (ret < 0))
         return ret;
