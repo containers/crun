@@ -1,3 +1,18 @@
+* crun-0.15.1
+
+- add experimental support for libkrun.
+- fix check for pidfd availability on older kernels.
+- linux: do not set data when remounting read-only.  Fix 'ro' mounts
+  on older kernels when SELinux is enabled.
+- linux: label the cgroup v1 tmpfs when SELinux is enabled.
+- container: truncate the pid file before writing to it.
+- exec: fix check for read bytes from the sync socket.
+- check the process has a cgroup before allowing pause and resume.
+- linux: always create a user namespace if not running with euid == 0.
+- libcrun can use a hook instead of executing a container process.
+- use libyajl to generate hooks json input.
+- handle correctly ENOENT for seccomp notifications.
+
 * crun-0.15
 
 - add support for OCI unified cgroup v2.
