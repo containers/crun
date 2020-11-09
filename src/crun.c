@@ -115,29 +115,35 @@ struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create
                                  { COMMAND_UPDATE, "update", crun_command_update },
                                  { COMMAND_PAUSE, "pause", crun_command_pause },
                                  { COMMAND_UNPAUSE, "resume", crun_command_unpause },
-                                 /* Not calling it yet 'checkpoint' as this might confuse tools
-                                  * testing for checkpoint support like Podman does.
-                                  * Once it is ready for Podman, this can be renamed to 'checkpoint' */
-                                 { COMMAND_CHECKPOINT, "_checkpoint", crun_command_checkpoint },
-                                 { COMMAND_RESTORE, "_restore", crun_command_restore },
+#ifdef HAVE_CRIU
+                                 { COMMAND_CHECKPOINT, "checkpoint", crun_command_checkpoint },
+                                 { COMMAND_RESTORE, "restore", crun_command_restore },
+#endif
                                  {
                                      0,
                                  } };
 
 static char doc[] = "\nCOMMANDS:\n"
-                    "\tcreate  - create a container\n"
-                    "\tdelete  - remove definition for a container\n"
-                    "\texec    - exec a command in a running container\n"
-                    "\tlist    - list known containers\n"
-                    "\tkill    - send a signal to the container init process\n"
-                    "\tps      - show the processes in the container\n"
-                    "\trun     - run a container\n"
-                    "\tspec    - generate a configuration file\n"
-                    "\tstart   - start a container\n"
-                    "\tstate   - output the state of a container\n"
-                    "\tpause   - pause all the processes in the container\n"
-                    "\tresume  - unpause the processes in the container\n"
-                    "\tupdate  - update container resource constraints\n";
+#ifdef HAVE_CRIU
+                    "\tcheckpoint  - checkpoint a container\n"
+#endif
+                    "\tcreate      - create a container\n"
+                    "\tdelete      - remove definition for a container\n"
+                    "\texec        - exec a command in a running container\n"
+                    "\tlist        - list known containers\n"
+                    "\tkill        - send a signal to the container init process\n"
+                    "\tps          - show the processes in the container\n"
+#ifdef HAVE_CRIU
+                    "\trestore     - restore a container\n"
+#endif
+                    "\trun         - run a container\n"
+                    "\tspec        - generate a configuration file\n"
+                    "\tstart       - start a container\n"
+                    "\tstate       - output the state of a container\n"
+                    "\tpause       - pause all the processes in the container\n"
+                    "\tresume      - unpause the processes in the container\n"
+                    "\tupdate      - update container resource constraints\n";
+
 static char args_doc[] = "COMMAND [OPTION...]";
 
 static struct commands_s *

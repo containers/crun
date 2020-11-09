@@ -33,10 +33,39 @@
 #  include "linux.h"
 #  include "status.h"
 #  include "utils.h"
+#  include "cgroup.h"
 
 #  define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 #  define CRIU_RESTORE_LOG_FILE "restore.log"
 #  define DESCRIPTORS_FILENAME "descriptors.json"
+
+static const char *console_socket = NULL;
+
+static int
+criu_notify (char *action, criu_notify_arg_t na)
+{
+  if (strncmp (action, "orphan-pts-master", 17) == 0)
+    {
+      /* CRIU sends us the master FD via the 'orphan-pts-master'
+       * callback and we are passing it on to the '--console-socket'
+       * if it exists. */
+      cleanup_close int console_socket_fd = -1;
+      int master_fd;
+      int ret;
+
+      if (! console_socket)
+        return 0;
+      master_fd = criu_get_orphan_pts_master_fd ();
+
+      console_socket_fd = open_unix_domain_client_socket (console_socket, 0, NULL);
+      if (UNLIKELY (console_socket_fd < 0))
+        return console_socket_fd;
+      ret = send_fd_to_socket (console_socket_fd, master_fd, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
 
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
@@ -44,11 +73,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *descriptors_path = NULL;
+  cleanup_free char *freezer_path = NULL;
   cleanup_close int descriptors_fd = -1;
   cleanup_free char *external = NULL;
   cleanup_free char *path = NULL;
   cleanup_close int image_fd = -1;
   cleanup_close int work_fd = -1;
+  int cgroup_mode;
   size_t i;
   int ret;
 
@@ -186,11 +217,27 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         }
     }
 
+  /* Tell CRIU to use the freezer to pause all container processes. */
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    /* This needs CRIU 3.14. */
+    xasprintf (&freezer_path, "/sys/fs/cgroup/%s", status->cgroup_path);
+  else
+    xasprintf (&freezer_path, "/sys/fs/cgroup/freezer/%s", status->cgroup_path);
+
+  ret = criu_set_freeze_cgroup (freezer_path);
+  if (UNLIKELY (ret != 0))
+    return crun_make_error (err, ret, "CRIU: failed setting freezer %d\n", ret);
+
   /* Set boolean options . */
   criu_set_leave_running (cr_options->leave_running);
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
+  criu_set_orphan_pts_master (true);
 
   /* Set up logging. */
   criu_set_log_level (4);
@@ -447,10 +494,14 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         }
     }
 
+  console_socket = cr_options->console_socket;
+  criu_set_notify_cb (criu_notify);
+
   /* Set boolean options . */
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
+  criu_set_orphan_pts_master (true);
 
   criu_set_log_level (4);
   criu_set_log_file (CRIU_RESTORE_LOG_FILE);
