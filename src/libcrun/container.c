@@ -2350,8 +2350,15 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
       ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
       if (UNLIKELY (ret < 0))
         {
-          /* The cgroup might have been cleaned up by systemd by the time we try to read it, so ignore ENOENT.  */
-          if (status->systemd_cgroup && crun_error_get_errno (err) == ENOENT)
+          /*
+            The cgroup might have been cleaned up by the time we try to read it, ignore both
+            ENOENT and ENODEV:
+            - ENOENT: if the open(CGROUP_PATH) fails because the cgroup was deleted.
+            - ENODEV: if the cgroup is deleted between the open and reading the freeze status.
+          */
+
+          errno = crun_error_get_errno (err);
+          if (errno == ENOENT || errno == ENODEV)
             {
               crun_error_release (err);
               *container_status = "stopped";
