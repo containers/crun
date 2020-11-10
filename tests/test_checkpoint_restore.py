@@ -58,7 +58,7 @@ def test_cr1():
         first_cmdline = cmdline_fd.read()
         cmdline_fd.close()
 
-        run_crun_command(["_checkpoint", "--image-path=%s" % cr_dir, cid])
+        run_crun_command(["checkpoint", "--image-path=%s" % cr_dir, cid])
 
         bundle = os.path.join(
             get_tests_root(),
@@ -66,7 +66,7 @@ def test_cr1():
         )
 
         run_crun_command([
-            "_restore",
+            "restore",
             "-d",
             "--image-path=%s" % cr_dir,
             "--bundle=%s" % bundle,
