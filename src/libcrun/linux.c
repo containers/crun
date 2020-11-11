@@ -892,7 +892,14 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
               ret = do_mount (container, source_subsystem, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags,
                               NULL, LABEL_NONE, err);
               if (UNLIKELY (ret < 0))
-                return ret;
+               {
+                 /* If it still fails with ENOENT, ignore the error as the controller might have been
+                    dropped and doesn't exist.  */
+                 if (crun_error_get_errno (err) != ENOENT)
+                   return ret;
+
+                 crun_error_release (err);
+               }
             }
         }
     }
