@@ -67,6 +67,137 @@ criu_notify (char *action, criu_notify_arg_t na)
   return 0;
 }
 
+static int
+restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  bool has_cgroup_mount = false;
+  char *saveptr = NULL;
+  int cgroup_mode;
+  char *from;
+  int ret;
+  int i;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    return 0;
+
+  /* First check if there is actually a cgroup mount in the container. */
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      if (strcmp (def->mounts[i]->type, "cgroup") == 0)
+        {
+          has_cgroup_mount = true;
+          break;
+        }
+    }
+
+  if (! has_cgroup_mount)
+    return 0;
+
+  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (UNLIKELY (content == NULL || content[0] == '\0'))
+    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
+
+  for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
+    {
+      cleanup_free char *destination = NULL;
+      cleanup_free char *source = NULL;
+      char *subsystem;
+      char *subpath;
+      char *it;
+
+      subsystem = strchr (from, ':') + 1;
+      subpath = strchr (subsystem, ':') + 1;
+      *(subpath - 1) = '\0';
+
+      if (subsystem[0] == '\0')
+        continue;
+
+      it = strstr (subsystem, "name=");
+      if (it)
+        subsystem = it + 5;
+
+      if (strcmp (subsystem, "net_prio,net_cls") == 0)
+        subsystem = "net_cls,net_prio";
+      if (strcmp (subsystem, "cpuacct,cpu") == 0)
+        subsystem = "cpu,cpuacct";
+
+      xasprintf (&source, "/sys/fs/cgroup/%s", subsystem);
+      xasprintf (&destination, "%s/%s", source, subpath);
+
+      criu_add_ext_mount (source, destination);
+    }
+
+  return 0;
+}
+
+static int
+checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  bool has_cgroup_mount = false;
+  char *saveptr = NULL;
+  char *from;
+  int ret;
+  int i;
+
+  /* First check if there is actually a cgroup mount in the container. */
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      if (strcmp (def->mounts[i]->type, "cgroup") == 0)
+        {
+          has_cgroup_mount = true;
+          break;
+        }
+    }
+
+  if (! has_cgroup_mount)
+    return 0;
+
+  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (UNLIKELY (content == NULL || content[0] == '\0'))
+    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
+
+  for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
+    {
+      cleanup_free char *source_path = NULL;
+      char *subsystem;
+      char *subpath;
+      char *it;
+
+      subsystem = strchr (from, ':') + 1;
+      subpath = strchr (subsystem, ':') + 1;
+      *(subpath - 1) = '\0';
+
+      if (subsystem[0] == '\0')
+        continue;
+
+      it = strstr (subsystem, "name=");
+      if (it)
+        subsystem = it + 5;
+
+      if (strcmp (subsystem, "net_prio,net_cls") == 0)
+        subsystem = "net_cls,net_prio";
+      if (strcmp (subsystem, "cpuacct,cpu") == 0)
+        subsystem = "cpu,cpuacct";
+
+      xasprintf (&source_path, "/sys/fs/cgroup/%s", subsystem);
+      criu_add_ext_mount (source_path, source_path);
+    }
+
+  return 0;
+}
+
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
                                          libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
@@ -161,6 +292,18 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret != 0))
     return crun_make_error (err, 0, "error setting CRIU root to %s\n", path);
 
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  /* For cgroup v1 we need to tell CRIU to handle all cgroup mounts as external mounts. */
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    {
+      ret = checkpoint_cgroup_v1_mount (def, err);
+      if (UNLIKELY (ret != 0))
+        return crun_make_error (err, 0, "error handling cgroup v1 mounts\n");
+    }
+
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
@@ -218,10 +361,6 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     }
 
   /* Tell CRIU to use the freezer to pause all container processes. */
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
-    return cgroup_mode;
-
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     /* This needs CRIU 3.14. */
     xasprintf (&freezer_path, "/sys/fs/cgroup/%s", status->cgroup_path);
@@ -238,6 +377,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
   criu_set_orphan_pts_master (true);
+  criu_set_manage_cgroups (true);
 
   /* Set up logging. */
   criu_set_log_level (4);
@@ -494,6 +634,11 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         }
     }
 
+  /* Tell CRIU if cgroup v1 needs to be handled. */
+  ret = restore_cgroup_v1_mount (def, err);
+  if (UNLIKELY (ret < 0))
+    goto out_umount;
+
   console_socket = cr_options->console_socket;
   criu_set_notify_cb (criu_notify);
 
@@ -502,6 +647,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
   criu_set_orphan_pts_master (true);
+  criu_set_manage_cgroups (true);
 
   criu_set_log_level (4);
   criu_set_log_file (CRIU_RESTORE_LOG_FILE);

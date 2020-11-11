@@ -33,11 +33,6 @@ def test_cr1():
     add_all_namespaces(conf)
     # User namespace support not working yet for checkpoint/restore
     conf['linux']['namespaces'].remove({'type':'user'})
-    for i in conf['mounts']:
-        # Also remove the cgroup mount as CRIU cgroup2 support
-        # has not been yet merged upstream
-        if i['type'] == 'cgroup':
-            conf['mounts'].remove(i)
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'checkpoint')
     try:
