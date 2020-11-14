@@ -11,11 +11,11 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
     go get github.com/onsi/gomega/... && \
     mkdir -p /root/go/src/github.com/containers && \
     chmod 755 /root && \
-    (cd /root/go/src/github.com/containers && git clone -b v1.9 https://github.com/containers/libpod && \
-     cd libpod && \
+    (cd /root/go/src/github.com/containers && git clone -b v2.1 https://github.com/containers/podman && \
+     cd podman && \
      make install.catatonit && \
      make)
 
 COPY run-tests.sh /usr/local/bin
 
-ENTRYPOINT /usr/local/bin/run-tests.sh /root/go/src/github.com/containers/libpod
+ENTRYPOINT /usr/local/bin/run-tests.sh /root/go/src/github.com/containers/podman
