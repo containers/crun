@@ -108,7 +108,7 @@ AS_IF([test "x$enable_criu" != "xno"], [
 FOUND_LIBS=$LIBS
 LIBS=""
 
-dnl mount API
+AC_MSG_CHECKING([for new mount API (fsconfig)])
 AC_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([[
 			#include <linux/mount.h>
@@ -118,7 +118,7 @@ AC_COMPILE_IFELSE(
 		 AC_DEFINE([HAVE_FSCONFIG_CMD_CREATE], 1, [Define if FSCONFIG_CMD_CREATE is available])],
 		[AC_MSG_RESULT(no)])
 
-dnl seccomp notify API
+AC_MSG_CHECKING([for seccomp notify API])
 AC_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([[
 			#include <linux/seccomp.h>
