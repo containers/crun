@@ -8,7 +8,6 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_CONFIG_SRCDIR([src/crun.c])
 
-AC_PROG_RANLIB
 LT_INIT([disable-shared])
 
 AM_INIT_AUTOMAKE([1.11.2 -Wno-portability foreign tar-ustar no-dist-gzip dist-xz subdir-objects])
@@ -98,17 +97,17 @@ dnl criu
 AC_ARG_ENABLE([criu], AS_HELP_STRING([--disable-criu], [Disable CRIU based checkpoint/restore support]))
 AS_IF([test "x$enable_criu" != "xno"], [
             PKG_CHECK_MODULES([CRIU], [criu >= 3.15], [have_criu="yes"], [have_criu="no"
-			       AC_MSG_RESULT([CRIU headers not found, building without CRIU support])])
+			       AC_MSG_NOTICE([CRIU headers not found, building without CRIU support])])
 	    AS_IF([test "$have_criu" = "yes"], [
 		   AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
 		   AC_SEARCH_LIBS(criu_init_opts, [criu])
 	    ])
-], [AC_MSG_RESULT([CRIU support disabled per user request])])
+], [AC_MSG_NOTICE([CRIU support disabled per user request])])
 
 FOUND_LIBS=$LIBS
 LIBS=""
 
-dnl mount API
+AC_MSG_CHECKING([for new mount API (fsconfig)])
 AC_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([[
 			#include <linux/mount.h>
@@ -118,7 +117,7 @@ AC_COMPILE_IFELSE(
 		 AC_DEFINE([HAVE_FSCONFIG_CMD_CREATE], 1, [Define if FSCONFIG_CMD_CREATE is available])],
 		[AC_MSG_RESULT(no)])
 
-dnl seccomp notify API
+AC_MSG_CHECKING([for seccomp notify API])
 AC_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([[
 			#include <linux/seccomp.h>
@@ -141,7 +140,7 @@ if test -z "$GPERF"; then
        AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
 fi
 
-AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])]], [])
+AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
