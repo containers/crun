@@ -332,7 +332,7 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
         {
           if (errno == ENOSYS)
             openat2_supported = false;
-          if (errno == ENOSYS || errno == EINVAL)
+          if (errno == ENOSYS || errno == EINVAL || errno == EPERM)
             goto fallback;
           return crun_make_error (err, errno, "openat2 `%s`", path);
         }
