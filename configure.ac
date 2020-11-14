@@ -141,7 +141,7 @@ if test -z "$GPERF"; then
        AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
 fi
 
-AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])]], [])
+AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
