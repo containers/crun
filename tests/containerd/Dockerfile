@@ -5,18 +5,19 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/b
 
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get install -y bash golang libbtrfs-dev libnl-3-dev libnet1-dev \
+    && apt-get install -y bash golang-1.13 libbtrfs-dev libnl-3-dev libnet1-dev \
             protobuf-c-compiler python-minimal libcap-dev libaio-dev \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
             pigz lsof make git gcc build-essential pkgconf libtool \
             libsystemd-dev libcap-dev libyajl-dev \
-            go-md2man libtool autoconf python3 automake \
+            go-md2man libtool autoconf python3 automake sudo \
+    && update-alternatives --install /usr/bin/go go /usr/lib/go-1.13/bin/go 0 \
     && mkdir -p /root/go/src/github.com/containerd \
     && chmod 755 /root \
     && (cd /root/go/src/github.com/containerd \
         && git clone https://github.com/containerd/containerd \
         && cd containerd \
-        && git reset --hard v1.3.3 \
+        && git reset --hard v1.4.1 \
         && make \
         && make binaries \
         && make install \
