@@ -1,3 +1,12 @@
+* crun-0.16
+
+- CRIU support.
+- fallback to openat if openat2 returns EPERM.
+- ignore ENOENT for cgroup v1 mounts, if the mount fails with
+  ENOENT, the controller might have been unmounted.
+- fix another race reading cgroup freeze.  Reading from the cgroup
+  fails with ENODEV if the cgroup was deleted in the meanwhile.
+
 * crun-0.15.1
 
 - add experimental support for libkrun.
