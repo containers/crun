@@ -127,7 +127,7 @@ git-version.h:
 	fi
 
 nixpkgs:
-	@nix run -f channel:nixos-20.03 nix-prefetch-git -c nix-prefetch-git \
+	@nix run -f channel:nixos-20.09 nix-prefetch-git -c nix-prefetch-git \
 		--no-deepClone https://github.com/nixos/nixpkgs > nix/nixpkgs.json
 
 dist-hook:
