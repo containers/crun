@@ -18,7 +18,7 @@
 #include <config.h>
 #include <errno.h>
 
-#if HAVE_SECCOMP_GET_NOTIF_SIZES
+#if HAVE_SECCOMP_GET_NOTIF_SIZES && HAVE_SECCOMP
 #  include <seccomp.h>
 #  include <sys/ioctl.h>
 #  include <linux/seccomp.h>
@@ -40,7 +40,7 @@ struct plugin
 {
   void *handle;
   void *opaque;
-#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES
+#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES && HAVE_SECCOMP
   run_oci_seccomp_notify_handle_request_cb handle_request_cb;
 #endif
 };
@@ -70,7 +70,7 @@ cleanup_seccomp_notify_pluginsp (void *p)
     }
 }
 
-#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES
+#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES && HAVE_SECCOMP
 static int
 seccomp_syscall (unsigned int op, unsigned int flags, void *args)
 {
@@ -83,7 +83,7 @@ LIBCRUN_PUBLIC int
 libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, const char *plugins,
                                      struct libcrun_load_seccomp_notify_conf_s *conf, libcrun_error_t *err)
 {
-#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES
+#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES && HAVE_SECCOMP
   cleanup_seccomp_notify_context struct seccomp_notify_context_s *ctx = xmalloc0 (sizeof *ctx);
   cleanup_free char *b = NULL;
   char *it, *saveptr;
@@ -156,7 +156,7 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
 LIBCRUN_PUBLIC int
 libcrun_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, int seccomp_fd, libcrun_error_t *err)
 {
-#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES
+#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES && HAVE_SECCOMP
   size_t i;
   int ret;
 
@@ -227,7 +227,7 @@ send_resp:
 LIBCRUN_PUBLIC int
 libcrun_free_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, libcrun_error_t *err)
 {
-#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES
+#if HAVE_DLOPEN && HAVE_SECCOMP_GET_NOTIF_SIZES && HAVE_SECCOMP
   size_t i;
 
   if (ctx == NULL)
