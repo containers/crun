@@ -29,7 +29,6 @@
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #include <sys/prctl.h>
-#include <sys/capability.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/sysmacros.h>
