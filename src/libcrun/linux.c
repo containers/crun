@@ -31,7 +31,9 @@
 #endif
 #include <sys/syscall.h>
 #include <sys/prctl.h>
-#include <sys/capability.h>
+#ifdef HAVE_CAP
+# include <sys/capability.h>
+#endif
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/sysmacros.h>
@@ -2328,6 +2330,7 @@ libcrun_init_caps (libcrun_error_t *err)
 static int
 set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_privs, libcrun_error_t *err)
 {
+#ifdef HAVE_CAP
   unsigned long cap;
   int ret;
   struct __user_cap_header_struct hdr = { _LINUX_CAPABILITY_VERSION_3, 0 };
@@ -2367,7 +2370,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "capset");
 
-#ifdef PR_CAP_AMBIENT
+# ifdef PR_CAP_AMBIENT
   ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
   if (UNLIKELY (ret < 0 && ! (errno == EINVAL || errno == EPERM)))
     return crun_make_error (err, errno, "prctl reset ambient");
@@ -2379,6 +2382,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
         if (UNLIKELY (ret < 0 && ! (errno == EINVAL || errno == EPERM)))
           return crun_make_error (err, errno, "prctl ambient raise");
       }
+# endif
 #endif
 
   if (no_new_privs)
@@ -2391,6 +2395,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
 static int
 read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *err)
 {
+#ifdef HAVE_CAP
   size_t i;
   for (i = 0; i < len; i++)
     {
@@ -2402,6 +2407,10 @@ read_caps (unsigned long caps[2], char **values, size_t len, libcrun_error_t *er
       else
         caps[1] |= CAP_TO_MASK_1 (cap);
     }
+#else
+  caps[0] = 0;
+  caps[1] = 0;
+#endif
   return 0;
 }
 
