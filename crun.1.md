@@ -448,6 +448,17 @@ The current user is mapped to the ID 0 in the container, and any
 additional id specified in the files `/etc/subuid` and `/etc/subgid`
 is automatically added starting with ID 1.
 
+## Intermediate user namespace
+
+If the configuration specifies a new user namespace made of a single
+mapping to the root user, but either the UID or the GID are set as
+nonzero then crun automatically creates another user namespace to map
+the root user to the specified UID and GID.
+
+It enables running unprivileged containers with UID and GID different
+than zero, even when a single UID and GID are available, e.g. rootless
+users on a system without newuidmap/newgidmap.
+
 # CGROUP v2
 
 If the cgroup configuration found is for cgroup v1, crun attempts a

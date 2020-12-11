@@ -66,6 +66,8 @@ struct libcrun_container_s
   uid_t container_uid;
   gid_t container_gid;
 
+  bool use_intermediate_userns;
+
   void *private_data;
   struct libcrun_context_s *context;
 };
