@@ -2360,11 +2360,11 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
 
   ret = setgid (gid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot setgid");
+    return crun_make_error (err, errno, "cannot setgid to %d", gid);
 
   ret = setuid (uid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot setuid");
+    return crun_make_error (err, errno, "cannot setuid to %d", uid);
 
   ret = capset (&hdr, data);
   if (UNLIKELY (ret < 0))
@@ -2593,6 +2593,18 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
   return libcrun_set_sysctl_from_schema (container->container_def, err);
 }
 
+static uid_t
+get_uid_for_intermediate_userns (libcrun_container_t *container)
+{
+  if (container->use_intermediate_userns)
+    return 0;
+
+  if (container->container_def->process && container->container_def->process->user)
+    return container->container_def->process->user->uid;
+
+  return 0;
+}
+
 static int
 open_terminal (libcrun_container_t *container, char **pty, libcrun_error_t *err)
 {
@@ -2610,7 +2622,9 @@ open_terminal (libcrun_container_t *container, char **pty, libcrun_error_t *err)
   if (container->container_def->process && container->container_def->process->user
       && container->container_def->process->user->uid)
     {
-      ret = chown (*pty, container->container_def->process->user->uid, -1);
+      uid_t uid = get_uid_for_intermediate_userns (container);
+
+      ret = chown (*pty, uid, -1);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chown `%s`", *pty);
     }
@@ -3781,6 +3795,118 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
   ret = syscall_pidfd_send_signal (pidfd, signal, NULL, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "send signal to pidfd");
+
+  return 0;
+}
+
+/*
+   Used when creating an intermediate user namespace.
+   If the container is running with a single UID/GID mapped, and specifies
+   a different UID/GID, then create an intermediate user namespace to do
+   all the configuration as root, and then once the container is set up,
+   create a new user namespace to map root to the desired UID/GID.
+   This implementation has some issues as some namespaces in the container
+   won't be owned by the final user namespace and it creates a process inside
+   the container PID namespace, so the next created process won't have pid=2.
+   Some of these issues could be solved or at least mitigated, but it is not worth
+   at the moment to add more complexity to address these corner cases.
+*/
+int
+libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int closep0 = -1;
+  cleanup_close int closep1 = -1;
+  int pid_status;
+  pid_t pid, target_pid;
+  int p[2];
+  int ret;
+  int i, to_unshare;
+
+  ret = pipe2 (p, O_CLOEXEC);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "create pipe2");
+
+  closep0 = p[0];
+  closep1 = p[1];
+
+  target_pid = getpid ();
+
+  pid = fork ();
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "fork");
+
+  if (pid == 0)
+    {
+      cleanup_free char *uid_map_file = NULL;
+      cleanup_free char *gid_map_file = NULL;
+      cleanup_free char *uid_map = NULL;
+      cleanup_free char *gid_map = NULL;
+      char buffer[1];
+      size_t len;
+      uid_t uid;
+      gid_t gid;
+
+      close_and_reset (&closep1);
+
+      ret = TEMP_FAILURE_RETRY (read (p[0], buffer, sizeof (buffer)));
+      if (UNLIKELY (ret < 0))
+        _exit (errno);
+
+      if (container->container_def->process && container->container_def->process->user)
+        {
+          uid = container->container_def->process->user->uid;
+          gid = container->container_def->process->user->gid;
+        }
+      xasprintf (&uid_map_file, "/proc/%d/uid_map", target_pid);
+      xasprintf (&gid_map_file, "/proc/%d/gid_map", target_pid);
+
+      len = xasprintf (&gid_map, "%d 0 1", gid);
+      ret = write_file (gid_map_file, gid_map, len, err);
+      if (UNLIKELY (ret < 0))
+        _exit (crun_error_get_errno (err));
+
+      len = xasprintf (&uid_map, "%d 0 1", uid);
+      ret = write_file (uid_map_file, uid_map, len, err);
+      if (UNLIKELY (ret < 0))
+        _exit (crun_error_get_errno (err));
+
+      _exit (EXIT_SUCCESS);
+    }
+
+  close_and_reset (&closep0);
+
+  ret = unshare (CLONE_NEWUSER);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "unshare (CLONE_USERNS)");
+
+  ret = TEMP_FAILURE_RETRY (write (p[1], "0", 1));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync pipe");
+
+  ret = TEMP_FAILURE_RETRY (waitpid (pid, &pid_status, 0));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "waitpid for exec child pid");
+
+  if (UNLIKELY (WEXITSTATUS (pid_status) != 0))
+    return crun_make_error (err, WEXITSTATUS (pid_status), "setting mapping for final userns");
+
+  to_unshare = 0;
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      if (def->linux->namespaces[i]->path != NULL
+          && def->linux->namespaces[i]->path[0] != '\0')
+        continue;
+
+      to_unshare |= libcrun_find_namespace (def->linux->namespaces[i]->type);
+    }
+
+  if (to_unshare)
+    {
+      ret = unshare (to_unshare & (CLONE_NEWIPC|CLONE_NEWNET|CLONE_NEWNS));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "unshare");
+    }
 
   return 0;
 }
