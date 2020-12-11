@@ -74,6 +74,14 @@ Resume the processes in the container.
 \fBupdate\fP
 Update container resource constraints.
 
+.PP
+\fBcheckpoint\fP
+Checkpoint a running container using CRIU
+
+.PP
+\fBrestore\fP
+Restore a container from a checkpoint
+
 
 .SH STATE
 .PP
@@ -372,6 +380,69 @@ Maximum number of pids allowed in the container.
 \fB\-r\fP, \fB\-\-resources\fP=\fBFILE\fP
 Path to the file containing the resources to update.
 
+.SH CHECKPOINT OPTIONS
+.PP
+crun [global options] checkpoint [options] CONTAINER
+
+.PP
+\fB\-\-image\-path\fP=\fBDIR\fP
+Path for saving CRIU image files
+
+.PP
+\fB\-\-work\-path\fP=\fBDIR\fP
+Path for saving work files and logs
+
+.PP
+\fB\-\-leave\-running\fP
+Leave the process running after checkpointing
+
+.PP
+\fB\-\-tcp\-established\fP
+Allow open TCP connections
+
+.PP
+\fB\-\-ext\-unix\-sk\fP
+Allow external UNIX sockets
+
+.PP
+\fB\-\-shell\-job\fP
+Allow shell jobs
+
+.SH RESTORE OPTIONS
+.PP
+crun [global options] restore [options] CONTAINER
+
+.PP
+\fB-b\fP, \fB\-\-bundle\fP=\fBDIR\fP
+Container bundle directory (default ".")
+
+.PP
+\fB\-\-image\-path\fP=\fBDIR\fP
+Path for saving CRIU image files
+
+.PP
+\fB\-\-work\-path\fP=\fBDIR\fP
+Path for saving work files and logs
+
+.PP
+\fB\-\-tcp\-established\fP
+Allow open TCP connections
+
+.PP
+\fB\-\-ext\-unix\fP
+Allow external UNIX sockets
+
+.PP
+\fB\-\-shell\-job\fP
+Allow shell jobs
+
+.PP
+\fB\-\-detach\fP
+Detach from the container's process
+
+.PP
+\fB\-\-pid\-file\fP=\fBFILE\fP
+Where to write the PID of the container
 
 .SH Extensions to OCI
 .SH \fB\fCrun.oci.seccomp.receiver=PATH\fR

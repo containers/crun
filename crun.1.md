@@ -59,6 +59,12 @@ Resume the processes in the container.
 **update**
 Update container resource constraints.
 
+**checkpoint**
+Checkpoint a running container using CRIU
+
+**restore**
+Restore a container from a checkpoint
+
 # STATE
 
 By default, when running as root user, crun saves its state under the
@@ -291,6 +297,56 @@ Maximum number of pids allowed in the container.
 
 **-r**, **--resources**=**FILE**
 Path to the file containing the resources to update.
+
+## CHECKPOINT OPTIONS
+
+crun [global options] checkpoint [options] CONTAINER
+
+**--image-path**=**DIR**
+Path for saving CRIU image files
+
+**--work-path**=**DIR**
+Path for saving work files and logs
+
+**--leave-running**
+Leave the process running after checkpointing
+
+**--tcp-established**
+Allow open TCP connections
+
+**--ext-unix-sk**
+Allow external UNIX sockets
+
+**--shell-job**
+Allow shell jobs
+
+## RESTORE OPTIONS
+
+crun [global options] restore [options] CONTAINER
+
+**-b DIR** **--bundle**=**DIR**
+Container bundle directory (default ".")
+
+**--image-path**=**DIR**
+Path for saving CRIU image files
+
+**--work-path**=**DIR**
+Path for saving work files and logs
+
+**--tcp-established**
+Allow open TCP connections
+
+**--ext-unix**
+Allow external UNIX sockets
+
+**--shell-job**
+Allow shell jobs
+
+**--detach**
+Detach from the container's process
+
+**--pid-file**=**FILE**
+Where to write the PID of the container
 
 # Extensions to OCI
 
