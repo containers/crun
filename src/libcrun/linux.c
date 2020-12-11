@@ -2360,11 +2360,11 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
 
   ret = setgid (gid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot setgid");
+    return crun_make_error (err, errno, "cannot setgid to %d", gid);
 
   ret = setuid (uid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot setuid");
+    return crun_make_error (err, errno, "cannot setuid to %d", uid);
 
   ret = capset (&hdr, data);
   if (UNLIKELY (ret < 0))
