@@ -413,7 +413,7 @@ Allow shell jobs
 crun [global options] restore [options] CONTAINER
 
 .PP
-\fB-b\fP, \fB\-\-bundle\fP=\fBDIR\fP
+\fB\-b DIR\fP \fB\-\-bundle\fP=\fBDIR\fP
 Container bundle directory (default ".")
 
 .PP
@@ -443,6 +443,7 @@ Detach from the container's process
 .PP
 \fB\-\-pid\-file\fP=\fBFILE\fP
 Where to write the PID of the container
+
 
 .SH Extensions to OCI
 .SH \fB\fCrun.oci.seccomp.receiver=PATH\fR
@@ -560,9 +561,8 @@ is automatically added starting with ID 1.
 
 .SH CGROUP v2
 .PP
-crun has some basic support for cgroup v2.  Since the OCI spec is
-designed for cgroup v1, in some cases there is need to convert from
-the cgroup v1 configuration to cgroup v2.
+If the cgroup configuration found is for cgroup v1, crun attempts a
+conversion when running on a cgroup v2 system.
 
 .PP
 These are the OCI resources currently supported with cgroup v2 and how

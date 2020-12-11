@@ -450,9 +450,8 @@ is automatically added starting with ID 1.
 
 # CGROUP v2
 
-crun has some basic support for cgroup v2.  Since the OCI spec is
-designed for cgroup v1, in some cases there is need to convert from
-the cgroup v1 configuration to cgroup v2.
+If the cgroup configuration found is for cgroup v1, crun attempts a
+conversion when running on a cgroup v2 system.
 
 These are the OCI resources currently supported with cgroup v2 and how
 they are converted when needed from the cgroup v1 configuration.
