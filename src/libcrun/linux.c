@@ -3819,9 +3819,10 @@ libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *er
   cleanup_close int closep1 = -1;
   int pid_status;
   pid_t pid, target_pid;
+  int to_unshare;
+  size_t i;
   int p[2];
   int ret;
-  int i, to_unshare;
 
   ret = pipe2 (p, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
