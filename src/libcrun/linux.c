@@ -3879,7 +3879,7 @@ libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *er
 
   ret = unshare (CLONE_NEWUSER);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "unshare (CLONE_USERNS)");
+    return crun_make_error (err, errno, "unshare (CLONE_NEWUSER)");
 
   ret = TEMP_FAILURE_RETRY (write (p[1], "0", 1));
   if (UNLIKELY (ret < 0))
