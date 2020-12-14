@@ -3000,6 +3000,63 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
   return 0;
 }
 
+/* Detect if root is available in the container.  */
+static bool
+root_mapped_in_container_p (runtime_spec_schema_defs_id_mapping **mappings, size_t len)
+{
+  size_t i;
+
+  for (i = 0; i < len; i++)
+    if (mappings[i]->container_id == 0)
+        return true;
+
+  return false;
+}
+
+static int
+set_id_init (libcrun_container_t *container, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  uid_t uid = 0;
+  gid_t gid = 0;
+  int ret;
+
+  if (def->process && def->process->user && def->linux)
+    {
+      /*
+        If it is running in a user namespace and root is not mapped
+        use the UID/GID specified for running the container.
+      */
+      bool root_mapped = false;
+
+      if (def->linux->uid_mappings_len != 0)
+        {
+          root_mapped = root_mapped_in_container_p (def->linux->uid_mappings,
+                                                    def->linux->uid_mappings_len);
+          if (!root_mapped)
+            uid = def->process->user->uid;
+        }
+
+      if (def->linux->gid_mappings_len != 0)
+        {
+          root_mapped = root_mapped_in_container_p (def->linux->gid_mappings,
+                                                    def->linux->gid_mappings_len);
+          if (!root_mapped)
+            gid = def->process->user->gid;
+        }
+    }
+
+  ret = setresuid (uid, uid, uid);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "setresuid to %d", uid);
+
+  ret = setresgid (gid, gid, gid);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "setresgid to %d", gid);
+
+  return 0;
+}
+
 static int
 init_container (libcrun_container_t *container, int sync_socket_container, struct init_status_s *init_status,
                 libcrun_error_t *err)
@@ -3072,13 +3129,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
                                     def->linux->namespaces[init_status->userns_index_origin]->path);
         }
 
-      ret = setresuid (0, 0, 0);
+      ret = set_id_init (container, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "setresuid(0)");
-
-      ret = setresgid (0, 0, 0);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "setresgid(0)");
+        return ret;
     }
 
   ret = join_namespaces (def, init_status->fd, init_status->fd_len, init_status->index, false, err);
@@ -3575,19 +3628,9 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
               send_error_to_sync_socket_and_die (sync_fd, true, err);
             }
 
-          ret = setresuid (0, 0, 0);
+          ret = set_id_init (container, err);
           if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "setgid");
-              send_error_to_sync_socket_and_die (sync_fd, true, err);
-            }
-
-          ret = setresgid (0, 0, 0);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_make_error (err, errno, "setuid");
-              send_error_to_sync_socket_and_die (sync_fd, true, err);
-            }
+            send_error_to_sync_socket_and_die (sync_fd, true, err);
 
           ptmx_fd = open_terminal (container, &pty, err);
           if (UNLIKELY (ptmx_fd < 0))
