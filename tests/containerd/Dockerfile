@@ -1,4 +1,4 @@
-FROM ubuntu:eoan
+FROM ubuntu:groovy
 
 ENV GOPATH=/root/go
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/bin
@@ -6,7 +6,7 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/b
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install -y bash golang-1.13 libbtrfs-dev libnl-3-dev libnet1-dev \
-            protobuf-c-compiler python-minimal libcap-dev libaio-dev \
+            protobuf-c-compiler libcap-dev libaio-dev \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
             pigz lsof make git gcc build-essential pkgconf libtool \
             libsystemd-dev libcap-dev libyajl-dev \
