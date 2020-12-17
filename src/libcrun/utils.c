@@ -41,14 +41,26 @@
 #include <linux/magic.h>
 #include <limits.h>
 
+#ifndef CLOSE_RANGE_CLOEXEC
+# define CLOSE_RANGE_CLOEXEC (1U << 2)
+#endif
 #ifndef RESOLVE_IN_ROOT
 #  define RESOLVE_IN_ROOT 0x10
+#endif
+#ifndef __NR_close_range
+#  define __NR_close_range 436
 #endif
 #ifndef __NR_openat2
 #  define __NR_openat2 437
 #endif
 
 #define MAX_READLINKS 32
+
+static int
+syscall_close_range (unsigned int fd, unsigned int max_fd, unsigned int flags)
+{
+  return (int) syscall (__NR_close_range, fd, max_fd, flags);
+}
 
 static int
 syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uint64_t resolve)
@@ -1397,6 +1409,12 @@ close_fds_ge_than (int n, libcrun_error_t *err)
   int fd;
   struct statfs sfs;
   struct dirent *next;
+
+  ret = syscall_close_range (n, UINT_MAX, CLOSE_RANGE_CLOEXEC);
+  if (ret == 0)
+    return 0;
+  if (ret < 0 && errno != EINVAL && errno != ENOSYS)
+    return crun_make_error (err, errno, "close_range from %d", n);
 
   cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (cfd < 0))
