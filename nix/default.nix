@@ -59,12 +59,12 @@ let
     doCheck = false;
     enableParallelBuilding = true;
     outputs = [ "out" ];
-    nativeBuildInputs = [ autoreconfHook bash git pkg-config python3 which ];
+    nativeBuildInputs = [ autoreconfHook bash gitMinimal pkg-config python3 which ];
     buildInputs = [ glibc glibc.static criu libcap libseccomp protobufc systemd yajl ];
     configureFlags = [ "--enable-static" ]
       ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
     prePatch = ''
-      export CFLAGS='-static'
+      export CFLAGS='-static -pthread'
       export LDFLAGS='-s -w -static-libgcc -static'
       export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
       export CRUN_LDFLAGS='-all-static'
