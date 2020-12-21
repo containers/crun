@@ -1968,7 +1968,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **th
     {
       int ret;
       size_t len;
-      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %s=%lu\n", throttling[i]->major, throttling[i]->minor, name,
+      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %s=%" PRIu64 "\n", throttling[i]->major, throttling[i]->minor, name,
                      throttling[i]->rate);
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
@@ -2048,13 +2048,13 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
 
           for (i = 0; i < blkio->weight_device_len; i++)
             {
-              len = sprintf (fmt_buf, "%lu:%lu %i\n", blkio->weight_device[i]->major, blkio->weight_device[i]->minor,
+              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64" %" PRIu16 "\n", blkio->weight_device[i]->major, blkio->weight_device[i]->minor,
                              blkio->weight_device[i]->weight);
               ret = TEMP_FAILURE_RETRY (write (w_device_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write blkio.weight_device");
 
-              len = sprintf (fmt_buf, "%lu:%lu %i\n", blkio->weight_device[i]->major, blkio->weight_device[i]->minor,
+              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major, blkio->weight_device[i]->minor,
                              blkio->weight_device[i]->leaf_weight);
               ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
@@ -2175,7 +2175,7 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
 
       xasprintf (&filename, "hugetlb.%s.%s", htlb[i]->page_size, suffix);
 
-      len = sprintf (fmt_buf, "%lu", htlb[i]->limit);
+      len = sprintf (fmt_buf, "%" PRIu64, htlb[i]->limit);
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2210,14 +2210,14 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           char fmt_buf_major[16];
           char fmt_buf_minor[16];
 
-#define FMT_DEV(x, b)          \
-  do                           \
-    {                          \
-      if (x##_present)         \
-        sprintf (b, "%lu", x); \
-      else                     \
-        strcpy (b, "*");       \
-    }                          \
+#define FMT_DEV(x, b)               \
+  do                                \
+    {                               \
+      if (x##_present)              \
+        sprintf (b, "%" PRIi64, x); \
+      else                          \
+        strcpy (b, "*");            \
+    }                               \
   while (0)
 
           FMT_DEV (devs[i]->major, fmt_buf_major);
@@ -2365,7 +2365,7 @@ static int
 cg_itoa (char *buf, int64_t value, bool cgroup2)
 {
   if (! (cgroup2 && value == -1))
-    return sprintf (buf, "%lu", value);
+    return sprintf (buf, "%" PRIi64, value);
 
   memcpy (buf, "max", 4);
   return 3;
@@ -2457,7 +2457,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set kernel memory with cgroupv2");
 
-      len = sprintf (fmt_buf, "%lu", memory->kernel);
+      len = sprintf (fmt_buf, "%" PRIu64, memory->kernel);
       ret = write_file_at (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2465,7 +2465,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
 
   if (memory->reservation_present)
     {
-      len = sprintf (fmt_buf, "%lu", memory->reservation);
+      len = sprintf (fmt_buf, "%" PRIu64, memory->reservation);
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2484,7 +2484,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set kernel TCP with cgroupv2");
 
-      len = sprintf (fmt_buf, "%lu", memory->kernel_tcp);
+      len = sprintf (fmt_buf, "%" PRIu64, memory->kernel_tcp);
       ret = write_file_at (dirfd, "memory.kmem.tcp.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2494,7 +2494,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set memory swappiness with cgroupv2");
 
-      len = sprintf (fmt_buf, "%lu", memory->swappiness);
+      len = sprintf (fmt_buf, "%" PRIu64, memory->swappiness);
       ret = write_file_at (dirfd, "memory.swappiness", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2554,7 +2554,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         period = cpu->period;
       else
         {
-          len = sprintf (fmt_buf, "%lu", cpu->period);
+          len = sprintf (fmt_buf, "%" PRIu64, cpu->period);
           ret = write_file_at (dirfd_cpu, "cpu.cfs_period_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -2566,7 +2566,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         quota = cpu->quota;
       else
         {
-          len = sprintf (fmt_buf, "%lu", cpu->quota);
+          len = sprintf (fmt_buf, "%" PRIu64, cpu->quota);
           ret = write_file_at (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -2576,7 +2576,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime period not supported on cgroupv2");
-      len = sprintf (fmt_buf, "%lu", cpu->realtime_period);
+      len = sprintf (fmt_buf, "%" PRIu64, cpu->realtime_period);
       ret = write_file_at (dirfd_cpu, "cpu.rt_period_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2585,7 +2585,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime runtime not supported on cgroupv2");
-      len = sprintf (fmt_buf, "%lu", cpu->realtime_runtime);
+      len = sprintf (fmt_buf, "%" PRIu64, cpu->realtime_runtime);
       ret = write_file_at (dirfd_cpu, "cpu.rt_runtime_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;

@@ -230,6 +230,12 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
 
   program = bpf_program_append (program, accept_block, sizeof (accept_block));
 #endif
+  (void) access;
+  (void) type;
+  (void) major;
+  (void) minor;
+  (void) accept;
+
   return program;
 }
 
@@ -285,7 +291,6 @@ read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_er
   return 0;
 #else
   (void) dirfd;
-  (void) err;
 
   *progs_out = NULL;
   *n_progs_out = 0;
@@ -335,6 +340,9 @@ remove_all_progs (int dirfd, uint32_t *progs, size_t n_progs, libcrun_error_t *e
     }
   return 0;
 #else
+  (void) dirfd;
+  (void) progs;
+  (void) n_progs;
   return crun_make_error (err, 0, "eBPF not supported");
 #endif
 }
@@ -343,6 +351,11 @@ static int
 ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
 {
 #ifndef HAVE_EBPF
+  (void) fd;
+  (void) dirfd;
+  (void) read_all_progs;
+  (void) remove_all_progs;
+
   return crun_make_error (err, 0, "eBPF not supported");
 #else
 #  ifdef BPF_F_REPLACE
@@ -426,6 +439,11 @@ int
 libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err)
 {
 #ifndef HAVE_EBPF
+  (void) dirfd;
+  (void) program;
+  (void) pin;
+  (void) ebpf_attach_program;
+
   return crun_make_error (err, 0, "eBPF not supported");
 #else
   cleanup_close int fd = -1;
