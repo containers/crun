@@ -71,7 +71,14 @@ AS_IF([test "x$enable_bpf" != "xno"], [
 		AC_MSG_CHECKING(compilation for eBPF)
 		AC_COMPILE_IFELSE(
 			[AC_LANG_SOURCE([[
+				#include <unistd.h>
+				#include <stdint.h>
 				#include <linux/bpf.h>
+                                void foo() {
+					uint64_t val = 0x123456789;
+					union bpf_attr attr;
+					attr.insns = val;
+                                }
 				int program = BPF_PROG_TYPE_CGROUP_DEVICE;
 			]])],
 			[AC_MSG_RESULT(yes)
