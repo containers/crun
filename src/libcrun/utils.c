@@ -1401,7 +1401,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
 }
 
 int
-close_fds_ge_than (int n, libcrun_error_t *err)
+mark_for_close_fds_ge_than (int n, libcrun_error_t *err)
 {
   cleanup_close int cfd = -1;
   cleanup_dir DIR *dir = NULL;
