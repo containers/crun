@@ -816,7 +816,7 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
         return ret;
     }
 
-  ret = close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
+  ret = mark_for_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
@@ -2702,6 +2702,10 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
             return ret;
         }
 
+      ret = mark_for_close_fds_ge_than (context->preserve_fds + 3, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+
       if (! process->no_new_privileges)
         {
           ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_flags, seccomp_flags_len, err);
@@ -2726,10 +2730,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
           if (UNLIKELY (ret < 0))
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
         }
-
-      ret = close_fds_ge_than (context->preserve_fds + 3, err);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
       if (process->no_new_privileges)
         {
