@@ -779,7 +779,9 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container, const char *source, 
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
-  xasprintf (&subsystem_path, "%s/%s", target, subsystem);
+  ret = append_paths (&subsystem_path, err, target, subsystem, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return do_mount (container, "cgroup", fd, subsystem_path, "cgroup", mountflags, "none,name=systemd,xattr", LABEL_NONE,
                    err);
@@ -847,14 +849,21 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      xasprintf (&source_subsystem, "/sys/fs/cgroup/%s", subsystem);
+      ret = append_paths (&source_subsystem, err, "/sys/fs/cgroup", subsystem, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       /* if there is already a mount specified, do not add a default one.  */
       if (has_mount_for (container, source_subsystem))
         continue;
 
-      xasprintf (&source_path, "%s/%s", source_subsystem, subpath);
-      xasprintf (&subsystem_path, "%s/%s", target, subsystem);
+      ret = append_paths (&source_path, err, source_subsystem, subpath, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = append_paths (&subsystem_path, err, target, subsystem, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = mkdirat (targetfd, subsystem, 0755);
       if (UNLIKELY (ret < 0))
@@ -1561,6 +1570,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *state_dir = NULL;
   char *host_path = NULL;
+  int ret;
 
   if (container && get_private_data (container)->host_notify_socket_path)
     {
@@ -1568,7 +1578,10 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
 
       parent_dir = get_private_data (container)->host_notify_socket_path;
 
-      xasprintf (&host_notify_socket_path, "%s/notify", parent_dir);
+      ret = append_paths (&host_notify_socket_path, err, parent_dir, "notify", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       host_path = host_notify_socket_path;
     }
 
@@ -1577,7 +1590,11 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
   if (host_path == NULL)
     {
       state_dir = libcrun_get_state_directory (context->state_root, context->id);
-      xasprintf (&host_notify_socket_path, "%s/notify/notify", state_dir);
+
+      ret = append_paths (&host_notify_socket_path, err, state_dir, "notify/notify", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       host_path = host_notify_socket_path;
     }
 
@@ -1621,8 +1638,13 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   if (notify_socket == NULL)
     return 0;
 
-  xasprintf (&container_notify_socket_path, "%s%s/notify", rootfs, notify_socket);
-  xasprintf (&host_notify_socket_path, "%s/notify", state_dir);
+  ret = append_paths (&container_notify_socket_path, err, rootfs, notify_socket, "notify", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (&host_notify_socket_path, err, state_dir, "notify", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = mkdir (host_notify_socket_path, 0700);
   if (ret < 0)
@@ -1716,7 +1738,10 @@ allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out, c
   where = state_dir;
 
 repeat:
-  xasprintf (&tmpdir, "%s/tmp-dir", where);
+  ret = append_paths (&tmpdir, err, where, "tmp-dir", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = crun_ensure_directory (tmpdir, 0700, true, err);
   if (UNLIKELY (ret < 0))
     {
@@ -1747,7 +1772,10 @@ repeat:
       return ret;
     }
 
-  xasprintf (&tmpfile, "%s/tmp-file", where);
+  ret = append_paths (&tmpfile, err, where, "tmp-file", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = crun_ensure_file (tmpfile, 0700, true, err);
   if (UNLIKELY (ret < 0))
     {
