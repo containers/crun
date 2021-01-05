@@ -40,6 +40,7 @@
 #include <sys/vfs.h>
 #include <linux/magic.h>
 #include <limits.h>
+#include <stdarg.h>
 
 #ifndef CLOSE_RANGE_CLOEXEC
 # define CLOSE_RANGE_CLOEXEC (1U << 2)
@@ -1910,4 +1911,84 @@ safe_write (int fd, const void *buf, ssize_t count)
       written += w;
     }
   return written;
+}
+
+int
+append_paths (char **out, libcrun_error_t *err, ...)
+{
+  const size_t MAX_PARTS = 32;
+  const char *parts[MAX_PARTS];
+  size_t sizes[MAX_PARTS];
+  size_t total_len = 0;
+  size_t n_parts = 0;
+  size_t copied = 0;
+  va_list ap;
+  size_t i;
+
+  va_start (ap, err);
+  for (;;)
+    {
+      const char *part;
+      size_t size;
+
+      part = va_arg (ap, const char *);
+      if (part == NULL)
+        break;
+
+      if (n_parts == MAX_PARTS)
+        {
+          va_end (ap);
+          return crun_make_error (err, EINVAL, "too many paths specified");
+        }
+
+      if (n_parts == 0)
+        {
+          /* For the first component allow only one '/'.  */
+          while (part[0] == '/' && part[1] == '/')
+            part++;
+        }
+      else
+        {
+          /* And drop any initial '/' for other components.  */
+          while (part[0] == '/')
+            part++;
+        }
+
+      size = strlen (part);
+      if (size == 0)
+        continue;
+
+      while (size > 1 && part[size - 1] == '/')
+        size--;
+
+      parts[n_parts] = part;
+      sizes[n_parts] = size;
+
+      n_parts++;
+    }
+  va_end (ap);
+
+  total_len = n_parts + 1;
+  for (i = 0; i < n_parts; i++)
+    total_len += sizes[i];
+
+  *out = xmalloc (total_len);
+
+  copied = 0;
+  for (i = 0; i < n_parts; i++)
+    {
+      bool has_trailing_slash;
+
+      has_trailing_slash = copied > 0 && (*out)[copied - 1] == '/';
+      if (i > 0 && !has_trailing_slash)
+        {
+          (*out)[copied] = '/';
+          copied += 1;
+        }
+
+      memcpy (*out + copied, parts[i], sizes[i]);
+      copied += sizes[i];
+    }
+  (*out)[copied] = '\0';
+  return 0;
 }
