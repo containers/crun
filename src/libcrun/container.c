@@ -1107,8 +1107,9 @@ static int
 read_container_config_from_state (libcrun_container_t **container, const char *state_root, const char *id,
                                   libcrun_error_t *err)
 {
-  cleanup_free char *dir = NULL;
   cleanup_free char *config_file = NULL;
+  cleanup_free char *dir = NULL;
+  int ret;
 
   *container = NULL;
 
@@ -1116,7 +1117,10 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory from `%s`", state_root);
 
-  xasprintf (&config_file, "%s/config.json", dir);
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   *container = libcrun_container_load_from_file (config_file, err);
   if (*container == NULL)
     return crun_make_error (err, 0, "error loading `%s`", config_file);
@@ -1456,7 +1460,10 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
       state_root = libcrun_get_state_directory (context->state_root, context->id);
       if (UNLIKELY (state_root == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
-      xasprintf (&oci_config_path, "%s/config.json", state_root);
+
+      ret = append_paths (&oci_config_path, err, state_root, "config.json", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       conf.runtime_root_path = state_root;
       conf.name = context->id;
@@ -1626,7 +1633,9 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  xasprintf (&dest_path, "%s/seccomp.bpf", dir);
+  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   *fd = -1;
   if (readonly)
@@ -2048,7 +2057,9 @@ libcrun_copy_config_file (const char *id, const char *state_root, const char *co
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  xasprintf (&dest_path, "%s/config.json", dir);
+  ret = append_paths (&dest_path, err, dir, "config.json", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = read_all_file (config_file, &buffer, &len, err);
   if (UNLIKELY (ret < 0))
@@ -2490,7 +2501,10 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
         goto exit;
       }
 
-    xasprintf (&config_file, "%s/config.json", dir);
+    ret = append_paths (&config_file, err, dir, "config.json", NULL);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
     container = libcrun_container_load_from_file (config_file, err);
     if (UNLIKELY (container == NULL))
       {
@@ -2531,7 +2545,7 @@ int
 libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process,
                         libcrun_error_t *err)
 {
-  int ret;
+  int container_status, ret;
   pid_t pid;
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
@@ -2558,17 +2572,21 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
   ret = libcrun_is_container_running (&status, err);
   if (UNLIKELY (ret < 0))
     return ret;
+  container_status = ret;
 
   dir = libcrun_get_state_directory (state_root, id);
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  xasprintf (&config_file, "%s/config.json", dir);
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   container = libcrun_container_load_from_file (config_file, err);
   if (container == NULL)
     return crun_make_error (err, 0, "error loading config.json");
 
-  if (ret == 0)
+  if (container_status == 0)
     return crun_make_error (err, 0, "the container `%s` is not running.", id);
 
   ret = block_signals (err);
