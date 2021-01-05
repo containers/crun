@@ -50,7 +50,14 @@ get_run_directory (const char *state_root)
     {
       const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
       if (runtime_dir && runtime_dir[0] != '\0')
-        xasprintf (&root, "%s/crun", runtime_dir);
+        {
+          ret = append_paths (&root, &err, runtime_dir, "crun", NULL);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_error_release (&err);
+              return NULL;
+            }
+        }
     }
   if (root == NULL)
     root = xstrdup ("/run/crun");
@@ -64,19 +71,37 @@ get_run_directory (const char *state_root)
 char *
 libcrun_get_state_directory (const char *state_root, const char *id)
 {
-  char *ret;
+  int ret;
+  char *path;
+  libcrun_error_t *err = NULL;
   cleanup_free char *root = get_run_directory (state_root);
-  xasprintf (&ret, "%s/%s", root, id);
-  return ret;
+
+  ret = append_paths (&path, err, root, id, NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (err);
+      return NULL;
+    }
+
+  return path;
 }
 
 static char *
 get_state_directory_status_file (const char *state_root, const char *id)
 {
-  char *ret;
   cleanup_free char *root = get_run_directory (state_root);
-  xasprintf (&ret, "%s/%s/status", root, id);
-  return ret;
+  libcrun_error_t *err = NULL;
+  char *path = NULL;
+  int ret;
+
+  ret = append_paths (&path, err, root, id, "status", NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (err);
+      return NULL;
+    }
+
+  return path;
 }
 
 static int
@@ -480,7 +505,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
 
   for (next = readdir (dir); next; next = readdir (dir))
     {
-      int exists;
+      int r, exists;
       cleanup_free char *status_file = NULL;
 
       libcrun_container_list_t *next_container;
@@ -488,7 +513,10 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       if (next->d_name[0] == '.')
         continue;
 
-      xasprintf (&status_file, "%s/%s/status", path, next->d_name);
+      r = append_paths (&status_file, err, path, next->d_name, "status", NULL);
+      if (UNLIKELY (r < 0))
+        return r;
+
       exists = crun_path_exists (status_file, err);
       if (exists < 0)
         {
@@ -568,7 +596,11 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
   cleanup_free char *fifo_path;
   int ret, fd = -1;
-  xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
+
+  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = mkfifo (fifo_path, 0600);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mkfifo");
@@ -588,10 +620,12 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
   char buffer[1] = {
     0,
   };
-  int ret;
   cleanup_close int fd = -1;
+  int ret;
 
-  xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
+  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   fd = open (fifo_path, O_WRONLY);
   if (UNLIKELY (fd < 0))
@@ -613,8 +647,11 @@ libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcr
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
   cleanup_free char *fifo_path;
+  int ret;
 
-  xasprintf (&fifo_path, "%s/exec.fifo", state_dir);
+  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return crun_path_exists (fifo_path, err);
 }
