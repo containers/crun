@@ -247,6 +247,8 @@ int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *p
 
 ssize_t safe_write (int fd, const void *buf, ssize_t count);
 
+int append_paths (char **out, libcrun_error_t *err, ...);
+
 LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
 
 #endif

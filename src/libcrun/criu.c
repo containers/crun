@@ -129,8 +129,13 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      xasprintf (&source, "/sys/fs/cgroup/%s", subsystem);
-      xasprintf (&destination, "%s/%s", source, subpath);
+      ret = append_paths (&source, err, "/sys/fs/cgroup", subsystem, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = append_paths (&destination, err, source, subpath, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       criu_add_ext_mount (source, destination);
     }
@@ -191,7 +196,10 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      xasprintf (&source_path, "/sys/fs/cgroup/%s", subsystem);
+      ret = append_paths (&source_path, err, "/sys/fs/cgroup", subsystem, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       criu_add_ext_mount (source_path, source_path);
     }
 
@@ -253,7 +261,10 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   /* descriptors.json is needed during restore to correctly
    * reconnect stdin, stdout, stderr. */
-  xasprintf (&descriptors_path, "%s/%s", cr_options->image_path, DESCRIPTORS_FILENAME);
+  ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   descriptors_fd = open (descriptors_path, O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR);
   if (UNLIKELY (descriptors_fd == -1))
     return crun_make_error (err, errno, "error opening descriptors file %s\n", descriptors_path);
@@ -286,7 +297,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
    * and all of its children. */
   criu_set_pid (status->pid);
 
-  xasprintf (&path, "%s/%s", status->bundle, status->rootfs);
+  ret = append_paths (&path, err, status->bundle, status->rootfs, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = criu_set_root (path);
   if (UNLIKELY (ret != 0))
@@ -362,10 +375,18 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   /* Tell CRIU to use the freezer to pause all container processes. */
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
-    /* This needs CRIU 3.14. */
-    xasprintf (&freezer_path, "/sys/fs/cgroup/%s", status->cgroup_path);
+    {
+      /* This needs CRIU 3.14. */
+      ret = append_paths (&freezer_path, err, "/sys/fs/cgroup", status->cgroup_path, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
   else
-    xasprintf (&freezer_path, "/sys/fs/cgroup/freezer/%s", status->cgroup_path);
+    {
+      ret = append_paths (&freezer_path, err, "/sys/fs/cgroup/freezer", status->cgroup_path, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = criu_set_freeze_cgroup (freezer_path);
   if (UNLIKELY (ret != 0))
@@ -503,7 +524,10 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     char err_buffer[256];
     yajl_val tree;
 
-    xasprintf (&descriptors_path, "%s/%s", cr_options->image_path, DESCRIPTORS_FILENAME);
+    ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
     ret = read_all_file (descriptors_path, &buffer, NULL, err);
     if (UNLIKELY (ret < 0))
       return ret;
@@ -581,7 +605,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     }
 
   /* Mount the container rootfs for CRIU. */
-  xasprintf (&root, "%s/criu-root", status->bundle);
+  ret = append_paths (&root, err, status->bundle, "criu-root", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))

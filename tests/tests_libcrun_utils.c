@@ -247,6 +247,81 @@ test_crun_path_exists ()
   return 0;
 }
 
+static int
+test_append_paths ()
+{
+#define PROLOGUE()                              \
+  cleanup_free char *out = NULL;                \
+  libcrun_error_t err = NULL;                   \
+  int ret;
+
+#define EXPECT_STRING(exp)                      \
+  {                                             \
+    if (ret < 0 || out == NULL)                 \
+      {                                         \
+        crun_error_release (&err);              \
+        return ret;                             \
+      }                                         \
+    if (strcmp (out, exp))                      \
+      return -1;                                \
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "/sys/fs/cgroup/", "memory", "some/path", NULL);
+    EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "/sys/fs/cgroup", "memory", "some/path", NULL);
+    EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "/sys/fs/cgroup////////", "memory////////", "some/path//////", NULL);
+    EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "/sys/fs/cgroup////////", "memory////////", "///////some/path//////", NULL);
+    EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "", "//", "", "", "", NULL);
+    EXPECT_STRING ("/");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "///", "/", "", "///", "a", NULL);
+    EXPECT_STRING ("/a");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "////", "/////", "///", "", "", NULL);
+    EXPECT_STRING ("/");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "", "", "", "", "", NULL);
+    EXPECT_STRING ("");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "", "///sys/fs/cgroup////////", "", "some/path", NULL);
+    EXPECT_STRING ("/sys/fs/cgroup/some/path");
+  }
+  {
+    PROLOGUE ();
+    ret = append_paths (&out, &err, "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d",
+                        "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d",
+                        "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d", NULL);
+    if (ret == 0)
+      return -1;
+    crun_error_release (&err);
+  }
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -265,12 +340,13 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..6\n");
+  printf ("1..7\n");
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
   RUN_TEST (test_run_process);
   RUN_TEST (test_dir_p);
   RUN_TEST (test_socket_pair);
   RUN_TEST (test_send_receive_fd);
+  RUN_TEST (test_append_paths);
   return 0;
 }
