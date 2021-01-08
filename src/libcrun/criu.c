@@ -129,7 +129,7 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      ret = append_paths (&source, err, "/sys/fs/cgroup", subsystem, NULL);
+      ret = append_paths (&source, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -196,7 +196,7 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      ret = append_paths (&source_path, err, "/sys/fs/cgroup", subsystem, NULL);
+      ret = append_paths (&source_path, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -377,13 +377,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       /* This needs CRIU 3.14. */
-      ret = append_paths (&freezer_path, err, "/sys/fs/cgroup", status->cgroup_path, NULL);
+      ret = append_paths (&freezer_path, err, CGROUP_ROOT, status->cgroup_path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
-      ret = append_paths (&freezer_path, err, "/sys/fs/cgroup/freezer", status->cgroup_path, NULL);
+      ret = append_paths (&freezer_path, err, CGROUP_ROOT "/freezer", status->cgroup_path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }

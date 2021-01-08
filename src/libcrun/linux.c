@@ -726,7 +726,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
         {
           crun_error_release (err);
 
-          ret = do_mount (container, "/sys/fs/cgroup", targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE,
+          ret = do_mount (container, CGROUP_ROOT, targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE,
                           err);
         }
       return ret;
@@ -849,7 +849,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      ret = append_paths (&source_subsystem, err, "/sys/fs/cgroup", subsystem, NULL);
+      ret = append_paths (&source_subsystem, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 

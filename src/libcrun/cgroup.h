@@ -21,6 +21,10 @@
 #include "container.h"
 #include <unistd.h>
 
+#ifndef CGROUP_ROOT
+# define CGROUP_ROOT "/sys/fs/cgroup"
+#endif
+
 enum
 {
   CGROUP_MODE_UNIFIED = 1,
