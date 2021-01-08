@@ -594,32 +594,40 @@ static int
 chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
-  cleanup_dir DIR *dir = NULL;
-  struct dirent *next;
+  cleanup_free char *delegate = NULL;
+  cleanup_close int dfd = -1;
+  size_t delegate_size;
+  char *saveptr = NULL;
+  char *name;
   int ret;
-  int dfd;
 
   ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  dir = opendir (cgroup_path);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot opendir `%s`", cgroup_path);
+  dfd = open (cgroup_path, O_PATH);
 
-  dfd = dirfd (dir);
-
-  for (next = readdir (dir); next; next = readdir (dir))
+  ret = read_all_file ("/sys/kernel/cgroup/delegate", &delegate, &delegate_size, err);
+  if (UNLIKELY (ret < 0))
     {
-      const char *name = next->d_name;
+      if (crun_error_get_errno (err) == ENOENT)
+        {
+          crun_error_release (err);
+          return 0;
+        }
+      return ret;
+    }
 
-      /* do not chown the parent directory, but chown the current one.  */
-      if (name[0] == '.' && name[1] == '.' && name[2] == '\0')
-        continue;
-
+  for (name = strtok_r (delegate, "\n", &saveptr); name; name = strtok_r (NULL, "\n", &saveptr))
+    {
       ret = fchownat (dfd, name, uid, gid, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "cannot chown `%s/%s`", cgroup_path, name);
+        {
+          if (errno == ENOENT)
+            continue;
+
+          return crun_make_error (err, errno, "cannot chown `%s/%s`", cgroup_path, name);
+        }
     }
 
   return 0;
@@ -943,6 +951,8 @@ systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
+      bool must_chown = false;
+
       if (suffix)
         {
           cleanup_free char *dir = NULL;
@@ -959,18 +969,23 @@ systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = chown_cgroups (*path, args->root_uid, args->root_gid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
           ret = move_process_to_cgroup (pid, NULL, *path, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
+          must_chown = true;
         }
 
       ret = enable_controllers (*path, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (must_chown)
+        {
+          ret = chown_cgroups (*path, args->root_uid, args->root_gid, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (cgroup_mode != CGROUP_MODE_UNIFIED && geteuid ())
