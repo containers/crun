@@ -1560,7 +1560,10 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
         return chown_cgroups (*path, root_uid, root_gid, err);
 
-      return ret;
+      if (args->resources)
+        return libcrun_update_cgroup_resources (args->cgroup_mode, args->resources, *path, err);
+
+      return 0;
     }
 
   rootless = is_rootless (&tmp_err);
