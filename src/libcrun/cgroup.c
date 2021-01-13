@@ -76,16 +76,16 @@ detect_cgroup_mode (libcrun_error_t *err)
   struct statfs stat;
   int ret;
 
-  ret = statfs ("/sys/fs/cgroup", &stat);
+  ret = statfs (CGROUP_ROOT, &stat);
   if (ret < 0)
-    return crun_make_error (err, errno, "statfs '/sys/fs/cgroup'");
+    return crun_make_error (err, errno, "statfs '" CGROUP_ROOT "'");
   if (stat.f_type == CGROUP2_SUPER_MAGIC)
     return CGROUP_MODE_UNIFIED;
   if (stat.f_type != TMPFS_MAGIC)
-    return crun_make_error (err, 0, "invalid file system type on '/sys/fs/cgroup'");
-  ret = statfs ("/sys/fs/cgroup/unified", &stat);
+    return crun_make_error (err, 0, "invalid file system type on '" CGROUP_ROOT "'");
+  ret = statfs (CGROUP_ROOT "/unified", &stat);
   if (ret < 0 && errno != ENOENT)
-    return crun_make_error (err, errno, "statfs '/sys/fs/cgroup/unified'");
+    return crun_make_error (err, errno, "statfs '" CGROUP_ROOT "/unified'");
   if (ret < 0)
     return CGROUP_MODE_LEGACY;
   return stat.f_type == CGROUP2_SUPER_MAGIC ? CGROUP_MODE_HYBRID : CGROUP_MODE_LEGACY;
@@ -262,14 +262,14 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
   xasprintf (&tmp_path, "%s/", path);
 
-  ret = read_available_controllers ("/sys/fs/cgroup", err);
+  ret = read_available_controllers (CGROUP_ROOT, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   controllers_to_enable = ret;
 
   /* Enable all possible controllers in the root cgroup.  */
-  ret = write_controller_file ("/sys/fs/cgroup", controllers_to_enable, err);
+  ret = write_controller_file (CGROUP_ROOT, controllers_to_enable, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -280,7 +280,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
       *it = '\0';
 
-      ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", tmp_path, NULL);
+      ret = append_paths (&cgroup_path, err, CGROUP_ROOT, tmp_path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -493,7 +493,7 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
   char pid_str[16];
   int ret;
 
-  ret = append_paths (&cgroup_path_procs, err, "/sys/fs/cgroup", subsystem ? subsystem : "", path ? path : "", "cgroup.procs", NULL);
+  ret = append_paths (&cgroup_path_procs, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "", "cgroup.procs", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -509,7 +509,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool
   cleanup_free char *cgroup_path = NULL;
   int ret;
 
-  ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", subsystem ? subsystem : "", path ? path : "", NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -601,7 +601,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
   char *name;
   int ret;
 
-  ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", path, NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -706,7 +706,7 @@ enter_cgroup_v1 (int cgroup_mode, pid_t pid, const char *path, bool create_if_mi
       if (cgroup_mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
         continue;
 
-      sprintf (subsystem_path, "/sys/fs/cgroup/%s", subsystems[i]);
+      sprintf (subsystem_path, CGROUP_ROOT "/%s", subsystems[i]);
       ret = crun_path_exists (subsystem_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -741,7 +741,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
 
   sprintf (pid_str, "%d", pid);
 
-  ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", path, NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -794,7 +794,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
       if (cgroup_crun_exec_path == NULL)
         xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
 
-      ret = append_paths (&cgroup_sub_path_procs, err, "/sys/fs/cgroup", cgroup_crun_exec_path, "cgroup.procs", NULL);
+      ret = append_paths (&cgroup_sub_path_procs, err, CGROUP_ROOT, cgroup_crun_exec_path, "cgroup.procs", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -957,7 +957,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_
         {
           cleanup_free char *dir = NULL;
 
-          ret = append_paths (&dir, err, "/sys/fs/cgroup", *path, NULL);
+          ret = append_paths (&dir, err, CGROUP_ROOT, *path, NULL);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -1546,7 +1546,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       size_t len;
       cleanup_free char *buffer = NULL;
 
-      ret = read_all_file ("/sys/fs/cgroup/unified/cgroup.controllers", &buffer, &len, err);
+      ret = read_all_file (CGROUP_ROOT "/unified/cgroup.controllers", &buffer, &len, err);
       if (UNLIKELY (ret < 0))
         return ret;
       if (len > 0)
@@ -1575,7 +1575,10 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
         return chown_cgroups (*path, root_uid, root_gid, err);
 
-      return ret;
+      if (args->resources)
+        return libcrun_update_cgroup_resources (args->cgroup_mode, args->resources, *path, err);
+
+      return 0;
     }
 
   rootless = is_rootless (&tmp_err);
@@ -1613,7 +1616,7 @@ libcrun_cgroup_is_container_paused (const char *cgroup_path, int cgroup_mode, bo
     {
       state = "1";
 
-      ret = append_paths (&path, err, "/sys/fs/cgroup", cgroup_path, "cgroup.freeze", NULL);
+      ret = append_paths (&path, err, CGROUP_ROOT, cgroup_path, "cgroup.freeze", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1621,7 +1624,7 @@ libcrun_cgroup_is_container_paused (const char *cgroup_path, int cgroup_mode, bo
     {
       state = "FROZEN";
 
-      ret = append_paths (&path, err, "/sys/fs/cgroup/freezer", cgroup_path, "freezer.state", NULL);
+      ret = append_paths (&path, err, CGROUP_ROOT "/freezer", cgroup_path, "freezer.state", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1648,14 +1651,14 @@ libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       state = pause ? "1" : "0";
-      ret = append_paths (&path, err, "/sys/fs/cgroup", cgroup_path, "cgroup.freeze", NULL);
+      ret = append_paths (&path, err, CGROUP_ROOT, cgroup_path, "cgroup.freeze", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
       state = pause ? "FROZEN" : "THAWED";
-      ret = append_paths (&path, err, "/sys/fs/cgroup/freezer", cgroup_path, "freezer.state", NULL);
+      ret = append_paths (&path, err, CGROUP_ROOT "/freezer", cgroup_path, "freezer.state", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1767,14 +1770,14 @@ libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_
   switch (mode)
     {
     case CGROUP_MODE_UNIFIED:
-      ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", path, NULL);
+      ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
       break;
 
     case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
-      ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup/memory", path, NULL);
+      ret = append_paths (&cgroup_path, err, CGROUP_ROOT "/memory", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
       break;
@@ -1935,7 +1938,7 @@ libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int
         {
           cleanup_free char *cgroup_path = NULL;
 
-          ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", path, NULL);
+          ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
           if (UNLIKELY (ret < 0))
             return ret;
           ret = rmdir (cgroup_path);
@@ -1955,7 +1958,7 @@ libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int
               if (mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
                 continue;
 
-              ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", subsystems[i], path, NULL);
+              ret = append_paths (&cgroup_path, err, CGROUP_ROOT, subsystems[i], path, NULL);
               if (UNLIKELY (ret < 0))
                 return ret;
 
@@ -2704,7 +2707,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_close int dirfd_blkio = -1;
       runtime_spec_schema_config_linux_resources_block_io *blkio = resources->block_io;
 
-      ret = append_paths (&path_to_blkio, err, "/sys/fs/cgroup/blkio", path, NULL);
+      ret = append_paths (&path_to_blkio, err, CGROUP_ROOT "/blkio", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2725,11 +2728,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_close int dirfd_netprio = -1;
       runtime_spec_schema_config_linux_resources_network *network = resources->network;
 
-      ret = append_paths (&path_to_netclass, err, "/sys/fs/cgroup/net_cls", path, NULL);
+      ret = append_paths (&path_to_netclass, err, CGROUP_ROOT "/net_cls", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = append_paths (&path_to_netprio, err, "/sys/fs/cgroup/net_prio", path, NULL);
+      ret = append_paths (&path_to_netprio, err, CGROUP_ROOT "/net_prio", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2751,7 +2754,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_htlb = NULL;
       cleanup_close int dirfd_htlb = -1;
 
-      ret = append_paths (&path_to_htlb, err, "/sys/fs/cgroup/hugetlb", path, NULL);
+      ret = append_paths (&path_to_htlb, err, CGROUP_ROOT "/hugetlb", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
@@ -2769,7 +2772,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_devs = NULL;
       cleanup_close int dirfd_devs = -1;
 
-      ret = append_paths (&path_to_devs, err, "/sys/fs/cgroup/devices", path, NULL);
+      ret = append_paths (&path_to_devs, err, CGROUP_ROOT "/devices", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2787,7 +2790,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_mem = NULL;
       cleanup_close int dirfd_mem = -1;
 
-      ret = append_paths (&path_to_mem, err, "/sys/fs/cgroup/memory", path, NULL);
+      ret = append_paths (&path_to_mem, err, CGROUP_ROOT "/memory", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2805,7 +2808,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_pid = NULL;
       cleanup_close int dirfd_pid = -1;
 
-      ret = append_paths (&path_to_pid, err, "/sys/fs/cgroup/pids", path, NULL);
+      ret = append_paths (&path_to_pid, err, CGROUP_ROOT "/pids", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2825,7 +2828,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_cpuset = NULL;
       cleanup_close int dirfd_cpuset = -1;
 
-      ret = append_paths (&path_to_cpu, err, "/sys/fs/cgroup/cpu", path, NULL);
+      ret = append_paths (&path_to_cpu, err, CGROUP_ROOT "/cpu", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2839,7 +2842,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (resources->cpu->cpus == NULL && resources->cpu->mems == NULL)
         return 0;
 
-      ret = append_paths (&path_to_cpuset, err, "/sys/fs/cgroup/cpuset", path, NULL);
+      ret = append_paths (&path_to_cpuset, err, CGROUP_ROOT "/cpuset", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2890,7 +2893,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
   if (resources->network)
     return crun_make_error (err, 0, "network limits not supported on cgroupv2");
 
-  ret = append_paths (&cgroup_path, err, "/sys/fs/cgroup", path, NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 

@@ -1912,13 +1912,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     ret = libcrun_cgroup_enter (&cg, err);
     if (UNLIKELY (ret < 0))
       return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
-
-    if (def->linux && def->linux->resources)
-      {
-        ret = libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources, cgroup_path, err);
-        if (UNLIKELY (ret < 0))
-          return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
-      }
   }
 
   /* sync 1.  */
@@ -3062,13 +3055,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     ret = libcrun_cgroup_enter (&cg, err);
     if (UNLIKELY (ret < 0))
       return ret;
-
-    if (def->linux && def->linux->resources)
-      {
-        ret = libcrun_update_cgroup_resources (cgroup_mode, def->linux->resources, cgroup_path, err);
-        if (UNLIKELY (ret < 0))
-          return ret;
-      }
   }
 
   get_current_timestamp (created);
