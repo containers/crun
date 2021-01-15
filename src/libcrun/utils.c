@@ -1368,6 +1368,10 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
       char *tmp_args[] = { path, NULL };
       int dev_null_fd = -1;
 
+      ret = mark_for_close_fds_ge_than (3, err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+
       if (out_fd < 0 || err_fd < 0)
         {
           dev_null_fd = open ("/dev/null", O_WRONLY);
