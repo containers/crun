@@ -3304,16 +3304,6 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
               break;
             }
         }
-      /* It creates a new PID namespace, without a user namespace, we can try to
-         join it immediately without another fork.  */
-      if (i == init_status.fd_len && (init_status.all_namespaces & CLONE_NEWUSER) == 0)
-        {
-          if (unshare (CLONE_NEWPID) == 0)
-            {
-              init_status.namespaces_to_unshare &= ~CLONE_NEWPID;
-              init_status.must_fork = false;
-            }
-        }
     }
 #ifdef CLONE_NEWTIME
   if (init_status.all_namespaces & CLONE_NEWTIME)
