@@ -122,6 +122,10 @@ get_private_data (struct libcrun_container_s *container)
   return container->private_data;
 }
 
+#ifndef CLONE_NEWTIME
+# define CLONE_NEWTIME 0
+#endif
+
 static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS },
                                                  { "network", "net", CLONE_NEWNET },
                                                  { "ipc", "ipc", CLONE_NEWIPC },
@@ -131,7 +135,7 @@ static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS }
 #ifdef CLONE_NEWCGROUP
                                                  { "cgroup", "cgroup", CLONE_NEWCGROUP },
 #endif
-#ifdef CLONE_NEWTIME
+#if CLONE_NEWTIME
                                                  { "time", "time", CLONE_NEWTIME },
 #endif
                                                  { NULL, NULL, 0 } };
@@ -3174,7 +3178,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return crun_make_error (err, errno, "unshare");
     }
 
-#ifdef CLONE_NEWTIME
   if (init_status->all_namespaces & CLONE_NEWTIME)
     {
       const char *v = find_annotation (container, "run.oci.timens_offset");
@@ -3185,7 +3188,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
             return ret;
         }
     }
-#endif
 
   if (init_status->must_fork)
     {
@@ -3305,10 +3307,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
             }
         }
     }
-#ifdef CLONE_NEWTIME
   if (init_status.all_namespaces & CLONE_NEWTIME)
     init_status.must_fork = true;
-#endif
 
   /* If there are no other namespaces to join, we can create the user ns directly with clone(2).  */
   clone_can_create_userns = init_status.fd_len == 0;
@@ -3316,14 +3316,29 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   if ((init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0)
     init_status.delayed_userns_create = ! clone_can_create_userns || init_status.fd_len > 0;
 
-  /* If we create a new user namespace, create it as part of the clone.  */
-  pid = syscall_clone ((init_status.namespaces_to_unshare & (clone_can_create_userns ? CLONE_NEWUSER : 0)) | SIGCHLD,
-                       NULL);
-  if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "clone");
+  /* If we create a new user namespace, create it alone.  */
+  if (init_status.namespaces_to_unshare & CLONE_NEWUSER)
+    {
+      pid = syscall_clone ((clone_can_create_userns ? CLONE_NEWUSER : 0) | SIGCHLD, NULL);
+      if (UNLIKELY (pid < 0))
+        return crun_make_error (err, errno, "clone");
 
-  if (clone_can_create_userns)
-    init_status.namespaces_to_unshare &= ~CLONE_NEWUSER;
+      if (clone_can_create_userns)
+        init_status.namespaces_to_unshare &= ~CLONE_NEWUSER;
+    }
+  else
+    {
+      int can_clone = init_status.namespaces_to_unshare & ~CLONE_NEWTIME;
+
+      pid = syscall_clone (can_clone | SIGCHLD, NULL);
+      if (UNLIKELY (pid < 0))
+        return crun_make_error (err, errno, "clone");
+
+      init_status.namespaces_to_unshare &= ~can_clone;
+
+      if ((init_status.namespaces_to_unshare & (CLONE_NEWPID|CLONE_NEWTIME)) == 0)
+        init_status.must_fork = false;
+    }
 
   if (pid)
     {
