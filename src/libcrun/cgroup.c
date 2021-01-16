@@ -2458,7 +2458,9 @@ static int
 write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory,
                    libcrun_error_t *err)
 {
+  int ret;
   int64_t swap;
+  char *filename;
   char swap_buf[32];
   size_t swap_buf_len;
 
@@ -2478,7 +2480,26 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
 
   swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
 
-  return write_file_and_check_controllers_at (cgroup2, dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+  filename = cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes";
+
+  ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename,
+                                             swap_buf, swap_buf_len, err);
+  if (UNLIKELY (ret < 0))
+    {
+      /* If the swap cgroup is not enabled, and the limit is either 0
+         on cgroup v2 or same as the memory limit on cgroup v1,
+         ignore the error.  */
+      if (crun_error_get_errno (err) == ENOENT)
+        {
+          if ((cgroup2 && swap == 0)
+              || (!cgroup2 && swap == memory->limit))
+            {
+              crun_error_release (err);
+              return 0;
+            }
+        }
+    }
+  return ret;
 }
 
 static int
