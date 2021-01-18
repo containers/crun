@@ -18,10 +18,7 @@ export GO111MODULE=off
 ulimit -u unlimited
 export TMPDIR=/var/tmp
 
-# Skip some tests that are not currently supported:
-#
-# - checkpoint
-#  crun doesn't support CRIU.
+# Skip some tests that are not currently supported in the testing environment:
 #
 # - search|trust|inspect|logs|generate|import|mounted rw|inherit host devices|privileged CapEff|
 #   Flaky or not using the runtime.
@@ -34,8 +31,9 @@ export TMPDIR=/var/tmp
 #
 # - podman run exit 12*|podman run exit code on failure to exec|failed to start
 #   assumption that "create" must fail if the executable is not found.  We must add lookup for the executable in $PATH to mimic the runc behavior.
+#   device-cgroup-rule|capabilities|network|overlay volume flag|prune removes a pod with a stopped container: not working on github actions
 
 
-ginkgo --focus='.*' --skip='.*(checkpoint|selinux|notify_socket|systemd|podman run exit 12*|podman run exit code on failure to exec|failed to start|search|trust|inspect|logs|generate|import|mounted rw|inherit host devices|privileged CapEff|).*' \
-	 -v -tags "seccomp   ostree selinux  varlink exclude_graphdriver_devicemapper" \
+ginkgo --focus='.*' --skip='.*(selinux|notify_socket|systemd|podman run exit 12*|podman run exit code on failure to exec|failed to start|search|trust|inspect|logs|generate|import|mounted rw|inherit host devices|privileged CapEff|device-cgroup-rule|capabilities|network|--add-host|removes a pod with a container|prune removes a pod with a stopped container|overlay volume flag).*' \
+	 -v -tags "seccomp ostree selinux varlink exclude_graphdriver_devicemapper" \
 	 -timeout=50m -cover -flakeAttempts 3 -progress -trace -noColor test/e2e/.
