@@ -1527,9 +1527,41 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
 #endif
 }
 
+static inline void
+cleanup_sig_contp (void *p)
+{
+  pid_t *pp = p;
+  if (*pp < 0)
+    return;
+
+  TEMP_FAILURE_RETRY (kill (*pp, SIGCONT));
+}
+
+static bool
+must_stop_proc (runtime_spec_schema_config_linux_resources *resources)
+{
+  size_t i;
+
+  if (resources == NULL)
+    return false;
+
+  if (resources->cpu && (resources->cpu->cpus || resources->cpu->mems))
+    return true;
+
+  if (resources->unified)
+    {
+      for (i = 0; i < resources->unified->len; i++)
+        if (has_prefix (resources->unified->keys[i], "cpuset."))
+          return true;
+    }
+
+  return false;
+}
+
 int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
+  pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
   int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
   int manager = args->manager;
@@ -1538,6 +1570,21 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   libcrun_error_t tmp_err = NULL;
   int rootless;
   int ret;
+
+  /* If the cgroup configuration is limiting what CPUs/memory Nodes are available for the container,
+     then stop the container process during the cgroup configuration to avoid it being rescheduled on
+     a CPU that is not allowed.  This extra step is required for setting up the sub cgroup with the
+     systemd driver.  The alternative would be to temporarily setup the cpus/mems using d-bus.
+  */
+  if (must_stop_proc (args->resources))
+    {
+      ret = TEMP_FAILURE_RETRY (kill (args->pid, SIGSTOP));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "cannot stop container process '%d' with SIGSTOP", args->pid);
+
+      /* Send SIGCONT as soon as the function exits.  */
+      sigcont_cleanup = args->pid;
+    }
 
   if (cgroup_mode == CGROUP_MODE_HYBRID)
     {
