@@ -3170,10 +3170,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (init_status->namespaces_to_unshare)
+  if (init_status->namespaces_to_unshare & ~CLONE_NEWCGROUP)
     {
       /* New namespaces to create for the container.  */
-      ret = unshare (init_status->namespaces_to_unshare);
+      ret = unshare (init_status->namespaces_to_unshare & ~CLONE_NEWCGROUP);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "unshare");
     }
@@ -3328,7 +3328,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     }
   else
     {
-      int can_clone = init_status.namespaces_to_unshare & ~CLONE_NEWTIME;
+      int can_clone = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME|CLONE_NEWCGROUP);
 
       pid = syscall_clone (can_clone | SIGCHLD, NULL);
       if (UNLIKELY (pid < 0))
