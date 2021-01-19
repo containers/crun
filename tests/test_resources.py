@@ -64,7 +64,7 @@ def test_resources_unified_invalid_controller():
         # must raise an exception, fail if it doesn't.
         return -1
     except Exception as e:
-        if 'the requested controller `foo` is not available' in e.stdout.decode("utf-8").strip():
+        if 'the requested cgroup controller `foo` is not available' in e.stdout.decode("utf-8").strip():
             return 0
         return -1
     finally:
