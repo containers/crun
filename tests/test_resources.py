@@ -46,6 +46,43 @@ def test_resources_pid_limit():
         return -1
     return 0
 
+def test_resources_pid_limit_userns():
+    if os.getuid() != 0:
+        return 77
+
+    conf = base_config()
+    conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
+    add_all_namespaces(conf)
+
+    mappings = [
+        {
+            "containerID": 0,
+            "hostID": 1,
+            "size": 1,
+        },
+        {
+            "containerID": 1,
+            "hostID": 0,
+            "size": 1,
+        }
+    ]
+
+    conf['linux']['namespaces'].append({"type" : "user"})
+    conf['linux']['uidMappings'] = mappings
+    conf['linux']['gidMappings'] = mappings
+
+    fn = "/sys/fs/cgroup/pids/pids.max"
+    if not os.path.exists("/sys/fs/cgroup/pids"):
+        fn = "/sys/fs/cgroup/pids.max"
+        conf['linux']['namespaces'].append({"type" : "cgroup"})
+
+    conf['process']['args'] = ['/init', 'cat', fn]
+
+    out, _ = run_and_get_output(conf)
+    if "1024" not in out:
+        return -1
+    return 0
+
 def test_resources_unified_invalid_controller():
     if not is_cgroup_v2_unified() or os.geteuid() != 0:
         return 77
@@ -125,6 +162,7 @@ def test_resources_unified():
 
 all_tests = {
     "resources-pid-limit" : test_resources_pid_limit,
+    "resources-pid-limit-userns" : test_resources_pid_limit_userns,
     "resources-unified" : test_resources_unified,
     "resources-unified-invalid-controller" : test_resources_unified_invalid_controller,
     "resources-unified-invalid-key" : test_resources_unified_invalid_key,
