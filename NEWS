@@ -1,3 +1,13 @@
+* crun-0.17
+
+- allow creating user namespaces without root being mapped.
+- allow arbitrary IDs with single ID userns.
+- use close_range(CLOSE_RANGE_CLOEXEC) where available.
+- honor /sys/kernel/cgroup/delegate.
+- fix an issue with hooks running in the container PID namespace.
+- fix building without seccomp.
+- fix building without libcap.
+
 * crun-0.16
 
 - CRIU support.
