@@ -125,6 +125,9 @@ get_private_data (struct libcrun_container_s *container)
 #ifndef CLONE_NEWTIME
 # define CLONE_NEWTIME 0
 #endif
+#ifndef CLONE_NEWCGROUP
+# define CLONE_NEWCGROUP 0
+#endif
 
 static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS },
                                                  { "network", "net", CLONE_NEWNET },
@@ -132,7 +135,7 @@ static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS }
                                                  { "pid", "pid", CLONE_NEWPID },
                                                  { "uts", "uts", CLONE_NEWUTS },
                                                  { "user", "user", CLONE_NEWUSER },
-#ifdef CLONE_NEWCGROUP
+#if CLONE_NEWCGROUP
                                                  { "cgroup", "cgroup", CLONE_NEWCGROUP },
 #endif
 #if CLONE_NEWTIME
@@ -803,7 +806,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
   char *saveptr = NULL;
   bool has_cgroupns = false;
 
-#ifdef CLONE_NEWCGROUP
+#if CLONE_NEWCGROUP
   has_cgroupns = get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
 #endif
 
@@ -2171,7 +2174,7 @@ libcrun_container_setgroups (libcrun_container_t *container, libcrun_error_t *er
 int
 libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err)
 {
-#ifdef CLONE_NEWCGROUP
+#if CLONE_NEWCGROUP
   if (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP)
     {
       int ret = unshare (CLONE_NEWCGROUP);
@@ -3304,7 +3307,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     return ret;
 
   get_private_data (container)->unshare_flags = init_status.all_namespaces;
-#ifdef CLONE_NEWCGROUP
+#if CLONE_NEWCGROUP
   /* cgroup will be unshared later.  Once the process is in the correct cgroup.  */
   init_status.all_namespaces &= ~CLONE_NEWCGROUP;
 #endif
