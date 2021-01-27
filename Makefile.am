@@ -35,6 +35,8 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/signals.c \
 			src/libcrun/seccomp_notify.c
 
+libocispec/libocispec.la:
+	$(MAKE) $(AM_MAKEFLAGS) -C libocispec libocispec.la
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
