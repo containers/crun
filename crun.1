@@ -628,19 +628,7 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-weight	io.bfq.weight	T{
-y = (1 + (x \- 10) * 9999 / 990)
-T}
-	T{
-convert linearly from [10\-1000] to [1\-10000]
-T}
-weight\_device	io.bfq.weight	T{
-y = (1 + (x \- 10) * 9999 / 990)
-T}
-	T{
-convert linearly from [10\-1000] to [1\-10000]
-T}
-rbps	io.max	y=x	wbps	io.max	y=x	riops	io.max	y=x	wiops	io.max	y=x	
+weight	io.bfq.weight	y = x	weight\_device	io.bfq.weight	y = x	rbps	io.max	y=x	wbps	io.max	y=x	riops	io.max	y=x	wiops	io.max	y=x	
 .TE
 
 .SH cpuset controller

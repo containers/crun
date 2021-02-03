@@ -2105,15 +2105,10 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
   char fmt_buf[128];
   size_t len;
   int ret;
-  /* convert linearly from 10-1000 to 1-10000.  */
-#define CONVERT_WEIGHT_TO_CGROUPS_V2(x) (1 + ((x) -10) * 9999 / 990)
 
   if (blkio->weight)
     {
       uint32_t val = blkio->weight;
-
-      if (cgroup2)
-        val = CONVERT_WEIGHT_TO_CGROUPS_V2 (val);
 
       len = sprintf (fmt_buf, "%" PRIu32, val);
       ret = write_file_at (dirfd, cgroup2 ? "io.bfq.weight" : "blkio.weight", fmt_buf, len, err);
@@ -2141,7 +2136,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
             return crun_make_error (err, errno, "open io.weight");
           for (i = 0; i < blkio->weight_device_len; i++)
             {
-              uint32_t w = CONVERT_WEIGHT_TO_CGROUPS_V2 (blkio->weight_device[i]->weight);
+              uint32_t w = blkio->weight_device[i]->weight;
 
               len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %i\n", blkio->weight_device[i]->major,
                              blkio->weight_device[i]->minor, w);
