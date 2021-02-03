@@ -493,12 +493,12 @@ they are converted when needed from the cgroup v1 configuration.
 
 | OCI (x) | cgroup 2 value (y) | conversion  |   comment |
 |---|---|---|---|
-| weight | io.bfq.weight | y = (1 + (x - 10) * 9999 / 990) | convert linearly from [10-1000] to [1-10000]|
-| weight_device | io.bfq.weight | y = (1 + (x - 10) * 9999 / 990) | convert linearly from [10-1000] to [1-10000]|
-|rbps|io.max|y=x||
-|wbps|io.max|y=x||
-|riops|io.max|y=x||
-|wiops|io.max|y=x||
+| weight | io.bfq.weight | y = x ||
+| weight_device | io.bfq.weight | y = x ||
+| rbps | io.max | y=x ||
+| wbps | io.max | y=x ||
+| riops | io.max |y=x ||
+| wiops | io.max |y=x ||
 
 ## cpuset controller
 
