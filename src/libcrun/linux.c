@@ -617,7 +617,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd, cons
                 }
             }
 
-          return crun_make_error (err, saved_errno, "mount `%s` to '/%s'", source, target);
+          return crun_make_error (err, saved_errno, "mount `%s` to `/%s`", source, target);
         }
 
       if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
@@ -993,7 +993,6 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   int ret;
   dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
-  char fd_buffer[64];
   const char *fullname = device->path;
   cleanup_close int fd = -1;
   int rootfsfd = get_private_data (container)->rootfsfd;
@@ -1026,14 +1025,14 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
             return fd;
         }
 
-      sprintf (fd_buffer, "/proc/self/fd/%d", fd);
-
-      ret = do_mount (container, fullname, fd, fd_buffer, NULL, MS_BIND | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, fullname, fd, device->path, NULL, MS_BIND | MS_PRIVATE, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
+      char fd_buffer[64];
+
       dev = makedev (device->major, device->minor);
 
       /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
@@ -1730,6 +1729,27 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
   return 0;
 }
 
+static bool
+has_shared_mounts (runtime_spec_schema_config_schema *def)
+{
+  size_t i;
+
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      size_t j;
+
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        {
+          if (strcmp (def->mounts[i]->options[j], "shared") == 0
+              || strcmp (def->mounts[i]->options[j], "rshared") == 0)
+            {
+              return true;
+            }
+        }
+    }
+  return false;
+}
+
 static int
 allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out, char **tmpdir_out, char **tmpfile_out,
                      libcrun_error_t *err)
@@ -1743,6 +1763,12 @@ allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out, c
   state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
 
   where = state_dir;
+
+  /* If there is any shared mount in the container, disable the temporary mounts
+     logic as it requires the parent mount to be MS_PRIVATE and it could affect these
+     mounts.  */
+  if (has_shared_mounts (container->container_def))
+    return 0;
 
 repeat:
   ret = append_paths (&tmpdir, err, where, "tmp-dir", NULL);
@@ -1830,12 +1856,12 @@ exit:
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
+  int rootfsfd = -1;
   int ret = 0, is_user_ns = 0;
   unsigned long rootfs_propagation = 0;
   cleanup_close int rootfsfd_cleanup = -1;
+  runtime_spec_schema_config_schema *def = container->container_def;
   __attribute__ ((cleanup (cleanup_rmdir))) char *tmpdirparent = NULL;
-  int rootfsfd = -1;
 
   if (rootfs == NULL || def->mounts == NULL)
     return 0;
@@ -1868,15 +1894,16 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = make_parent_mount_private (tmpdirparent ? tmpdirparent : tmpdir, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (tmpdirparent != NULL || tmpdir != NULL)
+        {
+          ret = make_parent_mount_private (tmpdirparent ? tmpdirparent : tmpdir, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = do_mount (container, rootfs, -1, rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      do_mount (container, NULL, -1, "/tmp", NULL, MS_PRIVATE, NULL, LABEL_MOUNT, err);
     }
 
   if (rootfs == NULL)
@@ -1896,8 +1923,9 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
     {
       struct remount_s *r;
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
-      int fd = dup (rootfsfd);
+      int fd;
 
+      fd = dup (rootfsfd);
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "dup fd for `%s`", rootfs);
 
