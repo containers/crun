@@ -43,7 +43,7 @@
 #include <stdarg.h>
 
 #ifndef CLOSE_RANGE_CLOEXEC
-# define CLOSE_RANGE_CLOEXEC (1U << 2)
+#  define CLOSE_RANGE_CLOEXEC (1U << 2)
 #endif
 #ifndef RESOLVE_IN_ROOT
 #  define RESOLVE_IN_ROOT 0x10
@@ -451,8 +451,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
                       resolved_path = xrealloc (resolved_path, resolved_size);
 
                       s = readlinkat (dirfd, npath, resolved_path, resolved_size);
-                    }
-                  while (s == resolved_size);
+                  } while (s == resolved_size);
 
                   if (s > 0)
                     {
@@ -1036,8 +1035,7 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
             return crun_make_error (err, errno, "write");
           remaining -= ret;
         }
-    }
-  while (consume && nread);
+  } while (consume && nread);
 
   return 0;
 }
@@ -1824,8 +1822,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
               size = readlinkat (dirfd (dsrcfd), de->d_name, target_buf, buf_size);
               if (UNLIKELY (size < 0))
                 return crun_make_error (err, errno, "readlink `%s/%s`", srcname, de->d_name);
-            }
-          while (size == buf_size);
+          } while (size == buf_size);
 
           ret = symlinkat (target_buf, destdirfd, de->d_name);
           if (UNLIKELY (ret < 0))
@@ -1984,7 +1981,7 @@ append_paths (char **out, libcrun_error_t *err, ...)
       bool has_trailing_slash;
 
       has_trailing_slash = copied > 0 && (*out)[copied - 1] == '/';
-      if (i > 0 && !has_trailing_slash)
+      if (i > 0 && ! has_trailing_slash)
         {
           (*out)[copied] = '/';
           copied += 1;

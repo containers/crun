@@ -156,9 +156,12 @@
    See above for restrictions.  Avoid && and || as they tickle
    bugs in Sun C 5.11 2010/08/13 and other compilers; see
    <http://lists.gnu.org/archive/html/bug-gnulib/2011-05/msg00401.html>.  */
-#define INT_MULTIPLY_RANGE_OVERFLOW(a, b, min, max)                            \
-  ((b) < 0 ? ((a) < 0 ? (a) < (max) / (b) : (b) == -1 ? 0 : (min) / (b) < (a)) \
-           : (b) == 0 ? 0 : ((a) < 0 ? (a) < (min) / (b) : (max) / (b) < (a)))
+#define INT_MULTIPLY_RANGE_OVERFLOW(a, b, min, max) \
+  ((b) < 0    ? ((a) < 0     ? (a) < (max) / (b)    \
+                 : (b) == -1 ? 0                    \
+                             : (min) / (b) < (a))   \
+   : (b) == 0 ? 0                                   \
+              : ((a) < 0 ? (a) < (min) / (b) : (max) / (b) < (a)))
 
 /* Return 1 if A / B would overflow in [MIN,MAX] arithmetic.
    See above for restrictions.  Do not check for division by zero.  */
@@ -201,18 +204,24 @@
 #else
 #  define _GL_ADD_OVERFLOW(a, b, min, max)               \
     ((min) < 0 ? INT_ADD_RANGE_OVERFLOW (a, b, min, max) \
-               : (a) < 0 ? (b) <= (a) + (b) : (b) < 0 ? (a) <= (a) + (b) : (a) + (b) < (b))
-#  define _GL_SUBTRACT_OVERFLOW(a, b, min, max) \
-    ((min) < 0 ? INT_SUBTRACT_RANGE_OVERFLOW (a, b, min, max) : (a) < 0 ? 1 : (b) < 0 ? (a) - (b) <= (a) : (a) < (b))
+     : (a) < 0 ? (b) <= (a) + (b)                        \
+     : (b) < 0 ? (a) <= (a) + (b)                        \
+               : (a) + (b) < (b))
+#  define _GL_SUBTRACT_OVERFLOW(a, b, min, max)                                            \
+    ((min) < 0 ? INT_SUBTRACT_RANGE_OVERFLOW (a, b, min, max) : (a) < 0 ? 1                \
+                                                            : (b) < 0   ? (a) - (b) <= (a) \
+                                                                        : (a) < (b))
 #  define _GL_MULTIPLY_OVERFLOW(a, b, min, max) \
     (((min) == 0 && (((a) < 0 && 0 < (b)) || ((b) < 0 && 0 < (a)))) || INT_MULTIPLY_RANGE_OVERFLOW (a, b, min, max))
 #endif
 #define _GL_DIVIDE_OVERFLOW(a, b, min, max)                           \
   ((min) < 0 ? (b) == _GL_INT_NEGATE_CONVERT (min, 1) && (a) < -(max) \
-             : (a) < 0 ? (b) <= (a) + (b) -1 : (b) < 0 && (a) + (b) <= (a))
+   : (a) < 0 ? (b) <= (a) + (b) -1                                    \
+             : (b) < 0 && (a) + (b) <= (a))
 #define _GL_REMAINDER_OVERFLOW(a, b, min, max)                        \
   ((min) < 0 ? (b) == _GL_INT_NEGATE_CONVERT (min, 1) && (a) < -(max) \
-             : (a) < 0 ? (a) % (b) != ((max) - (b) + 1) % (b) : (b) < 0 && ! _GL_UNSIGNED_NEG_MULTIPLE (a, b, max))
+   : (a) < 0 ? (a) % (b) != ((max) - (b) + 1) % (b)                   \
+             : (b) < 0 && ! _GL_UNSIGNED_NEG_MULTIPLE (a, b, max))
 
 /* Return a nonzero value if A is a mathematical multiple of B, where
    A is unsigned, B is negative, and MAX is the maximum value of A's
@@ -316,14 +325,13 @@
                 long long int                                                                                       \
               : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned long long int, long long int, LLONG_MIN, LLONG_MAX)))
 #else
-#  define _GL_INT_OP_WRAPV(a, b, r, op, builtin, overflow)                                            \
-    (sizeof *(r) == sizeof (signed char)                                                              \
-         ? _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, signed char, SCHAR_MIN, SCHAR_MAX)   \
-         : sizeof *(r) == sizeof (short int)                                                          \
-               ? _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, short int, SHRT_MIN, SHRT_MAX) \
-               : sizeof *(r) == sizeof (int)                                                          \
-                     ? _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, int, INT_MIN, INT_MAX)   \
-                     : _GL_INT_OP_WRAPV_LONGISH (a, b, r, op, overflow))
+#  define _GL_INT_OP_WRAPV(a, b, r, op, builtin, overflow)                                                        \
+    (sizeof *(r) == sizeof (signed char)                                                                          \
+         ? _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, signed char, SCHAR_MIN, SCHAR_MAX)               \
+     : sizeof *(r) == sizeof (short int)                                                                          \
+         ? _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, short int, SHRT_MIN, SHRT_MAX)                   \
+     : sizeof *(r) == sizeof (int) ? _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, int, INT_MIN, INT_MAX) \
+                                   : _GL_INT_OP_WRAPV_LONGISH (a, b, r, op, overflow))
 #  ifdef LLONG_MAX
 #    define _GL_INT_OP_WRAPV_LONGISH(a, b, r, op, overflow)                                           \
       (sizeof *(r) == sizeof (long int)                                                               \

@@ -22,7 +22,7 @@
 #include <unistd.h>
 
 #ifndef CGROUP_ROOT
-# define CGROUP_ROOT "/sys/fs/cgroup"
+#  define CGROUP_ROOT "/sys/fs/cgroup"
 #endif
 
 enum

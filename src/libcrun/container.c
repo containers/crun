@@ -1039,8 +1039,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
           ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "read from the exec fifo");
-        }
-      while (ret == 0);
+      } while (ret == 0);
 
       close_and_reset (&entrypoint_args->context->fifo_exec_wait_fd);
     }
