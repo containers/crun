@@ -1733,22 +1733,47 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 }
 
 static bool
-has_shared_mounts (runtime_spec_schema_config_schema *def)
+has_shared_or_slave_parent_mount (const char *dir, runtime_spec_schema_config_schema *def)
 {
   size_t i;
 
   for (i = 0; i < def->mounts_len; i++)
     {
+      bool has_propagation_flag = false;
+      bool is_bind = false;
       size_t j;
+
+      if (def->mounts[i]->source == NULL)
+        continue;
 
       for (j = 0; j < def->mounts[i]->options_len; j++)
         {
           if (strcmp (def->mounts[i]->options[j], "shared") == 0
-              || strcmp (def->mounts[i]->options[j], "rshared") == 0)
+              || strcmp (def->mounts[i]->options[j], "rshared") == 0
+              || strcmp (def->mounts[i]->options[j], "slave") == 0
+              || strcmp (def->mounts[i]->options[j], "rslave") == 0)
             {
-              return true;
+              has_propagation_flag = true;
+              break;
             }
         }
+      if (! has_propagation_flag)
+        continue;
+
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        {
+          if (strcmp (def->mounts[i]->options[j], "bind") == 0
+              || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+            {
+              is_bind = true;
+              break;
+            }
+        }
+      if (! is_bind)
+        continue;
+
+      if (has_prefix (dir, def->mounts[i]->source))
+        return true;
     }
   return false;
 }
@@ -1763,17 +1788,13 @@ allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out, c
   char *where = NULL;
   int ret;
 
-  state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
-
-  where = state_dir;
-
+repeat:
   /* If there is any shared mount in the container, disable the temporary mounts
      logic as it requires the parent mount to be MS_PRIVATE and it could affect these
      mounts.  */
-  if (has_shared_mounts (container->container_def))
+  if (has_shared_or_slave_parent_mount (where, container->container_def))
     return 0;
 
-repeat:
   ret = append_paths (&tmpdir, err, where, "tmp-dir", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -1783,7 +1804,8 @@ repeat:
     {
       /*If the current user has no access to the state directory (e.g. running in an
         user namespace), then try with a temporary directory.  */
-      if (crun_error_get_errno (err) == EPERM || crun_error_get_errno (err) == EROFS
+      if (crun_error_get_errno (err) == EPERM
+          || crun_error_get_errno (err) == EROFS
           || crun_error_get_errno (err) == EACCES)
         {
           char tmp_dir[32];
