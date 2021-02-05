@@ -118,6 +118,7 @@ jobs:
                 ./configure
                 sudo docker build -t crun-clang-format tests/clang-format
                 sudo docker run --rm -w /crun -v ${PWD}:/crun crun-clang-format make clang-format
+                git diff --exit-code src
             ;;
             checkpoint-restore)
                 ./autogen.sh

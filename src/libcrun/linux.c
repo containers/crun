@@ -32,7 +32,7 @@
 #include <sys/syscall.h>
 #include <sys/prctl.h>
 #ifdef HAVE_CAP
-# include <sys/capability.h>
+#  include <sys/capability.h>
 #endif
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -123,10 +123,10 @@ get_private_data (struct libcrun_container_s *container)
 }
 
 #ifndef CLONE_NEWTIME
-# define CLONE_NEWTIME 0
+#  define CLONE_NEWTIME 0
 #endif
 #ifndef CLONE_NEWCGROUP
-# define CLONE_NEWCGROUP 0
+#  define CLONE_NEWCGROUP 0
 #endif
 
 static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS },
@@ -439,7 +439,7 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
             }
         }
       if (UNLIKELY (ret < 0))
-	return crun_make_error (err, errno, "remount `%s`", target);
+        return crun_make_error (err, errno, "remount `%s`", target);
     }
   return 0;
 }
@@ -733,8 +733,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
         {
           crun_error_release (err);
 
-          ret = do_mount (container, CGROUP_ROOT, targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE,
-                          err);
+          ret = do_mount (container, CGROUP_ROOT, targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE, err);
         }
       return ret;
     }
@@ -814,7 +813,8 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
   if (UNLIKELY (subsystems == NULL))
     return -1;
 
-  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", LABEL_MOUNT, err);
+  ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", LABEL_MOUNT,
+                  err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -910,14 +910,14 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
               ret = do_mount (container, source_subsystem, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags,
                               NULL, LABEL_NONE, err);
               if (UNLIKELY (ret < 0))
-               {
-                 /* If it still fails with ENOENT, ignore the error as the controller might have been
-                    dropped and doesn't exist.  */
-                 if (crun_error_get_errno (err) != ENOENT)
-                   return ret;
+                {
+                  /* If it still fails with ENOENT, ignore the error as the controller might have been
+                     dropped and doesn't exist.  */
+                  if (crun_error_get_errno (err) != ENOENT)
+                    return ret;
 
-                 crun_error_release (err);
-               }
+                  crun_error_release (err);
+                }
             }
         }
     }
@@ -1150,8 +1150,12 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   for (i = 0; i < def->linux->devices_len; i++)
     {
       struct device_s device = {
-        def->linux->devices[i]->path,  def->linux->devices[i]->type,      def->linux->devices[i]->major,
-        def->linux->devices[i]->minor, def->linux->devices[i]->file_mode, def->linux->devices[i]->uid,
+        def->linux->devices[i]->path,
+        def->linux->devices[i]->type,
+        def->linux->devices[i]->major,
+        def->linux->devices[i]->minor,
+        def->linux->devices[i]->file_mode,
+        def->linux->devices[i]->uid,
         def->linux->devices[i]->gid,
       };
 
@@ -1319,8 +1323,7 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
         break;
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "umount oldroot");
-    }
-  while (ret == 0);
+  } while (ret == 0);
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
@@ -2433,7 +2436,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "capset");
 
-# ifdef PR_CAP_AMBIENT
+#  ifdef PR_CAP_AMBIENT
   ret = prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
   if (UNLIKELY (ret < 0 && ! (errno == EINVAL || errno == EPERM)))
     return crun_make_error (err, errno, "prctl reset ambient");
@@ -2445,7 +2448,7 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
         if (UNLIKELY (ret < 0 && ! (errno == EINVAL || errno == EPERM)))
           return crun_make_error (err, errno, "prctl ambient raise");
       }
-# endif
+#  endif
 #endif
 
   if (no_new_privs)
@@ -3081,7 +3084,7 @@ root_mapped_in_container_p (runtime_spec_schema_defs_id_mapping **mappings, size
 
   for (i = 0; i < len; i++)
     if (mappings[i]->container_id == 0)
-        return true;
+      return true;
 
   return false;
 }
@@ -3104,17 +3107,15 @@ set_id_init (libcrun_container_t *container, libcrun_error_t *err)
 
       if (def->linux->uid_mappings_len != 0)
         {
-          root_mapped = root_mapped_in_container_p (def->linux->uid_mappings,
-                                                    def->linux->uid_mappings_len);
-          if (!root_mapped)
+          root_mapped = root_mapped_in_container_p (def->linux->uid_mappings, def->linux->uid_mappings_len);
+          if (! root_mapped)
             uid = def->process->user->uid;
         }
 
       if (def->linux->gid_mappings_len != 0)
         {
-          root_mapped = root_mapped_in_container_p (def->linux->gid_mappings,
-                                                    def->linux->gid_mappings_len);
-          if (!root_mapped)
+          root_mapped = root_mapped_in_container_p (def->linux->gid_mappings, def->linux->gid_mappings_len);
+          if (! root_mapped)
             gid = def->process->user->gid;
         }
     }
@@ -3372,9 +3373,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
   /* If a new user namespace must be created, but there are other namespaces to join, then delay
      the userns creation after the namespaces are joined.  */
-  init_status.delayed_userns_create = (init_status.all_namespaces & CLONE_NEWUSER)
-    && init_status.userns_index < 0
-    && init_status.fd_len > 0;
+  init_status.delayed_userns_create
+      = (init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0 && init_status.fd_len > 0;
 
   /* Check if special handling is required to join the namespaces.  */
   for (i = 0; i < init_status.fd_len; i++)
@@ -3420,7 +3420,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   else if ((init_status.all_namespaces & CLONE_NEWUSER) == 0)
     {
       /* If it doesn't create a user namespace or need to join one, create the new requested namespaces now. */
-      first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME|CLONE_NEWCGROUP);
+      first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME | CLONE_NEWCGROUP);
     }
 
   pid = syscall_clone (first_clone_args | SIGCHLD, NULL);
@@ -3430,7 +3430,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   init_status.namespaces_to_unshare &= ~first_clone_args;
 
   /* Check if there are still namespaces that require a fork().  */
-  if (init_status.namespaces_to_unshare & (CLONE_NEWPID|CLONE_NEWTIME))
+  if (init_status.namespaces_to_unshare & (CLONE_NEWPID | CLONE_NEWTIME))
     init_status.must_fork = true;
 
   if (pid)
@@ -3443,8 +3443,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "close");
 
-      if (init_status.idx_pidns_to_join_immediately >= 0
-          || init_status.idx_timens_to_join_immediately >= 0)
+      if (init_status.idx_pidns_to_join_immediately >= 0 || init_status.idx_timens_to_join_immediately >= 0)
         {
           pid_t new_pid = 0;
 
@@ -4084,8 +4083,7 @@ libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *er
   to_unshare = 0;
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
-      if (def->linux->namespaces[i]->path != NULL
-          && def->linux->namespaces[i]->path[0] != '\0')
+      if (def->linux->namespaces[i]->path != NULL && def->linux->namespaces[i]->path[0] != '\0')
         continue;
 
       to_unshare |= libcrun_find_namespace (def->linux->namespaces[i]->type);
@@ -4093,7 +4091,7 @@ libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *er
 
   if (to_unshare)
     {
-      ret = unshare (to_unshare & (CLONE_NEWIPC|CLONE_NEWNET|CLONE_NEWNS));
+      ret = unshare (to_unshare & (CLONE_NEWIPC | CLONE_NEWNET | CLONE_NEWNS));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "unshare");
     }
