@@ -1839,7 +1839,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->linux && def->linux->seccomp)
+  if (def->linux && (def->linux->seccomp || find_annotation (container, "run.oci.seccomp_bpf_data")))
     {
       ret = open_seccomp_output (context->id, &seccomp_fd, false, context->state_root, err);
       if (UNLIKELY (ret < 0))
@@ -1949,9 +1949,33 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       if (annotation && strcmp (annotation, "0") != 0)
         seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
 
-      ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
-      if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+      if ((annotation = find_annotation (container, "run.oci.seccomp_bpf_data")) != NULL)
+        {
+          cleanup_free char *bpf_data = NULL;
+          size_t size = 0;
+          size_t in_size;
+          int consumed;
+
+          in_size = strlen (annotation);
+          bpf_data = xmalloc (in_size + 1);
+
+          consumed = base64_decode (annotation, in_size, bpf_data, in_size, &size);
+          if (UNLIKELY (consumed != (int) in_size))
+            return crun_make_error (err, 0, "invalid seccomp BPF data");
+
+          ret = safe_write (seccomp_fd, bpf_data, (ssize_t) size);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_make_error (err, 0, "write to seccomp fd");
+              return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+            }
+        }
+      else
+        {
+          ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
+          if (UNLIKELY (ret < 0))
+            return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        }
       close_and_reset (&seccomp_fd);
     }
 

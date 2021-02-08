@@ -251,4 +251,6 @@ int append_paths (char **out, libcrun_error_t *err, ...);
 
 LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
 
+int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes);
+
 #endif

@@ -1993,3 +1993,60 @@ append_paths (char **out, libcrun_error_t *err, ...)
   (*out)[copied] = '\0';
   return 0;
 }
+
+/* Adapted from mailutils 0.6.91 (distributed under LGPL 2.0+)  */
+static int
+b64_input (char c)
+{
+  const char table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  int i;
+
+  for (i = 0; i < 64; i++)
+    {
+      if (table[i] == c)
+        return i;
+    }
+  return -1;
+}
+
+int
+base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes)
+{
+  int i = 0, tmp = 0, pad = 0;
+  size_t consumed = 0;
+  unsigned char data[4];
+
+  *nbytes = 0;
+  while (consumed < isize && (*nbytes) + 3 < osize)
+    {
+      while ((i < 4) && (consumed < isize))
+        {
+          tmp = b64_input (*iptr++);
+          consumed++;
+          if (tmp != -1)
+            data[i++] = tmp;
+          else if (*(iptr - 1) == '=')
+            {
+              data[i++] = '\0';
+              pad++;
+            }
+        }
+
+      /* I have a entire block of data 32 bits get the output data.  */
+      if (i == 4)
+        {
+          *optr++ = (data[0] << 2) | ((data[1] & 0x30) >> 4);
+          *optr++ = ((data[1] & 0xf) << 4) | ((data[2] & 0x3c) >> 2);
+          *optr++ = ((data[2] & 0x3) << 6) | data[3];
+          (*nbytes) += 3 - pad;
+        }
+      else
+        {
+          /* I did not get all the data.  */
+          consumed -= i;
+          return consumed;
+        }
+      i = 0;
+    }
+  return consumed;
+}
