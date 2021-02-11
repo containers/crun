@@ -1660,7 +1660,7 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
 }
 
 /* Find the uid:gid that is mapped to root inside the container user namespace.  */
-static void
+void
 get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid, uid_t *uid,
                                     gid_t *gid)
 {

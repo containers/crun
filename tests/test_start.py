@@ -19,8 +19,11 @@ import time
 import json
 import subprocess
 import os
+import os.path
 import shutil
 import sys
+import threading
+import socket
 from tests_utils import *
 
 def test_cwd_relative():
@@ -165,6 +168,55 @@ def test_sd_notify_env():
         return -1
     return 0
 
+def test_sd_notify_proxy():
+    if os.getuid() != 0:
+        return 77
+
+    has_open_tree_status = subprocess.call(["./tests/init", "check-feature", "open_tree"])
+    has_move_mount_status = subprocess.call(["./tests/init", "check-feature", "move_mount"])
+    if has_open_tree_status != 0 or has_move_mount_status != 0:
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'systemd-notify', '--ready']
+    add_all_namespaces(conf, cgroupns=True)
+    mappings = [
+        {
+            "containerID": 0,
+            # + getuid() makes sure we don't accidently run the container as the user that's running the test.
+            "hostID": 8000 + os.getuid(),
+            "size": 1,
+        },
+    ]
+    conf['linux']['uidMappings'] = mappings
+    conf['linux']['gidMappings'] = mappings
+    env = dict(os.environ)
+    with tempfile.TemporaryDirectory() as socket_dir:
+        env["NOTIFY_SOCKET"] = os.path.join(socket_dir, "notify.socket")
+        ready_datagram = None
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+            s.bind(env["NOTIFY_SOCKET"])
+            s.settimeout(2)
+            def notify_server():
+                nonlocal ready_datagram
+                ready_datagram = s.recv(1024)
+
+            notify_thread = threading.Thread(target=notify_server)
+            notify_thread.start()
+            try:
+                run_and_get_output(conf, env=env, command='run', chown_rootfs_to=8000)
+                notify_thread.join()
+                if ready_datagram != b"READY=1":
+                    return -1
+            except:
+                return -1
+            finally:
+                try:
+                    notify_thread.join()
+                except:
+                    pass
+            return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -172,6 +224,7 @@ all_tests = {
     "sd-notify" : test_sd_notify,
     "sd-notify-file" : test_sd_notify_file,
     "sd-notify-env" : test_sd_notify_env,
+    "sd-notify-proxy": test_sd_notify_proxy,
     "test-cwd-relative": test_cwd_relative,
     "test-cwd-relative-subdir": test_cwd_relative_subdir,
     "test-cwd-absolute": test_cwd_absolute,

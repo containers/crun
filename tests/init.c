@@ -26,6 +26,9 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/syscall.h>
 
 #ifdef HAVE_ERROR_H
 # include <error.h>
@@ -120,6 +123,37 @@ ls (char *path)
       printf ("%s\n", de->d_name);
     }
   closedir (dir);
+  return 0;
+}
+
+static int
+sd_notify () {
+  int ret;
+  int notify_socket_fd;
+  char *notify_socket_name;
+  struct sockaddr_un notify_socket_unix_name;
+  const char *ready_data = "READY=1";
+  const int ready_data_len = 7;
+
+  notify_socket_name = getenv ("NOTIFY_SOCKET");
+
+  if (notify_socket_name == NULL)
+    error (EXIT_FAILURE, 0, "NOTIFY_SOCKET not found in environment");
+
+  notify_socket_fd = socket (AF_UNIX, SOCK_DGRAM, 0);
+  if (notify_socket_fd < 0)
+    error (EXIT_FAILURE, errno, "socket");
+
+  notify_socket_unix_name.sun_family = AF_UNIX;
+  strncpy (notify_socket_unix_name.sun_path, notify_socket_name,
+           sizeof(notify_socket_unix_name.sun_path));
+
+  ret = sendto (notify_socket_fd, ready_data, ready_data_len, 0,
+                (struct sockaddr *)&notify_socket_unix_name, sizeof(notify_socket_unix_name));
+
+  if (ret < 0)
+    error (EXIT_FAILURE, 0, "sendto");
+
   return 0;
 }
 
@@ -261,6 +295,37 @@ int main (int argc, char **argv)
       return ls (argv[2]);
     }
 
+  if (strcmp (argv[1], "systemd-notify") == 0)
+    return sd_notify();
+
+  if (strcmp (argv[1], "check-feature") == 0)
+    {
+      int ret;
+
+      if (argc < 2)
+        error (EXIT_FAILURE, 0, "`check-feature` requires an argument");
+
+      if (strcmp (argv[2], "open_tree") == 0)
+        {
+#if defined __NR_open_tree
+          ret = syscall(__NR_open_tree);
+          return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
+#else
+          return 1;
+#endif
+        }
+      else if (strcmp (argv[2], "move_mount") == 0)
+        {
+#if defined __NR_move_mount
+          ret = syscall(__NR_move_mount);
+          return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
+#else
+          return 1;
+#endif
+        }
+      else
+        error (EXIT_FAILURE, 0, "unknown feature");
+    }
 
   error (EXIT_FAILURE, 0, "unknown command '%s' specified", argv[1]);
   return 0;

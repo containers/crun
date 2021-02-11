@@ -190,11 +190,20 @@ def get_crun_path():
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', env=None, use_popen=False, hide_stderr=False,
-                       all_dev_null=False, id_container=None, relative_config_path="config.json"):
-    temp_dir = tempfile.mkdtemp(dir=get_tests_root())
+                       all_dev_null=False, id_container=None, relative_config_path="config.json",
+                       chown_rootfs_to=None):
+
+    # Some tests require that the container user, which might not be the
+    # same user as the person running the tests, is able to resolve the full path
+    # to its own tree
+    if chown_rootfs_to is not None:
+        temp_dir = tempfile.mkdtemp()
+    else:
+        temp_dir = tempfile.mkdtemp(dir=get_tests_root())
+
     rootfs = os.path.join(temp_dir, "rootfs")
     os.makedirs(rootfs)
-    for i in ["usr/bin", "etc", "var", "lib", "lib64", "usr/share/zoneinfo/Europe"]:
+    for i in ["usr/bin", "etc", "var", "lib", "lib64", "usr/share/zoneinfo/Europe", "proc", "sys", "dev"]:
         os.makedirs(os.path.join(rootfs, i))
     with open(os.path.join(rootfs, "var", "file"), "w+") as f:
         f.write("file")
@@ -221,6 +230,12 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     open(os.path.join(rootfs, "usr/share/zoneinfo/Europe/Rome"), "w").close()
     os.symlink("../usr/share/zoneinfo/Europe/Rome", os.path.join(rootfs, "etc/localtime"))
     os.symlink("../foo/bar/not/here", os.path.join(rootfs, "etc/not-existing"))
+
+    if chown_rootfs_to is not None:
+        os.chown(temp_dir, chown_rootfs_to, chown_rootfs_to)
+        for root, dirs, files in os.walk(temp_dir):
+            for f in dirs + files:
+                os.chown(os.path.join(root, f), chown_rootfs_to, chown_rootfs_to, follow_symlinks=False)
 
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []

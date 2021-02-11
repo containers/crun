@@ -92,6 +92,7 @@ struct private_data_s
   int procfsfd;
   int mqueuefsfd;
   size_t rootfs_len;
+  int notify_socket_tree_fd;
 
   char *tmpmountdir;
   char *tmpmountfile;
@@ -118,6 +119,7 @@ get_private_data (struct libcrun_container_s *container)
       p->rootfsfd = -1;
       p->procfsfd = -1;
       p->mqueuefsfd = -1;
+      p->notify_socket_tree_fd = -1;
     }
   return container->private_data;
 }
@@ -127,6 +129,9 @@ get_private_data (struct libcrun_container_s *container)
 #endif
 #ifndef CLONE_NEWCGROUP
 #  define CLONE_NEWCGROUP 0
+#endif
+#ifndef AT_RECURSIVE
+#  define AT_RECURSIVE 0x8000
 #endif
 
 static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS },
@@ -210,6 +215,20 @@ syscall_move_mount (int from_dfd, const char *from_pathname, int to_dfd, const c
 {
 #if defined __NR_move_mount
   return (int) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
+#else
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+/* ignore this being unused - it's (currently) only unused if not building with systemd,
+   but conditioning the definition of syscall_open_tree on HAVE_SYSTEMD seems pretty silly */
+__attribute__ ((unused)) static int
+syscall_open_tree (int dfd, const char *pathname, unsigned int flags)
+
+{
+#if defined __NR_open_tree
+  return (int) syscall (__NR_open_tree, dfd, pathname, flags);
 #else
   errno = ENOSYS;
   return -1;
@@ -1643,6 +1662,9 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
   cleanup_free char *state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+  uid_t container_root_uid = -1;
+  gid_t container_root_gid = -1;
+  int notify_socket_tree_fd;
 
   if (notify_socket == NULL)
     return 0;
@@ -1659,6 +1681,35 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   if (ret < 0)
     return crun_make_error (err, errno, "mkdir `%s`", host_notify_socket_path);
 
+  if (get_private_data (container)->unshare_flags & CLONE_NEWUSER)
+    {
+      get_root_in_the_userns_for_cgroups (container->container_def, 0, 0, &container_root_uid, &container_root_gid);
+      if (container_root_uid != ((uid_t) -1) && container_root_gid != ((gid_t) -1))
+        {
+          ret = chown (host_notify_socket_path, container_root_uid, container_root_gid);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "chown %d:%d `%s`", container_root_uid, container_root_gid,
+                                    host_notify_socket_path);
+        }
+    }
+
+  notify_socket_tree_fd = syscall_open_tree (AT_FDCWD, host_notify_socket_path, OPEN_TREE_CLONE | AT_RECURSIVE);
+  if (notify_socket_tree_fd >= 0)
+    /* open_tree worked */
+    get_private_data (container)->notify_socket_tree_fd = notify_socket_tree_fd;
+  else if (errno == EPERM)
+    /* this can happen when trying to run a rootless container; this function is called
+       in the original namespace where the caller is _not_ CAP_SYS_ADMIN - in that case,
+       do nothing, because the bind mount of host_notify_socket_path directly should succeed
+       since it will be readable by the container user. */
+    ;
+  else if (errno == ENOSYS)
+    /* if open_tree(2) is not available, do nothing; we will try mount(2) in do_finalize_notify_socket */
+    ;
+  else
+    /* some other error */
+    return crun_make_error (err, errno, "open_tree `%s`", host_notify_socket_path);
+
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
   host_notify_socket_path = container_notify_socket_path = NULL;
@@ -1674,6 +1725,8 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
   cleanup_free char *container_notify_socket_path = get_private_data (container)->container_notify_socket_path;
   cleanup_free char *container_notify_socket_path_dir_alloc = NULL;
   char *container_notify_socket_path_dir = NULL;
+  cleanup_close int notify_socket_tree_fd = -1;
+  int did_mount_with_move_mount = 0;
 
   get_private_data (container)->host_notify_socket_path = get_private_data (container)->container_notify_socket_path
       = NULL;
@@ -1688,10 +1741,32 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mount (container, host_notify_socket_path, -1, container_notify_socket_path_dir, NULL,
-                  MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  notify_socket_tree_fd = get_private_data (container)->notify_socket_tree_fd;
+  /* the FD will be unconditionally closed at the end of this function due to cleanup_close above */
+  get_private_data (container)->notify_socket_tree_fd = -1;
+
+  if (notify_socket_tree_fd >= 0)
+    {
+      ret = syscall_move_mount (notify_socket_tree_fd, "", AT_FDCWD, container_notify_socket_path_dir,
+                                MOVE_MOUNT_F_EMPTY_PATH);
+      if (ret >= 0)
+        /* if move_mount(2) worked, make sure we don't try mount(2) */
+        did_mount_with_move_mount = 1;
+      else if (errno == ENOSYS)
+        /* do nothing; we will try mount(2) next */
+        ;
+      else
+        return crun_make_error (err, errno, "move_mount %d -> `%s`", notify_socket_tree_fd,
+                                container_notify_socket_path_dir);
+    }
+
+  if (! did_mount_with_move_mount)
+    {
+      ret = do_mount (container, host_notify_socket_path, -1, container_notify_socket_path_dir, NULL,
+                      MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   return 0;
 }
@@ -3496,6 +3571,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       ret = close_and_reset (&sync_socket_container);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "close");
+
+      /* any systemd notify socket open_tree FD is pointless to keep around in the parent */
+      close_and_reset (&(get_private_data (container)->notify_socket_tree_fd));
 
       if (init_status.idx_pidns_to_join_immediately >= 0 || init_status.idx_timens_to_join_immediately >= 0)
         {
