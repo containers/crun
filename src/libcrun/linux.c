@@ -1733,22 +1733,47 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 }
 
 static bool
-has_shared_mounts (runtime_spec_schema_config_schema *def)
+has_shared_or_slave_parent_mount (const char *dir, runtime_spec_schema_config_schema *def)
 {
   size_t i;
 
   for (i = 0; i < def->mounts_len; i++)
     {
+      bool has_propagation_flag = false;
+      bool is_bind = false;
       size_t j;
+
+      if (def->mounts[i]->source == NULL)
+        continue;
 
       for (j = 0; j < def->mounts[i]->options_len; j++)
         {
           if (strcmp (def->mounts[i]->options[j], "shared") == 0
-              || strcmp (def->mounts[i]->options[j], "rshared") == 0)
+              || strcmp (def->mounts[i]->options[j], "rshared") == 0
+              || strcmp (def->mounts[i]->options[j], "slave") == 0
+              || strcmp (def->mounts[i]->options[j], "rslave") == 0)
             {
-              return true;
+              has_propagation_flag = true;
+              break;
             }
         }
+      if (! has_propagation_flag)
+        continue;
+
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        {
+          if (strcmp (def->mounts[i]->options[j], "bind") == 0
+              || strcmp (def->mounts[i]->options[j], "rbind") == 0)
+            {
+              is_bind = true;
+              break;
+            }
+        }
+      if (! is_bind)
+        continue;
+
+      if (has_prefix (dir, def->mounts[i]->source))
+        return true;
     }
   return false;
 }
@@ -1757,71 +1782,100 @@ static int
 allocate_tmp_mounts (libcrun_container_t *container, char **parent_tmpdir_out, char **tmpdir_out, char **tmpfile_out,
                      libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = NULL;
-  cleanup_free char *tmpdir = NULL;
-  cleanup_free char *tmpfile = NULL;
   char *where = NULL;
+  int state = 0;
   int ret;
 
-  state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
-
-  where = state_dir;
-
-  /* If there is any shared mount in the container, disable the temporary mounts
-     logic as it requires the parent mount to be MS_PRIVATE and it could affect these
-     mounts.  */
-  if (has_shared_mounts (container->container_def))
-    return 0;
-
-repeat:
-  ret = append_paths (&tmpdir, err, where, "tmp-dir", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = crun_ensure_directory (tmpdir, 0700, true, err);
-  if (UNLIKELY (ret < 0))
+  for (state = 0;; state++)
     {
-      /*If the current user has no access to the state directory (e.g. running in an
-        user namespace), then try with a temporary directory.  */
-      if (crun_error_get_errno (err) == EPERM || crun_error_get_errno (err) == EROFS
-          || crun_error_get_errno (err) == EACCES)
+      cleanup_free char *parent_tmpdir = NULL;
+      cleanup_free char *state_dir = NULL;
+      cleanup_free char *tmpdir = NULL;
+      cleanup_free char *tmpfile = NULL;
+      char tmp_dir[32];
+      char *d;
+
+      switch (state)
         {
-          char tmp_dir[32];
-          char *d;
+        case 0:
+          state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+          where = state_dir;
+          break;
 
-          if (*parent_tmpdir_out == NULL)
+        case 1:
+          strcpy (tmp_dir, "/tmp/libcrun.XXXXXX");
+          d = mkdtemp (tmp_dir);
+          if (d == NULL)
+            continue;
+
+          parent_tmpdir = xstrdup (d);
+          where = parent_tmpdir;
+          break;
+
+        case 2:
+          strcpy (tmp_dir, "/dev/shm/libcrun.XXXXXX");
+          d = mkdtemp (tmp_dir);
+          if (d == NULL)
+            continue;
+
+          parent_tmpdir = xstrdup (d);
+          where = parent_tmpdir;
+          break;
+
+        case 3:
+          return 0;
+        }
+
+      /* If there is any shared mount in the container, disable the temporary mounts
+         logic as it requires the parent mount to be MS_PRIVATE and it could affect these
+         mounts.  */
+      if (has_shared_or_slave_parent_mount (where, container->container_def))
+        continue;
+
+      ret = append_paths (&tmpdir, err, where, "tmp-dir", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = crun_ensure_directory (tmpdir, 0700, true, err);
+      if (UNLIKELY (ret < 0))
+        {
+          /*If the current user has no access to the state directory (e.g. running in an
+            user namespace), then try with another directory.  */
+          if (crun_error_get_errno (err) == EPERM
+              || crun_error_get_errno (err) == EROFS
+              || crun_error_get_errno (err) == EACCES)
             {
-              strcpy (tmp_dir, "/tmp/libcrun.XXXXXX");
-              d = mkdtemp (tmp_dir);
-              if (d)
-                {
-                  crun_error_release (err);
-                  *parent_tmpdir_out = xstrdup (d);
-                  where = *parent_tmpdir_out;
-                  goto repeat;
-                }
+              crun_error_release (err);
+              continue;
             }
-
           return ret;
         }
 
+      ret = append_paths (&tmpfile, err, where, "tmp-file", NULL);
+      if (UNLIKELY (ret < 0))
+        goto cleanup;
+
+      ret = crun_ensure_file (tmpfile, 0700, true, err);
+      if (UNLIKELY (ret < 0))
+        goto cleanup;
+
+      /* Move ownership.  */
+      *parent_tmpdir_out = parent_tmpdir;
+      *tmpdir_out = tmpdir;
+      *tmpfile_out = tmpfile;
+      parent_tmpdir = tmpdir = tmpfile = NULL;
+      return 0;
+
+    cleanup:
+      if (tmpfile)
+        unlink (tmpfile);
+      if (tmpdir)
+        rmdir (tmpdir);
+      if (parent_tmpdir)
+        rmdir (parent_tmpdir);
       return ret;
     }
 
-  ret = append_paths (&tmpfile, err, where, "tmp-file", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = crun_ensure_file (tmpfile, 0700, true, err);
-  if (UNLIKELY (ret < 0))
-    {
-      rmdir (tmpdir);
-      return ret;
-    }
-
-  *tmpdir_out = tmpdir;
-  *tmpfile_out = tmpfile;
-  tmpdir = tmpfile = NULL;
   return 0;
 }
 
