@@ -1039,11 +1039,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
         }
       else
         {
-          ret = crun_ensure_file_at (rootfsfd, rel_path, 0700, true, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          fd = open_mount_target (container, rel_path, err);
+          fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0700, err);
           if (UNLIKELY (fd < 0))
             return fd;
         }
@@ -1099,17 +1095,14 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           *tmp = '\0';
           basename = tmp + 1;
 
-          dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname, O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
+          dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname,
+                               O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
           if (dirfd < 0 && ensure_parent_dir)
             {
               crun_error_release (err);
 
-              ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfs_len, dirname, 0755, err);
-
-              if (UNLIKELY (ret < 0))
-                return ret;
-
-              dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname, O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
+              dirfd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs,
+                                                        rootfs_len, dirname, 0755, err);
             }
           if (UNLIKELY (dirfd < 0))
             return dirfd;
@@ -1440,6 +1433,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
       cleanup_close int copy_from_fd = -1;
       cleanup_close int targetfd = -1;
       bool mounted = false;
+      bool is_sysfs_or_proc;
 
       type = def->mounts[i]->type;
 
@@ -1463,6 +1457,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           /* It is used only for error messages.  */
           type = "bind";
         }
+      is_sysfs_or_proc = strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0;
 
       if (def->mounts[i]->source && (flags & MS_BIND))
         {
@@ -1473,35 +1468,42 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           data = append_mode_if_missing (data, "mode=1755");
         }
 
-      if (is_dir)
+      if (is_sysfs_or_proc)
         {
-          /* Enforce /proc and /sys to be directories without any symlink under rootfs.  */
-          bool must_be_dir_under_root = strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0;
-
-          ret = crun_safe_ensure_directory_at (rootfsfd, rootfs, rootfs_len, target, 01755, err);
+          /* Enforce sysfs and proc to be mounted on a regular directory.  */
+          ret = openat (rootfsfd, target, O_NOFOLLOW | O_DIRECTORY);
           if (UNLIKELY (ret < 0))
-            return ret;
-
-          if (must_be_dir_under_root)
             {
-              mode_t mode;
+              if (errno == ENOENT)
+                {
+                  if (strchr (target, '/'))
+                    return crun_make_error (err, 0, "invalid target `%s`: it must be mounted at the root", target);
 
-              ret = get_file_type_at (rootfsfd, &mode, true, target);
-              if (UNLIKELY (ret < 0))
-                return ret;
+                  ret = mkdirat (rootfsfd, target, 0755);
+                  if (UNLIKELY (ret < 0))
+                    return crun_make_error (err, errno, "cannot mkdir `%s`", target);
 
-              if (! S_ISDIR (mode))
-                return crun_make_error (err, ENOTDIR, "invalid target for `%s`", type);
+                  /* Try opening it again.  */
+                  ret = openat (rootfsfd, target, O_NOFOLLOW | O_DIRECTORY);
+                }
+              else if (errno == ENOTDIR)
+                return crun_make_error (err, errno, "the target `/%s` is invalid", target);
 
-              if (strchr (target, '/'))
-                return crun_make_error (err, EINVAL, "target for `%s` must be under the rootfs", type);
+              if (ret < 0)
+                return crun_make_error (err, errno, "cannot open `%s`", target);
             }
+
+          targetfd = ret;
         }
       else
         {
-          ret = crun_safe_ensure_file_at (rootfsfd, rootfs, rootfs_len, target, 0755, err);
+          /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
+          ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, rootfs_len, target,
+                                                  is_dir ? 01755 : 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
+          targetfd = ret;
         }
 
       if (extra_flags & OPTION_TMPCOPYUP)
@@ -1509,11 +1511,12 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           if (strcmp (type, "tmpfs") != 0)
             return crun_make_error (err, 0, "tmpcopyup can be used only with tmpfs");
 
-          copy_from_fd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY | O_CLOEXEC, 0, err);
+          /* targetfd is opened with O_PATH, reopen the fd so it can read.  */
+          copy_from_fd = openat (targetfd, ".", O_RDONLY | O_DIRECTORY);
           if (UNLIKELY (copy_from_fd < 0))
             {
               if (errno != ENOTDIR)
-                return copy_from_fd;
+                return crun_make_error (err, errno, "cannot reopen `%s`", target);
 
               crun_error_release (err);
             }
@@ -1535,15 +1538,13 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
                   return ret;
                 mounted = true;
               }
+
             /* If the mount cannot be moved, attempt to mount it normally.  */
             break;
           }
+
       if (mounted)
         continue;
-
-      targetfd = open_mount_target (container, target, err);
-      if (UNLIKELY (targetfd < 0))
-        return targetfd;
 
       if (systemd_cgroup_v1 && strcmp (def->mounts[i]->destination, systemd_cgroup_v1) == 0)
         {
@@ -1562,7 +1563,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         {
           int label_how = LABEL_MOUNT;
 
-          if (strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0)
+          if (is_sysfs_or_proc)
             label_how = LABEL_NONE;
           else if (strcmp (type, "mqueue") == 0)
             label_how = LABEL_XATTR;
@@ -2097,7 +2098,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_masked_and_readonly_paths (container, rootfsfd, err);
+  ret = do_masked_and_readonly_paths (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
