@@ -280,7 +280,17 @@ enable_controllers (const char *path, libcrun_error_t *err)
   /* Enable all possible controllers in the root cgroup.  */
   ret = write_controller_file (CGROUP_ROOT, controllers_to_enable, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      /* Enabling +cpu when there are realtime processes fail with EINVAL.  */
+      if ((controllers_to_enable & CGROUP_CPU) && (crun_error_get_errno (err) == EINVAL))
+        {
+          crun_error_release (err);
+          controllers_to_enable &= ~CGROUP_CPU;
+          ret = write_controller_file (CGROUP_ROOT, controllers_to_enable, err);
+        }
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   for (it = strchr (tmp_path + 1, '/'); it;)
     {
