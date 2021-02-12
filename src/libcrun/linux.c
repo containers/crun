@@ -1552,7 +1552,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         {
           int destfd, tmpfd;
 
-          destfd = openat (rootfsfd, target, O_DIRECTORY);
+          destfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY, 0, err);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open target to write for tmpcopyup");
 
