@@ -635,6 +635,7 @@ libkrun_do_exec (void *container, void *arg, const char *pathname, char *const a
   int (*krun_start_enter) (uint32_t ctx_id);
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
+  int32_t (*krun_set_workdir) (uint32_t ctx_id, const char *workdir_path);
   int32_t (*krun_set_exec) (uint32_t ctx_id, const char *exec_path, char *const argv[], char *const envp[]);
   void *handle = arg;
   uint32_t num_vcpus, ram_mib;
@@ -645,6 +646,7 @@ libkrun_do_exec (void *container, void *arg, const char *pathname, char *const a
   krun_start_enter = dlsym (handle, "krun_start_enter");
   krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
   krun_set_root = dlsym (handle, "krun_set_root");
+  krun_set_workdir = dlsym (handle, "krun_set_workdir");
   krun_set_exec = dlsym (handle, "krun_set_exec");
   if (krun_create_ctx == NULL || krun_start_enter == NULL || krun_set_vm_config == NULL || krun_set_root == NULL
       || krun_set_exec == NULL)
@@ -678,6 +680,13 @@ libkrun_do_exec (void *container, void *arg, const char *pathname, char *const a
   ret = krun_set_root (ctx_id, "/");
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "could not set krun root");
+
+  if (krun_set_workdir && def && def->process && def->process->cwd)
+    {
+      ret = krun_set_workdir (ctx_id, def->process->cwd);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun working directory");
+    }
 
   ret = krun_set_exec (ctx_id, pathname, &argv[1], NULL);
   if (UNLIKELY (ret < 0))
