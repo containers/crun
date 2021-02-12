@@ -390,7 +390,8 @@ fallback:
 }
 
 static int
-crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
+                     size_t dirpath_len, const char *path, int mode,
                      int max_readlinks, libcrun_error_t *err)
 {
   cleanup_close int wd_cleanup = -1;
@@ -445,9 +446,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
             }
         }
 
-      if (! last_component || dir)
-        ret = mkdirat (cwd, cur, mode);
-      else
+      if (last_component && ! dir)
         {
           ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW, 0700);
           if (UNLIKELY (ret < 0))
@@ -470,7 +469,9 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
                     {
                       resolved_path[s] = '\0';
                       crun_error_release (err);
-                      return crun_safe_ensure_at (dir, dirfd, dirpath, dirpath_len, resolved_path, mode,
+                      return crun_safe_ensure_at (do_open, dir, dirfd,
+                                                  dirpath, dirpath_len,
+                                                  resolved_path, mode,
                                                   max_readlinks - 1, err);
                     }
                 }
@@ -480,11 +481,14 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
                 return crun_make_error (err, errno, "open `%s/%s`", dirpath, cur);
             }
 
-          close_and_replace (&wd_cleanup, ret);
+          if (do_open)
+            return ret;
 
+          close_and_replace (&wd_cleanup, ret);
           return 0;
         }
 
+      ret = mkdirat (cwd, cur, mode);
       if (ret < 0)
         {
           if (errno != EEXIST)
@@ -506,21 +510,44 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
       it = strchr (cur, '/');
     }
 
+  if (do_open)
+    {
+      if (cwd == dirfd)
+        return dup (dirfd);
+
+      wd_cleanup = -1;
+      return cwd;
+    }
+
   return 0;
+}
+
+int
+crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len,
+                                  const char *path, int mode, libcrun_error_t *err)
+{
+  int fd;
+
+  /* If the file/dir already exists, just open it.  */
+  fd = safe_openat (dirfd, dirpath, dirpath_len, path, O_PATH | O_CLOEXEC, 0, err);
+  if (LIKELY (fd > 0))
+    return fd;
+
+  return crun_safe_ensure_at (true, dir, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                                libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (true, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, true, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                           libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, false, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int

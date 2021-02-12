@@ -171,6 +171,8 @@ int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofoll
 
 int crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
+int crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+
 int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                                    libcrun_error_t *err);
 
