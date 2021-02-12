@@ -362,6 +362,15 @@ fallback:
   while (*path_in_chroot == '/')
     path_in_chroot++;
 
+  /* If the path is empty we are at the root, dup the dirfd itself.  */
+  if (path_in_chroot[0] == '\0')
+    {
+      ret = dup (dirfd);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "dup `%s`", rootfs);
+      return ret;
+    }
+
   ret = openat (dirfd, path_in_chroot, flags, mode);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "open `%s`", path);
