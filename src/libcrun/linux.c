@@ -542,7 +542,10 @@ static int
 fs_move_mount_to (int fd, int dirfd, const char *name)
 {
 #ifdef HAVE_FSCONFIG_CMD_CREATE
-  return syscall_move_mount (fd, "", dirfd, name, MOVE_MOUNT_F_EMPTY_PATH);
+  if (name)
+    return syscall_move_mount (fd, "", dirfd, name, MOVE_MOUNT_F_EMPTY_PATH);
+
+  return syscall_move_mount (fd, "", dirfd, "", MOVE_MOUNT_T_EMPTY_PATH | MOVE_MOUNT_F_EMPTY_PATH);
 #else
   (void) syscall_move_mount;
   errno = ENOSYS;
@@ -1533,7 +1536,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           {
             cleanup_close int mfd = get_and_reset (fsfd_mounts[j].fd);
 
-            ret = fs_move_mount_to (mfd, rootfsfd, target);
+            ret = fs_move_mount_to (mfd, targetfd, NULL);
             if (LIKELY (ret == 0))
               {
                 ret = do_mount (container, NULL, mfd, target, NULL, flags, data, LABEL_NONE, err);
