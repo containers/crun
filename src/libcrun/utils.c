@@ -362,6 +362,15 @@ fallback:
   while (*path_in_chroot == '/')
     path_in_chroot++;
 
+  /* If the path is empty we are at the root, dup the dirfd itself.  */
+  if (path_in_chroot[0] == '\0')
+    {
+      ret = dup (dirfd);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "dup `%s`", rootfs);
+      return ret;
+    }
+
   ret = openat (dirfd, path_in_chroot, flags, mode);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "open `%s`", path);
@@ -427,8 +436,10 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
             depth--;
           else
             {
+              /* Start from the root.  */
               close_and_reset (&wd_cleanup);
               cwd = dirfd;
+              goto next;
             }
         }
 
