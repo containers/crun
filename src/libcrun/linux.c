@@ -1231,9 +1231,12 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
 }
 
 static int
-do_masked_or_readonly_path (libcrun_container_t *container, int rootfsfd, const char *rel_path, bool readonly,
+do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path, bool readonly,
                             libcrun_error_t *err)
 {
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
+  const char *rootfs = get_private_data (container)->rootfs;
+  int rootfsfd = get_private_data (container)->rootfsfd;
   cleanup_close int pathfd = -1;
   int ret;
   mode_t mode;
@@ -1241,7 +1244,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, int rootfsfd, const 
   if (rel_path[0] == '/')
     rel_path++;
 
-  pathfd = openat (rootfsfd, rel_path, O_PATH | O_CLOEXEC);
+  pathfd = safe_openat (rootfsfd, rootfs, rootfs_len, rel_path, O_PATH | O_CLOEXEC, 0, err);
   if (UNLIKELY (pathfd < 0))
     {
       if (errno != ENOENT && errno != EACCES)
@@ -1279,7 +1282,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, int rootfsfd, const 
 }
 
 static int
-do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, libcrun_error_t *err)
+do_masked_and_readonly_paths (libcrun_container_t *container, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -1287,13 +1290,13 @@ do_masked_and_readonly_paths (libcrun_container_t *container, int rootfsfd, libc
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
-      ret = do_masked_or_readonly_path (container, rootfsfd, def->linux->masked_paths[i], false, err);
+      ret = do_masked_or_readonly_path (container, def->linux->masked_paths[i], false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   for (i = 0; i < def->linux->readonly_paths_len; i++)
     {
-      ret = do_masked_or_readonly_path (container, rootfsfd, def->linux->readonly_paths[i], true, err);
+      ret = do_masked_or_readonly_path (container, def->linux->readonly_paths[i], true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
