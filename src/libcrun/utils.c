@@ -41,6 +41,9 @@
 #include <linux/magic.h>
 #include <limits.h>
 #include <stdarg.h>
+#ifdef HAVE_LINUX_OPENAT2_H
+#  include <linux/openat2.h>
+#endif
 
 #ifndef CLOSE_RANGE_CLOEXEC
 #  define CLOSE_RANGE_CLOEXEC (1U << 2)
