@@ -436,8 +436,10 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
             depth--;
           else
             {
+              /* Start from the root.  */
               close_and_reset (&wd_cleanup);
               cwd = dirfd;
+              goto next;
             }
         }
 
