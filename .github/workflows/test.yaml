@@ -70,7 +70,7 @@ jobs:
         sudo add-apt-repository -y ppa:criu/ppa
         sudo apt-get update -q -y
 
-        sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev docker.io containerd runc
+        sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev docker.io containerd runc libasan6
 
         sudo systemctl unmask docker
         sudo systemctl start docker
@@ -92,10 +92,10 @@ jobs:
                 make
             ;;
             check)
-                ./configure
+                ./configure --disable-dl CFLAGS='-fsanitize=address -fsanitize=undefined -fsanitize=null -fsanitize=return -fsanitize=bounds -fsanitize=bool  -fsanitize=enum -fsanitize=builtin'
                 make
                 make syntax-check
-                sudo make check
+                sudo make check ASAN_OPTIONS=detect_leaks=false
             ;;
             podman)
                 sudo docker build -t crun-podman tests/podman
