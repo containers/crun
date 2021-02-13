@@ -143,4 +143,8 @@ LIBCRUN_PUBLIC int libcrun_container_checkpoint (libcrun_context_t *context, con
 LIBCRUN_PUBLIC int libcrun_container_restore (libcrun_context_t *context, const char *id,
                                               libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err);
 
+// Not part of the public API, just a method in container.c we need to access from linux.c
+void get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid,
+                                         uid_t *uid, gid_t *gid);
+
 #endif
