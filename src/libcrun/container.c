@@ -1670,8 +1670,8 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
 
 /* Find the uid:gid that is mapped to root inside the container user namespace.  */
 void
-get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid, uid_t *uid,
-                                    gid_t *gid)
+get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid, uid_t *uid,
+                        gid_t *gid)
 {
   *uid = -1;
   *gid = -1;
@@ -1899,7 +1899,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   /* If we are root (either on the host or in a namespace), then chown the cgroup to root in the container user
    * namespace.  */
-  get_root_in_the_userns_for_cgroups (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
+  get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
   {
     struct libcrun_cgroup_args cg = {
@@ -3066,7 +3066,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
 
   /* If we are root (either on the host or in a namespace),
    * then chown the cgroup to root in the container user namespace. */
-  get_root_in_the_userns_for_cgroups (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
+  get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
   {
     struct libcrun_cgroup_args cg = {

@@ -1690,7 +1690,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
 
   if (get_private_data (container)->unshare_flags & CLONE_NEWUSER)
     {
-      get_root_in_the_userns_for_cgroups (container->container_def, 0, 0, &container_root_uid, &container_root_gid);
+      get_root_in_the_userns (container->container_def, 0, 0, &container_root_uid, &container_root_gid);
       if (container_root_uid != ((uid_t) -1) && container_root_gid != ((gid_t) -1))
         {
           ret = chown (host_notify_socket_path, container_root_uid, container_root_gid);
