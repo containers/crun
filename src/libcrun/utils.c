@@ -605,12 +605,21 @@ int
 check_running_in_user_namespace (libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
+  static int run_in_userns = -1;
   size_t len;
-  int ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
+  int ret;
+
+  ret = run_in_userns;
+  if (ret >= 0)
+    return ret;
+
+  ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return strstr (buffer, "4294967295") ? 0 : 1;
+  ret = strstr (buffer, "4294967295") ? 0 : 1;
+  run_in_userns = ret;
+  return ret;
 }
 
 static int selinux_enabled = -1;
