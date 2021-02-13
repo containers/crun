@@ -7,9 +7,9 @@ if test "$(id -u)" != 0; then
 	exit 1
 fi
 
-(cd /crun; git clean -fdx; ./autogen.sh && ./configure CFLAGS='-Wall -Wextra -Werror' && make -j $(nproc))
+(cd /crun; git clean -fdx; ./autogen.sh && ./configure CFLAGS='-Wall -Wextra -Werror' --prefix=/usr && make -j $(nproc) && make install)
 
-export OCI_RUNTIME=/crun/crun
+export OCI_RUNTIME=/usr/bin/crun
 export CGROUP_MANAGER=cgroupfs
 export STORAGE_OPTIONS="--storage-driver=vfs"
 
