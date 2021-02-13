@@ -336,7 +336,8 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
   int ret;
   cleanup_close int fd = -1;
   static bool openat2_supported = true;
-  char buffer[PATH_MAX], *path_in_chroot;
+  const char *path_in_chroot;
+  char buffer[PATH_MAX];
 
   if (openat2_supported)
     {
@@ -359,8 +360,7 @@ fallback:
     return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
 
   path_in_chroot += rootfs_len;
-  while (*path_in_chroot == '/')
-    path_in_chroot++;
+  path_in_chroot = consume_slashes (path_in_chroot);
 
   /* If the path is empty we are at the root, dup the dirfd itself.  */
   if (path_in_chroot[0] == '\0')
@@ -402,8 +402,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
   if (max_readlinks <= 0)
     return crun_make_error (err, ELOOP, "resolve path `%s`", path);
 
-  while (*path == '/')
-    path++;
+  path = consume_slashes (path);
 
   npath = xstrdup (path);
 

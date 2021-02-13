@@ -145,6 +145,14 @@ xstrdup (const char *str)
   return ret;
 }
 
+static inline const char *
+consume_slashes (const char *t)
+{
+  while (*t == '/')
+    t++;
+  return t;
+}
+
 int xasprintf (char **str, const char *fmt, ...);
 
 int crun_path_exists (const char *path, libcrun_error_t *err);

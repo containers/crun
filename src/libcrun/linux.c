@@ -1029,10 +1029,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   if (binds)
     {
       cleanup_close int fd = -1;
-      const char *rel_path = device->path;
-
-      while (*rel_path == '/')
-        rel_path++;
+      const char *rel_path = consume_slashes (device->path);
 
       if (rel_dev)
         {
@@ -1412,20 +1409,16 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
 
   for (i = 0; i < def->mounts_len; i++)
     {
+      const char *target = consume_slashes (def->mounts[i]->destination);
       cleanup_free char *data = NULL;
       char *type;
       char *source;
       unsigned long flags = 0;
       unsigned long extra_flags = 0;
       int is_dir = 1;
-      char *target = NULL;
       cleanup_close int copy_from_fd = -1;
       cleanup_close int targetfd = -1;
       bool mounted = false;
-
-      target = def->mounts[i]->destination;
-      while (*target == '/')
-        target++;
 
       type = def->mounts[i]->type;
 
