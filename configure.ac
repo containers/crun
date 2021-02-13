@@ -38,6 +38,12 @@ AS_IF([test "x$enable_caps" != "xno"], [
 	])
 ])
 
+dnl dl
+AC_ARG_ENABLE([dl], AS_HELP_STRING([--disable-dl], [Disable dynamic libraries support]))
+AS_IF([test "x$enable_dl" != "xno"], [
+        AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
+])
+
 dnl include support for libkrun (EXPERIMENTAL)
 AC_ARG_WITH([libkrun], AS_HELP_STRING([--with-libkrun], [build with libkrun support]))
 AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE([HAVE_LIBKRUN], 1, [Define if libkrun is available]), [AC_MSG_ERROR([*** Missing libkrun headers])]))
@@ -146,8 +152,6 @@ AC_CHECK_TOOL(GPERF, gperf)
 if test -z "$GPERF"; then
        AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
 fi
-
-AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
