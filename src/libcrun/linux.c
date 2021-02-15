@@ -275,7 +275,14 @@ libcrun_create_keyring (const char *name, libcrun_error_t *err)
 {
   int ret = syscall_keyctl_join (name);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "create keyring `%s`", name);
+    {
+      if (errno == ENOSYS)
+        {
+          libcrun_warning ("could not create a new keyring: keyctl_join is not supported");
+          return 0;
+        }
+      return crun_make_error (err, errno, "create keyring `%s`", name);
+    }
   return 0;
 }
 
