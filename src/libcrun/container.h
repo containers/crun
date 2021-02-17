@@ -95,6 +95,8 @@ LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_file (const char
 
 LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
 
+LIBCRUN_PUBLIC void libcrun_container_free (libcrun_container_t *);
+
 LIBCRUN_PUBLIC int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container,
                                           unsigned int options, libcrun_error_t *error);
 
@@ -144,7 +146,17 @@ LIBCRUN_PUBLIC int libcrun_container_restore (libcrun_context_t *context, const 
                                               libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err);
 
 // Not part of the public API, just a method in container.c we need to access from linux.c
-void get_root_in_the_userns_for_cgroups (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid,
-                                         uid_t *uid, gid_t *gid);
+void get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid,
+                             uid_t *uid, gid_t *gid);
+
+static inline void
+cleanup_containerp (libcrun_container_t **c)
+{
+  libcrun_container_t *container = *c;
+  if (container)
+    libcrun_container_free (container);
+}
+
+#define cleanup_container __attribute__ ((cleanup (cleanup_containerp)))
 
 #endif

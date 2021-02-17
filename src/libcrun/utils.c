@@ -41,6 +41,9 @@
 #include <linux/magic.h>
 #include <limits.h>
 #include <stdarg.h>
+#ifdef HAVE_LINUX_OPENAT2_H
+#  include <linux/openat2.h>
+#endif
 
 #ifndef CLOSE_RANGE_CLOEXEC
 #  define CLOSE_RANGE_CLOEXEC (1U << 2)
@@ -336,7 +339,8 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
   int ret;
   cleanup_close int fd = -1;
   static bool openat2_supported = true;
-  char buffer[PATH_MAX], *path_in_chroot;
+  const char *path_in_chroot;
+  char buffer[PATH_MAX];
 
   if (openat2_supported)
     {
@@ -359,8 +363,7 @@ fallback:
     return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
 
   path_in_chroot += rootfs_len;
-  while (*path_in_chroot == '/')
-    path_in_chroot++;
+  path_in_chroot = consume_slashes (path_in_chroot);
 
   /* If the path is empty we are at the root, dup the dirfd itself.  */
   if (path_in_chroot[0] == '\0')
@@ -387,7 +390,8 @@ fallback:
 }
 
 static int
-crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
+                     size_t dirpath_len, const char *path, int mode,
                      int max_readlinks, libcrun_error_t *err)
 {
   cleanup_close int wd_cleanup = -1;
@@ -402,8 +406,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
   if (max_readlinks <= 0)
     return crun_make_error (err, ELOOP, "resolve path `%s`", path);
 
-  while (*path == '/')
-    path++;
+  path = consume_slashes (path);
 
   npath = xstrdup (path);
 
@@ -443,9 +446,7 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
             }
         }
 
-      if (! last_component || dir)
-        ret = mkdirat (cwd, cur, mode);
-      else
+      if (last_component && ! dir)
         {
           ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW, 0700);
           if (UNLIKELY (ret < 0))
@@ -468,7 +469,9 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
                     {
                       resolved_path[s] = '\0';
                       crun_error_release (err);
-                      return crun_safe_ensure_at (dir, dirfd, dirpath, dirpath_len, resolved_path, mode,
+                      return crun_safe_ensure_at (do_open, dir, dirfd,
+                                                  dirpath, dirpath_len,
+                                                  resolved_path, mode,
                                                   max_readlinks - 1, err);
                     }
                 }
@@ -478,11 +481,14 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
                 return crun_make_error (err, errno, "open `%s/%s`", dirpath, cur);
             }
 
-          close_and_replace (&wd_cleanup, ret);
+          if (do_open)
+            return ret;
 
+          close_and_replace (&wd_cleanup, ret);
           return 0;
         }
 
+      ret = mkdirat (cwd, cur, mode);
       if (ret < 0)
         {
           if (errno != EEXIST)
@@ -504,21 +510,44 @@ crun_safe_ensure_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_le
       it = strchr (cur, '/');
     }
 
+  if (do_open)
+    {
+      if (cwd == dirfd)
+        return dup (dirfd);
+
+      wd_cleanup = -1;
+      return cwd;
+    }
+
   return 0;
+}
+
+int
+crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len,
+                                  const char *path, int mode, libcrun_error_t *err)
+{
+  int fd;
+
+  /* If the file/dir already exists, just open it.  */
+  fd = safe_openat (dirfd, dirpath, dirpath_len, path, O_PATH | O_CLOEXEC, 0, err);
+  if (LIKELY (fd > 0))
+    return fd;
+
+  return crun_safe_ensure_at (true, dir, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                                libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (true, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, true, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                           libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, false, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
 }
 
 int
@@ -605,12 +634,21 @@ int
 check_running_in_user_namespace (libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
+  static int run_in_userns = -1;
   size_t len;
-  int ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
+  int ret;
+
+  ret = run_in_userns;
+  if (ret >= 0)
+    return ret;
+
+  ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return strstr (buffer, "4294967295") ? 0 : 1;
+  ret = strstr (buffer, "4294967295") ? 0 : 1;
+  run_in_userns = ret;
+  return ret;
 }
 
 static int selinux_enabled = -1;

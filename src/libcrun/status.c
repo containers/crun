@@ -487,7 +487,9 @@ libcrun_free_container_status (libcrun_container_status_t *status)
   free (status->cgroup_path);
   free (status->bundle);
   free (status->rootfs);
+  free (status->external_descriptors);
   free (status->created);
+  free (status->scope);
 }
 
 int

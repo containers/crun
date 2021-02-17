@@ -145,6 +145,14 @@ xstrdup (const char *str)
   return ret;
 }
 
+static inline const char *
+consume_slashes (const char *t)
+{
+  while (*t == '/')
+    t++;
+  return t;
+}
+
 int xasprintf (char **str, const char *fmt, ...);
 
 int crun_path_exists (const char *path, libcrun_error_t *err);
@@ -162,6 +170,8 @@ int crun_ensure_file (const char *path, int mode, bool nofollow, libcrun_error_t
 int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
 int crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
+
+int crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
 
 int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
                                    libcrun_error_t *err);
