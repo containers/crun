@@ -479,6 +479,14 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   return make_container (container_def);
 }
 
+void
+libcrun_container_free (libcrun_container_t *ctr)
+{
+  if (ctr->container_def)
+    free_runtime_spec_schema_config_schema (ctr->container_def);
+  free (ctr);
+}
+
 static int
 block_signals (libcrun_error_t *err)
 {
@@ -1140,7 +1148,7 @@ static int
 run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, runtime_spec_schema_config_schema *def,
                     libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free libcrun_container_t *container_cleanup = NULL;
+  cleanup_container libcrun_container_t *container_cleanup = NULL;
   int ret;
 
   if (def == NULL)
@@ -1178,8 +1186,6 @@ run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, 
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
-  if (container && container->container_def)
-    free_runtime_spec_schema_config_schema (container->container_def);
   return 0;
 }
 
@@ -2516,7 +2522,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   {
     size_t i;
     cleanup_free char *config_file;
-    cleanup_free libcrun_container_t *container = NULL;
+    cleanup_container libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
 
     dir = libcrun_get_state_directory (state_root, id);
@@ -2550,7 +2556,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
           }
         yajl_gen_map_close (gen);
       }
-    free_runtime_spec_schema_config_schema (container->container_def);
   }
 
   yajl_gen_map_close (gen);
@@ -3009,7 +3014,7 @@ int
 libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
                            libcrun_error_t *err)
 {
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
   runtime_spec_schema_config_schema *def;
   cleanup_free char *cgroup_path = NULL;
   libcrun_container_status_t status = {};

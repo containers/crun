@@ -120,7 +120,7 @@ int
 crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg, ret;
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *config_file_cleanup = NULL;
 
