@@ -1391,6 +1391,27 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
   return 0;
 }
 
+static char *
+append_mode_if_missing (char *data, const char *mode)
+{
+  char *new_data;
+  bool append;
+
+  if (data != NULL && strstr (data, "mode="))
+    return data;
+
+  append = data != NULL && data[0] != '\0';
+
+  if (append)
+    xasprintf (&new_data, "%s,%s", data, mode);
+  else
+    new_data = xstrdup (mode);
+
+  free (data);
+
+  return new_data;
+}
+
 static int
 do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
@@ -1449,23 +1470,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
           if (UNLIKELY (is_dir < 0))
             return is_dir;
 
-          if (data == NULL || strstr (data, "mode=") == NULL)
-            {
-              bool append;
-
-              append = data != NULL && data[0] != '\0';
-
-              if (data != NULL)
-                {
-                  free (data);
-                  data = NULL;
-                }
-
-              if (append)
-                xasprintf (&data, "%s,%s", data, "mode=1755");
-              else
-                data = xstrdup ("mode=1755");
-            }
+          data = append_mode_if_missing (data, "mode=1755");
         }
 
       if (is_dir)
