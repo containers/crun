@@ -24,7 +24,7 @@ import sys
 from tests_utils import *
 
 def test_pid():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']

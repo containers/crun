@@ -28,7 +28,7 @@ def is_cgroup_v2_unified():
     return subprocess.check_output("stat -c%T -f /sys/fs/cgroup".split()).decode("utf-8").strip() == "cgroup2fs"
 
 def test_resources_pid_limit():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     conf = base_config()
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
@@ -47,7 +47,7 @@ def test_resources_pid_limit():
     return 0
 
 def test_resources_pid_limit_userns():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
 
     conf = base_config()
@@ -84,7 +84,7 @@ def test_resources_pid_limit_userns():
     return 0
 
 def test_resources_unified_invalid_controller():
-    if not is_cgroup_v2_unified() or os.geteuid() != 0:
+    if not is_cgroup_v2_unified() or is_rootless():
         return 77
 
     conf = base_config()
@@ -110,7 +110,7 @@ def test_resources_unified_invalid_controller():
     return 0
 
 def test_resources_unified_invalid_key():
-    if not is_cgroup_v2_unified() or os.geteuid() != 0:
+    if not is_cgroup_v2_unified() or is_rootless():
         return 77
 
     conf = base_config()
@@ -136,7 +136,7 @@ def test_resources_unified_invalid_key():
     return 0
 
 def test_resources_unified():
-    if not is_cgroup_v2_unified() or os.geteuid() != 0:
+    if not is_cgroup_v2_unified() or is_rootless():
         return 77
 
     conf = base_config()

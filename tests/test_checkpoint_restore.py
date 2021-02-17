@@ -24,13 +24,13 @@ import sys
 from tests_utils import *
 
 def test_cr1():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     if 'CRIU' not in get_crun_feature_string():
         return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
-    add_all_namespaces(conf)
+    add_all_namespaces(conf, userns=True)
     # User namespace support not working yet for checkpoint/restore
     conf['linux']['namespaces'].remove({'type':'user'})
     cid = None

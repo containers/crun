@@ -169,7 +169,7 @@ def test_sd_notify_env():
     return 0
 
 def test_sd_notify_proxy():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
 
     has_open_tree_status = subprocess.call(["./tests/init", "check-feature", "open_tree"])

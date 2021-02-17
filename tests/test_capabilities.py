@@ -61,13 +61,23 @@ def test_new_privs():
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status['NoNewPrivs']
     if no_new_privs != "1":
+        print("invalid value for NoNewPrivs, found %s" % no_new_privs)
         return -1
+
+    with open("/proc/self/status") as f:
+        host_proc_status = parse_proc_status("\n".join(f.readlines()))
+        no_new_privs = proc_status['NoNewPrivs']
+        # if nonewprivs is already set, it cannot be unset, so skip the
+        # next test
+        if no_new_privs:
+            return 0
 
     conf['process']['noNewPrivileges'] = False
     out, _ = run_and_get_output(conf)
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status['NoNewPrivs']
     if no_new_privs != "0":
+        print("invalid value for NoNewPrivs, found %s" % no_new_privs)
         return -1
 
     return 0

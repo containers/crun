@@ -24,7 +24,7 @@ import sys
 from tests_utils import *
 
 def test_deny_devices():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
 
     try:
@@ -54,7 +54,7 @@ def test_deny_devices():
     return -1
 
 def test_allow_device():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
 
     try:
