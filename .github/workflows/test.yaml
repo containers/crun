@@ -95,7 +95,12 @@ jobs:
                 ./configure --disable-dl CFLAGS='-fsanitize=address -fsanitize=undefined -fsanitize=null -fsanitize=return -fsanitize=bounds -fsanitize=bool  -fsanitize=enum -fsanitize=builtin'
                 make
                 make syntax-check
-                sudo make check ASAN_OPTIONS=detect_leaks=false
+                echo run tests as root
+                sudo make check ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
+                echo run tests as rootless
+                mkdir /tmp/runroot && make check XDG_RUNTIME_DIR=/tmp/runroot ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
+                echo run tests as rootless in a user namespace
+                mkdir /tmp/runroot && unshare -r make check XDG_RUNTIME_DIR=/tmp/runroot ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
             ;;
             podman)
                 sudo docker build -t crun-podman tests/podman

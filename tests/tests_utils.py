@@ -144,13 +144,15 @@ def parse_proc_status(content):
         r[k] = v.strip()
     return r
 
-def add_all_namespaces(conf, cgroupns=False):
+def add_all_namespaces(conf, cgroupns=False, userns=False):
     has = {}
     for i in conf['linux']['namespaces']:
         has[i['type']] = i['type']
-    namespaces = ['pid', 'user', 'ipc', 'uts', 'network']
+    namespaces = ['pid', 'ipc', 'uts', 'network']
     if cgroupns:
         namespaces = namespaces + ["cgroup"]
+    if userns:
+        namespaces = namespaces + ["user"]
     for i in namespaces:
         if i not in has:
             conf['linux']['namespaces'].append({"type" : i})
@@ -279,6 +281,13 @@ def tests_main(all_tests):
     finally:
         shutil.rmtree(tests_root)
 
+def is_rootless():
+    if os.getuid() != 0:
+        return True
+    with open("/proc/self/uid_map") as f:
+        if "4294967295" in f.readline():
+            return False
+    return True
 
 def get_crun_feature_string():
     for i in run_crun_command(['--version']).split('\n'):

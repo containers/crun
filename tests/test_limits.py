@@ -26,7 +26,7 @@ from tests_utils import *
 def test_limit_pid_0():
     conf = base_config()
     add_all_namespaces(conf)
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : 0}}
@@ -37,7 +37,7 @@ def test_limit_pid_0():
 
 def test_limit_pid_n():
     conf = base_config()
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'forkbomb', '20']

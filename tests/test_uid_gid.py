@@ -24,7 +24,7 @@ import sys
 from tests_utils import *
 
 def test_userns_full_mapping():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     conf = base_config()
     add_all_namespaces(conf)
@@ -52,6 +52,8 @@ def test_userns_full_mapping():
 
 
 def test_uid():
+    if is_rootless():
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
@@ -66,6 +68,8 @@ def test_uid():
     return 0
 
 def test_gid():
+    if is_rootless():
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
@@ -80,7 +84,7 @@ def test_gid():
     return 0
 
 def test_no_groups():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
@@ -95,7 +99,7 @@ def test_no_groups():
     return 0
 
 def test_keep_groups():
-    if os.getuid() != 0:
+    if is_rootless():
         return 77
     oldgroups = os.getgroups()
     out = ""
