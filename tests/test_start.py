@@ -217,6 +217,18 @@ def test_sd_notify_proxy():
                     pass
             return 0
 
+def test_empty_home():
+    conf = base_config()
+    conf['process']['args'] = ['/sbin/init', 'printenv', 'HOME']
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf)
+        if "/" not in str(out):
+            return -1
+    except Exception as e:
+        return -1
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -228,6 +240,7 @@ all_tests = {
     "test-cwd-relative": test_cwd_relative,
     "test-cwd-relative-subdir": test_cwd_relative_subdir,
     "test-cwd-absolute": test_cwd_absolute,
+    "empty-home": test_empty_home,
 }
 
 if __name__ == "__main__":

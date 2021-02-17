@@ -1157,7 +1157,8 @@ set_home_env (uid_t id)
   if (stream == NULL)
     {
       if (errno == ENOENT)
-        return 0;
+        goto exit;
+
       return -1;
     }
 
@@ -1186,6 +1187,10 @@ set_home_env (uid_t id)
           return 0;
         }
     }
+
+exit:
+  /* If the user was not found, set it to something reasonable.  */
+  setenv ("HOME", "/", 1);
   return 0;
 }
 
