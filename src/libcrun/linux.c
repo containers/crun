@@ -64,6 +64,18 @@
 #  define RLIMIT_RTTIME 15
 #endif
 
+#ifndef OPEN_TREE_CLONE
+#  define OPEN_TREE_CLONE 1
+#endif
+
+#ifndef MOVE_MOUNT_F_EMPTY_PATH
+#  define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
+#endif
+
+#ifndef MOVE_MOUNT_T_EMPTY_PATH
+#  define MOVE_MOUNT_T_EMPTY_PATH 0x00000040
+#endif
+
 struct remount_s
 {
   struct remount_s *next;
