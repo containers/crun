@@ -1,3 +1,18 @@
+* crun-0.18
+
+- fix build without CLONE_NEWCGROUP.
+- fix conversion from blkio to io.
+- add custom annotation to load raw BPF.
+- set working directory for libkrun
+- fix symlink lookup on old kernels that lack openat2
+- skip +cpu on EINVAL in cgroup root.  Enabling the cpu controller is
+  not permitted if there are already realtime processes running on the
+  system.
+- Fix permission error when using NOTIFY_SOCKET with username spaces.
+- set HOME to root if the user not found.
+- simplify mount logic to not use a temporary mount.
+- ignore ENOSYS from keyctl.
+
 * crun-0.17
 
 - allow creating user namespaces without root being mapped.
