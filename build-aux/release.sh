@@ -56,6 +56,12 @@ cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64
 
 rm -rf result
 
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/default-arm64.nix --arg enableSystemd false
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64-disable-systemd
+
+rm -rf result
+
 if test x$SKIP_GPG = x; then
     for i in $OUTDIR/*; do
         gpg2 -b --armour $i
