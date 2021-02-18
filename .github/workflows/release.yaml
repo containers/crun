@@ -32,6 +32,7 @@ jobs:
           sudo mv /tmp/artifact/crun-*-linux-amd64 /tmp/artifact/crun-linux-amd64
           sudo mv /tmp/artifact/crun-*-linux-amd64-disable-systemd /tmp/artifact/crun-linux-amd64-disable-systemd
           sudo mv /tmp/artifact/crun-*-linux-arm64 /tmp/artifact/crun-linux-arm64
+          sudo mv /tmp/artifact/crun-*-linux-arm64-disable-systemd /tmp/artifact/crun-linux-arm64-disable-systemd
           sudo mv /tmp/artifact/*.tar.gz /tmp/artifact/crun.tar.gz
           sudo mv /tmp/artifact/*.tar.xz /tmp/artifact/crun.tar.xz
 
@@ -49,6 +50,11 @@ jobs:
         with:
           name: crun-linux-arm64
           path: /tmp/artifact/crun-linux-arm64
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: crun-linux-arm64-disable-systemd
+          path: /tmp/artifact/crun-linux-arm64-disable-systemd
 
       - uses: actions/upload-artifact@v2
         with:
