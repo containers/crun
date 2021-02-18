@@ -27,7 +27,6 @@ jobs:
           sudo chown -Rf $(whoami) .cache
 
       - run: |
-          (cd release-*; sha256sum *)
           sudo mv release-* /tmp/artifact
           sudo mv /tmp/artifact/crun-*-linux-amd64 /tmp/artifact/crun-linux-amd64
           sudo mv /tmp/artifact/crun-*-linux-amd64-disable-systemd /tmp/artifact/crun-linux-amd64-disable-systemd
@@ -35,6 +34,7 @@ jobs:
           sudo mv /tmp/artifact/crun-*-linux-arm64-disable-systemd /tmp/artifact/crun-linux-arm64-disable-systemd
           sudo mv /tmp/artifact/*.tar.gz /tmp/artifact/crun.tar.gz
           sudo mv /tmp/artifact/*.tar.xz /tmp/artifact/crun.tar.xz
+          (cd /tmp/artifact; sha256sum * | sudo tee CHECKSUMS)
 
       - uses: actions/upload-artifact@v2
         with:
@@ -65,3 +65,8 @@ jobs:
         with:
           name: crun.tar.xz
           path: /tmp/artifact/crun.tar.xz
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: CHECKSUMS
+          path: /tmp/artifact/CHECKSUMS
