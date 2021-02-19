@@ -14,7 +14,7 @@ srpm: dist-gzip rpm/crun.spec
 	$(MAKE) -C $(WD) dist-gzip
 	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
-CLEANFILES = crun.spec tests/init
+CLEANFILES = crun.spec
 
 lib_LTLIBRARIES = libcrun.la
 
@@ -79,9 +79,9 @@ noinst_PROGRAMS = tests/init $(UNIT_TESTS)
 
 TESTS_LDADD = libcrun_testing.a $(FOUND_LIBS)
 
-tests/init: tests/init.c
-	$(CC) -static-libgcc --static -o $@ $<
-EXTRA_DIST += tests/init.c
+tests_init_LDADD =
+tests_init_LDFLAGS = -static-libgcc -all-static
+tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
 
 tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
