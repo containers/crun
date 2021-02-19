@@ -73,9 +73,10 @@ $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
 ### RHEL/CentOS 8
 
 ```console
-$ sudo yum --enablerepo='*' install -y make automake autoconf gettext \
+$ sudo yum --enablerepo='*' --disablerepo='media-*' install -y make automake \
+    autoconf gettext \
     libtool gcc libcap-devel systemd-devel yajl-devel \
-    libseccomp-devel python36 libtool
+    libseccomp-devel python36 libtool git
 ```
 
 go-md2man is not available on RHEL/CentOS 8, so if you'd like to build
