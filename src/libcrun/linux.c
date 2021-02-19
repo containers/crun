@@ -191,6 +191,8 @@ syscall_fsopen (const char *fs_name, unsigned int flags)
 #if defined __NR_fsopen
   return (int) syscall (__NR_fsopen, fs_name, flags);
 #else
+  (void) fs_name;
+  (void) flags;
   errno = ENOSYS;
   return -1;
 #endif
@@ -202,6 +204,9 @@ syscall_fsmount (int fsfd, unsigned int flags, unsigned int attr_flags)
 #if defined __NR_fsmount
   return (int) syscall (__NR_fsmount, fsfd, flags, attr_flags);
 #else
+  (void) fsfd;
+  (void) flags;
+  (void) attr_flags;
   errno = ENOSYS;
   return -1;
 #endif
@@ -213,6 +218,11 @@ syscall_fsconfig (int fsfd, unsigned int cmd, const char *key, const void *val, 
 #if defined __NR_fsconfig
   return (int) syscall (__NR_fsconfig, fsfd, cmd, key, val, aux);
 #else
+  (void) fsfd;
+  (void) cmd;
+  (void) key;
+  (void) val;
+  (void) aux;
   errno = ENOSYS;
   return -1;
 #endif
@@ -225,6 +235,11 @@ syscall_move_mount (int from_dfd, const char *from_pathname, int to_dfd, const c
 #if defined __NR_move_mount
   return (int) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
 #else
+  (void) from_dfd;
+  (void) from_pathname;
+  (void) to_dfd;
+  (void) to_pathname;
+  (void) flags;
   errno = ENOSYS;
   return -1;
 #endif
@@ -239,6 +254,9 @@ syscall_open_tree (int dfd, const char *pathname, unsigned int flags)
 #if defined __NR_open_tree
   return (int) syscall (__NR_open_tree, dfd, pathname, flags);
 #else
+  (void) dfd;
+  (void) pathname;
+  (void) flags;
   errno = ENOSYS;
   return -1;
 #endif
@@ -539,6 +557,7 @@ fsopen_mount (runtime_spec_schema_defs_mount *mount)
 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
 #else
+  (void) mount;
   (void) syscall_fsopen;
   (void) syscall_fsconfig;
   (void) syscall_fsmount;
@@ -556,6 +575,9 @@ fs_move_mount_to (int fd, int dirfd, const char *name)
 
   return syscall_move_mount (fd, "", dirfd, "", MOVE_MOUNT_T_EMPTY_PATH | MOVE_MOUNT_F_EMPTY_PATH);
 #else
+  (void) fd;
+  (void) dirfd;
+  (void) name;
   (void) syscall_move_mount;
   errno = ENOSYS;
   return -1;
