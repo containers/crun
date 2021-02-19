@@ -149,6 +149,10 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
   ctx = NULL;
   return 0;
 #else
+  (void) out;
+  (void) plugins;
+  (void) conf;
+  (void) err;
   return crun_make_error (err, ENOTSUP, "seccomp notify support not available");
 #endif
 }
@@ -220,6 +224,9 @@ send_resp:
     }
   return 0;
 #else
+  (void) ctx;
+  (void) seccomp_fd;
+  (void) err;
   return crun_make_error (err, ENOTSUP, "seccomp notify support not available");
 #endif
 }
@@ -251,6 +258,8 @@ libcrun_free_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, libcr
 
   return 0;
 #else
+  (void) ctx;
+  (void) err;
   return crun_make_error (err, ENOTSUP, "seccomp notify support not available");
 #endif
 }

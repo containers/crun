@@ -56,6 +56,7 @@ jobs:
           - test: containerd
           - test: oci-validation
           - test: alpine-build
+          - test: centos8-build
           - test: clang-format
           - test: checkpoint-restore
     steps:
@@ -101,6 +102,8 @@ jobs:
                 mkdir /tmp/runroot && make check XDG_RUNTIME_DIR=/tmp/runroot ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
                 echo run tests as rootless in a user namespace
                 mkdir /tmp/runroot && unshare -r make check XDG_RUNTIME_DIR=/tmp/runroot ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
+                # check that the working dir is clean
+                git describe --broken --dirty --all | grep -qv dirty
             ;;
             podman)
                 sudo docker build -t crun-podman tests/podman
@@ -118,6 +121,10 @@ jobs:
             alpine-build)
                 sudo docker build -t crun-alpine-build tests/alpine-build
                 sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-alpine-build
+            ;;
+            centos8-build)
+                sudo docker build -t crun-centos8-build tests/centos8-build
+                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-centos8-build
             ;;
             clang-format)
                 ./configure
