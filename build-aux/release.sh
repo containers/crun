@@ -14,14 +14,16 @@ test -e Makefile && make distclean
 make -j $(nproc)
 
 VERSION=$($(dirname $0)/git-version-gen --prefix "" .)
-
 if test x$SKIP_CHECKS = x; then
     grep $VERSION NEWS
 fi
 
-OUTDIR=release-$VERSION
+OUTDIR=${OUTDIR:-release-$VERSION}
+if test -e $OUTDIR; then
+    echo "the directory $OUTDIR already exists" >&2
+    exit 1
+fi
 
-rm -rf $OUTDIR
 mkdir -p $OUTDIR
 
 rm -f crun-*.tar*
