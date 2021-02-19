@@ -300,14 +300,14 @@ int main (int argc, char **argv)
 
   if (strcmp (argv[1], "check-feature") == 0)
     {
-      int ret;
-
       if (argc < 2)
         error (EXIT_FAILURE, 0, "`check-feature` requires an argument");
 
       if (strcmp (argv[2], "open_tree") == 0)
         {
 #if defined __NR_open_tree
+          int ret;
+
           ret = syscall(__NR_open_tree);
           return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
 #else
@@ -317,6 +317,8 @@ int main (int argc, char **argv)
       else if (strcmp (argv[2], "move_mount") == 0)
         {
 #if defined __NR_move_mount
+          int ret;
+
           ret = syscall(__NR_move_mount);
           return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
 #else
