@@ -108,7 +108,8 @@ $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
 
 ```console
 # zypper install make automake autoconf gettext libtool gcc libcap-devel \
-systemd-devel yajl-devel libseccomp-devel python3 libtool go-md2man;
+systemd-devel libyajl-devel libseccomp-devel python3 libtool go-md2man \
+glibc-static;
 ```
 
 Note that Tumbleweed requires you to specify libseccomp's header file location
