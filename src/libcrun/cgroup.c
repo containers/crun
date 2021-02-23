@@ -699,34 +699,81 @@ read_unified_cgroup_pid (pid_t pid, char **path, libcrun_error_t *err)
   return 0;
 }
 
-static int
-enter_cgroup_v1 (int cgroup_mode, pid_t pid, const char *path, bool create_if_missing, libcrun_error_t *err)
+/* same semantic as strtok_r.  */
+static bool
+read_proc_cgroup (char *content, char **saveptr, char **id, char **controller_list, char **path)
 {
-  char pid_str[16];
-  int ret;
-  size_t i;
+  char *it;
+
+  it = strtok_r (content, "\n", saveptr);
+  if (it == NULL)
+    return false;
+
+  if (id)
+    *id = it;
+
+  it = strchr (it, ':');
+  if (it == NULL)
+    return false;
+  *it++ = '\0';
+
+  if (controller_list)
+    *controller_list = it;
+
+  it = strchr (it, ':');
+  if (it == NULL)
+    return false;
+  *it++ = '\0';
+
+  if (path)
+    *path = it;
+
+  return true;
+}
+
+static int
+enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
   int entered_any = 0;
+  size_t content_size;
+  char *controller;
+  char pid_str[16];
+  char *saveptr;
+  bool has_data;
   int rootless;
-  const cgroups_subsystem_t *subsystems;
+  int ret;
 
   sprintf (pid_str, "%d", pid);
-
-  subsystems = libcrun_get_cgroups_subsystems (err);
-  if (UNLIKELY (subsystems == NULL))
-    return -1;
 
   rootless = is_rootless (err);
   if (UNLIKELY (rootless < 0))
     return rootless;
 
-  for (i = 0; subsystems[i]; i++)
+  ret = read_all_file ("/proc/self/cgroup", &content, &content_size, err);
+  if (UNLIKELY (ret < 0))
+    {
+      if (crun_error_get_errno (err) == ENOENT)
+        {
+          crun_error_release (err);
+          return 0;
+        }
+      return ret;
+    }
+
+  for (has_data = read_proc_cgroup (content, &saveptr, NULL, &controller, NULL);
+       has_data;
+       has_data = read_proc_cgroup (NULL, &saveptr, NULL, &controller, NULL))
     {
       char subsystem_path[64];
+      char *subsystem;
 
-      if (cgroup_mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
-        continue;
+      if (has_prefix (controller, "name="))
+        controller += 5;
 
-      sprintf (subsystem_path, CGROUP_ROOT "/%s", subsystems[i]);
+      subsystem = controller[0] == '\0' ? "unified" : controller;
+
+      snprintf (subsystem_path, sizeof (subsystem_path), CGROUP_ROOT "/%s", subsystem);
       ret = crun_path_exists (subsystem_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -734,7 +781,7 @@ enter_cgroup_v1 (int cgroup_mode, pid_t pid, const char *path, bool create_if_mi
         continue;
 
       entered_any = 1;
-      ret = enter_cgroup_subsystem (pid, subsystems[i], path, create_if_missing, err);
+      ret = enter_cgroup_subsystem (pid, subsystem, path, create_if_missing, err);
       if (UNLIKELY (ret < 0))
         {
           int errcode = crun_error_get_errno (err);
@@ -841,7 +888,7 @@ enter_cgroup (int cgroup_mode, pid_t pid, pid_t init_pid, const char *path, bool
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     return enter_cgroup_v2 (pid, init_pid, path, create_if_missing, err);
 
-  return enter_cgroup_v1 (cgroup_mode, pid, path, create_if_missing, err);
+  return enter_cgroup_v1 (pid, path, create_if_missing, err);
 }
 
 int
