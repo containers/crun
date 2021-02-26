@@ -83,10 +83,41 @@ def test_allow_device():
         return -1
     return 0
 
+def test_allow_access():
+    if is_rootless():
+        return 77
+
+    try:
+        os.stat("/dev/fuse")
+    except:
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'access', '/dev/fuse']
+    conf['linux']['resources'] = {"devices": [{"allow": False, "access": "rwm"},
+                                              {"allow": True, "type": "c", "major": 10, "minor": 229, "access": "rw"}]}
+    dev = {
+	"destination": "/dev",
+	"type": "bind",
+	"source": "/dev",
+	"options": [
+            "rbind",
+	    "rw"
+	]
+    }
+    conf['mounts'].append(dev)
+    try:
+        run_and_get_output(conf)
+    except Exception as e:
+        return -1
+    return 0
+
 
 all_tests = {
     "deny-devices" : test_deny_devices,
     "allow-device" : test_allow_device,
+    "allow-access" : test_allow_access,
 }
 
 if __name__ == "__main__":
