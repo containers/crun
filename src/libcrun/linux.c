@@ -2655,7 +2655,8 @@ save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_er
               return crun_make_error (err, errno, "readlink");
             }
         }
-      link_path[ret] = 0;
+      else
+        link_path[ret] = 0;
       yajl_gen_string (gen, YAJL_STR (link_path), strlen (link_path));
     }
 
