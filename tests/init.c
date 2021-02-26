@@ -197,6 +197,16 @@ int main (int argc, char **argv)
       return open_only (argv[2]);
     }
 
+  if (strcmp (argv[1], "access") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'access' requires an argument");
+
+      if (access (argv[2], F_OK) < 0)
+        error (EXIT_FAILURE, errno, "could not access %s", argv[2]);
+      return 0;
+    }
+
   if (strcmp (argv[1], "cwd") == 0)
     {
       int ret;

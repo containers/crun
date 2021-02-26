@@ -70,6 +70,9 @@ struct bpf_program
 #  define BPF_JMP_IMM(OP, DST, IMM, OFF) \
     ((struct bpf_insn){ .code = BPF_JMP | BPF_OP (OP) | BPF_K, .dst_reg = DST, .src_reg = 0, .off = OFF, .imm = IMM })
 
+#  define BPF_JMP_REG(OP, DST, SRC, OFF) \
+    ((struct bpf_insn){ .code = BPF_JMP | BPF_OP (OP) | BPF_X, .dst_reg = DST, .src_reg = SRC, .off = OFF, .imm = 0 })
+
 #  define BPF_MOV64_IMM(DST, IMM) \
     ((struct bpf_insn){ .code = BPF_ALU64 | BPF_MOV | BPF_K, .dst_reg = DST, .src_reg = 0, .off = 0, .imm = IMM })
 
@@ -180,7 +183,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
   /*
     if (request.type != device.type)
       goto next_block:
-    if ((request.access & device.access) == 0)
+    if ((request.access & device.access) != request.access)
       goto next_block:
     if (device.major != '*' && request.major != device.major) == 0)
       goto next_block:
@@ -207,7 +210,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
       struct bpf_insn i[] = {
         BPF_MOV32_REG (BPF_REG_1, BPF_REG_3),
         BPF_ALU32_IMM (BPF_AND, BPF_REG_1, bpf_access),
-        BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
+        BPF_JMP_REG (BPF_JNE, BPF_REG_1, BPF_REG_3, number_instructions - 2),
       };
       number_instructions -= 3;
       program = bpf_program_append (program, i, sizeof (i));
