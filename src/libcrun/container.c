@@ -928,7 +928,7 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
         return ret;
     }
 
-  if (def->process->user)
+  if (def->process && def->process->user)
     umask (def->process->user->umask_present ? def->process->user->umask : 0022);
 
   if (def->process && ! def->process->no_new_privileges)
