@@ -424,6 +424,9 @@ need_intermediate_userns (runtime_spec_schema_config_schema *def)
   if (container_uid == 0 && container_gid == 0)
     return false;
 
+  if (def->linux == NULL)
+    return false;
+
   if (def->linux->uid_mappings_len != 1 || def->linux->gid_mappings_len != 1)
     return false;
 
