@@ -153,8 +153,7 @@ static inline void
 cleanup_containerp (libcrun_container_t **c)
 {
   libcrun_container_t *container = *c;
-  if (container)
-    libcrun_container_free (container);
+  libcrun_container_free (container);
 }
 
 #define cleanup_container __attribute__ ((cleanup (cleanup_containerp)))

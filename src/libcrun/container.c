@@ -485,6 +485,9 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 void
 libcrun_container_free (libcrun_container_t *ctr)
 {
+  if (ctr == NULL)
+    return;
+
   if (ctr->container_def)
     free_runtime_spec_schema_config_schema (ctr->container_def);
   free (ctr);
@@ -1215,7 +1218,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
   int ret;
   cleanup_container_status libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -2314,7 +2317,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 int
 libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
   runtime_spec_schema_config_schema *def;
   libcrun_container_status_t status = {};
@@ -2586,7 +2589,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
   cleanup_close int seccomp_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_free char *config_file = NULL;
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *dir = NULL;
   cleanup_free const char *exec_path = NULL;
   int container_ret_status[2];
@@ -2924,7 +2927,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
 int
 libcrun_container_update_from_file (libcrun_context_t *context, const char *id, const char *file, libcrun_error_t *err)
 {
-  char *content = NULL;
+  cleanup_free char *content = NULL;
   size_t len;
   int ret;
 
@@ -2988,7 +2991,7 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   int ret;
   const char *state_root = context->state_root;
   libcrun_container_status_t status = {};
-  cleanup_free libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
