@@ -2524,7 +2524,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   {
     size_t i;
-    cleanup_free char *config_file;
+    cleanup_free char *config_file = NULL;
     cleanup_container libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
 
