@@ -105,7 +105,7 @@ char *chroot_realpath (const char *chroot, const char *path, char resolved_path[
 static int
 test_chroot_realpath (uint8_t *buf, size_t len)
 {
-  cleanup_free char *path;
+  cleanup_free char *path = NULL;
   char resolved_path[PATH_MAX];
 
   path = make_nul_terminated (buf, len);
@@ -120,7 +120,7 @@ test_chroot_realpath (uint8_t *buf, size_t len)
 static int
 test_libcrun_str2sig (uint8_t *buf, size_t len)
 {
-  cleanup_free char *name;
+  cleanup_free char *name = NULL;
 
   name = make_nul_terminated (buf, len);
   if (name == NULL)
