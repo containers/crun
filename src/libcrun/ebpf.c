@@ -160,7 +160,7 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
   };
 
   if (program->private & HAS_WILDCARD)
-    return 0;
+    return program;
 
   for (i = 0; access[i]; i++)
     {
