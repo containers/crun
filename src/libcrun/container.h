@@ -29,6 +29,7 @@ struct libcrun_context_s
   const char *id;
   const char *bundle;
   const char *config_file;
+  const char *config_file_content;
   const char *console_socket;
   const char *pid_file;
   const char *notify_socket;
