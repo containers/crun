@@ -75,18 +75,23 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
 bin_PROGRAMS = crun
-noinst_PROGRAMS = tests/init $(UNIT_TESTS)
+noinst_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
 
 TESTS_LDADD = libcrun_testing.a $(FOUND_LIBS)
 
 tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
-tests_init_SOURCES = tests/init.c $(UNIT_TESTS)
+tests_init_SOURCES = tests/init.c
 
 tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
 tests_tests_libcrun_utils_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_utils_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_fuzzer_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_fuzzer_SOURCES = tests/tests_libcrun_fuzzer.c
+tests_tests_libcrun_fuzzer_LDADD = $(TESTS_LDADD) libocispec/libocispec.la libocispec/yajl/libyajl.la
+tests_tests_libcrun_fuzzer_LDFLAGS = $(crun_LDFLAGS)
 
 tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
