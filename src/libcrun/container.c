@@ -2139,6 +2139,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
+  libcrun_error_t tmp_err;
 
   container->context = context;
 
@@ -2208,23 +2209,32 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   close_and_reset (&pipefd0);
 
   /* forked process.  */
+
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
 
-  ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, err);
+  ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, &tmp_err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    goto fail;
 
-  ret = libcrun_container_run_internal (container, context, -1, err);
+  ret = libcrun_container_run_internal (container, context, -1, &tmp_err);
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
+    goto fail;
+
+  exit (EXIT_SUCCESS);
+fail:
+
+  force_delete_container_status (context, def);
+  if (tmp_err)
     {
-      force_delete_container_status (context, def);
-      TEMP_FAILURE_RETRY (write (pipefd1, &((*err)->status), sizeof ((*err)->status)));
-      TEMP_FAILURE_RETRY (write (pipefd1, (*err)->msg, strlen ((*err)->msg) + 1));
+      TEMP_FAILURE_RETRY (write (pipefd1, &(tmp_err->status), sizeof (tmp_err->status)));
+      TEMP_FAILURE_RETRY (write (pipefd1, tmp_err->msg, strlen (tmp_err->msg) + 1));
+      crun_error_release (&tmp_err);
     }
-  exit (ret);
+
+  exit (EXIT_FAILURE);
 }
 
 int
