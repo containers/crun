@@ -563,7 +563,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   if (cwd == NULL)
     {
-      cwd = cwd_allocated = get_current_dir_name ();
+      cwd = cwd_allocated = getcwd (NULL, 0);
       if (cwd == NULL)
         OOM ();
     }
@@ -1333,7 +1333,7 @@ static int
 write_container_status (libcrun_container_t *container, libcrun_context_t *context, pid_t pid, char *cgroup_path,
                         char *scope, char *created, libcrun_error_t *err)
 {
-  cleanup_free char *cwd = get_current_dir_name ();
+  cleanup_free char *cwd = getcwd (NULL, 0);
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
   libcrun_container_status_t status = { .pid = pid,

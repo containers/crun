@@ -122,7 +122,7 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
     {
       cleanup_free char *path = NULL;
 
-      path = get_current_dir_name ();
+      path = getcwd (NULL, 0);
       if (UNLIKELY (path == NULL))
         libcrun_fail_with_error (0, "realloc failed");
 

@@ -2852,7 +2852,7 @@ join_namespaces (runtime_spec_schema_config_schema *def, int *namespaces_to_join
 
       if (value == CLONE_NEWNS)
         {
-          cwd = get_current_dir_name ();
+          cwd = getcwd (NULL, 0);
           if (UNLIKELY (cwd == NULL))
             return crun_make_error (err, errno, "cannot get current working directory");
         }
