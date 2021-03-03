@@ -1564,7 +1564,11 @@ check_access (const char *path)
   int ret;
   mode_t mode;
 
+#ifdef ANDROID
+  ret = access (path, X_OK);
+#else
   ret = eaccess (path, X_OK);
+#endif
   if (ret < 0)
     return ret;
 
@@ -1603,7 +1607,7 @@ find_executable (const char *executable_path, const char *cwd)
 
       if (cwd == NULL)
         {
-          cwd_allocated = get_current_dir_name ();
+          cwd_allocated = getcwd (NULL, 0);
           if (cwd_allocated == NULL)
             OOM ();
 

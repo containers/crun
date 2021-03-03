@@ -210,7 +210,7 @@ int main (int argc, char **argv)
   if (strcmp (argv[1], "cwd") == 0)
     {
       int ret;
-      char *wd = get_current_dir_name ();
+      char *wd = getcwd (NULL, 0);
       if (wd == NULL)
         error (EXIT_FAILURE, 0, "OOM");
 
