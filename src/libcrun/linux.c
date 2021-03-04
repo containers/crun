@@ -1078,7 +1078,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
       else
         {
           char *dirname;
-          cleanup_free char *buffer;
+          cleanup_free char *buffer = NULL;
           cleanup_close int dirfd = -1;
           char *basename, *tmp;
 
@@ -3585,7 +3585,8 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
 
   for (i = 0; namespaces[i].ns_file; i++)
     {
-      cleanup_free char *ns_join;
+      cleanup_free char *ns_join = NULL;
+
       xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
       fds[i] = open (ns_join, O_RDONLY);
       if (UNLIKELY (fds[i] < 0))
