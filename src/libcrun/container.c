@@ -614,7 +614,8 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   yajl_gen_map_close (gen);
 
-  yajl_gen_get_buf (gen, (const unsigned char **) &stdin, &stdin_len);
+  if (yajl_gen_get_buf (gen, (const unsigned char **) &stdin, &stdin_len) != yajl_gen_status_ok)
+    return crun_make_error (err, 0, "error generating JSON");
 
   ret = 0;
 
@@ -2588,7 +2589,11 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   yajl_gen_map_close (gen);
 
-  yajl_gen_get_buf (gen, &buf, &len);
+  if (yajl_gen_get_buf (gen, &buf, &len) != yajl_gen_status_ok)
+    {
+      ret = crun_make_error (err, 0, "error generating JSON");
+      goto exit;
+    }
 
   fprintf (out, "%s\n", buf);
 
