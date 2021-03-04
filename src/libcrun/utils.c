@@ -530,7 +530,7 @@ crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size
 
   /* If the file/dir already exists, just open it.  */
   fd = safe_openat (dirfd, dirpath, dirpath_len, path, O_PATH | O_CLOEXEC, 0, err);
-  if (LIKELY (fd > 0))
+  if (LIKELY (fd >= 0))
     return fd;
 
   return crun_safe_ensure_at (true, dir, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
