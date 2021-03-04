@@ -496,7 +496,7 @@ int
 libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err)
 {
   struct dirent *next;
-  libcrun_container_list_t *tmp = NULL;
+  cleanup_container_list libcrun_container_list_t *tmp = NULL;
   cleanup_free char *path = get_run_directory (state_root);
   cleanup_dir DIR *dir;
 
@@ -535,6 +535,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       tmp = next_container;
     }
   *ret = tmp;
+  tmp = NULL;
   return 0;
 }
 
