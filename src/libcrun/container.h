@@ -29,6 +29,7 @@ struct libcrun_context_s
   const char *id;
   const char *bundle;
   const char *config_file;
+  const char *config_file_content;
   const char *console_socket;
   const char *pid_file;
   const char *notify_socket;
@@ -153,8 +154,7 @@ static inline void
 cleanup_containerp (libcrun_container_t **c)
 {
   libcrun_container_t *container = *c;
-  if (container)
-    libcrun_container_free (container);
+  libcrun_container_free (container);
 }
 
 #define cleanup_container __attribute__ ((cleanup (cleanup_containerp)))

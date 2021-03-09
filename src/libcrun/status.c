@@ -496,9 +496,9 @@ int
 libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err)
 {
   struct dirent *next;
-  libcrun_container_list_t *tmp = NULL;
+  cleanup_container_list libcrun_container_list_t *tmp = NULL;
   cleanup_free char *path = get_run_directory (state_root);
-  cleanup_dir DIR *dir;
+  cleanup_dir DIR *dir = NULL;
 
   *ret = NULL;
   dir = opendir (path);
@@ -535,6 +535,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       tmp = next_container;
     }
   *ret = tmp;
+  tmp = NULL;
   return 0;
 }
 
@@ -596,7 +597,7 @@ int
 libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
-  cleanup_free char *fifo_path;
+  cleanup_free char *fifo_path = NULL;
   int ret, fd = -1;
 
   ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
@@ -618,7 +619,7 @@ int
 libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
-  cleanup_free char *fifo_path;
+  cleanup_free char *fifo_path = NULL;
   char buffer[1] = {
     0,
   };
@@ -648,7 +649,7 @@ int
 libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
-  cleanup_free char *fifo_path;
+  cleanup_free char *fifo_path = NULL;
   int ret;
 
   ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);

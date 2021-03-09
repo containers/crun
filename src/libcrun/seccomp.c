@@ -247,13 +247,17 @@ int
 libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err)
 {
 #ifdef HAVE_SECCOMP
-  runtime_spec_schema_config_linux_seccomp *seccomp = container->container_def->linux->seccomp;
+  runtime_spec_schema_config_linux_seccomp *seccomp;
   int ret;
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
   int action, default_action;
   const char *def_action = "SCMP_ACT_ALLOW";
 
+  if (container == NULL || container->container_def == NULL || container->container_def->linux == NULL)
+    return 0;
+
+  seccomp = container->container_def->linux->seccomp;
   if (seccomp == NULL)
     return 0;
 

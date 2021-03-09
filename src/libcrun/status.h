@@ -46,8 +46,6 @@ struct libcrun_container_status_s
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
-#define cleanup_container_status __attribute__ ((cleanup (libcrun_free_container_status)))
-
 LIBCRUN_PUBLIC void libcrun_free_container_status (libcrun_container_status_t *status);
 LIBCRUN_PUBLIC int libcrun_write_container_status (const char *state_root, const char *id,
                                                    libcrun_container_status_t *status, libcrun_error_t *err);
@@ -65,4 +63,16 @@ int libcrun_status_create_exec_fifo (const char *state_root, const char *id, lib
 int libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t *err);
+
+static inline void
+libcrun_free_container_listp (void *p)
+{
+  libcrun_container_list_t **l = p;
+  if (*l != NULL)
+    libcrun_free_containers_list (*l);
+}
+
+#define cleanup_container_status __attribute__ ((cleanup (libcrun_free_container_status)))
+#define cleanup_container_list __attribute__ ((cleanup (libcrun_free_container_listp)))
+
 #endif
