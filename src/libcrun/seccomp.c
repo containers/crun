@@ -243,6 +243,13 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
 #endif
 }
 
+static bool
+seccomp_action_supports_errno (const char *action)
+{
+  return strcmp (action, "SCMP_ACT_ERRNO") == 0
+         || strcmp (action, "SCMP_ACT_TRACE") == 0;
+}
+
 int
 libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err)
 {
@@ -270,7 +277,12 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
     return crun_make_error (err, 0, "seccomp misses the default action");
 
   if (seccomp->default_errno_ret_present)
-    default_errno_value = seccomp->default_errno_ret;
+    {
+      if (! seccomp_action_supports_errno (def_action))
+        return crun_make_error (err, 0, "errno value specified for action `%s`", def_action);
+
+      default_errno_value = seccomp->default_errno_ret;
+    }
 
   default_action = get_seccomp_action (def_action, default_errno_value, err);
   if (UNLIKELY (err && *err != NULL))
@@ -308,7 +320,11 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
       int errno_ret = EPERM;
 
       if (seccomp->syscalls[i]->errno_ret_present)
-        errno_ret = seccomp->syscalls[i]->errno_ret;
+        {
+          if (! seccomp_action_supports_errno (seccomp->syscalls[i]->action))
+            return crun_make_error (err, 0, "errno value specified for action `%s`", def_action);
+          errno_ret = seccomp->syscalls[i]->errno_ret;
+        }
 
       action = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, err);
       if (UNLIKELY (err && *err != NULL))
