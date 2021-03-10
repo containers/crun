@@ -243,6 +243,13 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
 #endif
 }
 
+static bool
+seccomp_action_supports_errno (const char *action)
+{
+  return strcmp (action, "SCMP_ACT_ERRNO") == 0
+         || strcmp (action, "SCMP_ACT_TRACE") == 0;
+}
+
 int
 libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err)
 {
@@ -251,8 +258,8 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   int ret;
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
-  int action, default_action;
-  const char *def_action = "SCMP_ACT_ALLOW";
+  int action, default_action, default_errno_value = EPERM;
+  const char *def_action = NULL;
 
   if (container == NULL || container->container_def == NULL || container->container_def->linux == NULL)
     return 0;
@@ -265,10 +272,19 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   if (prctl (PR_GET_SECCOMP, 0, 0, 0, 0) < 0)
     return crun_make_error (err, errno, "prctl");
 
-  if (seccomp->default_action != NULL)
-    def_action = seccomp->default_action;
+  def_action = seccomp->default_action;
+  if (def_action == NULL)
+    return crun_make_error (err, 0, "seccomp misses the default action");
 
-  default_action = get_seccomp_action (def_action, EPERM, err);
+  if (seccomp->default_errno_ret_present)
+    {
+      if (! seccomp_action_supports_errno (def_action))
+        return crun_make_error (err, 0, "errno value specified for action `%s`", def_action);
+
+      default_errno_value = seccomp->default_errno_ret;
+    }
+
+  default_action = get_seccomp_action (def_action, default_errno_value, err);
   if (UNLIKELY (err && *err != NULL))
     return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->default_action);
 
@@ -304,7 +320,11 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
       int errno_ret = EPERM;
 
       if (seccomp->syscalls[i]->errno_ret_present)
-        errno_ret = seccomp->syscalls[i]->errno_ret;
+        {
+          if (! seccomp_action_supports_errno (seccomp->syscalls[i]->action))
+            return crun_make_error (err, 0, "errno value specified for action `%s`", def_action);
+          errno_ret = seccomp->syscalls[i]->errno_ret;
+        }
 
       action = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, err);
       if (UNLIKELY (err && *err != NULL))
