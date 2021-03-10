@@ -252,7 +252,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
   int action, default_action, default_errno_value = EPERM;
-  const char *def_action = "SCMP_ACT_ALLOW";
+  const char *def_action = NULL;
 
   if (container == NULL || container->container_def == NULL || container->container_def->linux == NULL)
     return 0;
@@ -265,8 +265,9 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   if (prctl (PR_GET_SECCOMP, 0, 0, 0, 0) < 0)
     return crun_make_error (err, errno, "prctl");
 
-  if (seccomp->default_action != NULL)
-    def_action = seccomp->default_action;
+  def_action = seccomp->default_action;
+  if (def_action == NULL)
+    return crun_make_error (err, 0, "seccomp misses the default action");
 
   if (seccomp->default_errno_ret_present)
     default_errno_value = seccomp->default_errno_ret;
