@@ -175,6 +175,90 @@ test_read_cgroup_pids (uint8_t *buf, size_t len)
 }
 
 static int
+test_get_file_type (uint8_t *buf, size_t len)
+{
+  cleanup_free char *path = NULL;
+  libcrun_error_t err = NULL;
+  mode_t mode;
+
+  path = make_nul_terminated (buf, len);
+  if (path == NULL)
+    return 0;
+
+  if (get_file_type_at (AT_FDCWD, &mode, true, path) < 0)
+    crun_error_release (&err);
+
+  if (get_file_type_at (AT_FDCWD, &mode, false, path) < 0)
+    crun_error_release (&err);
+
+  if (get_file_type (&mode, true, path) < 0)
+    crun_error_release (&err);
+
+  if (get_file_type (&mode, false, path) < 0)
+    crun_error_release (&err);
+
+  return 0;
+}
+
+static int
+test_path_exists (uint8_t *buf, size_t len)
+{
+  cleanup_free char *path = NULL;
+  libcrun_error_t err = NULL;
+
+  path = make_nul_terminated (buf, len);
+  if (path == NULL)
+    return 0;
+
+  if (crun_path_exists (path, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p (path, true, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p (path, false, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p_at (AT_FDCWD, path, true, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p_at (AT_FDCWD, path, false, &err) < 0)
+    crun_error_release (&err);
+
+  return 0;
+}
+
+static int
+test_read_files (uint8_t *buf, size_t len)
+{
+  cleanup_free char *path = NULL;
+
+  path = make_nul_terminated (buf, len);
+  if (path == NULL)
+    return 0;
+
+  {
+    cleanup_free char *out = NULL;
+    libcrun_error_t err = NULL;
+    size_t size = 0;
+
+    if (read_all_file (path, &out, &size, &err) < 0)
+      crun_error_release (&err);
+  }
+
+  {
+    cleanup_free char *out = NULL;
+    libcrun_error_t err = NULL;
+    size_t size = 0;
+
+    if (read_all_file_at (AT_FDCWD, path, &out, &size, &err) < 0)
+      crun_error_release (&err);
+  }
+
+  return 0;
+}
+
+static int
 run_one_container (uint8_t *buf, size_t len, bool detach)
 {
   cleanup_free char *conf = NULL;
@@ -255,6 +339,9 @@ run_one_test (int mode, uint8_t *buf, size_t len)
       /* expects paths. */
       test_chroot_realpath (buf, len);
       test_read_cgroup_pids (buf, len);
+      test_read_files (buf, len);
+      test_path_exists (buf, len);
+      test_get_file_type (buf, len);
       break;
 
     case 5:
