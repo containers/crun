@@ -204,6 +204,7 @@ run_one_container (uint8_t *buf, size_t len, bool detach)
   ctx.bundle = "rootfs";
   ctx.detach = detach;
   ctx.config_file_content = conf;
+  ctx.fifo_exec_wait_fd = -1;
 
   libcrun_container_run (&ctx, container, 0, &err);
   crun_error_release (&err);
@@ -231,36 +232,39 @@ run_one_test (int mode, uint8_t *buf, size_t len)
   switch (mode)
     {
     case 0:
+      /* expects config.json.  */
       run_one_container (buf, len, false);
       break;
 
     case 1:
+      /* expects config.json.  */
       run_one_container (buf, len, true);
       break;
 
     case 2:
+      /* expects config.json/linux/seccomp.  */
       generate_seccomp (buf, len);
       break;
 
     case 3:
+      /* expects signals.  */
       test_libcrun_str2sig (buf, len);
       break;
 
     case 4:
+      /* expects paths. */
       test_chroot_realpath (buf, len);
+      test_read_cgroup_pids (buf, len);
       break;
 
     case 5:
+      /* expects random data.  */
       test_generate_ebpf (buf, len);
-      break;
-
-    case 6:
-      test_read_cgroup_pids (buf, len);
       break;
 
       /* ALL mode.  */
     case -1:
-      for (i = 0; i <= 6; i++)
+      for (i = 0; i <= 5; i++)
         run_one_test (i, buf, len);
       break;
 
