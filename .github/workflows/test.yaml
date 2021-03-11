@@ -60,6 +60,7 @@ jobs:
           - test: clang-format
           - test: clang-check
           - test: checkpoint-restore
+          - test: fuzzing
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -143,4 +144,8 @@ jobs:
                 make -j $(nproc)
                 sudo python3 tests/test_checkpoint_restore.py
             ;;
+            fuzzing)
+                sudo docker build -t crun-fuzzing tests/fuzzing
+                sudo docker run -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
+           ;;
         esac
