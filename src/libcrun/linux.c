@@ -2215,7 +2215,8 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     ret = newgidmap (pid, gid_map, err);
   if (container->host_uid == 0 || ret < 0)
     {
-      crun_error_release (err);
+      if (ret < 0)
+        crun_error_release (err);
 
       xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
       ret = write_file (gid_map_file, gid_map, gid_map_len, err);
@@ -2240,7 +2241,8 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     ret = newuidmap (pid, uid_map, err);
   if (container->host_uid == 0 || ret < 0)
     {
-      crun_error_release (err);
+      if (ret < 0)
+        crun_error_release (err);
 
       xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
       ret = write_file (uid_map_file, uid_map, uid_map_len, err);
