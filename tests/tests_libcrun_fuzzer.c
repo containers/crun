@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <sys/prctl.h>
 
 static int test_mode = -1;
 
@@ -290,21 +291,23 @@ run_one_container (uint8_t *buf, size_t len, bool detach)
   ctx.config_file_content = conf;
   ctx.fifo_exec_wait_fd = -1;
 
-  libcrun_container_run (&ctx, container, 0, &err);
+  libcrun_container_run (&ctx, container, LIBCRUN_RUN_OPTIONS_PREFORK, &err);
   crun_error_release (&err);
 
   memset (&status, 0, sizeof (status));
 
-  libcrun_read_container_status (&status, NULL, id, &err);
-  crun_error_release (&err);
+  if (libcrun_read_container_status (&status, NULL, id, &err) < 0)
+    crun_error_release (&err);
 
-  libcrun_get_container_state_string (id, &status, NULL, &container_status, &running, &err);
-  crun_error_release (&err);
+  if (libcrun_get_container_state_string (id, &status, NULL, &container_status, &running, &err) < 0)
+    crun_error_release (&err);
 
   libcrun_free_container_status (&status);
 
-  libcrun_container_delete (&ctx, container->container_def, id, true, &err);
-  crun_error_release (&err);
+  if (libcrun_container_delete (&ctx, container->container_def, id, false, &err) < 0)
+    crun_error_release (&err);
+  if (libcrun_container_delete (&ctx, container->container_def, id, true, &err) < 0)
+    crun_error_release (&err);
   return 0;
 }
 
@@ -376,12 +379,26 @@ LLVMFuzzerTestOneInput (uint8_t *buf, size_t len)
   return 0;
 }
 
+static void
+sig_chld ()
+{
+  int status;
+  pid_t p;
+  do
+    p = waitpid (-1, &status, WNOHANG);
+  while (p > 0);
+}
+
 int
 main (int argc, char **argv)
 {
   const char *t = getenv ("FUZZING_MODE");
   if (t)
     test_mode = atoi (t);
+
+  if (prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) < 0)
+    libcrun_fail_with_error (1, "%s", "cannot set subreaper");
+  signal (SIGCHLD, sig_chld);
 
   if (argc > 1)
     {
