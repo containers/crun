@@ -1628,7 +1628,10 @@ cleanup_watch (libcrun_context_t *context, pid_t init_pid, int sync_socket, int 
   libcrun_error_t tmp_err = NULL;
 
   if (init_pid)
-    kill (init_pid, SIGKILL);
+    {
+      kill (init_pid, SIGKILL);
+      TEMP_FAILURE_RETRY (waitpid (init_pid, NULL, 0));
+    }
 
   sync_socket_wait_sync (context, sync_socket, true, &tmp_err);
   if (tmp_err)
@@ -1898,7 +1901,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       /* Do not open the notify socket here on "create".  "start" will take care of it.  */
       ret = get_notify_fd (context, container, &notify_socket, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
     }
 
   if (container_args.terminal_socketpair[1] >= 0)
@@ -1983,7 +1986,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
           consumed = base64_decode (annotation, in_size, bpf_data, in_size, &size);
           if (UNLIKELY (consumed != (int) in_size))
-            return crun_make_error (err, 0, "invalid seccomp BPF data");
+            {
+              ret = crun_make_error (err, 0, "invalid seccomp BPF data");
+              return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+            }
 
           ret = safe_write (seccomp_fd, bpf_data, (ssize_t) size);
           if (UNLIKELY (ret < 0))
@@ -2182,11 +2188,12 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
     {
       int status;
       close_and_reset (&pipefd1);
+
       TEMP_FAILURE_RETRY (waitpid (ret, &status, 0));
 
       ret = TEMP_FAILURE_RETRY (read (pipefd0, &status, sizeof (status)));
       if (UNLIKELY (ret < 0))
-        return ret;
+        return crun_make_error (err, errno, "invalid read from sync pipe");
 
       if (status < 0)
         {
@@ -2194,11 +2201,11 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
           char buf[512];
           ret = TEMP_FAILURE_RETRY (read (pipefd0, &errno_, sizeof (errno_)));
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_make_error (err, errno, "invalid read from sync pipe");
 
           ret = TEMP_FAILURE_RETRY (read (pipefd0, buf, sizeof (buf) - 1));
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_make_error (err, errno, "invalid read from sync pipe");
           buf[ret] = '\0';
 
           return crun_make_error (err, errno_, "%s", buf);
@@ -2210,7 +2217,6 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   close_and_reset (&pipefd0);
 
   /* forked process.  */
-
   ret = detach_process ();
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");

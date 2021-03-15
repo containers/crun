@@ -26,7 +26,9 @@
 #include "error.h"
 #include <dirent.h>
 #include <unistd.h>
+#include <signal.h>
 #include <runtime_spec_schema_config_schema.h>
+#include <sys/wait.h>
 #include "container.h"
 
 #ifndef TEMP_FAILURE_RETRY
@@ -46,6 +48,7 @@
 #define cleanup_close_vec __attribute__ ((cleanup (cleanup_close_vecp)))
 #define cleanup_dir __attribute__ ((cleanup (cleanup_dirp)))
 #define arg_unused __attribute__ ((unused))
+#define cleanup_pid __attribute__ ((cleanup (cleanup_pidp)))
 
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
@@ -98,6 +101,17 @@ cleanup_closep (void *p)
   int *pp = p;
   if (*pp >= 0)
     TEMP_FAILURE_RETRY (close (*pp));
+}
+
+static inline void
+cleanup_pidp (void *p)
+{
+  pid_t *pp = p;
+  if (*pp > 0)
+    {
+      TEMP_FAILURE_RETRY (kill (*pp, SIGKILL));
+      TEMP_FAILURE_RETRY (waitpid (*pp, NULL, 0));
+    }
 }
 
 static inline void
