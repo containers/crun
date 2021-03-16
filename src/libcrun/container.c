@@ -788,7 +788,7 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
-container_init_setup (void *args, char *notify_socket, int sync_socket, const char **exec_path, libcrun_error_t *err)
+container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_socket, const char **exec_path, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -1051,12 +1051,22 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
   __attribute__ ((unused)) cleanup_free char *notify_socket_cleanup = notify_socket;
+  pid_t own_pid = 0;
 
   entrypoint_args->sync_socket = sync_socket;
 
   crun_set_output_handler (log_write_to_sync_socket, args, false);
 
-  ret = container_init_setup (args, notify_socket, sync_socket, &exec_path, err);
+  /* sync receive own pid.  */
+  ret = TEMP_FAILURE_RETRY (read (sync_socket, &own_pid, sizeof (own_pid)));
+  if (UNLIKELY (ret != sizeof (own_pid)))
+    {
+      if (ret >= 0)
+        errno = 0;
+      return crun_make_error (err, errno, "read from sync socket");
+    }
+
+  ret = container_init_setup (args, own_pid, notify_socket, sync_socket, &exec_path, err);
   if (UNLIKELY (ret < 0))
     {
       /* If it fails to write the error using the sync socket, then fallback
@@ -2003,6 +2013,16 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
   }
 
+  /* sync send own pid.  */
+  ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
+  if (UNLIKELY (ret != sizeof (pid)))
+    {
+      if (ret >= 0)
+        errno = 0;
+      crun_make_error (err, errno, "write to sync socket");
+      return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    }
+
   /* sync 1.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
@@ -2780,9 +2800,12 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
       runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
       char **seccomp_flags = NULL;
       size_t seccomp_flags_len = 0;
+      pid_t own_pid = 0;
 
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
+
+      TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
 
       cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
@@ -2906,6 +2929,8 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
   TEMP_FAILURE_RETRY (close (pipefd1));
   pipefd1 = -1;
+
+  TEMP_FAILURE_RETRY (write (pipefd0, &pid, sizeof (pid)));
 
   if (seccomp_fd >= 0)
     close_and_reset (&seccomp_fd);
