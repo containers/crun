@@ -221,6 +221,8 @@ int open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err);
 
 int send_fd_to_socket (int server, int fd, libcrun_error_t *err);
 
+int send_fd_to_socket_with_payload (int server, int fd, const char *payload, size_t payload_len, libcrun_error_t *err);
+
 int create_socket_pair (int *pair, libcrun_error_t *err);
 
 int receive_fd_from_socket (int from, libcrun_error_t *err);
