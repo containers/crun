@@ -143,7 +143,9 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
     }
 
   /* Make sure the bundle is an absolute path.  */
-  if (bundle)
+  if (bundle == NULL)
+    bundle = bundle_cleanup = getcwd (NULL, 0);
+  else
     {
       if (bundle[0] != '/')
         {
@@ -165,7 +167,7 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   if (UNLIKELY (ret < 0))
     return ret;
 
-  crun_context.bundle = bundle ? bundle : ".";
+  crun_context.bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
 
