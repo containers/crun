@@ -129,6 +129,7 @@ TESTS = tests/test_capabilities.py \
 	tests/test_resources.py \
 	tests/test_start.py \
 	tests/test_exec.py \
+	tests/test_seccomp.py \
 	$(UNIT_TESTS)
 
 .version:
