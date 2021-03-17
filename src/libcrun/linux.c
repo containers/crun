@@ -2215,7 +2215,8 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     ret = newgidmap (pid, gid_map, err);
   if (container->host_uid == 0 || ret < 0)
     {
-      crun_error_release (err);
+      if (ret < 0)
+        crun_error_release (err);
 
       xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
       ret = write_file (gid_map_file, gid_map, gid_map_len, err);
@@ -2240,7 +2241,8 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     ret = newuidmap (pid, uid_map, err);
   if (container->host_uid == 0 || ret < 0)
     {
-      crun_error_release (err);
+      if (ret < 0)
+        crun_error_release (err);
 
       xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
       ret = write_file (uid_map_file, uid_map, uid_map_len, err);
@@ -3354,6 +3356,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
   if (pid)
     {
+      cleanup_pid pid_t pid_to_clean = pid;
+
       ret = save_external_descriptors (container, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -3378,9 +3382,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
             return crun_make_error (err, errno, "read pid from sync socket");
 
           /* Cleanup the first process.  */
-          ret = waitpid (pid, NULL, 0);
+          ret = TEMP_FAILURE_RETRY (waitpid (pid, NULL, 0));
 
-          pid = new_pid;
+          pid_to_clean = pid = new_pid;
 
           ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &success, 1));
           if (UNLIKELY (ret < 0))
@@ -3424,7 +3428,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           /* Cleanup the first process.  */
           waitpid (pid, NULL, 0);
 
-          pid = grandchild;
+          pid_to_clean = pid = grandchild;
         }
 
       ret = expect_success_from_sync_socket (sync_socket_host, err);
@@ -3433,6 +3437,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
       *sync_socket_out = get_and_reset (&sync_socket_host);
 
+      pid_to_clean = 0;
       return pid;
     }
 

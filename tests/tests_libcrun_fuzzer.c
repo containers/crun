@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <sys/prctl.h>
 
 static int test_mode = -1;
 
@@ -175,6 +176,90 @@ test_read_cgroup_pids (uint8_t *buf, size_t len)
 }
 
 static int
+test_get_file_type (uint8_t *buf, size_t len)
+{
+  cleanup_free char *path = NULL;
+  libcrun_error_t err = NULL;
+  mode_t mode;
+
+  path = make_nul_terminated (buf, len);
+  if (path == NULL)
+    return 0;
+
+  if (get_file_type_at (AT_FDCWD, &mode, true, path) < 0)
+    crun_error_release (&err);
+
+  if (get_file_type_at (AT_FDCWD, &mode, false, path) < 0)
+    crun_error_release (&err);
+
+  if (get_file_type (&mode, true, path) < 0)
+    crun_error_release (&err);
+
+  if (get_file_type (&mode, false, path) < 0)
+    crun_error_release (&err);
+
+  return 0;
+}
+
+static int
+test_path_exists (uint8_t *buf, size_t len)
+{
+  cleanup_free char *path = NULL;
+  libcrun_error_t err = NULL;
+
+  path = make_nul_terminated (buf, len);
+  if (path == NULL)
+    return 0;
+
+  if (crun_path_exists (path, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p (path, true, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p (path, false, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p_at (AT_FDCWD, path, true, &err) < 0)
+    crun_error_release (&err);
+
+  if (crun_dir_p_at (AT_FDCWD, path, false, &err) < 0)
+    crun_error_release (&err);
+
+  return 0;
+}
+
+static int
+test_read_files (uint8_t *buf, size_t len)
+{
+  cleanup_free char *path = NULL;
+
+  path = make_nul_terminated (buf, len);
+  if (path == NULL)
+    return 0;
+
+  {
+    cleanup_free char *out = NULL;
+    libcrun_error_t err = NULL;
+    size_t size = 0;
+
+    if (read_all_file (path, &out, &size, &err) < 0)
+      crun_error_release (&err);
+  }
+
+  {
+    cleanup_free char *out = NULL;
+    libcrun_error_t err = NULL;
+    size_t size = 0;
+
+    if (read_all_file_at (AT_FDCWD, path, &out, &size, &err) < 0)
+      crun_error_release (&err);
+  }
+
+  return 0;
+}
+
+static int
 run_one_container (uint8_t *buf, size_t len, bool detach)
 {
   cleanup_free char *conf = NULL;
@@ -204,22 +289,25 @@ run_one_container (uint8_t *buf, size_t len, bool detach)
   ctx.bundle = "rootfs";
   ctx.detach = detach;
   ctx.config_file_content = conf;
+  ctx.fifo_exec_wait_fd = -1;
 
-  libcrun_container_run (&ctx, container, 0, &err);
+  libcrun_container_run (&ctx, container, LIBCRUN_RUN_OPTIONS_PREFORK, &err);
   crun_error_release (&err);
 
   memset (&status, 0, sizeof (status));
 
-  libcrun_read_container_status (&status, NULL, id, &err);
-  crun_error_release (&err);
+  if (libcrun_read_container_status (&status, NULL, id, &err) < 0)
+    crun_error_release (&err);
 
-  libcrun_get_container_state_string (id, &status, NULL, &container_status, &running, &err);
-  crun_error_release (&err);
+  if (libcrun_get_container_state_string (id, &status, NULL, &container_status, &running, &err) < 0)
+    crun_error_release (&err);
 
   libcrun_free_container_status (&status);
 
-  libcrun_container_delete (&ctx, container->container_def, id, true, &err);
-  crun_error_release (&err);
+  if (libcrun_container_delete (&ctx, container->container_def, id, false, &err) < 0)
+    crun_error_release (&err);
+  if (libcrun_container_delete (&ctx, container->container_def, id, true, &err) < 0)
+    crun_error_release (&err);
   return 0;
 }
 
@@ -231,36 +319,42 @@ run_one_test (int mode, uint8_t *buf, size_t len)
   switch (mode)
     {
     case 0:
+      /* expects config.json.  */
       run_one_container (buf, len, false);
       break;
 
     case 1:
+      /* expects config.json.  */
       run_one_container (buf, len, true);
       break;
 
     case 2:
+      /* expects config.json/linux/seccomp.  */
       generate_seccomp (buf, len);
       break;
 
     case 3:
+      /* expects signals.  */
       test_libcrun_str2sig (buf, len);
       break;
 
     case 4:
+      /* expects paths. */
       test_chroot_realpath (buf, len);
+      test_read_cgroup_pids (buf, len);
+      test_read_files (buf, len);
+      test_path_exists (buf, len);
+      test_get_file_type (buf, len);
       break;
 
     case 5:
+      /* expects random data.  */
       test_generate_ebpf (buf, len);
-      break;
-
-    case 6:
-      test_read_cgroup_pids (buf, len);
       break;
 
       /* ALL mode.  */
     case -1:
-      for (i = 0; i <= 6; i++)
+      for (i = 0; i <= 5; i++)
         run_one_test (i, buf, len);
       break;
 
@@ -285,12 +379,26 @@ LLVMFuzzerTestOneInput (uint8_t *buf, size_t len)
   return 0;
 }
 
+static void
+sig_chld ()
+{
+  int status;
+  pid_t p;
+  do
+    p = waitpid (-1, &status, WNOHANG);
+  while (p > 0);
+}
+
 int
 main (int argc, char **argv)
 {
   const char *t = getenv ("FUZZING_MODE");
   if (t)
     test_mode = atoi (t);
+
+  if (prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) < 0)
+    libcrun_fail_with_error (1, "%s", "cannot set subreaper");
+  signal (SIGCHLD, sig_chld);
 
   if (argc > 1)
     {
