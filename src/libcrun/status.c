@@ -171,7 +171,7 @@ int
 libcrun_write_container_status (const char *state_root, const char *id, libcrun_container_status_t *status,
                                 libcrun_error_t *err)
 {
-  int ret;
+  int r, ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
   cleanup_free char *file_tmp = NULL;
   size_t len;
@@ -199,46 +199,99 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   yajl_gen_config (gen, yajl_gen_beautify, 1);
   yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
 
-  yajl_gen_map_open (gen);
-  yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  yajl_gen_integer (gen, status->pid);
+  r = yajl_gen_map_open (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("process-start-time"), strlen ("process-start-time"));
-  yajl_gen_integer (gen, status->process_start_time);
+  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("cgroup-path"), strlen ("cgroup-path"));
+  r = yajl_gen_integer (gen, status->pid);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("process-start-time"), strlen ("process-start-time"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_integer (gen, status->process_start_time);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("cgroup-path"), strlen ("cgroup-path"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
   tmp = status->cgroup_path ? status->cgroup_path : "";
-  yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+  r = yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("scope"), strlen ("scope"));
+  r = yajl_gen_string (gen, YAJL_STR ("scope"), strlen ("scope"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
   tmp = status->scope ? status->scope : "";
-  yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+  r = yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
-  yajl_gen_string (gen, YAJL_STR (status->rootfs), strlen (status->rootfs));
+  r = yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("systemd-cgroup"), strlen ("systemd-cgroup"));
-  yajl_gen_bool (gen, status->systemd_cgroup);
+  r = yajl_gen_string (gen, YAJL_STR (status->rootfs), strlen (status->rootfs));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-  yajl_gen_string (gen, YAJL_STR (status->bundle), strlen (status->bundle));
+  r = yajl_gen_string (gen, YAJL_STR ("systemd-cgroup"), strlen ("systemd-cgroup"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
-  yajl_gen_string (gen, YAJL_STR (status->created), strlen (status->created));
+  r = yajl_gen_bool (gen, status->systemd_cgroup);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("detached"), strlen ("detached"));
-  yajl_gen_bool (gen, status->detached);
+  r = yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("external_descriptors"), strlen ("external_descriptors"));
-  yajl_gen_string (gen, YAJL_STR (status->external_descriptors), strlen (status->external_descriptors));
+  r = yajl_gen_string (gen, YAJL_STR (status->bundle), strlen (status->bundle));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_map_close (gen);
+  r = yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  if (yajl_gen_get_buf (gen, &buf, &len) != yajl_gen_status_ok)
-    {
-      ret = crun_make_error (err, 0, "cannot generate status file");
-      goto exit;
-    }
+  r = yajl_gen_string (gen, YAJL_STR (status->created), strlen (status->created));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("detached"), strlen ("detached"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_bool (gen, status->detached);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("external_descriptors"), strlen ("external_descriptors"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR (status->external_descriptors), strlen (status->external_descriptors));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_map_close (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_get_buf (gen, &buf, &len);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
   if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
     {
@@ -259,6 +312,12 @@ exit:
     yajl_gen_free (gen);
 
   return ret;
+
+yajl_error:
+  if (gen)
+    yajl_gen_free (gen);
+
+  return yajl_error_to_crun_error (r, err);
 }
 
 int

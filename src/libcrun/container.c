@@ -2643,6 +2643,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
+  const char *const OCI_CONFIG_VERSION = "1.0.0";
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
   const char *container_status = NULL;
@@ -2670,7 +2671,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   yajl_gen_map_open (gen);
   yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  yajl_gen_string (gen, YAJL_STR ("1.0.0"), strlen ("1.0.0"));
+  yajl_gen_string (gen, YAJL_STR (OCI_CONFIG_VERSION), strlen (OCI_CONFIG_VERSION));
 
   yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
   yajl_gen_string (gen, YAJL_STR (id), strlen (id));
