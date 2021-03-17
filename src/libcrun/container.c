@@ -1014,7 +1014,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   int ret;
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
-  cleanup_free char *notify_socket_cleanup = notify_socket;
+  __attribute__ ((unused)) cleanup_free char *notify_socket_cleanup = notify_socket;
 
   entrypoint_args->sync_socket = sync_socket;
 

@@ -3241,7 +3241,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   cleanup_close int sync_socket_container = -1;
   char *notify_socket_env = NULL;
   cleanup_close int sync_socket_host = -1;
-  cleanup_close int restore_pidns = -1;
+  __attribute__ ((unused)) cleanup_close int restore_pidns = -1;
   int first_clone_args = 0;
   const char failure = 1;
   const char success = 0;
@@ -3956,8 +3956,8 @@ libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *er
       cleanup_free char *gid_map = NULL;
       char buffer[1];
       size_t len;
-      uid_t uid;
-      gid_t gid;
+      uid_t uid = -1;
+      gid_t gid = -1;
 
       close_and_reset (&closep1);
 

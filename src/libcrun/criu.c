@@ -42,7 +42,7 @@
 static const char *console_socket = NULL;
 
 static int
-criu_notify (char *action, criu_notify_arg_t na)
+criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
 {
   if (strncmp (action, "orphan-pts-master", 17) == 0)
     {
@@ -76,7 +76,7 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
   int cgroup_mode;
   char *from;
   int ret;
-  int i;
+  uint32_t i;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (cgroup_mode < 0)
@@ -151,7 +151,7 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
   char *saveptr = NULL;
   char *from;
   int ret;
-  int i;
+  uint32_t i;
 
   /* First check if there is actually a cgroup mount in the container. */
   for (i = 0; i < def->mounts_len; i++)
@@ -416,7 +416,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 static int
 prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libcrun_error_t *err)
 {
-  int i;
+  uint32_t i;
 
   /* Go through all mountpoints to be able to recreate missing mountpoints. */
   for (i = 0; i < def->mounts_len; i++)
