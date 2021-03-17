@@ -58,6 +58,7 @@ jobs:
           - test: alpine-build
           - test: centos8-build
           - test: clang-format
+          - test: clang-check
           - test: checkpoint-restore
     steps:
     - name: checkout
@@ -131,6 +132,10 @@ jobs:
                 sudo docker build -t crun-clang-format tests/clang-format
                 sudo docker run --rm -w /crun -v ${PWD}:/crun crun-clang-format make clang-format
                 git diff --exit-code src
+            ;;
+            clang-check)
+                sudo docker build -t crun-clang-check tests/clang-check
+                sudo docker run --privileged --rm -w /crun -v ${PWD}:/crun crun-clang-check
             ;;
             checkpoint-restore)
                 ./autogen.sh
