@@ -17,6 +17,7 @@
  */
 #define _GNU_SOURCE
 
+#include <config.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,6 +30,22 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/syscall.h>
+#include <sys/prctl.h>
+
+#ifdef HAVE_SECCOMP
+# include <linux/seccomp.h>
+# include <linux/filter.h>
+# include <seccomp.h>
+
+# ifndef SECCOMP_FILTER_FLAG_NEW_LISTENER
+#  define SECCOMP_FILTER_FLAG_NEW_LISTENER (1UL << 3)
+# endif
+
+# ifndef SECCOMP_SET_MODE_FILTER
+#  define SECCOMP_SET_MODE_FILTER 1
+# endif
+
+#endif
 
 #ifdef HAVE_ERROR_H
 # include <error.h>
@@ -127,7 +144,8 @@ ls (char *path)
 }
 
 static int
-sd_notify () {
+sd_notify ()
+{
   int ret;
   int notify_socket_fd;
   char *notify_socket_name;
@@ -155,6 +173,12 @@ sd_notify () {
     error (EXIT_FAILURE, 0, "sendto");
 
   return 0;
+}
+
+static int
+syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
+{
+  return (int) syscall (__NR_seccomp, operation, flags, args);
 }
 
 int main (int argc, char **argv)
@@ -334,6 +358,43 @@ int main (int argc, char **argv)
 #else
           return 1;
 #endif
+        }
+      else if (strcmp (argv[2], "seccomp-listener") == 0)
+        {
+#ifdef HAVE_SECCOMP
+          int ret;
+          int p = fork ();
+          if (p < 0)
+            return 1;
+          if (p)
+            {
+              int status;
+              do
+                ret = waitpid (p, &status, 0);
+              while (ret < 0 && errno == EINTR);
+              if (ret == p && WIFEXITED (status) && WEXITSTATUS (status) == 0)
+                return 0;
+
+              return 1;
+            }
+          else
+            {
+              struct sock_fprog seccomp_filter;
+              const char bpf[] = {0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f};
+              seccomp_filter.len = 1;
+              seccomp_filter.filter = (struct sock_filter *) bpf;
+
+              if (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0)
+                return 1;
+
+              ret = syscall_seccomp (SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_NEW_LISTENER, &seccomp_filter);
+              if (ret <= 0)
+                return 1;
+
+              return 0;
+            }
+#endif
+          return 1;
         }
       else
         error (EXIT_FAILURE, 0, "unknown feature");
