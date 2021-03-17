@@ -310,7 +310,7 @@ int main (int argc, char **argv)
 
   if (strcmp (argv[1], "check-feature") == 0)
     {
-      if (argc < 2)
+      if (argc < 3)
         error (EXIT_FAILURE, 0, "`check-feature` requires an argument");
 
       if (strcmp (argv[2], "open_tree") == 0)
