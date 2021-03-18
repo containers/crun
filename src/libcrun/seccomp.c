@@ -298,11 +298,14 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
     {
       uint32_t arch_token;
       const char *arch = seccomp->architectures[i];
-      char lowercase_arch[32];
+      char *end, lowercase_arch[32] = {
+        0,
+      };
 
       if (has_prefix (arch, "SCMP_ARCH_"))
         arch += 10;
-      stpncpy (lowercase_arch, arch, sizeof (lowercase_arch));
+      end = stpncpy (lowercase_arch, arch, sizeof (lowercase_arch) - 1);
+      *end = '\0';
       make_lowercase (lowercase_arch);
 #  ifdef SECCOMP_ARCH_RESOLVE_NAME
       arch_token = seccomp_arch_resolve_name (lowercase_arch);
