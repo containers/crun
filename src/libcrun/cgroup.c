@@ -1819,6 +1819,9 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (len == 0)
+    return 0;
+
   for (n_new_pids = 0, it = buffer; it; it = strchr (it + 1, '\n'))
     n_new_pids++;
 
