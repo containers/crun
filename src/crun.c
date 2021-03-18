@@ -297,7 +297,7 @@ int
 main (int argc, char **argv)
 {
   libcrun_error_t err = NULL;
-  int ret, first_argument;
+  int ret, first_argument = 0;
 
   argp_program_version_hook = print_version;
 

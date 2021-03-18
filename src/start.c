@@ -65,7 +65,7 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, N
 int
 crun_command_start (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg, ret;
+  int first_arg = 0, ret;
 
   libcrun_context_t crun_context = {
     0,
