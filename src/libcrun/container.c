@@ -2500,7 +2500,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
-  libcrun_error_t tmp_err;
+  libcrun_error_t tmp_err = NULL;
 
   container->context = context;
 
@@ -2667,7 +2667,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
         {
           if (exit_code != 0)
             {
-              libcrun_error_t tmp_err;
+              libcrun_error_t tmp_err = NULL;
               libcrun_container_delete (context, def, context->id, true, &tmp_err);
               crun_error_release (err);
             }
