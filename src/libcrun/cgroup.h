@@ -76,4 +76,6 @@ typedef const char *cgroups_subsystem_t;
 
 const cgroups_subsystem_t *libcrun_get_cgroups_subsystems ();
 
+int libcrun_cgroup_has_oom (const char *path, int cgroup_mode, libcrun_error_t *err);
+
 #endif
