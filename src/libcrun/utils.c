@@ -979,6 +979,8 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
   ret = TEMP_FAILURE_RETRY (recvmsg (from, &msg, 0));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "recvmsg");
+  if (UNLIKELY (ret == 0))
+    return crun_make_error (err, 0, "read FD: connection closed");
 
   cmsg = CMSG_FIRSTHDR (&msg);
   if (cmsg == NULL)
