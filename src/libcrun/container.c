@@ -333,6 +333,40 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
     log_write_to_stderr (errno_, msg, warning, arg);
 }
 
+static bool
+is_memory_limit_too_low (runtime_spec_schema_config_schema *def)
+{
+  const long memory_limit_too_low = 1024 * 1024;
+
+  if (def->linux == NULL || def->linux->resources == NULL)
+    return false;
+
+  if (def->linux->resources->memory
+      && def->linux->resources->memory->limit_present
+      && def->linux->resources->memory->limit < memory_limit_too_low)
+    return true;
+
+  if (def->linux->resources->unified)
+    {
+      size_t i;
+
+      for (i = 0; i < def->linux->resources->unified->len; i++)
+        if (strcmp (def->linux->resources->unified->keys[i], "memory.max") == 0)
+          {
+            long limit;
+
+            errno = 0;
+            limit = strtol (def->linux->resources->unified->values[i], NULL, 10);
+            if (errno != 0)
+              return false;
+            if (limit < memory_limit_too_low)
+              return true;
+          }
+    }
+
+  return false;
+}
+
 static int
 sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_error_t *err)
 {
@@ -345,6 +379,7 @@ sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_e
     {
       int ret;
 
+      errno = 0;
       ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
       if (UNLIKELY (ret < 0))
         {
@@ -357,7 +392,8 @@ sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_e
         {
           if (flush)
             return 0;
-          return crun_make_error (err, 0, "sync socket closed");
+
+          return crun_make_error (err, errno, "read from the init process");
         }
 
       if (! flush && msg.type == SYNC_SOCKET_SYNC_MESSAGE)
@@ -1623,25 +1659,54 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
 }
 
 static int
-cleanup_watch (libcrun_context_t *context, pid_t init_pid, int sync_socket, int terminal_fd, libcrun_error_t *err)
+cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *cgroup_path, int cgroup_mode, pid_t init_pid, int sync_socket, int terminal_fd, libcrun_error_t *err)
 {
+  const char *oom_message = NULL;
   libcrun_error_t tmp_err = NULL;
+  bool terminated = false;
+  int ret;
 
   if (init_pid)
     {
+      /* Try to detect whether the cgroup has a OOM.  */
+      if (cgroup_path != NULL && cgroup_path[0])
+        {
+          int has_oom;
+
+          has_oom = libcrun_cgroup_has_oom (cgroup_path, cgroup_mode, &tmp_err);
+          if (has_oom > 0)
+            oom_message = "OOM: the memory limit could be too low";
+          else if (has_oom < 0)
+            {
+              /* If the detection has failed for any reason, e.g. the cgroup was
+                 already deleted by the time it was checked, just ignore the
+                 failure.  */
+              crun_error_release (&tmp_err);
+            }
+        }
+      /* If the OOM wasn't detected, look into the static configuration.  */
+      if (oom_message == NULL && is_memory_limit_too_low (def))
+        oom_message = "the memory limit could be too low";
+
       kill (init_pid, SIGKILL);
-      TEMP_FAILURE_RETRY (waitpid (init_pid, NULL, 0));
+      terminated = TEMP_FAILURE_RETRY (waitpid (init_pid, NULL, 0)) == init_pid;
     }
 
-  sync_socket_wait_sync (context, sync_socket, true, &tmp_err);
-  if (tmp_err)
+  if (! terminated)
     {
-      crun_error_release (err);
-      *err = tmp_err;
+      ret = sync_socket_wait_sync (context, sync_socket, true, &tmp_err);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_error_release (err);
+          *err = tmp_err;
+        }
     }
 
   if (terminal_fd >= 0)
     flush_fd_to_err (context, terminal_fd);
+
+  if (oom_message)
+    return crun_error_wrap (err, "%s", oom_message);
 
   return -1;
 }
@@ -1901,7 +1966,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       /* Do not open the notify socket here on "create".  "start" will take care of it.  */
       ret = get_notify_fd (context, container, &notify_socket, err);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
     }
 
   if (container_args.terminal_socketpair[1] >= 0)
@@ -1935,18 +2000,18 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
     ret = libcrun_cgroup_enter (&cg, err);
     if (UNLIKELY (ret < 0))
-      return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+      return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
   }
 
   /* sync 1.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
   /* sync 2.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
   /* The container is waiting that we write back.  In this phase we can launch the
      prestart hooks.  */
@@ -1955,14 +2020,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       ret = do_hooks (def, pid, context->id, false, NULL, "created", (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
     }
   if (def->hooks && def->hooks->create_runtime_len)
     {
       ret = do_hooks (def, pid, context->id, false, NULL, "created", (hook **) def->hooks->create_runtime,
                       def->hooks->create_runtime_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
     }
 
   if (seccomp_fd >= 0)
@@ -1988,21 +2053,21 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
           if (UNLIKELY (consumed != (int) in_size))
             {
               ret = crun_make_error (err, 0, "invalid seccomp BPF data");
-              return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+              return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
             }
 
           ret = safe_write (seccomp_fd, bpf_data, (ssize_t) size);
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, 0, "write to seccomp fd");
-              return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+              return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
             }
         }
       else
         {
           ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
           if (UNLIKELY (ret < 0))
-            return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+            return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
         }
       close_and_reset (&seccomp_fd);
     }
@@ -2010,34 +2075,34 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   /* sync 3.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
   if (def->process && def->process->terminal && ! detach && context->console_socket == NULL)
     {
       terminal_fd = receive_fd_from_socket (socket_pair_0, err);
       if (UNLIKELY (terminal_fd < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
       close_and_reset (&socket_pair_0);
 
       ret = libcrun_setup_terminal_ptmx (terminal_fd, &orig_terminal, err);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
     }
 
   /* sync 4.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
   ret = close_and_reset (&sync_socket);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
   get_current_timestamp (created);
   ret = write_container_status (container, context, pid, cgroup_path, scope, created, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
   /* Run poststart hooks here only if the container is created using "run".  For create+start, the
      hooks will be executed as part of the start command.  */
@@ -2046,7 +2111,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       ret = do_hooks (def, pid, context->id, true, NULL, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
     }
 
   /* Let's receive the seccomp notify fd and handle it as part of wait_for_process().  */
@@ -2054,11 +2119,11 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       seccomp_notify_fd = receive_fd_from_socket (own_seccomp_receiver_fd, err);
       if (UNLIKELY (seccomp_notify_fd < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
 
       ret = close_and_reset (&own_seccomp_receiver_fd);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
     }
 
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, container_ready_fd, seccomp_notify_fd,
@@ -2066,7 +2131,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (! context->detach)
     {
       libcrun_error_t tmp_err = NULL;
-      cleanup_watch (context, 0, sync_socket, terminal_fd, &tmp_err);
+      cleanup_watch (context, def, cgroup_path, cgroup_mode, 0, sync_socket, terminal_fd, &tmp_err);
       crun_error_release (&tmp_err);
     }
 
