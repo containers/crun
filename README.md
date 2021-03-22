@@ -39,15 +39,9 @@ containers, the containers run `/bin/true`:
 | 100 /bin/true | 0:01.69 | 0:3.34 | \-49.4% |
 
 crun requires fewer resources, so it is also possible to set stricter
-limits on the memory and number of PIDs allowed in the container:
+limits on the memory allowed in the container:
 
 ```console
-# podman --runtime /usr/bin/runc run --rm --pids-limit 1 fedora echo it works
-Error: container_linux.go:346: starting container process caused "process_linux.go:319: getting the final child's pid from pipe caused \"EOF\"": OCI runtime error
-
-# podman --runtime /usr/bin/crun run --rm --pids-limit 1 fedora echo it works
-it works
-
 # podman --runtime /usr/bin/runc run --rm --memory 4M fedora echo it works
 Error: container_linux.go:346: starting container process caused "process_linux.go:327: getting pipe fds for pid 13859 caused \"readlink /proc/13859/fd/0: no such file or directory\"": OCI runtime command not found error
 
