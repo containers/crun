@@ -3133,3 +3133,79 @@ libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_lin
       return crun_make_error (err, 0, "invalid cgroup mode");
     }
 }
+
+int
+libcrun_cgroup_has_oom (const char *path, int cgroup_mode, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  const char *prefix = NULL;
+  size_t content_size = 0;
+  char *it;
+
+  if (path == NULL || path[0] == '\0')
+    return 0;
+
+  switch (cgroup_mode)
+    {
+    case CGROUP_MODE_UNIFIED:
+      {
+        cleanup_free char *events_path = NULL;
+        int ret;
+
+        ret = append_paths (&events_path, err, CGROUP_ROOT, path, "memory.events", NULL);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* read_all_file always NUL terminates the output.  */
+        ret = read_all_file (events_path, &content, &content_size, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        prefix = "oom ";
+        break;
+      }
+    case CGROUP_MODE_LEGACY:
+    case CGROUP_MODE_HYBRID:
+      {
+        cleanup_free char *oom_control_path = NULL;
+        int ret;
+
+        ret = append_paths (&oom_control_path, err, CGROUP_ROOT, "memory", path, "memory.oom_control", NULL);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* read_all_file always NUL terminates the output.  */
+        ret = read_all_file (oom_control_path, &content, &content_size, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        prefix = "oom_kill ";
+        break;
+      }
+
+    default:
+      return crun_make_error (err, 0, "invalid cgroup mode");
+    }
+
+  it = content;
+  while (it && *it)
+    {
+      if (has_prefix (it, prefix))
+        {
+          it += strlen (prefix);
+          while (*it == ' ')
+            it++;
+
+          return *it != '0';
+        }
+      else
+        {
+          it = strchr (it, '\n');
+          if (it == NULL)
+            return 0;
+          it++;
+        }
+    }
+
+  return 0;
+}
