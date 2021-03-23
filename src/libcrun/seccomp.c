@@ -168,7 +168,8 @@ cleanup_seccompp (void *p)
 #define cleanup_seccomp __attribute__ ((cleanup (cleanup_seccompp)))
 
 int
-libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags, size_t seccomp_flags_len,
+libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_fd_payload,
+                       size_t receiver_fd_payload_len, char **seccomp_flags, size_t seccomp_flags_len,
                        libcrun_error_t *err)
 {
 #ifdef HAVE_SECCOMP
@@ -233,7 +234,8 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, char **seccomp_flags,
     {
       int fd = ret;
 
-      ret = send_fd_to_socket (listener_receiver_fd, fd, err);
+      ret = send_fd_to_socket_with_payload (listener_receiver_fd, fd,
+                                            receiver_fd_payload, receiver_fd_payload_len, err);
       if (UNLIKELY (ret < 0))
         return crun_error_wrap (err, "send listener fd `%d` to receiver", fd);
     }
@@ -296,11 +298,14 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
     {
       uint32_t arch_token;
       const char *arch = seccomp->architectures[i];
-      char lowercase_arch[32];
+      char *end, lowercase_arch[32] = {
+        0,
+      };
 
       if (has_prefix (arch, "SCMP_ARCH_"))
         arch += 10;
-      stpncpy (lowercase_arch, arch, sizeof (lowercase_arch));
+      end = stpncpy (lowercase_arch, arch, sizeof (lowercase_arch) - 1);
+      *end = '\0';
       make_lowercase (lowercase_arch);
 #  ifdef SECCOMP_ARCH_RESOLVE_NAME
       arch_token = seccomp_arch_resolve_name (lowercase_arch);

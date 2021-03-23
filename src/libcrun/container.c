@@ -597,7 +597,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
           const char *status, hook **hooks, size_t hooks_len, int out_fd, int err_fd, libcrun_error_t *err)
 {
   size_t i, stdin_len;
-  int ret;
+  int r, ret;
   char *stdin = NULL;
   cleanup_free char *cwd_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
@@ -614,44 +614,93 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   if (gen == NULL)
     return crun_make_error (err, 0, "yajl_gen_alloc failed");
 
-  yajl_gen_map_open (gen);
-  yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  yajl_gen_string (gen, YAJL_STR ("1.0"), strlen ("1.0"));
+  r = yajl_gen_map_open (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
-  yajl_gen_string (gen, YAJL_STR (id), strlen (id));
+  r = yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  yajl_gen_integer (gen, pid);
+  r = yajl_gen_string (gen, YAJL_STR ("1.0"), strlen ("1.0"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("root"), strlen ("root"));
-  yajl_gen_string (gen, YAJL_STR (rootfs), strlen (rootfs));
+  r = yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-  yajl_gen_string (gen, YAJL_STR (cwd), strlen (cwd));
+  r = yajl_gen_string (gen, YAJL_STR (id), strlen (id));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
-  yajl_gen_string (gen, YAJL_STR (status), strlen (status));
+  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_integer (gen, pid);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("root"), strlen ("root"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR (rootfs), strlen (rootfs));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR (cwd), strlen (cwd));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR (status), strlen (status));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
   if (def && def->annotations && def->annotations->len)
     {
-      yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
-      yajl_gen_map_open (gen);
+      r = yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto yajl_error;
+
+      r = yajl_gen_map_open (gen);
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto yajl_error;
+
       for (i = 0; i < def->annotations->len; i++)
         {
           const char *key = def->annotations->keys[i];
           const char *val = def->annotations->values[i];
 
-          yajl_gen_string (gen, YAJL_STR (key), strlen (key));
-          yajl_gen_string (gen, YAJL_STR (val), strlen (val));
+          r = yajl_gen_string (gen, YAJL_STR (key), strlen (key));
+          if (UNLIKELY (r != yajl_gen_status_ok))
+            goto yajl_error;
+
+          r = yajl_gen_string (gen, YAJL_STR (val), strlen (val));
+          if (UNLIKELY (r != yajl_gen_status_ok))
+            goto yajl_error;
         }
-      yajl_gen_map_close (gen);
+      r = yajl_gen_map_close (gen);
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto yajl_error;
     }
 
-  yajl_gen_map_close (gen);
+  r = yajl_gen_map_close (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
-  if (yajl_gen_get_buf (gen, (const unsigned char **) &stdin, &stdin_len) != yajl_gen_status_ok)
-    return crun_make_error (err, 0, "error generating JSON");
+  r = yajl_gen_get_buf (gen, (const unsigned char **) &stdin, &stdin_len);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
   ret = 0;
 
@@ -675,6 +724,11 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
     yajl_gen_free (gen);
 
   return ret;
+
+yajl_error:
+  if (gen)
+    yajl_gen_free (gen);
+  return yajl_error_to_crun_error (r, err);
 }
 
 #if HAVE_DLOPEN && HAVE_LIBKRUN
@@ -785,10 +839,202 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
   return crun_make_error (err, EINVAL, "invalid handler specified `%s`", annotation);
 }
 
+static int
+get_yajl_result (yajl_gen gen, char **out, size_t *out_len)
+{
+  const unsigned char *buf = NULL;
+  size_t buf_len = 0;
+  int r;
+
+  r = yajl_gen_get_buf (gen, &buf, &buf_len);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    return r;
+
+  *out_len = buf_len;
+
+  *out = malloc (buf_len + 1);
+  if (*out == NULL)
+    OOM ();
+  memcpy (*out, buf, buf_len);
+  (*out)[buf_len] = '\0';
+
+  return yajl_gen_status_ok;
+}
+
+static int
+get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *status, pid_t own_pid,
+                                 char **seccomp_fd_payload, size_t *seccomp_fd_payload_len, libcrun_error_t *err)
+{
+  int r;
+  yajl_gen gen = NULL;
+  runtime_spec_schema_config_schema *def = container->container_def;
+  const char *const OCI_VERSION = "0.2.0";
+
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+
+  yajl_gen_config (gen, yajl_gen_beautify, 1);
+  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+
+  r = yajl_gen_map_open (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR (OCI_VERSION), strlen (OCI_VERSION));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR ("fds"), strlen ("fds"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_array_open (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR ("seccompFd"), strlen ("seccompFd"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_array_close (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_integer (gen, own_pid);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  if (def && def->linux && def->linux->seccomp)
+    {
+      const char *metadata = def->linux->seccomp->listener_metadata;
+
+      if (metadata)
+        {
+          r = yajl_gen_string (gen, YAJL_STR ("metadata"), strlen ("metadata"));
+          if (UNLIKELY (r != yajl_gen_status_ok))
+            goto exit;
+
+          r = yajl_gen_string (gen, YAJL_STR (metadata), strlen (metadata));
+          if (UNLIKELY (r != yajl_gen_status_ok))
+            goto exit;
+        }
+    }
+
+  /* State.  */
+  r = yajl_gen_string (gen, YAJL_STR ("state"), strlen ("state"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_map_open (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR (OCI_VERSION), strlen (OCI_VERSION));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  if (container->context && container->context->id)
+    {
+      r = yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+
+      r = yajl_gen_string (gen, YAJL_STR (container->context->id), strlen (container->context->id));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+    }
+
+  r = yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR (status), strlen (status));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = yajl_gen_integer (gen, own_pid);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  if (container->context && container->context->bundle)
+    {
+      r = yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+
+      r = yajl_gen_string (gen, YAJL_STR (container->context->bundle), strlen (container->context->bundle));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+    }
+
+  if (def->annotations && def->annotations->len)
+    {
+      size_t i;
+
+      r = yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+
+      r = yajl_gen_map_open (gen);
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+
+      for (i = 0; i < def->annotations->len; i++)
+        {
+          const char *key = def->annotations->keys[i];
+          const char *val = def->annotations->values[i];
+
+          r = yajl_gen_string (gen, YAJL_STR (key), strlen (key));
+          if (UNLIKELY (r != yajl_gen_status_ok))
+            goto exit;
+
+          r = yajl_gen_string (gen, YAJL_STR (val), strlen (val));
+          if (UNLIKELY (r != yajl_gen_status_ok))
+            goto exit;
+        }
+      r = yajl_gen_map_close (gen);
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto exit;
+    }
+
+  r = yajl_gen_map_close (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+  /* End state.  */
+
+  r = yajl_gen_map_close (gen);
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto exit;
+
+  r = get_yajl_result (gen, seccomp_fd_payload, seccomp_fd_payload_len);
+
+exit:
+  yajl_gen_free (gen);
+
+  return yajl_error_to_crun_error (r, err);
+}
+
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
-container_init_setup (void *args, char *notify_socket, int sync_socket, const char **exec_path, libcrun_error_t *err)
+container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_socket, const char **exec_path, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -978,6 +1224,8 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
     {
       char **seccomp_flags = NULL;
       size_t seccomp_flags_len = 0;
+      cleanup_free char *seccomp_fd_payload = NULL;
+      size_t seccomp_fd_payload_len = 0;
 
       if (def->linux && def->linux->seccomp)
         {
@@ -985,8 +1233,15 @@ container_init_setup (void *args, char *notify_socket, int sync_socket, const ch
           seccomp_flags_len = def->linux->seccomp->flags_len;
         }
 
-      ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, entrypoint_args->seccomp_receiver_fd, seccomp_flags,
-                                   seccomp_flags_len, err);
+      if (entrypoint_args->seccomp_receiver_fd >= 0)
+        {
+          ret = get_seccomp_receiver_fd_payload (container, "creating", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, entrypoint_args->seccomp_receiver_fd,
+                                   seccomp_fd_payload, seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1051,12 +1306,22 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
   cleanup_free const char *exec_path = NULL;
   __attribute__ ((unused)) cleanup_free char *notify_socket_cleanup = notify_socket;
+  pid_t own_pid = 0;
 
   entrypoint_args->sync_socket = sync_socket;
 
   crun_set_output_handler (log_write_to_sync_socket, args, false);
 
-  ret = container_init_setup (args, notify_socket, sync_socket, &exec_path, err);
+  /* sync receive own pid.  */
+  ret = TEMP_FAILURE_RETRY (read (sync_socket, &own_pid, sizeof (own_pid)));
+  if (UNLIKELY (ret != sizeof (own_pid)))
+    {
+      if (ret >= 0)
+        errno = 0;
+      return crun_make_error (err, errno, "read from sync socket");
+    }
+
+  ret = container_init_setup (args, own_pid, notify_socket, sync_socket, &exec_path, err);
   if (UNLIKELY (ret < 0))
     {
       /* If it fails to write the error using the sync socket, then fallback
@@ -1110,6 +1375,8 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
     {
       char **seccomp_flags = NULL;
       size_t seccomp_flags_len = 0;
+      cleanup_free char *seccomp_fd_payload = NULL;
+      size_t seccomp_fd_payload_len = 0;
 
       if (def->linux && def->linux->seccomp)
         {
@@ -1117,7 +1384,15 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
           seccomp_flags_len = def->linux->seccomp->flags_len;
         }
 
-      ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, entrypoint_args->seccomp_receiver_fd, seccomp_flags,
+      if (entrypoint_args->seccomp_receiver_fd >= 0)
+        {
+          ret = get_seccomp_receiver_fd_payload (entrypoint_args->container, "creating", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      ret = libcrun_apply_seccomp (entrypoint_args->seccomp_fd, entrypoint_args->seccomp_receiver_fd,
+                                   seccomp_fd_payload, seccomp_fd_payload_len, seccomp_flags,
                                    seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1813,6 +2088,7 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
                          libcrun_error_t *err)
 {
   const char *tmp;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
   *fd = -1;
   *self_receiver_fd = -1;
@@ -1832,7 +2108,10 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
       *plugins = tmp;
     }
 
-  tmp = find_annotation (container, "run.oci.seccomp.receiver");
+  if (def && def->linux && def->linux->seccomp && def->linux->seccomp->listener_path)
+    tmp = def->linux->seccomp->listener_path;
+  else
+    tmp = find_annotation (container, "run.oci.seccomp.receiver");
   if (tmp == NULL)
     tmp = getenv ("RUN_OCI_SECCOMP_RECEIVER");
   if (tmp)
@@ -2002,6 +2281,16 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     if (UNLIKELY (ret < 0))
       return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
   }
+
+  /* sync send own pid.  */
+  ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
+  if (UNLIKELY (ret != sizeof (pid)))
+    {
+      if (ret >= 0)
+        errno = 0;
+      crun_make_error (err, errno, "write to sync socket");
+      return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    }
 
   /* sync 1.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
@@ -2211,7 +2500,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
-  libcrun_error_t tmp_err;
+  libcrun_error_t tmp_err = NULL;
 
   container->context = context;
 
@@ -2378,7 +2667,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
         {
           if (exit_code != 0)
             {
-              libcrun_error_t tmp_err;
+              libcrun_error_t tmp_err = NULL;
               libcrun_container_delete (context, def, context->id, true, &tmp_err);
               crun_error_release (err);
             }
@@ -2569,6 +2858,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
+  const char *const OCI_CONFIG_VERSION = "1.0.0";
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
   const char *container_status = NULL;
@@ -2596,7 +2886,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   yajl_gen_map_open (gen);
   yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  yajl_gen_string (gen, YAJL_STR ("1.0.0"), strlen ("1.0.0"));
+  yajl_gen_string (gen, YAJL_STR (OCI_CONFIG_VERSION), strlen (OCI_CONFIG_VERSION));
 
   yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
   yajl_gen_string (gen, YAJL_STR (id), strlen (id));
@@ -2780,9 +3070,12 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
       runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
       char **seccomp_flags = NULL;
       size_t seccomp_flags_len = 0;
+      pid_t own_pid = 0;
 
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
+
+      TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
 
       cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
@@ -2860,7 +3153,18 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
       if (! process->no_new_privileges)
         {
-          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_flags, seccomp_flags_len, err);
+          cleanup_free char *seccomp_fd_payload = NULL;
+          size_t seccomp_fd_payload_len = 0;
+
+          if (seccomp_receiver_fd >= 0)
+            {
+              ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+
+          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
+                                       seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
           if (UNLIKELY (ret < 0))
             return ret;
           close_and_reset (&seccomp_fd);
@@ -2885,9 +3189,20 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
       if (process->no_new_privileges)
         {
-          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_flags, seccomp_flags_len, err);
+          cleanup_free char *seccomp_fd_payload = NULL;
+          size_t seccomp_fd_payload_len = 0;
+
+          if (seccomp_receiver_fd >= 0)
+            {
+              ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
+                                       seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
           if (UNLIKELY (ret < 0))
             return ret;
+
           close_and_reset (&seccomp_fd);
           close_and_reset (&seccomp_receiver_fd);
         }
@@ -2906,6 +3221,8 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
   TEMP_FAILURE_RETRY (close (pipefd1));
   pipefd1 = -1;
+
+  TEMP_FAILURE_RETRY (write (pipefd0, &pid, sizeof (pid)));
 
   if (seccomp_fd >= 0)
     close_and_reset (&seccomp_fd);

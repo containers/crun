@@ -114,7 +114,7 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, N
 int
 crun_command_create (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg, ret;
+  int first_arg = 0, ret;
   cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *config_file_cleanup = NULL;
@@ -138,7 +138,9 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
     }
 
   /* Make sure the bundle is an absolute path.  */
-  if (bundle)
+  if (bundle == NULL)
+    bundle = bundle_cleanup = getcwd (NULL, 0);
+  else
     {
       if (bundle[0] != '/')
         {
@@ -160,7 +162,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
 
-  crun_context.bundle = bundle ? bundle : ".";
+  crun_context.bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
 

@@ -202,7 +202,7 @@ make_oci_process_user (const char *userspec)
 int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg, ret = 0;
+  int first_arg = 0, ret = 0;
   libcrun_context_t crun_context = {
     0,
   };

@@ -168,7 +168,9 @@ get_file_type_fd (int fd, mode_t *mode)
   int ret;
 
 #ifdef HAVE_STATX
-  struct statx stx;
+  struct statx stx = {
+    0,
+  };
 
   ret = statx (fd, "", AT_EMPTY_PATH | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
   if (UNLIKELY (ret < 0))
@@ -195,7 +197,9 @@ get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path)
   int ret;
 
 #ifdef HAVE_STATX
-  struct statx stx;
+  struct statx stx = {
+    0,
+  };
 
   ret = statx (dirfd, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
   if (UNLIKELY (ret < 0))
@@ -591,7 +595,9 @@ get_file_size (int fd, off_t *size)
   struct stat st;
   int ret;
 #ifdef HAVE_STATX
-  struct statx stx;
+  struct statx stx = {
+    0,
+  };
 
   ret = statx (fd, "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC, STATX_SIZE, &stx);
   if (UNLIKELY (ret < 0))
@@ -923,16 +929,28 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
 int
 send_fd_to_socket (int server, int fd, libcrun_error_t *err)
 {
+  return send_fd_to_socket_with_payload (server, fd, NULL, 0, err);
+}
+
+int
+send_fd_to_socket_with_payload (int server, int fd, const char *payload, size_t payload_len, libcrun_error_t *err)
+{
   int ret;
   struct cmsghdr *cmsg = NULL;
-  struct iovec iov[1];
+  struct iovec iov[2];
   struct msghdr msg = {};
-  char ctrl_buf[CMSG_SPACE (sizeof (int))] = {};
+  char ctrl_buf[CMSG_SPACE (1 + sizeof (int))] = {};
   char data[1];
 
   data[0] = ' ';
   iov[0].iov_base = data;
   iov[0].iov_len = sizeof (data);
+
+  if (payload_len > 0)
+    {
+      iov[0].iov_base = (void *) payload;
+      iov[0].iov_len = payload_len;
+    }
 
   msg.msg_name = NULL;
   msg.msg_namelen = 0;
@@ -1751,7 +1769,9 @@ copy_rec_stat_file_at (int dfd, const char *path, mode_t *mode, off_t *size, dev
   int ret;
 
 #ifdef HAVE_STATX
-  struct statx stx;
+  struct statx stx = {
+    0,
+  };
 
   ret = statx (dfd, path, AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC,
                STATX_TYPE | STATX_MODE | STATX_SIZE | STATX_UID | STATX_GID, &stx);

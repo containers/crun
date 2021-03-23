@@ -442,3 +442,37 @@ libcrun_set_log_format (const char *format, libcrun_error_t *err)
 
   return 0;
 }
+
+int
+yajl_error_to_crun_error (int yajl_status, libcrun_error_t *err)
+{
+  switch (yajl_status)
+    {
+    case yajl_gen_status_ok:
+      return 0;
+
+    case yajl_gen_keys_must_be_strings:
+      return crun_make_error (err, 0, "generate JSON document: gen keys must be strings");
+
+    case yajl_max_depth_exceeded:
+      return crun_make_error (err, 0, "generate JSON document: max depth exceeded");
+
+    case yajl_gen_in_error_state:
+      return crun_make_error (err, 0, "generate JSON document: complete JSON document generated");
+
+    case yajl_gen_generation_complete:
+      return crun_make_error (err, 0, "generate JSON document: called while in error state");
+
+    case yajl_gen_invalid_number:
+      return crun_make_error (err, 0, "generate JSON document: invalid number");
+
+    case yajl_gen_no_buf:
+      return crun_make_error (err, 0, "generate JSON document: no buffer provided");
+
+    case yajl_gen_invalid_string:
+      return crun_make_error (err, 0, "generate JSON document: invalid string");
+
+    default:
+      return crun_make_error (err, 0, "generate JSON document");
+    }
+}
