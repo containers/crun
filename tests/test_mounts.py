@@ -30,11 +30,14 @@ except Exception:
     print("1..0")
     sys.exit(0)
 
-def helper_mount(options):
+def helper_mount(options, tmpfs=True):
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
     add_all_namespaces(conf)
-    mount_opt = {"destination": "/var/dir", "type": "tmpfs", "source": "tmpfs", "options": [options]}
+    if tmpfs:
+        mount_opt = {"destination": "/var/dir", "type": "tmpfs", "source": "tmpfs", "options": [options]}
+    else:
+        mount_opt = {"destination": "/var/dir", "type": "bind", "source": get_tests_root(), "options": ["bind", "rprivate"] + [options]}
     conf['mounts'].append(mount_opt)
     out, _ = run_and_get_output(conf, hide_stderr=True)
     with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
@@ -69,63 +72,105 @@ def test_mount_symlink_not_existing():
 
 def test_mount_ro():
     a = helper_mount("ro")[0]
-    if "ro" in a:
-        return 0
-    return -1
+    if "ro" not in a:
+        return -1
+    a = helper_mount("ro", tmpfs=False)[0]
+    if "ro" not in a:
+        return -1
+    return 0
 
 def test_mount_rw():
+    a = helper_mount("rw", tmpfs=False)[0]
+    if "rw" not in a:
+        return -1
     a = helper_mount("rw")[0]
-    if "rw" in a:
-        return 0
-    return -1
+    if "rw" not in a:
+        return -1
+    return 0
 
 def test_mount_relatime():
+    a = helper_mount("relatime", tmpfs=False)[0]
+    if "relatime" not in a:
+        return -1
     a = helper_mount("relatime")[0]
-    if "relatime" in a:
-        return 0
-    return -1
+    if "relatime" not in a:
+        return -1
+    return 0
 
 def test_mount_strictatime():
+    a = helper_mount("strictatime", tmpfs=False)[0]
+    if "relatime" not in a:
+        return 0
     a = helper_mount("strictatime")[0]
     if "relatime" not in a:
         return 0
     return -1
 
 def test_mount_exec():
+    a = helper_mount("exec", tmpfs=False)[0]
+    if "noexec" in a:
+        return -1
     a = helper_mount("exec")[0]
-    if "noexec" not in a:
-        return 0
-    return -1
+    if "noexec" in a:
+        return -1
+    return 0
 
 def test_mount_noexec():
+    a = helper_mount("noexec", tmpfs=False)[0]
+    if "noexec" not in a:
+        return -1
     a = helper_mount("noexec")[0]
-    if "noexec" in a:
-        return 0
-    return -1
+    if "noexec" not in a:
+        return -1
+    return 0
 
 def test_mount_suid():
+    a = helper_mount("suid", tmpfs=False)[0]
+    if "nosuid" in a:
+        return -1
     a = helper_mount("suid")[0]
-    if "nosuid" not in a:
-        return 0
-    return -1
+    if "nosuid" in a:
+        return -1
+    return 0
 
 def test_mount_nosuid():
+    a = helper_mount("nosuid", tmpfs=False)[0]
+    if "nosuid" not in a:
+        return -1
     a = helper_mount("nosuid")[0]
-    if "nosuid" in a:
-        return 0
-    return -1
+    if "nosuid" not in a:
+        return -1
+    return 0
 
 def test_mount_sync():
     a = helper_mount("sync")[1]
-    if "sync" in a:
-        return 0
-    return -1
+    if "sync" not in a:
+        return -1
+    return 0
 
 def test_mount_dirsync():
     a = helper_mount("dirsync")[1]
-    if "dirsync" in a:
-        return 0
-    return -1
+    if "dirsync" not in a:
+        return -1
+    return 0
+
+def test_mount_nodev():
+    a = helper_mount("nodev", tmpfs=False)[0]
+    if "nodev" not in a:
+        return -1
+    a = helper_mount("nodev")[0]
+    if "nodev" not in a:
+        return -1
+    return 0
+
+def test_mount_dev():
+    a = helper_mount("dev", tmpfs=False)[0]
+    if "nodev" in a:
+        return -1
+    a = helper_mount("dev")[0]
+    if "nodev" in a:
+        return -1
+    return 0
 
 all_tests = {
     "test-mount-ro" : test_mount_ro,
@@ -140,6 +185,8 @@ all_tests = {
     "test-mount-dirsync" : test_mount_dirsync,
     "test-mount-symlink" : test_mount_symlink,
     "test-mount-symlink-not-existing" : test_mount_symlink_not_existing,
+    "test-mount-dev" : test_mount_dev,
+    "test-mount-nodev" : test_mount_nodev,
 }
 
 if __name__ == "__main__":

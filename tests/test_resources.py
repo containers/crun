@@ -35,7 +35,7 @@ def test_resources_pid_limit():
     add_all_namespaces(conf)
 
     fn = "/sys/fs/cgroup/pids/pids.max"
-    if not os.path.exists("/sys/fs/cgroup/pids"):
+    if is_cgroup_v2_unified():
         fn = "/sys/fs/cgroup/pids.max"
         conf['linux']['namespaces'].append({"type" : "cgroup"})
 
@@ -43,6 +43,7 @@ def test_resources_pid_limit():
 
     out, _ = run_and_get_output(conf)
     if "1024" not in out:
+        sys.stderr.write("found %s instead of 1024\n" % out)
         return -1
     return 0
 
@@ -72,7 +73,7 @@ def test_resources_pid_limit_userns():
     conf['linux']['gidMappings'] = mappings
 
     fn = "/sys/fs/cgroup/pids/pids.max"
-    if not os.path.exists("/sys/fs/cgroup/pids"):
+    if is_cgroup_v2_unified():
         fn = "/sys/fs/cgroup/pids.max"
         conf['linux']['namespaces'].append({"type" : "cgroup"})
 
@@ -80,6 +81,7 @@ def test_resources_pid_limit_userns():
 
     out, _ = run_and_get_output(conf)
     if "1024" not in out:
+        sys.stderr.write("found %s instead of 1024\n" % out)
         return -1
     return 0
 

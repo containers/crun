@@ -658,9 +658,6 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           return crun_make_error (err, saved_errno, "mount `%s` to `/%s`", source, target);
         }
 
-      if ((flags & MS_BIND) && (flags & ~(MS_BIND | MS_RDONLY | ALL_PROPAGATIONS)))
-        needs_remount = true;
-
       if (targetfd >= 0)
         {
           /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
@@ -698,8 +695,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
         }
     }
 
-  if (mountflags & MS_RDONLY)
+  if (mountflags & (MS_BIND | MS_RDONLY))
     needs_remount = true;
+
   if (data && fstype && strcmp (fstype, "proc") == 0)
     {
       single_instance = true;
