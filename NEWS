@@ -1,3 +1,18 @@
+* crun-0.19
+
+- join all the cgroup v1 controllers.
+- raise a warning when newuidmap/newgidmap fail.
+- handle eBPF access(dev_name, F_OK) call correctly.
+- fix some memory leaks on errors when libcrun is used by a long
+  running process.
+- fix the SELinux label for masked directories.
+- support default seccomp errno value.
+- fail if no default seccomp action specified.
+- support OCI seccomp notify listener.
+- improve OOM error messages.
+- ignore unknown capabilities and raise a warning.
+- always remount bind mounts to drop not requested mount flags.
+
 * crun-0.18
 
 - fix build without CLONE_NEWCGROUP.
