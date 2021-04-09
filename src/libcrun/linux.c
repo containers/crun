@@ -2090,18 +2090,19 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 int
-libcrun_container_setgroups (libcrun_container_t *container, libcrun_error_t *err)
+libcrun_container_setgroups (libcrun_container_t *container,
+                             runtime_spec_schema_config_schema_process *process,
+                             libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   gid_t *additional_gids = NULL;
   size_t additional_gids_len = 0;
   int can_do_setgroups;
   int ret;
 
-  if (def->process != NULL && def->process->user != NULL)
+  if (process != NULL && process->user != NULL)
     {
-      additional_gids = def->process->user->additional_gids;
-      additional_gids_len = def->process->user->additional_gids_len;
+      additional_gids = process->user->additional_gids;
+      additional_gids_len = process->user->additional_gids_len;
     }
 
   can_do_setgroups = can_setgroups (container, err);
@@ -3217,7 +3218,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return ret;
     }
 
-  ret = libcrun_container_setgroups (container, err);
+  ret = libcrun_container_setgroups (container, container->container_def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

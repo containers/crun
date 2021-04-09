@@ -68,7 +68,9 @@ int libcrun_container_restore_linux (libcrun_container_status_t *status, libcrun
 
 int libcrun_find_namespace (const char *name);
 char *libcrun_get_external_descriptors (libcrun_container_t *container);
-int libcrun_container_setgroups (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_container_setgroups (libcrun_container_t *container,
+                                 runtime_spec_schema_config_schema_process *process,
+                                 libcrun_error_t *err);
 int libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err);
 int libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *err);
 #endif

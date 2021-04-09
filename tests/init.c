@@ -207,6 +207,19 @@ int main (int argc, char **argv)
       exit (0);
     }
 
+  if (strcmp (argv[1], "groups") == 0)
+    {
+      gid_t groups[10];
+      int max_groups = sizeof(groups) / sizeof(groups[0]);
+      int n_groups, i;
+      n_groups = getgroups(max_groups, groups);
+      fputs("GROUPS=[", stdout);
+      for (i = 0; i < n_groups; i++)
+        printf("%s%d", i == 0 ? "" : " ", groups[i]);
+      fputs("]\n", stdout);
+      exit (0);
+    }
+
   if (strcmp (argv[1], "cat") == 0)
     {
       if (argc < 3)

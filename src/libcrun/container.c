@@ -3177,7 +3177,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
           close_and_reset (&seccomp_receiver_fd);
         }
 
-      ret = libcrun_container_setgroups (container, err);
+      ret = libcrun_container_setgroups (container, process, err);
       if (UNLIKELY (ret < 0))
         return ret;
 

@@ -21,6 +21,7 @@ import subprocess
 import os
 import shutil
 import sys
+import tempfile
 from tests_utils import *
 
 def test_exec():
@@ -62,11 +63,50 @@ def test_exec_not_exists():
 
 def test_exec_detach_not_exists():
     return test_exec_not_exists_helper(False)
-    
+
+def test_exec_additional_gids():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            json.dump({
+	        "user": {
+	            "uid": 0,
+	            "gid": 0,
+                    "additionalGids": [432]
+	        },
+                "terminal": False,
+	        "args": [
+                    "/init",
+                    "groups"
+	        ],
+	        "env": [
+	            "PATH=/bin",
+	            "TERM=xterm"
+	        ],
+	        "cwd": "/",
+	        "noNewPrivileges": True
+            }, f)
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        if "432" not in out:
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
     "exec-detach-not-exists" : test_exec_detach_not_exists,
+    "exec-detach-additional-gids" : test_exec_additional_gids,
 }
 
 if __name__ == "__main__":
