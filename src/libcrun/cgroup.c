@@ -1163,6 +1163,61 @@ systemd_check_job_status (sd_bus *bus, struct systemd_job_removed_s *data, const
   return 0;
 }
 
+int
+parse_sd_array (char *s, char **out, char **next, libcrun_error_t *err)
+{
+  char endchr;
+  char *it, *dest;
+  bool escaped = false;
+
+  *out = NULL;
+  *next = NULL;
+
+  while (isspace (*s))
+    s++;
+  if (*s == '\0')
+    return 0;
+  else if (*s != '\'' && *s != '"')
+    return crun_make_error (err, 0, "invalid string `%s`", s);
+
+  it = s;
+  endchr = *it++;
+  *out = dest = it;
+
+  while (1)
+    {
+      if (*it == '\0')
+        return crun_make_error (err, 0, "invalid string `%s`", s);
+      if (*it == endchr && ! escaped)
+        {
+          *it++ = '\0';
+          while (isspace (*it))
+            it++;
+          if (*it == ',')
+            {
+              *next = ++it;
+              *dest = '\0';
+              return 0;
+            }
+
+          if (*it == ']' || *it == '\0')
+            {
+              *dest = '\0';
+              return 0;
+            }
+
+          return crun_make_error (err, 0, "invalid character found `%c`", *it);
+        }
+
+      escaped = *it == '\\' ? ! escaped : false;
+      if (! escaped)
+        *dest++ = *it;
+      it++;
+    }
+
+  return 0;
+}
+
 /* Parse a gvariant string.  Support only a subset of types, just enough for systemd .  */
 static int
 append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len, const char *value,
@@ -1216,6 +1271,62 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
       sd_err = sd_bus_message_append (m, "(sv)", name, "s", it + 1);
       if (UNLIKELY (sd_err < 0))
         return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+  else if (*it == '[')
+    {
+      cleanup_free char *v_start = NULL;
+      size_t n_parts = 0, parts_size = 32;
+      char **parts = xmalloc (sizeof (char *) * parts_size);
+      char *part;
+
+      part = v_start = xstrdup (it + 1);
+      while (1)
+        {
+          char *out = NULL, *next = NULL;
+          int ret;
+
+          ret = parse_sd_array (part, &out, &next, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          parts[n_parts++] = out;
+          if (n_parts == parts_size - 1)
+            {
+              parts_size += 32;
+              parts = xrealloc (parts, parts_size);
+            }
+          parts[n_parts] = NULL;
+          if (next == NULL)
+            break;
+
+          part = next;
+        }
+
+      sd_err = sd_bus_message_open_container (m, 'r', "sv");
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus open container");
+
+      sd_err = sd_bus_message_append (m, "s", name);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      sd_err = sd_bus_message_open_container (m, 'v', "as");
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus open container");
+
+      sd_err = sd_bus_message_append_strv (m, parts);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      sd_err = sd_bus_message_close_container (m);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus close container");
+
+      sd_err = sd_bus_message_close_container (m);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus close container");
 
       return 0;
     }

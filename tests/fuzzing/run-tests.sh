@@ -6,7 +6,7 @@ TIMEOUT=${TIMEOUT:=10}
 RUN_TIME=${RUN_TIME:=600}
 VERBOSITY=${VERBOSITY:=}
 
-N_TESTS=6
+N_TESTS=7
 
 SINGLE_RUN_TIME=$(expr $RUN_TIME / $N_TESTS)
 
@@ -35,3 +35,4 @@ run_test 2 $CORPUS/seccomp
 run_test 3 $CORPUS/signals
 run_test 4 $CORPUS/paths
 run_test 5 random-data
+run_test 6 $CORPUS/annotations

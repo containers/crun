@@ -18,6 +18,7 @@
 
 #include <libcrun/error.h>
 #include <libcrun/utils.h>
+#include <libcrun/cgroup.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -322,6 +323,52 @@ test_append_paths ()
   return 0;
 }
 
+#ifdef HAVE_SYSTEMD
+static int
+test_parse_sd_array ()
+{
+  char *out, *next;
+  libcrun_error_t err = NULL;
+  {
+    cleanup_free char *s = xstrdup ("       'firewalld.service'    ");
+    if (parse_sd_array (s, &out, &next, &err) < 0)
+      {
+        crun_error_release (&err);
+        return -1;
+      }
+    if (strcmp (out, "firewalld.service"))
+      return -1;
+    if (next != NULL)
+      return -1;
+  }
+  {
+    cleanup_free char *s = xstrdup ("'fir\\ewalld.ser\\vi\\ce']");
+    if (parse_sd_array (s, &out, &next, &err) < 0)
+      {
+        crun_error_release (&err);
+        return -1;
+      }
+    if (strcmp (out, "firewalld.service"))
+      return -1;
+    if (next != NULL)
+      return -1;
+  }
+  {
+    cleanup_free char *s = xstrdup ("'fi\\rew\\alld.s\\erv\\ice', 'foo.service']");
+    if (parse_sd_array (s, &out, &next, &err) < 0)
+      {
+        crun_error_release (&err);
+        return -1;
+      }
+    if (strcmp (out, "firewalld.service"))
+      return -1;
+    if (strcmp (next, " 'foo.service']"))
+      return -1;
+  }
+  return 0;
+}
+#endif
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -348,5 +395,8 @@ main ()
   RUN_TEST (test_socket_pair);
   RUN_TEST (test_send_receive_fd);
   RUN_TEST (test_append_paths);
+#ifdef HAVE_SYSTEMD
+  RUN_TEST (test_parse_sd_array);
+#endif
   return 0;
 }
