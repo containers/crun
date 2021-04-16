@@ -260,6 +260,27 @@ test_read_files (uint8_t *buf, size_t len)
 }
 
 static int
+test_parse_sd_array (uint8_t *buf, size_t len)
+{
+#ifdef HAVE_SYSTEMD
+  char *out = NULL, *next = NULL;
+  cleanup_free char *data = NULL;
+  libcrun_error_t err = NULL;
+
+  data = make_nul_terminated (buf, len);
+  if (data == NULL)
+    return 0;
+
+  if (parse_sd_array (data, &out, &next, &err) < 0)
+    crun_error_release (&err);
+#else
+  (void) buf;
+  (void) len;
+#endif
+  return 0;
+}
+
+static int
 run_one_container (uint8_t *buf, size_t len, bool detach)
 {
   cleanup_free char *conf = NULL;
@@ -350,6 +371,11 @@ run_one_test (int mode, uint8_t *buf, size_t len)
     case 5:
       /* expects random data.  */
       test_generate_ebpf (buf, len);
+      break;
+
+    case 6:
+      /* expects annotations data.  */
+      test_parse_sd_array (buf, len);
       break;
 
       /* ALL mode.  */
