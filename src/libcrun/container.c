@@ -256,6 +256,7 @@ static const char spec_file[] = "\
 				\"type\": \"uts\"\n\
 			},\n\
 %s\
+%s\
 			{\n\
 				\"type\": \"mount\"\n\
 			}\n\
@@ -288,6 +289,11 @@ static const char *spec_pts_tty_group = ",\n\
 static const char *spec_user = "\
 			{\n\
 				\"type\": \"user\"\n \
+			},\n";
+
+static const char *spec_cgroupns = "\
+			{\n\
+				\"type\": \"cgroup\"\n \
 			},\n";
 
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
@@ -3362,7 +3368,16 @@ libcrun_container_update_from_file (libcrun_context_t *context, const char *id, 
 int
 libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
 {
-  return fprintf (out, spec_file, root ? spec_pts_tty_group : "\n", root ? "" : spec_user);
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  return fprintf (out, spec_file,
+                  root ? spec_pts_tty_group : "\n",
+                  root ? "" : spec_user,
+                  cgroup_mode == CGROUP_MODE_UNIFIED ? spec_cgroupns : "");
 }
 
 int
