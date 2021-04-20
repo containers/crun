@@ -99,7 +99,7 @@ struct sync_socket_message_s
 
 typedef runtime_spec_schema_defs_hook hook;
 
-static char spec_file[] = "\
+static const char spec_file[] = "\
   {\n\
 	\"ociVersion\": \"1.0.0\",\n\
 	\"process\": {\n\
