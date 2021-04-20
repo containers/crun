@@ -99,7 +99,7 @@ struct sync_socket_message_s
 
 typedef runtime_spec_schema_defs_hook hook;
 
-static char spec_file[] = "\
+static const char spec_file[] = "\
   {\n\
 	\"ociVersion\": \"1.0.0\",\n\
 	\"process\": {\n\
@@ -256,6 +256,7 @@ static char spec_file[] = "\
 				\"type\": \"uts\"\n\
 			},\n\
 %s\
+%s\
 			{\n\
 				\"type\": \"mount\"\n\
 			}\n\
@@ -288,6 +289,11 @@ static const char *spec_pts_tty_group = ",\n\
 static const char *spec_user = "\
 			{\n\
 				\"type\": \"user\"\n \
+			},\n";
+
+static const char *spec_cgroupns = "\
+			{\n\
+				\"type\": \"cgroup\"\n \
 			},\n";
 
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
@@ -2239,7 +2245,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, err);
@@ -2824,7 +2830,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
       int cgroup_mode;
 
       cgroup_mode = libcrun_get_cgroup_mode (err);
-      if (cgroup_mode < 0)
+      if (UNLIKELY (cgroup_mode < 0))
         return cgroup_mode;
 
       ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
@@ -3362,7 +3368,16 @@ libcrun_container_update_from_file (libcrun_context_t *context, const char *id, 
 int
 libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
 {
-  return fprintf (out, spec_file, root ? spec_pts_tty_group : "\n", root ? "" : spec_user);
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  return fprintf (out, spec_file,
+                  root ? spec_pts_tty_group : "\n",
+                  root ? "" : spec_user,
+                  cgroup_mode == CGROUP_MODE_UNIFIED ? spec_cgroupns : "");
 }
 
 int
@@ -3487,7 +3502,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   def = container->container_def;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   cgroup_manager = CGROUP_MANAGER_CGROUPFS;
