@@ -1,3 +1,10 @@
+* crun-0.19.1
+
+- on exec, honor additional_gids from the process spec, not the
+  container definition.
+- spec: add cgroup ns if on cgroup v2.
+- systemd: support array of strings for cgroup annotation.
+
 * crun-0.19
 
 - join all the cgroup v1 controllers.
