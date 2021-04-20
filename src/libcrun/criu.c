@@ -79,7 +79,7 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
   uint32_t i;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
@@ -306,7 +306,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     return crun_make_error (err, 0, "error setting CRIU root to %s\n", path);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   /* For cgroup v1 we need to tell CRIU to handle all cgroup mounts as external mounts. */

@@ -2239,7 +2239,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, err);
@@ -2824,7 +2824,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
       int cgroup_mode;
 
       cgroup_mode = libcrun_get_cgroup_mode (err);
-      if (cgroup_mode < 0)
+      if (UNLIKELY (cgroup_mode < 0))
         return cgroup_mode;
 
       ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
@@ -3487,7 +3487,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   def = container->container_def;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   cgroup_manager = CGROUP_MANAGER_CGROUPFS;

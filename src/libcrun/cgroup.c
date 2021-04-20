@@ -1904,7 +1904,7 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
   int cgroup_mode;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   return libcrun_cgroup_pause_unpause_with_mode (cgroup_path, cgroup_mode, pause, err);
@@ -1996,7 +1996,7 @@ libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_
     return 0;
 
   mode = libcrun_get_cgroup_mode (err);
-  if (mode < 0)
+  if (UNLIKELY (mode < 0))
     return mode;
 
   switch (mode)
@@ -2146,7 +2146,7 @@ libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int
     return -1;
 
   mode = libcrun_get_cgroup_mode (err);
-  if (mode < 0)
+  if (UNLIKELY (mode < 0))
     return mode;
 
   ret = libcrun_cgroup_killall (path, err);

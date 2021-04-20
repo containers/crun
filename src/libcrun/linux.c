@@ -741,7 +741,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
   int cgroup_mode;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
@@ -954,7 +954,7 @@ do_mount_cgroup (libcrun_container_t *container, const char *source, int targetf
   int cgroup_mode;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   switch (cgroup_mode)
@@ -3737,7 +3737,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   int cgroup_mode;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (cgroup_mode < 0)
+  if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
   ret = parse_json_file (&tree, content, &ctx, err);
