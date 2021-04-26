@@ -154,7 +154,10 @@ stripped ELF binary for [glibc](https://www.gnu.org/software/libc).
 To build the binaries by locally installing the nix package manager:
 
 ```console
+$ curl -L https://nixos.org/nix/install | sh
+$ git clone --recursive https://github.com/containers/crun.git && cd crun
 $ nix build -f nix/
+$ ./result/bin/crun --version
 ```
 
 ### Ansible
