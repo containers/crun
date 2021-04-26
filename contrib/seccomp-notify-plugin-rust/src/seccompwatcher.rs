@@ -26,7 +26,6 @@ type Errno = i32;
 
 type SyscallHandler = fn(req: &mut nc::seccomp_notif_t) -> Result<bool, Errno>;
 
-#[no_mangle]
 pub struct LibcrunLoadSeccompNotifyConf {
     _runtime_root_path: *const c_char,
     _name: *const c_char,
