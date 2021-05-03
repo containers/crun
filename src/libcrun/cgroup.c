@@ -2094,9 +2094,24 @@ rmdir_all_fd (int dfd)
       ret = unlinkat (dfd, name, AT_REMOVEDIR);
       if (ret < 0 && errno == EBUSY)
         {
-          cleanup_close int child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
+          cleanup_free pid_t *pids = NULL;
+          libcrun_error_t tmp_err = NULL;
+          size_t i, n_pids = 0, allocated = 0;
+          int child_dfd = -1;
+
+          child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
           if (child_dfd < 0)
             return child_dfd;
+
+          ret = read_pids_cgroup (child_dfd, true, &pids, &n_pids, &allocated, &tmp_err);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_error_release (&tmp_err);
+              continue;
+            }
+
+          for (i = 0; i < n_pids; i++)
+            kill (pids[i], SIGKILL);
 
           return rmdir_all_fd (child_dfd);
         }
@@ -2238,7 +2253,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
 
   fd = openat (dirfd, name, O_WRONLY);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open %s", name);
+    return crun_make_error (err, errno, "open `%s`", name);
 
   for (i = 0; i < throttling_len; i++)
     {
@@ -2249,7 +2264,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write %s", name);
+        return crun_make_error (err, errno, "write `%s`", name);
     }
   return 0;
 }
@@ -2273,7 +2288,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **th
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write %s", name);
+        return crun_make_error (err, errno, "write `%s`", name);
     }
   return 0;
 }
