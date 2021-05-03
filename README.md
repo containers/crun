@@ -116,6 +116,24 @@ as a compiler flag.
 # make
 ```
 
+### RaspiOS
+
+```console
+# apt install make git gcc build-essential pkgconf libtool \
+   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev \
+   go-md2man libtool autoconf python3 automake
+# apt install raspberrypi-kernel-headers
+```
+
+Note that RaspiOS requires you to specify raspberry-specific kernel headers location
+as a compiler flag.
+
+```console
+# ./autogen.sh
+# ./configure CFLAGS='-I/usr/src/linux-headers-${uname -r}/include/uapi -I/usr/src/linux-headers-${uname -r}/include'
+# make
+```
+
 ## Build
 
 Unless you are also building the Python bindings, Python is needed only
