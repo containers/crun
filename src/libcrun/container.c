@@ -1950,7 +1950,6 @@ cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *de
 {
   const char *oom_message = NULL;
   libcrun_error_t tmp_err = NULL;
-  bool terminated = false;
   int ret;
 
   if (init_pid)
@@ -1976,17 +1975,14 @@ cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *de
         oom_message = "the memory limit could be too low";
 
       kill (init_pid, SIGKILL);
-      terminated = TEMP_FAILURE_RETRY (waitpid (init_pid, NULL, 0)) == init_pid;
+      TEMP_FAILURE_RETRY (waitpid (init_pid, NULL, 0));
     }
 
-  if (! terminated)
+  ret = sync_socket_wait_sync (context, sync_socket, true, &tmp_err);
+  if (UNLIKELY (ret < 0))
     {
-      ret = sync_socket_wait_sync (context, sync_socket, true, &tmp_err);
-      if (UNLIKELY (ret < 0))
-        {
-          crun_error_release (err);
-          *err = tmp_err;
-        }
+      crun_error_release (err);
+      *err = tmp_err;
     }
 
   if (terminal_fd >= 0)

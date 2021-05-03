@@ -10,6 +10,8 @@ fi
 
 (cd /crun; git clean -fdx; ./autogen.sh && ./configure && make -j $(nproc))
 
+export GO111MODULE=off
+
 # Install and run runtime-tools' validation tests
 go get -d -u github.com/opencontainers/runtime-tools || true
 
