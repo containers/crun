@@ -2097,17 +2097,23 @@ rmdir_all_fd (int dfd)
           cleanup_free pid_t *pids = NULL;
           libcrun_error_t tmp_err = NULL;
           size_t i, n_pids = 0, allocated = 0;
-          int child_dfd = -1;
+          cleanup_close int child_dfd = -1;
+          int child_dfd_clone;
 
           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
           if (child_dfd < 0)
             return child_dfd;
 
-          ret = read_pids_cgroup (child_dfd, true, &pids, &n_pids, &allocated, &tmp_err);
-          if (UNLIKELY (ret < 0))
+          /* read_pids_cgroup takes ownership for the fd, so dup it.  */
+          child_dfd_clone = dup (child_dfd);
+          if (LIKELY (child_dfd_clone >= 0))
             {
-              crun_error_release (&tmp_err);
-              continue;
+              ret = read_pids_cgroup (child_dfd_clone, true, &pids, &n_pids, &allocated, &tmp_err);
+              if (UNLIKELY (ret < 0))
+                {
+                  crun_error_release (&tmp_err);
+                  continue;
+                }
             }
 
           for (i = 0; i < n_pids; i++)
