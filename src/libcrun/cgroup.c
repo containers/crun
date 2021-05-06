@@ -1749,6 +1749,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   uid_t root_uid = args->root_uid;
   uid_t root_gid = args->root_gid;
   libcrun_error_t tmp_err = NULL;
+  bool cgroup_path_empty;
   int rootless;
   int ret;
 
@@ -1821,7 +1822,9 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       return rootless;
     }
 
-  if (rootless > 0 && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
+  /* Ignore errors only if there is no explicit path set in the configuration.  */
+  cgroup_path_empty = args->cgroup_path[0] == '\0';
+  if (rootless > 0 && cgroup_path_empty && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
     {
       /* Ignore cgroups errors and set there is no cgroup path to use.  */
       free (*path);
