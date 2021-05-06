@@ -735,7 +735,7 @@ static int
 enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
-  int entered_any = 0;
+  bool entered_any = false;
   size_t content_size;
   char *controller;
   char pid_str[16];
@@ -780,7 +780,7 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
       if (ret == 0)
         continue;
 
-      entered_any = 1;
+      entered_any = true;
       ret = enter_cgroup_subsystem (pid, subsystem, path, create_if_missing, err);
       if (UNLIKELY (ret < 0))
         {
@@ -794,7 +794,10 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
         }
     }
 
-  return entered_any ? 0 : -1;
+  if (entered_any)
+    return 0;
+
+  return crun_make_error (err, 0, "could not join cgroup");
 }
 
 static int
