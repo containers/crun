@@ -735,7 +735,7 @@ static int
 enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
-  int entered_any = 0;
+  bool entered_any = false;
   size_t content_size;
   char *controller;
   char pid_str[16];
@@ -780,7 +780,7 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
       if (ret == 0)
         continue;
 
-      entered_any = 1;
+      entered_any = true;
       ret = enter_cgroup_subsystem (pid, subsystem, path, create_if_missing, err);
       if (UNLIKELY (ret < 0))
         {
@@ -794,7 +794,10 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
         }
     }
 
-  return entered_any ? 0 : -1;
+  if (entered_any)
+    return 0;
+
+  return crun_make_error (err, 0, "could not join cgroup");
 }
 
 static int
@@ -1746,6 +1749,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   uid_t root_uid = args->root_uid;
   uid_t root_gid = args->root_gid;
   libcrun_error_t tmp_err = NULL;
+  bool cgroup_path_empty;
   int rootless;
   int ret;
 
@@ -1818,7 +1822,9 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       return rootless;
     }
 
-  if (rootless > 0 && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
+  /* Ignore errors only if there is no explicit path set in the configuration.  */
+  cgroup_path_empty = args->cgroup_path[0] == '\0';
+  if (rootless > 0 && cgroup_path_empty && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
     {
       /* Ignore cgroups errors and set there is no cgroup path to use.  */
       free (*path);
@@ -2097,17 +2103,23 @@ rmdir_all_fd (int dfd)
           cleanup_free pid_t *pids = NULL;
           libcrun_error_t tmp_err = NULL;
           size_t i, n_pids = 0, allocated = 0;
-          int child_dfd = -1;
+          cleanup_close int child_dfd = -1;
+          int child_dfd_clone;
 
           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
           if (child_dfd < 0)
             return child_dfd;
 
-          ret = read_pids_cgroup (child_dfd, true, &pids, &n_pids, &allocated, &tmp_err);
-          if (UNLIKELY (ret < 0))
+          /* read_pids_cgroup takes ownership for the fd, so dup it.  */
+          child_dfd_clone = dup (child_dfd);
+          if (LIKELY (child_dfd_clone >= 0))
             {
-              crun_error_release (&tmp_err);
-              continue;
+              ret = read_pids_cgroup (child_dfd_clone, true, &pids, &n_pids, &allocated, &tmp_err);
+              if (UNLIKELY (ret < 0))
+                {
+                  crun_error_release (&tmp_err);
+                  continue;
+                }
             }
 
           for (i = 0; i < n_pids; i++)
