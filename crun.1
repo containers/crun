@@ -531,6 +531,32 @@ e.g.
 .fi
 .RE
 
+.SH \fB\fCrun.oci.delegate\-cgroup=DELEGATED\-CGROUP\fR
+.PP
+If the \fB\fCrun.oci.systemd.subgroup\fR annotation is specified, yet another
+sub\-cgroup is created and the container process is moved here.
+
+.PP
+.RS
+
+.nf
+/sys/fs/cgroup/$PATH/$SUBGROUP/$DELEGATED\-CGROUP
+
+.fi
+.RE
+
+.PP
+The runtime doesn't apply any limit to the \fB\fC$DELEGATED\-CGROUP\fR
+sub\-cgroup, the runtime uses only \fB\fC$PATH/$SUBGROUP\fR\&.
+
+.PP
+The container payload fully manages \fB\fC$DELEGATE\-CGROUP\fR, the limits
+applied to \fB\fC$PATH/$SUBGROUP\fR still applies to \fB\fC$DELEGATE\-CGROUP\fR\&.
+
+.PP
+Since cgroup delegation is not safe on cgroup v1, this option is
+supported only on cgroup v2.
+
 .SH \fB\fCrun.oci.hooks.stdout=FILE\fR
 .PP
 If the annotation \fB\fCrun.oci.hooks.stdout\fR is present, then crun

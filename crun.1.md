@@ -421,6 +421,24 @@ e.g.
 /sys/fs/cgroup//system.slice/foo-352700.scope/container
 ```
 
+## `run.oci.delegate-cgroup=DELEGATED-CGROUP`
+
+If the `run.oci.systemd.subgroup` annotation is specified, yet another
+sub-cgroup is created and the container process is moved here.
+
+```
+/sys/fs/cgroup/$PATH/$SUBGROUP/$DELEGATED-CGROUP
+```
+
+The runtime doesn't apply any limit to the `$DELEGATED-CGROUP`
+sub-cgroup, the runtime uses only `$PATH/$SUBGROUP`.
+
+The container payload fully manages `$DELEGATE-CGROUP`, the limits
+applied to `$PATH/$SUBGROUP` still applies to `$DELEGATE-CGROUP`.
+
+Since cgroup delegation is not safe on cgroup v1, this option is
+supported only on cgroup v2.
+
 ## `run.oci.hooks.stdout=FILE`
 
 If the annotation `run.oci.hooks.stdout` is present, then crun
