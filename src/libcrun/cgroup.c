@@ -957,7 +957,7 @@ get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **sco
 }
 
 static int
-systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
+systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int cgroup_mode = args->cgroup_mode;
@@ -967,6 +967,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_
   char *from, *to;
   char *saveptr = NULL;
   cleanup_free char *cgroup_path = NULL;
+  const char *suffix = args->systemd_subgroup;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
@@ -1699,7 +1700,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return systemd_finalize (args, args->systemd_subgroup, err);
+  return systemd_finalize (args, err);
 #else
   return libcrun_cgroup_enter_cgroupfs (args, err);
 #endif
