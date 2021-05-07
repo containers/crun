@@ -119,7 +119,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   if (fd < 0)
     {
       /* The process already exited.  */
-      if (errno == ENOENT)
+      if (errno == ENOENT || errno == ESRCH)
         {
           memset (st, 0, sizeof (*st));
           return 0;
