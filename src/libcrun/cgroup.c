@@ -960,7 +960,7 @@ get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **sco
 }
 
 static int
-systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_error_t *err)
+systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   int cgroup_mode = args->cgroup_mode;
@@ -970,22 +970,28 @@ systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_
   char *from, *to;
   char *saveptr = NULL;
   cleanup_free char *cgroup_path = NULL;
+  const char *suffix = args->systemd_subgroup;
+  const char *delegate_cgroup = args->delegate_cgroup;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (cgroup_mode == CGROUP_MODE_LEGACY)
+  switch (cgroup_mode)
     {
+    case CGROUP_MODE_LEGACY:
+      if (delegate_cgroup)
+        return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
+
       from = strstr (content, ":memory");
       if (UNLIKELY (from == NULL))
-        return crun_make_error (err, -1, "cannot find memory controller for the current process");
+        return crun_make_error (err, 0, "cannot find memory controller for the current process");
 
       from += 8;
       to = strchr (from, '\n');
       if (UNLIKELY (to == NULL))
-        return crun_make_error (err, -1, "cannot parse /proc/self/cgroup");
+        return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
       *to = '\0';
       if (suffix == NULL)
         *path = xstrdup (from);
@@ -996,98 +1002,106 @@ systemd_finalize (struct libcrun_cgroup_args *args, const char *suffix, libcrun_
             return ret;
         }
       *to = '\n';
-    }
-  else
-    {
-      from = strstr (content, "0::");
-      if (UNLIKELY (from == NULL))
-        return crun_make_error (err, -1, "cannot find cgroup2 for the current process");
 
-      from += 3;
-      to = strchr (from, '\n');
-      if (UNLIKELY (to == NULL))
-        return crun_make_error (err, -1, "cannot parse /proc/self/cgroup");
-      *to = '\0';
-      if (suffix == NULL)
-        *path = xstrdup (from);
-      else
+      if (geteuid ())
+        return 0;
+
+      for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
         {
-          ret = append_paths (path, err, from, suffix, NULL);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      *to = '\n';
-    }
+          char *subpath, *subsystem;
+          subsystem = strchr (from, ':') + 1;
+          subpath = strchr (subsystem, ':') + 1;
+          *(subpath - 1) = '\0';
 
-  if (cgroup_mode == CGROUP_MODE_UNIFIED)
-    {
-      bool must_chown = false;
-
-      if (suffix)
-        {
-          cleanup_free char *dir = NULL;
-
-          ret = append_paths (&dir, err, CGROUP_ROOT, *path, NULL);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          /* On cgroup v2, processes can be only in leaf nodes.  If a suffix is used,
-             move the process immediately to the new location before enabling
-             the controllers.
-          */
-          ret = crun_ensure_directory (dir, 0755, true, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = move_process_to_cgroup (pid, NULL, *path, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          must_chown = true;
-        }
-
-      ret = enable_controllers (*path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      if (must_chown)
-        {
-          ret = chown_cgroups (*path, args->root_uid, args->root_gid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-    }
-
-  if (cgroup_mode != CGROUP_MODE_UNIFIED && geteuid ())
-    return 0;
-
-  for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
-    {
-      char *subpath, *subsystem;
-      subsystem = strchr (from, ':') + 1;
-      subpath = strchr (subsystem, ':') + 1;
-      *(subpath - 1) = '\0';
-
-      /* on cgroup v2, ignore any subsystem except unified,
-         since other subsystems are not supported anyway.  */
-      if (cgroup_mode == CGROUP_MODE_UNIFIED && subsystem[0] != '\0')
-        continue;
-
-      if (strcmp (subpath, *path))
-        {
-          ret = enter_cgroup_subsystem (pid, subsystem, *path, true, err);
-          if (UNLIKELY (ret < 0))
+          if (strcmp (subpath, *path))
             {
-              /* If it is a named hierarchy, skip the error.  */
-              /* skip named hierarchies that have no cgroup controller */
-              if (strchr (subsystem, '='))
+              ret = enter_cgroup_subsystem (pid, subsystem, *path, true, err);
+              if (UNLIKELY (ret < 0))
                 {
-                  crun_error_release (err);
-                  continue;
+                  /* If it is a named hierarchy, skip the error.  */
+                  if (strchr (subsystem, '='))
+                    {
+                      crun_error_release (err);
+                      continue;
+                    }
+                  return ret;
                 }
-              return ret;
             }
         }
+      break;
+
+    case CGROUP_MODE_UNIFIED:
+      {
+        cleanup_free char *target_cgroup_cleanup = NULL;
+        const char *process_target_cgroup = NULL;
+        cleanup_free char *dir = NULL;
+
+        from = strstr (content, "0::");
+        if (UNLIKELY (from == NULL))
+          return crun_make_error (err, 0, "cannot find cgroup2 for the current process");
+
+        from += 3;
+        to = strchr (from, '\n');
+        if (UNLIKELY (to == NULL))
+          return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+        *to = '\0';
+        if (suffix == NULL)
+          *path = xstrdup (from);
+        else
+          {
+            ret = append_paths (path, err, from, suffix, NULL);
+            if (UNLIKELY (ret < 0))
+              return ret;
+          }
+        *to = '\n';
+
+        ret = append_paths (&dir, err, CGROUP_ROOT, *path, delegate_cgroup, NULL);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* On cgroup v2, processes can be only in leaf nodes.  If a suffix is used,
+           move the process immediately to the new location before enabling
+           the controllers.  */
+        ret = crun_ensure_directory (dir, 0755, true, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* The difference between path and process_target_cgroup is:
+
+           - path is the cgroup path that is configured by the runtime.
+           - process_target_cgroup is the cgroup where the container process is moved to.
+
+           process_target_cgroup can be a sub-cgroup of PATH.  */
+        if (delegate_cgroup == NULL)
+          process_target_cgroup = *path;
+        else
+          {
+            ret = append_paths (&target_cgroup_cleanup, err, *path, delegate_cgroup, NULL);
+            if (UNLIKELY (ret < 0))
+              return ret;
+
+            process_target_cgroup = target_cgroup_cleanup;
+          }
+
+        ret = move_process_to_cgroup (pid, NULL, process_target_cgroup, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        ret = enable_controllers (process_target_cgroup, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        if (suffix || delegate_cgroup)
+          {
+            ret = chown_cgroups (process_target_cgroup, args->root_uid, args->root_gid, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+          }
+      }
+      break;
+
+    default:
+      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
     }
 
   return 0;
@@ -1654,11 +1668,18 @@ libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error
 static int
 libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
-  int cgroup_mode = args->cgroup_mode;
-  char **path = args->path;
+  const char *delegate_cgroup = args->delegate_cgroup;
+  cleanup_free char *target_cgroup_cleanup = NULL;
   const char *cgroup_path = args->cgroup_path;
-  pid_t pid = args->pid;
+  const char *process_target_cgroup = NULL;
+  int cgroup_mode = args->cgroup_mode;
   const char *id = args->id;
+  char **path = args->path;
+  pid_t pid = args->pid;
+  int ret;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED && args->delegate_cgroup)
+    return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
 
   if (cgroup_path == NULL)
     xasprintf (path, "/%s", id);
@@ -1670,16 +1691,27 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
         xasprintf (path, "/%s", cgroup_path);
     }
 
+  if (delegate_cgroup == NULL)
+    process_target_cgroup = *path;
+  else
+    {
+      ret = append_paths (&target_cgroup_cleanup, err, *path, delegate_cgroup, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      process_target_cgroup = target_cgroup_cleanup;
+    }
+
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       int ret;
 
-      ret = enable_controllers (*path, err);
+      ret = enable_controllers (process_target_cgroup, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
-  return enter_cgroup (cgroup_mode, pid, 0, *path, true, err);
+  return enter_cgroup (cgroup_mode, pid, 0, process_target_cgroup, true, err);
 }
 
 static int
@@ -1702,7 +1734,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return systemd_finalize (args, args->systemd_subgroup, err);
+  return systemd_finalize (args, err);
 #else
   return libcrun_cgroup_enter_cgroupfs (args, err);
 #endif
