@@ -40,9 +40,12 @@ enum
   OPTION_ROOTLESS = 1000
 };
 
+static const char *bundle = NULL;
+
 static struct spec_options_s spec_options;
 
-static struct argp_option options[] = { { "rootless", OPTION_ROOTLESS, 0, 0, "spec for the rootless case", 0 },
+static struct argp_option options[] = { { "bundle", 'b', "DIR", 0, "path to the root of the bundle dir (default \".\")", 0 },
+                                        { "rootless", OPTION_ROOTLESS, 0, 0, "spec for the rootless case", 0 },
                                         {
                                             0,
                                         } };
@@ -54,6 +57,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 {
   switch (key)
     {
+    case 'b':
+      bundle = argp_mandatory_argument (arg, state);
+      break;
+
     case OPTION_ROOTLESS:
       spec_options.rootless = true;
       break;
@@ -76,6 +83,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   };
   int ret;
   cleanup_file FILE *f = NULL;
+  cleanup_free char *bundle_cleanup = NULL;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);
   crun_assert_n_args (argc - first_arg, 0, 0);
@@ -83,6 +91,21 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* Change dir only if -b or --bundle is defined and make sure the bundle is an absolute path.  */
+  if (bundle != NULL)
+    {
+      if (bundle[0] != '/')
+        {
+          bundle_cleanup = realpath (bundle, NULL);
+          if (bundle_cleanup == NULL)
+            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
+          bundle = bundle_cleanup;
+        }
+
+      if (chdir (bundle) < 0)
+        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
+    }
 
   ret = access ("config.json", F_OK);
   if (ret == 0)
