@@ -980,6 +980,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 
   switch (cgroup_mode)
     {
+    case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
       if (delegate_cgroup)
         return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
@@ -3303,7 +3304,7 @@ libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_lin
       return update_cgroup_v1_resources (resources, path, err);
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode");
+      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
     }
 }
 
@@ -3357,7 +3358,7 @@ libcrun_cgroup_has_oom (const char *path, int cgroup_mode, libcrun_error_t *err)
       }
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode");
+      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
     }
 
   it = content;
