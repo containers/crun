@@ -35,6 +35,7 @@ struct exec_options_s
 {
   bool tty;
   bool detach;
+  bool no_new_privs;
   int preserve_fds;
   const char *process;
   const char *console_socket;
@@ -52,7 +53,8 @@ enum
   OPTION_CONSOLE_SOCKET = 1000,
   OPTION_PID_FILE,
   OPTION_CWD,
-  OPTION_PRESERVE_FDS
+  OPTION_PRESERVE_FDS,
+  OPTION_NO_NEW_PRIVS
 };
 
 static struct exec_options_s exec_options;
@@ -69,6 +71,7 @@ static struct argp_option options[]
         { "cap", 'c', "CAP", 0, "add a capability", 0 },
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
         { "preserve-fds", OPTION_PRESERVE_FDS, "N", 0, "pass additional FDs to the container", 0 },
+        { "no-new-privs", OPTION_NO_NEW_PRIVS, 0, 0, "set the no new privileges value for the process", 0 },
         {
             0,
         } };
@@ -124,6 +127,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_PID_FILE:
       exec_options.pid_file = arg;
+      break;
+
+    case OPTION_NO_NEW_PRIVS:
+      exec_options.no_new_privs = true;
       break;
 
     case OPTION_PRESERVE_FDS:
@@ -264,7 +271,11 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
 
           process->capabilities = capabilities;
         }
-      process->no_new_privileges = 1;
+
+      // noNewPriviledges will remain `false` if basespec has `false` unless specified
+      // Default is always `true` in generated basespec config
+      if (exec_options.no_new_privs)
+        process->no_new_privileges = 1;
       ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
       free_runtime_spec_schema_config_schema_process (process);
       return ret;
