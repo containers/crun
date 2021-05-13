@@ -1043,6 +1043,21 @@ exit:
   return yajl_error_to_crun_error (r, err);
 }
 
+static int
+send_sync_cb (void *data, libcrun_error_t *err)
+{
+  int sync_socket_fd = *((int *) data);
+  int ret;
+
+  /* sync 2.  */
+  ret = sync_socket_send_sync (sync_socket_fd, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* sync 3.  */
+  return sync_socket_wait_sync (NULL, sync_socket_fd, false, err);
+}
+
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
@@ -1100,17 +1115,8 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_mounts (container, rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  /* sync 2.  */
-  ret = sync_socket_send_sync (sync_socket, false, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  /* sync 3.  */
-  ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
+  /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
+  ret = libcrun_set_mounts (container, rootfs, send_sync_cb, &sync_socket, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

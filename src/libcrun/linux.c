@@ -1809,7 +1809,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 }
 
 int
-libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
+libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {
   int rootfsfd = -1;
   int ret = 0, is_user_ns = 0;
@@ -1889,6 +1889,14 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, libcrun_
   if (! get_private_data (container)->mount_dev_from_host)
     {
       ret = create_missing_devs (container, is_user_ns ? true : false, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  /* Notify the callback after all the mounts are ready but before making them read-only.  */
+  if (cb)
+    {
+      ret = cb (cb_data, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
