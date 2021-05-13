@@ -239,6 +239,10 @@ Delete all the containers that satisfy the specified regex.
 crun [global options] exec [options] CONTAINER CMD
 
 .PP
+\fB\-\-apparmor\fP=\fBPROFILE\fP
+Set the apparmor profile for the process.
+
+.PP
 \fB\-\-console\-socket\fP=\fBSOCKET\fP
 Path to a UNIX socket that will receive the ptmx end of the tty for
 the container.
@@ -260,12 +264,20 @@ Detach the container process from the current session.
 Specify an environment variable.
 
 .PP
+\fB\-\-no\-new\-privs\fP
+Set the no new privileges value for the process.
+
+.PP
 \fB\-\-preserve\-fds\fP=\fBN\fP
 Additional number of FDs to pass into the container.
 
 .PP
 \fB\-\-process\fP=\fBFILE\fP
 Path to a file containing the process JSON configuration.
+
+.PP
+\fB\-\-process\-label\fP=\fBVALUE\fP
+Set the asm process label for the process commonly used with selinux.
 
 .PP
 \fB\-\-pid\-file\fP=\fBPATH\fP
@@ -311,6 +323,10 @@ By default \fB\fCtable\fR is used.
 .SH SPEC OPTIONS
 .PP
 crun [global options] spec [options]
+
+.PP
+\fB\-b DIR\fP \fB\-\-bundle\fP=\fBDIR\fP
+Path to the root of the bundle dir (default ".").
 
 .PP
 \fB\-\-rootless\fP
