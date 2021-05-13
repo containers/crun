@@ -237,7 +237,7 @@ static const char spec_file[] = "\
 		\"resources\": {\n\
 			\"devices\": [\n\
 				{\n\
-					\"allow\": \"false\",\n\
+					\"allow\": false,\n\
 					\"access\": \"rwm\"\n\
 				}\n\
 			]\n\
