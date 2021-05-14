@@ -1506,7 +1506,7 @@ mark_for_close_fds_ge_than (int n, libcrun_error_t *err)
   ret = syscall_close_range (n, UINT_MAX, CLOSE_RANGE_CLOEXEC);
   if (ret == 0)
     return 0;
-  if (ret < 0 && errno != EINVAL && errno != ENOSYS)
+  if (ret < 0 && errno != EINVAL && errno != ENOSYS && errno != EPERM)
     return crun_make_error (err, errno, "close_range from %d", n);
 
   cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
