@@ -298,19 +298,55 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
 }
 
 int
-libcrun_create_keyring (const char *name, libcrun_error_t *err)
+libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err)
 {
-  int ret = syscall_keyctl_join (name);
+  const char *const keycreate = "/proc/self/attr/keycreate";
+  cleanup_close int labelfd = -1;
+  bool label_set = false;
+  int ret;
+
+  if (label)
+    {
+      labelfd = open (keycreate, O_WRONLY | O_CLOEXEC);
+      if (UNLIKELY (labelfd < 0))
+        {
+          if (errno != ENOENT)
+            return crun_make_error (err, errno, "open `%s`", keycreate);
+        }
+      else
+        {
+          ret = write (labelfd, label, strlen (label));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to `%s`", keycreate);
+
+          label_set = true;
+        }
+    }
+
+  ret = syscall_keyctl_join (name);
   if (UNLIKELY (ret < 0))
     {
       if (errno == ENOSYS)
         {
           libcrun_warning ("could not create a new keyring: keyctl_join is not supported");
-          return 0;
+          ret = 0;
+          goto out;
         }
-      return crun_make_error (err, errno, "create keyring `%s`", name);
+      ret = crun_make_error (err, errno, "create keyring `%s`", name);
+      goto out;
     }
-  return 0;
+
+out:
+  if (label_set)
+    {
+      int tmp_ret;
+
+      tmp_ret = write (labelfd, "", 0);
+      /* do not override a previous error.  */
+      if (UNLIKELY (tmp_ret < 0 && ret >= 0))
+        return crun_make_error (err, errno, "reset `%s`", keycreate);
+    }
+  return ret;
 }
 
 static void
