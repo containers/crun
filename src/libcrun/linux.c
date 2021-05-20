@@ -1021,16 +1021,23 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
   if (binds)
     {
       cleanup_close int fd = -1;
-      const char *rel_path = consume_slashes (device->path);
 
       if (rel_dev)
         {
-          fd = openat (devfd, rel_dev, O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0700);
+          fd = openat (devfd, rel_dev, O_NOFOLLOW | O_CLOEXEC | O_PATH | O_NONBLOCK);
           if (UNLIKELY (fd < 0))
-            return crun_make_error (err, errno, "create device `%s`", device->path);
+            {
+              if (errno == ENOENT)
+                fd = openat (devfd, rel_dev, O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0700);
+
+              if (UNLIKELY (fd < 0))
+                return crun_make_error (err, errno, "create device `%s`", device->path);
+            }
         }
       else
         {
+          const char *rel_path = consume_slashes (device->path);
+
           fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0700, err);
           if (UNLIKELY (fd < 0))
             return fd;
