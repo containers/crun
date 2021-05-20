@@ -2218,7 +2218,12 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (! context->no_new_keyring)
     {
-      ret = libcrun_create_keyring (container->context->id, err);
+      const char *label = NULL;
+
+      if (def->process)
+        label = def->process->selinux_label;
+
+      ret = libcrun_create_keyring (container->context->id, label, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
