@@ -327,7 +327,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
       if (seccomp->syscalls[i]->errno_ret_present)
         {
           if (! seccomp_action_supports_errno (seccomp->syscalls[i]->action))
-            return crun_make_error (err, 0, "errno value specified for action `%s`", def_action);
+            return crun_make_error (err, 0, "errno value specified for action `%s`", seccomp->syscalls[i]->action);
           errno_ret = seccomp->syscalls[i]->errno_ret;
         }
 
