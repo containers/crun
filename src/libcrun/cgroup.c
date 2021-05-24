@@ -1014,6 +1014,14 @@ systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
           subpath = strchr (subsystem, ':') + 1;
           *(subpath - 1) = '\0';
 
+          if (subsystem[0] == '\0')
+            {
+              if (cgroup_mode == CGROUP_MODE_LEGACY)
+                continue;
+
+              subsystem = "unified";
+            }
+
           if (strcmp (subpath, *path))
             {
               ret = enter_cgroup_subsystem (pid, subsystem, *path, true, err);
