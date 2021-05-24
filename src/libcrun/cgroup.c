@@ -2737,10 +2737,31 @@ static int
 write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
                          libcrun_error_t *err)
 {
-  if (cgroup2)
-    return write_devices_resources_v2 (dirfd, devs, devs_len, err);
+  int ret;
 
-  return write_devices_resources_v1 (dirfd, devs, devs_len, err);
+  if (cgroup2)
+    ret = write_devices_resources_v2 (dirfd, devs, devs_len, err);
+  else
+    ret = write_devices_resources_v1 (dirfd, devs, devs_len, err);
+  if (UNLIKELY (ret < 0))
+    {
+      libcrun_error_t tmp_err = NULL;
+      int rootless;
+
+      rootless = is_rootless (&tmp_err);
+      if (UNLIKELY (rootless < 0))
+        {
+          crun_error_release (&tmp_err);
+          return ret;
+        }
+
+      if (rootless)
+        {
+          crun_error_release (err);
+          ret = 0;
+        }
+    }
+  return ret;
 }
 
 /* use for cgroupv2 files with .min, .max, .low, or .high suffix */
