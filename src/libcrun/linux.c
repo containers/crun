@@ -852,7 +852,6 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
                     unsigned long mountflags, libcrun_error_t *err)
 {
   int ret;
-  const cgroups_subsystem_t *subsystems = NULL;
   cleanup_free char *content = NULL;
   char *from;
   cleanup_close int tmpfsdirfd = -1;
@@ -862,10 +861,6 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
 #if CLONE_NEWCGROUP
   has_cgroupns = get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
 #endif
-
-  subsystems = libcrun_get_cgroups_subsystems (err);
-  if (UNLIKELY (subsystems == NULL))
-    return -1;
 
   ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", LABEL_MOUNT,
                   err);

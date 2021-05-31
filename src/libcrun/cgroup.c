@@ -38,28 +38,6 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-static const cgroups_subsystem_t cgroups_subsystems[] = {
-  "cpuset",
-  "cpu",
-  "devices",
-  "pids",
-  "memory",
-  "net_cls,net_prio",
-  "freezer",
-  "blkio",
-  "hugetlb",
-  "cpu,cpuacct",
-  "perf_event",
-  "unified",
-  NULL
-};
-
-const cgroups_subsystem_t *
-libcrun_get_cgroups_subsystems (libcrun_error_t *err arg_unused)
-{
-  return cgroups_subsystems;
-}
-
 struct symlink_s
 {
   const char *name;
@@ -2193,42 +2171,11 @@ libcrun_cgroup_killall (const char *path, libcrun_error_t *err)
   return libcrun_cgroup_killall_signal (path, SIGKILL, err);
 }
 
-int
-libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager, libcrun_error_t *err)
+static int
+do_cgroup_destroy (const char *path, int mode, libcrun_error_t *err)
 {
-  int ret;
-  size_t i;
-  int mode;
-  const cgroups_subsystem_t *subsystems;
   bool repeat = true;
-
-  (void) id;
-  (void) manager;
-  (void) scope;
-
-  if (path == NULL || *path == '\0')
-    return 0;
-
-  subsystems = libcrun_get_cgroups_subsystems (err);
-  if (UNLIKELY (subsystems == NULL))
-    return -1;
-
-  mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (mode < 0))
-    return mode;
-
-  ret = libcrun_cgroup_killall (path, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
-
-#ifdef HAVE_SYSTEMD
-  if (manager == CGROUP_MANAGER_SYSTEMD)
-    {
-      ret = destroy_systemd_cgroup_scope (scope, err);
-      if (UNLIKELY (ret < 0))
-        crun_error_release (err);
-    }
-#endif
+  int ret;
 
   do
     {
@@ -2251,14 +2198,37 @@ libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int
         }
       else
         {
-          for (i = 0; subsystems[i]; i++)
+          cleanup_free char *content = NULL;
+          size_t content_size;
+          char *controller;
+          char *saveptr;
+          bool has_data;
+
+          ret = read_all_file ("/proc/self/cgroup", &content, &content_size, err);
+          if (UNLIKELY (ret < 0))
+            {
+              if (crun_error_get_errno (err) == ENOENT)
+                {
+                  crun_error_release (err);
+                  return 0;
+                }
+              return ret;
+            }
+
+          for (has_data = read_proc_cgroup (content, &saveptr, NULL, &controller, NULL);
+               has_data;
+               has_data = read_proc_cgroup (NULL, &saveptr, NULL, &controller, NULL))
             {
               cleanup_free char *cgroup_path = NULL;
+              char *subsystem;
+              if (has_prefix (controller, "name="))
+                controller += 5;
 
-              if (mode == CGROUP_MODE_LEGACY && strcmp (subsystems[i], "unified") == 0)
+              subsystem = controller[0] == '\0' ? "unified" : controller;
+              if (mode == CGROUP_MODE_LEGACY && strcmp (subsystem, "unified") == 0)
                 continue;
 
-              ret = append_paths (&cgroup_path, err, CGROUP_ROOT, subsystems[i], path, NULL);
+              ret = append_paths (&cgroup_path, err, CGROUP_ROOT, subsystem, path, NULL);
               if (UNLIKELY (ret < 0))
                 return ret;
 
@@ -2286,6 +2256,43 @@ libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int
             crun_error_release (err);
         }
   } while (repeat);
+
+  return 0;
+}
+
+int
+libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager, libcrun_error_t *err)
+{
+  int ret;
+  int mode;
+
+  (void) id;
+  (void) manager;
+  (void) scope;
+
+  if (path == NULL || *path == '\0')
+    return 0;
+
+  mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (mode < 0))
+    return mode;
+
+  ret = libcrun_cgroup_killall (path, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+
+#ifdef HAVE_SYSTEMD
+  if (manager == CGROUP_MANAGER_SYSTEMD)
+    {
+      ret = destroy_systemd_cgroup_scope (scope, err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
+    }
+#endif
+
+  ret = do_cgroup_destroy (path, mode, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
 
   return 0;
 }
