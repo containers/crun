@@ -2,7 +2,7 @@ FROM fedora
 
 RUN dnf install -y git dnf-utils gcc meson ninja-build libseccomp-static libcap-static \
     make python git gcc automake autoconf libcap-devel systemd-devel yajl-devel libseccomp-devel cmake \
-    go-md2man glibc-static python3-libmount libtool pcre2-static \
+    go-md2man glibc-static python3-libmount libtool pcre2-static python3-jinja2 \
     && yum-builddep -y systemd \
     && git clone --depth 1 https://github.com/systemd/systemd.git \
     && (mkdir systemd/build; cd systemd/build; meson -Dstatic-libsystemd=true -Dselinux=false ..; ninja version.h; ninja libsystemd.a; cp libsystemd.a /usr/lib64) \
