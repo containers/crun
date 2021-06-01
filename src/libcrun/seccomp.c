@@ -187,7 +187,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 
   /* if no seccomp flag was specified use a sane default.  */
   if (seccomp_flags == NULL)
-    flags = SECCOMP_FILTER_FLAG_LOG | SECCOMP_FILTER_FLAG_SPEC_ALLOW;
+    flags = SECCOMP_FILTER_FLAG_SPEC_ALLOW;
   else
     {
       size_t i = 0;
