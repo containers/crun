@@ -1,3 +1,21 @@
+* crun-0.20
+
+- container: call prestart hooks before rootfs is RO.
+- cgroup: added support cleaning custom controllers on cgroupv1.
+- spec: add support for --bundle.
+- exec: add --no-new-privs.
+- exec: add --process-label and --apparmor to change SELinux and
+  AppArmor labels.
+- cgroup: kill procs in cgroup on EBUSY.
+- cgroup: ignore devices errors when running in a user namespace.
+- seccomp: drop SECCOMP_FILTER_FLAG_LOG by default.
+- seccomp: report correct action in error message.
+- apply SELinux label to keyring.
+- add custom annotation run.oci.delegate-cgroup.
+- close_range fallbacks to close on EPERM.
+- report error if the cgroup path was set and the cgroup could not be
+  joined.
+
 * crun-0.19.1
 
 - on exec, honor additional_gids from the process spec, not the
