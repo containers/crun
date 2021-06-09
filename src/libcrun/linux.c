@@ -337,15 +337,9 @@ libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *er
     }
 
 out:
+  /* Best effort attempt to reset the SELinux label used for new keyrings.  */
   if (label_set)
-    {
-      int tmp_ret;
-
-      tmp_ret = write (labelfd, "", 0);
-      /* do not override a previous error.  */
-      if (UNLIKELY (tmp_ret < 0 && ret >= 0))
-        return crun_make_error (err, errno, "reset `%s`", keycreate);
-    }
+    write (labelfd, "", 0);
   return ret;
 }
 
