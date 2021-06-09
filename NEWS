@@ -1,3 +1,8 @@
+* crun-0.20.1
+
+- container: ignore error when resetting the SELinux label for the
+  keyring.
+
 * crun-0.20
 
 - container: call prestart hooks before rootfs is RO.
