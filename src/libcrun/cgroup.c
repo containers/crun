@@ -2902,7 +2902,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (memory->swappiness && memory->swappiness <= 100)
+  if (memory->swappiness_present)
     {
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set memory swappiness with cgroupv2");
