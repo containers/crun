@@ -1282,7 +1282,7 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
     {
       cleanup_free char *v_start = NULL;
       size_t n_parts = 0, parts_size = 32;
-      char **parts = xmalloc (sizeof (char *) * parts_size);
+      cleanup_free char **parts = xmalloc (sizeof (char *) * parts_size);
       char *part;
 
       part = v_start = xstrdup (it + 1);
