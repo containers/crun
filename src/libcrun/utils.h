@@ -268,6 +268,8 @@ int get_file_type (mode_t *mode, bool nofollow, const char *path);
 
 int get_file_type_fd (int fd, mode_t *mode);
 
+char *get_user_name (uid_t uid);
+
 int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
                  libcrun_error_t *err);
 

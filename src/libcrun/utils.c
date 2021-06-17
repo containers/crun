@@ -2146,3 +2146,14 @@ base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t 
     }
   return consumed;
 }
+
+char *
+get_user_name (uid_t uid)
+{
+  struct passwd pd;
+  struct passwd *temp_result_ptr;
+  char pwdbuffer[200];
+  if (! getpwuid_r (uid, &pd, pwdbuffer, sizeof (pwdbuffer), &temp_result_ptr))
+    return xstrdup (pd.pw_name);
+  return xstrdup ("");
+}

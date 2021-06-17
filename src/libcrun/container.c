@@ -1670,6 +1670,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                         char *scope, char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = getcwd (NULL, 0);
+  cleanup_free char *owner = get_user_name (geteuid ());
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
   libcrun_container_status_t status = { .pid = pid,
@@ -1678,6 +1679,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                                         .rootfs = rootfs,
                                         .bundle = cwd,
                                         .created = created,
+                                        .owner = owner,
                                         .systemd_cgroup = context->systemd_cgroup,
                                         .detached = context->detach,
                                         .external_descriptors = external_descriptors };
@@ -2943,7 +2945,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
 
   yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-  yajl_gen_string (gen, YAJL_STR (""), strlen (""));
+  yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
 
   {
     size_t i;

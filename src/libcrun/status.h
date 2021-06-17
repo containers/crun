@@ -43,6 +43,7 @@ struct libcrun_container_status_s
   char *created;
   int detached;
   char *external_descriptors;
+  char *owner;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
