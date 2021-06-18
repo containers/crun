@@ -2186,7 +2186,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
   int uid_map_len, gid_map_len;
-  int ret;
+  int ret = 0;
   runtime_spec_schema_config_schema *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)

@@ -652,7 +652,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
           inherit_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
-          if (UNLIKELY (ret < 0))
+          if (UNLIKELY (inherit_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
           criu_add_inherit_fd (inherit_fd, "extRootNetNS");
