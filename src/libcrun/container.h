@@ -33,6 +33,7 @@ struct libcrun_context_s
   const char *console_socket;
   const char *pid_file;
   const char *notify_socket;
+  const char *handler;
   int preserve_fds;
 
   crun_output_handler output_handler;

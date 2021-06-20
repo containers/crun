@@ -21,6 +21,9 @@
 #include <stdlib.h>
 #include <argp.h>
 #include <string.h>
+#ifdef HAVE_LIBKRUN
+#  include <libgen.h>
+#endif
 
 #include "crun.h"
 #include "libcrun/utils.h"
@@ -204,6 +207,9 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
 #ifdef HAVE_CRIU
   fprintf (stream, "+CRIU ");
 #endif
+#ifdef HAVE_LIBKRUN
+  fprintf (stream, "+LIBKRUN ");
+#endif
   fprintf (stream, "+YAJL\n");
 }
 
@@ -300,6 +306,12 @@ main (int argc, char **argv)
   int ret, first_argument = 0;
 
   argp_program_version_hook = print_version;
+#ifdef HAVE_LIBKRUN
+  if (strcmp (basename (argv[0]), "krun") == 0)
+    {
+      arguments.handler = "krun";
+    }
+#endif
 
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);
 

@@ -120,6 +120,9 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   cleanup_free char *config_file_cleanup = NULL;
 
   crun_context.preserve_fds = 0;
+  /* Check if global handler is configured and pass it down to crun context */
+  crun_context.handler = global_args->handler;
+
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
 
   crun_assert_n_args (argc - first_arg, 1, 1);

@@ -25,6 +25,7 @@ struct crun_global_arguments
   char *root;
   char *log;
   char *log_format;
+  const char *handler;
 
   bool command;
   bool debug;
