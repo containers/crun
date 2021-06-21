@@ -133,7 +133,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
     error (EXIT_FAILURE, 0, "yajl_gen_alloc failed");
 
   if (! list_options.quiet && list_options.format == LIST_TABLE)
-    printf ("%-*s%-10s%-8s %-39s\n", max_length, "NAME", "PID", "STATUS", "BUNDLE PATH");
+    printf ("%-*s%-10s%-8s %-39s %-30s %s\n", max_length, "NAME", "PID", "STATUS", "BUNDLE PATH", "CREATED", "OWNER");
   else if (list_options.format == LIST_JSON)
     {
       yajl_gen_config (gen, yajl_gen_beautify, 1);
@@ -181,11 +181,15 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
               yajl_gen_string (gen, YAJL_STR (container_status), strlen (container_status));
               yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
               yajl_gen_string (gen, YAJL_STR (status.bundle), strlen (status.bundle));
+              yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
+              yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
+              yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
+              yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
               yajl_gen_map_close (gen);
               break;
 
             case LIST_TABLE:
-              printf ("%-*s%-10d%-8s %-39s\n", max_length, it->name, pid, container_status, status.bundle);
+              printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, it->name, pid, container_status, status.bundle, status.created, status.owner);
               break;
             }
         }

@@ -269,6 +269,14 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
 
+  r = yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  r = yajl_gen_string (gen, YAJL_STR (status->owner), strlen (status->owner));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
   r = yajl_gen_string (gen, YAJL_STR ("detached"), strlen ("detached"));
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
@@ -389,6 +397,11 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "'created' missing in %s", file);
     status->created = xstrdup (YAJL_GET_STRING (tmp));
+  }
+  {
+    const char *owner[] = { "owner", NULL };
+    tmp = yajl_tree_get (tree, owner, yajl_t_string);
+    status->owner = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
   }
   {
     const char *detached[] = { "detached", NULL };
@@ -549,6 +562,7 @@ libcrun_free_container_status (libcrun_container_status_t *status)
   free (status->external_descriptors);
   free (status->created);
   free (status->scope);
+  free (status->owner);
 }
 
 int
