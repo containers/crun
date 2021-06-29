@@ -408,6 +408,18 @@ made of a single hierarchy `none,name=systemd`.
 It is useful to run on a cgroup v2 system containers using older
 versions of systemd that lack support for cgroup v2.
 
+**Note**: Your container host has to have the cgroup v1 mount already present, otherwise
+this will not work. If you want to run the container rootless, the user it runs under
+has to have permissions to this mountpoint.
+
+For example, as root:
+
+```
+mkdir /sys/fs/cgroup/systemd
+mount cgroup -t cgroup /sys/fs/cgroup/systemd -o none,name=systemd,xattr
+chown -R the_user.the_user /sys/fs/cgroup/systemd
+```
+
 ## `run.oci.timens_offset=ID SEC NSEC`
 
 Specify the offset to be written to /proc/self/timens_offsets when creating

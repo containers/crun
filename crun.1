@@ -509,6 +509,25 @@ made of a single hierarchy \fB\fCnone,name=systemd\fR\&.
 It is useful to run on a cgroup v2 system containers using older
 versions of systemd that lack support for cgroup v2.
 
+.PP
+\fBNote\fP: Your container host has to have the cgroup v1 mount already present, otherwise
+this will not work. If you want to run the container rootless, the user it runs under
+has to have permissions to this mountpoint.
+
+.PP
+For example, as root:
+
+.PP
+.RS
+
+.nf
+mkdir /sys/fs/cgroup/systemd
+mount cgroup \-t cgroup /sys/fs/cgroup/systemd \-o none,name=systemd,xattr
+chown \-R the\_user.the\_user /sys/fs/cgroup/systemd
+
+.fi
+.RE
+
 .SH \fB\fCrun.oci.timens\_offset=ID SEC NSEC\fR
 .PP
 Specify the offset to be written to /proc/self/timens\_offsets when creating
@@ -642,8 +661,7 @@ l l l l .
 limit	memory.max	y = x	swap	memory.swap.max	y = x \- memory\_limit	T{
 the swap limit on cgroup v1 includes the memory usage too
 T}
-reservation	memory.low	y = x	
-.TE
+reservation	memory.low	y = x	.TE
 
 .SH PIDs controller
 .TS
@@ -651,8 +669,7 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-limit	pids.max	y = x	
-.TE
+limit	pids.max	y = x	.TE
 
 .SH CPU controller
 .TS
@@ -672,7 +689,6 @@ T}
 quota	cpu.max	y = x	T{
 period and quota are written together
 T}
-
 .TE
 
 .SH blkio controller
@@ -681,8 +697,7 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-weight	io.bfq.weight	y = x	weight\_device	io.bfq.weight	y = x	rbps	io.max	y=x	wbps	io.max	y=x	riops	io.max	y=x	wiops	io.max	y=x	
-.TE
+weight	io.bfq.weight	y = x	weight\_device	io.bfq.weight	y = x	rbps	io.max	y=x	wbps	io.max	y=x	riops	io.max	y=x	wiops	io.max	y=x	.TE
 
 .SH cpuset controller
 .TS
@@ -690,8 +705,7 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-cpus	cpuset.cpus	y = x	mems	cpuset.mems	y = x	
-.TE
+cpus	cpuset.cpus	y = x	mems	cpuset.mems	y = x	.TE
 
 .SH hugetlb controller
 .TS
@@ -699,5 +713,4 @@ allbox;
 l l l l 
 l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
-\&.limit\_\&in\_\&bytes	hugetlb.\&.max	y = x	
-.TE
+\&.limit\_\&in\_\&bytes	hugetlb.\&.max	y = x	.TE
