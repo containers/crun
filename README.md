@@ -1,6 +1,5 @@
 # crun
 
-[![Build Status](https://travis-ci.org/containers/crun.svg?branch=master)](https://travis-ci.org/containers/crun)
 [![Coverity Status](https://scan.coverity.com/projects/17787/badge.svg)](https://scan.coverity.com/projects/giuseppe-crun)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/containers/crun.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/containers/crun/alerts/)
 [![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/containers/crun.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/containers/crun/context:cpp)
