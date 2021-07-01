@@ -963,11 +963,18 @@ systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
       if (delegate_cgroup)
         return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
 
-      from = strstr (content, ":memory");
-      if (UNLIKELY (from == NULL))
-        return crun_make_error (err, 0, "cannot find memory controller for the current process");
+      from = strstr (content, ":memory:");
+      if (LIKELY (from != NULL))
+        from += 8;
+      else
+        {
+          from = strstr (content, ":pids:");
+          if (UNLIKELY (from == NULL))
+            return crun_make_error (err, 0, "cannot find memory or pids controller for the current process");
 
-      from += 8;
+          from += 6;
+        }
+
       to = strchr (from, '\n');
       if (UNLIKELY (to == NULL))
         return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
