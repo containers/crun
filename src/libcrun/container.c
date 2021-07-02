@@ -1447,7 +1447,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       _exit (ret);
     }
 
-  execv (exec_path, def->process->args);
+  TEMP_FAILURE_RETRY (execv (exec_path, def->process->args));
 
   if (errno == ENOENT)
     return crun_make_error (err, errno, "exec container process (missing dynamic library?) `%s`", exec_path);
@@ -3252,7 +3252,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
       TEMP_FAILURE_RETRY (close (pipefd1));
       pipefd1 = -1;
 
-      execv (exec_path, process->args);
+      TEMP_FAILURE_RETRY (execv (exec_path, process->args));
       libcrun_fail_with_error (errno, "exec");
       _exit (EXIT_FAILURE);
     }
