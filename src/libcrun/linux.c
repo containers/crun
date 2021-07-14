@@ -1840,6 +1840,47 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
   return 0;
 }
 
+// libcrun_create_kvm_device: explicitly adds kvm device.
+int
+libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err)
+{
+  int ret, rootfsfd;
+  size_t i;
+  struct device_s kvm_device = { "/dev/kvm", "c", 10, 232, 0666, 0, 0 };
+  cleanup_close int devfd = -1;
+  cleanup_close int rootfsfd_cleanup = -1;
+  runtime_spec_schema_config_schema *def = container->container_def;
+  const char *rootfs = get_private_data (container)->rootfs;
+
+  /* Do nothing if /dev/kvm is already present in spec */
+  for (i = 0; i < def->linux->devices_len; i++)
+    {
+      if (strcmp (def->linux->devices[i]->path, "/dev/kvm") == 0)
+        return 0;
+    }
+
+  if (rootfs == NULL)
+    rootfsfd = AT_FDCWD;
+  else
+    {
+      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH);
+      if (UNLIKELY (rootfsfd < 0))
+        return crun_make_error (err, errno, "open `%s`", rootfs);
+    }
+  get_private_data (container)->rootfsfd = rootfsfd;
+  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
+  if (UNLIKELY (devfd < 0))
+    return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
+  int is_user_ns = 0;
+  is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER);
+
+  ret = create_dev (container, devfd, &kvm_device, is_user_ns ? true : false, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {

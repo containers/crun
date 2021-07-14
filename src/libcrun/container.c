@@ -839,14 +839,33 @@ static int
 libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t *err)
 {
   const char *annotation;
-
   annotation = find_annotation (args->container, "run.oci.handler");
-  /*Nothing to do.  */
+
+  /* Fail with EACCESS if global handler is already configured and there was a attempt to override it via spec. */
+  if (args->context->handler != NULL && annotation != NULL)
+    {
+      return crun_make_error (err, EACCES, "invalid attempt to override already configured global handler: %s", args->context->handler);
+    }
+
+    /* In selection order global_handler takes more priority over handler configured via spec annotations. */
+    /* Check if crun is being invoked as krun via global_handler. */
+#if HAVE_DLOPEN && HAVE_LIBKRUN
+  if (args->context->handler != NULL && (strcmp (args->context->handler, "krun") == 0))
+    {
+      return libcrun_configure_libkrun (args, err);
+    }
+#endif
+
+  /* Do nothing: no annotations or global_handler configured */
   if (annotation == NULL)
     return 0;
 
   if (strcmp (annotation, "krun") == 0)
-    return libcrun_configure_libkrun (args, err);
+    {
+      /* set global_handler equivalent to "krun" so that we can mount kvm device */
+      args->context->handler = annotation;
+      return libcrun_configure_libkrun (args, err);
+    }
 
   return crun_make_error (err, EINVAL, "invalid handler specified `%s`", annotation);
 }
@@ -1119,6 +1138,16 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
   ret = libcrun_set_mounts (container, rootfs, send_sync_cb, &sync_socket, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+#if HAVE_DLOPEN && HAVE_LIBKRUN
+  /* explicitly configure kvm device if binary is invoked as krun */
+  if (entrypoint_args->context->handler != NULL && (strcmp (entrypoint_args->context->handler, "krun") == 0))
+    {
+      ret = libcrun_create_kvm_device (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+#endif
 
   if (def->hooks && def->hooks->create_container_len)
     {
