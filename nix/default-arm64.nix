@@ -27,6 +27,16 @@ let
               -i "$dev"/include/glib-2.0/gobject/gobjectnotifyqueue.c
           '';
         });
+        pcsclite = (static pkg.pcsclite).overrideAttrs (x: {
+          configureFlags = [
+            "--enable-confdir=/etc"
+            "--enable-usbdropdir=/var/lib/pcsc/drivers"
+            "--disable-libsystemd"
+            "--disable-libudev"
+            "--disable-libusb"
+          ];
+          buildInputs = [ pkgs.python3 pkgs.dbus ];
+        });
         libcap = (static pkg.libcap).overrideAttrs (x: {
           postInstall = ''
             mkdir -p "$doc/share/doc/${x.pname}-${x.version}"
@@ -38,6 +48,7 @@ let
         systemd = (static pkg.systemd).overrideAttrs (x: {
           outputs = [ "out" "dev" ];
           mesonFlags = x.mesonFlags ++ [
+            "-Dglib=false"
             "-Dstatic-libsystemd=true"
           ];
         });
@@ -68,15 +79,8 @@ let
     doCheck = false;
     enableParallelBuilding = true;
     outputs = [ "out" ];
-    nativeBuildInputs = with buildPackages; [
-      autoreconfHook
-      bash
-      gitMinimal
-      pkg-config
-      python3
-      which
-    ];
-    buildInputs = [ glibc glibc.static libcap libseccomp protobufc systemd yajl ];
+    nativeBuildInputs = [ autoreconfHook bash gitMinimal pkg-config python3 which ];
+    buildInputs = [ glibc glibc.static glib libcap libseccomp protobufc systemd yajl ];
     configureFlags = [ "--enable-static" ]
       ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
     prePatch = ''
