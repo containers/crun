@@ -513,6 +513,10 @@ users on a system without newuidmap/newgidmap.
 
 # CGROUP v2
 
+**Note**: cgroup v2 does not yet support control of realtime processes and
+the cpu controller can only be enabled when all RT processes are in the root
+cgroup. This will make crun fail while running alongside RT processes.
+
 If the cgroup configuration found is for cgroup v1, crun attempts a
 conversion when running on a cgroup v2 system.
 
