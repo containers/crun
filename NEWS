@@ -1,3 +1,12 @@
+* crun-0.21
+
+- honor memory swappiness set to 0
+- status: add fields for owner and created timestamp
+- cgroup: lookup pids controller as well when the memory controller
+  is not available
+- when compiled with krun, automatically use it if the current
+  executable file is called "krun".
+
 * crun-0.20.1
 
 - container: ignore error when resetting the SELinux label for the
