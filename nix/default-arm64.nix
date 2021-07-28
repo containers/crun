@@ -1,5 +1,6 @@
 { enableSystemd ? true }:
 let
+  static = import ./static.nix;
   pkgs = (import ./nixpkgs.nix {
     crossSystem = {
       config = "aarch64-unknown-linux-gnu";
@@ -38,6 +39,7 @@ let
         systemd = (static pkg.systemd).overrideAttrs (x: {
           outputs = [ "out" "dev" ];
           mesonFlags = x.mesonFlags ++ [
+            "-Dglib=false"
             "-Dstatic-libsystemd=true"
           ];
         });
@@ -46,19 +48,12 @@ let
             export CMAKE_STATIC_LINKER_FLAGS="-static"
           '';
         });
+        zstd = pkg.zstd.overrideAttrs (x: {
+          cmakeFlags = x.cmakeFlags ++ [ "-DZSTD_BUILD_CONTRIB:BOOL=OFF" ];
+          preInstall = "";
+        });
       };
     };
-  });
-
-  static = pkg: pkg.overrideAttrs (x: {
-    doCheck = false;
-    configureFlags = (x.configureFlags or [ ]) ++ [
-      "--without-shared"
-      "--disable-shared"
-    ];
-    dontDisableStatic = true;
-    enableSharedExecutables = false;
-    enableStatic = true;
   });
 
   self = with pkgs; stdenv.mkDerivation rec {
@@ -76,7 +71,15 @@ let
       python3
       which
     ];
-    buildInputs = [ glibc glibc.static libcap libseccomp protobufc systemd yajl ];
+    buildInputs = [
+      glibc
+      glibc.static
+      libcap
+      libseccomp
+      protobufc
+      systemd
+      yajl
+    ];
     configureFlags = [ "--enable-static" ]
       ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
     prePatch = ''
