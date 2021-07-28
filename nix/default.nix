@@ -1,5 +1,6 @@
 { system ? builtins.currentSystem, enableSystemd ? true }:
 let
+  static = import ./static.nix;
   pkgs = (import ./nixpkgs.nix {
     config = {
       packageOverrides = pkg: {
@@ -9,7 +10,7 @@ let
         libgpgerror = (static pkg.libgpgerror);
         libseccomp = (static pkg.libseccomp);
         protobufc = (static pkg.protobufc);
-        glib = (static pkg.glib).overrideAttrs(x: {
+        glib = (static pkg.glib).overrideAttrs (x: {
           outputs = [ "bin" "out" "dev" ];
           mesonFlags = [
             "-Ddefault_library=static"
@@ -18,7 +19,7 @@ let
             "-Dnls=disabled"
           ];
         });
-        libcap = (static pkg.libcap).overrideAttrs(x: {
+        libcap = (static pkg.libcap).overrideAttrs (x: {
           postInstall = ''
             mkdir -p "$doc/share/doc/${x.pname}-${x.version}"
             cp License "$doc/share/doc/${x.pname}-${x.version}/"
@@ -26,30 +27,20 @@ let
             mv "$lib"/lib/security "$pam/lib"
           '';
         });
-        systemd = (static pkg.systemd).overrideAttrs(x: {
+        systemd = (static pkg.systemd).overrideAttrs (x: {
           outputs = [ "out" "dev" ];
           mesonFlags = x.mesonFlags ++ [
+            "-Dglib=false"
             "-Dstatic-libsystemd=true"
           ];
         });
-        yajl = (static pkg.yajl).overrideAttrs(x: {
+        yajl = (static pkg.yajl).overrideAttrs (x: {
           preConfigure = ''
             export CMAKE_STATIC_LINKER_FLAGS="-static"
           '';
         });
       };
     };
-  });
-
-  static = pkg: pkg.overrideAttrs(x: {
-    doCheck = false;
-    configureFlags = (x.configureFlags or []) ++ [
-      "--without-shared"
-      "--disable-shared"
-    ];
-    dontDisableStatic = true;
-    enableSharedExecutables = false;
-    enableStatic = true;
   });
 
   self = with pkgs; stdenv.mkDerivation rec {
@@ -59,8 +50,24 @@ let
     doCheck = false;
     enableParallelBuilding = true;
     outputs = [ "out" ];
-    nativeBuildInputs = [ autoreconfHook bash gitMinimal pkg-config python3 which ];
-    buildInputs = [ glibc glibc.static criu libcap libseccomp protobufc systemd yajl ];
+    nativeBuildInputs = [
+      autoreconfHook
+      bash
+      gitMinimal
+      pkg-config
+      python3
+      which
+    ];
+    buildInputs = [
+      criu
+      glibc
+      glibc.static
+      libcap
+      libseccomp
+      protobufc
+      systemd
+      yajl
+    ];
     configureFlags = [ "--enable-static" ]
       ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
     prePatch = ''
@@ -78,4 +85,5 @@ let
       install -Dm755 crun $out/bin/crun
     '';
   };
-in self
+in
+self
