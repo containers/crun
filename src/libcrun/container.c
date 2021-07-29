@@ -1624,7 +1624,11 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
               ret = libcrun_kill_linux (&status, SIGKILL, err);
               if (UNLIKELY (ret < 0))
                 {
-                  if (crun_error_get_errno (err) != ESRCH)
+                  errno = crun_error_get_errno (err);
+
+                  /* pidfd_open returns EINVAL if the process is not a a thread-group leader.
+                     In our case it means the process already exited, so handle as ESRCH.  */
+                  if (errno != ESRCH && errno != EINVAL)
                     return ret;
 
                   crun_error_release (err);
