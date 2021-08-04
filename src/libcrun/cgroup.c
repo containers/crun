@@ -2882,6 +2882,19 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
         return ret;
     }
 
+  // allows users set use_hierarchy as 0 when defined as false in spec.
+  // if use_hierarchy is not defined in spec value defaults to 1 (True).
+  // Note: users can only toggle use_hierarchy if the parent cgroup has use_hierarchy configured as 0.
+  if (memory->use_hierarchy_present)
+    {
+      if (cgroup2)
+        return crun_make_error (err, 0, "cannot set useHierarchy memory with cgroupv2");
+
+      ret = write_file_at (dirfd, "memory.use_hierarchy", (memory->use_hierarchy) ? "1" : "0", 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (memory->reservation_present)
     {
       len = sprintf (fmt_buf, "%" PRIu64, memory->reservation);
