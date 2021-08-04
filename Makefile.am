@@ -46,7 +46,7 @@ libocispec/libocispec.la:
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
-libcrun_la_LIBADD = libocispec/libocispec.la $(maybe_libyajl.la)
+libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
 libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
 
 # build a version with all the symbols visible for testing
