@@ -616,6 +616,10 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
       return ret;
     }
 
+  ret = fchownat (dfd, "", uid, gid, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "cannot chown `%s`", cgroup_path);
+
   for (name = strtok_r (delegate, "\n", &saveptr); name; name = strtok_r (NULL, "\n", &saveptr))
     {
       ret = fchownat (dfd, name, uid, gid, AT_SYMLINK_NOFOLLOW);
