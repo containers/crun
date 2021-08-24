@@ -1,3 +1,10 @@
+* crun-1.0
+
+- cgroup: chown the current container cgroup to root in the container.
+- linux: treat pidfd_open failures EINVAL as ESRCH
+- cgroup: add support for setting memory.use_hierarchy on cgroup v1.
+- Makefile.am: fix link error when using directly libcrun.
+
 * crun-0.21
 
 - honor memory swappiness set to 0
