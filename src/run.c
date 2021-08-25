@@ -125,6 +125,7 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   cleanup_free char *config_file_cleanup = NULL;
 
   crun_context.preserve_fds = 0;
+  crun_context.listen_fds = 0;
   /* Check if global handler is configured and pass it down to crun context */
   crun_context.handler = global_args->handler;
 
@@ -171,7 +172,10 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
 
   crun_context.bundle = bundle;
   if (getenv ("LISTEN_FDS"))
-    crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+    {
+      crun_context.listen_fds = strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+      crun_context.preserve_fds += crun_context.listen_fds;
+    }
 
   return libcrun_container_run (&crun_context, container, 0, err);
 }

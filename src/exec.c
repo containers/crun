@@ -229,6 +229,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   };
 
   crun_context.preserve_fds = 0;
+  crun_context.listen_fds = 0;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
   crun_assert_n_args (argc - first_arg, exec_options.process ? 1 : 2, -1);
@@ -243,7 +244,10 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   crun_context.preserve_fds = exec_options.preserve_fds;
 
   if (getenv ("LISTEN_FDS"))
-    crun_context.preserve_fds += strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+    {
+      crun_context.listen_fds = strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+      crun_context.preserve_fds += crun_context.listen_fds;
+    }
 
   if (exec_options.process)
     return libcrun_container_exec_process_file (&crun_context, argv[first_arg], exec_options.process, err);
