@@ -1101,7 +1101,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmodat `%s`", device->path);
 
-          ret = chown (fd_buffer, device->uid, device->gid);
+          ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "chown `%s`", device->path);
         }
@@ -1149,7 +1149,7 @@ create_dev (libcrun_container_t *container, int devfd, struct device_s *device, 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "chmod `%s`", device->path);
 
-          ret = chown (fd_buffer, device->uid, device->gid);
+          ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "chown `%s`", device->path);
         }
