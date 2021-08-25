@@ -2977,8 +2977,11 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
   yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
 
-  yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-  yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
+  if (status.owner)
+    {
+      yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
+      yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
+    }
 
   {
     size_t i;

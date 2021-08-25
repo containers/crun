@@ -269,13 +269,16 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  if (status->owner)
+    {
+      r = yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto yajl_error;
 
-  r = yajl_gen_string (gen, YAJL_STR (status->owner), strlen (status->owner));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+      r = yajl_gen_string (gen, YAJL_STR (status->owner), strlen (status->owner));
+      if (UNLIKELY (r != yajl_gen_status_ok))
+        goto yajl_error;
+    }
 
   r = yajl_gen_string (gen, YAJL_STR ("detached"), strlen ("detached"));
   if (UNLIKELY (r != yajl_gen_status_ok))
