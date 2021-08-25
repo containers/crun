@@ -1906,18 +1906,18 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           break;
 
         case S_IFLNK:
-          buf_size = st_size + 1;
-          target_buf = xmalloc (buf_size);
-
+          buf_size = st_size;
           do
             {
-              buf_size += 1024;
+              if (target_buf != NULL)
+                buf_size += 1024;
 
-              target_buf = xrealloc (target_buf, buf_size);
+              target_buf = xrealloc (target_buf, buf_size + 1);
 
               size = readlinkat (dirfd (dsrcfd), de->d_name, target_buf, buf_size);
               if (UNLIKELY (size < 0))
                 return crun_make_error (err, errno, "readlink `%s/%s`", srcname, de->d_name);
+              target_buf[size] = '\0';
           } while (size == buf_size);
 
           ret = symlinkat (target_buf, destdirfd, de->d_name);

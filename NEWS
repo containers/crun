@@ -4,6 +4,7 @@
 - linux: treat pidfd_open failures EINVAL as ESRCH
 - cgroup: add support for setting memory.use_hierarchy on cgroup v1.
 - Makefile.am: fix link error when using directly libcrun.
+- Fix symlink target mangling for tmpcopyup targets.
 
 * crun-0.21
 
