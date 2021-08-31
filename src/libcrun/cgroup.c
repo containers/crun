@@ -2074,6 +2074,22 @@ libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *er
   if (path == NULL || *path == '\0')
     return 0;
 
+  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.  */
+  if (signal == SIGKILL)
+    {
+      cleanup_free char *kill_file = NULL;
+
+      ret = append_paths (&kill_file, err, CGROUP_ROOT, path, "cgroup.kill", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = write_file_with_flags (kill_file, 0, "1", 1, err);
+      if (ret >= 0)
+        return 0;
+
+      crun_error_release (err);
+    }
+
   ret = libcrun_cgroup_pause_unpause (path, true, err);
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
