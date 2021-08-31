@@ -1206,6 +1206,13 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
         }
     }
 
+  // set primary process to 1 explicitly if nothing is configured and LISTEN_FD is not set
+  if (entrypoint_args->context->listen_fds > 0 && getenv ("LISTEN_PID") == NULL)
+    {
+      setenv ("LISTEN_PID", "1", 1);
+      libcrun_warning ("setting LISTEN_PID=1 since no previous configuration was found");
+    }
+
   if (def->process && def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       return crun_make_error (err, errno, "chdir");

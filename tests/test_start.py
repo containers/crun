@@ -229,6 +229,22 @@ def test_empty_home():
         return -1
     return 0
 
+# Following test is for a special case where crun sets LISTEN_PID=1 when nothing is specified
+# to make sure that primary process is 1, this feature makes sure crun is in parity with runc.
+def test_listen_pid_env():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'printenv', 'LISTEN_PID']
+    add_all_namespaces(conf)
+    env = dict(os.environ)
+    env["LISTEN_FDS"] = "1"
+    try:
+        out, cid = run_and_get_output(conf, env=env, command='run')
+        if "1" not in str(out):
+            return -1
+    except:
+        return -1
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -237,6 +253,7 @@ all_tests = {
     "sd-notify-file" : test_sd_notify_file,
     "sd-notify-env" : test_sd_notify_env,
     "sd-notify-proxy": test_sd_notify_proxy,
+    "listen_pid_env": test_listen_pid_env,
     "test-cwd-relative": test_cwd_relative,
     "test-cwd-relative-subdir": test_cwd_relative_subdir,
     "test-cwd-absolute": test_cwd_absolute,

@@ -35,6 +35,9 @@ struct libcrun_context_s
   const char *notify_socket;
   const char *handler;
   int preserve_fds;
+  // For some use-cases we need differentiation between preserve_fds and listen_fds.
+  // Following context variable makes sure we get exact value of listen_fds irrespective of preserve_fds.
+  int listen_fds;
 
   crun_output_handler output_handler;
   void *output_handler_arg;
