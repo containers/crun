@@ -2893,13 +2893,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 
   if (*running && ! has_fifo)
     {
-      int cgroup_mode;
-
-      cgroup_mode = libcrun_get_cgroup_mode (err);
-      if (UNLIKELY (cgroup_mode < 0))
-        return cgroup_mode;
-
-      ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
+      ret = libcrun_cgroup_is_container_paused (status->cgroup_path, &paused, err);
       if (UNLIKELY (ret < 0))
         {
           /*
