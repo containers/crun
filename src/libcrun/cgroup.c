@@ -1867,15 +1867,20 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 }
 
 int
-libcrun_cgroup_is_container_paused (const char *cgroup_path, int cgroup_mode, bool *paused, libcrun_error_t *err)
+libcrun_cgroup_is_container_paused (const char *cgroup_path, bool *paused, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   cleanup_free char *path = NULL;
   const char *state;
+  int cgroup_mode;
   int ret;
 
   if (cgroup_path == NULL || cgroup_path[0] == '\0')
     return 0;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {

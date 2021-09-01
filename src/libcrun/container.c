@@ -2893,13 +2893,7 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 
   if (*running && ! has_fifo)
     {
-      int cgroup_mode;
-
-      cgroup_mode = libcrun_get_cgroup_mode (err);
-      if (UNLIKELY (cgroup_mode < 0))
-        return cgroup_mode;
-
-      ret = libcrun_cgroup_is_container_paused (status->cgroup_path, cgroup_mode, &paused, err);
+      ret = libcrun_cgroup_is_container_paused (status->cgroup_path, &paused, err);
       if (UNLIKELY (ret < 0))
         {
           /*
@@ -3051,6 +3045,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
                         libcrun_error_t *err)
 {
   int container_status, ret;
+  bool container_paused;
   pid_t pid;
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
@@ -3093,6 +3088,13 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
 
   if (container_status == 0)
     return crun_make_error (err, 0, "the container `%s` is not running.", id);
+
+  ret = libcrun_cgroup_is_container_paused (status.cgroup_path, &container_paused, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (UNLIKELY (container_paused))
+    return crun_make_error (err, 0, "the container `%s` is paused.", id);
 
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
