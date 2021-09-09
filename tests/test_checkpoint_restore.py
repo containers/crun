@@ -17,10 +17,7 @@
 
 import time
 import json
-import subprocess
 import os
-import shutil
-import sys
 from tests_utils import *
 
 def test_cr1():

@@ -21,7 +21,6 @@ import sys
 import os
 import tempfile
 import subprocess
-import time
 
 base_conf = """
 {
