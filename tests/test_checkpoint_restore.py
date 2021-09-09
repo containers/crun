@@ -20,35 +20,30 @@ import json
 import os
 from tests_utils import *
 
-def test_cr1():
-    if is_rootless():
-        return 77
-    if 'CRIU' not in get_crun_feature_string():
-        return 77
-    conf = base_config()
-    conf['process']['args'] = ['/init', 'pause']
-    add_all_namespaces(conf, userns=True)
-    # User namespace support not working yet for checkpoint/restore
-    conf['linux']['namespaces'].remove({'type':'user'})
+
+def run_cr_test(conf):
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'checkpoint')
     try:
-        proc, cid = run_and_get_output(conf, all_dev_null=True, use_popen=True, detach=True)
-        for i in range(50):
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True
+        )
+        for _ in range(50):
             try:
                 s = json.loads(run_crun_command(["state", cid]))
                 break
             except Exception as e:
                 time.sleep(0.1)
 
-
         if s['status'] != "running":
             return -1
         if s['id'] != cid:
             return -1
-        cmdline_fd = open("/proc/%s/cmdline" % s['pid'], 'r')
-        first_cmdline = cmdline_fd.read()
-        cmdline_fd.close()
+        with open("/proc/%s/cmdline" % s['pid'], 'r') as cmdline_fd:
+            first_cmdline = cmdline_fd.read()
 
         run_crun_command(["checkpoint", "--image-path=%s" % cr_dir, cid])
 
@@ -70,20 +65,47 @@ def test_cr1():
             return -1
         if s['id'] != cid:
             return -1
-        cmdline_fd = open("/proc/%s/cmdline" % s['pid'], 'r')
-        second_cmdline = cmdline_fd.read()
-        cmdline_fd.close()
+        with open("/proc/%s/cmdline" % s['pid'], 'r') as cmdline_fd:
+            second_cmdline = cmdline_fd.read()
         if first_cmdline != second_cmdline:
             return -1
-
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
-
     return 0
 
+
+def test_cr():
+    if is_rootless() or 'CRIU' not in get_crun_feature_string():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    return run_cr_test(conf)
+
+
+def test_cr_with_ext_ns():
+    if is_rootless() or 'CRIU' not in get_crun_feature_string():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+
+    ns_path = os.path.join('/proc', str(os.getpid()), 'ns')
+    for ns in conf['linux']['namespaces']:
+        if ns['type'] == 'pid':
+            ns.update({'path': os.path.join(ns_path, 'pid')})
+        if ns['type'] == 'network':
+            ns.update({'path': os.path.join(ns_path, 'net')})
+
+    return run_cr_test(conf)
+
+
 all_tests = {
-    "checkpoint-restore" : test_cr1,
+    "checkpoint-restore": test_cr,
+    "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
 }
 
 if __name__ == "__main__":
