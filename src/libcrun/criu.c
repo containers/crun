@@ -39,6 +39,9 @@
 #  define CRIU_RESTORE_LOG_FILE "restore.log"
 #  define DESCRIPTORS_FILENAME "descriptors.json"
 
+#  define CRIU_EXT_NETNS "extRootNetNS"
+#  define CRIU_EXT_PIDNS "extRootPidNS"
+
 static const char *console_socket = NULL;
 
 static int
@@ -214,7 +217,6 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   cleanup_free char *descriptors_path = NULL;
   cleanup_free char *freezer_path = NULL;
   cleanup_close int descriptors_fd = -1;
-  cleanup_free char *external = NULL;
   cleanup_free char *path = NULL;
   cleanup_close int image_fd = -1;
   cleanup_close int work_fd = -1;
@@ -340,22 +342,25 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         criu_add_ext_mount (def->linux->masked_paths[i], def->linux->masked_paths[i]);
     }
 
-  /* CRIU tries to checkpoint and restore all namespaces. The network
-   * namespace, however, is usually a bit special as it requires
-   * connecting network interfaces into the namespace. CRIU has support
-   * to reconnect veth devices, but as we are mainly targeting Podman
-   * right now, only Podman's way of creating network namespaces via
-   * CNI is handled here. We are looking at config.json and if there
-   * is a path configured for the network namespace we are telling CRIU
-   * to ignore the network namespace and just restore the container
-   * into the existing network namespace.
+  /* CRIU tries to checkpoint and restore all namespaces. However,
+   * namespaces could be shared between containers in a pod.
+   * To address this, CRIU provides support for external namespaces.
+   * External namespaces allow to ignore the namespace during checkpoint
+   * and restore the container into the existing namespaces.
+   *
+   * We are looking at config.json and if there is a path configured for
+   * a namespace we are telling CRIU to ignore the namespace and
+   * just restore the container into the existing namespace.
+   *
+   * In the case of Podman, a network namespace would be created via CNI.
    *
    * CRIU expects the information about an external namespace like this:
-   * --external net[<inode>]:<key>
-   * For key we are using the string: 'extRootNetNS'. */
+   * --external <namespace>[<inode>]:<key>
+   */
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
+      cleanup_free char *external = NULL;
       int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
@@ -367,9 +372,19 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
 
-          xasprintf (&external, "net[%ld]:extRootNetNS", statbuf.st_ino);
+          xasprintf (&external, "net[%ld]:" CRIU_EXT_NETNS, statbuf.st_ino);
           criu_add_external (external);
-          break;
+        }
+
+      if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
+        {
+          struct stat statbuf;
+          ret = stat (def->linux->namespaces[i]->path, &statbuf);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
+
+          xasprintf (&external, "pid[%ld]:" CRIU_EXT_PIDNS, statbuf.st_ino);
+          criu_add_external (external);
         }
     }
 
@@ -638,9 +653,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       goto out_umount;
     }
 
-  /* If there is network namespace defined in config.json we are telling
-   * CRIU to restore the process into that network namespace.
-   * CRIU expects the information about the network namespace like this:
+  /* If there is a PID or network namespace defined in config.json we are telling
+   * CRIU to restore the process into that namespace.
+   * CRIU expects the information about the namespace like this:
    * --inherit-fd fd[<fd>]:<key>
    * The <key> needs to be the same as during checkpointing (extRootNetNS). */
   for (i = 0; i < def->linux->namespaces_len; i++)
@@ -655,8 +670,16 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           if (UNLIKELY (inherit_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
-          criu_add_inherit_fd (inherit_fd, "extRootNetNS");
-          break;
+          criu_add_inherit_fd (inherit_fd, CRIU_EXT_NETNS);
+        }
+
+      if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
+        {
+          inherit_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          if (UNLIKELY (inherit_fd < 0))
+            return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+
+          criu_add_inherit_fd (inherit_fd, CRIU_EXT_PIDNS);
         }
     }
 
