@@ -266,7 +266,6 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False).decode(), id_container
 
 def run_crun_command(args):
-    cwd = os.getcwd()
     crun = get_crun_path()
     args = [crun] + args
     return subprocess.check_output(args, close_fds=False).decode()
