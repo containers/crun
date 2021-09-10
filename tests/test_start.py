@@ -16,12 +16,9 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
-import json
 import subprocess
 import os
 import os.path
-import shutil
-import sys
 import threading
 import socket
 from tests_utils import *
