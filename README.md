@@ -137,7 +137,7 @@ $ sudo make install
 
 ### Shared Libraries
 
-The previous build instructions do not enable shared libraries, therefore you will be unable to use libcrun. If you wish to build the shared libraries you can change the previous `./configure.sh` statement to `./configure --enable-shared`.
+The previous build instructions do not enable shared libraries, therefore you will be unable to use libcrun. If you wish to build the shared libraries you can change the previous `./configure` statement to `./configure --enable-shared`.
 
 ## Static build
 
