@@ -393,6 +393,36 @@ fallback:
   return ret;
 }
 
+static ssize_t
+safe_readlinkat (int dfd, const char *dirpath, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err)
+{
+  cleanup_free char *tmp_buf = NULL;
+  ssize_t buf_size = hint > 0 ? hint + 1 : 512;
+  ssize_t size;
+
+  do
+    {
+      if (tmp_buf != NULL)
+        buf_size += 256;
+
+      /* Allocate an extra byte so the buffer can be NUL terminated.  */
+      tmp_buf = xrealloc (tmp_buf, buf_size + 1);
+
+      size = readlinkat (dfd, name, tmp_buf, buf_size);
+      if (UNLIKELY (size < 0))
+        return crun_make_error (err, errno, "readlink `%s/%s`", dirpath, name);
+  } while (size == buf_size);
+
+  /* Always NUL terminate the buffer.  */
+  tmp_buf[size] = '\0';
+
+  /* Move ownership to BUFFER.  */
+  *buffer = tmp_buf;
+  tmp_buf = NULL;
+
+  return size;
+}
+
 static int
 crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
                      size_t dirpath_len, const char *path, int mode,
@@ -458,26 +488,17 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
               /* If the last component is a symlink, repeat the lookup with the resolved path.  */
               if (errno == ELOOP)
                 {
-                  size_t s, resolved_size = 0;
                   cleanup_free char *resolved_path = NULL;
 
-                  do
+                  ret = safe_readlinkat (dirfd, dirpath, cur, &resolved_path, 0, err);
+                  if (LIKELY (ret >= 0))
                     {
-                      resolved_size += 512;
-                      resolved_path = xrealloc (resolved_path, resolved_size);
-
-                      s = readlinkat (dirfd, npath, resolved_path, resolved_size);
-                  } while (s == resolved_size);
-
-                  if (s > 0)
-                    {
-                      resolved_path[s] = '\0';
-                      crun_error_release (err);
                       return crun_safe_ensure_at (do_open, dir, dirfd,
                                                   dirpath, dirpath_len,
                                                   resolved_path, mode,
                                                   max_readlinks - 1, err);
                     }
+                  crun_error_release (err);
                 }
               /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
               ret = openat (cwd, cur, O_CLOEXEC | O_PATH, 0);
@@ -1839,8 +1860,6 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
       cleanup_close int srcfd = -1;
       cleanup_close int destfd = -1;
       cleanup_free char *target_buf = NULL;
-      ssize_t buf_size;
-      ssize_t size;
       int ret;
       mode_t mode;
       off_t st_size;
@@ -1906,19 +1925,9 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           break;
 
         case S_IFLNK:
-          buf_size = st_size;
-          do
-            {
-              if (target_buf != NULL)
-                buf_size += 1024;
-
-              target_buf = xrealloc (target_buf, buf_size + 1);
-
-              size = readlinkat (dirfd (dsrcfd), de->d_name, target_buf, buf_size);
-              if (UNLIKELY (size < 0))
-                return crun_make_error (err, errno, "readlink `%s/%s`", srcname, de->d_name);
-              target_buf[size] = '\0';
-          } while (size == buf_size);
+          ret = safe_readlinkat (dirfd (dsrcfd), srcname, de->d_name, &target_buf, st_size, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
           ret = symlinkat (target_buf, destdirfd, de->d_name);
           if (UNLIKELY (ret < 0))
