@@ -394,10 +394,10 @@ fallback:
 }
 
 static ssize_t
-safe_readlinkat (int dfd, const char *dirpath, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err)
+safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err)
 {
-  cleanup_free char *tmp_buf = NULL;
   ssize_t buf_size = hint > 0 ? hint + 1 : 512;
+  cleanup_free char *tmp_buf = NULL;
   ssize_t size;
 
   do
@@ -410,7 +410,7 @@ safe_readlinkat (int dfd, const char *dirpath, const char *name, char **buffer, 
 
       size = readlinkat (dfd, name, tmp_buf, buf_size);
       if (UNLIKELY (size < 0))
-        return crun_make_error (err, errno, "readlink `%s/%s`", dirpath, name);
+        return crun_make_error (err, errno, "readlink `%s`", name);
   } while (size == buf_size);
 
   /* Always NUL terminate the buffer.  */
@@ -490,7 +490,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
                 {
                   cleanup_free char *resolved_path = NULL;
 
-                  ret = safe_readlinkat (dirfd, dirpath, cur, &resolved_path, 0, err);
+                  ret = safe_readlinkat (cwd, cur, &resolved_path, 0, err);
                   if (LIKELY (ret >= 0))
                     {
                       return crun_safe_ensure_at (do_open, dir, dirfd,
@@ -1925,7 +1925,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           break;
 
         case S_IFLNK:
-          ret = safe_readlinkat (dirfd (dsrcfd), srcname, de->d_name, &target_buf, st_size, err);
+          ret = safe_readlinkat (dirfd (dsrcfd), de->d_name, &target_buf, st_size, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
