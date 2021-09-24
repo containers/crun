@@ -246,18 +246,18 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = criu_init_opts ();
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "CRIU init failed with %d\n", ret);
+    return crun_make_error (err, 0, "CRIU init failed with %d", ret);
 
   if (UNLIKELY (cr_options->image_path == NULL))
-    return crun_make_error (err, 0, "image path not set\n");
+    return crun_make_error (err, 0, "image path not set");
 
   ret = mkdir (cr_options->image_path, 0700);
   if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-    return crun_make_error (err, errno, "error creating checkpoint directory %s\n", cr_options->image_path);
+    return crun_make_error (err, errno, "error creating checkpoint directory %s", cr_options->image_path);
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory %s\n", cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory %s", cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
 
@@ -269,7 +269,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   descriptors_fd = open (descriptors_path, O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR);
   if (UNLIKELY (descriptors_fd == -1))
-    return crun_make_error (err, errno, "error opening descriptors file %s\n", descriptors_path);
+    return crun_make_error (err, errno, "error opening descriptors file %s", descriptors_path);
   if (status->external_descriptors)
     {
       ret = TEMP_FAILURE_RETRY (
@@ -285,7 +285,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory %s\n", cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory %s", cr_options->work_path);
 
       criu_set_work_dir_fd (work_fd);
     }
@@ -305,7 +305,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = criu_set_root (path);
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, 0, "error setting CRIU root to %s\n", path);
+    return crun_make_error (err, 0, "error setting CRIU root to %s", path);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -316,7 +316,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     {
       ret = checkpoint_cgroup_v1_mount (def, err);
       if (UNLIKELY (ret != 0))
-        return crun_make_error (err, 0, "error handling cgroup v1 mounts\n");
+        return crun_make_error (err, 0, "error handling cgroup v1 mounts");
     }
 
   /* Tell CRIU about external bind mounts. */
@@ -405,7 +405,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = criu_set_freeze_cgroup (freezer_path);
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, ret, "CRIU: failed setting freezer %d\n", ret);
+    return crun_make_error (err, ret, "CRIU: failed setting freezer %d", ret);
 
   /* Set boolean options . */
   criu_set_leave_running (cr_options->leave_running);
@@ -421,8 +421,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   ret = criu_dump ();
   if (UNLIKELY (ret != 0))
     return crun_make_error (err, 0,
-                            "CRIU checkpointing failed %d\n"
-                            "Please check CRIU logfile %s/%s\n",
+                            "CRIU checkpointing failed %d.  Please check CRIU logfile %s/%s",
                             ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
 
   return 0;
@@ -522,14 +521,14 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   ret = criu_init_opts ();
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "CRIU init failed with %d\n", ret);
+    return crun_make_error (err, 0, "CRIU init failed with %d", ret);
 
   if (UNLIKELY (cr_options->image_path == NULL))
-    return crun_make_error (err, 0, "image path not set\n");
+    return crun_make_error (err, 0, "image path not set");
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory %s\n", cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory %s", cr_options->image_path);
 
   criu_set_images_dir_fd (image_fd);
 
@@ -587,7 +586,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory %s\n", cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory %s", cr_options->work_path);
 
       criu_set_work_dir_fd (work_fd);
     }
@@ -627,12 +626,12 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))
-    return crun_make_error (err, errno, "error creating restore directory %s\n", root);
+    return crun_make_error (err, errno, "error creating restore directory %s", root);
   /* do realpath on root */
   ret = mount (status->rootfs, root, NULL, MS_BIND | MS_REC, NULL);
   if (UNLIKELY (ret == -1))
     {
-      ret = crun_make_error (err, errno, "error mounting restore directory %s\n", root);
+      ret = crun_make_error (err, errno, "error mounting restore directory %s", root);
       goto out;
     }
 
@@ -650,7 +649,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = criu_set_root (root);
   if (UNLIKELY (ret != 0))
     {
-      ret = crun_make_error (err, 0, "error setting CRIU root to %s\n", root);
+      ret = crun_make_error (err, 0, "error setting CRIU root to %s", root);
       goto out_umount;
     }
 
@@ -710,8 +709,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   if (UNLIKELY (ret <= 0))
     {
       ret = crun_make_error (err, 0,
-                             "CRIU restoring failed %d\n"
-                             "Please check CRIU logfile %s/%s\n",
+                             "CRIU restoring failed %d.  Please check CRIU logfile %s/%s",
                              ret, cr_options->work_path, CRIU_RESTORE_LOG_FILE);
       goto out_umount;
     }
@@ -723,13 +721,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 out_umount:
   ret_out = umount (root);
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno, "error unmounting restore directory %s\n", root);
+    return crun_make_error (err, errno, "error unmounting restore directory %s", root);
 out:
   ret_out = rmdir (root);
   if (UNLIKELY (ret == -1))
     return ret;
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno, "error removing restore directory %s\n", root);
+    return crun_make_error (err, errno, "error removing restore directory %s", root);
   return ret;
 }
 #endif
