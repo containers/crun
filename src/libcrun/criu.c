@@ -563,7 +563,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
             if (s && YAJL_IS_STRING (s))
               {
                 char *str = YAJL_GET_STRING (s);
-                if (strncmp (str, "pipe:", 5) == 0)
+                if (has_prefix (str, "pipe:"))
                   criu_add_inherit_fd (i, str);
               }
           }
