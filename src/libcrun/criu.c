@@ -216,7 +216,6 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *descriptors_path = NULL;
   cleanup_free char *freezer_path = NULL;
-  cleanup_close int descriptors_fd = -1;
   cleanup_free char *path = NULL;
   cleanup_close int image_fd = -1;
   cleanup_close int work_fd = -1;
@@ -267,16 +266,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return ret;
 
-  descriptors_fd = open (descriptors_path, O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR);
-  if (UNLIKELY (descriptors_fd == -1))
-    return crun_make_error (err, errno, "error opening descriptors file %s", descriptors_path);
-  if (status->external_descriptors)
-    {
-      ret = TEMP_FAILURE_RETRY (
-          write (descriptors_fd, status->external_descriptors, strlen (status->external_descriptors)));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write '%s'", DESCRIPTORS_FILENAME);
-    }
+  ret = write_file (descriptors_path, status->external_descriptors, strlen (status->external_descriptors), err);
+  if (UNLIKELY (ret < 0))
+    return crun_error_wrap (err, "error saving CRIU descriptors file");
 
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
    * CRIU will put the logfiles into the images_dir from above. No need for
