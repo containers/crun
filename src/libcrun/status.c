@@ -292,9 +292,28 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
 
-  r = yajl_gen_string (gen, YAJL_STR (status->external_descriptors), strlen (status->external_descriptors));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  {
+    const char *it = status->external_descriptors;
+
+    r = yajl_gen_array_open (gen);
+    if (UNLIKELY (r != yajl_gen_status_ok))
+      goto yajl_error;
+
+    while (*it)
+      {
+        size_t len = strlen (it);
+
+        r = yajl_gen_string (gen, (unsigned char *) it, len);
+        if (UNLIKELY (r != yajl_gen_status_ok))
+          goto yajl_error;
+
+        it += len + 1;
+      }
+
+    r = yajl_gen_array_close (gen);
+    if (UNLIKELY (r != yajl_gen_status_ok))
+      goto yajl_error;
+  }
 
   r = yajl_gen_map_close (gen);
   if (UNLIKELY (r != yajl_gen_status_ok))
