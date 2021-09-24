@@ -62,6 +62,8 @@ def test_exec_detach_not_exists():
     return test_exec_not_exists_helper(False)
 
 def test_exec_additional_gids():
+    if is_rootless():
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
     add_all_namespaces(conf)

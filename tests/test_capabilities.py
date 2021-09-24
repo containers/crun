@@ -126,18 +126,28 @@ def test_some_caps_permitted():
     return helper_test_some_caps(0, ["permitted"], 'CapPrm')
 
 def test_some_caps_effective_non_root():
+    if is_rootless():
+        return 77
     return helper_test_some_caps(1000, ["effective", "permitted", "inheritable", "ambient"], 'CapEff')
 
 def test_some_caps_bounding_non_root():
+    if is_rootless():
+        return 77
     return helper_test_some_caps(1000, ["bounding"], 'CapBnd')
 
 def test_some_caps_inheritable_non_root():
+    if is_rootless():
+        return 77
     return helper_test_some_caps(1000, ["inheritable"], 'CapInh')
 
 def test_some_caps_ambient_non_root():
+    if is_rootless():
+        return 77
     return helper_test_some_caps(1000, ["ambient", "permitted", "inheritable"], 'CapAmb')
 
 def test_some_caps_permitted_non_root():
+    if is_rootless():
+        return 77
     return helper_test_some_caps(1000, ["ambient", "permitted", "inheritable"], 'CapPrm')
 
 
