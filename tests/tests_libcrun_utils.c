@@ -387,7 +387,11 @@ int
 main ()
 {
   int id = 1;
+#ifdef HAVE_SYSTEMD
+  printf ("1..8\n");
+#else
   printf ("1..7\n");
+#endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
   RUN_TEST (test_run_process);
