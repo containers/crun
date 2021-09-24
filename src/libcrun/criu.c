@@ -508,7 +508,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
                                       libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_close int inherit_fd = -1;
+  cleanup_close int inherit_new_net_fd = -1;
+  cleanup_close int inherit_new_pid_fd = -1;
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
   cleanup_close int work_fd = -1;
@@ -666,20 +667,20 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
-          inherit_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
-          if (UNLIKELY (inherit_fd < 0))
+          inherit_new_net_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          if (UNLIKELY (inherit_new_net_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
-          criu_add_inherit_fd (inherit_fd, CRIU_EXT_NETNS);
+          criu_add_inherit_fd (inherit_new_net_fd, CRIU_EXT_NETNS);
         }
 
       if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
         {
-          inherit_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
-          if (UNLIKELY (inherit_fd < 0))
+          inherit_new_pid_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          if (UNLIKELY (inherit_new_pid_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
-          criu_add_inherit_fd (inherit_fd, CRIU_EXT_PIDNS);
+          criu_add_inherit_fd (inherit_new_pid_fd, CRIU_EXT_PIDNS);
         }
     }
 
