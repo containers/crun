@@ -185,6 +185,9 @@ def run_all_tests(all_tests, allowed_tests):
 def get_tests_root():
     return '%s/.testsuite-run-%d' % (os.getcwd(), os.getpid())
 
+def get_tests_root_status():
+    return os.path.join(get_tests_root(), "root")
+
 def get_crun_path():
     cwd = os.getcwd()
     return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
@@ -243,7 +246,8 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
     relative_config_path = ['--config', relative_config_path] if relative_config_path else []
 
-    args = [crun, command] + relative_config_path + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
+    root = get_tests_root_status()
+    args = [crun, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:
@@ -266,8 +270,9 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False).decode(), id_container
 
 def run_crun_command(args):
+    root = get_tests_root_status()
     crun = get_crun_path()
-    args = [crun] + args
+    args = [crun, "--root", root] + args
     return subprocess.check_output(args, close_fds=False).decode()
 
 def tests_main(all_tests):

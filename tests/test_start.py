@@ -21,6 +21,7 @@ import os
 import os.path
 import threading
 import socket
+import json
 from tests_utils import *
 
 def test_cwd_relative():
@@ -80,6 +81,15 @@ def test_start():
         out, _ = proc.communicate()
         if "hello" not in str(out):
             return -1
+
+        # verify that the external_descriptors are stored correctly
+        path = os.path.join(get_tests_root_status(), cid, "status")
+        with open(path) as f:
+            status = json.load(f)
+            descriptors = status["external_descriptors"]
+            if len(descriptors) <= 1:
+                print("invalid length for external_descriptors")
+                return -1
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
