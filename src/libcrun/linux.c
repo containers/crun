@@ -2700,57 +2700,75 @@ libcrun_get_external_descriptors (libcrun_container_t *container)
   return get_private_data (container)->external_descriptors;
 }
 
-/*
- * Save the external descriptors as a NUL terminated string list
- * e.g. "/dev/pts/2\0/dev/pts/2\0/dev/pts/2\0\0"
- */
 static int
 save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
-  cleanup_free char *buf = NULL;
-  size_t buf_allocated = 0;
-  size_t buf_size = 0;
+  const unsigned char *buf = NULL;
+  yajl_gen gen = NULL;
+  size_t buf_len;
+  int ret;
   int i;
 
-  /* Just a guess.  */
-  buf_allocated = 64;
-  buf = xmalloc (buf_allocated);
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, errno, "yajl_gen_alloc");
+
+  ret = yajl_gen_array_open (gen);
+  if (UNLIKELY (ret != yajl_gen_status_ok))
+    goto yajl_error;
 
   /* Remember original stdin, stdout, stderr for container restore.  */
   for (i = 0; i < 3; i++)
     {
-      char link_path[PATH_MAX];
       char fd_path[64];
-      ssize_t ret;
-
+      char link_path[PATH_MAX];
       sprintf (fd_path, "/proc/%d/fd/%d", pid, i);
       ret = readlink (fd_path, link_path, PATH_MAX - 1);
       if (UNLIKELY (ret < 0))
         {
           /* The fd could not exist.  */
-          if (errno != ENOENT)
-            return crun_make_error (err, errno, "readlink");
-
-          strcpy (link_path, "/dev/null");
-          ret = 9;
+          if (errno == ENOENT)
+            {
+              strcpy (link_path, "/dev/null");
+              ret = 9; /* strlen ("/dev/null").  */
+            }
+          else
+            {
+              yajl_gen_free (gen);
+              return crun_make_error (err, errno, "readlink");
+            }
         }
+      link_path[ret] = 0;
 
-      if (buf_allocated < buf_size + ret + 2)
-        {
-          buf_allocated = buf_size + ret + 2;
-          buf = xrealloc (buf, buf_allocated);
-        }
-      memcpy (buf + buf_size, link_path, ret);
-      buf_size += ret;
-      buf[buf_size++] = '\0';
-      buf[buf_size] = '\0';
+      ret = yajl_gen_string (gen, YAJL_STR (link_path), ret);
+      if (UNLIKELY (ret != yajl_gen_status_ok))
+        goto yajl_error;
     }
 
-  /* Move ownership.  */
-  get_private_data (container)->external_descriptors = buf;
-  buf = NULL;
+  ret = yajl_gen_array_close (gen);
+  if (UNLIKELY (ret != yajl_gen_status_ok))
+    goto yajl_error;
+
+  ret = yajl_gen_get_buf (gen, &buf, &buf_len);
+  if (UNLIKELY (ret != yajl_gen_status_ok))
+    goto yajl_error;
+
+  if (buf)
+    {
+      char *b = xmalloc (buf_len + 1);
+      memcpy (b, buf, buf_len);
+      b[buf_len] = '\0';
+      get_private_data (container)->external_descriptors = b;
+    }
+
+  yajl_gen_free (gen);
 
   return 0;
+
+yajl_error:
+  if (gen)
+    yajl_gen_free (gen);
+  return yajl_error_to_crun_error (ret, err);
 }
 
 int

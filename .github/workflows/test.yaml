@@ -99,14 +99,14 @@ jobs:
                 make
                 make syntax-check
                 echo run tests as root
-                # check that the working dir is clean
-                git describe --broken --dirty --all | grep -qv dirty
-
                 sudo make check ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
                 echo run tests as rootless
                 make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
                 echo run tests as rootless in a user namespace
                 unshare -r make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
+
+                # check that the working dir is clean
+                git describe --broken --dirty --all | grep -qv dirty
             ;;
             podman)
                 sudo docker build -t crun-podman tests/podman
