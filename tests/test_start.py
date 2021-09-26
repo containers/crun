@@ -87,8 +87,8 @@ def test_start():
         with open(path) as f:
             status = json.load(f)
             descriptors = status["external_descriptors"]
-            if len(descriptors) <= 1:
-                print("invalid length for external_descriptors")
+            if not isinstance(descriptors, str):
+                print("external_descriptors is not a string")
                 return -1
     finally:
         if cid is not None:

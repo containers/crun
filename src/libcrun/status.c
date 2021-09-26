@@ -292,28 +292,9 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
 
-  {
-    const char *it = status->external_descriptors;
-
-    r = yajl_gen_array_open (gen);
-    if (UNLIKELY (r != yajl_gen_status_ok))
-      goto yajl_error;
-
-    while (*it)
-      {
-        size_t len = strlen (it);
-
-        r = yajl_gen_string (gen, (unsigned char *) it, len);
-        if (UNLIKELY (r != yajl_gen_status_ok))
-          goto yajl_error;
-
-        it += len + 1;
-      }
-
-    r = yajl_gen_array_close (gen);
-    if (UNLIKELY (r != yajl_gen_status_ok))
-      goto yajl_error;
-  }
+  r = yajl_gen_string (gen, YAJL_STR (status->external_descriptors), strlen (status->external_descriptors));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
 
   r = yajl_gen_map_close (gen);
   if (UNLIKELY (r != yajl_gen_status_ok))
@@ -430,36 +411,9 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     status->detached = YAJL_IS_TRUE (yajl_tree_get (tree, detached, yajl_t_true));
   }
   {
-    const char *external[] = { "external_descriptors", NULL };
-    const unsigned char *buf = NULL;
-    yajl_gen gen = NULL;
-    size_t buf_len;
-
-    gen = yajl_gen_alloc (NULL);
-    if (gen == NULL)
-      return crun_make_error (err, errno, "yajl_gen_alloc");
-    yajl_gen_array_open (gen);
-
-    tmp = yajl_tree_get (tree, external, yajl_t_array);
-    if (tmp && YAJL_IS_ARRAY (tmp))
-      {
-        size_t len = tmp->u.array.len;
-        size_t i;
-        for (i = 0; i < len; ++i)
-          {
-            yajl_val s = tmp->u.array.values[i];
-            if (s && YAJL_IS_STRING (s))
-              {
-                char *str = YAJL_GET_STRING (s);
-                yajl_gen_string (gen, YAJL_STR (str), strlen (str));
-              }
-          }
-      }
-    yajl_gen_array_close (gen);
-    yajl_gen_get_buf (gen, &buf, &buf_len);
-    if (buf)
-      status->external_descriptors = xstrdup ((const char *) buf);
-    yajl_gen_free (gen);
+    const char *external_descriptors[] = { "external_descriptors", NULL };
+    tmp = yajl_tree_get (tree, external_descriptors, yajl_t_string);
+    status->external_descriptors = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
   }
   yajl_tree_free (tree);
   return 0;
