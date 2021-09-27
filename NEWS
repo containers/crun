@@ -1,3 +1,17 @@
+* crun-1.1
+
+- cgroup: use cgroup.kill when available. It is faster to kill a
+  container through its cgroup as there is no need to recurse over the
+  cgroup pids and terminate each one of them.
+- exec: refuse to exec in a paused container/cgroup.
+- container: Set primary process to 1 via LISTEN_PID by default if
+  user configuration is missing.
+- criu: Add support for external PID namespace.
+- criu: fix save of external descriptors.  Now restored containers
+  attach correctly their standard streams.
+- utils: retry openat2 on EAGAIN.  If the openat2 syscall is
+  interrupted, try again.
+
 * crun-1.0
 
 - cgroup: chown the current container cgroup to root in the container.
