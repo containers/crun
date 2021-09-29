@@ -250,7 +250,7 @@ int parse_json_file (yajl_val *out, const char *jsondata, struct parser_context 
 
 int has_prefix (const char *str, const char *prefix);
 
-const char *find_executable (const char *executable_path, const char *cwd);
+const char *find_executable (const char *executable_path, const char *cwd, const char *handler);
 
 int copy_recursive_fd_to_fd (int srcfd, int destfd, const char *srcname, const char *destname, libcrun_error_t *err);
 
@@ -280,5 +280,6 @@ int append_paths (char **out, libcrun_error_t *err, ...);
 LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
 
 int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes);
+int has_suffix (const char *source, const char *suffix);
 
 #endif
