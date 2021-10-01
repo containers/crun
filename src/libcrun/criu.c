@@ -42,6 +42,10 @@
 #  define CRIU_EXT_NETNS "extRootNetNS"
 #  define CRIU_EXT_PIDNS "extRootPidNS"
 
+#  ifndef CLONE_NEWTIME
+#    define CLONE_NEWTIME 0x00000080 /* New time namespace */
+#  endif
+
 static const char *console_socket = NULL;
 
 static int
@@ -645,8 +649,18 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       goto out_umount;
     }
 
-  /* If there is a PID or network namespace defined in config.json we are telling
-   * CRIU to restore the process into that namespace.
+#  ifdef CRIU_JOIN_NS_SUPPORT
+  /* criu_join_ns_add() API was introduced with CRIU version 3.16.1
+   * Here we check if this API is available at build time to support
+   * compiling with older version of CRIU, and at runtime to support
+   * running crun with older versions of libcriu.so.2.
+   */
+  bool join_ns_support = criu_check_version (31601) == 1;
+#  endif
+
+  /* If a namespace defined in config.json we are telling
+   * CRIU use that namespace when restoring the process tree.
+   *
    * CRIU expects the information about the namespace like this:
    * --inherit-fd fd[<fd>]:<key>
    * The <key> needs to be the same as during checkpointing (extRootNetNS). */
@@ -673,6 +687,32 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
           criu_add_inherit_fd (inherit_new_pid_fd, CRIU_EXT_PIDNS);
         }
+
+#  ifdef CRIU_JOIN_NS_SUPPORT
+      if (value == CLONE_NEWTIME && def->linux->namespaces[i]->path != NULL)
+        {
+          if (join_ns_support)
+            criu_join_ns_add ("time", def->linux->namespaces[i]->path, NULL);
+          else
+            return crun_make_error (err, 0, "Shared time namespace restore is supported in CRIU >= 3.16.1");
+        }
+
+      if (value == CLONE_NEWIPC && def->linux->namespaces[i]->path != NULL)
+        {
+          if (join_ns_support)
+            criu_join_ns_add ("ipc", def->linux->namespaces[i]->path, NULL);
+          else
+            return crun_make_error (err, 0, "Shared ipc namespace restore is supported in CRIU >= 3.16.1");
+        }
+
+      if (value == CLONE_NEWUTS && def->linux->namespaces[i]->path != NULL)
+        {
+          if (join_ns_support)
+            criu_join_ns_add ("uts", def->linux->namespaces[i]->path, NULL);
+          else
+            return crun_make_error (err, 0, "Shared uts namespace restore is supported in CRIU >= 3.16.1");
+        }
+#  endif
     }
 
   /* Tell CRIU if cgroup v1 needs to be handled. */

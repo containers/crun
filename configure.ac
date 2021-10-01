@@ -124,6 +124,8 @@ AC_ARG_ENABLE([criu], AS_HELP_STRING([--disable-criu], [Disable CRIU based check
 AS_IF([test "x$enable_criu" != "xno"], [
 	PKG_CHECK_MODULES([CRIU], [criu >= 3.15], [have_criu="yes"], [have_criu="no"
 		AC_MSG_NOTICE([CRIU headers not found, building without CRIU support])])
+	PKG_CHECK_MODULES([CRIU], [criu > 3.16], [have_criu_join_ns="yes"], [have_criu_join_ns="no"
+		AC_MSG_NOTICE([CRIU version doesn't support join-ns API])])
 		AS_IF([test "$have_criu" = "yes"], [
 			AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
 			AC_SEARCH_LIBS(criu_init_opts, [criu])
@@ -170,6 +172,7 @@ AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not f
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
 AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])
+AM_CONDITIONAL([CRIU_JOIN_NS_SUPPORT], [test "x$have_criu_join_ns" = "xyes"])
 
 AC_CONFIG_FILES([Makefile rpm/crun.spec])
 
