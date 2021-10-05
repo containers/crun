@@ -99,6 +99,12 @@ def test_cr_with_ext_ns():
             ns.update({'path': os.path.join(ns_path, 'pid')})
         if ns['type'] == 'network':
             ns.update({'path': os.path.join(ns_path, 'net')})
+        if ns['type'] == 'ipc':
+            ns.update({'path': os.path.join(ns_path, 'ipc')})
+        if ns['type'] == 'uts':
+            ns.update({'path': os.path.join(ns_path, 'uts')})
+        if ns['type'] == 'time':
+            ns.update({'path': os.path.join(ns_path, 'time')})
 
     return run_cr_test(conf)
 

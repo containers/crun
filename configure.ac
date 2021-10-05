@@ -1,7 +1,7 @@
 AC_PREREQ([2.69])
 AC_INIT([crun],
-        m4_esyscmd([build-aux/git-version-gen --prefix "" .tarball-version]),
-        [giuseppe@scrivano.org])
+	m4_esyscmd([build-aux/git-version-gen --prefix "" .tarball-version]),
+	[giuseppe@scrivano.org])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -33,9 +33,9 @@ AC_ARG_ENABLE(embedded-yajl,
 AS_HELP_STRING([--enable-embedded-yajl], [Statically link a modified yajl version]),
 [
 case "${enableval}" in
-  yes) embedded_yajl=true ;;
-  no)  embedded_yajl=false ;;
-  *) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-yajl) ;;
+	yes) embedded_yajl=true ;;
+	no)  embedded_yajl=false ;;
+	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-yajl) ;;
 esac],[embedded_yajl=false])
 
 AM_CONDITIONAL([HAVE_EMBEDDED_YAJL], [test x"$embedded_yajl" == xtrue])
@@ -57,7 +57,7 @@ AS_IF([test "x$enable_caps" != "xno"], [
 dnl dl
 AC_ARG_ENABLE([dl], AS_HELP_STRING([--disable-dl], [Disable dynamic libraries support]))
 AS_IF([test "x$enable_dl" != "xno"], [
-        AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
+	AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
 ])
 
 dnl include support for libkrun (EXPERIMENTAL)
@@ -96,11 +96,11 @@ AS_IF([test "x$enable_bpf" != "xno"], [
 				#include <unistd.h>
 				#include <stdint.h>
 				#include <linux/bpf.h>
-                                void foo() {
+				void foo() {
 					uint64_t val = 0x123456789;
 					union bpf_attr attr;
 					attr.insns = val;
-                                }
+				}
 				int program = BPF_PROG_TYPE_CGROUP_DEVICE;
 			]])],
 			[AC_MSG_RESULT(yes)
@@ -112,22 +112,24 @@ AS_IF([test "x$enable_bpf" != "xno"], [
 
 AC_ARG_WITH([python-bindings], AS_HELP_STRING([--with-python-bindings], [build the Python bindings]))
 AS_IF([test "x$with_python_bindings" = "xyes"], [
-            PKG_CHECK_MODULES([PYTHON], [python3], [], [AC_MSG_ERROR([*** python headers not found])])
-            # configure should not touch CFLAGS/LDFLAGS but we need it to propagate it
-            # to libocispec.
-            CFLAGS+=" -fPIC "
-            LDFLAGS+=" -fPIC "
+	PKG_CHECK_MODULES([PYTHON], [python3], [], [AC_MSG_ERROR([*** python headers not found])])
+	# configure should not touch CFLAGS/LDFLAGS but we need it to propagate it
+	# to libocispec.
+	CFLAGS+=" -fPIC "
+	LDFLAGS+=" -fPIC "
 ])
 
 dnl criu
 AC_ARG_ENABLE([criu], AS_HELP_STRING([--disable-criu], [Disable CRIU based checkpoint/restore support]))
 AS_IF([test "x$enable_criu" != "xno"], [
-            PKG_CHECK_MODULES([CRIU], [criu >= 3.15], [have_criu="yes"], [have_criu="no"
-			       AC_MSG_NOTICE([CRIU headers not found, building without CRIU support])])
-	    AS_IF([test "$have_criu" = "yes"], [
-		   AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
-		   AC_SEARCH_LIBS(criu_init_opts, [criu])
-	    ])
+	PKG_CHECK_MODULES([CRIU], [criu >= 3.15], [have_criu="yes"], [have_criu="no"
+		AC_MSG_NOTICE([CRIU headers not found, building without CRIU support])])
+	PKG_CHECK_MODULES([CRIU], [criu > 3.16], [have_criu_join_ns="yes"], [have_criu_join_ns="no"
+		AC_MSG_NOTICE([CRIU version doesn't support join-ns API])])
+		AS_IF([test "$have_criu" = "yes"], [
+			AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
+			AC_SEARCH_LIBS(criu_init_opts, [criu])
+		])
 ], [AC_MSG_NOTICE([CRIU support disabled per user request])])
 
 FOUND_LIBS=$LIBS
@@ -138,10 +140,10 @@ AC_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([[
 			#include <linux/mount.h>
 			int cmd = FSCONFIG_CMD_CREATE;
-		]])],
-		[AC_MSG_RESULT(yes)
+	]])],
+	[AC_MSG_RESULT(yes)
 		 AC_DEFINE([HAVE_FSCONFIG_CMD_CREATE], 1, [Define if FSCONFIG_CMD_CREATE is available])],
-		[AC_MSG_RESULT(no)])
+	[AC_MSG_RESULT(no)])
 
 AC_MSG_CHECKING([for seccomp notify API])
 AC_COMPILE_IFELSE(
@@ -163,13 +165,14 @@ AC_SUBST([RPM_VERSION])
 
 AC_CHECK_TOOL(GPERF, gperf)
 if test -z "$GPERF"; then
-       AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
+	AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
 fi
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
 AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])
+AM_CONDITIONAL([CRIU_JOIN_NS_SUPPORT], [test "x$have_criu_join_ns" = "xyes"])
 
 AC_CONFIG_FILES([Makefile rpm/crun.spec])
 
