@@ -3045,7 +3045,7 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
                         libcrun_error_t *err)
 {
   int container_status, ret;
-  bool container_paused;
+  bool container_paused = false;
   pid_t pid;
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
