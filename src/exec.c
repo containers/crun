@@ -227,6 +227,11 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   libcrun_context_t crun_context = {
     0,
   };
+  runtime_spec_schema_config_schema_process *process = NULL;
+  struct libcrun_container_exec_options_s exec_opts;
+
+  memset (&exec_opts, 0, sizeof (exec_opts));
+  exec_opts.struct_size = sizeof (exec_opts);
 
   crun_context.preserve_fds = 0;
   crun_context.listen_fds = 0;
@@ -250,10 +255,10 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
     }
 
   if (exec_options.process)
-    return libcrun_container_exec_process_file (&crun_context, argv[first_arg], exec_options.process, err);
+    exec_opts.path = exec_options.process;
   else
     {
-      runtime_spec_schema_config_schema_process *process = xmalloc0 (sizeof (*process));
+      process = xmalloc0 (sizeof (*process));
       int i;
 
       process->args_len = argc;
@@ -301,8 +306,13 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       // Default is always `true` in generated basespec config
       if (exec_options.no_new_privs)
         process->no_new_privileges = 1;
-      ret = libcrun_container_exec (&crun_context, argv[first_arg], process, err);
-      free_runtime_spec_schema_config_schema_process (process);
-      return ret;
+
+      exec_opts.process = process;
     }
+
+  ret = libcrun_container_exec_with_options (&crun_context, argv[first_arg], &exec_opts, err);
+  if (process)
+    free_runtime_spec_schema_config_schema_process (process);
+  return ret;
+
 }
