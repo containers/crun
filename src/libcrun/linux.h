@@ -52,7 +52,7 @@ int libcrun_set_sysctl_from_schema (runtime_spec_schema_config_schema *def, libc
 int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status,
-                          int detach, int *terminal_fd, libcrun_error_t *err);
+                          const char *cgroup, int detach, int *terminal_fd, libcrun_error_t *err);
 int libcrun_linux_container_update (libcrun_container_status_t *status, const char *content, size_t len,
                                     libcrun_error_t *err);
 int libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err);

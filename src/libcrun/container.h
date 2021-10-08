@@ -131,6 +131,7 @@ struct libcrun_container_exec_options_s
   size_t struct_size;
   runtime_spec_schema_config_schema_process *process;
   const char *path;
+  const char *cgroup;
 };
 
 LIBCRUN_PUBLIC int libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,

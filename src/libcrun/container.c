@@ -3040,7 +3040,6 @@ exit:
   return ret;
 }
 
-
 int
 libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process,
                         libcrun_error_t *err)
@@ -3216,8 +3215,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  pid = libcrun_join_process (container, status.pid, &status, context->detach, process->terminal ? &terminal_fd : NULL,
-                              err);
+  pid = libcrun_join_process (container, status.pid, &status, opts->cgroup, context->detach,
+                              process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
 
