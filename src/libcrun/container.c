@@ -3040,9 +3040,46 @@ exit:
   return ret;
 }
 
+
 int
 libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec_schema_config_schema_process *process,
                         libcrun_error_t *err)
+{
+  struct libcrun_container_exec_options_s opts;
+  memset (&opts, 0, sizeof (opts));
+
+  opts.struct_size = sizeof (opts);
+  opts.process = process;
+
+  return libcrun_container_exec_with_options (context, id, &opts, err);
+}
+
+int
+libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err)
+{
+  struct libcrun_container_exec_options_s opts;
+  memset (&opts, 0, sizeof (opts));
+
+  opts.struct_size = sizeof (opts);
+  opts.path = path;
+
+  return libcrun_container_exec_with_options (context, id, &opts, err);
+}
+
+#define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
+
+static inline void
+cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
+{
+  runtime_spec_schema_config_schema_process *process = *p;
+  if (process)
+    (void) free_runtime_spec_schema_config_schema_process (process);
+}
+
+int
+libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
+                                     struct libcrun_container_exec_options_s *opts,
+                                     libcrun_error_t *err)
 {
   int container_status, ret;
   bool container_paused = false;
@@ -3063,6 +3100,8 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
   cleanup_close int own_seccomp_receiver_fd = -1;
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
+  cleanup_process_schema runtime_spec_schema_config_schema_process *process_cleanup = NULL;
+  runtime_spec_schema_config_schema_process *process = opts->process;
   char b;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -3110,6 +3149,45 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
                                      err);
       if (UNLIKELY (ret < 0))
         return ret;
+    }
+
+  if (sizeof (*opts) != opts->struct_size)
+    return crun_make_error (err, EINVAL, "invalid libcrun_container_exec_options_s struct");
+
+  if (opts->path)
+    {
+      struct parser_context ctx = { 0, stderr };
+      cleanup_free char *content = NULL;
+      parser_error parser_err = NULL;
+      yajl_val tree = NULL;
+      size_t len;
+
+      if (process)
+        return crun_make_error (err, EINVAL, "cannot specify both exec file and options");
+
+      ret = read_all_file (opts->path, &content, &len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = parse_json_file (&tree, content, &ctx, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
+      if (UNLIKELY (process == NULL))
+        {
+          ret = crun_make_error (err, errno, "cannot parse process file: %s", parser_err);
+          free (parser_err);
+          if (tree)
+            yajl_tree_free (tree);
+          return ret;
+        }
+
+      free (parser_err);
+      if (tree)
+        yajl_tree_free (tree);
+
+      process_cleanup = process;
     }
 
   /* This must be done before we enter a user namespace.  */
@@ -3368,42 +3446,6 @@ libcrun_container_exec (libcrun_context_t *context, const char *id, runtime_spec
     }
 
   flush_fd_to_err (context, terminal_fd);
-  return ret;
-}
-
-int
-libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path, libcrun_error_t *err)
-{
-  int ret;
-  size_t len;
-  cleanup_free char *content = NULL;
-  struct parser_context ctx = { 0, stderr };
-  yajl_val tree = NULL;
-  parser_error parser_err = NULL;
-  runtime_spec_schema_config_schema_process *process = NULL;
-
-  ret = read_all_file (path, &content, &len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = parse_json_file (&tree, content, &ctx, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
-  if (LIKELY (process != NULL))
-    ret = libcrun_container_exec (context, id, process, err);
-  else
-    ret = crun_make_error (err, errno, "cannot parse process file");
-
-  free (parser_err);
-
-  if (tree)
-    yajl_tree_free (tree);
-
-  if (process)
-    free_runtime_spec_schema_config_schema_process (process);
-
   return ret;
 }
 
