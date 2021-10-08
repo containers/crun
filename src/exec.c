@@ -48,6 +48,7 @@ struct exec_options_s
   char **cap;
   size_t cap_size;
   size_t env_size;
+  char *cgroup;
 };
 
 enum
@@ -58,7 +59,8 @@ enum
   OPTION_PRESERVE_FDS,
   OPTION_NO_NEW_PRIVS,
   OPTION_PROCESS_LABEL,
-  OPTION_APPARMOR
+  OPTION_APPARMOR,
+  OPTION_CGROUP,
 };
 
 static struct exec_options_s exec_options;
@@ -69,6 +71,7 @@ static struct argp_option options[]
         { "tty", 't', "TTY", OPTION_ARG_OPTIONAL, "allocate a pseudo-TTY", 0 },
         { "process", 'p', "FILE", 0, "path to the process.json", 0 },
         { "cwd", OPTION_CWD, "CWD", 0, "current working directory", 0 },
+        { "cgroup", OPTION_CGROUP, "PATH", 0, "sub-cgroup in the container", 0 },
         { "detach", 'd', 0, 0, "detach the command in the background", 0 },
         { "user", 'u', "USERSPEC", 0, "specify the user in the form UID[:GID]", 0 },
         { "env", 'e', "ENV", 0, "add an environment variable", 0 },
@@ -151,6 +154,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
       exec_options.preserve_fds = strtoul (argp_mandatory_argument (arg, state), NULL, 10);
       break;
 
+    case OPTION_CGROUP:
+      exec_options.cgroup = argp_mandatory_argument (arg, state);
+      break;
+
     case 'd':
       exec_options.detach = true;
       break;
@@ -220,6 +227,16 @@ make_oci_process_user (const char *userspec)
   return u;
 }
 
+#define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
+
+static inline void
+cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
+{
+  runtime_spec_schema_config_schema_process *process = *p;
+  if (process)
+    (void) free_runtime_spec_schema_config_schema_process (process);
+}
+
 int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
@@ -227,7 +244,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   libcrun_context_t crun_context = {
     0,
   };
-  runtime_spec_schema_config_schema_process *process = NULL;
+  cleanup_process_schema runtime_spec_schema_config_schema_process *process = NULL;
   struct libcrun_container_exec_options_s exec_opts;
 
   memset (&exec_opts, 0, sizeof (exec_opts));
@@ -310,9 +327,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       exec_opts.process = process;
     }
 
-  ret = libcrun_container_exec_with_options (&crun_context, argv[first_arg], &exec_opts, err);
-  if (process)
-    free_runtime_spec_schema_config_schema_process (process);
-  return ret;
+  exec_opts.cgroup = exec_options.cgroup;
 
+  return libcrun_container_exec_with_options (&crun_context, argv[first_arg], &exec_opts, err);
 }
