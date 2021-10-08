@@ -1,3 +1,9 @@
+* crun-1.2
+
+- exec: fix regression in 1.1 where containers are being wrongly
+  reported as paused.
+- criu: add support for external ipc, uts and time namespaces.
+
 * crun-1.1
 
 - cgroup: use cgroup.kill when available. It is faster to kill a
