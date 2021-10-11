@@ -186,7 +186,7 @@ def test_sd_notify_proxy():
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'systemd-notify', '--ready']
-    add_all_namespaces(conf, cgroupns=True)
+    add_all_namespaces(conf, cgroupns=True, userns=True)
     mappings = [
         {
             "containerID": 0,
