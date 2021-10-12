@@ -275,7 +275,7 @@ Specifies per cgroup weight.
 **--cpu-period**=_VALUE_
 CPU CFS period to be used for hardcapping.
 
---cpu-quota**=_VALUE_
+**--cpu-quota**=_VALUE_
 CPU CFS hardcap limit.
 
 **--cpu-rt-period**=_VALUE_
