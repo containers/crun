@@ -17,6 +17,7 @@
  */
 #define _GNU_SOURCE
 
+#include <linux/limits.h>
 #include <config.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -31,6 +32,8 @@
 #include <sys/un.h>
 #include <sys/syscall.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #ifdef HAVE_SECCOMP
 # include <linux/seccomp.h>
@@ -181,7 +184,22 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
   return (int) syscall (__NR_seccomp, operation, flags, args);
 }
 
-int main (int argc, char **argv)
+static void
+do_pause ()
+{
+  unsigned int remaining = 120;
+
+  close (1);
+  close (2);
+
+  while (remaining)
+    remaining = sleep (remaining);
+
+  exit (0);
+}
+
+int
+main (int argc, char **argv)
 {
   if (argc < 2)
     error (EXIT_FAILURE, 0, "specify at least one command");
@@ -290,15 +308,33 @@ int main (int argc, char **argv)
     }
   if (strcmp (argv[1], "pause") == 0)
     {
-      unsigned int remaining = 120;
+      do_pause ();
+    }
+  if (strcmp (argv[1], "create-sub-cgroup-and-wait") == 0)
+    {
+      char path[PATH_MAX];
+      int ret;
+      int fd;
 
-      close (1);
-      close (2);
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'create-sub-cgroup-and-wait' requires an argument");
 
-      while (remaining)
-        remaining = sleep (remaining);
+      sprintf (path, "/sys/fs/cgroup/%s", argv[2]);
+      ret = mkdir (path, 0700);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "mkdir");
 
-      exit (0);
+      sprintf (path, "/sys/fs/cgroup/%s/cgroup.procs", argv[2]);
+
+      fd = open (path, O_WRONLY);
+      if (fd < 0)
+        error (EXIT_FAILURE, errno, "open `%s`", path);
+      ret = write (fd, "1", 1);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "open `%s`", path);
+      close (fd);
+
+      do_pause ();
     }
   if (strcmp (argv[1], "forkbomb") == 0)
     {

@@ -17,6 +17,7 @@
 
 import subprocess
 import sys
+import time
 from tests_utils import *
 
 
@@ -156,6 +157,32 @@ def test_resources_unified():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_resources_exec_cgroup():
+    if not is_cgroup_v2_unified() or is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo']
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf, command='run', detach=True)
+        # Give some time to pid 1 to move to the new cgroup
+        time.sleep(2)
+        out = run_crun_command(["exec", "--cgroup=/foo", cid, "/init", "cat", "/proc/self/cgroup"])
+        for i in out.split("\n"):
+            if i == "":
+                continue
+            if "/foo" not in i:
+                sys.stderr.write("/foo not found in the output")
+                return -1
+        return 0
+    except Exception as e:
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
 
 
 all_tests = {
@@ -164,6 +191,7 @@ all_tests = {
     "resources-unified" : test_resources_unified,
     "resources-unified-invalid-controller" : test_resources_unified_invalid_controller,
     "resources-unified-invalid-key" : test_resources_unified_invalid_key,
+    "resources-unified-exec-cgroup" : test_resources_exec_cgroup,
 }
 
 if __name__ == "__main__":

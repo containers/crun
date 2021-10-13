@@ -3581,8 +3581,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 }
 
 static int
-join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_container_status_t *status, int *terminal_fd,
-                            libcrun_error_t *err)
+join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_container_status_t *status,
+                            const char *sub_cgroup, int *terminal_fd, libcrun_error_t *err)
 {
   int ret, pid_status;
   char res;
@@ -3609,9 +3609,23 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_contain
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
-  ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (sub_cgroup)
+    {
+      cleanup_free char *final_cgroup = NULL;
+      ret = append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, false, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, false, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   /* The write unblocks the grandchild process so it can run once we setup
      the cgroups.  */
@@ -3639,8 +3653,9 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_contain
 }
 
 int
-libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status, int detach,
-                      int *terminal_fd, libcrun_error_t *err)
+libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
+                      libcrun_container_status_t *status, const char *sub_cgroup,
+                      int detach, int *terminal_fd, libcrun_error_t *err)
 {
   pid_t pid;
   int ret;
@@ -3676,7 +3691,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun
     {
       close_and_reset (&sync_socket_fd[1]);
       sync_fd = sync_socket_fd[0];
-      return join_process_parent_helper (pid, sync_fd, status, terminal_fd, err);
+      return join_process_parent_helper (pid, sync_fd, status, sub_cgroup, terminal_fd, err);
     }
 
   close_and_reset (&sync_socket_fd[0]);

@@ -126,6 +126,18 @@ LIBCRUN_PUBLIC int libcrun_get_container_state_string (const char *id, libcrun_c
                                                        const char *state_root, const char **container_status,
                                                        int *running, libcrun_error_t *err);
 
+struct libcrun_container_exec_options_s
+{
+  size_t struct_size;
+  runtime_spec_schema_config_schema_process *process;
+  const char *path;
+  const char *cgroup;
+};
+
+LIBCRUN_PUBLIC int libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
+                                                        struct libcrun_container_exec_options_s *opts,
+                                                        libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_exec (libcrun_context_t *context, const char *id,
                                            runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
 

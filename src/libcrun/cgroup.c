@@ -897,7 +897,7 @@ libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
 }
 
 int
-libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_error_t *err)
+libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, bool create_if_missing, libcrun_error_t *err)
 {
   int cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -906,7 +906,7 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_e
   if (path == NULL || *path == '\0')
     return 0;
 
-  return enter_cgroup (cgroup_mode, pid, init_pid, path, false, err);
+  return enter_cgroup (cgroup_mode, pid, init_pid, path, create_if_missing, err);
 }
 
 #ifdef HAVE_SYSTEMD
