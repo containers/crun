@@ -1077,6 +1077,33 @@ send_sync_cb (void *data, libcrun_error_t *err)
   return sync_socket_wait_sync (NULL, sync_socket_fd, false, err);
 }
 
+static int
+maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
+                         libcrun_error_t *err)
+{
+  int ret, i;
+
+  for (i = 0; i < 3; i++)
+    {
+      if (! isatty (i))
+        {
+          ret = fchown (i, container_uid, container_gid);
+          if (UNLIKELY (ret < 0))
+            {
+              /* EINVAL means the user is not mapped in the current userns.
+                 Ignore EPERM as well as there is no reason to fail so early, and
+                 let the container payload deal with it.
+              */
+              if (errno == EINVAL || errno == EPERM)
+                continue;
+
+              return crun_make_error (err, errno, "fchown std stream %i", i);
+            }
+        }
+    }
+  return 0;
+}
+
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
@@ -1181,6 +1208,10 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
     }
 
   ret = libcrun_reopen_dev_null (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = maybe_chown_std_streams (container->container_uid, container->container_gid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2200,8 +2231,8 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
 }
 
 static int
-libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context, int container_ready_fd,
-                                libcrun_error_t *err)
+libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context,
+                                int container_ready_fd, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
@@ -3332,6 +3363,10 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         }
 
       ret = libcrun_container_setgroups (container, process, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = maybe_chown_std_streams (container_uid, container_gid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
