@@ -2700,8 +2700,8 @@ libcrun_get_external_descriptors (libcrun_container_t *container)
   return get_private_data (container)->external_descriptors;
 }
 
-static int
-save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
+int
+libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
   const unsigned char *buf = NULL;
   yajl_gen gen = NULL;
@@ -3458,7 +3458,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     {
       cleanup_pid pid_t pid_to_clean = pid;
 
-      ret = save_external_descriptors (container, pid, err);
+      ret = libcrun_save_external_descriptors (container, pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
 

@@ -76,4 +76,5 @@ int libcrun_container_setgroups (libcrun_container_t *container,
 int libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err);
 int libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
 #endif
