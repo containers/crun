@@ -543,8 +543,6 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     if (UNLIKELY (ret < 0))
       return ret;
 
-    status->external_descriptors = xstrdup (buffer);
-
     /* descriptors.json contains a JSON array with strings
      * telling where 0, 1 and 2 have been initially been
      * pointing to. For each descriptor which points to
@@ -750,10 +748,16 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
    * be necessary later when moving the process into its cgroup. */
   status->pid = ret;
 
+  if (LIKELY (ret > 0))
+    ret = libcrun_save_external_descriptors (container, ret, err);
+
 out_umount:
   ret_out = umount (root);
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno, "error unmounting restore directory %s", root);
+    {
+      rmdir (root);
+      return crun_make_error (err, errno, "error unmounting restore directory %s", root);
+    }
 out:
   ret_out = rmdir (root);
   if (UNLIKELY (ret == -1))
