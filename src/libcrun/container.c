@@ -1756,6 +1756,8 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                                         .external_descriptors = external_descriptors };
   if (cwd == NULL)
     OOM ();
+  if (external_descriptors == NULL)
+    return crun_make_error (err, 0, "invalid internal state.  No external descriptors found");
   return libcrun_write_container_status (context->state_root, context->id, &status, err);
 }
 
