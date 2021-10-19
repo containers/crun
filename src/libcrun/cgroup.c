@@ -197,6 +197,8 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
   ret = write_file (subtree_control, controllers, controllers_len, err);
   if (UNLIKELY (ret < 0))
     {
+      cleanup_free char *controllers_copy = xmalloc (controllers_len + 1);
+      int attempts_left;
       char *saveptr = NULL;
       const char *token;
       int e;
@@ -224,12 +226,52 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
 
       crun_error_release (err);
 
-      /* Fallback to write each one individually.  */
-      for (token = strtok_r (controllers, " ", &saveptr); token; token = strtok_r (NULL, " ", &saveptr))
+      /* It seems the kernel can return EBUSY when a process was moved to a sub-cgroup
+	 and the controllers are enabled in its parent cgroup.  Retry a few times when
+	 it happens.  */
+      for (attempts_left = 1000; attempts_left >= 0; attempts_left--)
         {
-          ret = write_file (subtree_control, token, strlen (token), err);
-          if (ret < 0)
-            crun_error_release (err);
+          int controllers_written;
+          bool repeat = false;
+
+          memcpy (controllers_copy, controllers, controllers_len);
+          controllers_copy[controllers_len] = '\0';
+          controllers_written = 0;
+
+          /* Fallback to write each one individually.  */
+          for (token = strtok_r (controllers_copy, " ", &saveptr); token; token = strtok_r (NULL, " ", &saveptr))
+            {
+              ret = write_file (subtree_control, token, strlen (token), err);
+              if (ret < 0)
+                {
+                  if (crun_error_get_errno (err) == EBUSY)
+                    repeat = true;
+                  crun_error_release (err);
+
+                  continue;
+                }
+
+              controllers_written++;
+            }
+
+          if (! repeat)
+            break;
+
+          /* If there was any controller written, just try once more without any delay.  */
+          if (controllers_written > 0 && attempts_left > 2)
+            {
+              attempts_left = 1;
+              continue;
+            }
+
+          if (attempts_left > 0)
+            {
+              struct timespec delay = {
+                .tv_sec = 0,
+                .tv_nsec = 1000000,
+              };
+              nanosleep (&delay, NULL);
+            }
         }
 
       /* Refresh what controllers are available.  */
