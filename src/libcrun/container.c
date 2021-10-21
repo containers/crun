@@ -752,7 +752,21 @@ yajl_error:
 static int
 wasmer_do_exec (void *container, void *arg, const char *pathname, char *const argv[])
 {
+
+  const wasm_func_t *core_func;
+  FILE *wat_wasm_file;
+  size_t file_size;
   void *handle = arg;
+  wasm_byte_vec_t wat;
+  wasm_byte_vec_t binary_bytes;
+  wasm_byte_vec_t wasm_bytes;
+  wasm_engine_t *engine;
+  wasm_val_t results_val[1] = { WASM_INIT_VAL };
+  wasm_store_t *store;
+  wasm_module_t *module;
+  wasm_instance_t *instance;
+  wasm_extern_vec_t exports;
+
   wasm_engine_t *(*wasm_engine_new) ();
   void (*wat2wasm) (const wasm_byte_vec_t *wat, wasm_byte_vec_t *out);
   wasm_module_t *(*wasm_module_new) (wasm_store_t *, const wasm_byte_vec_t *binary);
@@ -818,25 +832,10 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
       return -1;
     }
 
-  wasm_byte_vec_t wat;
-  wasm_byte_vec_t binary_bytes;
-  wasm_byte_vec_t wasm_bytes;
-  wasm_engine_t *engine;
-  wasm_val_t results_val[1] = { WASM_INIT_VAL };
-  wasm_store_t *store;
-  wasm_module_t *module;
-  wasm_instance_t *instance;
-  wasm_extern_vec_t exports;
-  const wasm_func_t *core_func;
-  FILE *wat_wasm_file;
-  size_t file_size;
-
   wat_wasm_file = fopen (pathname, "rb");
 
   if (! wat_wasm_file)
-    {
-      error (EXIT_FAILURE, -1, "error opening wat/wasm module");
-    }
+    error (EXIT_FAILURE, -1, "error opening wat/wasm module");
 
   fseek (wat_wasm_file, 0L, SEEK_END);
   file_size = ftell (wat_wasm_file);
@@ -845,13 +844,12 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wasm_byte_vec_new_uninitialized (&binary_bytes, file_size);
 
   if (fread (binary_bytes.data, file_size, 1, wat_wasm_file) != 1)
-    {
-      error (EXIT_FAILURE, -1, "error loading wat/wasm module");
-    }
+    error (EXIT_FAILURE, -1, "error loading wat/wasm module");
+
   //we can close entrypoint file
   fclose (wat_wasm_file);
 
-  // we have recevied a wat file
+  // we have received a wat file
   // convert wat to wasm
   if (has_suffix (pathname, "wat") > 0)
     {
@@ -865,9 +863,7 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   module = wasm_module_new (store, &binary_bytes);
 
   if (! module)
-    {
-      error (EXIT_FAILURE, -1, "error compiling wasm module");
-    }
+    error (EXIT_FAILURE, -1, "error compiling wasm module");
 
   wasi_config_t *config = wasi_config_new ("crun_wasi_program");
   wasi_config_capture_stdout (config);
@@ -887,29 +883,21 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   bool get_imports_result = wasi_get_imports (store, module, wasi_env, &imports);
 
   if (! get_imports_result)
-    {
-      error (EXIT_FAILURE, -1, "error getting WASI imports");
-    }
+    error (EXIT_FAILURE, -1, "error getting WASI imports");
 
   instance = wasm_instance_new (store, module, &imports, NULL);
 
   if (! instance)
-    {
-      error (EXIT_FAILURE, -1, "error instantiating module");
-    }
+    error (EXIT_FAILURE, -1, "error instantiating module");
 
   // Extract export.
   wasm_instance_exports (instance, &exports);
   if (exports.size == 0)
-    {
-      error (EXIT_FAILURE, -1, "error getting instance exports");
-    }
+    error (EXIT_FAILURE, -1, "error getting instance exports");
 
   wasm_func_t *run_func = wasi_get_start_function (instance);
   if (run_func == NULL)
-    {
-      error (EXIT_FAILURE, -1, "error accessing export");
-    }
+    error (EXIT_FAILURE, -1, "error accessing export");
 
   wasm_module_delete (module);
   wasm_instance_delete (instance);
@@ -917,22 +905,9 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wasm_val_vec_t res = WASM_EMPTY_VEC;
 
   if (wasm_func_call (run_func, &args, &res))
-    {
-      error (EXIT_FAILURE, -1, "error calling wasm function");
-    }
+    error (EXIT_FAILURE, -1, "error calling wasm function");
 
   {
-    FILE *memory_stream;
-    char *stdout;
-    size_t stdout_size = 0;
-
-    memory_stream = open_memstream (&stdout, &stdout_size);
-
-    if (NULL == memory_stream)
-      {
-        return 1;
-      }
-
     char buffer[WASMER_BUF_SIZE] = { 0 };
     size_t data_read_size = WASMER_BUF_SIZE;
 
@@ -942,15 +917,14 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
 
         if (data_read_size > 0)
           {
-            stdout_size += data_read_size;
-            fwrite (buffer, sizeof (char), data_read_size, memory_stream);
+            // relay wasi output to stdout
+            printf ("%.*s", (int) data_read_size, buffer);
           }
     } while (WASMER_BUF_SIZE == data_read_size);
 
-    fclose (memory_stream);
-
-    // relay wasi output to stdout
-    printf ("%.*s\n", (int) stdout_size, stdout);
+    //everything was successful we must flush buffers
+    //otherwise stdout could be blank.
+    fflush (stdout);
   }
 
   wasm_extern_vec_delete (&exports);
@@ -1086,6 +1060,12 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
   const char *annotation;
   annotation = find_annotation (args->container, "run.oci.handler");
 
+  /* If rootfs is a wasm variant and runtime has wasmer support */
+#if HAVE_DLOPEN && HAVE_WASMER
+  const char *wasm_image;
+  wasm_image = find_annotation (args->container, "module.wasm.image/variant");
+#endif
+
   /* Fail with EACCESS if global handler is already configured and there was a attempt to override it via spec. */
   if (args->context->handler != NULL && annotation != NULL)
     {
@@ -1098,6 +1078,17 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
   if (args->context->handler != NULL && (strcmp (args->context->handler, "krun") == 0))
     {
       return libcrun_configure_libkrun (args, err);
+    }
+#endif
+
+    /* If rootfs is a wasm variant and runtime has wasmer support */
+    /* Fallback to "wasm" handler but explictly setting handle to "wasm" */
+    /* Read more here: https://github.com/solo-io/wasm/blob/master/spec/spec-compat.md#annotation */
+#if HAVE_DLOPEN && HAVE_WASMER
+  if (wasm_image != NULL && (strcmp (wasm_image, "compat") == 0))
+    {
+      args->context->handler = "wasm";
+      return libcrun_configure_wasmer (args, err);
     }
 #endif
 
@@ -1114,7 +1105,7 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
 
   if (strcmp (annotation, "wasm") == 0)
     {
-      /* set global_handler equivalent to "wasm" so that we can mount kvm device */
+      /* set global_handler equivalent to "wasm" so that we can invoke wasmer runtime */
       args->context->handler = annotation;
       return libcrun_configure_wasmer (args, err);
     }

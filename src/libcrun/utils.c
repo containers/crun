@@ -2183,5 +2183,5 @@ has_suffix (const char *str, const char *suffix)
   size_t lensuffix = strlen (suffix);
   if (lensuffix > lenstr)
     return 0;
-  return strncmp (str + lenstr - lensuffix, suffix, lensuffix) == 0;
+  return memcmp (str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
