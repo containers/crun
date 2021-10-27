@@ -1680,9 +1680,7 @@ find_executable (const char *executable_path, const char *cwd, const char *handl
   /* Process executable according to configured handler */
   /* For `wasm` we don't want to check access hence return early*/
   if (handler != NULL && (strcmp (handler, "wasm") == 0))
-    {
-      return xstrdup (executable_path);
-    }
+    return xstrdup (executable_path);
 
   /* Absolute path.  It doesn't need to lookup $PATH.  */
   if (executable_path[0] == '/')

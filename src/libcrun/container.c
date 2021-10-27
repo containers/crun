@@ -753,6 +753,9 @@ static int
 wasmer_do_exec (void *container, void *arg, const char *pathname, char *const argv[])
 {
 
+  int ret;
+  char buffer[WASMER_BUF_SIZE] = { 0 };
+  size_t data_read_size = WASMER_BUF_SIZE;
   const wasm_func_t *core_func;
   FILE *wat_wasm_file;
   size_t file_size;
@@ -835,7 +838,7 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wat_wasm_file = fopen (pathname, "rb");
 
   if (! wat_wasm_file)
-    error (EXIT_FAILURE, -1, "error opening wat/wasm module");
+    error (EXIT_FAILURE, errno, "error opening wat/wasm module");
 
   fseek (wat_wasm_file, 0L, SEEK_END);
   file_size = ftell (wat_wasm_file);
@@ -844,7 +847,7 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wasm_byte_vec_new_uninitialized (&binary_bytes, file_size);
 
   if (fread (binary_bytes.data, file_size, 1, wat_wasm_file) != 1)
-    error (EXIT_FAILURE, -1, "error loading wat/wasm module");
+    error (EXIT_FAILURE, errno, "error loading wat/wasm module");
 
   //we can close entrypoint file
   fclose (wat_wasm_file);
@@ -908,9 +911,6 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
     error (EXIT_FAILURE, -1, "error calling wasm function");
 
   {
-    char buffer[WASMER_BUF_SIZE] = { 0 };
-    size_t data_read_size = WASMER_BUF_SIZE;
-
     do
       {
         data_read_size = wasi_env_read_stdout (wasi_env, buffer, WASMER_BUF_SIZE);
@@ -918,13 +918,11 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
         if (data_read_size > 0)
           {
             // relay wasi output to stdout
-            printf ("%.*s", (int) data_read_size, buffer);
+            ret = safe_write (STDOUT_FILENO, buffer, (ssize_t) data_read_size);
+            if (UNLIKELY (ret < 0))
+              error (EXIT_FAILURE, errno, "error while writing wasi output to stdout");
           }
     } while (WASMER_BUF_SIZE == data_read_size);
-
-    //everything was successful we must flush buffers
-    //otherwise stdout could be blank.
-    fflush (stdout);
   }
 
   wasm_extern_vec_delete (&exports);
