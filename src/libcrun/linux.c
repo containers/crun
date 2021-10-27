@@ -777,11 +777,23 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
   ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
   if (UNLIKELY (ret < 0))
     {
-      if (crun_error_get_errno (err) == EPERM || crun_error_get_errno (err) == EBUSY)
+      errno = crun_error_get_errno (err);
+      if (errno == EPERM || errno == EBUSY)
         {
           crun_error_release (err);
 
-          ret = do_mount (container, CGROUP_ROOT, targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE, err);
+          if (errno == EBUSY)
+            {
+              /* If we got EBUSY it means the cgroup file system is already mounted at the targetfd and we
+                 cannot stack another one on top of it.  Place a tmpfs in the middle, then try again.  */
+              ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", 0, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              return do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
+            }
+
+          return do_mount (container, CGROUP_ROOT, targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE, err);
         }
       return ret;
     }
