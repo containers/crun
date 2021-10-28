@@ -77,4 +77,6 @@ int parse_sd_array (char *s, char **out, char **next, libcrun_error_t *err);
 
 int libcrun_cgroup_has_oom (const char *path, int cgroup_mode, libcrun_error_t *err);
 
+int libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err);
+
 #endif

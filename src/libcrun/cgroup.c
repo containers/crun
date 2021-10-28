@@ -139,6 +139,31 @@ enum
   CGROUP_IO = 1 << 5,
 };
 
+int
+libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  size_t content_size;
+  char *from, *to;
+  int ret;
+
+  ret = read_all_file ("/proc/self/cgroup", &content, &content_size, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  from = strstr (content, "0::");
+  if (UNLIKELY (from == NULL))
+    return crun_make_error (err, 0, "cannot find cgroup2 for the current process");
+
+  from += 3;
+  to = strchr (from, '\n');
+  if (UNLIKELY (to == NULL))
+    return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+  *to = '\0';
+
+  return append_paths (path, err, CGROUP_ROOT, from, NULL);
+}
+
 static int
 read_available_controllers (const char *path, libcrun_error_t *err)
 {

@@ -763,9 +763,24 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
   return ret;
 }
 
+static void
+try_umount (int targetfd, const char *target)
+{
+  const char *real_target = target;
+  char target_buffer[64];
+
+  if (targetfd >= 0)
+    {
+      /* Best effort cleanup for the tmpfs.  */
+      sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+      real_target = target_buffer;
+    }
+  umount2 (real_target, MNT_DETACH);
+}
+
 static int
 do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *target, unsigned long mountflags,
-                    libcrun_error_t *err)
+                    const char *unified_cgroup_path, libcrun_error_t *err)
 {
   int ret;
   int cgroup_mode;
@@ -777,12 +792,35 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
   ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
   if (UNLIKELY (ret < 0))
     {
-      if (crun_error_get_errno (err) == EPERM || crun_error_get_errno (err) == EBUSY)
+      errno = crun_error_get_errno (err);
+      if (errno == EPERM || errno == EBUSY)
         {
           crun_error_release (err);
 
-          ret = do_mount (container, CGROUP_ROOT, targetfd, target, NULL, MS_BIND | mountflags, NULL, LABEL_NONE, err);
+          if (errno == EBUSY)
+            {
+              /* If we got EBUSY it means the cgroup file system is already mounted at the targetfd and we
+                 cannot stack another one on top of it.  Place a tmpfs in the middle, then try again.  */
+              ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", 0, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
+              if (LIKELY (ret == 0))
+                {
+                  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
+                  if (LIKELY (ret == 0))
+                    return ret;
+
+                  /* Best-effort cleanup for the tmpfs, if it fails there is nothing to worry about.  */
+                  try_umount (targetfd, target);
+                }
+
+              /* If the previous method failed, fall back to bind mounting the current cgroup.  */
+              crun_error_release (err);
+            }
+
+          /* If everything else failed, bind mount from the current cgroup.  */
+          return do_mount (container, unified_cgroup_path ?: CGROUP_ROOT, targetfd, target, NULL,
+                           MS_BIND | mountflags, NULL, LABEL_NONE, err);
         }
+
       return ret;
     }
 
@@ -974,7 +1012,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
 
 static int
 do_mount_cgroup (libcrun_container_t *container, const char *source, int targetfd, const char *target,
-                 unsigned long mountflags, libcrun_error_t *err)
+                 unsigned long mountflags, const char *unified_cgroup_path, libcrun_error_t *err)
 {
   int cgroup_mode;
 
@@ -985,7 +1023,7 @@ do_mount_cgroup (libcrun_container_t *container, const char *source, int targetf
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, err);
+      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, unified_cgroup_path, err);
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
       return do_mount_cgroup_v1 (container, source, targetfd, target, mountflags, err);
@@ -1433,7 +1471,7 @@ append_mode_if_missing (char *data, const char *mode)
 }
 
 static int
-do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
+do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, const char *unified_cgroup_path, libcrun_error_t *err)
 {
   size_t i, j;
   int ret;
@@ -1582,7 +1620,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, lib
         }
       else if (strcmp (type, "cgroup") == 0)
         {
-          ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
+          ret = do_mount_cgroup (container, source, targetfd, target, flags, unified_cgroup_path, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1884,11 +1922,14 @@ libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err)
 int
 libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {
-  int rootfsfd = -1;
-  int ret = 0, is_user_ns = 0;
-  unsigned long rootfs_propagation = 0;
-  cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_free char *unified_cgroup_path = NULL;
+  cleanup_close int rootfsfd_cleanup = -1;
+  unsigned long rootfs_propagation = 0;
+  int rootfsfd = -1;
+  int cgroup_mode;
+  int is_user_ns = 0;
+  int ret = 0;
 
   if (rootfs == NULL || def->mounts == NULL)
     return 0;
@@ -1943,13 +1984,28 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
       get_private_data (container)->remounts = r;
     }
 
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    {
+      /* Read the cgroup path before we enter the cgroupns.  */
+      ret = libcrun_get_current_unified_cgroup (&unified_cgroup_path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = libcrun_container_enter_cgroup_ns (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mounts (container, rootfsfd, rootfs, err);
+  ret = do_mounts (container, rootfsfd, rootfs, unified_cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  free (unified_cgroup_path);
+  unified_cgroup_path = NULL;
 
   is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER);
   if (! is_user_ns)
