@@ -60,6 +60,10 @@ AS_IF([test "x$enable_dl" != "xno"], [
 	AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
 ])
 
+dnl include support for wasmer (EXPERIMENTAL)
+AC_ARG_WITH([wasmer], AS_HELP_STRING([--with-wasmer], [build with wasmer support]))
+AS_IF([test "x$with_wasmer" = "xyes"], AC_CHECK_HEADERS([wasmer.h], AC_DEFINE([HAVE_WASMER], 1, [Define if wasmer is available]), [AC_MSG_ERROR([*** Missing wasmer headers])]))
+
 dnl include support for libkrun (EXPERIMENTAL)
 AC_ARG_WITH([libkrun], AS_HELP_STRING([--with-libkrun], [build with libkrun support]))
 AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE([HAVE_LIBKRUN], 1, [Define if libkrun is available]), [AC_MSG_ERROR([*** Missing libkrun headers])]))

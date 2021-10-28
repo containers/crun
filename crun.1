@@ -621,6 +621,13 @@ The only supported value is \fB\fCkrun\fR\&.  When \fB\fCkrun\fR is specified, t
 \fB\fClibkrun.so\fR shared object is loaded and it is used to launch the
 container using libkrun.
 
+.SH \fB\fCrun.oci.handler=wasm\fR
+.PP
+If specified, run the wasm handler for container.
+Allows running wasm workload natively. Accepts a \fB\fC.wasm\fR binary as input
+and if \fB\fC.wat\fR is provided it will automatically compiled into a wasm module.
+Stdout of wasm module is relayed back via crun.
+
 .SH tmpcopyup mount options
 .PP
 If the \fB\fCtmpcopyup\fR option is specified for a tmpfs, then the path that

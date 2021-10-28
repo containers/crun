@@ -490,6 +490,13 @@ The only supported value is `krun`.  When `krun` is specified, the
 `libkrun.so` shared object is loaded and it is used to launch the
 container using libkrun.
 
+## `run.oci.handler=wasm`
+
+If specified, run the wasm handler for container.
+Allows running wasm workload natively. Accepts a `.wasm` binary as input
+and if `.wat` is provided it will automatically compiled into a wasm module.
+Stdout of wasm module is relayed back via crun.
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that
