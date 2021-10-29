@@ -68,7 +68,7 @@ int libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t
 static inline void
 libcrun_free_container_listp (void *p)
 {
-  libcrun_container_list_t **l = p;
+  libcrun_container_list_t **l = (libcrun_container_list_t **) p;
   if (*l != NULL)
     libcrun_free_containers_list (*l);
 }
