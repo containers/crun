@@ -2183,3 +2183,29 @@ has_suffix (const char *str, const char *suffix)
     return 0;
   return memcmp (str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
+
+char *
+str_join_array (int offset, size_t size, char *const array[], const char *joint)
+{
+  size_t jlen, lens[size];
+  size_t i, total_size = (size - 1) * (jlen = strlen (joint)) + 1;
+  char *result, *p;
+
+  for (i = 0; i < size; ++i)
+    {
+      total_size += (lens[i] = strlen (array[i]));
+    }
+  p = result = xmalloc (total_size);
+  for (i = offset; i < size; ++i)
+    {
+      memcpy (p, array[i], lens[i]);
+      p += lens[i];
+      if (i < size - 1)
+        {
+          memcpy (p, joint, jlen);
+          p += jlen;
+        }
+    }
+  *p = '\0';
+  return result;
+}

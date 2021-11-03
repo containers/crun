@@ -769,6 +769,8 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wasm_module_t *module;
   wasm_instance_t *instance;
   wasm_extern_vec_t exports;
+  size_t args_size = 0;
+  cleanup_free char *wasi_args = NULL;
 
   wasm_engine_t *(*wasm_engine_new) ();
   void (*wat2wasm) (const wasm_byte_vec_t *wat, wasm_byte_vec_t *out);
@@ -797,6 +799,7 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wasm_func_t *(*wasi_get_start_function) (wasm_instance_t *);
   intptr_t (*wasi_env_read_stdout) (struct wasi_env_t *, char *, uintptr_t);
   void (*wasi_env_delete) (struct wasi_env_t *);
+  void (*wasi_config_arg) (struct wasi_config_t * config, const char *arg);
 
   wat2wasm = dlsym (handle, "wat2wasm");
   wasm_module_delete = dlsym (handle, "wasm_module_delete");
@@ -816,6 +819,7 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   wasm_importtype_vec_delete = dlsym (handle, "wasm_importtype_vec_delete");
   wasm_byte_vec_new_uninitialized = dlsym (handle, "wasm_byte_vec_new_uninitialized");
   wasi_config_new = dlsym (handle, "wasi_config_new");
+  wasi_config_arg = dlsym (handle, "wasi_config_arg");
   wasi_config_capture_stdout = dlsym (handle, "wasi_config_capture_stdout");
   wasi_env_new = dlsym (handle, "wasi_env_new");
   wasm_module_imports = dlsym (handle, "wasm_module_imports");
@@ -849,7 +853,7 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
   if (fread (binary_bytes.data, file_size, 1, wat_wasm_file) != 1)
     error (EXIT_FAILURE, errno, "error loading wat/wasm module");
 
-  //we can close entrypoint file
+  // we can close entrypoint file
   fclose (wat_wasm_file);
 
   // we have received a wat file
@@ -869,6 +873,18 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
     error (EXIT_FAILURE, -1, "error compiling wasm module");
 
   wasi_config_t *config = wasi_config_new ("crun_wasi_program");
+
+  // process wasi args
+  // count number of external arguments given
+  for (char *const *arg = argv; *arg != NULL; ++arg)
+    args_size++;
+
+  if (args_size > 1)
+    {
+      wasi_args = str_join_array (1, args_size, argv, " ");
+      wasi_config_arg (config, wasi_args);
+    }
+
   wasi_config_capture_stdout (config);
   wasi_env_t *wasi_env = wasi_env_new (config);
   if (! wasi_env)
