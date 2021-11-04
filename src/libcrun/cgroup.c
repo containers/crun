@@ -252,8 +252,8 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
       crun_error_release (err);
 
       /* It seems the kernel can return EBUSY when a process was moved to a sub-cgroup
-	 and the controllers are enabled in its parent cgroup.  Retry a few times when
-	 it happens.  */
+         and the controllers are enabled in its parent cgroup.  Retry a few times when
+         it happens.  */
       for (attempts_left = 1000; attempts_left >= 0; attempts_left--)
         {
           int controllers_written;

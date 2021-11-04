@@ -281,5 +281,6 @@ LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
 
 int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes);
 int has_suffix (const char *source, const char *suffix);
+char *str_join_array (int offset, size_t size, char *const array[], const char *joint);
 
 #endif

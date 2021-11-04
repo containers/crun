@@ -1,4 +1,4 @@
-FROM fedora
+FROM fedora:34
 
 ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
