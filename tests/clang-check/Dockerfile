@@ -1,4 +1,4 @@
-FROM fedora:latest
+FROM fedora:34
 
 RUN yum install -y protobuf-c protobuf-c-devel make clang-tools-extra clang python3-pip 'dnf-command(builddep)' && \
         dnf builddep -y crun && pip install scan-build
