@@ -1,4 +1,4 @@
-FROM fedora:34
+FROM fedora:latest
 
 ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
@@ -11,7 +11,7 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
     go get github.com/onsi/gomega/... && \
     mkdir -p /root/go/src/github.com/containers && \
     chmod 755 /root && \
-    (cd /root/go/src/github.com/containers && git clone -b v3.3.0 https://github.com/containers/podman && \
+    (cd /root/go/src/github.com/containers && git clone -b v3.4.0 https://github.com/containers/podman && \
      cd podman && \
      make install.catatonit && \
      make)
