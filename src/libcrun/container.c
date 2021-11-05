@@ -3389,7 +3389,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   cleanup_close int own_seccomp_receiver_fd = -1;
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
-  cleanup_process_schema runtime_spec_schema_config_schema_process *process_cleanup = NULL;
+  __attribute__ ((unused)) cleanup_process_schema runtime_spec_schema_config_schema_process *process_cleanup = NULL;
   runtime_spec_schema_config_schema_process *process = opts->process;
   char b;
 

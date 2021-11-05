@@ -436,7 +436,7 @@ static unsigned long
 get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option)
 {
   int found;
-  cleanup_free char *prev = NULL;
+  __attribute__ ((unused)) cleanup_free char *prev = NULL;
   unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags);
   if (found)
     return flags;
@@ -3512,7 +3512,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
   if (pid)
     {
-      cleanup_pid pid_t pid_to_clean = pid;
+      __attribute__ ((unused)) cleanup_pid pid_t pid_to_clean = pid;
 
       ret = libcrun_save_external_descriptors (container, pid, err);
       if (UNLIKELY (ret < 0))

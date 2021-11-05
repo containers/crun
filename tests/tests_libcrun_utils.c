@@ -23,15 +23,15 @@
 #include <unistd.h>
 #include <string.h>
 
-typedef int (*test)();
+typedef int (*test) ();
 
 static int
 test_socket_pair ()
 {
   libcrun_error_t err = NULL;
   int fds[2];
-  cleanup_close int fd0 = -1;
-  cleanup_close int fd1 = -1;
+  __attribute__ ((unused)) cleanup_close int fd0 = -1;
+  __attribute__ ((unused)) cleanup_close int fd1 = -1;
   char buffer[256];
   int ret = create_socket_pair (fds, &err);
   if (ret < 0)
@@ -96,7 +96,7 @@ test_send_receive_fd ()
       char buffer[256];
       const char *test_string = "TEST STRING";
       if (pipe (pipes) < 0)
-       return -1;
+        return -1;
 
       pipefd0 = pipes[0];
       pipefd1 = pipes[1];
@@ -133,7 +133,7 @@ test_send_receive_fd ()
       if (ret <= 0)
         return -1;
       if (write (fd0, buffer, ret) < 0)
-       return -1;
+        return -1;
 
       _exit (0);
     }
@@ -145,13 +145,13 @@ test_run_process ()
 {
   libcrun_error_t err = NULL;
   {
-    char *args[] = {"/bin/true", NULL};
+    char *args[] = { "/bin/true", NULL };
     if (run_process (args, &err) != 0)
       return -1;
   }
 
   {
-    char *args[] = {"/bin/false", NULL};
+    char *args[] = { "/bin/false", NULL };
     if (run_process (args, &err) <= 0)
       return -1;
     if (err != NULL)
@@ -159,7 +159,7 @@ test_run_process ()
   }
 
   {
-    char *args[] = {"/does/not/exist", NULL};
+    char *args[] = { "/does/not/exist", NULL };
     int r = run_process (args, &err);
     if (r <= 0)
       return -1;
@@ -251,20 +251,20 @@ test_crun_path_exists ()
 static int
 test_append_paths ()
 {
-#define PROLOGUE()                              \
-  cleanup_free char *out = NULL;                \
-  libcrun_error_t err = NULL;                   \
+#define PROLOGUE()               \
+  cleanup_free char *out = NULL; \
+  libcrun_error_t err = NULL;    \
   int ret;
 
-#define EXPECT_STRING(exp)                      \
-  {                                             \
-    if (ret < 0 || out == NULL)                 \
-      {                                         \
-        crun_error_release (&err);              \
-        return ret;                             \
-      }                                         \
-    if (strcmp (out, exp))                      \
-      return -1;                                \
+#define EXPECT_STRING(exp)         \
+  {                                \
+    if (ret < 0 || out == NULL)    \
+      {                            \
+        crun_error_release (&err); \
+        return ret;                \
+      }                            \
+    if (strcmp (out, exp))         \
+      return -1;                   \
   }
   {
     PROLOGUE ();
@@ -381,7 +381,11 @@ run_and_print_test_result (const char *name, int id, test t)
     printf ("not ok %d - %s\n", id, name);
 }
 
-#define RUN_TEST(T) do {run_and_print_test_result (#T, id++, T);} while (0)
+#define RUN_TEST(T)                            \
+  do                                           \
+    {                                          \
+      run_and_print_test_result (#T, id++, T); \
+  } while (0)
 
 int
 main ()

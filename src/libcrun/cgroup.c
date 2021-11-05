@@ -1839,7 +1839,7 @@ must_stop_proc (runtime_spec_schema_config_linux_resources *resources)
 int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
-  pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
+  __attribute__ ((unused)) pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
   int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
   int manager = args->manager;
@@ -2021,7 +2021,7 @@ libcrun_cgroup_pause_unpause (const char *cgroup_path, const bool pause, libcrun
 static int
 read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
-  cleanup_close int clean_dfd = dfd;
+  __attribute__ ((unused)) cleanup_close int clean_dfd = dfd;
   cleanup_close int tasksfd = -1;
   cleanup_free char *buffer = NULL;
   char *saveptr = NULL;
