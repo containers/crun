@@ -1,4 +1,4 @@
-FROM fedora:34
+FROM fedora:latest
 
 RUN yum install -y golang python git automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel go-md2man \

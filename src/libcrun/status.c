@@ -453,7 +453,7 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
   int ret;
   cleanup_dir DIR *d = NULL;
   struct dirent *de;
-  cleanup_close int fd_cleanup = fd;
+  __attribute__ ((unused)) cleanup_close int fd_cleanup = fd;
 
   d = fdopendir (fd);
   if (d == NULL)
