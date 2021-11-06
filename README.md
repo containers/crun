@@ -87,7 +87,7 @@ $ export PATH=$PATH:$GOPATH/bin
 
 ```console
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
-   libsystemd-dev libcap-dev libseccomp-dev libyajl-dev \
+   libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
    go-md2man libtool autoconf python3 automake
 ```
 
