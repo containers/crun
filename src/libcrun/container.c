@@ -54,6 +54,9 @@
 #ifdef HAVE_WASMER
 #  include <wasmer.h>
 #endif
+#ifdef HAVE_WASMEDGE
+#  include <wasmedge.h>
+#endif
 
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-daemon.h>
@@ -953,6 +956,107 @@ wasmer_do_exec (void *container, void *arg, const char *pathname, char *const ar
 }
 #endif
 
+#if HAVE_DLOPEN && HAVE_WASMEDGE
+static int
+wasmedge_do_exec (void *container, void *handle, const char *pathname, char *const argv[])
+{
+  runtime_spec_schema_config_schema *def = ((libcrun_container_t *) container)->container_def;
+  WasmEdge_ConfigureContext *(*WasmEdge_ConfigureCreate) (void);
+  void (*WasmEdge_ConfigureDelete) (WasmEdge_ConfigureContext * Cxt);
+  void (*WasmEdge_ConfigureAddProposal) (WasmEdge_ConfigureContext * Cxt, const enum WasmEdge_Proposal Prop);
+  void (*WasmEdge_ConfigureAddHostRegistration) (WasmEdge_ConfigureContext * Cxt, enum WasmEdge_HostRegistration Host);
+  WasmEdge_VMContext *(*WasmEdge_VMCreate) (const WasmEdge_ConfigureContext *ConfCxt, WasmEdge_StoreContext *StoreCxt);
+  void (*WasmEdge_VMDelete) (WasmEdge_VMContext * Cxt);
+  WasmEdge_Result (*WasmEdge_VMRegisterModuleFromFile) (WasmEdge_VMContext * Cxt, WasmEdge_String ModuleName, const char *Path);
+  WasmEdge_ImportObjectContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext * Cxt, const enum WasmEdge_HostRegistration Reg);
+  void (*WasmEdge_ImportObjectInitWASI) (WasmEdge_ImportObjectContext * Cxt, const char *const *Args, const uint32_t ArgLen, const char *const *Envs, const uint32_t EnvLen, const char *const *Dirs, const uint32_t DirLen, const char *const *Preopens, const uint32_t PreopenLen);
+  void (*WasmEdge_ImportObjectInitWasmEdgeProcess) (WasmEdge_ImportObjectContext * Cxt, const char *const *AllowedCmds, const uint32_t CmdsLen, const bool AllowAll);
+  WasmEdge_Result (*WasmEdge_VMRunWasmFromFile) (WasmEdge_VMContext * Cxt, const char *Path, const WasmEdge_String FuncName, const WasmEdge_Value *Params, const uint32_t ParamLen, WasmEdge_Value *Returns, const uint32_t ReturnLen);
+  bool (*WasmEdge_ResultOK) (const WasmEdge_Result Res);
+  WasmEdge_String (*WasmEdge_StringCreateByCString) (const char *Str);
+  uint32_t argn = 0;
+  const char *dirs[1] = { "/:/" };
+  WasmEdge_ConfigureContext *configure;
+  WasmEdge_VMContext *vm;
+  WasmEdge_ImportObjectContext *wasi_module;
+  WasmEdge_ImportObjectContext *proc_module;
+  WasmEdge_Result result;
+
+  WasmEdge_ConfigureCreate = dlsym (handle, "WasmEdge_ConfigureCreate");
+  WasmEdge_ConfigureDelete = dlsym (handle, "WasmEdge_ConfigureDelete");
+  WasmEdge_ConfigureAddProposal = dlsym (handle, "WasmEdge_ConfigureAddProposal");
+  WasmEdge_ConfigureAddHostRegistration = dlsym (handle, "WasmEdge_ConfigureAddHostRegistration");
+  WasmEdge_VMCreate = dlsym (handle, "WasmEdge_VMCreate");
+  WasmEdge_VMDelete = dlsym (handle, "WasmEdge_VMDelete");
+  WasmEdge_VMRegisterModuleFromFile = dlsym (handle, "WasmEdge_VMRegisterModuleFromFile");
+  WasmEdge_VMGetImportModuleContext = dlsym (handle, "WasmEdge_VMGetImportModuleContext");
+  WasmEdge_ImportObjectInitWASI = dlsym (handle, "WasmEdge_ImportObjectInitWASI");
+  WasmEdge_ImportObjectInitWasmEdgeProcess = dlsym (handle, "WasmEdge_ImportObjectInitWasmEdgeProcess");
+  WasmEdge_VMRunWasmFromFile = dlsym (handle, "WasmEdge_VMRunWasmFromFile");
+  WasmEdge_ResultOK = dlsym (handle, "WasmEdge_ResultOK");
+  WasmEdge_StringCreateByCString = dlsym (handle, "WasmEdge_StringCreateByCString");
+  if (WasmEdge_ConfigureCreate == NULL || WasmEdge_ConfigureDelete == NULL || WasmEdge_ConfigureAddProposal == NULL || WasmEdge_ConfigureAddHostRegistration == NULL || WasmEdge_VMCreate == NULL || WasmEdge_VMDelete == NULL || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL || WasmEdge_ImportObjectInitWASI == NULL || WasmEdge_ImportObjectInitWasmEdgeProcess == NULL || WasmEdge_VMRunWasmFromFile == NULL || WasmEdge_ResultOK == NULL || WasmEdge_StringCreateByCString == NULL)
+    {
+      fprintf (stderr, "could not find symbol in `libwasmedge.so`");
+      dlclose (handle);
+      return -1;
+    }
+
+  configure = WasmEdge_ConfigureCreate ();
+  if (UNLIKELY (configure == NULL))
+    error (EXIT_FAILURE, 0, "could not create wasmedge configure");
+
+  WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_BulkMemoryOperations);
+  WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_ReferenceTypes);
+  WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_SIMD);
+  WasmEdge_ConfigureAddHostRegistration (configure, WasmEdge_HostRegistration_Wasi);
+  WasmEdge_ConfigureAddHostRegistration (configure, WasmEdge_HostRegistration_WasmEdge_Process);
+
+  vm = WasmEdge_VMCreate (configure, NULL);
+  if (UNLIKELY (vm == NULL))
+    {
+      WasmEdge_ConfigureDelete (configure);
+      error (EXIT_FAILURE, 0, "could not create wasmedge vm");
+    }
+
+  wasi_module = WasmEdge_VMGetImportModuleContext (vm, WasmEdge_HostRegistration_Wasi);
+  if (UNLIKELY (wasi_module == NULL))
+    {
+      WasmEdge_VMDelete (vm);
+      WasmEdge_ConfigureDelete (configure);
+      error (EXIT_FAILURE, 0, "could not get wasmedge wasi module context");
+    }
+
+  proc_module = WasmEdge_VMGetImportModuleContext (vm, WasmEdge_HostRegistration_WasmEdge_Process);
+  if (UNLIKELY (proc_module == NULL))
+    {
+      WasmEdge_VMDelete (vm);
+      WasmEdge_ConfigureDelete (configure);
+      error (EXIT_FAILURE, 0, "could not get wasmedge process module context");
+    }
+
+  for (char *const *arg = argv; *arg != NULL; ++arg, ++argn)
+    ;
+
+  WasmEdge_ImportObjectInitWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
+
+  WasmEdge_ImportObjectInitWasmEdgeProcess (proc_module, NULL, 0, true);
+
+  result = WasmEdge_VMRunWasmFromFile (vm, pathname, WasmEdge_StringCreateByCString ("_start"), NULL, 0, NULL, 0);
+
+  if (UNLIKELY (! WasmEdge_ResultOK (result)))
+    {
+      WasmEdge_VMDelete (vm);
+      WasmEdge_ConfigureDelete (configure);
+      error (EXIT_FAILURE, 0, "could not set krun executable");
+    }
+
+  WasmEdge_VMDelete (vm);
+  WasmEdge_ConfigureDelete (configure);
+  return 0;
+}
+#endif
+
 #if HAVE_DLOPEN && HAVE_LIBKRUN
 static int
 libkrun_do_exec (void *container, void *arg, const char *pathname, char *const argv[])
@@ -1046,26 +1150,34 @@ libcrun_configure_libkrun (struct container_entrypoint_s *args, libcrun_error_t 
 }
 
 static int
-libcrun_configure_wasmer (struct container_entrypoint_s *args, libcrun_error_t *err)
+libcrun_configure_wasm (struct container_entrypoint_s *args, libcrun_error_t *err)
 {
-
-#if HAVE_DLOPEN && HAVE_WASMER
+#if HAVE_DLOPEN && (HAVE_WASMER || HAVE_WASMEDGE)
   void *handle;
 #endif
 
 #if HAVE_DLOPEN && HAVE_WASMER
   handle = dlopen ("libwasmer.so", RTLD_NOW);
-  if (handle == NULL)
-    return crun_make_error (err, 0, "could not load `libwasmer.so`: %s", dlerror ());
-
-  args->exec_func = wasmer_do_exec;
-  args->exec_func_arg = handle;
-
-  return 0;
-#else
-  (void) args;
-  return crun_make_error (err, ENOTSUP, "wasmer support not present");
+  if (handle != NULL)
+    {
+      args->exec_func = wasmer_do_exec;
+      args->exec_func_arg = handle;
+      return 0;
+    }
 #endif
+
+#if HAVE_DLOPEN && HAVE_WASMEDGE
+  handle = dlopen ("libwasmedge_c.so", RTLD_NOW);
+  if (handle != NULL)
+    {
+      args->exec_func = wasmedge_do_exec;
+      args->exec_func_arg = handle;
+      return 0;
+    }
+#endif
+
+  (void) args;
+  return crun_make_error (err, ENOTSUP, "wasm support not present");
 }
 
 static int
@@ -1075,7 +1187,7 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
   annotation = find_annotation (args->container, "run.oci.handler");
 
   /* If rootfs is a wasm variant and runtime has wasmer support */
-#if HAVE_DLOPEN && HAVE_WASMER
+#if HAVE_DLOPEN && (HAVE_WASMER || HAVE_WASMEDGE)
   const char *wasm_image;
   wasm_image = find_annotation (args->container, "module.wasm.image/variant");
 #endif
@@ -1098,11 +1210,11 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
     /* If rootfs is a wasm variant and runtime has wasmer support */
     /* Fallback to "wasm" handler but explictly setting handle to "wasm" */
     /* Read more here: https://github.com/solo-io/wasm/blob/master/spec/spec-compat.md#annotation */
-#if HAVE_DLOPEN && HAVE_WASMER
+#if HAVE_DLOPEN && (HAVE_WASMER || HAVE_WASMEDGE)
   if (wasm_image != NULL && (strcmp (wasm_image, "compat") == 0))
     {
       args->context->handler = "wasm";
-      return libcrun_configure_wasmer (args, err);
+      return libcrun_configure_wasm (args, err);
     }
 #endif
 
@@ -1121,7 +1233,7 @@ libcrun_configure_handler (struct container_entrypoint_s *args, libcrun_error_t 
     {
       /* set global_handler equivalent to "wasm" so that we can invoke wasmer runtime */
       args->context->handler = annotation;
-      return libcrun_configure_wasmer (args, err);
+      return libcrun_configure_wasm (args, err);
     }
 
   return crun_make_error (err, EINVAL, "invalid handler specified `%s`", annotation);
