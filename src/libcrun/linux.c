@@ -2778,7 +2778,11 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
     {
       char fd_path[64];
       char link_path[PATH_MAX];
-      sprintf (fd_path, "/proc/%d/fd/%d", pid, i);
+
+      if (pid)
+        sprintf (fd_path, "/proc/%d/fd/%d", pid, i);
+      else
+        sprintf (fd_path, "/proc/self/fd/%d", i);
       ret = readlink (fd_path, link_path, PATH_MAX - 1);
       if (UNLIKELY (ret < 0))
         {
@@ -2791,7 +2795,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
           else
             {
               yajl_gen_free (gen);
-              return crun_make_error (err, errno, "readlink");
+              return crun_make_error (err, errno, "readlink `%s`", fd_path);
             }
         }
       link_path[ret] = 0;
@@ -3514,7 +3518,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     {
       __attribute__ ((unused)) cleanup_pid pid_t pid_to_clean = pid;
 
-      ret = libcrun_save_external_descriptors (container, pid, err);
+      /* this is safe to do because the std stream files were not changed since the clone().  */
+      ret = libcrun_save_external_descriptors (container, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -3601,7 +3606,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
   ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "close");
+    libcrun_fail_with_error (errno, "close sync socket");
 
   /* Initialize the new process and make sure to join/create all the required namespaces.  */
   ret = init_container (container, sync_socket_container, &init_status, err);
@@ -3621,7 +3626,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     {
       ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
       if (UNLIKELY (ret < 0))
-        return ret;
+        libcrun_fail_with_error (errno, "write to sync socket");
     }
 
   /* Jump into the specified entrypoint.  */
