@@ -503,6 +503,10 @@ If the `tmpcopyup` option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
 
+## rro mount options
+
+If the `rro` option is specified then the mount is made recursively read-only.
+
 ## Automatically create user namespace
 
 When running as user different than root, an user namespace is

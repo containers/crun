@@ -624,8 +624,8 @@ container using libkrun.
 .SH \fB\fCrun.oci.handler=wasm\fR
 .PP
 If specified, run the wasm handler for container.
-Allows running wasm workload natively. Accepts a \fB\fC.wasm\fR binary as input
-and if \fB\fC.wat\fR is provided it will automatically compiled into a wasm module.
+Allows running wasm workload natively. Accepts a \fB\fC\&.wasm\fR binary as input
+and if \fB\fC\&.wat\fR is provided it will automatically compiled into a wasm module.
 Stdout of wasm module is relayed back via crun.
 
 .SH tmpcopyup mount options
@@ -633,6 +633,10 @@ Stdout of wasm module is relayed back via crun.
 If the \fB\fCtmpcopyup\fR option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
+
+.SH rro mount options
+.PP
+If the \fB\fCrro\fR option is specified then the mount is made recursively read-only.
 
 .SH Automatically create user namespace
 .PP
