@@ -262,6 +262,34 @@ syscall_open_tree (int dfd, const char *pathname, unsigned int flags)
 #endif
 }
 
+struct mount_attr_s
+{
+  uint64_t attr_set;
+  uint64_t attr_clr;
+  uint64_t propagation;
+  uint64_t userns_fd;
+};
+
+#ifndef MOUNT_ATTR_RDONLY
+#  define MOUNT_ATTR_RDONLY 0x00000001 /* Mount read-only */
+#endif
+
+static int
+syscall_mount_setattr (int dfd, const char *path, unsigned int flags,
+                       struct mount_attr_s *attr)
+{
+#ifdef __NR_mount_setattr
+  return (int) syscall (__NR_mount_setattr, dfd, path, flags, attr, sizeof (*attr));
+#else
+  (void) dfd;
+  (void) path;
+  (void) flags;
+  (void) attr;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
 static int
 syscall_keyctl_join (const char *name)
 {
@@ -295,6 +323,23 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
   errno = ENOSYS;
   return -1;
 #endif
+}
+
+static int
+make_mount_rro (const char *target, int targetfd, libcrun_error_t *err)
+{
+  struct mount_attr_s attr = {
+    0,
+  };
+  int ret;
+
+  attr.attr_set = MOUNT_ATTR_RDONLY;
+
+  ret = syscall_mount_setattr (targetfd, "", AT_RECURSIVE | AT_EMPTY_PATH, &attr);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mount_setattr `/%s`", target);
+
+  return 0;
 }
 
 int
@@ -368,7 +413,8 @@ struct propagation_flags_s
 
 enum
 {
-  OPTION_TMPCOPYUP = 1
+  OPTION_TMPCOPYUP = (1 << 0),
+  OPTION_RRO = (1 << 1),
 };
 
 static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 },
@@ -406,6 +452,7 @@ static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 
                                                           { "runbindable", 0, MS_REC | MS_UNBINDABLE, 0 },
 
                                                           { "tmpcopyup", 0, 0, OPTION_TMPCOPYUP },
+                                                          { "rro", 0, 0, OPTION_RRO },
 
                                                           { NULL, 0, 0, 0 } };
 
@@ -1608,34 +1655,34 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
             break;
           }
 
-      if (mounted)
-        continue;
-
-      if (systemd_cgroup_v1 && strcmp (def->mounts[i]->destination, systemd_cgroup_v1) == 0)
+      if (! mounted)
         {
-          /* Override the cgroup mount with a single named cgroup name=systemd.  */
-          ret = do_mount_cgroup_systemd_v1 (container, source, targetfd, target, flags, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else if (strcmp (type, "cgroup") == 0)
-        {
-          ret = do_mount_cgroup (container, source, targetfd, target, flags, unified_cgroup_path, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else
-        {
-          int label_how = LABEL_MOUNT;
+          if (systemd_cgroup_v1 && strcmp (def->mounts[i]->destination, systemd_cgroup_v1) == 0)
+            {
+              /* Override the cgroup mount with a single named cgroup name=systemd.  */
+              ret = do_mount_cgroup_systemd_v1 (container, source, targetfd, target, flags, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else if (strcmp (type, "cgroup") == 0)
+            {
+              ret = do_mount_cgroup (container, source, targetfd, target, flags, unified_cgroup_path, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else
+            {
+              int label_how = LABEL_MOUNT;
 
-          if (is_sysfs_or_proc)
-            label_how = LABEL_NONE;
-          else if (strcmp (type, "mqueue") == 0)
-            label_how = LABEL_XATTR;
+              if (is_sysfs_or_proc)
+                label_how = LABEL_NONE;
+              else if (strcmp (type, "mqueue") == 0)
+                label_how = LABEL_XATTR;
 
-          ret = do_mount (container, source, targetfd, target, type, flags, data, label_how, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
+              ret = do_mount (container, source, targetfd, target, type, flags, data, label_how, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
         }
 
       if (copy_from_fd >= 0)
@@ -1650,6 +1697,19 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           tmpfd = get_and_reset (&copy_from_fd);
 
           ret = copy_recursive_fd_to_fd (tmpfd, destfd, target, target, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      if (extra_flags & OPTION_RRO)
+        {
+          cleanup_close int dfd = -1;
+
+          dfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY, 0, err);
+          if (UNLIKELY (dfd < 0))
+            return crun_make_error (err, errno, "open mount target `/%s`", target);
+
+          ret = make_mount_rro (target, dfd, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
