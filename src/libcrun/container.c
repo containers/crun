@@ -1048,7 +1048,7 @@ wasmedge_do_exec (void *container, void *handle, const char *pathname, char *con
     {
       WasmEdge_VMDelete (vm);
       WasmEdge_ConfigureDelete (configure);
-      error (EXIT_FAILURE, 0, "could not set krun executable");
+      error (EXIT_FAILURE, 0, "could not get wasmedge result from VM");
     }
 
   WasmEdge_VMDelete (vm);
