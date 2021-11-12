@@ -207,6 +207,11 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
 #ifdef HAVE_CRIU
   fprintf (stream, "+CRIU ");
 #endif
+#ifdef HAVE_WASMER
+  fprintf (stream, "+WASM:wasmer ");
+#elif defined HAVE_WASMEDGE
+  fprintf (stream, "+WASM:wasmedge ");
+#endif
 #ifdef HAVE_LIBKRUN
   fprintf (stream, "+LIBKRUN ");
 #endif
