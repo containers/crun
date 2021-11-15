@@ -119,6 +119,22 @@ struct linux_namespace_s
   int value;
 };
 
+static void
+cleanup_private_data (void *private_data)
+{
+  struct private_data_s *p = private_data;
+
+  if (p->rootfsfd >= 0)
+    TEMP_FAILURE_RETRY (close (p->rootfsfd));
+  if (p->mount_fds)
+    cleanup_close_mapp (&(p->mount_fds));
+
+  free (p->host_notify_socket_path);
+  free (p->container_notify_socket_path);
+  free (p->external_descriptors);
+  free (p);
+}
+
 static struct private_data_s *
 get_private_data (struct libcrun_container_s *container)
 {
@@ -128,6 +144,7 @@ get_private_data (struct libcrun_container_s *container)
       container->private_data = p;
       p->rootfsfd = -1;
       p->notify_socket_tree_fd = -1;
+      container->cleanup_private_data = cleanup_private_data;
     }
   return container->private_data;
 }
@@ -1844,15 +1861,18 @@ static int
 do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
-  cleanup_free char *host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
-  cleanup_free char *container_notify_socket_path = get_private_data (container)->container_notify_socket_path;
+  cleanup_free char *host_notify_socket_path = NULL;
+  cleanup_free char *container_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path_dir_alloc = NULL;
   char *container_notify_socket_path_dir = NULL;
   cleanup_close int notify_socket_tree_fd = -1;
   int did_mount_with_move_mount = 0;
 
-  get_private_data (container)->host_notify_socket_path = get_private_data (container)->container_notify_socket_path
-      = NULL;
+  host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
+  get_private_data (container)->host_notify_socket_path = NULL;
+
+  container_notify_socket_path = get_private_data (container)->container_notify_socket_path;
+  get_private_data (container)->container_notify_socket_path = NULL;
 
   if (host_notify_socket_path == NULL || container_notify_socket_path == NULL)
     return 0;

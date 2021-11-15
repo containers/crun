@@ -74,6 +74,7 @@ struct libcrun_container_s
   bool use_intermediate_userns;
 
   void *private_data;
+  void (*cleanup_private_data) (void *private_data);
   struct libcrun_context_s *context;
 };
 
