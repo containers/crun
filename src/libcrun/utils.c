@@ -1010,7 +1010,7 @@ send_fd_to_socket_with_payload (int server, int fd, const char *payload, size_t 
 }
 
 int
-receive_fd_from_socket (int from, libcrun_error_t *err)
+receive_fd_from_socket_with_payload (int from, char *payload, size_t payload_len, libcrun_error_t *err)
 {
   cleanup_close int fd = -1;
   int ret;
@@ -1023,6 +1023,12 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
   data[0] = ' ';
   iov[0].iov_base = data;
   iov[0].iov_len = sizeof (data);
+
+  if (payload_len > 0)
+    {
+      iov[0].iov_base = (void *) payload;
+      iov[0].iov_len = payload_len;
+    }
 
   msg.msg_name = NULL;
   msg.msg_namelen = 0;
@@ -1045,6 +1051,12 @@ receive_fd_from_socket (int from, libcrun_error_t *err)
   ret = fd;
   fd = -1;
   return ret;
+}
+
+int
+receive_fd_from_socket (int from, libcrun_error_t *err)
+{
+  return receive_fd_from_socket_with_payload (from, NULL, 0, err);
 }
 
 int

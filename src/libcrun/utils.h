@@ -265,6 +265,8 @@ int create_socket_pair (int *pair, libcrun_error_t *err);
 
 int receive_fd_from_socket (int from, libcrun_error_t *err);
 
+int receive_fd_from_socket_with_payload (int from, char *payload, size_t payload_len, libcrun_error_t *err);
+
 int create_signalfd (sigset_t *mask, libcrun_error_t *err);
 
 int epoll_helper (int *fds, int *levelfds, libcrun_error_t *err);

@@ -3242,6 +3242,93 @@ root_mapped_in_container_p (runtime_spec_schema_defs_id_mapping **mappings, size
   return false;
 }
 
+static struct libcrun_fd_map *
+get_fd_map (libcrun_container_t *container)
+{
+  struct libcrun_fd_map *mount_fds = get_private_data (container)->mount_fds;
+
+  if (mount_fds == NULL)
+    {
+      runtime_spec_schema_config_schema *def = container->container_def;
+      mount_fds = make_libcrun_fd_map (def->mounts_len);
+      get_private_data (container)->mount_fds = mount_fds;
+    }
+  return mount_fds;
+}
+
+static int
+prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+  size_t how_many = 0;
+  size_t i;
+  int ret;
+
+  if (def->mounts_len == 0)
+    return 0;
+
+  mount_fds = make_libcrun_fd_map (def->mounts_len);
+
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      if (mount_fds->fds[i] >= 0)
+        how_many++;
+    }
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &how_many, sizeof (how_many)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      if (mount_fds->fds[i] >= 0)
+        {
+          ret = send_fd_to_socket_with_payload (sync_socket_host, mount_fds->fds[i], (char *) &i, sizeof (i), err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
+  return 0;
+}
+
+static int
+receive_mounts (libcrun_container_t *container, int sync_socket_container, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  size_t i, how_many = 0;
+  struct libcrun_fd_map *mount_fds = NULL;
+  int ret;
+
+  if (def->mounts_len == 0)
+    return 0;
+
+  mount_fds = get_fd_map (container);
+
+  ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &how_many, sizeof (how_many)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "read from sync socket");
+
+  for (i = 0; i < how_many; i++)
+    {
+      size_t index;
+
+      ret = receive_fd_from_socket_with_payload (sync_socket_container, (char *) &index, sizeof (index), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (index >= def->mounts_len)
+        return crun_make_error (err, 0, "invalid mount data received");
+
+      if (mount_fds->fds[index] >= 0)
+        TEMP_FAILURE_RETRY (close (mount_fds->fds[index]));
+
+      mount_fds->fds[index] = ret;
+    }
+
+  return 0;
+}
+
 static int
 set_id_init (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -3289,7 +3376,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
                 libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+  struct libcrun_fd_map *mount_fds = get_fd_map (container);
   pid_t pid_container = 0;
   size_t i;
   int ret;
@@ -3351,8 +3438,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       if (UNLIKELY (ret < 0))
         return ret;
     }
-
-  mount_fds = make_libcrun_fd_map (def->mounts_len);
 
   /* If the container needs to join an existing PID namespace, take a reference to it
      before creating a new user namespace, as we could lose the access to the existing
@@ -3468,6 +3553,11 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  /* Receive the mounts sent by `prepare_and_send_mounts`.  */
+  ret = receive_mounts (container, sync_socket_container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_container_setgroups (container, container->container_def->process, err);
   if (UNLIKELY (ret < 0))
@@ -3677,6 +3767,11 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
           pid_to_clean = pid = grandchild;
         }
+
+      /* They are received by `receive_mounts`.  */
+      ret = prepare_and_send_mounts (container, pid, sync_socket_host, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = expect_success_from_sync_socket (sync_socket_host, err);
       if (UNLIKELY (ret < 0))
