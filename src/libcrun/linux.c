@@ -101,10 +101,11 @@ struct private_data_s
 
   const char *rootfs;
   int rootfsfd;
-  int procfsfd;
-  int mqueuefsfd;
+
   size_t rootfs_len;
   int notify_socket_tree_fd;
+
+  struct libcrun_fd_map *mount_fds;
 
   /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
    * and needed during restore. */
@@ -126,8 +127,6 @@ get_private_data (struct libcrun_container_s *container)
       struct private_data_s *p = xmalloc0 (sizeof (*p));
       container->private_data = p;
       p->rootfsfd = -1;
-      p->procfsfd = -1;
-      p->mqueuefsfd = -1;
       p->notify_socket_tree_fd = -1;
     }
   return container->private_data;
@@ -1520,18 +1519,15 @@ append_mode_if_missing (char *data, const char *mode)
 static int
 do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, const char *unified_cgroup_path, libcrun_error_t *err)
 {
-  size_t i, j;
+  size_t i;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *systemd_cgroup_v1 = find_annotation (container, "run.oci.systemd.force_cgroup_v1");
-  struct
-  {
-    int *fd;
-    const char *fstype;
-  } fsfd_mounts[] = { { .fstype = "proc", .fd = &(get_private_data (container)->procfsfd) },
-                      { .fstype = "mqueue", .fd = &(get_private_data (container)->mqueuefsfd) },
-                      { .fd = NULL, .fstype = NULL } };
+  cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+
+  mount_fds = get_private_data (container)->mount_fds;
+  get_private_data (container)->mount_fds = NULL;
 
   for (i = 0; i < def->mounts_len; i++)
     {
@@ -1637,23 +1633,19 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
       /* Check if there is already a mount for the requested file system.  */
-      for (j = 0; fsfd_mounts[j].fstype; j++)
-        if (*fsfd_mounts[j].fd >= 0 && strcmp (type, fsfd_mounts[j].fstype) == 0)
-          {
-            cleanup_close int mfd = get_and_reset (fsfd_mounts[j].fd);
+      if (mount_fds && mount_fds->fds[i] >= 0)
+        {
+          cleanup_close int mfd = get_and_reset (&(mount_fds->fds[i]));
 
-            ret = fs_move_mount_to (mfd, targetfd, NULL);
-            if (LIKELY (ret == 0))
-              {
-                ret = do_mount (container, NULL, mfd, target, NULL, flags, data, LABEL_NONE, err);
-                if (UNLIKELY (ret < 0))
-                  return ret;
-                mounted = true;
-              }
-
-            /* If the mount cannot be moved, attempt to mount it normally.  */
-            break;
-          }
+          ret = fs_move_mount_to (mfd, targetfd, NULL);
+          if (LIKELY (ret == 0))
+            {
+              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, LABEL_NONE, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              mounted = true;
+            }
+        }
 
       if (! mounted)
         {
@@ -3277,8 +3269,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
                 libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_close int mqueuefsfd = -1;
-  cleanup_close int procfsfd = -1;
+  cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
   pid_t pid_container = 0;
   size_t i;
   int ret;
@@ -3341,20 +3332,34 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return ret;
     }
 
+  mount_fds = make_libcrun_fd_map (def->mounts_len);
+
   /* If the container needs to join an existing PID namespace, take a reference to it
      before creating a new user namespace, as we could lose the access to the existing
-     namespace.  */
+     namespace.
+
+     This cannot be done in the parent process (by `prepare_and_send_mounts`), since it is
+     necessary to first join the target namespaces and then create the mount.
+*/
   if ((init_status->all_namespaces & CLONE_NEWUSER) && (init_status->join_pidns || init_status->join_ipcns))
     {
       for (i = 0; i < def->mounts_len; i++)
         {
+          int fd = -1;
           /* If for any reason the mount cannot be opened, ignore errors and continue.
              An error will be generated later if it is not possible to join the namespace.
           */
           if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-            procfsfd = fsopen_mount (def->mounts[i]);
+            fd = fsopen_mount (def->mounts[i]);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            mqueuefsfd = fsopen_mount (def->mounts[i]);
+            fd = fsopen_mount (def->mounts[i]);
+
+          if (fd >= 0)
+            {
+              if (mount_fds->fds[i] >= 0)
+                TEMP_FAILURE_RETRY (close (mount_fds->fds[i]));
+              mount_fds->fds[i] = fd;
+            }
         }
     }
 
@@ -3448,8 +3453,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   if (UNLIKELY (ret < 0))
     return ret;
 
-  get_private_data (container)->procfsfd = get_and_reset (&procfsfd);
-  get_private_data (container)->mqueuefsfd = get_and_reset (&mqueuefsfd);
+  /* Move ownership.  */
+  get_private_data (container)->mount_fds = mount_fds;
+  mount_fds = NULL;
 
   return 0;
 }
