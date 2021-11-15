@@ -634,9 +634,59 @@ If the \fB\fCtmpcopyup\fR option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
 
-.SH rro mount options
+.SH r$FLAG mount options
 .PP
-If the \fB\fCrro\fR option is specified then the mount is made recursively read-only.
+If a \fB\fCr$FLAG\fR mount option is specified then the flag \fB\fC$FLAG\fR is set
+recursively for each children mount.
+
+.PP
+These flags are supported:
+
+.RS
+.IP \(bu 2
+"rro"
+.IP \(bu 2
+"rrw"
+.IP \(bu 2
+"rsuid"
+.IP \(bu 2
+"rnosuid"
+.IP \(bu 2
+"rdev"
+.IP \(bu 2
+"rnodev"
+.IP \(bu 2
+"rexec"
+.IP \(bu 2
+"rnoexec"
+.IP \(bu 2
+"rsync"
+.IP \(bu 2
+"rasync"
+.IP \(bu 2
+"rdirsync"
+.IP \(bu 2
+"rmand"
+.IP \(bu 2
+"rnomand"
+.IP \(bu 2
+"ratime"
+.IP \(bu 2
+"rnoatime"
+.IP \(bu 2
+"rdiratime"
+.IP \(bu 2
+"rnodiratime"
+.IP \(bu 2
+"rrelatime"
+.IP \(bu 2
+"rnorelatime"
+.IP \(bu 2
+"rstrictatime"
+.IP \(bu 2
+"rnostrictatime"
+
+.RE
 
 .SH idmap mount options
 .PP

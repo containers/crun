@@ -503,9 +503,34 @@ If the `tmpcopyup` option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
 
-## rro mount options
+## r$FLAG mount options
 
-If the `rro` option is specified then the mount is made recursively read-only.
+If a `r$FLAG` mount option is specified then the flag `$FLAG` is set
+recursively for each children mount.
+
+These flags are supported:
+
+- "rro"
+- "rrw"
+- "rsuid"
+- "rnosuid"
+- "rdev"
+- "rnodev"
+- "rexec"
+- "rnoexec"
+- "rsync"
+- "rasync"
+- "rdirsync"
+- "rmand"
+- "rnomand"
+- "ratime"
+- "rnoatime"
+- "rdiratime"
+- "rnodiratime"
+- "rrelatime"
+- "rnorelatime"
+- "rstrictatime"
+- "rnostrictatime"
 
 ## idmap mount options
 

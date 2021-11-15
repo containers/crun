@@ -346,14 +346,15 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
 }
 
 static int
-make_mount_rro (const char *target, int targetfd, libcrun_error_t *err)
+do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set, libcrun_error_t *err)
 {
   struct mount_attr_s attr = {
     0,
   };
   int ret;
 
-  attr.attr_set = MOUNT_ATTR_RDONLY;
+  attr.attr_set = set;
+  attr.attr_clr = clear;
 
   ret = syscall_mount_setattr (targetfd, "", AT_RECURSIVE | AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
@@ -465,7 +466,7 @@ struct propagation_flags_s
 enum
 {
   OPTION_TMPCOPYUP = (1 << 0),
-  OPTION_RRO = (1 << 1),
+  OPTION_RECURSIVE = (1 << 1),
   OPTION_IDMAP = (1 << 2),
 };
 
@@ -506,13 +507,35 @@ static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 
                                                           { "runbindable", 0, MS_REC | MS_UNBINDABLE, 0 },
 
                                                           { "tmpcopyup", 0, 0, OPTION_TMPCOPYUP },
-                                                          { "rro", 0, 0, OPTION_RRO },
+
+                                                          { "rro", 0, MS_RDONLY, OPTION_RECURSIVE },
+                                                          { "rrw", 1, MS_RDONLY, OPTION_RECURSIVE },
+                                                          { "rsuid", 1, MS_NOSUID, OPTION_RECURSIVE },
+                                                          { "rnosuid", 0, MS_NOSUID, OPTION_RECURSIVE },
+                                                          { "rdev", 1, MS_NODEV, OPTION_RECURSIVE },
+                                                          { "rnodev", 0, MS_NODEV, OPTION_RECURSIVE },
+                                                          { "rexec", 1, MS_NOEXEC, OPTION_RECURSIVE },
+                                                          { "rnoexec", 0, MS_NOEXEC, OPTION_RECURSIVE },
+                                                          { "rsync", 0, MS_SYNCHRONOUS, OPTION_RECURSIVE },
+                                                          { "rasync", 1, MS_SYNCHRONOUS, OPTION_RECURSIVE },
+                                                          { "rdirsync", 0, MS_DIRSYNC, OPTION_RECURSIVE },
+                                                          { "rmand", 0, MS_MANDLOCK, OPTION_RECURSIVE },
+                                                          { "rnomand", 1, MS_MANDLOCK, OPTION_RECURSIVE },
+                                                          { "ratime", 1, MS_NOATIME, OPTION_RECURSIVE },
+                                                          { "rnoatime", 0, MS_NOATIME, OPTION_RECURSIVE },
+                                                          { "rdiratime", 1, MS_NODIRATIME, OPTION_RECURSIVE },
+                                                          { "rnodiratime", 0, MS_NODIRATIME, OPTION_RECURSIVE },
+                                                          { "rrelatime", 0, MS_RELATIME, OPTION_RECURSIVE },
+                                                          { "rnorelatime", 1, MS_RELATIME, OPTION_RECURSIVE },
+                                                          { "rstrictatime", 0, MS_STRICTATIME, OPTION_RECURSIVE },
+                                                          { "rnostrictatime", 1, MS_STRICTATIME, OPTION_RECURSIVE },
+
                                                           { IDMAP, 0, 0, OPTION_IDMAP },
 
                                                           { NULL, 0, 0, 0 } };
 
 static unsigned long
-get_mount_flags (const char *name, int current_flags, int *found, unsigned long *extra_flags)
+get_mount_flags (const char *name, int current_flags, int *found, unsigned long *extra_flags, uint64_t *rec_clear, uint64_t *rec_set)
 {
   struct propagation_flags_s *it;
   if (found)
@@ -522,6 +545,15 @@ get_mount_flags (const char *name, int current_flags, int *found, unsigned long 
       {
         if (found)
           *found = 1;
+
+        if (it->extra_flags & OPTION_RECURSIVE)
+          {
+            if (rec_clear && it->clear)
+              *rec_clear |= it->flags;
+
+            if (rec_set && ! it->clear)
+              *rec_set |= it->flags;
+          }
 
         if (extra_flags)
           *extra_flags |= it->extra_flags;
@@ -535,11 +567,11 @@ get_mount_flags (const char *name, int current_flags, int *found, unsigned long 
 }
 
 static unsigned long
-get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option)
+get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option, uint64_t *rec_clear, uint64_t *rec_set)
 {
   int found;
   __attribute__ ((unused)) cleanup_free char *prev = NULL;
-  unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags);
+  unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags, rec_clear, rec_set);
   if (found)
     return flags;
 
@@ -1598,6 +1630,8 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
       cleanup_close int targetfd = -1;
       bool mounted = false;
       bool is_sysfs_or_proc;
+      uint64_t rec_clear = 0;
+      uint64_t rec_set = 0;
 
       type = def->mounts[i]->type;
 
@@ -1608,7 +1642,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           size_t j;
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data);
+            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
         }
 
       if (type == NULL && (flags & MS_BIND) == 0)
@@ -1750,7 +1784,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
             return ret;
         }
 
-      if (extra_flags & OPTION_RRO)
+      if (rec_clear || rec_set)
         {
           cleanup_close int dfd = -1;
 
@@ -1758,7 +1792,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           if (UNLIKELY (dfd < 0))
             return crun_make_error (err, errno, "open mount target `/%s`", target);
 
-          ret = make_mount_rro (target, dfd, err);
+          ret = do_mount_setattr (target, dfd, rec_clear, rec_set, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -2048,7 +2082,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
     return 0;
 
   if (def->linux->rootfs_propagation)
-    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL);
+    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL, NULL, NULL);
 
   if ((rootfs_propagation & (MS_SHARED | MS_SLAVE | MS_PRIVATE | MS_UNBINDABLE)) == 0)
     rootfs_propagation = MS_REC | MS_PRIVATE;
