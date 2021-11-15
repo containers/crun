@@ -290,6 +290,10 @@ struct mount_attr_s
 #  define MOUNT_ATTR_RDONLY 0x00000001 /* Mount read-only */
 #endif
 
+#ifndef MOUNT_ATTR_IDMAP
+#  define MOUNT_ATTR_IDMAP 0x00100000 /* Idmap mount to @userns_fd in struct mount_attr. */
+#endif
+
 static int
 syscall_mount_setattr (int dfd, const char *path, unsigned int flags,
                        struct mount_attr_s *attr)
@@ -356,6 +360,37 @@ make_mount_rro (const char *target, int targetfd, libcrun_error_t *err)
     return crun_make_error (err, errno, "mount_setattr `/%s`", target);
 
   return 0;
+}
+
+static int
+get_idmapped_mount (const char *src, pid_t pid, libcrun_error_t *err)
+{
+  cleanup_close int open_tree_fd = -1;
+  cleanup_close int fd = -1;
+  int ret;
+  char proc_path[64];
+  struct mount_attr_s attr = {
+    0,
+  };
+
+  sprintf (proc_path, "/proc/%d/ns/user", pid);
+  fd = open (proc_path, O_RDONLY);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `%s`", proc_path);
+
+  open_tree_fd = syscall_open_tree (-1, src,
+                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+  if (UNLIKELY (open_tree_fd < 0))
+    return crun_make_error (err, errno, "open `/%s`", src);
+
+  attr.attr_set = MOUNT_ATTR_IDMAP;
+  attr.userns_fd = fd;
+
+  ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mount_setattr `%s`", src);
+
+  return get_and_reset (&open_tree_fd);
 }
 
 int
@@ -431,7 +466,10 @@ enum
 {
   OPTION_TMPCOPYUP = (1 << 0),
   OPTION_RRO = (1 << 1),
+  OPTION_IDMAP = (1 << 2),
 };
+
+#define IDMAP "idmap"
 
 static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 },
                                                           { "bind", 0, MS_BIND, 0 },
@@ -469,6 +507,7 @@ static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 
 
                                                           { "tmpcopyup", 0, 0, OPTION_TMPCOPYUP },
                                                           { "rro", 0, 0, OPTION_RRO },
+                                                          { IDMAP, 0, 0, OPTION_IDMAP },
 
                                                           { NULL, 0, 0, 0 } };
 
@@ -1657,7 +1696,8 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           ret = fs_move_mount_to (mfd, targetfd, NULL);
           if (LIKELY (ret == 0))
             {
-              ret = do_mount (container, NULL, mfd, target, NULL, flags, data, LABEL_NONE, err);
+              /* Force no MS_BIND flag to not attempt again the bind mount.  */
+              ret = do_mount (container, NULL, mfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
               if (UNLIKELY (ret < 0))
                 return ret;
               mounted = true;
@@ -3256,6 +3296,17 @@ get_fd_map (libcrun_container_t *container)
   return mount_fds;
 }
 
+static bool
+is_idmapped (runtime_spec_schema_defs_mount *mnt)
+{
+  size_t i;
+
+  for (i = 0; i < mnt->options_len; i++)
+    if (strcmp (mnt->options[i], IDMAP) == 0)
+      return true;
+  return false;
+}
+
 static int
 prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
@@ -3272,6 +3323,17 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
 
   for (i = 0; i < def->mounts_len; i++)
     {
+      if (is_idmapped (def->mounts[i]))
+        {
+          int fd;
+
+          fd = get_idmapped_mount (def->mounts[i]->source, pid, err);
+          if (UNLIKELY (fd < 0))
+            return fd;
+
+          mount_fds->fds[i] = fd;
+        }
+
       if (mount_fds->fds[i] >= 0)
         how_many++;
     }

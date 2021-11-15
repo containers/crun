@@ -507,6 +507,12 @@ itself.
 
 If the `rro` option is specified then the mount is made recursively read-only.
 
+## idmap mount options
+
+If the `idmap` option is specified then the mount is ID mapped using the container
+target user namespace.  This is an experimental feature and can change at any time
+without notice.
+
 ## Automatically create user namespace
 
 When running as user different than root, an user namespace is

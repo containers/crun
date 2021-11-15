@@ -638,6 +638,12 @@ itself.
 .PP
 If the \fB\fCrro\fR option is specified then the mount is made recursively read-only.
 
+.SH idmap mount options
+.PP
+If the \fB\fCidmap\fR option is specified then the mount is ID mapped using the container
+target user namespace.  This is an experimental feature and can change at any time
+without notice.
+
 .SH Automatically create user namespace
 .PP
 When running as user different than root, an user namespace is
