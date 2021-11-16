@@ -41,6 +41,7 @@ enum
   OPTION_EXT_UNIX_SK,
   OPTION_PID_FILE,
   OPTION_CONSOLE_SOCKET,
+  OPTION_FILE_LOCKS,
 };
 
 static char doc[] = "OCI runtime";
@@ -62,6 +63,7 @@ static struct argp_option options[]
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
         { "console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0,
           "path to a socket that will receive the master end of the tty", 0 },
+        { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
         {
             0,
         } };
@@ -98,6 +100,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 
     case OPTION_SHELL_JOB:
       cr_options.shell_job = true;
+      break;
+
+    case OPTION_FILE_LOCKS:
+      cr_options.file_locks = true;
       break;
 
     case 'd':

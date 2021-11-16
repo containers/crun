@@ -39,7 +39,8 @@ enum
   OPTION_LEAVE_RUNNING,
   OPTION_TCP_ESTABLISHED,
   OPTION_SHELL_JOB,
-  OPTION_EXT_UNIX_SK
+  OPTION_EXT_UNIX_SK,
+  OPTION_FILE_LOCKS,
 };
 
 static char doc[] = "OCI runtime";
@@ -53,6 +54,7 @@ static struct argp_option options[]
         { "tcp-established", OPTION_TCP_ESTABLISHED, 0, 0, "allow open tcp connections", 0 },
         { "ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0 },
         { "shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0 },
+        { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
         {
             0,
         } };
@@ -89,6 +91,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 
     case OPTION_SHELL_JOB:
       cr_options.shell_job = true;
+      break;
+
+    case OPTION_FILE_LOCKS:
+      cr_options.file_locks = true;
       break;
 
     default:
