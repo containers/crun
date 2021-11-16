@@ -93,6 +93,7 @@ struct libcrun_checkpoint_restore_s
   bool shell_job;
   bool ext_unix_sk;
   bool detach;
+  bool file_locks;
   const char *console_socket;
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;

@@ -408,6 +408,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
+  criu_set_file_locks (cr_options->file_locks);
   criu_set_orphan_pts_master (true);
   criu_set_manage_cgroups (true);
 
@@ -725,6 +726,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
+  criu_set_file_locks (cr_options->file_locks);
   criu_set_orphan_pts_master (true);
   criu_set_manage_cgroups (true);
 
