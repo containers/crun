@@ -58,6 +58,8 @@
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
+#include "mount_flags.h"
+
 #define YAJL_STR(x) ((const unsigned char *) (x))
 
 #ifndef RLIMIT_RTTIME
@@ -346,14 +348,15 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
 }
 
 static int
-make_mount_rro (const char *target, int targetfd, libcrun_error_t *err)
+do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set, libcrun_error_t *err)
 {
   struct mount_attr_s attr = {
     0,
   };
   int ret;
 
-  attr.attr_set = MOUNT_ATTR_RDONLY;
+  attr.attr_set = set;
+  attr.attr_clr = clear;
 
   ret = syscall_mount_setattr (targetfd, "", AT_RECURSIVE | AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
@@ -454,92 +457,43 @@ get_uid_gid_from_def (runtime_spec_schema_config_schema *def, uid_t *uid, gid_t 
     }
 }
 
-struct propagation_flags_s
-{
-  const char *name;
-  int clear;
-  int flags;
-  int extra_flags;
-};
-
-enum
-{
-  OPTION_TMPCOPYUP = (1 << 0),
-  OPTION_RRO = (1 << 1),
-  OPTION_IDMAP = (1 << 2),
-};
-
-#define IDMAP "idmap"
-
-static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 },
-                                                          { "bind", 0, MS_BIND, 0 },
-                                                          { "rbind", 0, MS_REC | MS_BIND, 0 },
-                                                          { "ro", 0, MS_RDONLY, 0 },
-                                                          { "rw", 1, MS_RDONLY, 0 },
-                                                          { "suid", 1, MS_NOSUID, 0 },
-                                                          { "nosuid", 0, MS_NOSUID, 0 },
-                                                          { "dev", 1, MS_NODEV, 0 },
-                                                          { "nodev", 0, MS_NODEV, 0 },
-                                                          { "exec", 1, MS_NOEXEC, 0 },
-                                                          { "noexec", 0, MS_NOEXEC, 0 },
-                                                          { "sync", 0, MS_SYNCHRONOUS, 0 },
-                                                          { "async", 1, MS_SYNCHRONOUS, 0 },
-                                                          { "dirsync", 0, MS_DIRSYNC, 0 },
-                                                          { "remount", 0, MS_REMOUNT, 0 },
-                                                          { "mand", 0, MS_MANDLOCK, 0 },
-                                                          { "nomand", 1, MS_MANDLOCK, 0 },
-                                                          { "atime", 1, MS_NOATIME, 0 },
-                                                          { "noatime", 0, MS_NOATIME, 0 },
-                                                          { "diratime", 1, MS_NODIRATIME, 0 },
-                                                          { "nodiratime", 0, MS_NODIRATIME, 0 },
-                                                          { "relatime", 0, MS_RELATIME, 0 },
-                                                          { "norelatime", 1, MS_RELATIME, 0 },
-                                                          { "strictatime", 0, MS_STRICTATIME, 0 },
-                                                          { "nostrictatime", 1, MS_STRICTATIME, 0 },
-                                                          { "shared", 0, MS_SHARED, 0 },
-                                                          { "rshared", 0, MS_REC | MS_SHARED, 0 },
-                                                          { "slave", 0, MS_SLAVE, 0 },
-                                                          { "rslave", 0, MS_REC | MS_SLAVE, 0 },
-                                                          { "private", 0, MS_PRIVATE, 0 },
-                                                          { "rprivate", 0, MS_REC | MS_PRIVATE, 0 },
-                                                          { "unbindable", 0, MS_UNBINDABLE, 0 },
-                                                          { "runbindable", 0, MS_REC | MS_UNBINDABLE, 0 },
-
-                                                          { "tmpcopyup", 0, 0, OPTION_TMPCOPYUP },
-                                                          { "rro", 0, 0, OPTION_RRO },
-                                                          { IDMAP, 0, 0, OPTION_IDMAP },
-
-                                                          { NULL, 0, 0, 0 } };
-
 static unsigned long
-get_mount_flags (const char *name, int current_flags, int *found, unsigned long *extra_flags)
+get_mount_flags (const char *name, int current_flags, int *found, unsigned long *extra_flags, uint64_t *rec_clear, uint64_t *rec_set)
 {
-  struct propagation_flags_s *it;
+  const struct propagation_flags_s *prop;
+
+  prop = libcrun_str2mount_flags (name);
+
   if (found)
-    *found = 0;
-  for (it = propagation_flags; it->name; it++)
-    if (strcmp (it->name, name) == 0)
-      {
-        if (found)
-          *found = 1;
+    *found = prop ? 1 : 0;
 
-        if (extra_flags)
-          *extra_flags |= it->extra_flags;
+  if (prop == NULL)
+    return 0;
 
-        if (it->clear)
-          return current_flags & ~it->flags;
+  if (prop->extra_flags & OPTION_RECURSIVE)
+    {
+      if (rec_clear && prop->clear)
+        *rec_clear |= prop->flags;
 
-        return current_flags | it->flags;
-      }
-  return 0;
+      if (rec_set && ! prop->clear)
+        *rec_set |= prop->flags;
+    }
+
+  if (extra_flags)
+    *extra_flags |= prop->extra_flags;
+
+  if (prop->clear)
+    return current_flags & ~prop->flags;
+
+  return current_flags | prop->flags;
 }
 
 static unsigned long
-get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option)
+get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option, uint64_t *rec_clear, uint64_t *rec_set)
 {
   int found;
   __attribute__ ((unused)) cleanup_free char *prev = NULL;
-  unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags);
+  unsigned long flags = get_mount_flags (name, current_flags, &found, extra_flags, rec_clear, rec_set);
   if (found)
     return flags;
 
@@ -1598,6 +1552,8 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
       cleanup_close int targetfd = -1;
       bool mounted = false;
       bool is_sysfs_or_proc;
+      uint64_t rec_clear = 0;
+      uint64_t rec_set = 0;
 
       type = def->mounts[i]->type;
 
@@ -1608,7 +1564,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           size_t j;
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data);
+            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
         }
 
       if (type == NULL && (flags & MS_BIND) == 0)
@@ -1750,7 +1706,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
             return ret;
         }
 
-      if (extra_flags & OPTION_RRO)
+      if (rec_clear || rec_set)
         {
           cleanup_close int dfd = -1;
 
@@ -1758,7 +1714,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           if (UNLIKELY (dfd < 0))
             return crun_make_error (err, errno, "open mount target `/%s`", target);
 
-          ret = make_mount_rro (target, dfd, err);
+          ret = do_mount_setattr (target, dfd, rec_clear, rec_set, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1990,7 +1946,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
   return 0;
 }
 
-// libcrun_create_kvm_device: explicitly adds kvm device.
+/* libcrun_create_kvm_device: explicitly adds kvm device.  */
 int
 libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -2001,6 +1957,7 @@ libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err)
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
   const char *rootfs = get_private_data (container)->rootfs;
+  bool is_user_ns;
 
   /* Do nothing if /dev/kvm is already present in spec */
   for (i = 0; i < def->linux->devices_len; i++)
@@ -2021,10 +1978,10 @@ libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err)
   devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
-  int is_user_ns = 0;
-  is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER);
 
-  ret = create_dev (container, devfd, &kvm_device, is_user_ns ? true : false, true, err);
+  is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
+
+  ret = create_dev (container, devfd, &kvm_device, is_user_ns, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2047,7 +2004,7 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
     return 0;
 
   if (def->linux->rootfs_propagation)
-    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL);
+    rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL, NULL, NULL);
 
   if ((rootfs_propagation & (MS_SHARED | MS_SLAVE | MS_PRIVATE | MS_UNBINDABLE)) == 0)
     rootfs_propagation = MS_REC | MS_PRIVATE;
@@ -3302,7 +3259,7 @@ is_idmapped (runtime_spec_schema_defs_mount *mnt)
   size_t i;
 
   for (i = 0; i < mnt->options_len; i++)
-    if (strcmp (mnt->options[i], IDMAP) == 0)
+    if (strcmp (mnt->options[i], "idmap") == 0)
       return true;
   return false;
 }
