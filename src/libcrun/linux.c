@@ -58,6 +58,8 @@
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
 
+#include "mount_flags.h"
+
 #define YAJL_STR(x) ((const unsigned char *) (x))
 
 #ifndef RLIMIT_RTTIME
@@ -455,115 +457,35 @@ get_uid_gid_from_def (runtime_spec_schema_config_schema *def, uid_t *uid, gid_t 
     }
 }
 
-struct propagation_flags_s
-{
-  const char *name;
-  int clear;
-  int flags;
-  int extra_flags;
-};
-
-enum
-{
-  OPTION_TMPCOPYUP = (1 << 0),
-  OPTION_RECURSIVE = (1 << 1),
-  OPTION_IDMAP = (1 << 2),
-};
-
-#define IDMAP "idmap"
-
-static struct propagation_flags_s propagation_flags[] = { { "defaults", 0, 0, 0 },
-                                                          { "bind", 0, MS_BIND, 0 },
-                                                          { "rbind", 0, MS_REC | MS_BIND, 0 },
-                                                          { "ro", 0, MS_RDONLY, 0 },
-                                                          { "rw", 1, MS_RDONLY, 0 },
-                                                          { "suid", 1, MS_NOSUID, 0 },
-                                                          { "nosuid", 0, MS_NOSUID, 0 },
-                                                          { "dev", 1, MS_NODEV, 0 },
-                                                          { "nodev", 0, MS_NODEV, 0 },
-                                                          { "exec", 1, MS_NOEXEC, 0 },
-                                                          { "noexec", 0, MS_NOEXEC, 0 },
-                                                          { "sync", 0, MS_SYNCHRONOUS, 0 },
-                                                          { "async", 1, MS_SYNCHRONOUS, 0 },
-                                                          { "dirsync", 0, MS_DIRSYNC, 0 },
-                                                          { "remount", 0, MS_REMOUNT, 0 },
-                                                          { "mand", 0, MS_MANDLOCK, 0 },
-                                                          { "nomand", 1, MS_MANDLOCK, 0 },
-                                                          { "atime", 1, MS_NOATIME, 0 },
-                                                          { "noatime", 0, MS_NOATIME, 0 },
-                                                          { "diratime", 1, MS_NODIRATIME, 0 },
-                                                          { "nodiratime", 0, MS_NODIRATIME, 0 },
-                                                          { "relatime", 0, MS_RELATIME, 0 },
-                                                          { "norelatime", 1, MS_RELATIME, 0 },
-                                                          { "strictatime", 0, MS_STRICTATIME, 0 },
-                                                          { "nostrictatime", 1, MS_STRICTATIME, 0 },
-                                                          { "shared", 0, MS_SHARED, 0 },
-                                                          { "rshared", 0, MS_REC | MS_SHARED, 0 },
-                                                          { "slave", 0, MS_SLAVE, 0 },
-                                                          { "rslave", 0, MS_REC | MS_SLAVE, 0 },
-                                                          { "private", 0, MS_PRIVATE, 0 },
-                                                          { "rprivate", 0, MS_REC | MS_PRIVATE, 0 },
-                                                          { "unbindable", 0, MS_UNBINDABLE, 0 },
-                                                          { "runbindable", 0, MS_REC | MS_UNBINDABLE, 0 },
-
-                                                          { "tmpcopyup", 0, 0, OPTION_TMPCOPYUP },
-
-                                                          { "rro", 0, MS_RDONLY, OPTION_RECURSIVE },
-                                                          { "rrw", 1, MS_RDONLY, OPTION_RECURSIVE },
-                                                          { "rsuid", 1, MS_NOSUID, OPTION_RECURSIVE },
-                                                          { "rnosuid", 0, MS_NOSUID, OPTION_RECURSIVE },
-                                                          { "rdev", 1, MS_NODEV, OPTION_RECURSIVE },
-                                                          { "rnodev", 0, MS_NODEV, OPTION_RECURSIVE },
-                                                          { "rexec", 1, MS_NOEXEC, OPTION_RECURSIVE },
-                                                          { "rnoexec", 0, MS_NOEXEC, OPTION_RECURSIVE },
-                                                          { "rsync", 0, MS_SYNCHRONOUS, OPTION_RECURSIVE },
-                                                          { "rasync", 1, MS_SYNCHRONOUS, OPTION_RECURSIVE },
-                                                          { "rdirsync", 0, MS_DIRSYNC, OPTION_RECURSIVE },
-                                                          { "rmand", 0, MS_MANDLOCK, OPTION_RECURSIVE },
-                                                          { "rnomand", 1, MS_MANDLOCK, OPTION_RECURSIVE },
-                                                          { "ratime", 1, MS_NOATIME, OPTION_RECURSIVE },
-                                                          { "rnoatime", 0, MS_NOATIME, OPTION_RECURSIVE },
-                                                          { "rdiratime", 1, MS_NODIRATIME, OPTION_RECURSIVE },
-                                                          { "rnodiratime", 0, MS_NODIRATIME, OPTION_RECURSIVE },
-                                                          { "rrelatime", 0, MS_RELATIME, OPTION_RECURSIVE },
-                                                          { "rnorelatime", 1, MS_RELATIME, OPTION_RECURSIVE },
-                                                          { "rstrictatime", 0, MS_STRICTATIME, OPTION_RECURSIVE },
-                                                          { "rnostrictatime", 1, MS_STRICTATIME, OPTION_RECURSIVE },
-
-                                                          { IDMAP, 0, 0, OPTION_IDMAP },
-
-                                                          { NULL, 0, 0, 0 } };
-
 static unsigned long
 get_mount_flags (const char *name, int current_flags, int *found, unsigned long *extra_flags, uint64_t *rec_clear, uint64_t *rec_set)
 {
-  struct propagation_flags_s *it;
+  const struct propagation_flags_s *prop;
+
+  prop = libcrun_str2mount_flags (name);
+
   if (found)
-    *found = 0;
-  for (it = propagation_flags; it->name; it++)
-    if (strcmp (it->name, name) == 0)
-      {
-        if (found)
-          *found = 1;
+    *found = prop ? 1 : 0;
 
-        if (it->extra_flags & OPTION_RECURSIVE)
-          {
-            if (rec_clear && it->clear)
-              *rec_clear |= it->flags;
+  if (prop == NULL)
+    return 0;
 
-            if (rec_set && ! it->clear)
-              *rec_set |= it->flags;
-          }
+  if (prop->extra_flags & OPTION_RECURSIVE)
+    {
+      if (rec_clear && prop->clear)
+        *rec_clear |= prop->flags;
 
-        if (extra_flags)
-          *extra_flags |= it->extra_flags;
+      if (rec_set && ! prop->clear)
+        *rec_set |= prop->flags;
+    }
 
-        if (it->clear)
-          return current_flags & ~it->flags;
+  if (extra_flags)
+    *extra_flags |= prop->extra_flags;
 
-        return current_flags | it->flags;
-      }
-  return 0;
+  if (prop->clear)
+    return current_flags & ~prop->flags;
+
+  return current_flags | prop->flags;
 }
 
 static unsigned long
@@ -3337,7 +3259,7 @@ is_idmapped (runtime_spec_schema_defs_mount *mnt)
   size_t i;
 
   for (i = 0; i < mnt->options_len; i++)
-    if (strcmp (mnt->options[i], IDMAP) == 0)
+    if (strcmp (mnt->options[i], "idmap") == 0)
       return true;
   return false;
 }

@@ -33,6 +33,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/terminal.c \
 			src/libcrun/chroot_realpath.c \
 			src/libcrun/signals.c \
+			src/libcrun/mount_flags.c \
 			src/libcrun/seccomp_notify.c
 
 if HAVE_EMBEDDED_YAJL
@@ -75,7 +76,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/checkpoint.h src/restore.h src/libcrun/seccomp_notify.h src/libcrun/seccomp_notify_plugin.h \
 	src/libcrun/container.h src/libcrun/seccomp.h src/libcrun/ebpf.h src/libcrun/cgroup.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
-	src/libcrun/status.h src/libcrun/terminal.h \
+	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
 	src/libcrun/intprops.h crun.1.md crun.1 libcrun.lds
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
@@ -148,7 +149,7 @@ dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 	$(AM__GEN)cp git-version.h $(distdir)/git-version.h
 
-EXTRA_DIST += $(TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf
+EXTRA_DIST += $(TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf src/libcrun/mount_flags.perf
 BUILT_SOURCES = .version git-version.h
 
 man1_MANS = crun.1
@@ -175,8 +176,11 @@ generate-rust-bindings: libcrun.rs
 generate-signals.c: src/libcrun/signals.perf
 	${GPERF} --lookup-function-name libcrun_signal_in_word_set -m 100 --null-strings --pic -tCEG -S1 $< > src/libcrun/signals.c
 
+generate-mount_flags.c: src/libcrun/mount_flags.perf
+	${GPERF} --lookup-function-name libcrun_mount_flag_in_word_set -m 100 -tCEG -S1 $< > src/libcrun/mount_flags.c
+
 clang-format:
 # do not format files that were copied into the source directory.
-	git ls-files src | egrep "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c" | xargs clang-format -style=file -i
+	git ls-files src | egrep "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
-.PHONY: coverity sync generate-rust-bindings generate-signals.c clang-format
+.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format

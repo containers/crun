@@ -1,0 +1,98 @@
+/*
+ * crun - OCI runtime written in C
+ *
+ * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
+ * crun is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * crun is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with crun.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+%{
+#define _GNU_SOURCE
+
+#include <config.h>
+#include <stddef.h>
+#include <stdlib.h>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mount.h>
+
+#include "utils.h"
+#include "mount_flags.h"
+
+%}
+struct propagation_flags_s;
+%%
+defaults, 0, 0, 0
+bind, 0, MS_BIND, 0
+rbind, 0, MS_REC|MS_BIND, 0
+ro, 0, MS_RDONLY, 0
+rw, 1, MS_RDONLY, 0
+suid, 1, MS_NOSUID, 0
+nosuid, 0, MS_NOSUID, 0
+dev, 1, MS_NODEV, 0
+nodev, 0, MS_NODEV, 0
+exec, 1, MS_NOEXEC, 0
+noexec, 0, MS_NOEXEC, 0
+sync, 0, MS_SYNCHRONOUS, 0
+async, 1, MS_SYNCHRONOUS, 0
+dirsync, 0, MS_DIRSYNC, 0
+remount, 0, MS_REMOUNT, 0
+mand, 0, MS_MANDLOCK, 0
+nomand, 1, MS_MANDLOCK, 0
+atime, 1, MS_NOATIME, 0
+noatime, 0, MS_NOATIME, 0
+diratime, 1, MS_NODIRATIME, 0
+nodiratime, 0, MS_NODIRATIME, 0
+relatime, 0, MS_RELATIME, 0
+norelatime, 1, MS_RELATIME, 0
+strictatime, 0, MS_STRICTATIME, 0
+nostrictatime, 1, MS_STRICTATIME, 0
+shared, 0, MS_SHARED, 0
+rshared, 0, MS_REC|MS_SHARED, 0
+slave, 0, MS_SLAVE, 0
+rslave, 0, MS_REC|MS_SLAVE, 0
+private, 0, MS_PRIVATE, 0
+rprivate, 0, MS_REC|MS_PRIVATE, 0
+unbindable, 0, MS_UNBINDABLE, 0
+runbindable, 0, MS_REC|MS_UNBINDABLE, 0
+rro, 0, MS_RDONLY, OPTION_RECURSIVE
+rrw, 1, MS_RDONLY, OPTION_RECURSIVE
+rsuid, 1, MS_NOSUID, OPTION_RECURSIVE
+rnosuid, 0, MS_NOSUID, OPTION_RECURSIVE
+rdev, 1, MS_NODEV, OPTION_RECURSIVE
+rnodev, 0, MS_NODEV, OPTION_RECURSIVE
+rexec, 1, MS_NOEXEC, OPTION_RECURSIVE
+rnoexec, 0, MS_NOEXEC, OPTION_RECURSIVE
+rsync, 0, MS_SYNCHRONOUS, OPTION_RECURSIVE
+rasync, 1, MS_SYNCHRONOUS, OPTION_RECURSIVE
+rdirsync, 0, MS_DIRSYNC, OPTION_RECURSIVE
+rmand, 0, MS_MANDLOCK, OPTION_RECURSIVE
+rnomand, 1, MS_MANDLOCK, OPTION_RECURSIVE
+ratime, 1, MS_NOATIME, OPTION_RECURSIVE
+rnoatime, 0, MS_NOATIME, OPTION_RECURSIVE
+rdiratime, 1, MS_NODIRATIME, OPTION_RECURSIVE
+rnodiratime, 0, MS_NODIRATIME, OPTION_RECURSIVE
+rrelatime, 0, MS_RELATIME, OPTION_RECURSIVE
+rnorelatime, 1, MS_RELATIME, OPTION_RECURSIVE
+rstrictatime, 0, MS_STRICTATIME, OPTION_RECURSIVE
+rnostrictatime, 1, MS_STRICTATIME, OPTION_RECURSIVE
+tmpcopyup, 0, 0, OPTION_TMPCOPYUP
+idmap, 0, 0, OPTION_IDMAP
+%%
+
+const struct propagation_flags_s *
+libcrun_str2mount_flags (const char *name)
+{
+  return libcrun_mount_flag_in_word_set (name, strlen (name));
+}
