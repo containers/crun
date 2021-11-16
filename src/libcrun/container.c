@@ -543,8 +543,12 @@ libcrun_container_free (libcrun_container_t *ctr)
   if (ctr == NULL)
     return;
 
+  if (ctr->cleanup_private_data)
+    ctr->cleanup_private_data (ctr->private_data);
+
   if (ctr->container_def)
     free_runtime_spec_schema_config_schema (ctr->container_def);
+
   free (ctr);
 }
 

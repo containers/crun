@@ -46,6 +46,7 @@
 #define cleanup_free __attribute__ ((cleanup (cleanup_freep)))
 #define cleanup_close __attribute__ ((cleanup (cleanup_closep)))
 #define cleanup_close_vec __attribute__ ((cleanup (cleanup_close_vecp)))
+#define cleanup_close_map __attribute__ ((cleanup (cleanup_close_mapp)))
 #define cleanup_dir __attribute__ ((cleanup (cleanup_dirp)))
 #define arg_unused __attribute__ ((unused))
 #define cleanup_pid __attribute__ ((cleanup (cleanup_pidp)))
@@ -112,6 +113,43 @@ cleanup_pidp (void *p)
       TEMP_FAILURE_RETRY (kill (*pp, SIGKILL));
       TEMP_FAILURE_RETRY (waitpid (*pp, NULL, 0));
     }
+}
+
+struct
+    libcrun_fd_map
+{
+  size_t nfds;
+  int fds[];
+};
+
+static inline struct libcrun_fd_map *
+make_libcrun_fd_map (size_t len)
+{
+  struct libcrun_fd_map *ret;
+  size_t i;
+
+  ret = xmalloc (sizeof (*ret) + sizeof (int) * len);
+  ret->nfds = len;
+  for (i = 0; i < len; i++)
+    ret->fds[i] = -1;
+
+  return ret;
+}
+
+static inline void
+cleanup_close_mapp (struct libcrun_fd_map **p)
+{
+  struct libcrun_fd_map *m = *p;
+  size_t i;
+
+  if (m == NULL)
+    return;
+
+  for (i = 0; i < m->nfds; i++)
+    if (m->fds[i] >= 0)
+      TEMP_FAILURE_RETRY (close (m->fds[i]));
+
+  free (m);
 }
 
 static inline void
@@ -226,6 +264,8 @@ int send_fd_to_socket_with_payload (int server, int fd, const char *payload, siz
 int create_socket_pair (int *pair, libcrun_error_t *err);
 
 int receive_fd_from_socket (int from, libcrun_error_t *err);
+
+int receive_fd_from_socket_with_payload (int from, char *payload, size_t payload_len, libcrun_error_t *err);
 
 int create_signalfd (sigset_t *mask, libcrun_error_t *err);
 
