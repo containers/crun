@@ -57,6 +57,7 @@ jobs:
           - test: oci-validation
           - test: alpine-build
           - test: centos8-build
+          - test: centos9-build
           - test: clang-format
           - test: clang-check
           - test: checkpoint-restore
@@ -135,6 +136,10 @@ jobs:
             centos8-build)
                 sudo docker build -t crun-centos8-build tests/centos8-build
                 sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-centos8-build
+            ;;
+            centos9-build)
+                sudo docker build -t crun-centos9-build tests/centos9-build
+                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-centos9-build
             ;;
             clang-format)
                 ./configure
