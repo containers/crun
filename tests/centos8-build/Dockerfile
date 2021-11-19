@@ -1,4 +1,4 @@
-FROM centos:8
+FROM quay.io/centos/centos:stream8
 
 RUN yum --enablerepo='*' --disablerepo='media-*' install -y make automake autoconf gettext \
     libtool gcc libcap-devel systemd-devel yajl-devel \
