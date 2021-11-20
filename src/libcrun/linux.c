@@ -95,6 +95,10 @@ struct private_data_s
      namespaces are available.  */
   int unshare_flags;
 
+#if CLONE_NEWCGROUP
+  int unshare_cgroupns;
+#endif
+
   char *host_notify_socket_path;
   char *container_notify_socket_path;
   bool mount_dev_from_host;
@@ -2329,7 +2333,7 @@ int
 libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err)
 {
 #if CLONE_NEWCGROUP
-  if (get_private_data (container)->unshare_flags & CLONE_NEWCGROUP)
+  if (get_private_data (container)->unshare_cgroupns)
     {
       int ret = unshare (CLONE_NEWCGROUP);
       if (UNLIKELY (ret < 0))
@@ -3615,6 +3619,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 #if CLONE_NEWCGROUP
   /* cgroup will be unshared later.  Once the process is in the correct cgroup.  */
   init_status.all_namespaces &= ~CLONE_NEWCGROUP;
+  get_private_data (container)->unshare_cgroupns = init_status.namespaces_to_unshare & CLONE_NEWCGROUP;
 #endif
 
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket);
