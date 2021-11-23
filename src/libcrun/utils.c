@@ -336,32 +336,15 @@ close_and_replace (int *oldfd, int newfd)
 /* Defined in chroot_realpath.c  */
 char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
 
-int
-safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
-             libcrun_error_t *err)
+static int
+safe_openat_fallback (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
+                      int flags, int mode, libcrun_error_t *err)
 {
-  int ret;
-  cleanup_close int fd = -1;
-  static bool openat2_supported = true;
   const char *path_in_chroot;
+  cleanup_close int fd = -1;
   char buffer[PATH_MAX];
+  int ret;
 
-  if (openat2_supported)
-    {
-      ret = TEMP_FAILURE_RETRY (syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT));
-      if (ret < 0)
-        {
-          if (errno == ENOSYS)
-            openat2_supported = false;
-          if (errno == ENOSYS || errno == EINVAL || errno == EPERM)
-            goto fallback;
-          return crun_make_error (err, errno, "openat2 `%s`", path);
-        }
-
-      return ret;
-    }
-
-fallback:
   path_in_chroot = chroot_realpath (rootfs, path, buffer);
   if (path_in_chroot == NULL)
     return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
@@ -391,6 +374,32 @@ fallback:
   ret = fd;
   fd = -1;
   return ret;
+}
+
+int
+safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
+             libcrun_error_t *err)
+{
+  static bool openat2_supported = true;
+  int ret;
+
+  if (openat2_supported)
+    {
+      ret = TEMP_FAILURE_RETRY (syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT));
+      if (ret < 0)
+        {
+          if (errno == ENOSYS)
+            openat2_supported = false;
+          if (errno == ENOSYS || errno == EINVAL || errno == EPERM)
+            return safe_openat_fallback (dirfd, rootfs, rootfs_len, path, flags, mode, err);
+
+          return crun_make_error (err, errno, "openat2 `%s`", path);
+        }
+
+      return ret;
+    }
+
+  return safe_openat_fallback (dirfd, rootfs, rootfs_len, path, flags, mode, err);
 }
 
 static ssize_t
