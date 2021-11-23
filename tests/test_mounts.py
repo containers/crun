@@ -65,6 +65,17 @@ def test_mount_symlink_not_existing():
         return 0
     return -1
 
+def test_mount_path_with_multiple_slashes():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    mount_opt = {"destination": "/test//test", "type": "bind", "source": "/tmp", "options": ["bind"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    if "test/test" in out:
+        return 0
+    return -1
+
 def test_mount_ro():
     a = helper_mount("ro")[0]
     if "ro" not in a:
@@ -182,6 +193,7 @@ all_tests = {
     "test-mount-symlink-not-existing" : test_mount_symlink_not_existing,
     "test-mount-dev" : test_mount_dev,
     "test-mount-nodev" : test_mount_nodev,
+    "test-mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
 }
 
 if __name__ == "__main__":

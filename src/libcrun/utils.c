@@ -530,7 +530,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
       if (it == NULL)
         break;
 
-      cur = it + 1;
+      cur = consume_slashes (it + 1);
       *it = '/';
       it = strchr (cur, '/');
     }
