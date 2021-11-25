@@ -2185,6 +2185,11 @@ handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "sd_notify");
 
+#  if HAVE_SD_NOTIFY_BARRIER
+      /* Hard-code a 30 seconds timeout.  Ignore errors.  */
+      sd_notify_barrier (0, 30 * 1000000);
+#  endif
+
       return 1;
     }
   return 0;
