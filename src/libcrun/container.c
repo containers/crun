@@ -1619,7 +1619,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
 
   if (def->process && def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
-      return crun_make_error (err, errno, "chdir");
+      return crun_make_error (err, errno, "chdir `%s`", def->process->cwd);
 
   if (def->process && def->process->args)
     {
@@ -3650,7 +3650,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
       cwd = process->cwd ? process->cwd : "/";
       if (chdir (cwd) < 0)
-        libcrun_fail_with_error (errno, "chdir");
+        libcrun_fail_with_error (errno, "chdir `%s`", cwd);
 
       ret = unblock_signals (err);
       if (UNLIKELY (ret < 0))
