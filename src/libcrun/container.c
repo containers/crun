@@ -1484,6 +1484,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
+  bool chdir_done = false;
   int ret;
   int has_terminal;
   cleanup_close int console_socket = -1;
@@ -1610,16 +1611,18 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
         }
     }
 
-  // set primary process to 1 explicitly if nothing is configured and LISTEN_FD is not set
+  /* Set primary process to 1 explicitly if nothing is configured and LISTEN_FD is not set.  */
   if (entrypoint_args->context->listen_fds > 0 && getenv ("LISTEN_PID") == NULL)
     {
       setenv ("LISTEN_PID", "1", 1);
       libcrun_warning ("setting LISTEN_PID=1 since no previous configuration was found");
     }
 
+  /* Attempt to chdir immediately here, before doing the setresuid.  If we fail here, let's
+     try again later once the process switched to the user that runs in the container.  */
   if (def->process && def->process->cwd)
-    if (UNLIKELY (chdir (def->process->cwd) < 0))
-      return crun_make_error (err, errno, "chdir `%s`", def->process->cwd);
+    if (LIKELY (chdir (def->process->cwd) == 0))
+      chdir_done = true;
 
   if (def->process && def->process->args)
     {
@@ -1719,6 +1722,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
   ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* The chdir was not already performed, so try again now after switching to the UID/GID in the container.  */
+  if (! chdir_done && def->process && def->process->cwd)
+    if (UNLIKELY (chdir (def->process->cwd) < 0))
+      return crun_make_error (err, errno, "chdir `%s`", def->process->cwd);
 
   if (notify_socket)
     {
@@ -3486,6 +3494,181 @@ cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
     (void) free_runtime_spec_schema_config_schema_process (process);
 }
 
+static int
+exec_process_entrypoint (libcrun_context_t *context,
+                         libcrun_container_t *container,
+                         runtime_spec_schema_config_schema_process *process,
+                         int pipefd1,
+                         int seccomp_fd,
+                         int seccomp_receiver_fd,
+                         libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
+  cleanup_free const char *exec_path = NULL;
+  uid_t container_uid;
+  gid_t container_gid;
+  const char *cwd;
+  bool chdir_done = false;
+  size_t seccomp_flags_len = 0;
+  char **seccomp_flags = NULL;
+  pid_t own_pid = 0;
+  size_t i;
+  int ret;
+
+  container_uid = process->user ? process->user->uid : 0;
+  container_gid = process->user ? process->user->gid : 0;
+
+  TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
+
+  cwd = process->cwd ? process->cwd : "/";
+  if (LIKELY (chdir (cwd) == 0))
+    chdir_done = true;
+
+  ret = unblock_signals (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = clearenv ();
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (process->env_len)
+    {
+      for (i = 0; i < process->env_len; i++)
+        if (putenv (process->env[i]) < 0)
+          return crun_make_error (err, errno, "putenv `%s`", process->env[i]);
+    }
+  else if (container->container_def->process->env_len)
+    {
+      char *e;
+
+      for (i = 0; i < container->container_def->process->env_len; i++)
+        {
+          e = container->container_def->process->env[i];
+          if (putenv (e) < 0)
+            return crun_make_error (err, errno, "putenv `%s`", e);
+        }
+    }
+
+  if (getenv ("HOME") == NULL)
+    {
+      ret = set_home_env (container->container_uid);
+      if (UNLIKELY (ret < 0 && errno != ENOTSUP))
+        {
+          setenv ("HOME", "/", 1);
+          libcrun_warning ("cannot detect HOME environment variable, setting default");
+        }
+    }
+
+  ret = libcrun_set_selinux_exec_label (process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_set_apparmor_profile (process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (container->container_def->linux && container->container_def->linux->seccomp)
+    {
+      seccomp_flags = container->container_def->linux->seccomp->flags;
+      seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
+    }
+
+  exec_path = find_executable (process->args[0], process->cwd, NULL);
+  if (UNLIKELY (exec_path == NULL))
+    {
+      if (errno == ENOENT)
+        return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
+
+      return crun_make_error (err, errno, "open executable");
+    }
+
+  if (container->container_def->linux && container->container_def->linux->personality)
+    {
+      ret = libcrun_set_personality (container->container_def->linux->personality, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = mark_for_close_fds_ge_than (context->preserve_fds + 3, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! process->no_new_privileges)
+    {
+      cleanup_free char *seccomp_fd_payload = NULL;
+      size_t seccomp_fd_payload_len = 0;
+
+      if (seccomp_receiver_fd >= 0)
+        {
+          ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
+                                   seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      close_and_reset (&seccomp_fd);
+      close_and_reset (&seccomp_receiver_fd);
+    }
+
+  ret = libcrun_container_setgroups (container, process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = maybe_chown_std_streams (container_uid, container_gid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (process->capabilities)
+    capabilities = process->capabilities;
+  else if (container->container_def->process)
+    capabilities = container->container_def->process->capabilities;
+
+  ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! chdir_done && UNLIKELY (chdir (cwd) < 0))
+    libcrun_fail_with_error (errno, "chdir `%s`", cwd);
+
+  if (process->no_new_privileges)
+    {
+      cleanup_free char *seccomp_fd_payload = NULL;
+      size_t seccomp_fd_payload_len = 0;
+
+      if (seccomp_receiver_fd >= 0)
+        {
+          ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
+                                   seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      close_and_reset (&seccomp_fd);
+      close_and_reset (&seccomp_receiver_fd);
+    }
+
+  if (process->user)
+    umask (process->user->umask_present ? process->user->umask : 0022);
+
+  TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
+  TEMP_FAILURE_RETRY (close (pipefd1));
+  pipefd1 = -1;
+
+  TEMP_FAILURE_RETRY (execv (exec_path, process->args));
+  libcrun_fail_with_error (errno, "exec");
+  _exit (EXIT_FAILURE);
+
+  return 0;
+}
+
 int
 libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                      struct libcrun_container_exec_options_s *opts,
@@ -3502,7 +3685,6 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   cleanup_free char *config_file = NULL;
   cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *dir = NULL;
-  cleanup_free const char *exec_path = NULL;
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
@@ -3634,163 +3816,14 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   /* Process to exec.  */
   if (pid == 0)
     {
-      size_t i;
-      uid_t container_uid = process->user ? process->user->uid : 0;
-      gid_t container_gid = process->user ? process->user->gid : 0;
-      const char *cwd;
-      runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
-      char **seccomp_flags = NULL;
-      size_t seccomp_flags_len = 0;
-      pid_t own_pid = 0;
-
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
 
-      TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
-
-      cwd = process->cwd ? process->cwd : "/";
-      if (chdir (cwd) < 0)
-        libcrun_fail_with_error (errno, "chdir `%s`", cwd);
-
-      ret = unblock_signals (err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = clearenv ();
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "clearenv");
-
-      if (process->env_len)
-        {
-          for (i = 0; i < process->env_len; i++)
-            if (putenv (process->env[i]) < 0)
-              libcrun_fail_with_error (errno, "putenv `%s`", process->env[i]);
-        }
-      else if (container->container_def->process->env_len)
-        {
-          char *e;
-
-          for (i = 0; i < container->container_def->process->env_len; i++)
-            {
-              e = container->container_def->process->env[i];
-              if (putenv (e) < 0)
-                libcrun_fail_with_error (errno, "putenv `%s`", e);
-            }
-        }
-
-      if (getenv ("HOME") == NULL)
-        {
-          ret = set_home_env (container->container_uid);
-          if (UNLIKELY (ret < 0 && errno != ENOTSUP))
-            {
-              setenv ("HOME", "/", 1);
-              libcrun_warning ("cannot detect HOME environment variable, setting default");
-            }
-        }
-
-      if (UNLIKELY (libcrun_set_selinux_exec_label (process, err) < 0))
+      exec_process_entrypoint (context, container, process, pipefd1, seccomp_fd, seccomp_receiver_fd, err);
+      /* It gets here only on errors.  */
+      if (*err)
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-      if (UNLIKELY (libcrun_set_apparmor_profile (process, err) < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-
-      if (container->container_def->linux && container->container_def->linux->seccomp)
-        {
-          seccomp_flags = container->container_def->linux->seccomp->flags;
-          seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
-        }
-
-      exec_path = find_executable (process->args[0], process->cwd, NULL);
-      if (UNLIKELY (exec_path == NULL))
-        {
-          if (errno == ENOENT)
-            crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
-          else
-            crun_make_error (err, errno, "open executable");
-
-          libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-        }
-
-      if (container->container_def->linux && container->container_def->linux->personality)
-        {
-          ret = libcrun_set_personality (container->container_def->linux->personality, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      ret = mark_for_close_fds_ge_than (context->preserve_fds + 3, err);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-
-      if (! process->no_new_privileges)
-        {
-          cleanup_free char *seccomp_fd_payload = NULL;
-          size_t seccomp_fd_payload_len = 0;
-
-          if (seccomp_receiver_fd >= 0)
-            {
-              ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-
-          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
-                                       seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          close_and_reset (&seccomp_fd);
-          close_and_reset (&seccomp_receiver_fd);
-        }
-
-      ret = libcrun_container_setgroups (container, process, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = maybe_chown_std_streams (container_uid, container_gid, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      if (process->capabilities)
-        capabilities = process->capabilities;
-      else if (container->container_def->process)
-        capabilities = container->container_def->process->capabilities;
-
-      if (capabilities)
-        {
-          ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
-          if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-        }
-
-      if (process->no_new_privileges)
-        {
-          cleanup_free char *seccomp_fd_payload = NULL;
-          size_t seccomp_fd_payload_len = 0;
-
-          if (seccomp_receiver_fd >= 0)
-            {
-              ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-          ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
-                                       seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          close_and_reset (&seccomp_fd);
-          close_and_reset (&seccomp_receiver_fd);
-        }
-
-      if (process->user)
-        umask (process->user->umask_present ? process->user->umask : 0022);
-
-      TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
-      TEMP_FAILURE_RETRY (close (pipefd1));
-      pipefd1 = -1;
-
-      TEMP_FAILURE_RETRY (execv (exec_path, process->args));
-      libcrun_fail_with_error (errno, "exec");
       _exit (EXIT_FAILURE);
     }
 
