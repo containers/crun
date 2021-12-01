@@ -36,34 +36,36 @@
 #include <sys/types.h>
 
 #ifdef HAVE_SECCOMP
-# include <linux/seccomp.h>
-# include <linux/filter.h>
-# include <seccomp.h>
+#  include <linux/seccomp.h>
+#  include <linux/filter.h>
+#  include <seccomp.h>
 
-# ifndef SECCOMP_FILTER_FLAG_NEW_LISTENER
-#  define SECCOMP_FILTER_FLAG_NEW_LISTENER (1UL << 3)
-# endif
+#  ifndef SECCOMP_FILTER_FLAG_NEW_LISTENER
+#    define SECCOMP_FILTER_FLAG_NEW_LISTENER (1UL << 3)
+#  endif
 
-# ifndef SECCOMP_SET_MODE_FILTER
-#  define SECCOMP_SET_MODE_FILTER 1
-# endif
+#  ifndef SECCOMP_SET_MODE_FILTER
+#    define SECCOMP_SET_MODE_FILTER 1
+#  endif
 
 #endif
 
 #ifdef HAVE_ERROR_H
-# include <error.h>
+#  include <error.h>
 #else
-# define error(status, errno, fmt, ...) do {                            \
-    if (errno == 0)                                                     \
-      fprintf (stderr, "crun: " fmt "\n", ##__VA_ARGS__);               \
-    else                                                                \
-      {                                                                 \
-        fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                  \
-        fprintf (stderr, ": %s\n", strerror (errno));                   \
-      }                                                                 \
-    if (status)                                                         \
-      exit (status);                                                    \
-  } while(0)
+#  define error(status, errno, fmt, ...)                      \
+    do                                                        \
+      {                                                       \
+        if (errno == 0)                                       \
+          fprintf (stderr, "crun: " fmt "\n", ##__VA_ARGS__); \
+        else                                                  \
+          {                                                   \
+            fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);    \
+            fprintf (stderr, ": %s\n", strerror (errno));     \
+          }                                                   \
+        if (status)                                           \
+          exit (status);                                      \
+    } while (0)
 #endif
 
 static int
@@ -167,10 +169,10 @@ sd_notify ()
 
   notify_socket_unix_name.sun_family = AF_UNIX;
   strncpy (notify_socket_unix_name.sun_path, notify_socket_name,
-           sizeof(notify_socket_unix_name.sun_path));
+           sizeof (notify_socket_unix_name.sun_path));
 
   ret = sendto (notify_socket_fd, ready_data, ready_data_len, 0,
-                (struct sockaddr *)&notify_socket_unix_name, sizeof(notify_socket_unix_name));
+                (struct sockaddr *) &notify_socket_unix_name, sizeof (notify_socket_unix_name));
 
   if (ret < 0)
     error (EXIT_FAILURE, 0, "sendto");
@@ -228,13 +230,13 @@ main (int argc, char **argv)
   if (strcmp (argv[1], "groups") == 0)
     {
       gid_t groups[10];
-      int max_groups = sizeof(groups) / sizeof(groups[0]);
+      int max_groups = sizeof (groups) / sizeof (groups[0]);
       int n_groups, i;
-      n_groups = getgroups(max_groups, groups);
-      fputs("GROUPS=[", stdout);
+      n_groups = getgroups (max_groups, groups);
+      fputs ("GROUPS=[", stdout);
       for (i = 0; i < n_groups; i++)
-        printf("%s%d", i == 0 ? "" : " ", groups[i]);
-      fputs("]\n", stdout);
+        printf ("%s%d", i == 0 ? "" : " ", groups[i]);
+      fputs ("]\n", stdout);
       exit (0);
     }
 
@@ -379,7 +381,7 @@ main (int argc, char **argv)
     }
 
   if (strcmp (argv[1], "systemd-notify") == 0)
-    return sd_notify();
+    return sd_notify ();
 
   if (strcmp (argv[1], "check-feature") == 0)
     {
@@ -391,7 +393,7 @@ main (int argc, char **argv)
 #if defined __NR_open_tree
           int ret;
 
-          ret = syscall(__NR_open_tree);
+          ret = syscall (__NR_open_tree);
           return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
 #else
           return 1;
@@ -402,7 +404,7 @@ main (int argc, char **argv)
 #if defined __NR_move_mount
           int ret;
 
-          ret = syscall(__NR_move_mount);
+          ret = syscall (__NR_move_mount);
           return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
 #else
           return 1;
@@ -429,7 +431,7 @@ main (int argc, char **argv)
           else
             {
               struct sock_fprog seccomp_filter;
-              const char bpf[] = {0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f};
+              const char bpf[] = { 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f };
               seccomp_filter.len = 1;
               seccomp_filter.filter = (struct sock_filter *) bpf;
 

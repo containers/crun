@@ -181,6 +181,6 @@ generate-mount_flags.c: src/libcrun/mount_flags.perf
 
 clang-format:
 # do not format files that were copied into the source directory.
-	git ls-files src | egrep "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
+	git ls-files src tests | egrep "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
 .PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format
