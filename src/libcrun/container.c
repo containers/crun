@@ -1892,7 +1892,10 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
     {
       ret = entrypoint_args->exec_func (entrypoint_args->container, entrypoint_args->exec_func_arg, exec_path,
                                         def->process->args);
-      _exit (ret);
+      if (ret != 0)
+        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->context->handler);
+
+      return ret;
     }
 
   TEMP_FAILURE_RETRY (execv (exec_path, def->process->args));
