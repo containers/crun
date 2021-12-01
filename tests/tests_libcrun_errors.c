@@ -20,7 +20,7 @@
 #include <libcrun/utils.h>
 #include <string.h>
 
-typedef int (*test)();
+typedef int (*test) ();
 
 static int
 test_crun_make_error ()
@@ -89,7 +89,11 @@ run_and_print_test_result (const char *name, int id, test t)
     printf ("not ok %d - %s\n", id, name);
 }
 
-#define RUN_TEST(T) do {run_and_print_test_result (#T, id++, T);} while (0)
+#define RUN_TEST(T)                            \
+  do                                           \
+    {                                          \
+      run_and_print_test_result (#T, id++, T); \
+  } while (0)
 
 int
 main ()
