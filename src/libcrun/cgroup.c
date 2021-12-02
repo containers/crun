@@ -2360,12 +2360,11 @@ do_cgroup_destroy (const char *path, int mode, libcrun_error_t *err)
 }
 
 int
-libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager, libcrun_error_t *err)
+libcrun_cgroup_destroy (int manager, const char *path, const char *scope, libcrun_error_t *err)
 {
   int ret;
   int mode;
 
-  (void) id;
   (void) manager;
   (void) scope;
 

@@ -61,7 +61,7 @@ LIBCRUN_PUBLIC int libcrun_cgroup_read_pids (const char *path, bool recurse, pid
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
 int libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *err);
 int libcrun_cgroup_killall (const char *path, libcrun_error_t *err);
-int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager,
+int libcrun_cgroup_destroy (int manager, const char *path, const char *scope,
                             libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, bool create_if_missing,
                                     libcrun_error_t *err);
