@@ -3838,11 +3838,19 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   if (container->context->notify_socket)
     xasprintf (&notify_socket_env, "NOTIFY_SOCKET=%s/notify", container->context->notify_socket);
 
-  entrypoint (args, notify_socket_env, sync_socket_container, err);
+  ret = entrypoint (args, notify_socket_env, sync_socket_container, err);
 
-  /* ENTRYPOINT returns only on an error, fallback here: */
+  /* For most of the cases ENTRYPOINT returns only on an error, fallback here */
+  /* Except for custom handlers which could perform a task and return with success */
+  /* since custom handlers could or could not be {long-running, blocking} */
   if (*err)
     libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+
+  /* If cursor is here most likely we returned from a custom handler eg. wasm, libkrun */
+  /* Allow cleanup attributes to perform cleanup and exit with success if return code was 0 */
+  if (ret == 0)
+    _exit (EXIT_SUCCESS);
+
   _exit (EXIT_FAILURE);
 }
 
