@@ -4129,11 +4129,6 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   parser_error parser_err = NULL;
   runtime_spec_schema_config_linux_resources *resources = NULL;
   struct parser_context ctx = { 0, stderr };
-  int cgroup_mode;
-
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
 
   ret = parse_json_file (&tree, content, &ctx, err);
   if (UNLIKELY (ret < 0))
@@ -4146,7 +4141,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
       goto cleanup;
     }
 
-  ret = libcrun_update_cgroup_resources (cgroup_mode, resources, status->cgroup_path, err);
+  ret = libcrun_update_cgroup_resources (resources, status->cgroup_path, err);
 
 cleanup:
   if (tree)

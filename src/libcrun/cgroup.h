@@ -43,9 +43,6 @@ struct libcrun_cgroup_args
 {
   runtime_spec_schema_config_linux_resources *resources;
   json_map_string_string *annotations;
-  int cgroup_mode;
-  char **path;
-  char **scope;
   const char *cgroup_path;
   int manager;
   pid_t pid;
@@ -54,6 +51,10 @@ struct libcrun_cgroup_args
   const char *id;
   const char *systemd_subgroup;
   const char *delegate_cgroup;
+
+  /* Output.  */
+  char **path;
+  char **scope;
 };
 
 LIBCRUN_PUBLIC int libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);
@@ -65,8 +66,7 @@ int libcrun_cgroup_destroy (int manager, const char *path, const char *scope,
                             libcrun_error_t *err);
 int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, bool create_if_missing,
                                     libcrun_error_t *err);
-int libcrun_update_cgroup_resources (int cgroup_mode,
-                                     runtime_spec_schema_config_linux_resources *resources, char *path,
+int libcrun_update_cgroup_resources (runtime_spec_schema_config_linux_resources *resources, char *path,
                                      libcrun_error_t *err);
 int libcrun_cgroup_is_container_paused (const char *cgroup_path, bool *paused, libcrun_error_t *err);
 int libcrun_cgroup_pause_unpause (const char *path, const bool pause, libcrun_error_t *err);
@@ -76,7 +76,7 @@ int libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err);
 
 int parse_sd_array (char *s, char **out, char **next, libcrun_error_t *err);
 
-int libcrun_cgroup_has_oom (const char *path, int cgroup_mode, libcrun_error_t *err);
+int libcrun_cgroup_has_oom (const char *path, libcrun_error_t *err);
 
 int libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err);
 

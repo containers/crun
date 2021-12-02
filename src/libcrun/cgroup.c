@@ -1012,7 +1012,6 @@ static int
 systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
-  int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
   pid_t pid = args->pid;
   int ret;
@@ -1021,6 +1020,15 @@ systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   cleanup_free char *cgroup_path = NULL;
   const char *suffix = args->systemd_subgroup;
   const char *delegate_cgroup = args->delegate_cgroup;
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  /* On cgroup-v2, specify a suffix by default.  */
+  if (suffix == NULL && cgroup_mode == CGROUP_MODE_UNIFIED)
+    suffix = "container";
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
@@ -1737,11 +1745,15 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
   cleanup_free char *target_cgroup_cleanup = NULL;
   const char *cgroup_path = args->cgroup_path;
   const char *process_target_cgroup = NULL;
-  int cgroup_mode = args->cgroup_mode;
   const char *id = args->id;
   char **path = args->path;
   pid_t pid = args->pid;
+  int cgroup_mode;
   int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
 
   if (cgroup_mode != CGROUP_MODE_UNIFIED && args->delegate_cgroup)
     return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
@@ -1840,15 +1852,19 @@ int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
   __attribute__ ((unused)) pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
-  int cgroup_mode = args->cgroup_mode;
   char **path = args->path;
   int manager = args->manager;
   uid_t root_uid = args->root_uid;
   uid_t root_gid = args->root_gid;
   libcrun_error_t tmp_err = NULL;
   bool cgroup_path_empty;
+  int cgroup_mode;
   int rootless;
   int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
 
   /* If the cgroup configuration is limiting what CPUs/memory Nodes are available for the container,
      then stop the container process during the cgroup configuration to avoid it being rescheduled on
@@ -1906,7 +1922,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
         }
 
       if (args->resources)
-        return libcrun_update_cgroup_resources (args->cgroup_mode, args->resources, *path, err);
+        return libcrun_update_cgroup_resources (args->resources, *path, err);
 
       return 0;
     }
@@ -3416,9 +3432,15 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
 }
 
 int
-libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_linux_resources *resources, char *path,
+libcrun_update_cgroup_resources (runtime_spec_schema_config_linux_resources *resources, char *path,
                                  libcrun_error_t *err)
 {
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
   if (path == NULL)
     {
       size_t i;
@@ -3456,12 +3478,17 @@ libcrun_update_cgroup_resources (int cgroup_mode, runtime_spec_schema_config_lin
 }
 
 int
-libcrun_cgroup_has_oom (const char *path, int cgroup_mode, libcrun_error_t *err)
+libcrun_cgroup_has_oom (const char *path, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   const char *prefix = NULL;
   size_t content_size = 0;
+  int cgroup_mode;
   char *it;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
 
   if (path == NULL || path[0] == '\0')
     return 0;
