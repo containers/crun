@@ -28,7 +28,6 @@
 #include "libcrun/container.h"
 #include "libcrun/utils.h"
 #include "libcrun/cgroup.h"
-#include "libcrun/status.h"
 
 static char doc[] = "OCI runtime";
 
@@ -89,11 +88,10 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
 {
   int first_arg;
   int ret;
+  cleanup_free pid_t *pids = NULL;
   libcrun_context_t crun_context = {
     0,
   };
-  libcrun_container_status_t status;
-  cleanup_free pid_t *pids = NULL;
   size_t i;
 
   ps_options.format = PS_TABLE;
@@ -105,17 +103,7 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_read_container_status (&status, crun_context.state_root, argv[first_arg], err);
-  if (UNLIKELY (ret < 0))
-    {
-      libcrun_error_write_warning_and_release (stderr, &err);
-      return ret;
-    }
-
-  if (status.cgroup_path == NULL || status.cgroup_path[0] == '\0')
-    error (EXIT_FAILURE, 0, "the container is not using cgroups");
-
-  ret = libcrun_cgroup_read_pids (status.cgroup_path, true, &pids, err);
+  ret = libcrun_container_read_pids (&crun_context, argv[first_arg], true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       libcrun_error_write_warning_and_release (stderr, &err);

@@ -72,7 +72,7 @@ cgroup_status_freep (struct libcrun_cgroup_status **p)
 }
 #define cleanup_cgroup_status __attribute__ ((cleanup (cgroup_status_freep)))
 
-LIBCRUN_PUBLIC int libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);
+int libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);
 
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
 int libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *err);

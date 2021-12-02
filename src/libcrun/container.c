@@ -4089,3 +4089,19 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
 
   return 0;
 }
+
+int
+libcrun_container_read_pids (libcrun_context_t *context, const char *id, bool recurse, pid_t **pids, libcrun_error_t *err)
+{
+  cleanup_container_status libcrun_container_status_t status = {};
+  int ret;
+
+  ret = libcrun_read_container_status (&status, context->state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (status.cgroup_path == NULL || status.cgroup_path[0] == '\0')
+    return crun_make_error (err, 0, "the container is not using cgroups");
+
+  return libcrun_cgroup_read_pids (status.cgroup_path, recurse, pids, err);
+}
