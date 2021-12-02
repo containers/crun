@@ -2558,22 +2558,6 @@ find_delegate_cgroup (libcrun_container_t *container)
   return NULL;
 }
 
-static const char *
-find_systemd_subgroup (libcrun_container_t *container)
-{
-  const char *annotation;
-
-  annotation = find_annotation (container, "run.oci.systemd.subgroup");
-  if (annotation)
-    {
-      if (annotation[0] == '\0')
-        return NULL;
-      return annotation;
-    }
-
-  return NULL;
-}
-
 static int
 get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_receiver_fd, const char **plugins,
                          libcrun_error_t *err)
@@ -2765,7 +2749,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
-      .systemd_subgroup = find_systemd_subgroup (container),
       .delegate_cgroup = find_delegate_cgroup (container),
     };
 
@@ -4078,7 +4061,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
-      .systemd_subgroup = find_systemd_subgroup (container),
       .delegate_cgroup = find_delegate_cgroup (container),
     };
 

@@ -300,6 +300,7 @@ int libcrun_initialize_selinux (libcrun_error_t *err);
 
 int libcrun_initialize_apparmor (libcrun_error_t *err);
 
+const char *find_annotation_map (json_map_string_string *annotations, const char *name);
 const char *find_annotation (libcrun_container_t *container, const char *name);
 
 int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);

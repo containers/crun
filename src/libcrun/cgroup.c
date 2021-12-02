@@ -1009,7 +1009,7 @@ get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **sco
 }
 
 static int
-systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   char **path = args->path;
@@ -1018,17 +1018,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   char *from, *to;
   char *saveptr = NULL;
   cleanup_free char *cgroup_path = NULL;
-  const char *suffix = args->systemd_subgroup;
   const char *delegate_cgroup = args->delegate_cgroup;
-  int cgroup_mode;
-
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
-
-  /* On cgroup-v2, specify a suffix by default.  */
-  if (suffix == NULL && cgroup_mode == CGROUP_MODE_UNIFIED)
-    suffix = "container";
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
@@ -1791,6 +1781,25 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
   return enter_cgroup (cgroup_mode, pid, 0, process_target_cgroup, true, err);
 }
 
+static const char *
+find_systemd_subgroup (json_map_string_string *annotations, int cgroup_mode)
+{
+  const char *annotation;
+
+  annotation = find_annotation_map (annotations, "run.oci.systemd.subgroup");
+  if (annotation)
+    {
+      if (annotation[0] == '\0')
+        return NULL;
+      return annotation;
+    }
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    return "container";
+
+  return NULL;
+}
+
 static int
 libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
@@ -1798,10 +1807,16 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
   runtime_spec_schema_config_linux_resources *resources = args->resources;
   const char *cgroup_path = args->cgroup_path;
   cleanup_free char *slice = NULL;
+  const char *suffix;
   const char *id = args->id;
   pid_t pid = args->pid;
   char *scope = NULL;
+  int cgroup_mode;
   int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
 
   get_systemd_scope_and_slice (id, cgroup_path, &scope, &slice);
 
@@ -1811,7 +1826,9 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return systemd_finalize (args, err);
+  suffix = find_systemd_subgroup (args->annotations, cgroup_mode);
+
+  return systemd_finalize (args, cgroup_mode, suffix, err);
 #else
   return libcrun_cgroup_enter_cgroupfs (args, err);
 #endif
