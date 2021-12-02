@@ -22,6 +22,7 @@
 #include "cgroup.h"
 #include "ebpf.h"
 #include "utils.h"
+#include "status.h"
 #include <string.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -37,6 +38,12 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <libgen.h>
+
+struct libcrun_cgroup_status
+{
+  char *path;
+  char *scope;
+};
 
 struct symlink_s
 {
@@ -976,8 +983,6 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_e
   return enter_cgroup (cgroup_mode, pid, init_pid, path, false, err);
 }
 
-#ifdef HAVE_SYSTEMD
-
 static void
 get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
 {
@@ -1025,10 +1030,11 @@ find_delegate_cgroup (json_map_string_string *annotations)
 }
 
 static int
-systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char *suffix, libcrun_error_t *err)
+systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
+                  int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
-  char **path = args->path;
+  cleanup_free char *path = NULL;
   pid_t pid = args->pid;
   int ret;
   char *from, *to;
@@ -1067,10 +1073,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char 
         return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
       *to = '\0';
       if (suffix == NULL)
-        *path = xstrdup (from);
+        path = xstrdup (from);
       else
         {
-          ret = append_paths (path, err, from, suffix, NULL);
+          ret = append_paths (&path, err, from, suffix, NULL);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -1094,9 +1100,9 @@ systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char 
               subsystem = "unified";
             }
 
-          if (strcmp (subpath, *path))
+          if (strcmp (subpath, path))
             {
-              ret = enter_cgroup_subsystem (pid, subsystem, *path, true, err);
+              ret = enter_cgroup_subsystem (pid, subsystem, path, true, err);
               if (UNLIKELY (ret < 0))
                 {
                   /* If it is a named hierarchy, skip the error.  */
@@ -1127,16 +1133,16 @@ systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char 
           return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
         *to = '\0';
         if (suffix == NULL)
-          *path = xstrdup (from);
+          path = xstrdup (from);
         else
           {
-            ret = append_paths (path, err, from, suffix, NULL);
+            ret = append_paths (&path, err, from, suffix, NULL);
             if (UNLIKELY (ret < 0))
               return ret;
           }
         *to = '\n';
 
-        ret = append_paths (&dir, err, CGROUP_ROOT, *path, delegate_cgroup, NULL);
+        ret = append_paths (&dir, err, CGROUP_ROOT, path, delegate_cgroup, NULL);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -1154,10 +1160,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char 
 
            process_target_cgroup can be a sub-cgroup of PATH.  */
         if (delegate_cgroup == NULL)
-          process_target_cgroup = *path;
+          process_target_cgroup = path;
         else
           {
-            ret = append_paths (&target_cgroup_cleanup, err, *path, delegate_cgroup, NULL);
+            ret = append_paths (&target_cgroup_cleanup, err, path, delegate_cgroup, NULL);
             if (UNLIKELY (ret < 0))
               return ret;
 
@@ -1184,6 +1190,9 @@ systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char 
     default:
       return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
     }
+
+  *path_out = path;
+  path = NULL;
 
   return 0;
 }
@@ -1737,24 +1746,21 @@ exit:
   return ret;
 }
 
-#endif
-
 static int
-libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error_t *err arg_unused)
+libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args arg_unused, struct libcrun_cgroup_status *out, libcrun_error_t *err arg_unused)
 {
-  *args->path = NULL;
+  out->path = NULL;
   return 0;
 }
 
 static int
-libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *out, libcrun_error_t *err)
 {
   cleanup_free char *target_cgroup_cleanup = NULL;
   const char *cgroup_path = args->cgroup_path;
   const char *process_target_cgroup = NULL;
   const char *delegate_cgroup;
   const char *id = args->id;
-  char **path = args->path;
   pid_t pid = args->pid;
   int cgroup_mode;
   int ret;
@@ -1769,20 +1775,20 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
     return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
 
   if (cgroup_path == NULL)
-    xasprintf (path, "/%s", id);
+    xasprintf (&(out->path), "/%s", id);
   else
     {
       if (cgroup_path[0] == '/')
-        *path = xstrdup (cgroup_path);
+        out->path = xstrdup (cgroup_path);
       else
-        xasprintf (path, "/%s", cgroup_path);
+        xasprintf (&(out->path), "/%s", cgroup_path);
     }
 
   if (delegate_cgroup == NULL)
-    process_target_cgroup = *path;
+    process_target_cgroup = out->path;
   else
     {
-      ret = append_paths (&target_cgroup_cleanup, err, *path, delegate_cgroup, NULL);
+      ret = append_paths (&target_cgroup_cleanup, err, out->path, delegate_cgroup, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1821,16 +1827,17 @@ find_systemd_subgroup (json_map_string_string *annotations, int cgroup_mode)
 }
 
 static int
-libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *out, libcrun_error_t *err)
 {
 #ifdef HAVE_SYSTEMD
   runtime_spec_schema_config_linux_resources *resources = args->resources;
   const char *cgroup_path = args->cgroup_path;
+  cleanup_free char *scope = NULL;
+  cleanup_free char *path = NULL;
   cleanup_free char *slice = NULL;
   const char *suffix;
   const char *id = args->id;
   pid_t pid = args->pid;
-  char *scope = NULL;
   int cgroup_mode;
   int ret;
 
@@ -1840,15 +1847,22 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args, libcrun_error_t 
 
   get_systemd_scope_and_slice (id, cgroup_path, &scope, &slice);
 
-  *args->scope = scope;
-
   ret = enter_systemd_cgroup_scope (resources, args->annotations, scope, slice, pid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   suffix = find_systemd_subgroup (args->annotations, cgroup_mode);
 
-  return systemd_finalize (args, cgroup_mode, suffix, err);
+  ret = systemd_finalize (args, &path, cgroup_mode, suffix, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  out->path = path;
+  path = NULL;
+
+  out->scope = scope;
+  scope = NULL;
+  return 0;
 #else
   return libcrun_cgroup_enter_cgroupfs (args, err);
 #endif
@@ -1886,10 +1900,10 @@ must_stop_proc (runtime_spec_schema_config_linux_resources *resources)
 }
 
 int
-libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
+libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status **out, libcrun_error_t *err)
 {
   __attribute__ ((unused)) pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
-  char **path = args->path;
+  cleanup_cgroup_status struct libcrun_cgroup_status *status;
   int manager = args->manager;
   uid_t root_uid = args->root_uid;
   uid_t root_gid = args->root_gid;
@@ -1898,6 +1912,8 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   int cgroup_mode;
   int rootless;
   int ret;
+
+  status = xmalloc0 (sizeof *status);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -1935,33 +1951,39 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   switch (manager)
     {
     case CGROUP_MANAGER_DISABLED:
-      ret = libcrun_cgroup_enter_no_manager (args, err);
+      ret = libcrun_cgroup_enter_no_manager (args, status, err);
       break;
 
     case CGROUP_MANAGER_SYSTEMD:
-      ret = libcrun_cgroup_enter_systemd (args, err);
+      ret = libcrun_cgroup_enter_systemd (args, status, err);
       break;
 
     case CGROUP_MANAGER_CGROUPFS:
-      ret = libcrun_cgroup_enter_cgroupfs (args, err);
+      ret = libcrun_cgroup_enter_cgroupfs (args, status, err);
       break;
 
     default:
       return crun_make_error (err, EINVAL, "unknown cgroup manager specified %d", manager);
     }
+
   if (LIKELY (ret >= 0))
     {
-      if (cgroup_mode == CGROUP_MODE_UNIFIED && (root_uid != (uid_t) -1 || root_gid != (gid_t) -1))
+      bool need_chown = root_uid != (uid_t) -1 || root_gid != (gid_t) -1;
+      if (status->path && cgroup_mode == CGROUP_MODE_UNIFIED && need_chown)
         {
-          ret = chown_cgroups (*path, root_uid, root_gid, err);
+          ret = chown_cgroups (status->path, root_uid, root_gid, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      if (args->resources)
-        return libcrun_update_cgroup_resources (args->resources, *path, err);
+      if (args->resources && status->path)
+        {
+          ret = libcrun_update_cgroup_resources (args->resources, status->path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
-      return 0;
+      goto success;
     }
 
   rootless = is_rootless (&tmp_err);
@@ -1977,13 +1999,19 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err)
   if (rootless > 0 && cgroup_path_empty && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
     {
       /* Ignore cgroups errors and set there is no cgroup path to use.  */
-      free (*path);
-      *path = NULL;
+      free (status->path);
+      status->path = NULL;
       crun_error_release (err);
       return 0;
     }
 
-  return ret;
+  if (ret < 0)
+    return ret;
+
+success:
+  *out = status;
+  status = NULL;
+  return 0;
 }
 
 int
@@ -3515,13 +3543,18 @@ libcrun_update_cgroup_resources (runtime_spec_schema_config_linux_resources *res
 }
 
 int
-libcrun_cgroup_has_oom (const char *path, libcrun_error_t *err)
+libcrun_cgroup_has_oom (struct libcrun_cgroup_status *status, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
+  const char *path = NULL;
   const char *prefix = NULL;
   size_t content_size = 0;
   int cgroup_mode;
   char *it;
+
+  path = status->path;
+  if (UNLIKELY (path == NULL || path[0] == '\0'))
+    return 0;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -3593,4 +3626,24 @@ libcrun_cgroup_has_oom (const char *path, libcrun_error_t *err)
     }
 
   return 0;
+}
+
+int
+libcrun_cgroup_get_status (struct libcrun_cgroup_status *cgroup_status,
+                           libcrun_container_status_t *status, libcrun_error_t *err arg_unused)
+{
+  status->cgroup_path = cgroup_status->path;
+  status->scope = cgroup_status->scope;
+  return 0;
+}
+
+void
+libcrun_cgroup_status_free (struct libcrun_cgroup_status *cgroup_status)
+{
+  if (cgroup_status == NULL)
+    return;
+
+  free (cgroup_status->path);
+  free (cgroup_status->scope);
+  free (cgroup_status);
 }
