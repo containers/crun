@@ -64,8 +64,7 @@ int libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t
 int libcrun_cgroup_killall (const char *path, libcrun_error_t *err);
 int libcrun_cgroup_destroy (int manager, const char *path, const char *scope,
                             libcrun_error_t *err);
-int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, bool create_if_missing,
-                                    libcrun_error_t *err);
+int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_error_t *err);
 int libcrun_update_cgroup_resources (runtime_spec_schema_config_linux_resources *resources, char *path,
                                      libcrun_error_t *err);
 int libcrun_cgroup_is_container_paused (const char *cgroup_path, bool *paused, libcrun_error_t *err);

@@ -3890,13 +3890,13 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_contain
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, false, err);
+      ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
-      ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, false, err);
+      ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
