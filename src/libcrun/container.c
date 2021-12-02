@@ -2542,22 +2542,6 @@ get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, 
     *uid = *gid = -1;
 }
 
-static const char *
-find_delegate_cgroup (libcrun_container_t *container)
-{
-  const char *annotation;
-
-  annotation = find_annotation (container, "run.oci.delegate-cgroup");
-  if (annotation)
-    {
-      if (annotation[0] == '\0')
-        return NULL;
-      return annotation;
-    }
-
-  return NULL;
-}
-
 static int
 get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_receiver_fd, const char **plugins,
                          libcrun_error_t *err)
@@ -2749,7 +2733,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
-      .delegate_cgroup = find_delegate_cgroup (container),
     };
 
     ret = libcrun_cgroup_enter (&cg, err);
@@ -4061,7 +4044,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
-      .delegate_cgroup = find_delegate_cgroup (container),
     };
 
     ret = libcrun_cgroup_enter (&cg, err);

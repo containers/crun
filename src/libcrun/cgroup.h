@@ -49,7 +49,6 @@ struct libcrun_cgroup_args
   uid_t root_uid;
   gid_t root_gid;
   const char *id;
-  const char *delegate_cgroup;
 
   /* Output.  */
   char **path;

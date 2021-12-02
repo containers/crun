@@ -1008,6 +1008,22 @@ get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **sco
     }
 }
 
+static const char *
+find_delegate_cgroup (json_map_string_string *annotations)
+{
+  const char *annotation;
+
+  annotation = find_annotation_map (annotations, "run.oci.delegate-cgroup");
+  if (annotation)
+    {
+      if (annotation[0] == '\0')
+        return NULL;
+      return annotation;
+    }
+
+  return NULL;
+}
+
 static int
 systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
@@ -1018,12 +1034,14 @@ systemd_finalize (struct libcrun_cgroup_args *args, int cgroup_mode, const char 
   char *from, *to;
   char *saveptr = NULL;
   cleanup_free char *cgroup_path = NULL;
-  const char *delegate_cgroup = args->delegate_cgroup;
+  const char *delegate_cgroup;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  delegate_cgroup = find_delegate_cgroup (args->annotations);
 
   switch (cgroup_mode)
     {
@@ -1731,10 +1749,10 @@ libcrun_cgroup_enter_no_manager (struct libcrun_cgroup_args *args, libcrun_error
 static int
 libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t *err)
 {
-  const char *delegate_cgroup = args->delegate_cgroup;
   cleanup_free char *target_cgroup_cleanup = NULL;
   const char *cgroup_path = args->cgroup_path;
   const char *process_target_cgroup = NULL;
+  const char *delegate_cgroup;
   const char *id = args->id;
   char **path = args->path;
   pid_t pid = args->pid;
@@ -1745,7 +1763,9 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, libcrun_error_t
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
-  if (cgroup_mode != CGROUP_MODE_UNIFIED && args->delegate_cgroup)
+  delegate_cgroup = find_delegate_cgroup (args->annotations);
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED && delegate_cgroup)
     return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
 
   if (cgroup_path == NULL)
