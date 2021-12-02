@@ -56,19 +56,20 @@ struct libcrun_cgroup_args
   const char *delegate_cgroup;
 };
 
-LIBCRUN_PUBLIC int libcrun_get_cgroup_mode (libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_cgroup_killall (const char *path, libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager,
-                                           libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, bool create_if_missing,
-                                                   libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_update_cgroup_resources (int cgroup_mode,
-                                                    runtime_spec_schema_config_linux_resources *resources, char *path,
-                                                    libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_cgroup_is_container_paused (const char *cgroup_path, bool *paused, libcrun_error_t *err);
-LIBCRUN_PUBLIC int libcrun_cgroup_pause_unpause (const char *path, const bool pause, libcrun_error_t *err);
 LIBCRUN_PUBLIC int libcrun_cgroup_read_pids (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);
+
+int libcrun_get_cgroup_mode (libcrun_error_t *err);
+int libcrun_cgroup_killall_signal (const char *path, int signal, libcrun_error_t *err);
+int libcrun_cgroup_killall (const char *path, libcrun_error_t *err);
+int libcrun_cgroup_destroy (const char *id, const char *path, const char *scope, int manager,
+                            libcrun_error_t *err);
+int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, bool create_if_missing,
+                                    libcrun_error_t *err);
+int libcrun_update_cgroup_resources (int cgroup_mode,
+                                     runtime_spec_schema_config_linux_resources *resources, char *path,
+                                     libcrun_error_t *err);
+int libcrun_cgroup_is_container_paused (const char *cgroup_path, bool *paused, libcrun_error_t *err);
+int libcrun_cgroup_pause_unpause (const char *path, const bool pause, libcrun_error_t *err);
 
 int libcrun_cgroup_enter (struct libcrun_cgroup_args *args, libcrun_error_t *err);
 int libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err);
