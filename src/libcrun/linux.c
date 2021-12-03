@@ -3469,7 +3469,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
      This cannot be done in the parent process (by `prepare_and_send_mounts`), since it is
      necessary to first join the target namespaces and then create the mount.
-*/
+  */
   if ((init_status->all_namespaces & CLONE_NEWUSER) && (init_status->join_pidns || init_status->join_ipcns))
     {
       for (i = 0; i < def->mounts_len; i++)
