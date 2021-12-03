@@ -2232,9 +2232,19 @@ handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
 #endif
 }
 
+struct wait_for_process_args
+{
+  pid_t pid;
+  libcrun_context_t *context;
+  int terminal_fd;
+  int notify_socket;
+  int container_ready_fd;
+  int seccomp_notify_fd;
+  const char *seccomp_notify_plugins;
+};
+
 static int
-wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int notify_socket, int container_ready_fd,
-                  int seccomp_notify_fd, const char *seccomp_notify_plugins, libcrun_error_t *err)
+wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
@@ -2248,24 +2258,28 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
 
   container_exit_code = 0;
 
-  if (context->pid_file)
+  if (args == NULL || args->context == NULL)
+    return crun_make_error (err, 0, "internal error: context is empty");
+
+  if (args->context->pid_file)
     {
       char buf[32];
-      size_t buf_len = snprintf (buf, sizeof (buf), "%d", pid);
-      ret = write_file_with_flags (context->pid_file, O_CREAT | O_TRUNC, buf, buf_len, err);
+      size_t buf_len = snprintf (buf, sizeof (buf), "%d", args->pid);
+      ret = write_file_with_flags (args->context->pid_file, O_CREAT | O_TRUNC, buf,
+                                   buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
   /* Also exit if there is nothing more to wait for.  */
-  if (context->detach && notify_socket < 0)
+  if (args->context->detach && args->notify_socket < 0)
     return 0;
 
-  if (container_ready_fd >= 0)
+  if (args->container_ready_fd >= 0)
     {
       ret = 0;
-      TEMP_FAILURE_RETRY (write (container_ready_fd, &ret, sizeof (ret)));
-      close_and_reset (&container_ready_fd);
+      TEMP_FAILURE_RETRY (write (args->container_ready_fd, &ret, sizeof (ret)));
+      close_and_reset (&args->container_ready_fd);
     }
 
   sigfillset (&mask);
@@ -2277,14 +2291,14 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
   if (UNLIKELY (signalfd < 0))
     return signalfd;
 
-  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+  ret = reap_subprocesses (args->pid, &container_exit_code, &last_process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (last_process)
     return container_exit_code;
 
-  if (seccomp_notify_fd >= 0)
+  if (args->seccomp_notify_fd >= 0)
     {
       cleanup_free char *state_root = NULL;
       cleanup_free char *oci_config_path = NULL;
@@ -2292,7 +2306,7 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
       struct libcrun_load_seccomp_notify_conf_s conf;
       memset (&conf, 0, sizeof conf);
 
-      state_root = libcrun_get_state_directory (context->state_root, context->id);
+      state_root = libcrun_get_state_directory (args->context->state_root, args->context->id);
       if (UNLIKELY (state_root == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
@@ -2301,28 +2315,30 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
         return ret;
 
       conf.runtime_root_path = state_root;
-      conf.name = context->id;
-      conf.bundle_path = context->bundle;
+      conf.name = args->context->id;
+      conf.bundle_path = args->context->bundle;
       conf.oci_config_path = oci_config_path;
 
-      ret = set_blocking_fd (seccomp_notify_fd, 0, err);
+      ret = set_blocking_fd (args->seccomp_notify_fd, 0, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_load_seccomp_notify_plugins (&seccomp_notify_ctx, seccomp_notify_plugins, &conf, err);
+      ret = libcrun_load_seccomp_notify_plugins (&seccomp_notify_ctx,
+                                                 args->seccomp_notify_plugins,
+                                                 &conf, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      fds[fds_len++] = seccomp_notify_fd;
+      fds[fds_len++] = args->seccomp_notify_fd;
     }
 
   fds[fds_len++] = signalfd;
-  if (notify_socket >= 0)
-    fds[fds_len++] = notify_socket;
-  if (terminal_fd >= 0)
+  if (args->notify_socket >= 0)
+    fds[fds_len++] = args->notify_socket;
+  if (args->terminal_fd >= 0)
     {
       fds[fds_len++] = 0;
-      levelfds[levelfds_len++] = terminal_fd;
+      levelfds[levelfds_len++] = args->terminal_fd;
     }
   fds[fds_len++] = -1;
   levelfds[levelfds_len++] = -1;
@@ -2346,36 +2362,37 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
         {
           if (events[i].data.fd == 0)
             {
-              ret = copy_from_fd_to_fd (0, terminal_fd, 0, err);
+              ret = copy_from_fd_to_fd (0, args->terminal_fd, 0, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy to terminal fd");
             }
-          else if (events[i].data.fd == seccomp_notify_fd)
+          else if (events[i].data.fd == args->seccomp_notify_fd)
             {
-              ret = libcrun_seccomp_notify_plugins (seccomp_notify_ctx, seccomp_notify_fd, err);
+              ret = libcrun_seccomp_notify_plugins (seccomp_notify_ctx,
+                                                    args->seccomp_notify_fd, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
-          else if (events[i].data.fd == terminal_fd)
+          else if (events[i].data.fd == args->terminal_fd)
             {
-              ret = set_blocking_fd (terminal_fd, 0, err);
+              ret = set_blocking_fd (args->terminal_fd, 0, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "set terminal fd not blocking");
 
-              ret = copy_from_fd_to_fd (terminal_fd, 1, 1, err);
+              ret = copy_from_fd_to_fd (args->terminal_fd, 1, 1, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy from terminal fd");
 
-              ret = set_blocking_fd (terminal_fd, 1, err);
+              ret = set_blocking_fd (args->terminal_fd, 1, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "set terminal fd blocking");
             }
-          else if (events[i].data.fd == notify_socket)
+          else if (events[i].data.fd == args->notify_socket)
             {
-              ret = handle_notify_socket (notify_socket, err);
+              ret = handle_notify_socket (args->notify_socket, err);
               if (UNLIKELY (ret < 0))
                 return ret;
-              if (ret && context->detach)
+              if (ret && args->context->detach)
                 return 0;
             }
           else if (events[i].data.fd == signalfd)
@@ -2385,7 +2402,8 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
                 return crun_make_error (err, errno, "read from signalfd");
               if (si.ssi_signo == SIGCHLD)
                 {
-                  ret = reap_subprocesses (pid, &container_exit_code, &last_process, err);
+                  ret = reap_subprocesses (args->pid, &container_exit_code,
+                                           &last_process, err);
                   if (UNLIKELY (ret < 0))
                     return ret;
                   if (last_process)
@@ -2394,7 +2412,7 @@ wait_for_process (pid_t pid, libcrun_context_t *context, int terminal_fd, int no
               else
                 {
                   /* Send any other signal to the child process.  */
-                  ret = kill (pid, si.ssi_signo);
+                  ret = kill (args->pid, si.ssi_signo);
                 }
             }
           else
@@ -2891,8 +2909,18 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         goto fail;
     }
 
-  ret = wait_for_process (pid, context, terminal_fd, notify_socket, container_ready_fd, seccomp_notify_fd,
-                          seccomp_notify_plugins, err);
+  {
+    struct wait_for_process_args args = {
+      .pid = pid,
+      .context = context,
+      .terminal_fd = terminal_fd,
+      .notify_socket = notify_socket,
+      .container_ready_fd = container_ready_fd,
+      .seccomp_notify_fd = seccomp_notify_fd,
+      .seccomp_notify_plugins = seccomp_notify_plugins,
+    };
+    ret = wait_for_process (&args, err);
+  }
   if (! context->detach)
     {
       libcrun_error_t tmp_err = NULL;
@@ -3881,7 +3909,20 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
           if (UNLIKELY (ret < 0))
             return ret;
         }
-      ret = wait_for_process (pid, context, terminal_fd, -1, -1, seccomp_notify_fd, seccomp_notify_plugins, err);
+
+      {
+        struct wait_for_process_args args = {
+          .pid = pid,
+          .context = context,
+          .terminal_fd = terminal_fd,
+          .notify_socket = -1,
+          .container_ready_fd = -1,
+          .seccomp_notify_fd = seccomp_notify_fd,
+          .seccomp_notify_plugins = seccomp_notify_plugins,
+        };
+
+        ret = wait_for_process (&args, err);
+      }
     }
 
   flush_fd_to_err (context, terminal_fd);
