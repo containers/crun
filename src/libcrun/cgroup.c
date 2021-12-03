@@ -214,22 +214,45 @@ libcrun_update_cgroup_resources (struct libcrun_cgroup_status *status,
   return update_cgroup_resources (status->path, resources, err);
 }
 
+static int
+can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mode,
+                                libcrun_error_t *err)
+{
+  int manager = args->manager;
+  int rootless;
+
+  rootless = is_rootless (err);
+  if (UNLIKELY (rootless < 0))
+    return rootless;
+
+  /* Ignore errors if all these conditions are met:
+     - it is running as rootless.
+     - there is no explicit path in the OCI configuration.
+     - it is not both cgroupv2 and manager=systemd.
+  */
+
+  if (! rootless)
+    return 0;
+
+  if (! is_empty_string (args->cgroup_path))
+    return 0;
+
+  if (cgroup_mode == CGROUP_MODE_UNIFIED && manager == CGROUP_MANAGER_SYSTEMD)
+    return 0;
+
+  return 1;
+}
+
 int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status **out, libcrun_error_t *err)
 {
   __attribute__ ((unused)) pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
   cleanup_cgroup_status struct libcrun_cgroup_status *status;
   struct libcrun_cgroup_manager *cgroup_manager;
-  int manager = args->manager;
   uid_t root_uid = args->root_uid;
   uid_t root_gid = args->root_gid;
-  libcrun_error_t tmp_err = NULL;
-  bool cgroup_path_empty;
   int cgroup_mode;
-  int rootless;
   int ret;
-
-  status = xmalloc0 (sizeof *status);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -264,54 +287,63 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
         return crun_make_error (err, 0, "cgroups in hybrid mode not supported, drop all controllers from cgroupv2");
     }
 
-  ret = get_cgroup_manager (manager, &cgroup_manager, err);
+  ret = get_cgroup_manager (args->manager, &cgroup_manager, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* status will be filled by the cgroup manager.  */
+  status = xmalloc0 (sizeof *status);
+  status->manager = args->manager;
+
   ret = cgroup_manager->create_cgroup (args, status, err);
-
-  if (LIKELY (ret >= 0))
+  if (UNLIKELY (ret < 0))
     {
-      bool need_chown = root_uid != (uid_t) -1 || root_gid != (gid_t) -1;
+      libcrun_error_t tmp_err = NULL;
+      int ignore_cgroup_errors;
 
-      if (status->path && cgroup_mode == CGROUP_MODE_UNIFIED && need_chown)
+      ignore_cgroup_errors = can_ignore_cgroup_enter_errors (args, cgroup_mode, &tmp_err);
+      if (UNLIKELY (ignore_cgroup_errors < 0))
+        {
+          crun_error_release (err);
+          *err = tmp_err;
+          return ignore_cgroup_errors;
+        }
+
+      if (ignore_cgroup_errors)
+        {
+          /* Ignore cgroups errors and set there is no cgroup path to use.  */
+          free (status->path);
+          free (status->scope);
+          status->path = NULL;
+          status->scope = NULL;
+          status->manager = CGROUP_MANAGER_DISABLED;
+          crun_error_release (err);
+
+          goto success;
+        }
+
+      return ret;
+    }
+
+  if (status->path)
+    {
+      bool need_chown;
+
+      need_chown = root_uid != (uid_t) -1 || root_gid != (gid_t) -1;
+      if (cgroup_mode == CGROUP_MODE_UNIFIED && need_chown)
         {
           ret = chown_cgroups (status->path, root_uid, root_gid, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      if (status->path && args->resources && status->path)
+      if (args->resources)
         {
           ret = update_cgroup_resources (status->path, args->resources, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
-
-      goto success;
     }
-
-  rootless = is_rootless (&tmp_err);
-  if (UNLIKELY (rootless < 0))
-    {
-      crun_error_release (err);
-      *err = tmp_err;
-      return rootless;
-    }
-
-  /* Ignore errors only if there is no explicit path set in the configuration.  */
-  cgroup_path_empty = (args->cgroup_path == NULL || args->cgroup_path[0] == '\0');
-  if (rootless > 0 && cgroup_path_empty && (cgroup_mode != CGROUP_MODE_UNIFIED || manager != CGROUP_MANAGER_SYSTEMD))
-    {
-      /* Ignore cgroups errors and set there is no cgroup path to use.  */
-      free (status->path);
-      status->path = NULL;
-      crun_error_release (err);
-      goto success;
-    }
-
-  if (ret < 0)
-    return ret;
 
 success:
   *out = status;
