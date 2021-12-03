@@ -37,6 +37,7 @@
 #include "linux.h"
 #include "terminal.h"
 #include "cgroup.h"
+#include "cgroup-utils.h"
 #include <sys/prctl.h>
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
@@ -1993,13 +1994,14 @@ has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 }
 
 static int
-container_delete_internal (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id,
-                           bool force, bool killall, libcrun_error_t *err)
+container_delete_internal (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
+                           const char *id, bool force, bool killall, libcrun_error_t *err)
 {
-  int ret;
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_container_status libcrun_container_status_t status = {};
-  const char *state_root = context->state_root;
   cleanup_container libcrun_container_t *container = NULL;
+  const char *state_root = context->state_root;
+  int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -2015,6 +2017,8 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         }
       return libcrun_container_delete_status (state_root, id, err);
     }
+
+  cgroup_status = libcrun_cgroup_make_status (&status);
 
   if (! force)
     {
@@ -2058,7 +2062,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
             }
           else if (status.cgroup_path)
             {
-              ret = libcrun_cgroup_killall (status.cgroup_path, err);
+              ret = libcrun_cgroup_killall (cgroup_status, SIGKILL, err);
               if (UNLIKELY (ret < 0))
                 return 0;
             }
@@ -2067,10 +2071,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
 
   if (status.cgroup_path)
     {
-      int manager;
-
-      manager = status.systemd_cgroup ? CGROUP_MANAGER_SYSTEMD : CGROUP_MANAGER_CGROUPFS;
-      ret = libcrun_cgroup_destroy (id, status.cgroup_path, status.scope, manager, err);
+      ret = libcrun_cgroup_destroy (cgroup_status, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
@@ -2109,37 +2110,54 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
   int ret;
   const char *state_root = context->state_root;
   cleanup_container_status libcrun_container_status_t status = {};
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_cgroup_killall_signal (status.cgroup_path, signal, err);
+  cgroup_status = libcrun_cgroup_make_status (&status);
+
+  ret = libcrun_cgroup_killall (cgroup_status, signal, err);
   if (UNLIKELY (ret < 0))
     return ret;
   return 0;
 }
 
 static int
-write_container_status (libcrun_container_t *container, libcrun_context_t *context, pid_t pid, char *cgroup_path,
-                        char *scope, char *created, libcrun_error_t *err)
+write_container_status (libcrun_container_t *container, libcrun_context_t *context,
+                        pid_t pid, struct libcrun_cgroup_status *cgroup_status,
+                        char *created, libcrun_error_t *err)
 {
   cleanup_free char *cwd = getcwd (NULL, 0);
   cleanup_free char *owner = get_user_name (geteuid ());
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
-  libcrun_container_status_t status = { .pid = pid,
-                                        .cgroup_path = cgroup_path,
-                                        .scope = scope,
-                                        .rootfs = rootfs,
-                                        .bundle = cwd,
-                                        .created = created,
-                                        .owner = owner,
-                                        .systemd_cgroup = context->systemd_cgroup,
-                                        .detached = context->detach,
-                                        .external_descriptors = external_descriptors };
+  libcrun_container_status_t status = {
+    .pid = pid,
+    .rootfs = rootfs,
+    .bundle = cwd,
+    .created = created,
+    .owner = owner,
+    .systemd_cgroup = context->systemd_cgroup,
+    .detached = context->detach,
+    .external_descriptors = external_descriptors,
+    .cgroup_path = NULL,
+    .scope = NULL,
+  };
+
   if (cwd == NULL)
     OOM ();
+
+  if (cgroup_status)
+    {
+      int ret;
+
+      ret = libcrun_cgroup_get_status (cgroup_status, &status, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (external_descriptors == NULL)
     return crun_make_error (err, 0, "invalid internal state.  No external descriptors found");
   return libcrun_write_container_status (context->state_root, context->id, &status, err);
@@ -2416,7 +2434,9 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
 }
 
 static int
-cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *cgroup_path, int cgroup_mode, pid_t init_pid, int sync_socket, int terminal_fd, libcrun_error_t *err)
+cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
+               struct libcrun_cgroup_status *cgroup_status, pid_t init_pid, int sync_socket,
+               int terminal_fd, libcrun_error_t *err)
 {
   const char *oom_message = NULL;
   libcrun_error_t tmp_err = NULL;
@@ -2425,11 +2445,11 @@ cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *de
   if (init_pid)
     {
       /* Try to detect whether the cgroup has a OOM.  */
-      if (cgroup_path != NULL && cgroup_path[0])
+      if (cgroup_status)
         {
           int has_oom;
 
-          has_oom = libcrun_cgroup_has_oom (cgroup_path, cgroup_mode, &tmp_err);
+          has_oom = libcrun_cgroup_has_oom (cgroup_status, &tmp_err);
           if (has_oom > 0)
             oom_message = "OOM: the memory limit could be too low";
           else if (has_oom < 0)
@@ -2542,41 +2562,6 @@ get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, 
     *uid = *gid = -1;
 }
 
-static const char *
-find_delegate_cgroup (libcrun_container_t *container)
-{
-  const char *annotation;
-
-  annotation = find_annotation (container, "run.oci.delegate-cgroup");
-  if (annotation)
-    {
-      if (annotation[0] == '\0')
-        return NULL;
-      return annotation;
-    }
-
-  return NULL;
-}
-
-static const char *
-find_systemd_subgroup (libcrun_container_t *container, int cgroup_mode)
-{
-  const char *annotation;
-
-  annotation = find_annotation (container, "run.oci.systemd.subgroup");
-  if (annotation)
-    {
-      if (annotation[0] == '\0')
-        return NULL;
-      return annotation;
-    }
-
-  if (cgroup_mode == CGROUP_MODE_UNIFIED)
-    return "container";
-
-  return NULL;
-}
-
 static int
 get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_receiver_fd, const char **plugins,
                          libcrun_error_t *err)
@@ -2629,8 +2614,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   int ret;
   pid_t pid;
   int detach = context->detach;
-  cleanup_free char *cgroup_path = NULL;
-  cleanup_free char *scope = NULL;
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_close int terminal_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
   cleanup_close int sync_socket = -1;
@@ -2644,7 +2628,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int own_seccomp_receiver_fd = -1;
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
-  int cgroup_mode, cgroup_manager;
+  int cgroup_manager;
   char created[35];
   uid_t root_uid = -1;
   gid_t root_gid = -1;
@@ -2731,10 +2715,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       container_args.console_socket_fd = console_socket_fd;
     }
 
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
-
   pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, err);
   if (UNLIKELY (pid < 0))
     return pid;
@@ -2744,7 +2724,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       /* Do not open the notify socket here on "create".  "start" will take care of it.  */
       ret = get_notify_fd (context, container, &notify_socket, err);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
 
   if (container_args.terminal_socketpair[1] >= 0)
@@ -2764,22 +2744,17 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     struct libcrun_cgroup_args cg = {
       .resources = def->linux ? def->linux->resources : NULL,
       .annotations = def->annotations,
-      .cgroup_mode = cgroup_mode,
-      .path = &cgroup_path,
-      .scope = &scope,
       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
       .manager = cgroup_manager,
       .pid = pid,
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
-      .systemd_subgroup = find_systemd_subgroup (container, cgroup_mode),
-      .delegate_cgroup = find_delegate_cgroup (container),
     };
 
-    ret = libcrun_cgroup_enter (&cg, err);
+    ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
     if (UNLIKELY (ret < 0))
-      return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+      return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
   }
 
   /* sync send own pid.  */
@@ -2789,18 +2764,18 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       if (ret >= 0)
         errno = 0;
       crun_make_error (err, errno, "write to sync socket");
-      return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+      return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
 
   /* sync 1.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
   /* sync 2.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
   /* The container is waiting that we write back.  In this phase we can launch the
      prestart hooks.  */
@@ -2809,14 +2784,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       ret = do_hooks (def, pid, context->id, false, NULL, "created", (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
   if (def->hooks && def->hooks->create_runtime_len)
     {
       ret = do_hooks (def, pid, context->id, false, NULL, "created", (hook **) def->hooks->create_runtime,
                       def->hooks->create_runtime_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret != 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
 
   if (seccomp_fd >= 0)
@@ -2842,21 +2817,21 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
           if (UNLIKELY (consumed != (int) in_size))
             {
               ret = crun_make_error (err, 0, "invalid seccomp BPF data");
-              return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+              return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
             }
 
           ret = safe_write (seccomp_fd, bpf_data, (ssize_t) size);
           if (UNLIKELY (ret < 0))
             {
               crun_make_error (err, 0, "write to seccomp fd");
-              return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+              return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
             }
         }
       else
         {
           ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
           if (UNLIKELY (ret < 0))
-            return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+            return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
         }
       close_and_reset (&seccomp_fd);
     }
@@ -2864,34 +2839,34 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   /* sync 3.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
   if (def->process && def->process->terminal && ! detach && context->console_socket == NULL)
     {
       terminal_fd = receive_fd_from_socket (socket_pair_0, err);
       if (UNLIKELY (terminal_fd < 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
       close_and_reset (&socket_pair_0);
 
       ret = libcrun_setup_terminal_ptmx (terminal_fd, &orig_terminal, err);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
 
   /* sync 4.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
   ret = close_and_reset (&sync_socket);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
   get_current_timestamp (created);
-  ret = write_container_status (container, context, pid, cgroup_path, scope, created, err);
+  ret = write_container_status (container, context, pid, cgroup_status, created, err);
   if (UNLIKELY (ret < 0))
-    return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+    return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
   /* Run poststart hooks here only if the container is created using "run".  For create+start, the
      hooks will be executed as part of the start command.  */
@@ -2900,7 +2875,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       ret = do_hooks (def, pid, context->id, true, NULL, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
 
   /* Let's receive the seccomp notify fd and handle it as part of wait_for_process().  */
@@ -2908,11 +2883,11 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       seccomp_notify_fd = receive_fd_from_socket (own_seccomp_receiver_fd, err);
       if (UNLIKELY (seccomp_notify_fd < 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
 
       ret = close_and_reset (&own_seccomp_receiver_fd);
       if (UNLIKELY (ret < 0))
-        return cleanup_watch (context, def, cgroup_path, cgroup_mode, pid, sync_socket, terminal_fd, err);
+        return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
     }
 
   ret = wait_for_process (pid, context, terminal_fd, notify_socket, container_ready_fd, seccomp_notify_fd,
@@ -2920,7 +2895,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (! context->detach)
     {
       libcrun_error_t tmp_err = NULL;
-      cleanup_watch (context, def, cgroup_path, cgroup_mode, 0, sync_socket, terminal_fd, &tmp_err);
+      cleanup_watch (context, def, cgroup_status, 0, sync_socket, terminal_fd, &tmp_err);
       crun_error_release (&tmp_err);
     }
 
@@ -3315,7 +3290,11 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 
   if (*running && ! has_fifo)
     {
-      ret = libcrun_cgroup_is_container_paused (status->cgroup_path, &paused, err);
+      cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+
+      cgroup_status = libcrun_cgroup_make_status (status);
+
+      ret = libcrun_cgroup_is_container_paused (cgroup_status, &paused, err);
       if (UNLIKELY (ret < 0))
         {
           /*
@@ -3723,9 +3702,15 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (container_status == 0)
     return crun_make_error (err, 0, "the container `%s` is not running.", id);
 
-  ret = libcrun_cgroup_is_container_paused (status.cgroup_path, &container_paused, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  {
+    cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+
+    cgroup_status = libcrun_cgroup_make_status (&status);
+
+    ret = libcrun_cgroup_is_container_paused (cgroup_status, &container_paused, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+  }
 
   if (UNLIKELY (container_paused))
     return crun_make_error (err, 0, "the container `%s` is paused.", id);
@@ -4019,12 +4004,11 @@ int
 libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
                            libcrun_error_t *err)
 {
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_container libcrun_container_t *container = NULL;
   runtime_spec_schema_config_schema *def;
-  cleanup_free char *cgroup_path = NULL;
   libcrun_container_status_t status = {};
-  int cgroup_mode, cgroup_manager;
-  cleanup_free char *scope = NULL;
+  int cgroup_manager;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
   char created[35];
@@ -4064,10 +4048,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
    * The whole cgroup code is copied from libcrun_container_run_internal(). */
   def = container->container_def;
 
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
-
   cgroup_manager = CGROUP_MANAGER_CGROUPFS;
   if (context->systemd_cgroup)
     cgroup_manager = CGROUP_MANAGER_SYSTEMD;
@@ -4082,27 +4062,22 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     struct libcrun_cgroup_args cg = {
       .resources = def->linux ? def->linux->resources : NULL,
       .annotations = def->annotations,
-      .cgroup_mode = cgroup_mode,
-      .scope = &scope,
-      .path = &cgroup_path,
       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
       .manager = cgroup_manager,
       .pid = status.pid,
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
-      .systemd_subgroup = find_systemd_subgroup (container, cgroup_mode),
-      .delegate_cgroup = find_delegate_cgroup (container),
     };
 
-    ret = libcrun_cgroup_enter (&cg, err);
+    ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
     if (UNLIKELY (ret < 0))
       return ret;
   }
 
   get_current_timestamp (created);
   context->detach = cr_options->detach;
-  ret = write_container_status (container, context, status.pid, cgroup_path, scope, created, err);
+  ret = write_container_status (container, context, status.pid, cgroup_status, created, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4120,11 +4095,30 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       int wait_status;
       ret = waitpid (status.pid, &wait_status, 0);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "waitpid failed for container '%s' with %d", id, ret);
+        return crun_make_error (err, errno, "waitpid failed for container `%s` with %d", id, ret);
 
       if (WEXITSTATUS (wait_status))
         return WEXITSTATUS (wait_status);
     }
 
   return 0;
+}
+
+int
+libcrun_container_read_pids (libcrun_context_t *context, const char *id, bool recurse, pid_t **pids, libcrun_error_t *err)
+{
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+  cleanup_container_status libcrun_container_status_t status = {};
+  int ret;
+
+  ret = libcrun_read_container_status (&status, context->state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (status.cgroup_path == NULL || status.cgroup_path[0] == '\0')
+    return crun_make_error (err, 0, "the container is not using cgroups");
+
+  cgroup_status = libcrun_cgroup_make_status (&status);
+
+  return libcrun_cgroup_read_pids (cgroup_status, recurse, pids, err);
 }

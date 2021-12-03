@@ -2006,20 +2006,28 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
 }
 
 const char *
-find_annotation (libcrun_container_t *container, const char *name)
+find_annotation_map (json_map_string_string *annotations, const char *name)
 {
   size_t i;
 
+  if (annotations == NULL)
+    return NULL;
+
+  for (i = 0; i < annotations->len; i++)
+    {
+      if (strcmp (annotations->keys[i], name) == 0)
+        return annotations->values[i];
+    }
+  return NULL;
+}
+
+const char *
+find_annotation (libcrun_container_t *container, const char *name)
+{
   if (container->container_def->annotations == NULL)
     return NULL;
 
-  for (i = 0; i < container->container_def->annotations->len; i++)
-    {
-      if (strcmp (container->container_def->annotations->keys[i], name) == 0)
-        return container->container_def->annotations->values[i];
-    }
-
-  return NULL;
+  return find_annotation_map (container->container_def->annotations, name);
 }
 
 ssize_t

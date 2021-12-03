@@ -18,6 +18,9 @@
 
 #include <libcrun/error.h>
 #include <libcrun/cgroup.h>
+#include <libcrun/cgroup-systemd.h>
+#include <libcrun/cgroup-utils.h>
+#include <libcrun/cgroup-internal.h>
 #include <libcrun/utils.h>
 #include <libcrun/status.h>
 #include <libcrun/seccomp.h>
@@ -170,7 +173,7 @@ test_read_cgroup_pids (uint8_t *buf, size_t len)
   if (path == NULL)
     return 0;
 
-  libcrun_cgroup_read_pids (path, true, &pids, &err);
+  libcrun_cgroup_read_pids_from_path (path, true, &pids, &err);
   crun_error_release (&err);
   return 0;
 }

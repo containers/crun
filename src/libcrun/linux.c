@@ -43,6 +43,7 @@
 #include <signal.h>
 #include "terminal.h"
 #include "cgroup.h"
+#include "cgroup-utils.h"
 #include "status.h"
 #include "criu.h"
 #include <sys/socket.h>
@@ -3886,17 +3887,18 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_contain
   if (sub_cgroup)
     {
       cleanup_free char *final_cgroup = NULL;
+
       ret = append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, false, err);
+      ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
-      ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, false, err);
+      ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -4129,11 +4131,7 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
   parser_error parser_err = NULL;
   runtime_spec_schema_config_linux_resources *resources = NULL;
   struct parser_context ctx = { 0, stderr };
-  int cgroup_mode;
-
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
 
   ret = parse_json_file (&tree, content, &ctx, err);
   if (UNLIKELY (ret < 0))
@@ -4146,7 +4144,9 @@ libcrun_linux_container_update (libcrun_container_status_t *status, const char *
       goto cleanup;
     }
 
-  ret = libcrun_update_cgroup_resources (cgroup_mode, resources, status->cgroup_path, err);
+  cgroup_status = libcrun_cgroup_make_status (status);
+
+  ret = libcrun_update_cgroup_resources (cgroup_status, resources, err);
 
 cleanup:
   if (tree)
@@ -4161,7 +4161,11 @@ cleanup:
 static int
 libcrun_container_pause_unpause_linux (libcrun_container_status_t *status, const bool pause, libcrun_error_t *err)
 {
-  return libcrun_cgroup_pause_unpause (status->cgroup_path, pause, err);
+  cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+
+  cgroup_status = libcrun_cgroup_make_status (status);
+
+  return libcrun_cgroup_pause_unpause (cgroup_status, pause, err);
 }
 
 int
