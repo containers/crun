@@ -2238,7 +2238,7 @@ struct wait_for_process_args
   libcrun_context_t *context;
   int terminal_fd;
   int notify_socket;
-  int container_ready_fd;
+  int *container_ready_fd;
   int seccomp_notify_fd;
   const char *seccomp_notify_plugins;
 };
@@ -2275,11 +2275,11 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   if (args->context->detach && args->notify_socket < 0)
     return 0;
 
-  if (args->container_ready_fd >= 0)
+  if (args->container_ready_fd)
     {
       ret = 0;
-      TEMP_FAILURE_RETRY (write (args->container_ready_fd, &ret, sizeof (ret)));
-      close_and_reset (&args->container_ready_fd);
+      TEMP_FAILURE_RETRY (write (*args->container_ready_fd, &ret, sizeof (ret)));
+      close_and_reset (args->container_ready_fd);
     }
 
   sigfillset (&mask);
@@ -2629,7 +2629,7 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
 
 static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context,
-                                int container_ready_fd, libcrun_error_t *err)
+                                int *container_ready_fd, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
@@ -3031,7 +3031,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_container_run_internal (container, context, -1, err);
+      ret = libcrun_container_run_internal (container, context, NULL, err);
       force_delete_container_status (context, def);
       return ret;
     }
@@ -3086,7 +3086,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  ret = libcrun_container_run_internal (container, context, -1, &tmp_err);
+  ret = libcrun_container_run_internal (container, context, NULL, &tmp_err);
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
     goto fail;
@@ -3145,7 +3145,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, err);
       if (UNLIKELY (ret < 0))
         return ret;
-      ret = libcrun_container_run_internal (container, context, -1, err);
+      ret = libcrun_container_run_internal (container, context, NULL, err);
       if (UNLIKELY (ret < 0))
         force_delete_container_status (context, def);
       return ret;
@@ -3192,7 +3192,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "copy config file");
 
-  ret = libcrun_container_run_internal (container, context, pipefd1, err);
+  ret = libcrun_container_run_internal (container, context, &pipefd1, err);
   if (UNLIKELY (ret < 0))
     {
       force_delete_container_status (context, def);
@@ -3200,7 +3200,8 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       crun_set_output_handler (log_write_to_stderr, NULL, false);
     }
 
-  TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
+  if (pipefd1 >= 0)
+    TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   exit (ret ? EXIT_FAILURE : 0);
 }
 
@@ -3916,7 +3917,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
           .context = context,
           .terminal_fd = terminal_fd,
           .notify_socket = -1,
-          .container_ready_fd = -1,
+          .container_ready_fd = NULL,
           .seccomp_notify_fd = seccomp_notify_fd,
           .seccomp_notify_plugins = seccomp_notify_plugins,
         };
