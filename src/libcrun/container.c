@@ -2127,12 +2127,13 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
 static int
 write_container_status (libcrun_container_t *container, libcrun_context_t *context,
                         pid_t pid, struct libcrun_cgroup_status *cgroup_status,
-                        char *created, libcrun_error_t *err)
+                        libcrun_error_t *err)
 {
   cleanup_free char *cwd = getcwd (NULL, 0);
   cleanup_free char *owner = get_user_name (geteuid ());
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
+  char created[35];
   libcrun_container_status_t status = {
     .pid = pid,
     .rootfs = rootfs,
@@ -2145,6 +2146,8 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
     .cgroup_path = NULL,
     .scope = NULL,
   };
+
+  get_current_timestamp (created);
 
   if (cwd == NULL)
     OOM ();
@@ -2629,7 +2632,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
   int cgroup_manager;
-  char created[35];
   uid_t root_uid = -1;
   gid_t root_gid = -1;
   struct container_entrypoint_s container_args = {
@@ -2863,8 +2865,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  get_current_timestamp (created);
-  ret = write_container_status (container, context, pid, cgroup_status, created, err);
+  ret = write_container_status (container, context, pid, cgroup_status, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
@@ -4014,7 +4015,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   int cgroup_manager;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
-  char created[35];
   int ret;
 
   container = libcrun_container_load_from_file ("config.json", err);
@@ -4078,9 +4078,8 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       return ret;
   }
 
-  get_current_timestamp (created);
   context->detach = cr_options->detach;
-  ret = write_container_status (container, context, status.pid, cgroup_status, created, err);
+  ret = write_container_status (container, context, status.pid, cgroup_status, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
