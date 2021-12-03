@@ -1576,7 +1576,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 
       if (flags & MS_BIND)
         {
-          if (strcmp (def->mounts[i]->destination, "/dev") == 0)
+          if (path_is_slash_dev (def->mounts[i]->destination))
             get_private_data (container)->mount_dev_from_host = true;
           /* It is used only for error messages.  */
           type = "bind";

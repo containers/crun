@@ -205,6 +205,24 @@ consume_slashes (const char *t)
   return t;
 }
 
+static inline bool
+path_is_slash_dev (const char *path)
+{
+  path = consume_slashes (path);
+
+  if (strncmp (path, "dev", 3))
+    return false;
+
+  path += 3;
+
+  /* Check there are only '/' left.  */
+  for (; *path; path++)
+    if (*path != '/')
+      return false;
+
+  return true;
+}
+
 int xasprintf (char **str, const char *fmt, ...);
 
 int crun_path_exists (const char *path, libcrun_error_t *err);

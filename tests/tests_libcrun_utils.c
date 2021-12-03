@@ -249,6 +249,36 @@ test_crun_path_exists ()
 }
 
 static int
+test_path_is_slash_dev ()
+{
+  if (! path_is_slash_dev ("/dev"))
+    return -1;
+  if (! path_is_slash_dev ("/dev//"))
+    return -1;
+  if (! path_is_slash_dev ("///dev///"))
+    return -1;
+  if (! path_is_slash_dev ("/dev/"))
+    return -1;
+  if (! path_is_slash_dev ("dev"))
+    return -1;
+  if (! path_is_slash_dev ("dev////"))
+    return -1;
+  if (path_is_slash_dev ("dev////foo"))
+    return -1;
+  if (path_is_slash_dev ("/dev/foo"))
+    return -1;
+  if (path_is_slash_dev ("/dev/foo/"))
+    return -1;
+  if (path_is_slash_dev ("/dev/foo/bar"))
+    return -1;
+  if (path_is_slash_dev ("///dev/foo//bar"))
+    return -1;
+  if (path_is_slash_dev ("///dev/foo/////"))
+    return -1;
+  return 0;
+}
+
+static int
 test_append_paths ()
 {
 #define PROLOGUE()               \
@@ -392,9 +422,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..8\n");
+  printf ("1..9\n");
 #else
-  printf ("1..7\n");
+  printf ("1..8\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -403,6 +433,7 @@ main ()
   RUN_TEST (test_socket_pair);
   RUN_TEST (test_send_receive_fd);
   RUN_TEST (test_append_paths);
+  RUN_TEST (test_path_is_slash_dev);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
 #endif
