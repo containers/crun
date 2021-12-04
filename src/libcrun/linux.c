@@ -3974,8 +3974,64 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
   return pid;
 }
 
+/*
+  try to join all the namespaces with a single call to setns using the target process pidfd.
+
+  return codes:
+  < 0 - on errors
+  0   - the namespaces were not joined.
+  > 0 - the namespaces were joined.
+*/
 static int
-join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libcrun_error_t *err)
+try_setns_with_pidfd (pid_t pid_to_join, libcrun_container_status_t *status, libcrun_error_t *err)
+{
+  cleanup_close int pidfd_pid_to_join = -1;
+  int all_flags = 0;
+  size_t i;
+  int ret;
+
+  pidfd_pid_to_join = syscall_pidfd_open (pid_to_join, 0);
+  if (UNLIKELY (pidfd_pid_to_join < 0))
+    return 0;
+
+  /* Validate that the pidfd really refers to the original container process.  */
+  ret = libcrun_check_pid_valid (status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret == 0)
+    return crun_make_error (err, ESRCH, "container process not found, the pid was reused");
+
+  for (i = 0; namespaces[i].ns_file; i++)
+    all_flags |= namespaces[i].value;
+
+  if (all_flags & CLONE_NEWUSER)
+    {
+      ret = setns (pidfd_pid_to_join, CLONE_NEWUSER);
+      if (UNLIKELY (ret < 0))
+        {
+          /* Ignore the EINVAL error code.  The kernel might not support setns + pidfd.  */
+          if (errno == EINVAL)
+            return 0;
+
+          return crun_make_error (err, errno, "setns(pid=%d, CLONE_NEWUSER)", pid_to_join);
+        }
+    }
+
+  ret = setns (pidfd_pid_to_join, all_flags);
+  if (UNLIKELY (ret < 0))
+    {
+      /* Ignore the EINVAL error code.  The kernel might not support setns + pidfd.  */
+      if (errno == EINVAL)
+        return 0;
+
+      return crun_make_error (err, errno, "setns(pid=%d, CLONE_*)", pid_to_join);
+    }
+
+  return 1;
+}
+
+static int
+join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int fds_joined[MAX_NAMESPACES] = {
@@ -3986,6 +4042,16 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
   };
   size_t i;
   int ret;
+
+  /* Try to join all namespaces in one shot with setns and pidfd.  */
+  ret = try_setns_with_pidfd (pid_to_join, status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  /* Nothing left to do if the namespaces were joined.  */
+  if (LIKELY (ret > 0))
+    return 0;
+
+  /* If setns with the target pidfd, fall-back to join each namespace individually.  */
 
   if (def->linux->namespaces_len >= MAX_NAMESPACES)
     return crun_make_error (err, 0, "invalid configuration");
@@ -4135,7 +4201,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   close_and_reset (&sync_socket_fd[0]);
   sync_fd = sync_socket_fd[1];
 
-  ret = join_process_namespaces (container, pid_to_join, err);
+  ret = join_process_namespaces (container, pid_to_join, status, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
