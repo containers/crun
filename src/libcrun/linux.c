@@ -208,6 +208,35 @@ syscall_clone (unsigned long flags, void *child_stack)
 #endif
 }
 
+#ifndef __aligned_u64
+# define __aligned_u64 uint64_t __attribute__((aligned(8)))
+#endif
+struct _clone3_args {
+	__aligned_u64 flags;
+	__aligned_u64 pidfd;
+	__aligned_u64 child_tid;
+	__aligned_u64 parent_tid;
+	__aligned_u64 exit_signal;
+	__aligned_u64 stack;
+	__aligned_u64 stack_size;
+	__aligned_u64 tls;
+	__aligned_u64 set_tid;
+	__aligned_u64 set_tid_size;
+	__aligned_u64 cgroup;
+};
+
+static int
+syscall_clone3 (struct _clone3_args *args)
+{
+#ifdef __NR_clone3
+  return (int) syscall (__NR_clone3, args, sizeof (*args));
+#else
+  (void) args;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
 static int
 syscall_fsopen (const char *fs_name, unsigned int flags)
 {
@@ -3945,6 +3974,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t i;
   cleanup_close int sync_fd = -1;
+  struct _clone3_args clone3_args;
 
   if (! detach)
     {
@@ -3957,7 +3987,15 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error creating socketpair");
 
-  pid = fork ();
+  memset (&clone3_args, 0, sizeof (clone3_args));
+
+  clone3_args.exit_signal = SIGCHLD;
+
+  pid = syscall_clone3 (&clone3_args);
+
+  /* On errors, fall back to fork().  */
+  if (UNLIKELY (pid < 0))
+    pid = fork ();
   if (UNLIKELY (pid < 0))
     {
       crun_make_error (err, errno, "fork");
