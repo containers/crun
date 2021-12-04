@@ -3974,6 +3974,94 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
   return pid;
 }
 
+static int
+join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int fds_joined[MAX_NAMESPACES] = {
+    0,
+  };
+  int fds[MAX_NAMESPACES] = {
+    -1,
+  };
+  size_t i;
+  int ret;
+
+  if (def->linux->namespaces_len >= MAX_NAMESPACES)
+    return crun_make_error (err, 0, "invalid configuration");
+
+  for (i = 0; namespaces[i].ns_file; i++)
+    {
+      cleanup_free char *ns_join = NULL;
+
+      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
+      fds[i] = open (ns_join, O_RDONLY);
+      if (UNLIKELY (fds[i] < 0))
+        {
+          /* If the namespace doesn't exist, just ignore it.  */
+          if (errno == ENOENT)
+            continue;
+
+          crun_make_error (err, errno, "open `%s`", ns_join);
+          goto exit;
+        }
+    }
+
+  for (i = 0; namespaces[i].ns_file; i++)
+    {
+      if (namespaces[i].value == CLONE_NEWUSER)
+        continue;
+
+      ret = setns (fds[i], 0);
+      if (ret == 0)
+        fds_joined[i] = 1;
+    }
+  for (i = 0; namespaces[i].ns_file; i++)
+    {
+      ret = setns (fds[i], 0);
+      if (ret == 0)
+        fds_joined[i] = 1;
+    }
+  for (i = 0; namespaces[i].ns_file; i++)
+    {
+      if (fds_joined[i])
+        continue;
+      ret = setns (fds[i], 0);
+      if (UNLIKELY (ret < 0 && errno != EINVAL))
+        {
+          size_t j;
+          bool found = false;
+
+          for (j = 0; j < def->linux->namespaces_len; j++)
+            {
+              if (strcmp (namespaces[i].ns_file, def->linux->namespaces[j]->type) == 0)
+                {
+                  found = true;
+                  break;
+                }
+            }
+          if (! found)
+            {
+              /* It was not requested to create this ns, so just ignore it.  */
+              fds_joined[i] = 1;
+              continue;
+            }
+
+          crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
+          goto exit;
+        }
+      fds_joined[i] = 1;
+    }
+
+  ret = 0;
+
+exit:
+  for (i = 0; namespaces[i].ns_file; i++)
+    close_and_reset (&fds[i]);
+
+  return 0;
+}
+
 int
 libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
                       libcrun_container_status_t *status, const char *sub_cgroup,
@@ -3982,15 +4070,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   pid_t pid;
   int ret;
   int sync_socket_fd[2];
-  int fds[10] = {
-    -1,
-  };
-  int fds_joined[10] = {
-    0,
-  };
   cleanup_close int cgroup_dirfd = -1;
-  runtime_spec_schema_config_schema *def = container->container_def;
-  size_t i;
   cleanup_close int sync_fd = -1;
   struct _clone3_args clone3_args;
   bool need_move_to_cgroup = true;
@@ -4055,74 +4135,9 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   close_and_reset (&sync_socket_fd[0]);
   sync_fd = sync_socket_fd[1];
 
-  if (def->linux->namespaces_len >= 10)
-    {
-      crun_make_error (err, 0, "invalid configuration");
-      goto exit;
-    }
-
-  for (i = 0; namespaces[i].ns_file; i++)
-    {
-      cleanup_free char *ns_join = NULL;
-
-      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
-      fds[i] = open (ns_join, O_RDONLY);
-      if (UNLIKELY (fds[i] < 0))
-        {
-          /* If the namespace doesn't exist, just ignore it.  */
-          if (errno == ENOENT)
-            continue;
-          ret = crun_make_error (err, errno, "open `%s`", ns_join);
-          goto exit;
-        }
-    }
-
-  for (i = 0; namespaces[i].ns_file; i++)
-    {
-      if (namespaces[i].value == CLONE_NEWUSER)
-        continue;
-
-      ret = setns (fds[i], 0);
-      if (ret == 0)
-        fds_joined[i] = 1;
-    }
-  for (i = 0; namespaces[i].ns_file; i++)
-    {
-      ret = setns (fds[i], 0);
-      if (ret == 0)
-        fds_joined[i] = 1;
-    }
-  for (i = 0; namespaces[i].ns_file; i++)
-    {
-      if (fds_joined[i])
-        continue;
-      ret = setns (fds[i], 0);
-      if (UNLIKELY (ret < 0 && errno != EINVAL))
-        {
-          size_t j;
-          bool found = false;
-
-          for (j = 0; j < def->linux->namespaces_len; j++)
-            {
-              if (strcmp (namespaces[i].ns_file, def->linux->namespaces[j]->type) == 0)
-                {
-                  found = true;
-                  break;
-                }
-            }
-          if (! found)
-            {
-              /* It was not requested to create this ns, so just ignore it.  */
-              fds_joined[i] = 1;
-              continue;
-            }
-          crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
-          goto exit;
-        }
-      fds_joined[i] = 1;
-    }
-  for (i = 0; namespaces[i].ns_file; i++)
-    close_and_reset (&fds[i]);
+  ret = join_process_namespaces (container, pid_to_join, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   if (setsid () < 0)
     {
@@ -4198,9 +4213,6 @@ exit:
     TEMP_FAILURE_RETRY (close (sync_socket_fd[0]));
   if (sync_socket_fd[1] >= 0)
     TEMP_FAILURE_RETRY (close (sync_socket_fd[1]));
-  for (i = 0; namespaces[i].ns_file; i++)
-    if (fds[i] >= 0)
-      TEMP_FAILURE_RETRY (close (fds[i]));
   return ret;
 }
 
