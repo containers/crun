@@ -159,6 +159,9 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
     BPF_EXIT_INSN (),
   };
 
+  if (access == NULL)
+    access = "";
+
   if (program->private & HAS_WILDCARD)
     return program;
 
