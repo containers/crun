@@ -26,7 +26,9 @@ function run_test {
     export FUZZING_MODE=$1
     TEST_CASES=$2
 
-    honggfuzz --exit_upon_crash $VERBOSITY --run_time $SINGLE_RUN_TIME --timeout $TIMEOUT -T -i $TEST_CASES -- tests/tests_libcrun_fuzzer 2>&1 | tail -n 2
+    result=$(honggfuzz --exit_upon_crash $VERBOSITY --run_time $SINGLE_RUN_TIME --timeout $TIMEOUT -T -i $TEST_CASES -- tests/tests_libcrun_fuzzer 2>&1 | tail -n 2)
+    echo $result
+    echo $result | (grep -q crashes_count:0 || exit 1)
 }
 
 run_test 0 $CORPUS/config-json
