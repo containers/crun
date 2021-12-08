@@ -298,7 +298,7 @@ size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id,
 int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp,
                                          char *stdin, size_t stdin_len, int out_fd, int err_fd, libcrun_error_t *err);
 
-int mark_for_close_fds_ge_than (int n, libcrun_error_t *err);
+int mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err);
 
 void get_current_timestamp (char *out);
 
