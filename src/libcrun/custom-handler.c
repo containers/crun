@@ -248,6 +248,14 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
   *out = NULL;
   *cookie = NULL;
 
+  // Kubernetes sandbox containers must be executed as regular process
+  // Example sandbox container can contain pause process
+  // See: https://github.com/containers/crun/issues/798
+  // before invoking handler check if this is not a kubernetes sandbox
+  annotation = find_annotation (container, "io.kubernetes.cri.container-type");
+  if (annotation && (strcmp (annotation, "sandbox") == 0))
+    return 0;
+
   annotation = find_annotation (container, "run.oci.handler");
 
   /* Fail with EACCESS if global handler is already configured and there was a attempt to override it via spec.  */
