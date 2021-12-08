@@ -248,6 +248,7 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
   *out = NULL;
   *cookie = NULL;
 
+  // check ci
   annotation = find_annotation (container, "run.oci.handler");
 
   /* Fail with EACCESS if global handler is already configured and there was a attempt to override it via spec.  */
