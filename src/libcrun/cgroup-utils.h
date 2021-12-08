@@ -30,4 +30,6 @@ int libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err);
 
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
 
+int libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_cgroup, libcrun_error_t *err);
+
 #endif

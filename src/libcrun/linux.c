@@ -208,6 +208,41 @@ syscall_clone (unsigned long flags, void *child_stack)
 #endif
 }
 
+#ifndef __aligned_u64
+#  define __aligned_u64 uint64_t __attribute__ ((aligned (8)))
+#endif
+
+#ifndef CLONE_INTO_CGROUP
+#  define CLONE_INTO_CGROUP 0x200000000ULL
+#endif
+
+struct _clone3_args
+{
+  __aligned_u64 flags;
+  __aligned_u64 pidfd;
+  __aligned_u64 child_tid;
+  __aligned_u64 parent_tid;
+  __aligned_u64 exit_signal;
+  __aligned_u64 stack;
+  __aligned_u64 stack_size;
+  __aligned_u64 tls;
+  __aligned_u64 set_tid;
+  __aligned_u64 set_tid_size;
+  __aligned_u64 cgroup;
+};
+
+static int
+syscall_clone3 (struct _clone3_args *args)
+{
+#ifdef __NR_clone3
+  return (int) syscall (__NR_clone3, args, sizeof (*args));
+#else
+  (void) args;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
 static int
 syscall_fsopen (const char *fs_name, unsigned int flags)
 {
@@ -1531,6 +1566,12 @@ append_mode_if_missing (char *data, const char *mode)
   return new_data;
 }
 
+static const char *
+get_force_cgroup_v1_annotation (libcrun_container_t *container)
+{
+  return find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+}
+
 static int
 do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, const char *unified_cgroup_path, libcrun_error_t *err)
 {
@@ -1538,7 +1579,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
-  const char *systemd_cgroup_v1 = find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+  const char *systemd_cgroup_v1 = get_force_cgroup_v1_annotation (container);
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
 
   mount_fds = get_private_data (container)->mount_fds;
@@ -3856,8 +3897,10 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 }
 
 static int
-join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_container_status_t *status,
-                            const char *sub_cgroup, int *terminal_fd, libcrun_error_t *err)
+join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
+                            libcrun_container_status_t *status,
+                            bool need_move_to_cgroup, const char *sub_cgroup,
+                            int *terminal_fd, libcrun_error_t *err)
 {
   int ret, pid_status;
   char res;
@@ -3884,23 +3927,26 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_contain
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
-  if (sub_cgroup)
+  if (need_move_to_cgroup)
     {
-      cleanup_free char *final_cgroup = NULL;
+      if (sub_cgroup)
+        {
+          cleanup_free char *final_cgroup = NULL;
 
-      ret = append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
-      ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-  else
-    {
-      ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   /* The write unblocks the grandchild process so it can run once we setup
@@ -3928,56 +3974,87 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd, libcrun_contain
   return pid;
 }
 
-int
-libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
-                      libcrun_container_status_t *status, const char *sub_cgroup,
-                      int detach, int *terminal_fd, libcrun_error_t *err)
+/*
+  try to join all the namespaces with a single call to setns using the target process pidfd.
+
+  return codes:
+  < 0 - on errors
+  0   - the namespaces were not joined.
+  > 0 - the namespaces were joined.
+*/
+static int
+try_setns_with_pidfd (pid_t pid_to_join, libcrun_container_status_t *status, libcrun_error_t *err)
 {
-  pid_t pid;
+  cleanup_close int pidfd_pid_to_join = -1;
+  int all_flags = 0;
+  size_t i;
   int ret;
-  int sync_socket_fd[2];
-  int fds[10] = {
-    -1,
-  };
-  int fds_joined[10] = {
+
+  pidfd_pid_to_join = syscall_pidfd_open (pid_to_join, 0);
+  if (UNLIKELY (pidfd_pid_to_join < 0))
+    return 0;
+
+  /* Validate that the pidfd really refers to the original container process.  */
+  ret = libcrun_check_pid_valid (status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret == 0)
+    return crun_make_error (err, ESRCH, "container process not found, the pid was reused");
+
+  for (i = 0; namespaces[i].ns_file; i++)
+    all_flags |= namespaces[i].value;
+
+  if (all_flags & CLONE_NEWUSER)
+    {
+      ret = setns (pidfd_pid_to_join, CLONE_NEWUSER);
+      if (UNLIKELY (ret < 0))
+        {
+          /* Ignore the EINVAL error code.  The kernel might not support setns + pidfd.  */
+          if (errno == EINVAL)
+            return 0;
+
+          return crun_make_error (err, errno, "setns(pid=%d, CLONE_NEWUSER)", pid_to_join);
+        }
+    }
+
+  ret = setns (pidfd_pid_to_join, all_flags);
+  if (UNLIKELY (ret < 0))
+    {
+      /* Ignore the EINVAL error code.  The kernel might not support setns + pidfd.  */
+      if (errno == EINVAL)
+        return 0;
+
+      return crun_make_error (err, errno, "setns(pid=%d, CLONE_*)", pid_to_join);
+    }
+
+  return 1;
+}
+
+static int
+join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int fds_joined[MAX_NAMESPACES] = {
     0,
   };
-  runtime_spec_schema_config_schema *def = container->container_def;
+  int fds[MAX_NAMESPACES] = {
+    -1,
+  };
   size_t i;
-  cleanup_close int sync_fd = -1;
+  int ret;
 
-  if (! detach)
-    {
-      ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "set child subreaper");
-    }
-
-  ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket_fd);
+  /* Try to join all namespaces in one shot with setns and pidfd.  */
+  ret = try_setns_with_pidfd (pid_to_join, status, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error creating socketpair");
+    return ret;
+  /* Nothing left to do if the namespaces were joined.  */
+  if (LIKELY (ret > 0))
+    return 0;
 
-  pid = fork ();
-  if (UNLIKELY (pid < 0))
-    {
-      crun_make_error (err, errno, "fork");
-      goto exit;
-    }
-  if (pid)
-    {
-      close_and_reset (&sync_socket_fd[1]);
-      sync_fd = sync_socket_fd[0];
-      return join_process_parent_helper (pid, sync_fd, status, sub_cgroup, terminal_fd, err);
-    }
+  /* If setns with the target pidfd, fall-back to join each namespace individually.  */
 
-  close_and_reset (&sync_socket_fd[0]);
-  sync_fd = sync_socket_fd[1];
-
-  if (def->linux->namespaces_len >= 10)
-    {
-      crun_make_error (err, 0, "invalid configuration");
-      goto exit;
-    }
+  if (def->linux->namespaces_len >= MAX_NAMESPACES)
+    return crun_make_error (err, 0, "invalid configuration");
 
   for (i = 0; namespaces[i].ns_file; i++)
     {
@@ -3990,7 +4067,8 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
           /* If the namespace doesn't exist, just ignore it.  */
           if (errno == ENOENT)
             continue;
-          ret = crun_make_error (err, errno, "open `%s`", ns_join);
+
+          crun_make_error (err, errno, "open `%s`", ns_join);
           goto exit;
         }
     }
@@ -4034,13 +4112,98 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
               fds_joined[i] = 1;
               continue;
             }
+
           crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
           goto exit;
         }
       fds_joined[i] = 1;
     }
+
+  ret = 0;
+
+exit:
   for (i = 0; namespaces[i].ns_file; i++)
     close_and_reset (&fds[i]);
+
+  return 0;
+}
+
+int
+libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
+                      libcrun_container_status_t *status, const char *sub_cgroup,
+                      int detach, int *terminal_fd, libcrun_error_t *err)
+{
+  pid_t pid;
+  int ret;
+  int sync_socket_fd[2];
+  cleanup_close int cgroup_dirfd = -1;
+  cleanup_close int sync_fd = -1;
+  struct _clone3_args clone3_args;
+  bool need_move_to_cgroup = true;
+
+  if (! detach)
+    {
+      ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set child subreaper");
+    }
+
+  ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket_fd);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "error creating socketpair");
+
+  {
+    cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+
+    cgroup_status = libcrun_cgroup_make_status (status);
+
+    /* The cgroup can be joined directly only when there are no additional
+       controllers not handled by cgroup v2.  */
+    if (get_force_cgroup_v1_annotation (container) == NULL)
+      {
+        cgroup_dirfd = libcrun_get_cgroup_dirfd (cgroup_status, sub_cgroup, err);
+        if (UNLIKELY (cgroup_dirfd < 0))
+          crun_error_release (err);
+      }
+  }
+
+  memset (&clone3_args, 0, sizeof (clone3_args));
+  clone3_args.exit_signal = SIGCHLD;
+  if (cgroup_dirfd >= 0)
+    {
+      clone3_args.flags |= CLONE_INTO_CGROUP;
+      clone3_args.cgroup = cgroup_dirfd;
+    }
+
+  pid = syscall_clone3 (&clone3_args);
+
+  /* On errors, fall back to fork().  */
+  if (LIKELY (pid >= 0))
+    need_move_to_cgroup = false;
+  else
+    {
+      pid = fork ();
+      if (UNLIKELY (pid < 0))
+        {
+          crun_make_error (err, errno, "fork");
+          goto exit;
+        }
+    }
+
+  if (pid)
+    {
+      close_and_reset (&sync_socket_fd[1]);
+      sync_fd = sync_socket_fd[0];
+      return join_process_parent_helper (pid, sync_fd, status, need_move_to_cgroup,
+                                         sub_cgroup, terminal_fd, err);
+    }
+
+  close_and_reset (&sync_socket_fd[0]);
+  sync_fd = sync_socket_fd[1];
+
+  ret = join_process_namespaces (container, pid_to_join, status, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   if (setsid () < 0)
     {
@@ -4116,9 +4279,6 @@ exit:
     TEMP_FAILURE_RETRY (close (sync_socket_fd[0]));
   if (sync_socket_fd[1] >= 0)
     TEMP_FAILURE_RETRY (close (sync_socket_fd[1]));
-  for (i = 0; namespaces[i].ns_file; i++)
-    if (fds[i] >= 0)
-      TEMP_FAILURE_RETRY (close (fds[i]));
   return ret;
 }
 

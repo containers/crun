@@ -831,3 +831,35 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_e
 
   return enter_cgroup (cgroup_mode, pid, init_pid, path, false, err);
 }
+
+int
+libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_cgroup, libcrun_error_t *err)
+{
+  cleanup_free char *path_to_cgroup = NULL;
+  int cgroup_mode;
+  int cgroupdirfd;
+  int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    return crun_make_error (err, 0, "cgroup dirfd supported only on cgroup v2");
+
+  if (status == NULL)
+    return crun_make_error (err, 0, "internal error");
+
+  if (is_empty_string (status->path))
+    return crun_make_error (err, 0, "no cgroup path specified");
+
+  ret = append_paths (&path_to_cgroup, err, CGROUP_ROOT, status->path, sub_cgroup, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  cgroupdirfd = open (path_to_cgroup, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (cgroupdirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", path_to_cgroup);
+
+  return cgroupdirfd;
+}
