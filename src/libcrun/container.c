@@ -1571,7 +1571,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
         return ret;
     }
 
-  ret = mark_for_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, err);
+  ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
@@ -1891,6 +1891,11 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
   if (entrypoint_args->exec_func)
     {
+      /* Files marked with O_CLOEXEC are closed at execv time, so make sure they are closed now.  */
+      ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = entrypoint_args->exec_func (entrypoint_args->container, entrypoint_args->exec_func_arg, exec_path,
                                         def->process->args);
       if (ret != 0)
@@ -3605,7 +3610,7 @@ exec_process_entrypoint (libcrun_context_t *context,
         return ret;
     }
 
-  ret = mark_for_close_fds_ge_than (context->preserve_fds + 3, err);
+  ret = mark_or_close_fds_ge_than (context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

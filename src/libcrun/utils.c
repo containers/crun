@@ -1498,7 +1498,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
       char *tmp_args[] = { path, NULL };
       int dev_null_fd = -1;
 
-      ret = mark_for_close_fds_ge_than (3, err);
+      ret = mark_or_close_fds_ge_than (3, false, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
@@ -1536,7 +1536,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
 }
 
 int
-mark_for_close_fds_ge_than (int n, libcrun_error_t *err)
+mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
 {
   cleanup_close int cfd = -1;
   cleanup_dir DIR *dir = NULL;
@@ -1545,7 +1545,7 @@ mark_for_close_fds_ge_than (int n, libcrun_error_t *err)
   struct statfs sfs;
   struct dirent *next;
 
-  ret = syscall_close_range (n, UINT_MAX, CLOSE_RANGE_CLOEXEC);
+  ret = syscall_close_range (n, UINT_MAX, close_now ? 0 : CLOSE_RANGE_CLOEXEC);
   if (ret == 0)
     return 0;
   if (ret < 0 && errno != EINVAL && errno != ENOSYS && errno != EPERM)
@@ -1581,9 +1581,18 @@ mark_for_close_fds_ge_than (int n, libcrun_error_t *err)
       if (val < n || val == fd)
         continue;
 
-      ret = fcntl (val, F_SETFD, FD_CLOEXEC);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "cannot set CLOEXEC fd for '/proc/self/fd/%s'", name);
+      if (close_now)
+        {
+          ret = close (val);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "close(fd=%d)", val);
+        }
+      else
+        {
+          ret = fcntl (val, F_SETFD, FD_CLOEXEC);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "cannot set CLOEXEC fd for '/proc/self/fd/%s'", name);
+        }
     }
   return 0;
 }
