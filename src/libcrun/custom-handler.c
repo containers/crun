@@ -492,13 +492,11 @@ libcrun_configure_libkrun (struct custom_handler_s *out, libcrun_error_t *err)
 }
 
 static int
-libcrun_configure_wasm (struct custom_handler_s *out, libcrun_error_t *err)
+libcrun_configure_wasmer (struct custom_handler_s *out, libcrun_error_t *err)
 {
-#if HAVE_DLOPEN && (HAVE_WASMER || HAVE_WASMEDGE)
-  void *handle;
-#endif
-
 #if HAVE_DLOPEN && HAVE_WASMER
+  void *handle;
+
   handle = dlopen ("libwasmer.so", RTLD_NOW);
   if (handle != NULL)
     {
@@ -508,7 +506,16 @@ libcrun_configure_wasm (struct custom_handler_s *out, libcrun_error_t *err)
     }
 #endif
 
+  (void) out;
+  return crun_make_error (err, ENOTSUP, "wasmer support not present");
+}
+
+static int
+libcrun_configure_wasmedge (struct custom_handler_s *out, libcrun_error_t *err)
+{
 #if HAVE_DLOPEN && HAVE_WASMEDGE
+  void *handle;
+
   handle = dlopen ("libwasmedge_c.so", RTLD_NOW);
   if (handle != NULL)
     {
@@ -519,7 +526,7 @@ libcrun_configure_wasm (struct custom_handler_s *out, libcrun_error_t *err)
 #endif
 
   (void) out;
-  return crun_make_error (err, ENOTSUP, "wasm support not present");
+  return crun_make_error (err, ENOTSUP, "wasmedge support not present");
 }
 
 int
@@ -572,7 +579,13 @@ libcrun_configure_handler (libcrun_context_t *context, libcrun_container_t *cont
     {
       /* set global_handler equivalent to "wasm" so that we can invoke wasmer runtime */
       context->handler = annotation;
-      return libcrun_configure_wasm (out, err);
+#if HAVE_DLOPEN && HAVE_WASMER
+      return libcrun_configure_wasmer (out, err);
+#endif
+
+#if HAVE_DLOPEN && HAVE_WASMEDGE
+      return libcrun_configure_wasmedge (out, err);
+#endif
     }
 
   return crun_make_error (err, EINVAL, "invalid handler specified `%s`", annotation);
