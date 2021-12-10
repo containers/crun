@@ -56,7 +56,7 @@
 #  include <wasmer.h>
 #endif
 #ifdef HAVE_WASMEDGE
-#  include <wasmedge.h>
+#  include <wasmedge/wasmedge.h>
 #endif
 
 #ifdef HAVE_SYSTEMD
