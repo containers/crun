@@ -22,16 +22,44 @@
 #include "container.h"
 #include <stdio.h>
 
+enum handler_configure_phase
+  {
+    HANDLER_CONFIGURE_BEFORE_MOUNTS = 1,
+    HANDLER_CONFIGURE_AFTER_MOUNTS,
+  };
+
 struct custom_handler_s
 {
-  int (*exec_func) (void *container, void *arg, const char *pathname, char *const argv[]);
-  void *exec_func_arg;
+  const char *name;
+  const char *feature_string;
 
-  int (*post_configure_mounts) (libcrun_context_t *context, libcrun_container_t *container, const char *rootfs, libcrun_error_t *err);
+  int (*preload) ();
+
+  int (*load) (void **cookie, libcrun_error_t *err);
+  int (*unload) (void *cookie, libcrun_error_t *err);
+
+  int (*exec_func) (void *cookie, libcrun_container_t *container,
+                    const char *pathname, char *const argv[]);
+
+  int (*configure_container) (void *cookie, enum handler_configure_phase phase,
+                              libcrun_context_t *context, libcrun_container_t *container,
+                              const char *rootfs, libcrun_error_t *err);
+
+  int (*can_handle_container) (libcrun_container_t *container, libcrun_error_t *err);
 };
 
-int libcrun_configure_handler (libcrun_context_t *context, libcrun_container_t *container, struct custom_handler_s *out, libcrun_error_t *err);
+struct custom_handler_manager_s;
 
-void print_handlers_feature_tags (FILE *out);
+struct custom_handler_manager_s *handler_manager_create (libcrun_error_t *err);
+void handler_manager_free (struct custom_handler_manager_s *manager);
+
+struct custom_handler_s *handler_by_name (struct custom_handler_manager_s *manager, const char *name);
+void handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out);
+
+int libcrun_configure_handler (struct custom_handler_manager_s *manager,
+                               libcrun_context_t *context,
+                               libcrun_container_t *container,
+                               struct custom_handler_s **out,
+                               void **cookie, libcrun_error_t *err);
 
 #endif

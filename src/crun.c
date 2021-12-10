@@ -48,6 +48,22 @@
 
 static struct crun_global_arguments arguments;
 
+static struct custom_handler_manager_s *handler_manager;
+
+static struct custom_handler_manager_s *
+get_handler_manager ()
+{
+  if (handler_manager == NULL)
+    {
+      libcrun_error_t err;
+
+      handler_manager = handler_manager_create (&err);
+      if (UNLIKELY (handler_manager == NULL))
+        libcrun_fail_with_error (err->status, "%s", err->msg);
+    }
+  return handler_manager;
+}
+
 struct commands_s
 {
   int value;
@@ -83,6 +99,8 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
 
   if (con->config_file == NULL)
     con->config_file = "./config.json";
+
+  con->handler_manager = get_handler_manager ();
 
   return 0;
 }
@@ -209,7 +227,7 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
   fprintf (stream, "+CRIU ");
 #endif
 
-  print_handlers_feature_tags (stream);
+  handler_manager_print_feature_tags (get_handler_manager (), stream);
 
   fprintf (stream, "+YAJL\n");
 }

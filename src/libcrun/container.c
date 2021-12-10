@@ -78,7 +78,8 @@ struct container_entrypoint_s
   int hooks_out_fd;
   int hooks_err_fd;
 
-  struct custom_handler_s custom_handler;
+  struct custom_handler_s *custom_handler;
+  void *handler_cookie;
 };
 
 struct sync_socket_message_s
@@ -972,10 +973,27 @@ maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
   return 0;
 }
 
+static inline int
+notify_handler (struct container_entrypoint_s *args,
+                enum handler_configure_phase phase,
+                libcrun_container_t *container, const char *rootfs,
+                libcrun_error_t *err)
+{
+  struct custom_handler_s *h = args->custom_handler;
+
+  if (h == NULL || h->configure_container == NULL)
+    return 0;
+
+  return h->configure_container (args->handler_cookie, phase,
+                                 args->context, container,
+                                 rootfs, err);
+}
+
 /* Initialize the environment where the container process runs.
    It is used by the container init process.  */
 static int
-container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_socket, const char **exec_path, libcrun_error_t *err)
+container_init_setup (void *args, pid_t own_pid, char *notify_socket,
+                      int sync_socket, const char **exec_path, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -987,10 +1005,14 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
   runtime_spec_schema_config_schema *def = container->container_def;
   runtime_spec_schema_config_schema_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
-  struct custom_handler_s *handler = &(entrypoint_args->custom_handler);
   int no_new_privs;
 
-  ret = libcrun_configure_handler (entrypoint_args->context, container, handler, err);
+  ret = libcrun_configure_handler (entrypoint_args->context->handler_manager,
+                                   entrypoint_args->context,
+                                   container,
+                                   &(entrypoint_args->custom_handler),
+                                   &(entrypoint_args->handler_cookie),
+                                   err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1031,17 +1053,18 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket, int sync_s
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = notify_handler (entrypoint_args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
   ret = libcrun_set_mounts (container, rootfs, send_sync_cb, &sync_socket, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (handler->post_configure_mounts)
-    {
-      ret = handler->post_configure_mounts (entrypoint_args->context, container, rootfs, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  ret = notify_handler (entrypoint_args, HANDLER_CONFIGURE_AFTER_MOUNTS, container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (def->hooks && def->hooks->create_container_len)
     {
@@ -1381,17 +1404,17 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       (void) lseek (2, 0, SEEK_END);
     }
 
-  if (entrypoint_args->custom_handler.exec_func)
+  if (entrypoint_args->custom_handler)
     {
       /* Files marked with O_CLOEXEC are closed at execv time, so make sure they are closed now.  */
       ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = entrypoint_args->custom_handler.exec_func (entrypoint_args->container,
-                                                       entrypoint_args->custom_handler.exec_func_arg,
-                                                       exec_path,
-                                                       def->process->args);
+      ret = entrypoint_args->custom_handler->exec_func (entrypoint_args->handler_cookie,
+                                                        entrypoint_args->container,
+                                                        exec_path,
+                                                        def->process->args);
       if (ret != 0)
         return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->context->handler);
 
@@ -2159,9 +2182,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .hooks_out_fd = -1,
     .hooks_err_fd = -1,
     .seccomp_receiver_fd = -1,
-    .custom_handler.exec_func = context->exec_func,
-    .custom_handler.exec_func_arg = context->exec_func_arg,
-    .custom_handler.post_configure_mounts = NULL,
+    .custom_handler = NULL,
+    .handler_cookie = NULL,
   };
 
   if (def->hooks
@@ -2439,7 +2461,8 @@ check_config_file (runtime_spec_schema_config_schema *def, libcrun_context_t *co
 {
   if (UNLIKELY (def->linux == NULL))
     return crun_make_error (err, 0, "invalid config file, no 'linux' block specified");
-  if (context->exec_func == NULL)
+
+  if (context->handler == NULL)
     {
       if (UNLIKELY (def->root == NULL))
         return crun_make_error (err, 0, "invalid config file, no 'root' block specified");
