@@ -1,7 +1,7 @@
 /*
  * crun - OCI runtime written in C
  *
- * Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
+ * Copyright (C) 2017, 2018, 2019, 2021 Giuseppe Scrivano <giuseppe@scrivano.org>
  * crun is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation; either version 2.1 of the License, or
@@ -26,6 +26,17 @@
 #include <runtime_spec_schema_config_schema.h>
 #include "container.h"
 #include "status.h"
+
+struct device_s
+{
+  const char *path;
+  char *type;
+  int major;
+  int minor;
+  int mode;
+  uid_t uid;
+  gid_t gid;
+};
 
 typedef int (*container_entrypoint_t) (void *args, char *notify_socket, int sync_socket, libcrun_error_t *err);
 
@@ -75,6 +86,10 @@ int libcrun_container_setgroups (libcrun_container_t *container,
                                  libcrun_error_t *err);
 int libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err);
 int libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *err);
-int libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
+
+int libcrun_create_dev (libcrun_container_t *container, int devfd,
+                        struct device_s *device, bool binds,
+                        bool ensure_parent_dir, libcrun_error_t *err);
+
 #endif

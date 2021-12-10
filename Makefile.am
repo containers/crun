@@ -30,6 +30,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/cgroup-systemd.c \
 			src/libcrun/cgroup-utils.c \
 			src/libcrun/criu.c \
+			src/libcrun/custom-handler.c \
 			src/libcrun/linux.c \
 			src/libcrun/seccomp.c \
 			src/libcrun/ebpf.c \
@@ -84,6 +85,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/cgroup-internal.h \
 	src/libcrun/cgroup-resources.h src/libcrun/cgroup-setup.h \
 	src/libcrun/cgroup-systemd.h src/libcrun/cgroup-utils.h \
+	src/libcrun/custom-handler.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
 	src/libcrun/intprops.h crun.1.md crun.1 libcrun.lds
