@@ -40,7 +40,10 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/chroot_realpath.c \
 			src/libcrun/signals.c \
 			src/libcrun/mount_flags.c \
-			src/libcrun/seccomp_notify.c
+			src/libcrun/seccomp_notify.c \
+			src/libcrun/handlers/krun.c \
+			src/libcrun/handlers/wasmedge.c \
+			src/libcrun/handlers/wasmer.c
 
 if HAVE_EMBEDDED_YAJL
 maybe_libyajl.la = libocispec/yajl/libyajl.la
