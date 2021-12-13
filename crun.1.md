@@ -336,6 +336,21 @@ Allow external UNIX sockets
 **--shell-job**
 Allow shell jobs
 
+**--pre-dump**
+Only checkpoint the container's memory without stopping the container.
+It is not possible to restore a container from a pre-dump. A pre-dump
+always needs a final checkpoint (without **--pre-dump**). It is possible
+to make as many pre-dumps as necessary. For a second pre-dump or for
+a final checkpoint it is necessary to use **--parent-path** to point
+crun (and thus CRIU) to the pre-dump.
+
+**--parent-path**=_DIR_
+Doing multiple pre-dumps or the final checkpoint after one or multiple
+pre-dumps requires that crun (and thus CRIU) knows the location of
+the pre-dump. It is important to use a relative path from the actual
+checkpoint directory specified via **--image-path**. It will fail
+if an absolute path is used.
+
 ## RESTORE OPTIONS
 
 crun [global options] restore [options] CONTAINER
