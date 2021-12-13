@@ -55,11 +55,24 @@ get_handler_manager ()
 {
   if (handler_manager == NULL)
     {
+      cleanup_free char *handlers_path = NULL;
       libcrun_error_t err;
+      int ret;
 
       handler_manager = handler_manager_create (&err);
       if (UNLIKELY (handler_manager == NULL))
         libcrun_fail_with_error (err->status, "%s", err->msg);
+
+      ret = append_paths (&handlers_path, &err, CRUN_LIBDIR, "handlers", NULL);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (err->status, "%s", err->msg);
+
+      if (access (handlers_path, F_OK) == 0)
+        {
+          ret = handler_manager_load_from_directory (handler_manager, handlers_path, &err);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error (err->status, "%s", err->msg);
+        }
     }
   return handler_manager;
 }
