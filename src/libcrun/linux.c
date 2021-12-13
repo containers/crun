@@ -1128,17 +1128,6 @@ do_mount_cgroup (libcrun_container_t *container, const char *source, int targetf
   return crun_make_error (err, 0, "unknown cgroups mode %d", cgroup_mode);
 }
 
-struct device_s
-{
-  const char *path;
-  char *type;
-  int major;
-  int minor;
-  int mode;
-  uid_t uid;
-  gid_t gid;
-};
-
 struct device_s needed_devs[] = { { "/dev/null", "c", 1, 3, 0666, 0, 0 },
                                   { "/dev/zero", "c", 1, 5, 0666, 0, 0 },
                                   { "/dev/full", "c", 1, 7, 0666, 0, 0 },
@@ -1163,9 +1152,9 @@ relative_path_under_dev (const char *path)
   return NULL;
 }
 
-static int
-create_dev (libcrun_container_t *container, int devfd, struct device_s *device, bool binds, bool ensure_parent_dir,
-            libcrun_error_t *err)
+int
+libcrun_create_dev (libcrun_container_t *container, int devfd, struct device_s *device,
+                    bool binds, bool ensure_parent_dir, libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
@@ -1335,7 +1324,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
 
       if (! def->linux->devices[i]->file_mode_present)
         device.mode = 0666;
-      ret = create_dev (container, devfd, &device, binds, true, err);
+      ret = libcrun_create_dev (container, devfd, &device, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1343,7 +1332,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   for (it = needed_devs; it->path; it++)
     {
       /* make sure the parent directory exists only on the first iteration.  */
-      ret = create_dev (container, devfd, it, binds, it == needed_devs, err);
+      ret = libcrun_create_dev (container, devfd, it, binds, it == needed_devs, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1989,48 +1978,6 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
         }
       return crun_make_error (err, errno, "make `%s` private", tmp);
     }
-  return 0;
-}
-
-/* libcrun_create_kvm_device: explicitly adds kvm device.  */
-int
-libcrun_create_kvm_device (libcrun_container_t *container, libcrun_error_t *err)
-{
-  int ret, rootfsfd;
-  size_t i;
-  struct device_s kvm_device = { "/dev/kvm", "c", 10, 232, 0666, 0, 0 };
-  cleanup_close int devfd = -1;
-  cleanup_close int rootfsfd_cleanup = -1;
-  runtime_spec_schema_config_schema *def = container->container_def;
-  const char *rootfs = get_private_data (container)->rootfs;
-  bool is_user_ns;
-
-  /* Do nothing if /dev/kvm is already present in spec */
-  for (i = 0; i < def->linux->devices_len; i++)
-    {
-      if (strcmp (def->linux->devices[i]->path, "/dev/kvm") == 0)
-        return 0;
-    }
-
-  if (rootfs == NULL)
-    rootfsfd = AT_FDCWD;
-  else
-    {
-      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH);
-      if (UNLIKELY (rootfsfd < 0))
-        return crun_make_error (err, errno, "open `%s`", rootfs);
-    }
-  get_private_data (container)->rootfsfd = rootfsfd;
-  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
-  if (UNLIKELY (devfd < 0))
-    return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
-
-  is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
-
-  ret = create_dev (container, devfd, &kvm_device, is_user_ns, true, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   return 0;
 }
 

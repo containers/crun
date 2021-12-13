@@ -27,6 +27,7 @@
 
 #include "crun.h"
 #include "libcrun/utils.h"
+#include "libcrun/custom-handler.h"
 
 /* Commands.  */
 #include "run.h"
@@ -46,6 +47,35 @@
 #include "restore.h"
 
 static struct crun_global_arguments arguments;
+
+static struct custom_handler_manager_s *handler_manager;
+
+static struct custom_handler_manager_s *
+get_handler_manager ()
+{
+  if (handler_manager == NULL)
+    {
+      cleanup_free char *handlers_path = NULL;
+      libcrun_error_t err;
+      int ret;
+
+      handler_manager = handler_manager_create (&err);
+      if (UNLIKELY (handler_manager == NULL))
+        libcrun_fail_with_error (err->status, "%s", err->msg);
+
+      ret = append_paths (&handlers_path, &err, CRUN_LIBDIR, "handlers", NULL);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (err->status, "%s", err->msg);
+
+      if (access (handlers_path, F_OK) == 0)
+        {
+          ret = handler_manager_load_from_directory (handler_manager, handlers_path, &err);
+          if (UNLIKELY (ret < 0))
+            libcrun_fail_with_error (err->status, "%s", err->msg);
+        }
+    }
+  return handler_manager;
+}
 
 struct commands_s
 {
@@ -82,6 +112,8 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
 
   if (con->config_file == NULL)
     con->config_file = "./config.json";
+
+  con->handler_manager = get_handler_manager ();
 
   return 0;
 }
@@ -207,14 +239,9 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
 #ifdef HAVE_CRIU
   fprintf (stream, "+CRIU ");
 #endif
-#ifdef HAVE_WASMER
-  fprintf (stream, "+WASM:wasmer ");
-#elif defined HAVE_WASMEDGE
-  fprintf (stream, "+WASM:wasmedge ");
-#endif
-#ifdef HAVE_LIBKRUN
-  fprintf (stream, "+LIBKRUN ");
-#endif
+
+  handler_manager_print_feature_tags (get_handler_manager (), stream);
+
   fprintf (stream, "+YAJL\n");
 }
 

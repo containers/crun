@@ -23,6 +23,8 @@
 #include <runtime_spec_schema_config_schema.h>
 #include "error.h"
 
+struct custom_handler_manager_s;
+
 struct libcrun_context_s
 {
   const char *state_root;
@@ -51,8 +53,7 @@ struct libcrun_context_s
   bool force_no_cgroup;
   bool no_pivot;
 
-  int (*exec_func) (void *container, void *arg, const char *pathname, char *const argv[]);
-  void *exec_func_arg;
+  struct custom_handler_manager_s *handler_manager;
 };
 
 enum

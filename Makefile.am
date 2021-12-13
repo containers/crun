@@ -30,6 +30,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/cgroup-systemd.c \
 			src/libcrun/cgroup-utils.c \
 			src/libcrun/criu.c \
+			src/libcrun/custom-handler.c \
 			src/libcrun/linux.c \
 			src/libcrun/seccomp.c \
 			src/libcrun/ebpf.c \
@@ -39,7 +40,10 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/chroot_realpath.c \
 			src/libcrun/signals.c \
 			src/libcrun/mount_flags.c \
-			src/libcrun/seccomp_notify.c
+			src/libcrun/seccomp_notify.c \
+			src/libcrun/handlers/krun.c \
+			src/libcrun/handlers/wasmedge.c \
+			src/libcrun/handlers/wasmer.c
 
 if HAVE_EMBEDDED_YAJL
 maybe_libyajl.la = libocispec/yajl/libyajl.la
@@ -68,7 +72,7 @@ python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS)
 python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS) $(maybe_libyajl.la)
 endif
 
-crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \
 		src/checkpoint.c src/restore.c
@@ -84,6 +88,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/cgroup-internal.h \
 	src/libcrun/cgroup-resources.h src/libcrun/cgroup-setup.h \
 	src/libcrun/cgroup-systemd.h src/libcrun/cgroup-utils.h \
+	src/libcrun/custom-handler.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
 	src/libcrun/intprops.h crun.1.md crun.1 libcrun.lds
