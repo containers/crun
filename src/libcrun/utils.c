@@ -385,9 +385,12 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
 
   if (openat2_supported)
     {
-      ret = TEMP_FAILURE_RETRY (syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT));
-      if (ret < 0)
+    repeat:
+      ret = syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT);
+      if (UNLIKELY (ret < 0))
         {
+          if (errno == EINTR || errno == EAGAIN)
+            goto repeat;
           if (errno == ENOSYS)
             openat2_supported = false;
           if (errno == ENOSYS || errno == EINVAL || errno == EPERM)
