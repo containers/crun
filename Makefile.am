@@ -72,7 +72,7 @@ python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS)
 python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS) $(maybe_libyajl.la)
 endif
 
-crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src
+crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \
 		src/checkpoint.c src/restore.c

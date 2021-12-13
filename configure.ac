@@ -168,6 +168,8 @@ AC_DEFINE([LIBCRUN_PUBLIC], [__attribute__((visibility("default"))) extern], [LI
 AC_SUBST([FOUND_LIBS])
 AC_SUBST([CRUN_LDFLAGS])
 
+AC_SUBST([CRUN_LIBDIR], [$libdir/crun])
+
 [RPM_VERSION=$(echo $VERSION | sed -e's,^\([^-]*\).*$,\1,g')]
 
 AC_SUBST([RPM_VERSION])
