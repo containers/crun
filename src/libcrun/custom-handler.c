@@ -59,22 +59,122 @@ static struct custom_handler_s *static_handlers[] = {
 struct custom_handler_manager_s
 {
   struct custom_handler_s **handlers;
+  void **handles;
+  size_t handlers_len;
 };
 
 struct custom_handler_manager_s *
 handler_manager_create (libcrun_error_t *err arg_unused)
 {
+  struct custom_handler_s **handlers = NULL;
+  void **handles = NULL;
   struct custom_handler_manager_s *m;
+  size_t i, handlers_len;
+
+  /* Count the static handlers.  */
+  for (handlers_len = 0; static_handlers[handlers_len]; handlers_len++)
+    ;
+
+  if (handlers_len)
+    {
+      handlers = xmalloc (sizeof (struct custom_handler_s *) * handlers_len);
+      handles = xmalloc0 (sizeof (void *) * handlers_len);
+    }
+
+  for (i = 0; i < handlers_len; i++)
+    handlers[i] = static_handlers[i];
 
   m = xmalloc0 (sizeof (struct custom_handler_manager_s));
-  m->handlers = static_handlers;
+  m->handlers = handlers;
+  m->handles = handles;
+  m->handlers_len = handlers_len;
+
   return m;
 }
 
 void
 handler_manager_free (struct custom_handler_manager_s *manager)
 {
+  size_t i;
+
+  for (i = 0; i < manager->handlers_len; i++)
+    {
+#ifdef HAVE_DLOPEN
+      if (manager->handles[i])
+        dlclose (manager->handles[i]);
+#endif
+    }
+  free (manager->handlers);
+  free (manager->handles);
   free (manager);
+}
+
+#ifdef HAVE_DLOPEN
+static int
+handler_manager_add_so (struct custom_handler_manager_s *manager, void *handle, libcrun_error_t *err)
+{
+  struct custom_handler_s *h = NULL;
+  run_oci_get_handler_cb cb;
+
+  cb = (run_oci_get_handler_cb) dlsym (handle, "run_oci_handler_get_handler");
+  if (UNLIKELY (cb == NULL))
+    return crun_make_error (err, 0, "cannot find symbol `run_oci_handler_get_handler`");
+
+  h = cb ();
+  if (UNLIKELY (h == NULL))
+    return crun_make_error (err, 0, "the callback `run_oci_handler_get_handler` didn't return a handler");
+
+  manager->handlers = xrealloc (manager->handlers, sizeof (struct custom_handler_s *) * (manager->handlers_len + 1));
+  manager->handles = xrealloc (manager->handles, sizeof (void *) * (manager->handlers_len + 1));
+
+  manager->handlers[manager->handlers_len] = h;
+  manager->handles[manager->handlers_len] = handle;
+  manager->handlers_len++;
+  return 0;
+}
+#endif
+
+int
+handler_manager_load_from_directory (struct custom_handler_manager_s *manager, const char *path, libcrun_error_t *err)
+{
+#ifdef HAVE_DLOPEN
+  cleanup_dir DIR *dir = NULL;
+  struct dirent *next;
+
+  dir = opendir (path);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, errno, "cannot opendir `%s`", path);
+
+  for (next = readdir (dir); next; next = readdir (dir))
+    {
+      cleanup_free char *fpath = NULL;
+      const char *name;
+      void *handle;
+      int ret;
+
+      name = next->d_name;
+      if (name[0] == '.')
+        continue;
+
+      ret = append_paths (&fpath, err, path, name, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      handle = dlopen (fpath, RTLD_NOW);
+      if (UNLIKELY (handle == NULL))
+        return crun_make_error (err, 0, "cannot load `%s`: %s", fpath, dlerror ());
+
+      ret = handler_manager_add_so (manager, handle, err);
+      if (UNLIKELY (ret < 0))
+        {
+          dlclose (handle);
+          return ret;
+        }
+    }
+  return 0;
+#else
+  return crun_make_error (err, ENOTSUP, "dlopen not available");
+#endif
 }
 
 struct custom_handler_s *
@@ -82,7 +182,7 @@ handler_by_name (struct custom_handler_manager_s *manager, const char *name)
 {
   size_t i;
 
-  for (i = 0; manager->handlers[i]; i++)
+  for (i = 0; i < manager->handlers_len; i++)
     if (strcmp (manager->handlers[i]->name, name) == 0)
       return manager->handlers[i];
   return NULL;
@@ -93,8 +193,9 @@ handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FI
 {
   size_t i;
 
-  for (i = 0; manager->handlers[i]; i++)
-    fprintf (out, "+%s ", manager->handlers[i]->feature_string);
+  for (i = 0; i < manager->handlers_len; i++)
+    if (manager->handlers[i]->feature_string)
+      fprintf (out, "+%s ", manager->handlers[i]->feature_string);
 }
 
 static int
@@ -109,7 +210,7 @@ find_handler_for_container (struct custom_handler_manager_s *manager,
   *out = NULL;
   *cookie = NULL;
 
-  for (i = 0; manager->handlers[i]; i++)
+  for (i = 0; i < manager->handlers_len; i++)
     {
       int ret;
 
@@ -123,7 +224,10 @@ find_handler_for_container (struct custom_handler_manager_s *manager,
       if (ret)
         {
           *out = manager->handlers[i];
-          return (*out)->load (cookie, err);
+          if ((*out)->load)
+            return (*out)->load (cookie, err);
+
+          return 0;
         }
     }
 
@@ -162,7 +266,10 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
       if (*out == NULL)
         return crun_make_error (err, 0, "invalid handler specified `%s`", explicit_handler);
 
-      return (*out)->load (cookie, err);
+      if ((*out)->load)
+        return (*out)->load (cookie, err);
+
+      return 0;
     }
 
   if (manager == NULL)

@@ -33,8 +33,6 @@ struct custom_handler_s
   const char *name;
   const char *feature_string;
 
-  int (*preload) ();
-
   int (*load) (void **cookie, libcrun_error_t *err);
   int (*unload) (void *cookie, libcrun_error_t *err);
 
@@ -51,6 +49,7 @@ struct custom_handler_s
 struct custom_handler_manager_s;
 
 struct custom_handler_manager_s *handler_manager_create (libcrun_error_t *err);
+int handler_manager_load_from_directory (struct custom_handler_manager_s *manager, const char *path, libcrun_error_t *err);
 void handler_manager_free (struct custom_handler_manager_s *manager);
 
 struct custom_handler_s *handler_by_name (struct custom_handler_manager_s *manager, const char *name);
@@ -61,5 +60,7 @@ int libcrun_configure_handler (struct custom_handler_manager_s *manager,
                                libcrun_container_t *container,
                                struct custom_handler_s **out,
                                void **cookie, libcrun_error_t *err);
+
+typedef struct custom_handler_s *(*run_oci_get_handler_cb) ();
 
 #endif
