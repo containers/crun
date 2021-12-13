@@ -1673,7 +1673,7 @@ check_access (const char *path)
 }
 
 const char *
-find_executable (const char *executable_path, const char *cwd, const char *handler)
+find_executable (const char *executable_path, const char *cwd)
 {
   cleanup_free char *cwd_executable_path = NULL;
   cleanup_free char *tmp = NULL;
@@ -1706,11 +1706,6 @@ find_executable (const char *executable_path, const char *cwd, const char *handl
       xasprintf (&cwd_executable_path, "%s%s/%s", cwd[0] == '/' ? "" : "/", cwd, executable_path);
       executable_path = cwd_executable_path;
     }
-
-  /* Process executable according to configured handler */
-  /* For `wasm` we don't want to check access hence return early*/
-  if (handler != NULL && (strcmp (handler, "wasm") == 0))
-    return xstrdup (executable_path);
 
   /* Absolute path.  It doesn't need to lookup $PATH.  */
   if (executable_path[0] == '/')

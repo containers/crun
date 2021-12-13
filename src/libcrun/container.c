@@ -1142,7 +1142,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (def->process && def->process->args)
     {
-      *exec_path = find_executable (def->process->args[0], def->process->cwd, entrypoint_args->context->handler);
+      *exec_path = find_executable (def->process->args[0], def->process->cwd);
       if (UNLIKELY (*exec_path == NULL))
         {
           if (errno == ENOENT)
@@ -3112,7 +3112,7 @@ exec_process_entrypoint (libcrun_context_t *context,
       seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
     }
 
-  exec_path = find_executable (process->args[0], process->cwd, NULL);
+  exec_path = find_executable (process->args[0], process->cwd);
   if (UNLIKELY (exec_path == NULL))
     {
       if (errno == ENOENT)

@@ -308,7 +308,7 @@ int parse_json_file (yajl_val *out, const char *jsondata, struct parser_context 
 
 int has_prefix (const char *str, const char *prefix);
 
-const char *find_executable (const char *executable_path, const char *cwd, const char *handler);
+const char *find_executable (const char *executable_path, const char *cwd);
 
 int copy_recursive_fd_to_fd (int srcfd, int destfd, const char *srcname, const char *destname, libcrun_error_t *err);
 
