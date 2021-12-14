@@ -40,11 +40,13 @@ enum
   OPTION_ROOTLESS = 1000
 };
 
-static const char *bundle = NULL;
+static const char *bundle;
+static const char *fname;
 
 static struct spec_options_s spec_options;
 
 static struct argp_option options[] = { { "bundle", 'b', "DIR", 0, "path to the root of the bundle dir (default \".\")", 0 },
+                                        { "file", 'f', "PATH", 0, "destination file", 0 },
                                         { "rootless", OPTION_ROOTLESS, 0, 0, "spec for the rootless case", 0 },
                                         {
                                             0,
@@ -59,6 +61,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
     {
     case 'b':
       bundle = argp_mandatory_argument (arg, state);
+      break;
+
+    case 'f':
+      fname = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_ROOTLESS:
@@ -81,9 +87,10 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   libcrun_context_t crun_context = {
     0,
   };
-  int ret;
   cleanup_file FILE *f = NULL;
   cleanup_free char *bundle_cleanup = NULL;
+  const char *where;
+  int ret;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);
   crun_assert_n_args (argc - first_arg, 0, 0);
@@ -107,13 +114,18 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
         libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
-  ret = access ("config.json", F_OK);
-  if (ret == 0)
-    return libcrun_make_error (err, 0, "config.json already exists", err);
+  where = fname ? fname : "config.json";
 
-  f = fopen ("config.json", "w+");
+  if (fname == NULL)
+    {
+      ret = access (where, F_OK);
+      if (ret == 0)
+        return libcrun_make_error (err, 0, "`%s` already exists", where);
+    }
+
+  f = fopen (where, "w+");
   if (f == NULL)
-    return libcrun_make_error (err, 0, "cannot open config.json", err);
+    return libcrun_make_error (err, errno, "cannot open `%s`", where);
 
   ret = libcrun_container_spec (! spec_options.rootless, f, err);
 
