@@ -40,25 +40,25 @@ RUNTIME=${RUNTIME:-podman}
 
 mkdir -p /nix
 
-$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
     nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64
 
 rm -rf result
 
-$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
     nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/ --arg enableSystemd false
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64-disable-systemd
 
 rm -rf result
 
-$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
     nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/default-arm64.nix
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64
 
 rm -rf result
 
-$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix \
+$RUNTIME run --rm --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
     nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/default-arm64.nix --arg enableSystemd false
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64-disable-systemd
 
