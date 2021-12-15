@@ -4086,7 +4086,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   cleanup_close int cgroup_dirfd = -1;
   cleanup_close int sync_fd = -1;
   struct _clone3_args clone3_args;
-  bool need_move_to_cgroup = true;
+  bool need_move_to_cgroup;
 
   if (! detach)
     {
@@ -4116,8 +4116,11 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
 
   memset (&clone3_args, 0, sizeof (clone3_args));
   clone3_args.exit_signal = SIGCHLD;
-  if (cgroup_dirfd >= 0)
+  if (cgroup_dirfd < 0)
+    need_move_to_cgroup = true;
+  else
     {
+      need_move_to_cgroup = false;
       clone3_args.flags |= CLONE_INTO_CGROUP;
       clone3_args.cgroup = cgroup_dirfd;
     }
@@ -4125,10 +4128,10 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
   pid = syscall_clone3 (&clone3_args);
 
   /* On errors, fall back to fork().  */
-  if (LIKELY (pid >= 0))
-    need_move_to_cgroup = false;
-  else
+  if (pid < 0)
     {
+      need_move_to_cgroup = true;
+
       pid = fork ();
       if (UNLIKELY (pid < 0))
         {
