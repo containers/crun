@@ -39,6 +39,12 @@ syscall_bpf (int cmd, union bpf_attr *attr, unsigned int size)
 
 #endif
 
+static inline uint64_t
+ptr_to_u64 (const void *ptr)
+{
+  return (uint64_t) (unsigned long) ptr;
+}
+
 enum
 {
   HAS_WILDCARD = 1
@@ -281,7 +287,7 @@ read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_er
       attr.query.target_fd = dirfd;
       attr.query.attach_type = BPF_CGROUP_DEVICE;
       attr.query.prog_cnt = cur_size;
-      attr.query.prog_ids = (uint64_t) progs;
+      attr.query.prog_ids = ptr_to_u64 (progs);
 
       ret = bpf (BPF_PROG_QUERY, &attr, sizeof (attr));
     }
@@ -465,9 +471,9 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
   memset (&attr, 0, sizeof (attr));
   attr.prog_type = BPF_PROG_TYPE_CGROUP_DEVICE;
-  attr.insns = (uint64_t) program->program;
+  attr.insns = ptr_to_u64 (program->program);
   attr.insn_cnt = bpf_program_instructions (program);
-  attr.license = (uint64_t) "GPL";
+  attr.license = ptr_to_u64 ("GPL");
 
   /* First try without log.  */
   fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
@@ -478,7 +484,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
       log[0] = '\0';
       attr.log_level = 1;
-      attr.log_buf = (uint64_t) log;
+      attr.log_buf = ptr_to_u64 (log);
       attr.log_size = log_size;
 
       fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
@@ -496,7 +502,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
       unlink (pin);
 
       memset (&attr, 0, sizeof (attr));
-      attr.pathname = (uint64_t) pin;
+      attr.pathname = ptr_to_u64 (pin);
       attr.bpf_fd = fd;
       ret = bpf (BPF_OBJ_PIN, &attr, sizeof (attr));
       if (ret < 0)
