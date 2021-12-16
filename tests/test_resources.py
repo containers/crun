@@ -24,6 +24,25 @@ from tests_utils import *
 def is_cgroup_v2_unified():
     return subprocess.check_output("stat -c%T -f /sys/fs/cgroup".split()).decode("utf-8").strip() == "cgroup2fs"
 
+def test_resources_fail_with_enoent():
+    if is_rootless():
+        return 77
+    if not is_cgroup_v2_unified():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['linux']['resources'] = {"unified" : {"memory.DOESNTEXIST" : "baz"}}
+    conf['process']['args'] = ['/init', 'echo', 'hi']
+
+    proc, _ = run_and_get_output(conf, use_popen=True)
+    out, _ = proc.communicate()
+
+    if "no such file or directory" in out.decode().lower():
+        return 0
+
+    return -1
+
 def test_resources_pid_limit():
     if is_rootless():
         return 77
@@ -192,6 +211,7 @@ all_tests = {
     "resources-unified-invalid-controller" : test_resources_unified_invalid_controller,
     "resources-unified-invalid-key" : test_resources_unified_invalid_key,
     "resources-unified-exec-cgroup" : test_resources_exec_cgroup,
+    "resources-fail-with-enoent" : test_resources_fail_with_enoent,
 }
 
 if __name__ == "__main__":
