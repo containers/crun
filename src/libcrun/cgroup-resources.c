@@ -38,6 +38,12 @@
 #include <fcntl.h>
 #include <libgen.h>
 
+static inline int
+write_cgroup_file (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  return write_file_at_with_flags (dirfd, O_WRONLY, 0, name, data, len, err);
+}
+
 static int
 is_rwm (const char *str, libcrun_error_t *err)
 {
@@ -131,7 +137,7 @@ write_file_and_check_controllers_at (bool cgroup2, int dirfd, const char *name, 
 {
   int ret;
 
-  ret = write_file_at (dirfd, name, data, len, err);
+  ret = write_cgroup_file (dirfd, name, data, len, err);
   if (cgroup2)
     return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
   return ret;
@@ -206,7 +212,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       uint32_t val = blkio->weight;
 
       len = sprintf (fmt_buf, "%" PRIu32, val);
-      ret = write_file_at (dirfd, cgroup2 ? "io.bfq.weight" : "blkio.weight", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd, cgroup2 ? "io.bfq.weight" : "blkio.weight", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -215,7 +221,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set leaf_weight with cgroupv2");
       len = sprintf (fmt_buf, "%d", blkio->leaf_weight);
-      ret = write_file_at (dirfd, "blkio.leaf_weight", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd, "blkio.leaf_weight", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -343,7 +349,7 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
   if (net->class_id)
     {
       len = sprintf (fmt_buf, "%d", net->class_id);
-      ret = write_file_at (dirfd_netclass, "net_cls.classid", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd_netclass, "net_cls.classid", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -449,14 +455,14 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           /* Make sure it is still a NUL terminated string.  */
           fmt_buf[len] = '\0';
         }
-      ret = write_file_at (dirfd, file, fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd, file, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
   for (i = 0; default_devices[i]; i++)
     {
-      ret = write_file_at (dirfd, "devices.allow", default_devices[i], strlen (default_devices[i]), err);
+      ret = write_cgroup_file (dirfd, "devices.allow", default_devices[i], strlen (default_devices[i]), err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -633,7 +639,7 @@ write_memory (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resource
 
   limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
 
-  return write_file_at (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
+  return write_cgroup_file (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
 }
 
 static int
@@ -662,7 +668,7 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
 
   swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
 
-  ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, fname, swap_buf, swap_buf_len, err);
+  ret = write_cgroup_file (dirfd, fname, swap_buf, swap_buf_len, err);
   if (ret >= 0)
     return ret;
 
@@ -722,7 +728,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
         return crun_make_error (err, 0, "cannot set kernel memory with cgroupv2");
 
       len = sprintf (fmt_buf, "%" PRIu64, memory->kernel);
-      ret = write_file_at (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -735,7 +741,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set useHierarchy memory with cgroupv2");
 
-      ret = write_file_at (dirfd, "memory.use_hierarchy", (memory->use_hierarchy) ? "1" : "0", 1, err);
+      ret = write_cgroup_file (dirfd, "memory.use_hierarchy", (memory->use_hierarchy) ? "1" : "0", 1, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -753,7 +759,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot disable OOM killer with cgroupv2");
 
-      ret = write_file_at (dirfd, "memory.oom_control", "1", 1, err);
+      ret = write_cgroup_file (dirfd, "memory.oom_control", "1", 1, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -763,7 +769,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
         return crun_make_error (err, 0, "cannot set kernel TCP with cgroupv2");
 
       len = sprintf (fmt_buf, "%" PRIu64, memory->kernel_tcp);
-      ret = write_file_at (dirfd, "memory.kmem.tcp.limit_in_bytes", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd, "memory.kmem.tcp.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -773,7 +779,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
         return crun_make_error (err, 0, "cannot set memory swappiness with cgroupv2");
 
       len = sprintf (fmt_buf, "%" PRIu64, memory->swappiness);
-      ret = write_file_at (dirfd, "memory.swappiness", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd, "memory.swappiness", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -834,7 +840,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       else
         {
           len = sprintf (fmt_buf, "%" PRIu64, cpu->period);
-          ret = write_file_at (dirfd_cpu, "cpu.cfs_period_us", fmt_buf, len, err);
+          ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_period_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -846,7 +852,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       else
         {
           len = sprintf (fmt_buf, "%" PRIu64, cpu->quota);
-          ret = write_file_at (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
+          ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -856,7 +862,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (cgroup2)
         return crun_make_error (err, 0, "realtime period not supported on cgroupv2");
       len = sprintf (fmt_buf, "%" PRIu64, cpu->realtime_period);
-      ret = write_file_at (dirfd_cpu, "cpu.rt_period_us", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd_cpu, "cpu.rt_period_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -865,7 +871,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (cgroup2)
         return crun_make_error (err, 0, "realtime runtime not supported on cgroupv2");
       len = sprintf (fmt_buf, "%" PRIu64, cpu->realtime_runtime);
-      ret = write_file_at (dirfd_cpu, "cpu.rt_runtime_us", fmt_buf, len, err);
+      ret = write_cgroup_file (dirfd_cpu, "cpu.rt_runtime_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
