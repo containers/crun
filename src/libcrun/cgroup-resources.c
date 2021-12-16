@@ -640,9 +640,11 @@ static int
 write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory,
                    libcrun_error_t *err)
 {
+  int ret;
   int64_t swap;
   char swap_buf[32];
   size_t swap_buf_len;
+  const char *fname = cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes";
 
   if (! memory->swap_present)
     return 0;
@@ -660,8 +662,18 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
 
   swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
 
-  return write_file_and_check_controllers_at (
-      cgroup2, dirfd, cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes", swap_buf, swap_buf_len, err);
+  ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, fname, swap_buf, swap_buf_len, err);
+  if (ret >= 0)
+    return ret;
+
+  /* If swap is not enabled, ignore the error.  */
+  if (crun_error_get_errno (err) == ENOENT)
+    {
+      crun_error_release (err);
+      return 0;
+    }
+
+  return ret;
 }
 
 static int

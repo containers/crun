@@ -109,9 +109,9 @@ xasprintf (char **str, const char *fmt, ...)
 }
 
 int
-write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  cleanup_close int fd = openat (dirfd, name, O_WRONLY | O_CREAT | O_TRUNC, 0700);
+  cleanup_close int fd = openat (dirfd, name, O_WRONLY | flags, mode);
   int ret = 0;
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "opening file `%s` for writing", name);
@@ -124,6 +124,12 @@ write_file_at (int dirfd, const char *name, const void *data, size_t len, libcru
     }
 
   return ret;
+}
+
+int
+write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  return write_file_at_with_flags (dirfd, O_CREAT | O_TRUNC, 0700, name, data, len, err);
 }
 
 int

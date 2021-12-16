@@ -53,6 +53,7 @@ jobs:
           - test: disable-systemd
           - test: check
           - test: podman
+          - test: cri-o
           - test: containerd
           - test: oci-validation
           - test: alpine-build
@@ -120,6 +121,12 @@ jobs:
                 sudo mkdir -p /var/lib/containers /var/tmp
                 sudo docker build -t crun-podman tests/podman
                 sudo docker run --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-podman
+                ;;
+            cri-o)
+                sudo modprobe -a ip6_tables br_netfilter
+                sudo mkdir -p /var/lib/var-crio/tmp /var/lib/tmp-crio /var/lib/var-tmp-crio
+                sudo docker build -t crun-cri-o tests/cri-o
+                sudo docker run --net host --privileged --rm -v /dev/zero:/sys/module/apparmor/parameters/enabled -v /var/lib/tmp-crio:/tmp:rw -v /var/lib/var-tmp-crio:/var/tmp -v /var/lib/var-crio:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-cri-o
                 ;;
             containerd)
                 sudo mkdir -p /var/lib/var-containerd

@@ -107,7 +107,7 @@ AS_IF([test "x$enable_bpf" != "xno"], [
 				#include <linux/bpf.h>
 				void foo() {
 					uint64_t val = 0x123456789;
-					union bpf_attr attr;
+					__attribute__ ((unused)) union bpf_attr attr;
 					attr.insns = val;
 				}
 				int program = BPF_PROG_TYPE_CGROUP_DEVICE;

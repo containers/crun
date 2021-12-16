@@ -233,6 +233,8 @@ int write_file (const char *name, const void *data, size_t len, libcrun_error_t 
 
 int write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err);
 
+int write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err);
+
 int crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
 int crun_ensure_file (const char *path, int mode, bool nofollow, libcrun_error_t *err);
