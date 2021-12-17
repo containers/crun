@@ -564,8 +564,84 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
   return 0;
 }
 
+static inline int
+get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
+{
+  if (resources->cpu && resources->cpu->shares_present)
+    {
+      *weight = convert_shares_to_weight (resources->cpu->shares);
+      return 1;
+    }
+
+  if (resources->unified)
+    {
+      size_t i;
+
+      for (i = 0; i < resources->unified->len; i++)
+        if (strcmp (resources->unified->keys[i], "cpu.weight") == 0)
+          {
+            errno = 0;
+            *weight = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
+            if (UNLIKELY (errno))
+              return crun_make_error (err, errno, "invalid value for `cpu.weight`: %s",
+                                      resources->unified->values[i]);
+            return 1;
+          }
+    }
+  return 0;
+}
+
+static int
+append_resources (sd_bus_message *m,
+                  runtime_spec_schema_config_linux_resources *resources,
+                  int cgroup_mode,
+                  libcrun_error_t *err)
+{
+  int sd_err;
+
+  if (resources == NULL)
+    return 0;
+
+  switch (cgroup_mode)
+    {
+    case CGROUP_MODE_UNIFIED:
+      {
+        uint64_t weight;
+        int ret;
+
+        ret = get_weight (resources, &weight, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        if (ret)
+          {
+            sd_err = sd_bus_message_append (m, "(sv)", "CPUWeight", "t", weight);
+            if (UNLIKELY (sd_err < 0))
+              return crun_make_error (err, -sd_err, "sd-bus message append CPUWeight");
+          }
+      }
+      break;
+
+    case CGROUP_MODE_LEGACY:
+    case CGROUP_MODE_HYBRID:
+      if (resources->cpu && resources->cpu->shares_present)
+        {
+          sd_err = sd_bus_message_append (m, "(sv)", "CPUShares", "t", resources->cpu->shares);
+          if (UNLIKELY (sd_err < 0))
+            return crun_make_error (err, -sd_err, "sd-bus message append CPUShares");
+        }
+      break;
+
+    default:
+      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
+    }
+
+  return 0;
+}
+
 static int
 enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
+                            int cgroup_mode,
                             json_map_string_string *annotations,
                             const char *scope, const char *slice,
                             pid_t pid, libcrun_error_t *err)
@@ -684,6 +760,10 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
           goto exit;
         }
     }
+
+  ret = append_resources (m, resources, cgroup_mode, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   sd_err = sd_bus_message_close_container (m);
   if (UNLIKELY (sd_err < 0))
@@ -830,7 +910,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
 
   get_systemd_scope_and_slice (id, cgroup_path, &scope, &slice);
 
-  ret = enter_systemd_cgroup_scope (resources, args->annotations, scope, slice, pid, err);
+  ret = enter_systemd_cgroup_scope (resources, cgroup_mode, args->annotations, scope, slice, pid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
