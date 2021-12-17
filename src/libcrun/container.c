@@ -2935,6 +2935,12 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
   yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
 
+  if (status.scope)
+    {
+      yajl_gen_string (gen, YAJL_STR ("systemd-scope"), strlen ("systemd-scope"));
+      yajl_gen_string (gen, YAJL_STR (status.scope), strlen (status.scope));
+    }
+
   if (status.owner)
     {
       yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
