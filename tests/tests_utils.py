@@ -275,6 +275,10 @@ def run_crun_command(args):
     args = [crun, "--root", root] + args
     return subprocess.check_output(args, close_fds=False).decode()
 
+def running_on_systemd():
+    with open('/proc/1/comm') as f:
+        return "systemd" in f.readline()
+
 def tests_main(all_tests):
     os.environ["LANG"] = "C"
     tests_root = get_tests_root()
