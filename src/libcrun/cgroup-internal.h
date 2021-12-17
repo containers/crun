@@ -45,6 +45,8 @@ struct libcrun_cgroup_manager
   int (*create_cgroup) (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *out, libcrun_error_t *err);
   /* Destroy the cgroup and kill any process if needed.  */
   int (*destroy_cgroup) (struct libcrun_cgroup_status *cgroup_status, libcrun_error_t *err);
+  /* Additional resources configuration specific to this manager.  */
+  int (*update_resources) (struct libcrun_cgroup_status *cgroup_status, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
 };
 
 const char *find_delegate_cgroup (json_map_string_string *annotations);

@@ -192,7 +192,7 @@ libcrun_cgroup_killall (struct libcrun_cgroup_status *cgroup_status, int signal,
 int
 libcrun_cgroup_destroy (struct libcrun_cgroup_status *cgroup_status, libcrun_error_t *err)
 {
-  struct libcrun_cgroup_manager *cgroup_manager;
+  struct libcrun_cgroup_manager *cgroup_manager = NULL;
   int ret;
 
   ret = get_cgroup_manager (cgroup_status->manager, &cgroup_manager, err);
@@ -207,11 +207,24 @@ libcrun_cgroup_destroy (struct libcrun_cgroup_status *cgroup_status, libcrun_err
 }
 
 int
-libcrun_update_cgroup_resources (struct libcrun_cgroup_status *status,
+libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
                                  runtime_spec_schema_config_linux_resources *resources,
                                  libcrun_error_t *err)
 {
-  return update_cgroup_resources (status->path, resources, err);
+  struct libcrun_cgroup_manager *cgroup_manager = NULL;
+  int ret;
+
+  ret = get_cgroup_manager (cgroup_status->manager, &cgroup_manager, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (cgroup_manager->update_resources)
+    {
+      ret = cgroup_manager->update_resources (cgroup_status, resources, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return update_cgroup_resources (cgroup_status->path, resources, err);
 }
 
 static int
