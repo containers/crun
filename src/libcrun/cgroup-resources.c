@@ -816,15 +816,12 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
   int64_t period = -1;
   int64_t quota = -1;
 
-  /* convert linearly from 2-262144 to 1-10000.  */
-#define CONVERT_SHARES_TO_CGROUPS_V2(x) (1 + (((x) -2) * 9999) / 262142)
-
   if (cpu->shares)
     {
       uint32_t val = cpu->shares;
 
       if (cgroup2)
-        val = CONVERT_SHARES_TO_CGROUPS_V2 (val);
+        val = convert_shares_to_weight (val);
 
       len = sprintf (fmt_buf, "%u", val);
 

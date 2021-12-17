@@ -71,4 +71,11 @@ is_rootless (libcrun_error_t *err)
 
 int libcrun_cgroup_pause_unpause_path (const char *cgroup_path, const bool pause, libcrun_error_t *err);
 
+static inline uint64_t
+convert_shares_to_weight (uint64_t shares)
+{
+  /* convert linearly from 2-262144 to 1-10000.  */
+  return (1 + ((shares - 2) * 9999) / 262142);
+}
+
 #endif
