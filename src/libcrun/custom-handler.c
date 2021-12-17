@@ -263,13 +263,14 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
         return crun_make_error (err, 0, "handler requested but no manager configured: `%s`", context->handler);
 
       *out = handler_by_name (manager, explicit_handler);
-      if (*out == NULL)
-        return crun_make_error (err, 0, "invalid handler specified `%s`", explicit_handler);
+      if (*out)
+        {
+          if ((*out)->load)
+            return (*out)->load (cookie, err);
+          return 0;
+        }
 
-      if ((*out)->load)
-        return (*out)->load (cookie, err);
-
-      return 0;
+      return find_handler_for_container (manager, container, out, cookie, err);
     }
 
   if (manager == NULL)
