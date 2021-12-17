@@ -953,6 +953,87 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
 
   return 0;
 }
+
+static int
+libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
+                                  runtime_spec_schema_config_linux_resources *resources,
+                                  libcrun_error_t *err)
+{
+  struct systemd_job_removed_s job_data = {};
+  sd_bus_error error = SD_BUS_ERROR_NULL;
+  sd_bus_message *reply = NULL;
+  sd_bus_message *m = NULL;
+  sd_bus *bus = NULL;
+  int sd_err, ret;
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  ret = open_sd_bus_connection (&bus, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = systemd_check_job_status_setup (bus, &job_data, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+
+  sd_err = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1",
+                                           "/org/freedesktop/systemd1",
+                                           "org.freedesktop.systemd1.Manager",
+                                           "SetUnitProperties");
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, -sd_err, "set up dbus message");
+      goto exit;
+    }
+
+  sd_err = sd_bus_message_append (m, "sb", cgroup_status->scope, 1);
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, -ret, "sd-bus message append");
+      goto exit;
+    }
+
+  sd_err = sd_bus_message_open_container (m, 'a', "(sv)");
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, -sd_err, "sd-bus open container");
+      goto exit;
+    }
+
+  ret = append_resources (m, resources, cgroup_mode, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+
+  sd_err = sd_bus_message_close_container (m);
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, -sd_err, "sd-bus close container");
+      goto exit;
+    }
+
+  sd_err = sd_bus_call (bus, m, 0, &error, &reply);
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      goto exit;
+    }
+
+  ret = 0;
+
+exit:
+  if (bus)
+    sd_bus_unref (bus);
+  if (m)
+    sd_bus_message_unref (m);
+  if (reply)
+    sd_bus_message_unref (reply);
+  sd_bus_error_free (&error);
+  return ret;
+}
+
 #else
 static int
 libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
@@ -973,9 +1054,21 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
 
   return crun_make_error (err, ENOTSUP, "systemd not supported");
 }
+
+static int
+libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
+                                  runtime_spec_schema_config_linux_resources *resources,
+                                  libcrun_error_t *err)
+{
+  (void) cgroup_status;
+  (void) resources;
+
+  return crun_make_error (err, ENOTSUP, "systemd not supported");
+}
 #endif
 
 struct libcrun_cgroup_manager cgroup_manager_systemd = {
   .create_cgroup = libcrun_cgroup_enter_systemd,
   .destroy_cgroup = libcrun_destroy_cgroup_systemd,
+  .update_resources = libcrun_update_resources_systemd,
 };
