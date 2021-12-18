@@ -193,7 +193,7 @@ def get_crun_path():
     return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
-                       command='run', env=None, use_popen=False, hide_stderr=False,
+                       command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
                        all_dev_null=False, id_container=None, relative_config_path="config.json",
                        chown_rootfs_to=None):
 
@@ -247,7 +247,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     relative_config_path = ['--config', relative_config_path] if relative_config_path else []
 
     root = get_tests_root_status()
-    args = [crun, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
+    args = [crun, "--cgroup-manager", cgroup_manager, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:
@@ -274,6 +274,10 @@ def run_crun_command(args):
     crun = get_crun_path()
     args = [crun, "--root", root] + args
     return subprocess.check_output(args, close_fds=False).decode()
+
+def running_on_systemd():
+    with open('/proc/1/comm') as f:
+        return "systemd" in f.readline()
 
 def tests_main(all_tests):
     os.environ["LANG"] = "C"

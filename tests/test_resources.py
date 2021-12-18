@@ -176,6 +176,80 @@ def test_resources_unified():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_resources_cpu_weight():
+    if not is_cgroup_v2_unified() or is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'pause']
+
+    conf['linux']['resources'] = {}
+    conf['linux']['resources']['unified'] = {
+            "cpu.weight": "1234"
+    }
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
+        if "1234" not in out:
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+def test_resources_cpu_weight_systemd():
+    if not is_cgroup_v2_unified() or is_rootless():
+        return 77
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return 77
+    if not running_on_systemd():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'pause']
+
+    conf['linux']['resources'] = {}
+    conf['linux']['resources']['unified'] = {
+            "cpu.weight": "1234"
+    }
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True, cgroup_manager="systemd")
+        out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
+        if "1234" not in out:
+            sys.stderr.write("found wrong CPUWeight for the container cgroup\n")
+            return -1
+
+        state = run_crun_command(['state', cid])
+        scope = json.loads(state)['systemd-scope']
+
+        out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
+        if out != "1234":
+            sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
+            return 1
+
+        run_crun_command(['update', '--cpu-share', '4321', cid])
+        # this is the expected cpu weight after the conversion from the CPUShares
+        expected_weight = "165"
+
+        out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
+        if expected_weight not in out:
+            sys.stderr.write("found wrong CPUWeight %s for the container cgroup\n" % out)
+            return -1
+
+        out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
+        if out != expected_weight:
+            sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
+            return 1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
 def test_resources_exec_cgroup():
     if not is_cgroup_v2_unified() or is_rootless():
         return 77
@@ -212,6 +286,8 @@ all_tests = {
     "resources-unified-invalid-key" : test_resources_unified_invalid_key,
     "resources-unified-exec-cgroup" : test_resources_exec_cgroup,
     "resources-fail-with-enoent" : test_resources_fail_with_enoent,
+    "resources-cpu-weight" : test_resources_cpu_weight,
+    "resources-cpu-weight-systemd" : test_resources_cpu_weight_systemd,
 }
 
 if __name__ == "__main__":

@@ -73,7 +73,7 @@ static struct description_s descriptors[] = { { BLKIO_WEIGHT, 0, "weight", 1 },
 
                                               { CPU_PERIOD, 1, "period", 1 },
                                               { CPU_QUOTA, 1, "quota", 1 },
-                                              { CPU_SHARE, 1, "share", 1 },
+                                              { CPU_SHARE, 1, "shares", 1 },
                                               { CPU_RT_PERIOD, 1, "realtimePeriod", 1 },
                                               { CPU_RT_RUNTIME, 1, "realtimeRuntime", 1 },
                                               { CPUSET_CPUS, 1, "cpus", 0 },
