@@ -276,11 +276,15 @@ libwasmer_can_handle_container (libcrun_container_t *container, libcrun_error_t 
 {
   const char *annotation;
 
-  annotation = find_annotation (container, "module.wasm.image/variant");
-  if (! annotation)
-    return 0;
+  annotation = find_annotation (container, "run.oci.handler");
+  if (annotation)
+    return strcmp (annotation, "wasm") == 0 ? 1 : 0;
 
-  return strcmp (annotation, "compat") == 0 ? 1 : 0;
+  annotation = find_annotation (container, "module.wasm.image/variant");
+  if (annotation)
+    return strcmp (annotation, "compat") == 0 ? 1 : 0;
+
+  return 0;
 }
 
 struct custom_handler_s handler_wasmer = {
