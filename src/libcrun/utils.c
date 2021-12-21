@@ -460,12 +460,16 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
 
   path = consume_slashes (path);
 
+  /* Empty path, nothing to do.  */
+  if (*path == '\0')
+    return 0;
+
   npath = xstrdup (path);
 
   it = npath + strlen (npath) - 1;
-  while (*it == '/' && it > npath && ((size_t) (it - path)) > dirpath_len)
+  while (*it == '/' && it > npath && ((size_t) (it - npath)) > dirpath_len)
     *it-- = '\0';
-  if (((size_t) (it - path)) == dirpath_len)
+  if (((size_t) (it - npath)) == dirpath_len)
     return crun_make_error (err, 0, "invalid path `%s`", path);
 
   cwd = dirfd;
