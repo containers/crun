@@ -260,7 +260,8 @@ int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status **out, libcrun_error_t *err)
 {
   __attribute__ ((unused)) pid_t sigcont_cleanup __attribute__ ((cleanup (cleanup_sig_contp))) = -1;
-  cleanup_cgroup_status struct libcrun_cgroup_status *status;
+  /* status will be filled by the cgroup manager.  */
+  cleanup_cgroup_status struct libcrun_cgroup_status *status = xmalloc0 (sizeof *status);
   struct libcrun_cgroup_manager *cgroup_manager;
   uid_t root_uid = args->root_uid;
   uid_t root_gid = args->root_gid;
@@ -304,8 +305,6 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
   if (UNLIKELY (ret < 0))
     return ret;
 
-  /* status will be filled by the cgroup manager.  */
-  status = xmalloc0 (sizeof *status);
   status->manager = args->manager;
 
   ret = cgroup_manager->create_cgroup (args, status, err);
