@@ -51,7 +51,7 @@ static struct crun_global_arguments arguments;
 static struct custom_handler_manager_s *handler_manager;
 
 static struct custom_handler_manager_s *
-get_handler_manager ()
+libcrun_get_handler_manager ()
 {
   if (handler_manager == NULL)
     {
@@ -59,17 +59,17 @@ get_handler_manager ()
       libcrun_error_t err;
       int ret;
 
-      handler_manager = handler_manager_create (&err);
+      handler_manager = libcrun_handler_manager_create (&err);
       if (UNLIKELY (handler_manager == NULL))
         libcrun_fail_with_error (err->status, "%s", err->msg);
 
-      ret = append_paths (&handlers_path, &err, CRUN_LIBDIR, "handlers", NULL);
+      ret = libcrun_append_paths (&handlers_path, &err, CRUN_LIBDIR, "handlers", NULL);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error (err->status, "%s", err->msg);
 
       if (access (handlers_path, F_OK) == 0)
         {
-          ret = handler_manager_load_from_directory (handler_manager, handlers_path, &err);
+          ret = libcrun_handler_manager_load_directory (handler_manager, handlers_path, &err);
           if (UNLIKELY (ret < 0))
             libcrun_fail_with_error (err->status, "%s", err->msg);
         }
@@ -113,7 +113,7 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   if (con->config_file == NULL)
     con->config_file = "./config.json";
 
-  con->handler_manager = get_handler_manager ();
+  con->handler_manager = libcrun_get_handler_manager ();
 
   return 0;
 }
@@ -240,7 +240,7 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
   fprintf (stream, "+CRIU ");
 #endif
 
-  handler_manager_print_feature_tags (get_handler_manager (), stream);
+  libcrun_handler_manager_print_feature_tags (libcrun_get_handler_manager (), stream);
 
   fprintf (stream, "+YAJL\n");
 }

@@ -137,11 +137,11 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      ret = append_paths (&source, err, CGROUP_ROOT, subsystem, NULL);
+      ret = libcrun_append_paths (&source, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = append_paths (&destination, err, source, subpath, NULL);
+      ret = libcrun_append_paths (&destination, err, source, subpath, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -204,7 +204,7 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      ret = append_paths (&source_path, err, CGROUP_ROOT, subsystem, NULL);
+      ret = libcrun_append_paths (&source_path, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -267,7 +267,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   /* descriptors.json is needed during restore to correctly
    * reconnect stdin, stdout, stderr. */
-  ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
+  ret = libcrun_append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -296,7 +296,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
    * and all of its children. */
   criu_set_pid (status->pid);
 
-  ret = append_paths (&path, err, status->bundle, status->rootfs, NULL);
+  ret = libcrun_append_paths (&path, err, status->bundle, status->rootfs, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -389,13 +389,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       /* This needs CRIU 3.14. */
-      ret = append_paths (&freezer_path, err, CGROUP_ROOT, status->cgroup_path, NULL);
+      ret = libcrun_append_paths (&freezer_path, err, CGROUP_ROOT, status->cgroup_path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
-      ret = append_paths (&freezer_path, err, CGROUP_ROOT "/freezer", status->cgroup_path, NULL);
+      ret = libcrun_append_paths (&freezer_path, err, CGROUP_ROOT "/freezer", status->cgroup_path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -537,7 +537,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     char err_buffer[256];
     yajl_val tree;
 
-    ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
+    ret = libcrun_append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
     if (UNLIKELY (ret < 0))
       return ret;
 
@@ -616,7 +616,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     }
 
   /* Mount the container rootfs for CRIU. */
-  ret = append_paths (&root, err, status->bundle, "criu-root", NULL);
+  ret = libcrun_append_paths (&root, err, status->bundle, "criu-root", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 

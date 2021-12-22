@@ -280,7 +280,7 @@ test_path_is_slash_dev ()
 }
 
 static int
-test_append_paths ()
+test_libcrun_append_paths ()
 {
 #define PROLOGUE()               \
   cleanup_free char *out = NULL; \
@@ -299,54 +299,54 @@ test_append_paths ()
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "/sys/fs/cgroup/", "memory", "some/path", NULL);
+    ret = libcrun_append_paths (&out, &err, "/sys/fs/cgroup/", "memory", "some/path", NULL);
     EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "/sys/fs/cgroup", "memory", "some/path", NULL);
+    ret = libcrun_append_paths (&out, &err, "/sys/fs/cgroup", "memory", "some/path", NULL);
     EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "/sys/fs/cgroup////////", "memory////////", "some/path//////", NULL);
+    ret = libcrun_append_paths (&out, &err, "/sys/fs/cgroup////////", "memory////////", "some/path//////", NULL);
     EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "/sys/fs/cgroup////////", "memory////////", "///////some/path//////", NULL);
+    ret = libcrun_append_paths (&out, &err, "/sys/fs/cgroup////////", "memory////////", "///////some/path//////", NULL);
     EXPECT_STRING ("/sys/fs/cgroup/memory/some/path");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "", "//", "", "", "", NULL);
+    ret = libcrun_append_paths (&out, &err, "", "//", "", "", "", NULL);
     EXPECT_STRING ("/");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "///", "/", "", "///", "a", NULL);
+    ret = libcrun_append_paths (&out, &err, "///", "/", "", "///", "a", NULL);
     EXPECT_STRING ("/a");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "////", "/////", "///", "", "", NULL);
+    ret = libcrun_append_paths (&out, &err, "////", "/////", "///", "", "", NULL);
     EXPECT_STRING ("/");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "", "", "", "", "", NULL);
+    ret = libcrun_append_paths (&out, &err, "", "", "", "", "", NULL);
     EXPECT_STRING ("");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "", "///sys/fs/cgroup////////", "", "some/path", NULL);
+    ret = libcrun_append_paths (&out, &err, "", "///sys/fs/cgroup////////", "", "some/path", NULL);
     EXPECT_STRING ("/sys/fs/cgroup/some/path");
   }
   {
     PROLOGUE ();
-    ret = append_paths (&out, &err, "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d",
-                        "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d",
-                        "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d", NULL);
+    ret = libcrun_append_paths (&out, &err, "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d",
+                                "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d",
+                                "a", "b", "c", "d", "a", "b", "c", "d", "a", "b", "c", "d", NULL);
     if (ret == 0)
       return -1;
     crun_error_release (&err);
@@ -433,7 +433,7 @@ main ()
   RUN_TEST (test_dir_p);
   RUN_TEST (test_socket_pair);
   RUN_TEST (test_send_receive_fd);
-  RUN_TEST (test_append_paths);
+  RUN_TEST (test_libcrun_append_paths);
   RUN_TEST (test_path_is_slash_dev);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);

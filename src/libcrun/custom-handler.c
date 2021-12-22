@@ -64,7 +64,7 @@ struct custom_handler_manager_s
 };
 
 struct custom_handler_manager_s *
-handler_manager_create (libcrun_error_t *err arg_unused)
+libcrun_handler_manager_create (libcrun_error_t *err arg_unused)
 {
   struct custom_handler_s **handlers = NULL;
   void **handles = NULL;
@@ -135,7 +135,7 @@ handler_manager_add_so (struct custom_handler_manager_s *manager, void *handle, 
 #endif
 
 int
-handler_manager_load_from_directory (struct custom_handler_manager_s *manager, const char *path, libcrun_error_t *err)
+libcrun_handler_manager_load_directory (struct custom_handler_manager_s *manager, const char *path, libcrun_error_t *err)
 {
 #ifdef HAVE_DLOPEN
   cleanup_dir DIR *dir = NULL;
@@ -156,7 +156,7 @@ handler_manager_load_from_directory (struct custom_handler_manager_s *manager, c
       if (name[0] == '.')
         continue;
 
-      ret = append_paths (&fpath, err, path, name, NULL);
+      ret = libcrun_append_paths (&fpath, err, path, name, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -189,7 +189,7 @@ handler_by_name (struct custom_handler_manager_s *manager, const char *name)
 }
 
 void
-handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out)
+libcrun_handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out)
 {
   size_t i;
 

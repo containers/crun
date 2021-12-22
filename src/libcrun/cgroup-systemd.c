@@ -115,7 +115,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         path = xstrdup (from);
       else
         {
-          ret = append_paths (&path, err, from, suffix, NULL);
+          ret = libcrun_append_paths (&path, err, from, suffix, NULL);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -175,13 +175,13 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
           path = xstrdup (from);
         else
           {
-            ret = append_paths (&path, err, from, suffix, NULL);
+            ret = libcrun_append_paths (&path, err, from, suffix, NULL);
             if (UNLIKELY (ret < 0))
               return ret;
           }
         *to = '\n';
 
-        ret = append_paths (&dir, err, CGROUP_ROOT, path, delegate_cgroup, NULL);
+        ret = libcrun_append_paths (&dir, err, CGROUP_ROOT, path, delegate_cgroup, NULL);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -202,7 +202,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
           process_target_cgroup = path;
         else
           {
-            ret = append_paths (&target_cgroup_cleanup, err, path, delegate_cgroup, NULL);
+            ret = libcrun_append_paths (&target_cgroup_cleanup, err, path, delegate_cgroup, NULL);
             if (UNLIKELY (ret < 0))
               return ret;
 
