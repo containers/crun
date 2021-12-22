@@ -46,11 +46,12 @@ jobs:
 
             make -j $(nproc) clean
 
-            ./configure CFLAGS='-Wall -Werror --enable-shared'
-            make -j $(nproc) -C libocispec libocispec.la
-            make git-version.h
-            make -j $(nproc) libcrun.la
-            make -j $(nproc) crun
+            if ./configure CFLAGS='-Wall -Werror --enable-shared'; then
+                        make -j $(nproc) -C libocispec libocispec.la
+                        make git-version.h
+                        make -j $(nproc) libcrun.la
+                        make -j $(nproc) crun
+            fi
 
   Test:
     runs-on: ubuntu-latest
