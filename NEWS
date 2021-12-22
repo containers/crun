@@ -1,3 +1,21 @@
+* crun-1.4
+
+- wasm: support for running on kubernetes with containerd.
+- linux: add support for recursive mount options.  e.g. it is possible
+  to specify "rro" to make the mount read-only recursively.
+- add support for idmapped mounts through a new mount option "idmap".
+- linux: improve detection of /dev target.  Previously a mount like
+  `/dev/` was not properly detected as mounting /dev/ from the host.
+- now crun exec uses CLONE_INTO_CGROUP on supported kernels when
+  using cgroup v2.
+- retry the openat2 syscall if it fails with EAGAIN.
+- cgroup: set the CPUWeight/CPUShares on the systemd scope cgroup.
+- on new kernels, use setns with pidfd.
+- attempt the chdir again with the specified user if it failed before
+  changing credentials.
+- ebpf: fix build on 32 bits systems.
+- crun --version shows the configured handlers.
+
 * crun-1.3
 
 - add support to natively build and run WebAssembly workload and
