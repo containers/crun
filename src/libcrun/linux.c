@@ -71,6 +71,10 @@
 #  define OPEN_TREE_CLONE 1
 #endif
 
+#ifndef OPEN_TREE_CLOEXEC
+#  define OPEN_TREE_CLOEXEC O_CLOEXEC
+#endif
+
 #ifndef MOVE_MOUNT_F_EMPTY_PATH
 #  define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
 #endif
