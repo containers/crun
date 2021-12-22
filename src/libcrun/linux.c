@@ -967,7 +967,7 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container, const char *source, 
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
-  ret = append_paths (&subsystem_path, err, target, subsystem, NULL);
+  ret = libcrun_append_paths (&subsystem_path, err, target, subsystem, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1033,7 +1033,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      ret = append_paths (&source_subsystem, err, CGROUP_ROOT, subsystem, NULL);
+      ret = libcrun_append_paths (&source_subsystem, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1041,11 +1041,11 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (has_mount_for (container, source_subsystem))
         continue;
 
-      ret = append_paths (&source_path, err, source_subsystem, subpath, NULL);
+      ret = libcrun_append_paths (&source_path, err, source_subsystem, subpath, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = append_paths (&subsystem_path, err, target, subsystem, NULL);
+      ret = libcrun_append_paths (&subsystem_path, err, target, subsystem, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1777,7 +1777,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
 
       parent_dir = get_private_data (container)->host_notify_socket_path;
 
-      ret = append_paths (&host_notify_socket_path, err, parent_dir, "notify", NULL);
+      ret = libcrun_append_paths (&host_notify_socket_path, err, parent_dir, "notify", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1790,7 +1790,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
     {
       state_dir = libcrun_get_state_directory (context->state_root, context->id);
 
-      ret = append_paths (&host_notify_socket_path, err, state_dir, "notify/notify", NULL);
+      ret = libcrun_append_paths (&host_notify_socket_path, err, state_dir, "notify/notify", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1840,11 +1840,11 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   if (notify_socket == NULL)
     return 0;
 
-  ret = append_paths (&container_notify_socket_path, err, rootfs, notify_socket, "notify", NULL);
+  ret = libcrun_append_paths (&container_notify_socket_path, err, rootfs, notify_socket, "notify", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = append_paths (&host_notify_socket_path, err, state_dir, "notify", NULL);
+  ret = libcrun_append_paths (&host_notify_socket_path, err, state_dir, "notify", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3880,7 +3880,7 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
         {
           cleanup_free char *final_cgroup = NULL;
 
-          ret = append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
+          ret = libcrun_append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
           if (UNLIKELY (ret < 0))
             return ret;
 

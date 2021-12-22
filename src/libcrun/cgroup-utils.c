@@ -78,8 +78,8 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
   char pid_str[16];
   int ret;
 
-  ret = append_paths (&cgroup_path_procs, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "",
-                      "cgroup.procs", NULL);
+  ret = libcrun_append_paths (&cgroup_path_procs, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "",
+                              "cgroup.procs", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -110,7 +110,7 @@ libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err)
     return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
   *to = '\0';
 
-  return append_paths (path, err, CGROUP_ROOT, from, NULL);
+  return libcrun_append_paths (path, err, CGROUP_ROOT, from, NULL);
 }
 
 #ifndef CGROUP2_SUPER_MAGIC
@@ -326,14 +326,14 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
   switch (mode)
     {
     case CGROUP_MODE_UNIFIED:
-      ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
+      ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
       break;
 
     case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
-      ret = append_paths (&cgroup_path, err, CGROUP_ROOT "/memory", path, NULL);
+      ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT "/memory", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
       break;
@@ -398,7 +398,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
         {
           cleanup_free char *cgroup_path = NULL;
 
-          ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
+          ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
           if (UNLIKELY (ret < 0))
             return ret;
           ret = rmdir (cgroup_path);
@@ -441,7 +441,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
               if (mode == CGROUP_MODE_LEGACY && strcmp (subsystem, "unified") == 0)
                 continue;
 
-              ret = append_paths (&cgroup_path, err, CGROUP_ROOT, subsystem, path, NULL);
+              ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, subsystem, path, NULL);
               if (UNLIKELY (ret < 0))
                 return ret;
 
@@ -484,7 +484,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
   char *name;
   int ret;
 
-  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
+  ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -534,14 +534,14 @@ libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       state = pause ? "1" : "0";
-      ret = append_paths (&path, err, CGROUP_ROOT, cgroup_path, "cgroup.freeze", NULL);
+      ret = libcrun_append_paths (&path, err, CGROUP_ROOT, cgroup_path, "cgroup.freeze", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
       state = pause ? "FROZEN" : "THAWED";
-      ret = append_paths (&path, err, CGROUP_ROOT "/freezer", cgroup_path, "freezer.state", NULL);
+      ret = libcrun_append_paths (&path, err, CGROUP_ROOT "/freezer", cgroup_path, "freezer.state", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -579,7 +579,7 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
     {
       cleanup_free char *kill_file = NULL;
 
-      ret = append_paths (&kill_file, err, CGROUP_ROOT, path, "cgroup.kill", NULL);
+      ret = libcrun_append_paths (&kill_file, err, CGROUP_ROOT, path, "cgroup.kill", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -798,7 +798,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
       *it = '\0';
 
-      ret = append_paths (&cgroup_path, err, CGROUP_ROOT, tmp_path, NULL);
+      ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, tmp_path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -853,7 +853,7 @@ libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_
   if (is_empty_string (status->path))
     return crun_make_error (err, 0, "no cgroup path specified");
 
-  ret = append_paths (&path_to_cgroup, err, CGROUP_ROOT, status->path, sub_cgroup, NULL);
+  ret = libcrun_append_paths (&path_to_cgroup, err, CGROUP_ROOT, status->path, sub_cgroup, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 

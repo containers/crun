@@ -48,18 +48,18 @@ struct custom_handler_s
 
 struct custom_handler_manager_s;
 
-struct custom_handler_manager_s *handler_manager_create (libcrun_error_t *err);
-int handler_manager_load_from_directory (struct custom_handler_manager_s *manager, const char *path, libcrun_error_t *err);
-void handler_manager_free (struct custom_handler_manager_s *manager);
+LIBCRUN_PUBLIC struct custom_handler_manager_s *libcrun_handler_manager_create (libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_handler_manager_load_directory (struct custom_handler_manager_s *manager, const char *path, libcrun_error_t *err);
+LIBCRUN_PUBLIC void handler_manager_free (struct custom_handler_manager_s *manager);
 
-struct custom_handler_s *handler_by_name (struct custom_handler_manager_s *manager, const char *name);
-void handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out);
+LIBCRUN_PUBLIC struct custom_handler_s *handler_by_name (struct custom_handler_manager_s *manager, const char *name);
+LIBCRUN_PUBLIC void libcrun_handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out);
 
-int libcrun_configure_handler (struct custom_handler_manager_s *manager,
-                               libcrun_context_t *context,
-                               libcrun_container_t *container,
-                               struct custom_handler_s **out,
-                               void **cookie, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_configure_handler (struct custom_handler_manager_s *manager,
+                                              libcrun_context_t *context,
+                                              libcrun_container_t *container,
+                                              struct custom_handler_s **out,
+                                              void **cookie, libcrun_error_t *err);
 
 typedef struct custom_handler_s *(*run_oci_get_handler_cb) ();
 

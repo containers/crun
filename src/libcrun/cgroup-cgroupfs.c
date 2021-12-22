@@ -72,7 +72,7 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
     process_target_cgroup = out->path;
   else
     {
-      ret = append_paths (&target_cgroup_cleanup, err, out->path, delegate_cgroup, NULL);
+      ret = libcrun_append_paths (&target_cgroup_cleanup, err, out->path, delegate_cgroup, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
