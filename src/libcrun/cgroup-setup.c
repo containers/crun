@@ -161,7 +161,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool
   cleanup_free char *cgroup_path = NULL;
   int ret;
 
-  ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "", NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -360,7 +360,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
 
   sprintf (pid_str, "%d", pid);
 
-  ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -371,7 +371,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
         return ret;
     }
 
-  ret = libcrun_append_paths (&cgroup_path_procs, err, cgroup_path, "cgroup.procs", NULL);
+  ret = append_paths (&cgroup_path_procs, err, cgroup_path, "cgroup.procs", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -413,7 +413,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
       if (cgroup_crun_exec_path == NULL)
         xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
 
-      ret = libcrun_append_paths (&cgroup_sub_path_procs, err, CGROUP_ROOT, cgroup_crun_exec_path, "cgroup.procs", NULL);
+      ret = append_paths (&cgroup_sub_path_procs, err, CGROUP_ROOT, cgroup_crun_exec_path, "cgroup.procs", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 

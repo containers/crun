@@ -922,7 +922,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_close int dirfd_blkio = -1;
       runtime_spec_schema_config_linux_resources_block_io *blkio = resources->block_io;
 
-      ret = libcrun_append_paths (&path_to_blkio, err, CGROUP_ROOT "/blkio", path, NULL);
+      ret = append_paths (&path_to_blkio, err, CGROUP_ROOT "/blkio", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -943,11 +943,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_close int dirfd_netprio = -1;
       runtime_spec_schema_config_linux_resources_network *network = resources->network;
 
-      ret = libcrun_append_paths (&path_to_netclass, err, CGROUP_ROOT "/net_cls", path, NULL);
+      ret = append_paths (&path_to_netclass, err, CGROUP_ROOT "/net_cls", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_append_paths (&path_to_netprio, err, CGROUP_ROOT "/net_prio", path, NULL);
+      ret = append_paths (&path_to_netprio, err, CGROUP_ROOT "/net_prio", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -969,7 +969,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_htlb = NULL;
       cleanup_close int dirfd_htlb = -1;
 
-      ret = libcrun_append_paths (&path_to_htlb, err, CGROUP_ROOT "/hugetlb", path, NULL);
+      ret = append_paths (&path_to_htlb, err, CGROUP_ROOT "/hugetlb", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
@@ -987,7 +987,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_devs = NULL;
       cleanup_close int dirfd_devs = -1;
 
-      ret = libcrun_append_paths (&path_to_devs, err, CGROUP_ROOT "/devices", path, NULL);
+      ret = append_paths (&path_to_devs, err, CGROUP_ROOT "/devices", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1005,7 +1005,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_mem = NULL;
       cleanup_close int dirfd_mem = -1;
 
-      ret = libcrun_append_paths (&path_to_mem, err, CGROUP_ROOT "/memory", path, NULL);
+      ret = append_paths (&path_to_mem, err, CGROUP_ROOT "/memory", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1023,7 +1023,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_pid = NULL;
       cleanup_close int dirfd_pid = -1;
 
-      ret = libcrun_append_paths (&path_to_pid, err, CGROUP_ROOT "/pids", path, NULL);
+      ret = append_paths (&path_to_pid, err, CGROUP_ROOT "/pids", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1043,7 +1043,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       cleanup_free char *path_to_cpuset = NULL;
       cleanup_close int dirfd_cpuset = -1;
 
-      ret = libcrun_append_paths (&path_to_cpu, err, CGROUP_ROOT "/cpu", path, NULL);
+      ret = append_paths (&path_to_cpu, err, CGROUP_ROOT "/cpu", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1057,7 +1057,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (resources->cpu->cpus == NULL && resources->cpu->mems == NULL)
         return 0;
 
-      ret = libcrun_append_paths (&path_to_cpuset, err, CGROUP_ROOT "/cpuset", path, NULL);
+      ret = append_paths (&path_to_cpuset, err, CGROUP_ROOT "/cpuset", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1109,7 +1109,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
   if (resources->network)
     return crun_make_error (err, 0, "network limits not supported on cgroupv2");
 
-  ret = libcrun_append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 

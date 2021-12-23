@@ -63,9 +63,9 @@ libcrun_get_handler_manager ()
       if (UNLIKELY (handler_manager == NULL))
         libcrun_fail_with_error (err->status, "%s", err->msg);
 
-      ret = libcrun_append_paths (&handlers_path, &err, CRUN_LIBDIR, "handlers", NULL);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error (err->status, "%s", err->msg);
+      handlers_path = strdup (CRUN_LIBDIR "/handlers");
+      if (UNLIKELY (handlers_path == NULL))
+        OOM ();
 
       if (access (handlers_path, F_OK) == 0)
         {

@@ -1443,7 +1443,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory from `%s`", state_root);
 
-  ret = libcrun_append_paths (&config_file, err, dir, "config.json", NULL);
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1832,7 +1832,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
       if (UNLIKELY (state_root == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
-      ret = libcrun_append_paths (&oci_config_path, err, state_root, "config.json", NULL);
+      ret = append_paths (&oci_config_path, err, state_root, "config.json", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2038,7 +2038,7 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = libcrun_append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
+  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2485,7 +2485,7 @@ libcrun_copy_config_file (const char *id, const char *state_root, const char *co
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = libcrun_append_paths (&dest_path, err, dir, "config.json", NULL);
+  ret = append_paths (&dest_path, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2960,7 +2960,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
         goto exit;
       }
 
-    ret = libcrun_append_paths (&config_file, err, dir, "config.json", NULL);
+    ret = append_paths (&config_file, err, dir, "config.json", NULL);
     if (UNLIKELY (ret < 0))
       return ret;
 
@@ -3253,7 +3253,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = libcrun_append_paths (&config_file, err, dir, "config.json", NULL);
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 

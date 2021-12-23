@@ -156,7 +156,7 @@ libcrun_handler_manager_load_directory (struct custom_handler_manager_s *manager
       if (name[0] == '.')
         continue;
 
-      ret = libcrun_append_paths (&fpath, err, path, name, NULL);
+      ret = append_paths (&fpath, err, path, name, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
