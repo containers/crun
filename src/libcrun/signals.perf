@@ -94,7 +94,7 @@ RTMAX-1, 63
 RTMAX, 64
 %%
 int
-libcrun_str2sig (const char *name)
+str2sig (const char *name)
 {
   const struct signal_s *s;
 

@@ -1443,7 +1443,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory from `%s`", state_root);
 
-  ret = libcrun_append_paths (&config_file, err, dir, "config.json", NULL);
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1613,26 +1613,34 @@ libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config
 }
 
 int
-libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
+libcrun_container_kill (libcrun_context_t *context, const char *id, const char *signal, libcrun_error_t *err)
 {
-  int ret;
+  int sig, ret;
   const char *state_root = context->state_root;
   cleanup_container_status libcrun_container_status_t status = {};
+
+  sig = str2sig (signal);
+  if (UNLIKELY (sig < 0))
+    return crun_make_error (err, 0, "unknown signal %s", signal);
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return libcrun_kill_linux (&status, signal, err);
+  return libcrun_kill_linux (&status, sig, err);
 }
 
 int
-libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
+libcrun_container_killall (libcrun_context_t *context, const char *id, const char *signal, libcrun_error_t *err)
 {
-  int ret;
+  int sig, ret;
   const char *state_root = context->state_root;
   cleanup_container_status libcrun_container_status_t status = {};
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+
+  sig = str2sig (signal);
+  if (UNLIKELY (sig < 0))
+    return crun_make_error (err, 0, "unknown signal %s", signal);
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1640,7 +1648,7 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
 
   cgroup_status = libcrun_cgroup_make_status (&status);
 
-  ret = libcrun_cgroup_killall (cgroup_status, signal, err);
+  ret = libcrun_cgroup_killall (cgroup_status, sig, err);
   if (UNLIKELY (ret < 0))
     return ret;
   return 0;
@@ -1832,7 +1840,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
       if (UNLIKELY (state_root == NULL))
         return crun_make_error (err, 0, "cannot get state directory");
 
-      ret = libcrun_append_paths (&oci_config_path, err, state_root, "config.json", NULL);
+      ret = append_paths (&oci_config_path, err, state_root, "config.json", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2038,7 +2046,7 @@ open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_r
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = libcrun_append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
+  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2485,7 +2493,7 @@ libcrun_copy_config_file (const char *id, const char *state_root, const char *co
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = libcrun_append_paths (&dest_path, err, dir, "config.json", NULL);
+  ret = append_paths (&dest_path, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2960,7 +2968,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
         goto exit;
       }
 
-    ret = libcrun_append_paths (&config_file, err, dir, "config.json", NULL);
+    ret = append_paths (&config_file, err, dir, "config.json", NULL);
     if (UNLIKELY (ret < 0))
       return ret;
 
@@ -3253,7 +3261,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = libcrun_append_paths (&config_file, err, dir, "config.json", NULL);
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 

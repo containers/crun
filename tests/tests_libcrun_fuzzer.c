@@ -122,7 +122,7 @@ test_chroot_realpath (uint8_t *buf, size_t len)
 }
 
 static int
-test_libcrun_str2sig (uint8_t *buf, size_t len)
+test_str2sig (uint8_t *buf, size_t len)
 {
   cleanup_free char *name = NULL;
 
@@ -130,7 +130,7 @@ test_libcrun_str2sig (uint8_t *buf, size_t len)
   if (name == NULL)
     return 0;
 
-  libcrun_str2sig (name);
+  str2sig (name);
   return 0;
 }
 
@@ -359,7 +359,7 @@ run_one_test (int mode, uint8_t *buf, size_t len)
 
     case 3:
       /* expects signals.  */
-      test_libcrun_str2sig (buf, len);
+      test_str2sig (buf, len);
       break;
 
     case 4:

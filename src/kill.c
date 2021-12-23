@@ -87,7 +87,8 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, N
 int
 crun_command_kill (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg = 0, signal, ret;
+  int first_arg = 0, ret;
+  const char *signal;
 
   libcrun_context_t crun_context = {
     0,
@@ -100,13 +101,9 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
   if (UNLIKELY (ret < 0))
     return ret;
 
-  signal = SIGTERM;
+  signal = "SIGTERM";
   if (argc - first_arg > 1)
-    {
-      signal = libcrun_str2sig (argv[first_arg + 1]);
-      if (UNLIKELY (signal < 0))
-        libcrun_fail_with_error (0, "unknown signal %s", argv[first_arg + 1]);
-    }
+    signal = argv[first_arg + 1];
 
   if (kill_options.regex)
     {
@@ -135,7 +132,7 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
     }
 
   if (kill_options.all)
-    return libcrun_container_kill_all (&crun_context, argv[first_arg], signal, err);
+    return libcrun_container_killall (&crun_context, argv[first_arg], signal, err);
 
   return libcrun_container_kill (&crun_context, argv[first_arg], signal, err);
 }

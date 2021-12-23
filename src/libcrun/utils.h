@@ -336,9 +336,9 @@ int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *p
 
 ssize_t safe_write (int fd, const void *buf, ssize_t count);
 
-LIBCRUN_PUBLIC int libcrun_append_paths (char **out, libcrun_error_t *err, ...);
+int append_paths (char **out, libcrun_error_t *err, ...);
 
-LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
+int str2sig (const char *name);
 
 int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes);
 int has_suffix (const char *source, const char *suffix);

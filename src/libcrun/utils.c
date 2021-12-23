@@ -2071,7 +2071,7 @@ safe_write (int fd, const void *buf, ssize_t count)
 }
 
 int
-libcrun_append_paths (char **out, libcrun_error_t *err, ...)
+append_paths (char **out, libcrun_error_t *err, ...)
 {
   const size_t MAX_PARTS = 32;
   const char *parts[MAX_PARTS];

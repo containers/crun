@@ -156,7 +156,7 @@ libcrun_cgroup_is_container_paused (struct libcrun_cgroup_status *status, bool *
     {
       state = "1";
 
-      ret = libcrun_append_paths (&path, err, CGROUP_ROOT, cgroup_path, "cgroup.freeze", NULL);
+      ret = append_paths (&path, err, CGROUP_ROOT, cgroup_path, "cgroup.freeze", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -164,7 +164,7 @@ libcrun_cgroup_is_container_paused (struct libcrun_cgroup_status *status, bool *
     {
       state = "FROZEN";
 
-      ret = libcrun_append_paths (&path, err, CGROUP_ROOT "/freezer", cgroup_path, "freezer.state", NULL);
+      ret = append_paths (&path, err, CGROUP_ROOT "/freezer", cgroup_path, "freezer.state", NULL);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -391,7 +391,7 @@ libcrun_cgroup_has_oom (struct libcrun_cgroup_status *status, libcrun_error_t *e
         cleanup_free char *events_path = NULL;
         int ret;
 
-        ret = libcrun_append_paths (&events_path, err, CGROUP_ROOT, path, "memory.events", NULL);
+        ret = append_paths (&events_path, err, CGROUP_ROOT, path, "memory.events", NULL);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -409,7 +409,7 @@ libcrun_cgroup_has_oom (struct libcrun_cgroup_status *status, libcrun_error_t *e
         cleanup_free char *oom_control_path = NULL;
         int ret;
 
-        ret = libcrun_append_paths (&oom_control_path, err, CGROUP_ROOT, "memory", path, "memory.oom_control", NULL);
+        ret = append_paths (&oom_control_path, err, CGROUP_ROOT, "memory", path, "memory.oom_control", NULL);
         if (UNLIKELY (ret < 0))
           return ret;
 
