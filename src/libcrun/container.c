@@ -1613,26 +1613,34 @@ libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config
 }
 
 int
-libcrun_container_kill (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
+libcrun_container_kill (libcrun_context_t *context, const char *id, const char *signal, libcrun_error_t *err)
 {
-  int ret;
+  int sig, ret;
   const char *state_root = context->state_root;
   cleanup_container_status libcrun_container_status_t status = {};
+
+  sig = libcrun_str2sig (signal);
+  if (UNLIKELY (sig < 0))
+    return crun_make_error (err, 0, "unknown signal %s", signal);
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return libcrun_kill_linux (&status, signal, err);
+  return libcrun_kill_linux (&status, sig, err);
 }
 
 int
-libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal, libcrun_error_t *err)
+libcrun_container_kill_all (libcrun_context_t *context, const char *id, const char *signal, libcrun_error_t *err)
 {
-  int ret;
+  int sig, ret;
   const char *state_root = context->state_root;
   cleanup_container_status libcrun_container_status_t status = {};
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
+
+  sig = libcrun_str2sig (signal);
+  if (UNLIKELY (sig < 0))
+    return crun_make_error (err, 0, "unknown signal %s", signal);
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1640,7 +1648,7 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, int sign
 
   cgroup_status = libcrun_cgroup_make_status (&status);
 
-  ret = libcrun_cgroup_killall (cgroup_status, signal, err);
+  ret = libcrun_cgroup_killall (cgroup_status, sig, err);
   if (UNLIKELY (ret < 0))
     return ret;
   return 0;

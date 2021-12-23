@@ -233,11 +233,11 @@ container_kill (PyObject *self, PyObject *args)
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
   char *id = NULL;
-  int signal;
+  const char signal*;
   libcrun_context_t *ctx;
   int ret;
 
-  if (!PyArg_ParseTuple (args, "Osi", &ctx_obj, &id, &signal))
+  if (!PyArg_ParseTuple (args, "Oss", &ctx_obj, &id, &signal))
     return NULL;
 
   ctx = PyCapsule_GetPointer (ctx_obj, CONTEXT_OBJ_TAG);

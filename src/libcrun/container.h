@@ -111,10 +111,10 @@ LIBCRUN_PUBLIC int libcrun_container_run (libcrun_context_t *context, libcrun_co
 LIBCRUN_PUBLIC int libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
                                              const char *id, bool force, libcrun_error_t *err);
 
-LIBCRUN_PUBLIC int libcrun_container_kill (libcrun_context_t *context, const char *id, int signal,
+LIBCRUN_PUBLIC int libcrun_container_kill (libcrun_context_t *context, const char *id, const char *signal,
                                            libcrun_error_t *err);
 
-LIBCRUN_PUBLIC int libcrun_container_kill_all (libcrun_context_t *context, const char *id, int signal,
+LIBCRUN_PUBLIC int libcrun_container_kill_all (libcrun_context_t *context, const char *id, const char *signal,
                                                libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container,
