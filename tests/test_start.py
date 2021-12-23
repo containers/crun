@@ -134,6 +134,8 @@ def test_run_twice():
     return 0
 
 def test_sd_notify():
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
     add_all_namespaces(conf)
@@ -148,6 +150,8 @@ def test_sd_notify():
     return 0
 
 def test_sd_notify_file():
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'ls', '/tmp/parent-dir/the-socket/']
     add_all_namespaces(conf)
@@ -162,6 +166,8 @@ def test_sd_notify_file():
     return 0
 
 def test_sd_notify_env():
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return 77
     conf = base_config()
     conf['process']['args'] = ['/init', 'printenv', 'NOTIFY_SOCKET']
     add_all_namespaces(conf)
@@ -176,6 +182,8 @@ def test_sd_notify_env():
     return 0
 
 def test_sd_notify_proxy():
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return 77
     if is_rootless():
         return 77
 
