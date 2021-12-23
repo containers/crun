@@ -1631,7 +1631,7 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, const char *
 }
 
 int
-libcrun_container_kill_all (libcrun_context_t *context, const char *id, const char *signal, libcrun_error_t *err)
+libcrun_container_killall (libcrun_context_t *context, const char *id, const char *signal, libcrun_error_t *err)
 {
   int sig, ret;
   const char *state_root = context->state_root;
