@@ -338,7 +338,7 @@ ssize_t safe_write (int fd, const void *buf, ssize_t count);
 
 int append_paths (char **out, libcrun_error_t *err, ...);
 
-LIBCRUN_PUBLIC int libcrun_str2sig (const char *name);
+int str2sig (const char *name);
 
 int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes);
 int has_suffix (const char *source, const char *suffix);

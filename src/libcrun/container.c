@@ -1619,7 +1619,7 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, const char *
   const char *state_root = context->state_root;
   cleanup_container_status libcrun_container_status_t status = {};
 
-  sig = libcrun_str2sig (signal);
+  sig = str2sig (signal);
   if (UNLIKELY (sig < 0))
     return crun_make_error (err, 0, "unknown signal %s", signal);
 
@@ -1638,7 +1638,7 @@ libcrun_container_kill_all (libcrun_context_t *context, const char *id, const ch
   cleanup_container_status libcrun_container_status_t status = {};
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
 
-  sig = libcrun_str2sig (signal);
+  sig = str2sig (signal);
   if (UNLIKELY (sig < 0))
     return crun_make_error (err, 0, "unknown signal %s", signal);
 
