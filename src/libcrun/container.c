@@ -1053,6 +1053,16 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  // Run any `createContainer` hooks before setting up first mount
+  if (def->hooks && def->hooks->create_container_len)
+    {
+      ret = do_hooks (def, 0, container->context->id, false, NULL, "created", (hook **) def->hooks->create_container,
+                      def->hooks->create_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
+                      err);
+      if (UNLIKELY (ret != 0))
+        return ret;
+    }
+
   ret = notify_handler (entrypoint_args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -1065,15 +1075,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   ret = notify_handler (entrypoint_args, HANDLER_CONFIGURE_AFTER_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  if (def->hooks && def->hooks->create_container_len)
-    {
-      ret = do_hooks (def, 0, container->context->id, false, NULL, "created", (hook **) def->hooks->create_container,
-                      def->hooks->create_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
-                      err);
-      if (UNLIKELY (ret != 0))
-        return ret;
-    }
 
   if (def->process)
     {
