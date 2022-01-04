@@ -28,7 +28,7 @@ sed -i -e 's|@test "ctr device add" {|@test "ctr device add" {\nskip\n|g' test/*
 sed -i -e 's|@test "privileged ctr -- check for rw mounts" {|@test "privileged ctr -- check for rw mounts" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "kubernetes pod terminationGracePeriod passthru" {|@test "kubernetes pod terminationGracePeriod passthru" {\nskip\n|g' test/*.bats
 
-# remove unuseful tests
+# remove useless tests
 rm test/image.* test/config* test/reload_config.bats test/registries.bats test/crio-wipe.bats test/network_ping.bats
 
 test/test_runner.sh
