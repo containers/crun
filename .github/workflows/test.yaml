@@ -76,21 +76,10 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
-    - name: install latest stable docker
-      run: |
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-        sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu  $(lsb_release -cs)  stable"
-        sudo apt-get update -q -y
-        sudo apt-get install docker-ce
-
     - name: install dependencies
       run: |
-        sudo apt-get update -q -y
-        sudo apt-get install -q -y software-properties-common
-
         sudo add-apt-repository -y ppa:criu/ppa
-        sudo apt-get update -q -y
-
+        # add-apt-repository runs apt-get update so we don't have to.
         sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev docker.io containerd runc libasan6 libprotobuf-c-dev
 
         sudo systemctl unmask docker
