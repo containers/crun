@@ -569,6 +569,9 @@ get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *wei
 {
   if (resources->cpu && resources->cpu->shares_present)
     {
+      /* Docker uses shares == 0 to specify no limit.  */
+      if (resources->cpu->shares == 0)
+        return 0;
       *weight = convert_shares_to_weight (resources->cpu->shares);
       return 1;
     }
@@ -624,7 +627,7 @@ append_resources (sd_bus_message *m,
 
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
-      if (resources->cpu && resources->cpu->shares_present)
+      if (resources->cpu && resources->cpu->shares > 0)
         {
           sd_err = sd_bus_message_append (m, "(sv)", "CPUShares", "t", resources->cpu->shares);
           if (UNLIKELY (sd_err < 0))
