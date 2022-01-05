@@ -4061,7 +4061,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
 
           for (j = 0; j < def->linux->namespaces_len; j++)
             {
-              if (strcmp (namespaces[i].ns_file, def->linux->namespaces[j]->type) == 0)
+              if (strcmp (namespaces[i].name, def->linux->namespaces[j]->type) == 0)
                 {
                   found = true;
                   break;
@@ -4074,7 +4074,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
               continue;
             }
 
-          crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
+          ret = crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
           goto exit;
         }
       fds_joined[i] = 1;
@@ -4086,7 +4086,7 @@ exit:
   for (i = 0; namespaces[i].ns_file; i++)
     close_and_reset (&fds[i]);
 
-  return 0;
+  return ret;
 }
 
 int
