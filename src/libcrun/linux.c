@@ -3032,7 +3032,7 @@ send_error_to_sync_socket_and_die (int sync_socket_fd, bool has_terminal, libcru
 
   errno = crun_error_get_errno (err);
   msg = (*err)->msg;
-  libcrun_fail_with_error (errno, msg);
+  libcrun_fail_with_error (errno, "%s", msg);
   _exit (EXIT_FAILURE);
 }
 
@@ -3804,7 +3804,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
   ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
-    libcrun_fail_with_error (errno, "close sync socket");
+    libcrun_fail_with_error (errno, "%s", "close sync socket");
 
   /* Initialize the new process and make sure to join/create all the required namespaces.  */
   ret = init_container (container, sync_socket_container, &init_status, err);
@@ -3824,7 +3824,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     {
       ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
       if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error (errno, "write to sync socket");
+        libcrun_fail_with_error (errno, "%s", "write to sync socket");
     }
 
   /* Jump into the specified entrypoint.  */

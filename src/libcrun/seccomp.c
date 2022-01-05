@@ -92,7 +92,7 @@ get_seccomp_operator (const char *name, libcrun_error_t *err)
   if (strcmp (name, "SCMP_CMP_MASKED_EQ") == 0)
     return SCMP_CMP_MASKED_EQ;
 
-  crun_make_error (err, 0, "seccomp get operator", name);
+  crun_make_error (err, 0, "seccomp get operator `%s`", name);
   return 0;
 #else
   return 0;
@@ -139,7 +139,7 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
 #  endif
 
 fail:
-  crun_make_error (err, 0, "seccomp get action", name);
+  crun_make_error (err, 0, "seccomp get action `%s`", name);
   return 0;
 #else
   return 0;
