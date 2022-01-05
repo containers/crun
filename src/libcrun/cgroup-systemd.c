@@ -782,7 +782,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   sd_err = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
 
@@ -845,7 +845,7 @@ libcrun_destroy_systemd_cgroup_scope (struct libcrun_cgroup_status *cgroup_statu
   ret = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
 
@@ -1017,7 +1017,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   sd_err = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
 
