@@ -181,6 +181,22 @@ def test_sd_notify_env():
         return -1
     return 0
 
+def test_delete_in_created_state():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        proc, cid = run_and_get_output(conf, command='create', use_popen=True)
+        proc.wait()
+        run_crun_command(["delete", cid])
+    except:
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_sd_notify_proxy():
     if 'SYSTEMD' not in get_crun_feature_string():
         return 77
@@ -269,10 +285,11 @@ all_tests = {
     "sd-notify-env" : test_sd_notify_env,
     "sd-notify-proxy": test_sd_notify_proxy,
     "listen_pid_env": test_listen_pid_env,
-    "test-cwd-relative": test_cwd_relative,
-    "test-cwd-relative-subdir": test_cwd_relative_subdir,
-    "test-cwd-absolute": test_cwd_absolute,
+    "cwd-relative": test_cwd_relative,
+    "cwd-relative-subdir": test_cwd_relative_subdir,
+    "cwd-absolute": test_cwd_absolute,
     "empty-home": test_empty_home,
+    "delete-in-created-state": test_delete_in_created_state,
 }
 
 if __name__ == "__main__":

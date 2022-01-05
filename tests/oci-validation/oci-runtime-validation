@@ -30,7 +30,8 @@ make -j $(nproc)
 # misc_props, kill, hostname, process and pidfile are flaky.
 # start - expect to not fail if the specified process doesn't exist (support process unset)
 # hooks_stdin - tests are racy
-export VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | egrep -v "(hooks_stdin|misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname)" | tr '\n' ' ')
+# delete - both crun and runc allow to delete a container in the "created" state.
+export VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | egrep -v "(hooks_stdin|misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname|delete)" | tr '\n' ' ')
 
 export RUNTIME="/crun/crun"
 
