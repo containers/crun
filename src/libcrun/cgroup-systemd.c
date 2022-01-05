@@ -569,6 +569,9 @@ get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *wei
 {
   if (resources->cpu && resources->cpu->shares_present)
     {
+      /* Docker uses shares == 0 to specify no limit.  */
+      if (resources->cpu->shares == 0)
+        return 0;
       *weight = convert_shares_to_weight (resources->cpu->shares);
       return 1;
     }
@@ -624,7 +627,7 @@ append_resources (sd_bus_message *m,
 
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
-      if (resources->cpu && resources->cpu->shares_present)
+      if (resources->cpu && resources->cpu->shares > 0)
         {
           sd_err = sd_bus_message_append (m, "(sv)", "CPUShares", "t", resources->cpu->shares);
           if (UNLIKELY (sd_err < 0))
@@ -782,7 +785,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   sd_err = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
 
@@ -845,7 +848,7 @@ libcrun_destroy_systemd_cgroup_scope (struct libcrun_cgroup_status *cgroup_statu
   ret = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
 
@@ -1017,7 +1020,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   sd_err = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call");
+      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
 
