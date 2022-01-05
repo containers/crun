@@ -1551,43 +1551,40 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         return crun_make_error (err, 0, "the container `%s` is not in 'stopped' state", id);
     }
 
-  if (killall)
+  if (killall && force)
     {
-      if (force)
+      if (def == NULL)
         {
-          if (def == NULL)
+          ret = read_container_config_from_state (&container, state_root, id, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          def = container->container_def;
+        }
+
+      /* If the container has a pid namespace, it is enough to kill the first
+         process (pid=1 in the namespace).
+      */
+      if (has_new_pid_namespace (def))
+        {
+          ret = libcrun_kill_linux (&status, SIGKILL, err);
+          if (UNLIKELY (ret < 0))
             {
-              ret = read_container_config_from_state (&container, state_root, id, err);
-              if (UNLIKELY (ret < 0))
+              errno = crun_error_get_errno (err);
+
+              /* pidfd_open returns EINVAL if the process is not a a thread-group leader.
+                 In our case it means the process already exited, so handle as ESRCH.  */
+              if (errno != ESRCH && errno != EINVAL)
                 return ret;
 
-              def = container->container_def;
+              crun_error_release (err);
             }
-
-          /* If the container has a pid namespace, it is enough to kill the first
-             process (pid=1 in the namespace).
-          */
-          if (has_new_pid_namespace (def))
-            {
-              ret = libcrun_kill_linux (&status, SIGKILL, err);
-              if (UNLIKELY (ret < 0))
-                {
-                  errno = crun_error_get_errno (err);
-
-                  /* pidfd_open returns EINVAL if the process is not a a thread-group leader.
-                     In our case it means the process already exited, so handle as ESRCH.  */
-                  if (errno != ESRCH && errno != EINVAL)
-                    return ret;
-
-                  crun_error_release (err);
-                }
-            }
-          else if (status.cgroup_path)
-            {
-              ret = libcrun_cgroup_killall (cgroup_status, SIGKILL, err);
-              if (UNLIKELY (ret < 0))
-                return 0;
-            }
+        }
+      else if (status.cgroup_path)
+        {
+          ret = libcrun_cgroup_killall (cgroup_status, SIGKILL, err);
+          if (UNLIKELY (ret < 0))
+            return 0;
         }
     }
 
