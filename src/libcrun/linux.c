@@ -3438,7 +3438,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           _exit (0);
         }
 
-      /* In the new processs.  Wait for the parent to receive the new PID.  */
+      /* In the new process.  Wait for the parent to receive the new PID.  */
       ret = expect_success_from_sync_socket (sync_socket_container, err);
       if (UNLIKELY (ret < 0))
         return ret;

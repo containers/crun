@@ -214,7 +214,7 @@ def test_sd_notify_proxy():
     mappings = [
         {
             "containerID": 0,
-            # + getuid() makes sure we don't accidently run the container as the user that's running the test.
+            # + getuid() makes sure we don't accidentally run the container as the user that's running the test.
             "hostID": 8000 + os.getuid(),
             "size": 1,
         },
