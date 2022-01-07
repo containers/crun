@@ -143,15 +143,17 @@ def parse_proc_status(content):
         r[k] = v.strip()
     return r
 
-def add_all_namespaces(conf, cgroupns=False, userns=False):
+def add_all_namespaces(conf, cgroupns=False, userns=False, netns=True):
     has = {}
     for i in conf['linux']['namespaces']:
         has[i['type']] = i['type']
-    namespaces = ['pid', 'ipc', 'uts', 'network']
+    namespaces = ['pid', 'ipc', 'uts']
     if cgroupns:
         namespaces = namespaces + ["cgroup"]
     if userns:
         namespaces = namespaces + ["user"]
+    if netns:
+        namespaces = namespaces + ["network"]
     for i in namespaces:
         if i not in has:
             conf['linux']['namespaces'].append({"type" : i})

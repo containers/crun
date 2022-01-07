@@ -36,6 +36,41 @@ def test_exec():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_exec_root_netns_with_userns():
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, netns=False)
+    conf['linux']['namespaces'].append({"type" : "network", "path" : "/proc/1/ns/net"})
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+
+        with open("/proc/net/route") as f:
+            payload = f.read()
+            host_routes = [i.split('\t')[0] for i in payload.split('\n')[1:]]
+
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/net/route"])
+
+        container_routes = [i.split('\t')[0] for i in payload.split('\n')[1:]]
+
+        if len(container_routes) != len(host_routes):
+            sys.stderr.write("different length for the routes in the container and on the host\n")
+
+        host_routes.sort()
+        container_routes.sort()
+
+        for i in zip(container_routes, host_routes):
+            if i[0] != i[1]:
+                sys.stderr.write("different network device found\n")
+                return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_exec_not_exists_helper(detach):
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
@@ -106,6 +141,7 @@ all_tests = {
     "exec-not-exists" : test_exec_not_exists,
     "exec-detach-not-exists" : test_exec_detach_not_exists,
     "exec-detach-additional-gids" : test_exec_additional_gids,
+    "exec-root-netns-with-userns" : test_exec_root_netns_with_userns,
 }
 
 if __name__ == "__main__":

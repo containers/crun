@@ -260,6 +260,26 @@ def test_empty_home():
         return -1
     return 0
 
+def test_run_rootless_netns_with_userns():
+    if not is_rootless():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, netns=False)
+    # rootless should not be able to join the pid=1 netns
+    conf['linux']['namespaces'].append({"type" : "network", "path" : "/proc/1/ns/net"})
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+    except:
+        # expect a failure
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return -1
+
 # Following test is for a special case where crun sets LISTEN_PID=1 when nothing is specified
 # to make sure that primary process is 1, this feature makes sure crun is in parity with runc.
 def test_listen_pid_env():
@@ -290,6 +310,7 @@ all_tests = {
     "cwd-absolute": test_cwd_absolute,
     "empty-home": test_empty_home,
     "delete-in-created-state": test_delete_in_created_state,
+    "run-rootless-netns-with-userns" : test_run_rootless_netns_with_userns,
 }
 
 if __name__ == "__main__":

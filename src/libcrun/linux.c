@@ -3032,7 +3032,7 @@ send_error_to_sync_socket_and_die (int sync_socket_fd, bool has_terminal, libcru
 
   errno = crun_error_get_errno (err);
   msg = (*err)->msg;
-  libcrun_fail_with_error (errno, msg);
+  libcrun_fail_with_error (errno, "%s", msg);
   _exit (EXIT_FAILURE);
 }
 
@@ -3804,7 +3804,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
   ret = close_and_reset (&sync_socket_host);
   if (UNLIKELY (ret < 0))
-    libcrun_fail_with_error (errno, "close sync socket");
+    libcrun_fail_with_error (errno, "%s", "close sync socket");
 
   /* Initialize the new process and make sure to join/create all the required namespaces.  */
   ret = init_container (container, sync_socket_container, &init_status, err);
@@ -3824,7 +3824,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     {
       ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
       if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error (errno, "write to sync socket");
+        libcrun_fail_with_error (errno, "%s", "write to sync socket");
     }
 
   /* Jump into the specified entrypoint.  */
@@ -3934,12 +3934,22 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
   > 0 - the namespaces were joined.
 */
 static int
-try_setns_with_pidfd (pid_t pid_to_join, libcrun_container_status_t *status, libcrun_error_t *err)
+try_setns_with_pidfd (pid_t pid_to_join, libcrun_container_t *container, libcrun_container_status_t *status, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int pidfd_pid_to_join = -1;
   int all_flags = 0;
   size_t i;
   int ret;
+
+  /* If there is any explicit namespace path to join, skip the setns_with_pidfd
+     shortcut and join each namespace individually.  */
+  if (def->linux && def->linux->namespaces)
+    {
+      for (i = 0; i < def->linux->namespaces_len; i++)
+        if (! is_empty_string (def->linux->namespaces[i]->path))
+          return 0;
+    }
 
   pidfd_pid_to_join = syscall_pidfd_open (pid_to_join, 0);
   if (UNLIKELY (pidfd_pid_to_join < 0))
@@ -3995,7 +4005,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
   int ret;
 
   /* Try to join all namespaces in one shot with setns and pidfd.  */
-  ret = try_setns_with_pidfd (pid_to_join, status, err);
+  ret = try_setns_with_pidfd (pid_to_join, container, status, err);
   if (UNLIKELY (ret < 0))
     return ret;
   /* Nothing left to do if the namespaces were joined.  */
@@ -4051,7 +4061,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
 
           for (j = 0; j < def->linux->namespaces_len; j++)
             {
-              if (strcmp (namespaces[i].ns_file, def->linux->namespaces[j]->type) == 0)
+              if (strcmp (namespaces[i].name, def->linux->namespaces[j]->type) == 0)
                 {
                   found = true;
                   break;
@@ -4064,7 +4074,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
               continue;
             }
 
-          crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
+          ret = crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
           goto exit;
         }
       fds_joined[i] = 1;
@@ -4076,7 +4086,7 @@ exit:
   for (i = 0; namespaces[i].ns_file; i++)
     close_and_reset (&fds[i]);
 
-  return 0;
+  return ret;
 }
 
 int
