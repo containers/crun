@@ -75,6 +75,10 @@ jobs:
 
     - name: install dependencies
       run: |
+        # If Dockerfile is present in test directory, the test is run
+        # inside container, so these dependencies won't be needed.
+        test -f "tests/${{ matrix.test }}/Dockerfile" && exit 0
+
         sudo add-apt-repository -y ppa:criu/ppa
         # add-apt-repository runs apt-get update so we don't have to.
         sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev containerd runc libasan6 libprotobuf-c-dev
@@ -137,10 +141,8 @@ jobs:
                 sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos9-build
             ;;
             clang-format)
-                ./configure
                 sudo docker build -t crun-clang-format tests/clang-format
-                sudo docker run --rm -w /crun -v ${PWD}:/crun crun-clang-format make clang-format
-                git diff --exit-code src
+                sudo docker run --rm -w /crun -v ${PWD}:/crun crun-clang-format
             ;;
             clang-check)
                 sudo docker build -t crun-clang-check tests/clang-check
