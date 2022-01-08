@@ -188,4 +188,4 @@ jobs:
       - uses: lumaxis/shellcheck-problem-matchers@v1
       - name: shellcheck
         run: |
-          make shellcheck
+          make SHELLCHECK_OPTIONS="-f gcc" shellcheck
