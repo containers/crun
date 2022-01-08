@@ -17,5 +17,5 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
      make)
 
 COPY run-tests.sh /usr/local/bin
-
-ENTRYPOINT /usr/local/bin/run-tests.sh /root/go/src/github.com/containers/podman
+WORKDIR /root/go/src/github.com/containers/podman
+ENTRYPOINT /usr/local/bin/run-tests.sh

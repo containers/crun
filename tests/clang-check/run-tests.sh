@@ -1,7 +1,5 @@
 #!/bin/bash
 
-cd $1
-
 cd /crun
 
 git clean -fdx

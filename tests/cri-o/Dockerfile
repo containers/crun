@@ -29,5 +29,5 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
     cp build/bin/crictl /usr/local/bin/)
 
 COPY run-tests.sh /usr/local/bin
-
-ENTRYPOINT /usr/local/bin/run-tests.sh /root/go/src/github.com/cri-o/cri-o
+WORKDIR /root/go/src/github.com/cri-o/cri-o
+ENTRYPOINT /usr/local/bin/run-tests.sh

@@ -26,5 +26,5 @@ RUN apt-get update \
     && rm -rf /bin/runc /sbin/runc /usr/sbin/runc /usr/bin/runc
 
 COPY run-tests.sh /usr/local/bin
-
-ENTRYPOINT /usr/local/bin/run-tests.sh /root/go/src/github.com/containerd/containerd
+WORKDIR /root/go/src/github.com/containerd/containerd
+ENTRYPOINT /usr/local/bin/run-tests.sh

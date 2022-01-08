@@ -1,7 +1,5 @@
 #!/bin/bash
 
-cd $1
-
 if test "$(id -u)" != 0; then
 	echo "run as root"
 	exit 1
