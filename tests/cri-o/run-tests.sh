@@ -27,6 +27,6 @@ sed -i -e 's|@test "privileged ctr -- check for rw mounts" {|@test "privileged c
 sed -i -e 's|@test "kubernetes pod terminationGracePeriod passthru" {|@test "kubernetes pod terminationGracePeriod passthru" {\nskip\n|g' test/*.bats
 
 # remove useless tests
-rm test/image.* test/config* test/reload_config.bats test/registries.bats test/crio-wipe.bats test/network_ping.bats
+rm test/image.* test/config* test/reload_config.bats test/crio-wipe.bats test/network_ping.bats
 
 test/test_runner.sh
