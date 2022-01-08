@@ -181,9 +181,11 @@ jobs:
         run: |
           sudo apt-get update -q -y
           sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
-      - uses: lumaxis/shellcheck-problem-matchers@v1
-      - name: shellcheck
+      - name: configure
         run: |
           ./autogen.sh
           ./configure
+      - uses: lumaxis/shellcheck-problem-matchers@v1
+      - name: shellcheck
+        run: |
           make shellcheck
