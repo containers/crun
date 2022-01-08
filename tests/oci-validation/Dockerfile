@@ -8,6 +8,6 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
     glibc-static python3-libmount libtool make npm go-md2man && \
     npm install -g tap
 
-COPY oci-runtime-validation /usr/local/bin
+COPY run-tests.sh /usr/local/bin
 
-ENTRYPOINT /usr/local/bin/oci-runtime-validation
+ENTRYPOINT /usr/local/bin/run-tests.sh
