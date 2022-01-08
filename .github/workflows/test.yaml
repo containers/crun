@@ -158,3 +158,32 @@ jobs:
                 sudo docker run -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
            ;;
         esac
+
+  shellcheck:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: vars
+        run: |
+          echo 'VERSION=v0.8.0' >> $GITHUB_ENV
+          echo 'BASEURL=https://github.com/koalaman/shellcheck/releases/download' >> $GITHUB_ENV
+          echo 'SHA256SUM=f4bce23c11c3919c1b20bcb0f206f6b44c44e26f2bc95f8aa708716095fa0651' >> $GITHUB_ENV
+          echo ~/bin >> $GITHUB_PATH
+      - name: install shellcheck
+        run: |
+          mkdir ~/bin
+          curl -sSfL --retry 5 $BASEURL/$VERSION/shellcheck-$VERSION.linux.x86_64.tar.xz |
+            tar xfJ - -C ~/bin --strip 1 shellcheck-$VERSION/shellcheck
+          sha256sum ~/bin/shellcheck | grep -q $SHA256SUM
+          # make sure to remove the old version
+          sudo rm -f /usr/bin/shellcheck
+      - name: install dependencies
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
+      - uses: lumaxis/shellcheck-problem-matchers@v1
+      - name: shellcheck
+        run: |
+          ./autogen.sh
+          ./configure
+          make shellcheck
