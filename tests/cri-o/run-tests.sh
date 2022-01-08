@@ -1,13 +1,19 @@
 #!/bin/sh
 
-cd $1
-
 if test "$(id -u)" != 0; then
 	echo "run as root"
 	exit 1
 fi
+set -e
 
-(cd /crun; git clean -fdx; ./autogen.sh && ./configure CFLAGS='-Wall -Wextra -Werror' --prefix=/usr && make -j $(nproc) && make install)
+(
+cd /crun
+git clean -fdx
+./autogen.sh
+./configure CFLAGS='-Wall -Wextra -Werror' --prefix=/usr
+make -j "$(nproc)"
+make install
+)
 
 # make sure runc is not used
 rm -f /usr/bin/runc /usr/local/bin/runc
@@ -29,6 +35,6 @@ sed -i -e 's|@test "privileged ctr -- check for rw mounts" {|@test "privileged c
 sed -i -e 's|@test "kubernetes pod terminationGracePeriod passthru" {|@test "kubernetes pod terminationGracePeriod passthru" {\nskip\n|g' test/*.bats
 
 # remove useless tests
-rm test/image.* test/config* test/reload_config.bats test/registries.bats test/crio-wipe.bats test/network_ping.bats
+rm test/image.* test/config* test/reload_config.bats test/crio-wipe.bats test/network_ping.bats
 
 test/test_runner.sh
