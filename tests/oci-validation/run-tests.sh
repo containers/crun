@@ -8,7 +8,13 @@ if test "$(id -u)" != 0; then
 	exit 1
 fi
 
-(cd /crun; git clean -fdx; ./autogen.sh && ./configure && make -j $(nproc))
+(
+cd /crun
+git clean -fdx
+./autogen.sh
+./configure
+make -j "$(nproc)"
+)
 
 export GO111MODULE=off
 
@@ -19,10 +25,10 @@ export GOCACHE=/var/tmp/gocache
 export TMPDIR=/var/tmp
 export XDG_RUNTIME_DIR=/run
 
-cd $GOPATH/src/github.com/opencontainers/runtime-tools
+cd "$GOPATH/src/github.com/opencontainers/runtime-tools"
 # TODO: remove this `git magic` once runtime-tools is fixed in upstream
 git reset --hard 98b2d351ae7dd64da7cf6c89cb3f22497863513d
-make -j $(nproc)
+make -j "$(nproc)"
 
 # Skip:
 # cgroup tests as they require special configurations on the host
@@ -31,8 +37,8 @@ make -j $(nproc)
 # start - expect to not fail if the specified process doesn't exist (support process unset)
 # hooks_stdin - tests are racy
 # delete - both crun and runc allow to delete a container in the "created" state.
-export VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | egrep -v "(hooks_stdin|misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname|delete)" | tr '\n' ' ')
-
+VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | grep -Ev "(hooks_stdin|misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname|delete)" | tr '\n' ' ')
+export VALIDATION_TESTS
 export RUNTIME="/crun/crun"
 
 make localvalidation
