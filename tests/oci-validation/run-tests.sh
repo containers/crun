@@ -26,7 +26,6 @@ export TMPDIR=/var/tmp
 export XDG_RUNTIME_DIR=/run
 
 cd "$GOPATH/src/github.com/opencontainers/runtime-tools"
-make -j "$(nproc)"
 
 # Skip:
 # cgroup tests as they require special configurations on the host
@@ -39,4 +38,7 @@ VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | grep -Ev "(hooks_
 export VALIDATION_TESTS
 export RUNTIME="/crun/crun"
 
+# Build test binaries
+make -j "$(nproc)" runtimetest validation-executables
+# Run tests
 make localvalidation
