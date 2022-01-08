@@ -29,9 +29,6 @@ jobs:
 
           githubToken: ${{ github.token }}
 
-          setup: |
-            git submodule update --init --recursive
-
           install: |
             apt-get update -q -y
             apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
@@ -85,11 +82,6 @@ jobs:
         sudo systemctl unmask docker
         sudo systemctl start docker
 
-    - name: update submodules
-      run: |
-        git submodule update --init --recursive
-        git clean -fdx
-
     - name: run autogen.sh
       run: |
         ./autogen.sh
@@ -99,7 +91,7 @@ jobs:
         case "${{ matrix.test }}" in
             disable-systemd)
                 ./configure --disable-systemd
-                make
+                make -j $(nproc)
             ;;
             check)
                 ./configure --disable-dl
@@ -137,15 +129,15 @@ jobs:
             ;;
             alpine-build)
                 sudo docker build -t crun-alpine-build tests/alpine-build
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-alpine-build
+                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-alpine-build
             ;;
             centos8-build)
                 sudo docker build -t crun-centos8-build tests/centos8-build
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-centos8-build
+                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos8-build
             ;;
             centos9-build)
                 sudo docker build -t crun-centos9-build tests/centos9-build
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v $(pwd):/crun crun-centos9-build
+                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos9-build
             ;;
             clang-format)
                 ./configure
@@ -158,7 +150,6 @@ jobs:
                 sudo docker run --privileged --rm -w /crun -v ${PWD}:/crun crun-clang-check
             ;;
             checkpoint-restore)
-                ./autogen.sh
                 ./configure
                 make -j $(nproc)
                 sudo python3 tests/test_checkpoint_restore.py
