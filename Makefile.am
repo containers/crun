@@ -198,6 +198,6 @@ clang-format:
 	git ls-files src tests | egrep "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
 shellcheck:
-	shellcheck $(SHELLCHECK_OPTIONS) tests/*/*.sh contrib/*.sh
+	shellcheck $(SHELLCHECK_OPTIONS) tests/*.sh tests/*/*.sh contrib/*.sh
 
 .PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck
