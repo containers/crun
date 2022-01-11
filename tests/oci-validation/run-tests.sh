@@ -26,9 +26,6 @@ export TMPDIR=/var/tmp
 export XDG_RUNTIME_DIR=/run
 
 cd "$GOPATH/src/github.com/opencontainers/runtime-tools"
-# TODO: remove this `git magic` once runtime-tools is fixed in upstream
-git reset --hard 98b2d351ae7dd64da7cf6c89cb3f22497863513d
-make -j "$(nproc)"
 
 # Skip:
 # cgroup tests as they require special configurations on the host
@@ -41,4 +38,7 @@ VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | grep -Ev "(hooks_
 export VALIDATION_TESTS
 export RUNTIME="/crun/crun"
 
+# Build test binaries
+make -j "$(nproc)" runtimetest validation-executables
+# Run tests
 make localvalidation
