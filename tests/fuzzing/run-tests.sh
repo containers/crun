@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xeuo pipefail
+set -xeu
 
 TIMEOUT=${TIMEOUT:=10}
 RUN_TIME=${RUN_TIME:=600}
