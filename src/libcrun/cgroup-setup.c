@@ -270,7 +270,7 @@ read_unified_cgroup_pid (pid_t pid, char **path, libcrun_error_t *err)
     return crun_make_error (err, -1, "cannot find cgroup2 for the process %d", pid);
 
   from += 3;
-  to = strchr (from, '\n');
+
   to = strchr (from, '\n');
   if (UNLIKELY (to == NULL))
     return crun_make_error (err, -1, "cannot parse `%s`", cgroup_path);
