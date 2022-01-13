@@ -54,7 +54,7 @@
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
 
-static inline void *
+__attribute__ ((malloc)) static inline void *
 xmalloc (size_t size)
 {
   void *res = malloc (size);
@@ -63,7 +63,7 @@ xmalloc (size_t size)
   return res;
 }
 
-static inline void *
+__attribute__ ((malloc)) static inline void *
 xmalloc0 (size_t size)
 {
   void *res = calloc (1, size);
@@ -72,7 +72,7 @@ xmalloc0 (size_t size)
   return res;
 }
 
-static inline void *
+__attribute__ ((malloc)) static inline void *
 xrealloc (void *ptr, size_t size)
 {
   void *res = realloc (ptr, size);
@@ -223,7 +223,7 @@ path_is_slash_dev (const char *path)
   return true;
 }
 
-int xasprintf (char **str, const char *fmt, ...);
+int xasprintf (char **str, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 
 int crun_path_exists (const char *path, libcrun_error_t *err);
 
@@ -302,7 +302,7 @@ int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cw
 
 int mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err);
 
-void get_current_timestamp (char *out);
+void get_current_timestamp (char *out, size_t len);
 
 int set_blocking_fd (int fd, int blocking, libcrun_error_t *err);
 
@@ -336,7 +336,7 @@ int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *p
 
 ssize_t safe_write (int fd, const void *buf, ssize_t count);
 
-int append_paths (char **out, libcrun_error_t *err, ...);
+int append_paths (char **out, libcrun_error_t *err, ...) __attribute__ ((sentinel));
 
 int str2sig (const char *name);
 

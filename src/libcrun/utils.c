@@ -1605,7 +1605,7 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
 }
 
 void
-get_current_timestamp (char *out)
+get_current_timestamp (char *out, size_t len)
 {
   struct timeval tv;
   struct tm now;
@@ -1615,7 +1615,8 @@ get_current_timestamp (char *out)
   gmtime_r (&tv.tv_sec, &now);
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
-  sprintf (out, "%s.%09ldZ", timestamp, tv.tv_usec);
+  snprintf (out, len, "%s.%09ldZ", timestamp, tv.tv_usec);
+  out[len - 1] = '\0';
 }
 
 int
