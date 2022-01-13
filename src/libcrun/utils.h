@@ -302,7 +302,7 @@ int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cw
 
 int mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err);
 
-void get_current_timestamp (char *out);
+void get_current_timestamp (char *out, size_t len);
 
 int set_blocking_fd (int fd, int blocking, libcrun_error_t *err);
 

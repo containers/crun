@@ -1683,7 +1683,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
     .scope = NULL,
   };
 
-  get_current_timestamp (created);
+  get_current_timestamp (created, sizeof (created));
 
   if (cwd == NULL)
     OOM ();
