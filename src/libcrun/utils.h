@@ -54,7 +54,7 @@
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
 
-static inline void *
+__attribute__ ((malloc)) static inline void *
 xmalloc (size_t size)
 {
   void *res = malloc (size);
@@ -63,7 +63,7 @@ xmalloc (size_t size)
   return res;
 }
 
-static inline void *
+__attribute__ ((malloc)) static inline void *
 xmalloc0 (size_t size)
 {
   void *res = calloc (1, size);
@@ -72,7 +72,7 @@ xmalloc0 (size_t size)
   return res;
 }
 
-static inline void *
+__attribute__ ((malloc)) static inline void *
 xrealloc (void *ptr, size_t size)
 {
   void *res = realloc (ptr, size);
