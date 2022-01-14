@@ -1,3 +1,18 @@
+* crun-1.4.1
+
+- Fix check for an invalid path.  crun was performing the wrong check
+  to validate a path, causing spurious failures at runtime.
+- Allow deleting a container while in `created` state.  It goes
+  against what the OCI runtime specs dictate, but it is the expected
+  behavior since runc allows it.
+- Fix regression when joining a container that has explicit paths for
+  the namespaces.
+- cgroup: do not set cpu limits if number of shares is set to 0.
+  Moby uses 0 to indicate no limits.
+- Fix build issues when configured with --enable-shared.
+- Fix build on systems where OPEN_TREE_CLOEXEC is not defined.
+- Improve diagnostics for errors returned by dbus.
+
 * crun-1.4
 
 - wasm: support for running on kubernetes with containerd.
