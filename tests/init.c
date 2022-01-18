@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -200,6 +201,46 @@ do_pause ()
   exit (0);
 }
 
+static int
+memhog (int megabytes)
+{
+  char *buf;
+  int pos = 0;
+
+  if (megabytes < 1)
+    error (EXIT_FAILURE, 0, "memhog argument needs to be at least 1");
+
+  buf = malloc (megabytes * 1024 * 1024);
+  if (buf == NULL)
+    error (EXIT_FAILURE, 0, "malloc");
+
+  close (1);
+  close (2);
+
+  while (1)
+    {
+      /* write each page once */
+      buf[pos] = 'c';
+      pos += sysconf (_SC_PAGESIZE);
+      if (pos > megabytes * 1024 * 1024)
+        break;
+    }
+
+  pos = 0;
+
+  while (1)
+    {
+      /* change one page each 0.1 seconds */
+      nanosleep ((const struct timespec[]){{ 0, 100000000L }}, NULL);
+      buf[pos] = 'c';
+      pos += sysconf (_SC_PAGESIZE);
+      if (pos > megabytes * 1024 * 1024)
+        pos = 0;
+    }
+
+  return 0;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -311,6 +352,12 @@ main (int argc, char **argv)
   if (strcmp (argv[1], "pause") == 0)
     {
       do_pause ();
+    }
+  if (strcmp (argv[1], "memhog") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'memhog' requires an argument");
+      return memhog (atoi (argv[2]));
     }
   if (strcmp (argv[1], "create-sub-cgroup-and-wait") == 0)
     {

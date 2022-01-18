@@ -41,6 +41,8 @@ enum
   OPTION_SHELL_JOB,
   OPTION_EXT_UNIX_SK,
   OPTION_FILE_LOCKS,
+  OPTION_PARENT_PATH,
+  OPTION_PRE_DUMP,
 };
 
 static char doc[] = "OCI runtime";
@@ -55,6 +57,10 @@ static struct argp_option options[]
         { "ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0 },
         { "shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0 },
         { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
+#ifdef CRIU_PRE_DUMP_SUPPORT
+        { "parent-path", OPTION_PARENT_PATH, "DIR", 0, "path for previous criu image files in pre-dump", 0 },
+        { "pre-dump", OPTION_PRE_DUMP, 0, 0, "dump container's memory information only, leave the container running after this", 0 },
+#endif
         {
             0,
         } };
@@ -75,6 +81,14 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 
     case OPTION_WORK_PATH:
       cr_options.work_path = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_PARENT_PATH:
+      cr_options.parent_path = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_PRE_DUMP:
+      cr_options.pre_dump = true;
       break;
 
     case OPTION_LEAVE_RUNNING:

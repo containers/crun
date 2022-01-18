@@ -75,6 +75,39 @@ criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
   return 0;
 }
 
+#  ifdef CRIU_PRE_DUMP_SUPPORT
+
+static int
+criu_check_mem_track (char *work_path, libcrun_error_t *err)
+{
+  struct criu_feature_check features = { 0 };
+  int ret;
+
+  /* Right now we are only interested in checking memory tracking.
+   * Memory tracking can be disabled at different levels. aarch64
+   * for example has memory tracking not implemented. It could also
+   * be not enabled on other architectures. Just ask CRIU if that
+   * features exists. */
+
+  features.mem_track = true;
+
+  ret = criu_feature_check (&features, sizeof (features));
+
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0,
+                            "CRIU feature checking failed %d.  Please check CRIU logfile %s/%s",
+                            ret, work_path, CRIU_CHECKPOINT_LOG_FILE);
+
+  if (features.mem_track == true)
+    return 1;
+
+  return crun_make_error (err, 0,
+                          "Memory tracking not supported. Please check CRIU logfile %s/%s",
+                          work_path, CRIU_CHECKPOINT_LOG_FILE);
+}
+
+#  endif
+
 static int
 restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
@@ -265,15 +298,14 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   criu_set_images_dir_fd (image_fd);
 
-  /* descriptors.json is needed during restore to correctly
-   * reconnect stdin, stdout, stderr. */
-  ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = write_file (descriptors_path, status->external_descriptors, strlen (status->external_descriptors), err);
-  if (UNLIKELY (ret < 0))
-    return crun_error_wrap (err, "error saving CRIU descriptors file");
+  /* Set up logging. */
+  criu_set_log_level (4);
+  criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
+  /* Setting the pid early as we can skip a lot of checkpoint setup if
+   * we just do a pre-dump. The PID needs to be set always. Do it here.
+   * The main process of the container is the process CRIU will checkpoint
+   * and all of its children. */
+  criu_set_pid (status->pid);
 
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
    * CRIU will put the logfiles into the images_dir from above. No need for
@@ -292,9 +324,54 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
       cr_options->work_path = cr_options->image_path;
     }
 
-  /* The main process of the container is the process CRIU will checkpoint
-   * and all of its children. */
-  criu_set_pid (status->pid);
+#  ifdef CRIU_PRE_DUMP_SUPPORT
+
+  {
+    int criu_can_mem_track = 0;
+    /* If the user uses --pre-dump for the second time or does
+     * a final dump from a previous pre-dump, setting parent_path
+     * is necessary so that CRIU can find which pages have not
+     * changed compared to the previous dump. */
+    if (cr_options->parent_path != NULL)
+      {
+        criu_can_mem_track = criu_check_mem_track (cr_options->work_path, err);
+        if (UNLIKELY (criu_can_mem_track == -1))
+          return -1;
+        criu_set_track_mem (true);
+        /* The parent path needs to be a relative path. CRIU will fail
+         * if the path is not in the right format. Usually something like
+         * ../previous-dump */
+        criu_set_parent_images (cr_options->parent_path);
+      }
+
+    if (cr_options->pre_dump)
+      {
+        if (criu_can_mem_track != 1)
+          {
+            criu_can_mem_track = criu_check_mem_track (cr_options->work_path, err);
+            if (UNLIKELY (criu_can_mem_track == -1))
+              return -1;
+          }
+        criu_set_track_mem (true);
+        ret = criu_pre_dump ();
+        if (UNLIKELY (ret != 0))
+          return crun_make_error (err, 0,
+                                  "CRIU pre-dump failed %d.  Please check CRIU logfile %s/%s",
+                                  ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+        return 0;
+      }
+  }
+#  endif
+
+  /* descriptors.json is needed during restore to correctly
+   * reconnect stdin, stdout, stderr. */
+  ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = write_file (descriptors_path, status->external_descriptors, strlen (status->external_descriptors), err);
+  if (UNLIKELY (ret < 0))
+    return crun_error_wrap (err, "error saving CRIU descriptors file");
 
   ret = append_paths (&path, err, status->bundle, status->rootfs, NULL);
   if (UNLIKELY (ret < 0))
@@ -413,9 +490,6 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   criu_set_orphan_pts_master (true);
   criu_set_manage_cgroups (true);
 
-  /* Set up logging. */
-  criu_set_log_level (4);
-  criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
   ret = criu_dump ();
   if (UNLIKELY (ret != 0))
     return crun_make_error (err, 0,

@@ -3611,7 +3611,7 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (! cr_options->leave_running)
+  if (! (cr_options->leave_running || cr_options->pre_dump))
     return container_delete_internal (context, NULL, id, true, true, err);
 
   return 0;
