@@ -1147,9 +1147,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
         {
           if (errno == ENOENT)
             return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
-
-          return crun_make_error (err, errno, "open executable");
         }
+      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
+         once the process switched to the use that runs in the container.  This might be necessary
+         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
+         is not honored.  */
     }
 
   ret = setsid ();
@@ -1238,6 +1240,18 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (UNLIKELY (def->process && def->process->args && *exec_path == NULL))
+    {
+      *exec_path = find_executable (def->process->args[0], def->process->cwd);
+      if (UNLIKELY (*exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
+
+          return crun_make_error (err, errno, "open executable");
+        }
+    }
 
   /* The chdir was not already performed, so try again now after switching to the UID/GID in the container.  */
   if (! chdir_done && def->process && def->process->cwd)
@@ -3137,8 +3151,10 @@ exec_process_entrypoint (libcrun_context_t *context,
     {
       if (errno == ENOENT)
         return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
-
-      return crun_make_error (err, errno, "open executable");
+      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
+         once the process switched to the use that runs in the container.  This might be necessary
+         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
+         is not honored.  */
     }
 
   if (container->container_def->linux && container->container_def->linux->personality)
@@ -3189,6 +3205,18 @@ exec_process_entrypoint (libcrun_context_t *context,
   ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (UNLIKELY (exec_path == NULL))
+    {
+      exec_path = find_executable (process->args[0], process->cwd);
+      if (UNLIKELY (exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
+
+          return crun_make_error (err, errno, "open executable");
+        }
+    }
 
   if (! chdir_done && UNLIKELY (chdir (cwd) < 0))
     libcrun_fail_with_error (errno, "chdir `%s`", cwd);
