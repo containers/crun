@@ -993,7 +993,7 @@ notify_handler (struct container_entrypoint_s *args,
    It is used by the container init process.  */
 static int
 container_init_setup (void *args, pid_t own_pid, char *notify_socket,
-                      int sync_socket, const char **exec_path, libcrun_error_t *err)
+                      int sync_socket, char **exec_path, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -1286,7 +1286,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
-  cleanup_free const char *exec_path = NULL;
+  cleanup_free char *exec_path = NULL;
   __attribute__ ((unused)) cleanup_free char *notify_socket_cleanup = notify_socket;
   pid_t own_pid = 0;
 
@@ -3062,7 +3062,7 @@ exec_process_entrypoint (libcrun_context_t *context,
                          libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
-  cleanup_free const char *exec_path = NULL;
+  cleanup_free char *exec_path = NULL;
   uid_t container_uid;
   gid_t container_gid;
   const char *cwd;
