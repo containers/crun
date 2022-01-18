@@ -233,7 +233,7 @@ container_kill (PyObject *self, PyObject *args)
   libcrun_error_t err;
   PyObject *ctx_obj = NULL;
   char *id = NULL;
-  const char signal*;
+  char *signal;
   libcrun_context_t *ctx;
   int ret;
 
