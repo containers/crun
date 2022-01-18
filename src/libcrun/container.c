@@ -993,7 +993,7 @@ notify_handler (struct container_entrypoint_s *args,
    It is used by the container init process.  */
 static int
 container_init_setup (void *args, pid_t own_pid, char *notify_socket,
-                      int sync_socket, const char **exec_path, libcrun_error_t *err)
+                      int sync_socket, char **exec_path, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
@@ -1147,9 +1147,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
         {
           if (errno == ENOENT)
             return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
-
-          return crun_make_error (err, errno, "open executable");
         }
+      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
+         once the process switched to the use that runs in the container.  This might be necessary
+         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
+         is not honored.  */
     }
 
   ret = setsid ();
@@ -1239,6 +1241,18 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (UNLIKELY (def->process && def->process->args && *exec_path == NULL))
+    {
+      *exec_path = find_executable (def->process->args[0], def->process->cwd);
+      if (UNLIKELY (*exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
+
+          return crun_make_error (err, errno, "open executable");
+        }
+    }
+
   /* The chdir was not already performed, so try again now after switching to the UID/GID in the container.  */
   if (! chdir_done && def->process && def->process->cwd)
     if (UNLIKELY (chdir (def->process->cwd) < 0))
@@ -1286,7 +1300,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   struct container_entrypoint_s *entrypoint_args = args;
   int ret;
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
-  cleanup_free const char *exec_path = NULL;
+  cleanup_free char *exec_path = NULL;
   __attribute__ ((unused)) cleanup_free char *notify_socket_cleanup = notify_socket;
   pid_t own_pid = 0;
 
@@ -3062,7 +3076,7 @@ exec_process_entrypoint (libcrun_context_t *context,
                          libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
-  cleanup_free const char *exec_path = NULL;
+  cleanup_free char *exec_path = NULL;
   uid_t container_uid;
   gid_t container_gid;
   const char *cwd;
@@ -3137,8 +3151,10 @@ exec_process_entrypoint (libcrun_context_t *context,
     {
       if (errno == ENOENT)
         return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
-
-      return crun_make_error (err, errno, "open executable");
+      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
+         once the process switched to the use that runs in the container.  This might be necessary
+         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
+         is not honored.  */
     }
 
   if (container->container_def->linux && container->container_def->linux->personality)
@@ -3189,6 +3205,18 @@ exec_process_entrypoint (libcrun_context_t *context,
   ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (UNLIKELY (exec_path == NULL))
+    {
+      exec_path = find_executable (process->args[0], process->cwd);
+      if (UNLIKELY (exec_path == NULL))
+        {
+          if (errno == ENOENT)
+            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
+
+          return crun_make_error (err, errno, "open executable");
+        }
+    }
 
   if (! chdir_done && UNLIKELY (chdir (cwd) < 0))
     libcrun_fail_with_error (errno, "chdir `%s`", cwd);

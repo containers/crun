@@ -1680,7 +1680,7 @@ check_access (const char *path)
   return 0;
 }
 
-const char *
+char *
 find_executable (const char *executable_path, const char *cwd)
 {
   cleanup_free char *cwd_executable_path = NULL;
