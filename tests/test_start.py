@@ -63,6 +63,161 @@ def test_cwd_absolute():
         return -1
     return 0
 
+def test_not_allowed_ipc_sysctl():
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf, ipcns=False)
+    conf['linux']['sysctl'] = {'fs.mqueue.queues_max' : '100'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+        sys.stderr.write("unexpected success\n")
+        return -1
+    except:
+        pass
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf, ipcns=False)
+    conf['linux']['sysctl'] = {'kernel.msgmax' : '8192'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+        sys.stderr.write("unexpected success\n")
+        return -1
+    except:
+        pass
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    conf['linux']['sysctl'] = {'kernel.msgmax' : '8192'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+    except Exception as e:
+        sys.stderr.write("setting msgmax with new ipc namespace failed\n")
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+def test_not_allowed_net_sysctl():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf, netns=False)
+    conf['linux']['sysctl'] = {'net.ipv4.ping_group_range' : '0 0'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+        sys.stderr.write("unexpected success\n")
+        return -1
+    except:
+        pass
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    conf['linux']['sysctl'] = {'net.ipv4.ping_group_range' : '0 0'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+    except Exception as e:
+        sys.stderr.write("setting net.ipv4.ping_group_range with new net namespace failed\n")
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+    return 0
+
+def test_unknown_sysctl():
+    if is_rootless():
+        return 77
+
+    for sysctl in ['kernel.foo', 'bar.baz', 'fs.baz']:
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'true']
+        add_all_namespaces(conf)
+        conf['linux']['sysctl'] = {sysctl : 'value'}
+        cid = None
+        try:
+            _, cid = run_and_get_output(conf)
+            sys.stderr.write("unexpected success\n")
+            return -1
+        except:
+            return 0
+        finally:
+            if cid is not None:
+                run_crun_command(["delete", "-f", cid])
+        return 0
+
+def test_uts_sysctl():
+    if is_rootless():
+        return 77
+
+    # setting kernel.hostname must always fail.
+    for utsns in [True, False]:
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'true']
+        add_all_namespaces(conf, utsns=utsns)
+        conf['linux']['sysctl'] = {'kernel.hostname' : 'foo'}
+        cid = None
+        try:
+            _, cid = run_and_get_output(conf)
+            sys.stderr.write("unexpected success\n")
+            return -1
+        except:
+            return 0
+        finally:
+            if cid is not None:
+                run_crun_command(["delete", "-f", cid])
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf, utsns=False)
+    conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+        sys.stderr.write("unexpected success\n")
+        return -1
+    except:
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf)
+        return 0
+    except:
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_start():
     conf = base_config()
     conf['process']['args'] = ['/init', 'echo', 'hello']
@@ -311,6 +466,10 @@ all_tests = {
     "empty-home": test_empty_home,
     "delete-in-created-state": test_delete_in_created_state,
     "run-rootless-netns-with-userns" : test_run_rootless_netns_with_userns,
+    "not-allowed-ipc-sysctl": test_not_allowed_ipc_sysctl,
+    "not-allowed-net-sysctl": test_not_allowed_net_sysctl,
+    "uts-sysctl": test_uts_sysctl,
+    "unknown-sysctl": test_unknown_sysctl,
 }
 
 if __name__ == "__main__":
