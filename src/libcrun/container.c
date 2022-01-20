@@ -960,10 +960,10 @@ maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
           if (UNLIKELY (ret < 0))
             {
               /* EINVAL means the user is not mapped in the current userns.
-                 Ignore EPERM as well as there is no reason to fail so early, and
-                 let the container payload deal with it.
+                 Ignore EPERM and EROFS as well as there is no reason to fail
+                 so early, and let the container payload deal with it.
               */
-              if (errno == EINVAL || errno == EPERM)
+              if (errno == EINVAL || errno == EPERM || errno == EROFS)
                 continue;
 
               return crun_make_error (err, errno, "fchown std stream %i", i);
