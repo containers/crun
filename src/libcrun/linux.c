@@ -1378,6 +1378,13 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
         }
     }
 
+  if (container->container_def->process && container->container_def->process->terminal)
+    {
+      ret = crun_ensure_file_at (devfd, "console", 0620, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   return 0;
 }
 
@@ -2917,25 +2924,6 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
       ret = libcrun_terminal_setup_size (0, def->process->console_size->height, def->process->console_size->width, err);
       if (UNLIKELY (ret < 0))
         return ret;
-    }
-
-  ret = write_file ("/dev/console", NULL, 0, err);
-  if (UNLIKELY (ret < 0))
-    {
-      int ret_exists;
-      libcrun_error_t tmp_err = NULL;
-
-      ret_exists = crun_path_exists ("/dev/console", &tmp_err);
-      /* Always ignore errors from crun_path_exists.  */
-      if (UNLIKELY (ret_exists < 0))
-        crun_error_release (&tmp_err);
-
-      /* If the file doesn't exist or crun_path_exists failed, return the original error.  */
-      if (ret_exists <= 0)
-        return ret;
-
-      /* Otherwise ignore errors and try to bind mount on top of it.  */
-      crun_error_release (err);
     }
 
   ret = do_mount (container, pty, -1, "/dev/console", NULL, MS_BIND, NULL, LABEL_MOUNT, err);

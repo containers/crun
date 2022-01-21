@@ -614,10 +614,8 @@ crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcr
       if (UNLIKELY (ret < 0))
         return ret;
       *it = '/';
-
-      return create_file_if_missing_at (dirfd, tmp, err);
     }
-  return 0;
+  return create_file_if_missing_at (dirfd, tmp, err);
 }
 
 int
