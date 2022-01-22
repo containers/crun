@@ -2743,28 +2743,117 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   return 0;
 }
 
+const char *sysctlRequiringIPC[] = {
+  "kernel/msgmax",
+  "kernel/msgmnb",
+  "kernel/msgmni",
+  "kernel/sem",
+  "kernel/shmall",
+  "kernel/shmmax",
+  "kernel/shmmni",
+  "kernel/shm_rmid_forced",
+  NULL
+};
+
+static int
+validate_sysctl (const char *original_value, const char *name, unsigned long namespaces_created, libcrun_error_t *err)
+{
+  const char *namespace = "";
+
+  name = consume_slashes (name);
+
+  if (has_prefix (name, "fs/mqueue/"))
+    {
+      if (namespaces_created & CLONE_NEWIPC)
+        return 0;
+
+      namespace = "IPC";
+      goto fail;
+    }
+
+  if (has_prefix (name, "kernel/"))
+    {
+      size_t i;
+
+      for (i = 0; sysctlRequiringIPC[i]; i++)
+        if (strcmp (sysctlRequiringIPC[i], name) == 0)
+          {
+            if (namespaces_created & CLONE_NEWIPC)
+              return 0;
+
+            namespace = "IPC";
+            goto fail;
+          }
+
+      if (strcmp (name, "kernel/domainname") == 0)
+        {
+          if (namespaces_created & CLONE_NEWUTS)
+            return 0;
+
+          namespace = "UTS";
+          goto fail;
+        }
+
+      if (strcmp (name, "kernel/hostname") == 0)
+        return crun_make_error (err, 0, "the sysctl `%s` conflicts with OCI field `hostname`", original_value);
+    }
+  if (has_prefix (name, "net/"))
+    {
+      if (namespaces_created & CLONE_NEWNET)
+        return 0;
+
+      namespace = "network";
+      goto fail;
+    }
+
+  return crun_make_error (err, 0, "the sysctl `%s` is not namespaced", original_value);
+
+fail:
+  return crun_make_error (err, 0, "the sysctl `%s` requires a new %s namespace", original_value, namespace);
+}
+
 int
-libcrun_set_sysctl_from_schema (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
+libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 {
   size_t i;
   cleanup_close int dirfd = -1;
+  unsigned long namespaces_created = 0;
+  runtime_spec_schema_config_schema *def = container->container_def;
 
-  if (! def->linux || ! def->linux->sysctl)
+  if (def->linux == NULL || def->linux->sysctl == NULL || def->linux->sysctl->len == 0)
     return 0;
 
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value;
+
+      value = libcrun_find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0))
+        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
+
+      namespaces_created |= value;
+    }
+
+  get_private_data (container);
   dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open /proc/sys");
 
   for (i = 0; i < def->linux->sysctl->len; i++)
     {
-      cleanup_free char *name = xstrdup (def->linux->sysctl->keys[i]);
+      cleanup_free char *name = NULL;
       cleanup_close int fd = -1;
       int ret;
       char *it;
+
+      name = xstrdup (def->linux->sysctl->keys[i]);
       for (it = name; *it; it++)
         if (*it == '.')
           *it = '/';
+
+      ret = validate_sysctl (def->linux->sysctl->keys[i], name, namespaces_created, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       fd = openat (dirfd, name, O_WRONLY);
       if (UNLIKELY (fd < 0))
@@ -2775,12 +2864,6 @@ libcrun_set_sysctl_from_schema (runtime_spec_schema_config_schema *def, libcrun_
         return crun_make_error (err, errno, "write to /proc/sys/%s", name);
     }
   return 0;
-}
-
-int
-libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
-{
-  return libcrun_set_sysctl_from_schema (container->container_def, err);
 }
 
 static uid_t
