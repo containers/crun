@@ -554,7 +554,12 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
   if (do_open)
     {
       if (cwd == dirfd)
-        return dup (dirfd);
+        {
+          ret = dup (dirfd);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "dup `%s`", dirpath);
+          return ret;
+        }
 
       wd_cleanup = -1;
       return cwd;
