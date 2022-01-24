@@ -1,3 +1,15 @@
+* crun-1.4.2
+
+- CRIU: add pre-dump support.
+- Fix running with a read-only /dev.  The /dev/console file is created
+  before re-mounting /dev as read-only.
+- Ignore EROFS when chowning standard stream files.
+- Add validation for sysctls before applying them.
+- Attempt looking up the executable after the setresuid syscall, this
+  solves an issue on NFS when the executable file is not owned by root
+  in the container, but the UID:GID combination configured for the
+  container can access it.
+
 * crun-1.4.1
 
 - Fix check for an invalid path.  crun was performing the wrong check
