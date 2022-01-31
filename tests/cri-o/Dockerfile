@@ -12,7 +12,6 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
     chmod 755 /root && \
     (cd /root/go/src/github.com/cri-o && git clone https://github.com/cri-o/cri-o && \
     cd cri-o && \
-    git checkout daab4d1d8431cf3af59855d3ad220e5ded5e5822 && \
     make all test-binaries) && \
     (mkdir -p /root/go/src/github.com/containernetworking && \
     cd /root/go/src/github.com/containernetworking && \
