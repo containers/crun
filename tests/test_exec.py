@@ -20,6 +20,8 @@ import os
 import shutil
 import tempfile
 from tests_utils import *
+import hashlib
+import datetime
 
 def test_exec():
     conf = base_config()
@@ -135,6 +137,7 @@ def test_exec_additional_gids():
             run_crun_command(["delete", "-f", cid])
         shutil.rmtree(tempdir)
     return 0
+
 
 all_tests = {
     "exec" : test_exec,

@@ -25,6 +25,7 @@ AC_PATH_PROG(MD2MAN, go-md2man)
 AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 
 AC_CHECK_HEADERS([error.h linux/openat2.h])
+AC_CHECK_HEADER([bsd/queue.h], [AC_DEFINE([HAVE_BSD_QUEUE], 1, [Define if bsd/queue.h is available])])
 
 AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid)
 

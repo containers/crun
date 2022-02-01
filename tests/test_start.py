@@ -23,6 +23,7 @@ import threading
 import socket
 import json
 from tests_utils import *
+import re
 
 def test_cwd_relative():
     conf = base_config()

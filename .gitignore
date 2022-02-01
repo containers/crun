@@ -68,3 +68,4 @@ tests/tests_*
 tests/*.log
 tests/*.trs
 test-suite.log
+krun

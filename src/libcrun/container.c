@@ -44,6 +44,7 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <grp.h>
+#include "kontain.h"
 
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-daemon.h>
@@ -1152,6 +1153,14 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
          once the process switched to the use that runs in the container.  This might be necessary
          when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
          is not honored.  */
+      if (entrypoint_args->context->kontain)
+        {
+          int rc = libcrun_kontain_argv (&def->process->args, exec_path);
+          if (rc != 0)
+            {
+              return crun_make_error (err, rc, "init: fixup argv");
+            }
+        }
     }
 
   ret = setsid ();
@@ -3155,6 +3164,16 @@ exec_process_entrypoint (libcrun_context_t *context,
          once the process switched to the use that runs in the container.  This might be necessary
          when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
          is not honored.  */
+    }
+
+  if (context->kontain)
+    {
+      // Run as a payload
+      int rc = libcrun_kontain_argv (&process->args, &exec_path);
+      if (rc != 0)
+        {
+          return crun_make_error (err, rc, "failed to setup %s to run in a kontain VM", exec_path);
+        }
     }
 
   if (container->container_def->linux && container->container_def->linux->personality)

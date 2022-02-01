@@ -54,6 +54,8 @@ struct libcrun_context_s
   bool no_pivot;
 
   struct custom_handler_manager_s *handler_manager;
+
+  bool kontain;
 };
 
 enum
