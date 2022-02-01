@@ -3,11 +3,18 @@ FROM fedora:latest
 ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 
-RUN yum install -y golang python git gcc automake autoconf libcap-devel \
+RUN yum install -y python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel go-md2man conntrack-tools which \
     glibc-static python3-libmount libtool make podman xz nmap-ncat jq bats \
     iproute openssl iputils socat && \
     dnf install -y 'dnf-command(builddep)' && dnf builddep -y podman && \
+    dnf remove -y golang && \
+    sudo dnf update -y && \
+    curl -LO https://go.dev/dl/go1.17.6.linux-amd64.tar.gz && \
+    sudo tar -C /usr/local -xzf go1.17.6.linux-amd64.tar.gz && \
+    export GOPATH=$HOME/go && \
+    export GOROOT=/usr/local/go && \
+    export PATH=$GOPATH/bin:$GOROOT/bin:$PATH && \
     mkdir -p /root/go/src/github.com/cri-o && \
     chmod 755 /root && \
     (cd /root/go/src/github.com/cri-o && git clone https://github.com/cri-o/cri-o && \
