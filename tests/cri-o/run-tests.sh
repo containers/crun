@@ -33,6 +33,8 @@ sed -i -e 's|@test "privileged ctr device add" {|@test "privileged ctr device ad
 sed -i -e 's|@test "ctr device add" {|@test "ctr device add" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "privileged ctr -- check for rw mounts" {|@test "privileged ctr -- check for rw mounts" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "kubernetes pod terminationGracePeriod passthru" {|@test "kubernetes pod terminationGracePeriod passthru" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "userns annotation auto should succeed" {|@test "userns annotation auto should succeed" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "userns annotation auto should map host run_as_user" {|@test "userns annotation auto should map host run_as_user" {\nskip\n|g' test/*.bats
 
 # remove useless tests
 rm test/image.* test/config* test/reload_config.bats test/crio-wipe.bats test/network_ping.bats
