@@ -28,9 +28,28 @@
 #include <errno.h>
 #include <sys/sysmacros.h>
 
-#include "kontain.h"
 #include "container.h"
 #include "utils.h"
+#include "kontain.h"
+
+int 
+libcrun_kontain_use_argv(libcrun_context_t *context, libcrun_container_t *container)
+{
+  if (context->kontain == 0)
+    {
+      return 0;
+    }
+  if (context->kontain_ecs == 0)
+    {
+      return 1;
+    }
+  const char *label = find_annotation (container, "app.kontain.version");
+  if (label != NULL && strcmp(label, "1") == 0)
+    {
+      return 1;
+    }
+  return 0;
+}
 
 /*
  * If execpath is not a symlink to km or the path to km, then assume we

@@ -56,6 +56,7 @@ struct libcrun_context_s
   struct custom_handler_manager_s *handler_manager;
 
   bool kontain;
+  bool kontain_ecs;
 };
 
 enum

@@ -31,7 +31,8 @@ struct crun_global_arguments
   bool debug;
   bool option_systemd_cgroup;
   bool option_force_no_cgroup;
-  bool kontain;
+  bool kontain;		// Use Kontain logic
+  bool kontain_ecs;	// Use ECS Variation of Konatain logic
 };
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);

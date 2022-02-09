@@ -1153,7 +1153,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
          once the process switched to the use that runs in the container.  This might be necessary
          when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
          is not honored.  */
-      if (entrypoint_args->context->kontain)
+      if (libcrun_kontain_use_argv(entrypoint_args->context, container) != 0)
         {
           int rc = libcrun_kontain_argv (&def->process->args, exec_path);
           if (rc != 0)
@@ -3166,7 +3166,7 @@ exec_process_entrypoint (libcrun_context_t *context,
          is not honored.  */
     }
 
-  if (context->kontain)
+  if (libcrun_kontain_use_argv(context, container) != 0)
     {
       // Run as a payload
       int rc = libcrun_kontain_argv (&process->args, &exec_path);

@@ -115,6 +115,7 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
     con->config_file = "./config.json";
 
   con->kontain = glob->kontain;
+  con->kontain_ecs = glob->kontain_ecs;
   con->handler_manager = libcrun_get_handler_manager ();
 
   return 0;
@@ -351,6 +352,11 @@ main (int argc, char **argv)
   if (strcmp (cmd, "krun") == 0)
     {
       arguments.kontain = true;
+    }
+  else if (strcmp (cmd, "krun-ecs") == 0)
+    {
+      arguments.kontain = true;
+      arguments.kontain_ecs = true;
     }
 
   argp_program_version_hook = print_version;
