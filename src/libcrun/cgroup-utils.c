@@ -388,6 +388,8 @@ int
 destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
 {
   bool repeat = true;
+  int retry_count = 0;
+  const int max_attempts = 500;
   int ret;
 
   do
@@ -406,7 +408,13 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
             {
               ret = rmdir_all (cgroup_path);
               if (ret < 0)
-                repeat = true;
+                {
+                  if (retry_count >= max_attempts)
+                    return crun_make_error (err, errno, "cannot delete path `%s`", cgroup_path);
+
+                  retry_count++;
+                  repeat = true;
+                }
             }
         }
       else
@@ -450,7 +458,12 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
                 {
                   ret = rmdir_all (cgroup_path);
                   if (ret < 0)
-                    repeat = true;
+                    {
+                      if (retry_count >= max_attempts)
+                        return crun_make_error (err, errno, "cannot destroy subsystem `%s` at path `%s`", subsystem, cgroup_path);
+                      retry_count++;
+                      repeat = true;
+                    }
                 }
             }
         }

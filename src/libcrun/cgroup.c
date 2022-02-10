@@ -199,11 +199,7 @@ libcrun_cgroup_destroy (struct libcrun_cgroup_status *cgroup_status, libcrun_err
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = cgroup_manager->destroy_cgroup (cgroup_status, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
-
-  return 0;
+  return cgroup_manager->destroy_cgroup (cgroup_status, err);
 }
 
 int

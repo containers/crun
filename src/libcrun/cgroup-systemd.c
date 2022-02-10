@@ -950,11 +950,7 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
-  ret = destroy_cgroup_path (cgroup_status->path, mode, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
-
-  return 0;
+  return destroy_cgroup_path (cgroup_status->path, mode, err);
 }
 
 static int
