@@ -779,7 +779,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
               if (ret > 0)
                 {
-                  ret = mount ("/sys", real_target, "/sys", MS_BIND | MS_REC | MS_SLAVE, data);
+                  ret = mount ("/sys", real_target, NULL, MS_BIND | MS_REC, NULL);
                   if (LIKELY (ret == 0))
                     return 0;
                 }
