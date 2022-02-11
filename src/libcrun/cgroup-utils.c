@@ -459,7 +459,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
         {
           struct timespec req = {
             .tv_sec = 0,
-            .tv_nsec = 100000,
+            .tv_nsec = 10000000,
           };
 
           nanosleep (&req, NULL);
