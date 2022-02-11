@@ -410,6 +410,27 @@ do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set
 }
 
 static int
+get_bind_mount (const char *src, libcrun_error_t *err)
+{
+  cleanup_close int open_tree_fd = -1;
+  struct mount_attr_s attr = {
+    0,
+  };
+  int ret;
+
+  open_tree_fd = syscall_open_tree (-1, src,
+                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+  if (UNLIKELY (open_tree_fd < 0))
+    return crun_make_error (err, errno, "open `%s`", src);
+
+  ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mount_setattr `%s`", src);
+
+  return get_and_reset (&open_tree_fd);
+}
+
+static int
 get_idmapped_mount (const char *src, pid_t pid, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
@@ -1627,7 +1648,15 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 
       if (def->mounts[i]->source && (flags & MS_BIND))
         {
-          is_dir = crun_dir_p (def->mounts[i]->source, false, err);
+          char proc_buf[64];
+          const char *path = def->mounts[i]->source;
+          if (mount_fds->fds[i] >= 0)
+            {
+              sprintf (proc_buf, "/proc/self/fd/%d", mount_fds->fds[i]);
+              path = proc_buf;
+            }
+
+          is_dir = crun_dir_p (path, false, err);
           if (UNLIKELY (is_dir < 0))
             return is_dir;
 
@@ -3332,11 +3361,27 @@ is_idmapped (runtime_spec_schema_defs_mount *mnt)
   return false;
 }
 
+static bool
+is_bind_mount (runtime_spec_schema_defs_mount *mnt)
+{
+  size_t i;
+
+  for (i = 0; i < mnt->options_len; i++)
+    {
+      if (strcmp (mnt->options[i], "bind") == 0)
+        return true;
+      if (strcmp (mnt->options[i], "rbind") == 0)
+        return true;
+    }
+  return false;
+}
+
 static int
 prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
   size_t how_many = 0;
   size_t i;
   int ret;
@@ -3357,6 +3402,12 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
             return fd;
 
           mount_fds->fds[i] = fd;
+        }
+      else if (has_userns && is_bind_mount (def->mounts[i]))
+        {
+          mount_fds->fds[i] = get_bind_mount (def->mounts[i]->source, err);
+          if (UNLIKELY (mount_fds->fds[i] < 0))
+            crun_error_release (err);
         }
 
       if (mount_fds->fds[i] >= 0)
@@ -3649,10 +3700,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   ret = libcrun_container_setgroups (container, container->container_def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  /* Move ownership.  */
-  get_private_data (container)->mount_fds = mount_fds;
-  mount_fds = NULL;
 
   return 0;
 }

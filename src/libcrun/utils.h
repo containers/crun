@@ -116,7 +116,7 @@ cleanup_pidp (void *p)
 }
 
 struct
-    libcrun_fd_map
+libcrun_fd_map
 {
   size_t nfds;
   int fds[];

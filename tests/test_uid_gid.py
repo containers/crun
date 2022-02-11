@@ -22,7 +22,7 @@ def test_userns_full_mapping():
     if is_rootless():
         return 77
     conf = base_config()
-    add_all_namespaces(conf)
+    add_all_namespaces(conf, userns=True)
 
     fullMapping = [
         {
@@ -44,7 +44,6 @@ def test_userns_full_mapping():
             return -1
 
     return 0
-
 
 def test_uid():
     if is_rootless():
