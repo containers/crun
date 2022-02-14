@@ -707,9 +707,82 @@ These flags are supported:
 
 .SH idmap mount options
 .PP
-If the \fB\fCidmap\fR option is specified then the mount is ID mapped using the container
-target user namespace.  This is an experimental feature and can change at any time
-without notice.
+If the \fB\fCidmap\fR option is specified then the mount is ID mapped using
+the container target user namespace.  This is an experimental feature
+and can change at any time without notice.
+
+.PP
+The \fB\fCidmap\fR option supports a custom mapping that can be different
+than the user namespace used by the container.
+
+.PP
+The mapping can be specified after the \fB\fCidmap\fR option like:
+\fB\fCidmap=uids=0-1-10#10-11-10;gids=0-100-10\fR\&.
+
+.PP
+For each triplet, the first value is the start of the backing
+file system IDs that are mapped to the second value on the host.  The
+length of this mapping is given in the third value.
+
+.PP
+Multiple ranges are separed with \fB\fC#\fR\&.
+
+.PP
+These values are written to the \fB\fC/proc/$PID/uid_map\fR and
+\fB\fC/proc/$PID/gid_map\fR files to create the user namespace for the
+idmapped mount.
+
+.PP
+The only two options that are currently supported after \fB\fCidmap\fR are
+\fB\fCuids\fR and \fB\fCgids\fR\&.
+
+.PP
+When a custom mapping is specified, a new user namespace is created
+for the idmapped mount.
+
+.PP
+If no option is specified, then the container user namespace is used.
+
+.PP
+If the specified mapping is prepended with a '@' then the mapping is
+considered relative to the container user namespace.  The host ID for
+the mapping is changed to account for the relative position of the
+container user in the container user namespace.
+
+.PP
+For example, the mapping: \fB\fCuids=@1-3-10\fR, given a configuration like
+
+.PP
+.RS
+
+.nf
+"uidMappings": [
+      {
+        "containerID": 0,
+        "hostID": 0,
+        "size": 1
+      },
+      {
+        "containerID": 1,
+        "hostID": 2,
+        "size": 1000
+      }
+    ]
+
+.fi
+.RE
+
+.PP
+will be converted to the absolute value \fB\fCuids=1-4-10\fR, where 4 is
+calculated by adding 3 (container ID in the \fB\fCuids=\fR mapping)
++ 1 (\fB\fChostID - containerID\fR for the user namespace mapping where
+\fB\fCcontainerID = 1\fR is found).
+
+.PP
+The current implementation doesn't take into account multiple
+user namespace ranges, so it is the caller's responsibility to split a
+mapping if it overlaps multiple ranges in the user namespace.  In such
+a case, there won't be any error reported.
 
 .SH Automatically create user namespace
 .PP
