@@ -178,22 +178,56 @@ def test_mount_dev():
         return -1
     return 0
 
+
+def test_userns_bind_mount():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    add_all_namespaces(conf, userns=True)
+
+    fullMapping = [
+        {
+            "containerID": 0,
+            "hostID": 1,
+            "size": 10
+        }
+    ]
+    conf['linux']['uidMappings'] = fullMapping
+    conf['linux']['gidMappings'] = fullMapping
+
+    bind_dir_parent = os.path.join(get_tests_root(), "bind-mount-userns")
+    bind_dir = os.path.join(bind_dir_parent, "m")
+    try:
+        os.makedirs(bind_dir)
+        mount_opt = {"destination": "/foo", "type": "bind", "source": bind_dir, "options": ["bind", "ro"]}
+        conf['mounts'].append(mount_opt)
+        os.chown(bind_dir_parent, 0, 0)
+        os.chmod(bind_dir_parent, 0o000)
+
+        conf['process']['args'] = ['/init', 'true']
+        run_and_get_output(conf, chown_rootfs_to=1)
+    finally:
+        shutil.rmtree(bind_dir)
+
+    return 0
+
 all_tests = {
-    "test-mount-ro" : test_mount_ro,
-    "test-mount-rw" : test_mount_rw,
-    "test-mount-relatime" : test_mount_relatime,
-    "test-mount-strictatime" : test_mount_strictatime,
-    "test-mount-exec" : test_mount_exec,
-    "test-mount-noexec" : test_mount_noexec,
-    "test-mount-suid" : test_mount_suid,
-    "test-mount-nosuid" : test_mount_nosuid,
-    "test-mount-sync" : test_mount_sync,
-    "test-mount-dirsync" : test_mount_dirsync,
-    "test-mount-symlink" : test_mount_symlink,
-    "test-mount-symlink-not-existing" : test_mount_symlink_not_existing,
-    "test-mount-dev" : test_mount_dev,
-    "test-mount-nodev" : test_mount_nodev,
-    "test-mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
+    "mount-ro" : test_mount_ro,
+    "mount-rw" : test_mount_rw,
+    "mount-relatime" : test_mount_relatime,
+    "mount-strictatime" : test_mount_strictatime,
+    "mount-exec" : test_mount_exec,
+    "mount-noexec" : test_mount_noexec,
+    "mount-suid" : test_mount_suid,
+    "mount-nosuid" : test_mount_nosuid,
+    "mount-sync" : test_mount_sync,
+    "mount-dirsync" : test_mount_dirsync,
+    "mount-symlink" : test_mount_symlink,
+    "mount-symlink-not-existing" : test_mount_symlink_not_existing,
+    "mount-dev" : test_mount_dev,
+    "mount-nodev" : test_mount_nodev,
+    "mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
+    "mount-userns-bind-mount" : test_userns_bind_mount,
 }
 
 if __name__ == "__main__":
