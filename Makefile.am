@@ -141,6 +141,7 @@ TESTS = tests/test_capabilities.py \
 	tests/test_hooks.py \
 	tests/test_update.py \
 	tests/test_detach.py \
+	tests/test_delete.py \
 	tests/test_resources.py \
 	tests/test_start.py \
 	tests/test_exec.py \

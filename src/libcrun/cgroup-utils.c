@@ -241,7 +241,10 @@ rmdir_all_fd (int dfd)
 
   dir = fdopendir (dfd);
   if (dir == NULL)
-    return -1;
+    {
+      TEMP_FAILURE_RETRY (close (dfd));
+      return -1;
+    }
 
   dfd = dirfd (dir);
 
@@ -265,6 +268,7 @@ rmdir_all_fd (int dfd)
           libcrun_error_t tmp_err = NULL;
           size_t i, n_pids = 0, allocated = 0;
           cleanup_close int child_dfd = -1;
+          int tmp;
           int child_dfd_clone;
 
           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
@@ -286,7 +290,9 @@ rmdir_all_fd (int dfd)
           for (i = 0; i < n_pids; i++)
             kill (pids[i], SIGKILL);
 
-          return rmdir_all_fd (child_dfd);
+          tmp = child_dfd;
+          child_dfd = -1;
+          return rmdir_all_fd (tmp);
         }
     }
   return 0;
@@ -296,7 +302,7 @@ static int
 rmdir_all (const char *path)
 {
   int ret;
-  cleanup_close int dfd = open (path, O_DIRECTORY | O_CLOEXEC);
+  int dfd = open (path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (dfd < 0))
     return dfd;
 
@@ -388,6 +394,8 @@ int
 destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
 {
   bool repeat = true;
+  int retry_count = 0;
+  const int max_attempts = 500;
   int ret;
 
   do
@@ -406,7 +414,13 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
             {
               ret = rmdir_all (cgroup_path);
               if (ret < 0)
-                repeat = true;
+                {
+                  if (retry_count >= max_attempts)
+                    return crun_make_error (err, errno, "cannot delete path `%s`", cgroup_path);
+
+                  retry_count++;
+                  repeat = true;
+                }
             }
         }
       else
@@ -450,7 +464,12 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
                 {
                   ret = rmdir_all (cgroup_path);
                   if (ret < 0)
-                    repeat = true;
+                    {
+                      if (retry_count >= max_attempts)
+                        return crun_make_error (err, errno, "cannot destroy subsystem `%s` at path `%s`", subsystem, cgroup_path);
+                      retry_count++;
+                      repeat = true;
+                    }
                 }
             }
         }
@@ -459,7 +478,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
         {
           struct timespec req = {
             .tv_sec = 0,
-            .tv_nsec = 100000,
+            .tv_nsec = 10000000,
           };
 
           nanosleep (&req, NULL);
