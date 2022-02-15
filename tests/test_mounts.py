@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+import copy
 from tests_utils import *
 import tempfile
 
@@ -211,6 +212,62 @@ def test_userns_bind_mount():
 
     return 0
 
+def test_idmapped_mounts():
+    if is_rootless():
+        return 77
+    source_dir = os.path.join(get_tests_root(), "test-idmapped-mounts")
+    try:
+        os.makedirs(source_dir)
+        target = os.path.join(source_dir, "file")
+
+        with open(target, "w+") as f:
+            f.write("")
+        os.chown(target, 0, 0)
+
+        idmapped_mounts_status = subprocess.call(["./tests/init", "check-feature", "idmapped-mounts", source_dir])
+        if idmapped_mounts_status != 0:
+            return 77
+
+        template = base_config()
+        add_all_namespaces(template, userns=True)
+        fullMapping = [
+            {
+                "containerID": 0,
+                "hostID": 1,
+                "size": 10
+            }
+        ]
+        template['linux']['uidMappings'] = fullMapping
+        template['linux']['gidMappings'] = fullMapping
+        template['process']['args'] = ['/init', 'owner', '/foo/file']
+
+        def check(mappings, expected):
+            conf = copy.deepcopy(template)
+            mount_opt = {"destination": "/foo", "type": "bind", "source": source_dir, "options": ["bind", "ro", mappings]}
+            conf['mounts'].append(mount_opt)
+            out = run_and_get_output(conf, chown_rootfs_to=1)
+            if expected not in out[0]:
+                sys.stderr.write("wrong file owner, found %s instead of %s" % (out[0], expected))
+                return True
+            return False
+
+        if check("idmap", "0:0"):
+            return 1
+
+        if check("idmap=uids=0-1-10;gids=0-1-10", "0:0"):
+            return 1
+
+        if check("idmap=uids=0-2-10#10-100-10;gids=0-1-10", "1:0"):
+            return 1
+
+        os.chown(target, 1, 2)
+        if check("idmap=uids=@0-1-10;gids=+0-1-10", "2:2"):
+            return 1
+    finally:
+        shutil.rmtree(source_dir)
+
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rw" : test_mount_rw,
@@ -228,6 +285,7 @@ all_tests = {
     "mount-nodev" : test_mount_nodev,
     "mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
     "mount-userns-bind-mount" : test_userns_bind_mount,
+    "mount-idmapped-mounts" : test_idmapped_mounts,
 }
 
 if __name__ == "__main__":
