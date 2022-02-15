@@ -417,6 +417,19 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "owner") == 0)
+    {
+      struct stat st;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'owner' requires two arguments");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+
+      printf ("%d:%d", st.st_uid, st.st_gid);
+      return 0;
+    }
+
   if (strcmp (argv[1], "cwd") == 0)
     {
       int ret;
