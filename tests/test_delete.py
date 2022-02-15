@@ -46,7 +46,21 @@ def test_simple_delete():
                 f.write(str(state['pid']))
             with open('/sys/fs/cgroup/freezer/frozen/freezer.state', 'w') as f:
                 f.write('FROZEN')
-        run_crun_command(["delete", "-f", container_id])
+        try:
+            output = run_crun_command_raw(["delete", "-f", container_id])
+        except subprocess.CalledProcessError as exc:
+            print("Status : FAIL", exc.returncode, exc.output)
+            return -1
+        else:
+            # this is expected for cgroup v1 so ignore
+            if not output or b'Device or resource busy' in output:
+                # if output is empty or expected error pass
+                pass
+            else:
+                # anything else is error
+                print(output)
+                return -1
+
         if freezerCreated:
             os.rmdir("/sys/fs/cgroup/freezer/frozen/")
     return 0
