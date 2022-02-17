@@ -430,6 +430,92 @@ get_bind_mount (const char *src, libcrun_error_t *err)
   return get_and_reset (&open_tree_fd);
 }
 
+int
+parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uids, char *option, char **out, size_t *len, libcrun_error_t *err)
+{
+  size_t written = 0, allocated = 256;
+  cleanup_free char *mappings = NULL;
+  const char *it;
+
+  mappings = xmalloc (allocated);
+
+  for (it = option; *it;)
+    {
+      bool relative = false;
+      long value[3];
+      size_t i;
+
+      if (*it == '\0')
+        break;
+
+      if (*it == '#')
+        it++;
+
+      if (*it == '@')
+        {
+          relative = true;
+          it++;
+        }
+
+      /* read a triplet: file system id - host id - size.  */
+      for (i = 0; i < 3; i++)
+        {
+          char *endptr = NULL;
+
+          if (i > 0 && *it == '-')
+            it++;
+
+          if (*it == '\0')
+            return crun_make_error (err, errno, "invalid mapping specified `%s`", option);
+
+          errno = 0;
+          value[i] = strtol (it, &endptr, 10);
+          if (errno || endptr == it)
+            return crun_make_error (err, errno, "invalid mapping specified `%s`", option);
+
+          it = endptr;
+        }
+
+      if (relative)
+        {
+          runtime_spec_schema_defs_id_mapping **mappings;
+          size_t mappings_len;
+
+          if (def == NULL
+              || def->linux == NULL
+              || (is_uids && def->linux->uid_mappings_len == 0)
+              || (! is_uids && def->linux->gid_mappings_len == 0))
+            return crun_make_error (err, 0, "specified a relative mapping without user namespace mappings");
+
+          mappings_len = (is_uids ? def->linux->uid_mappings_len : def->linux->gid_mappings_len);
+          mappings = is_uids ? def->linux->uid_mappings : def->linux->gid_mappings;
+
+          for (i = 0; i < mappings_len; i++)
+            if (value[0] >= mappings[i]->container_id && value[0] < mappings[i]->container_id + mappings[i]->size)
+              break;
+
+          if (i == mappings_len)
+            return crun_make_error (err, 0, "could not find a user namespace mapping for the relative mapping `%s`", option);
+
+          value[1] += mappings[i]->host_id - mappings[i]->container_id;
+        }
+      if (written > allocated - 64)
+        {
+          allocated += 256;
+          mappings = xrealloc (mappings, allocated);
+        }
+      written += sprintf (mappings + written, "%ld %ld %ld\n", value[0], value[1], value[2]);
+    }
+  *(mappings + written) = '\0';
+
+  *len = written;
+
+  *out = mappings;
+  mappings = NULL;
+
+  return 0;
+}
+
 static pid_t
 create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, const char *options, libcrun_error_t *err)
 {
@@ -453,7 +539,6 @@ create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, const 
   for (option = strtok_r (dup_options, ";", &saveptr); option; option = strtok_r (NULL, ";", &saveptr))
     {
       cleanup_free char *mappings = NULL;
-      char *ids, *it, *it_mappings;
       bool is_uids = false;
       char proc_file[64];
       size_t len = 0;
@@ -469,85 +554,11 @@ create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, const 
       else
         return crun_make_error (err, 0, "invalid option `%s` specified", option);
 
-      ids = option + 5 /* strlen ("uids=") and strlen ("gids=") */;
+      ret = parse_idmapped_mount_option (def, is_uids, option + 5 /* strlen ("uids="), strlen ("gids=")*/, &mappings, &len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
-      for (it = ids; *it; it++)
-        {
-          /* Account for the maximum length.  */
-          if (*it == '-')
-            len += 10 /* strlen ("4294967295") */ + 1;
-          len++;
-        }
-
-      it_mappings = mappings = xmalloc (len + 1);
-
-      for (it = ids; *it;)
-        {
-          bool relative = false;
-          long value[3];
-          size_t i;
-
-          *it_mappings = *it;
-
-          if (*it == '\0')
-            break;
-
-          if (*it == '#')
-            it++;
-
-          if (*it == '@')
-            {
-              relative = true;
-              it++;
-            }
-
-          /* read a triplet: file system id - host id - size.  */
-          for (i = 0; i < 3; i++)
-            {
-              char *endptr = NULL;
-
-              if (i > 0 && *it == '-')
-                it++;
-
-              if (*it == '\0')
-                return crun_make_error (err, errno, "invalid mapping specified `%s`", option);
-
-              errno = 0;
-              value[i] = strtol (it, &endptr, 10);
-              if (errno || endptr == it)
-                return crun_make_error (err, errno, "invalid mapping specified `%s`", option);
-
-              it = endptr;
-            }
-
-          if (relative)
-            {
-              runtime_spec_schema_defs_id_mapping **mappings;
-              size_t mappings_len;
-
-              if (def->linux == NULL
-                  || (is_uids && def->linux->uid_mappings_len == 0)
-                  || (! is_uids && def->linux->gid_mappings_len == 0))
-                return crun_make_error (err, 0, "specified a relative mapping without user namespace mappings");
-
-              mappings_len = (is_uids ? def->linux->uid_mappings_len : def->linux->gid_mappings_len);
-              mappings = is_uids ? def->linux->uid_mappings : def->linux->gid_mappings;
-
-              for (i = 0; i < mappings_len; i++)
-                if (value[0] >= mappings[i]->container_id && value[0] < mappings[i]->container_id + mappings[i]->size)
-                  break;
-
-              if (i == mappings_len)
-                return crun_make_error (err, 0, "could not find a user namespace mapping for the relative mapping `%s`", option);
-
-              value[1] += mappings[i]->host_id - mappings[i]->container_id;
-            }
-
-          it_mappings += sprintf (it_mappings, "%ld %ld %ld\n", value[0], value[1], value[2]);
-        }
-      *it_mappings = '\0';
-
-      ret = write_file (proc_file, mappings, it_mappings - mappings, err);
+      ret = write_file (proc_file, mappings, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
