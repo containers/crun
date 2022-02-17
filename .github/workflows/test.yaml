@@ -69,6 +69,7 @@ jobs:
           - test: clang-check
           - test: checkpoint-restore
           - test: fuzzing
+          - test: codespell
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -156,6 +157,10 @@ jobs:
             fuzzing)
                 sudo docker build -t crun-fuzzing tests/fuzzing
                 sudo docker run -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
+           ;;
+           codespell)
+                sudo docker build -t crun-codespell tests/codespell
+                sudo docker run --rm -w /crun -v ${PWD}:/crun:/crun crun-codespell codespell
            ;;
         esac
 
