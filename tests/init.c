@@ -35,6 +35,7 @@
 #include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sched.h>
 
 #ifdef HAVE_SECCOMP
 #  include <linux/seccomp.h>
@@ -49,9 +50,9 @@
 #    define SECCOMP_SET_MODE_FILTER 1
 #  endif
 
-#ifndef __NR_seccomp
-#  define __NR_seccomp 0xffff // seccomp syscall number unknown for this architecture
-#endif
+#  ifndef __NR_seccomp
+#    define __NR_seccomp 0xffff // seccomp syscall number unknown for this architecture
+#  endif
 
 #endif
 
@@ -72,6 +73,129 @@
           exit (status);                                      \
     } while (0)
 #endif
+
+struct mount_attr_s
+{
+  uint64_t attr_set;
+  uint64_t attr_clr;
+  uint64_t propagation;
+  uint64_t userns_fd;
+};
+
+#ifndef MOUNT_ATTR_IDMAP
+#  define MOUNT_ATTR_IDMAP 0x00100000 /* Idmap mount to @userns_fd in struct mount_attr. */
+#endif
+
+#ifndef OPEN_TREE_CLONE
+#  define OPEN_TREE_CLONE 1
+#endif
+
+#ifndef OPEN_TREE_CLOEXEC
+#  define OPEN_TREE_CLOEXEC O_CLOEXEC
+#endif
+
+static int
+syscall_clone (unsigned long flags, void *child_stack)
+{
+#if defined __s390__ || defined __CRIS__
+  return (int) syscall (__NR_clone, child_stack, flags);
+#else
+  return (int) syscall (__NR_clone, flags, child_stack);
+#endif
+}
+
+static int
+syscall_open_tree (int dfd, const char *pathname, unsigned int flags)
+{
+#if defined __NR_open_tree
+  return (int) syscall (__NR_open_tree, dfd, pathname, flags);
+#else
+  (void) dfd;
+  (void) pathname;
+  (void) flags;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+static int
+syscall_mount_setattr (int dfd, const char *path, unsigned int flags,
+                       struct mount_attr_s *attr)
+{
+#ifdef __NR_mount_setattr
+  return (int) syscall (__NR_mount_setattr, dfd, path, flags, attr, sizeof (*attr));
+#else
+  (void) dfd;
+  (void) path;
+  (void) flags;
+  (void) attr;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+static void
+write_to (const char *path, const char *str)
+{
+  int fd = open (path, O_WRONLY);
+  if (fd < 0)
+    error (EXIT_FAILURE, errno, "open `%s`", path);
+
+  if (write (fd, str, strlen (str)) < 0)
+    error (EXIT_FAILURE, errno, "write to `%s`", path);
+  if (close (fd) < 0)
+    error (EXIT_FAILURE, errno, "close file `%s`", path);
+}
+
+/*
+  Check that the file system at the specified path supports
+  idmapped mounts.
+*/
+__attribute__ ((noreturn)) static void
+check_idmapped_mounts (const char *path)
+{
+  struct mount_attr_s attr = {
+    0,
+  };
+  char proc_path[64];
+  int open_tree_fd;
+  pid_t pid;
+  int fd;
+
+  pid = syscall_clone (CLONE_NEWUSER | SIGCHLD, NULL);
+  if (pid < 0)
+    error (EXIT_FAILURE, errno, "clone");
+  if (pid == 0)
+    {
+      prctl (PR_SET_PDEATHSIG, SIGKILL);
+      while (1)
+        pause ();
+      _exit (EXIT_SUCCESS);
+    }
+
+  sprintf (proc_path, "/proc/%d/uid_map", pid);
+  write_to (proc_path, "0 0 1");
+  sprintf (proc_path, "/proc/%d/gid_map", pid);
+  write_to (proc_path, "0 0 1");
+
+  sprintf (proc_path, "/proc/%d/ns/user", pid);
+  fd = open (proc_path, O_RDONLY);
+  if (fd < 0)
+    error (EXIT_FAILURE, errno, "open `%s`", proc_path);
+
+  open_tree_fd = syscall_open_tree (-1, path,
+                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+  if (open_tree_fd < 0)
+    error (EXIT_FAILURE, errno, "open `%s`", path);
+
+  attr.attr_set = MOUNT_ATTR_IDMAP;
+  attr.userns_fd = fd;
+
+  if (syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr) < 0)
+    error (EXIT_FAILURE, errno, "mount_setattr `%s`", path);
+
+  exit (EXIT_SUCCESS);
+}
 
 static int
 cat (char *file)
@@ -110,22 +234,6 @@ open_only (char *file)
     }
   error (EXIT_FAILURE, errno, "could not open %s", file);
   return -1;
-}
-
-static int
-write_to (const char *path, const char *str)
-{
-  FILE *f = fopen (path, "wb");
-  int ret;
-  if (f == NULL)
-    error (EXIT_FAILURE, errno, "fopen");
-  ret = fprintf (f, "%s", str);
-  if (ret < 0)
-    error (EXIT_FAILURE, errno, "fprintf");
-  ret = fclose (f);
-  if (ret)
-    error (EXIT_FAILURE, errno, "fclose");
-  return 0;
 }
 
 static int
@@ -235,7 +343,7 @@ memhog (int megabytes)
   while (1)
     {
       /* change one page each 0.1 seconds */
-      nanosleep ((const struct timespec[]){{ 0, 100000000L }}, NULL);
+      nanosleep ((const struct timespec[]){ { 0, 100000000L } }, NULL);
       buf[pos] = 'c';
       pos += sysconf (_SC_PAGESIZE);
       if (pos > megabytes * 1024 * 1024)
@@ -309,6 +417,19 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "owner") == 0)
+    {
+      struct stat st;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'owner' requires two arguments");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+
+      printf ("%d:%d", st.st_uid, st.st_gid);
+      return 0;
+    }
+
   if (strcmp (argv[1], "cwd") == 0)
     {
       int ret;
@@ -351,7 +472,8 @@ main (int argc, char **argv)
     {
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'write' requires two arguments");
-      return write_to (argv[2], argv[3]);
+      write_to (argv[2], argv[3]);
+      exit (EXIT_SUCCESS);
     }
   if (strcmp (argv[1], "pause") == 0)
     {
@@ -439,6 +561,13 @@ main (int argc, char **argv)
       if (argc < 3)
         error (EXIT_FAILURE, 0, "`check-feature` requires an argument");
 
+      if (strcmp (argv[2], "idmapped-mounts") == 0)
+        {
+          if (argc < 4)
+            error (EXIT_FAILURE, 0, "`idmapped-mounts` requires an argument");
+
+          check_idmapped_mounts (argv[3]);
+        }
       if (strcmp (argv[2], "open_tree") == 0)
         {
 #if defined __NR_open_tree

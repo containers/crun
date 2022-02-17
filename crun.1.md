@@ -549,9 +549,65 @@ These flags are supported:
 
 ## idmap mount options
 
-If the `idmap` option is specified then the mount is ID mapped using the container
-target user namespace.  This is an experimental feature and can change at any time
-without notice.
+If the `idmap` option is specified then the mount is ID mapped using
+the container target user namespace.  This is an experimental feature
+and can change at any time without notice.
+
+The `idmap` option supports a custom mapping that can be different
+than the user namespace used by the container.
+
+The mapping can be specified after the `idmap` option like:
+`idmap=uids=0-1-10#10-11-10;gids=0-100-10`.
+
+For each triplet, the first value is the start of the backing
+file system IDs that are mapped to the second value on the host.  The
+length of this mapping is given in the third value.
+
+Multiple ranges are separed with `#`.
+
+These values are written to the `/proc/$PID/uid_map` and
+`/proc/$PID/gid_map` files to create the user namespace for the
+idmapped mount.
+
+The only two options that are currently supported after `idmap` are
+`uids` and `gids`.
+
+When a custom mapping is specified, a new user namespace is created
+for the idmapped mount.
+
+If no option is specified, then the container user namespace is used.
+
+If the specified mapping is prepended with a '@' then the mapping is
+considered relative to the container user namespace.  The host ID for
+the mapping is changed to account for the relative position of the
+container user in the container user namespace.
+
+For example, the mapping: `uids=@1-3-10`, given a configuration like
+
+```
+"uidMappings": [
+      {
+        "containerID": 0,
+        "hostID": 0,
+        "size": 1
+      },
+      {
+        "containerID": 1,
+        "hostID": 2,
+        "size": 1000
+      }
+    ]
+```
+
+will be converted to the absolute value `uids=1-4-10`, where 4 is
+calculated by adding 3 (container ID in the `uids=` mapping)
++ 1 (`hostID - containerID` for the user namespace mapping where
+`containerID = 1` is found).
+
+The current implementation doesn't take into account multiple
+user namespace ranges, so it is the caller's responsibility to split a
+mapping if it overlaps multiple ranges in the user namespace.  In such
+a case, there won't be any error reported.
 
 ## Automatically create user namespace
 
