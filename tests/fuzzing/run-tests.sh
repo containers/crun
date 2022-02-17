@@ -6,13 +6,12 @@ TIMEOUT=${TIMEOUT:=10}
 RUN_TIME=${RUN_TIME:=600}
 VERBOSITY=${VERBOSITY:=}
 
-N_TESTS=7
+N_TESTS=8
 
 SINGLE_RUN_TIME=$(( RUN_TIME / N_TESTS ))
 
 CORPUS=${CORPUS:=/testcases}
 
-cd /crun
 git clean -fdx
 ./autogen.sh
 ./configure --enable-embedded-yajl HFUZZ_CC_UBSAN=1 HFUZZ_CC_ASAN=1 CC=hfuzz-clang CPPFLAGS="-D FUZZER" CFLAGS="-ggdb3 -fsanitize-coverage=trace-pc-guard,trace-cmp,trace-div,indirect-calls"
@@ -37,3 +36,4 @@ run_test 3 $CORPUS/signals
 run_test 4 $CORPUS/paths
 run_test 5 random-data
 run_test 6 $CORPUS/annotations
+run_test 7 $CORPUS/idmapped-mounts-option

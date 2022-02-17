@@ -22,6 +22,7 @@
 #include <libcrun/cgroup-utils.h>
 #include <libcrun/cgroup-internal.h>
 #include <libcrun/utils.h>
+#include <libcrun/linux.h>
 #include <libcrun/status.h>
 #include <libcrun/seccomp.h>
 #include <libcrun/ebpf.h>
@@ -284,6 +285,23 @@ test_parse_sd_array (uint8_t *buf, size_t len)
 }
 
 static int
+test_parse_idmapped_mounts (uint8_t *buf, size_t len)
+{
+  cleanup_free char *data = NULL;
+  cleanup_free char *out = NULL;
+  libcrun_error_t err = NULL;
+
+  data = make_nul_terminated (buf, len);
+  if (data == NULL)
+    return 0;
+
+  if (parse_idmapped_mount_option (NULL, buf[0] & 1, data, &out, &len, &err) < 0)
+    crun_error_release (&err);
+
+  return 0;
+}
+
+static int
 run_one_container (uint8_t *buf, size_t len, bool detach)
 {
   cleanup_free char *conf = NULL;
@@ -379,6 +397,11 @@ run_one_test (int mode, uint8_t *buf, size_t len)
     case 6:
       /* expects annotations data.  */
       test_parse_sd_array (buf, len);
+      break;
+
+    case 7:
+      /* expects idmapped mounts annotation.  */
+      test_parse_idmapped_mounts (buf, len);
       break;
 
       /* ALL mode.  */

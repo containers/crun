@@ -8,4 +8,6 @@ RUN git clone https://github.com/giuseppe/containers-fuzzing-corpus /testcases
 
 COPY run-tests.sh /usr/local/bin
 
+WORKDIR /crun
+
 ENTRYPOINT /usr/local/bin/run-tests.sh
