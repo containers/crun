@@ -1,7 +1,7 @@
 FROM quay.io/centos/centos:stream9
 
-RUN yum --enablerepo='*' --disablerepo='nfv-*' install -y make automake autoconf gettext \
-    criu-devel libtool gcc libcap-devel systemd-devel yajl-devel \
+RUN yum  --enablerepo='appstream'  --enablerepo='baseos' --enablerepo='crb' install -y make \
+    automake autoconf gettext criu-devel libtool gcc libcap-devel systemd-devel yajl-devel \
     libseccomp-devel python3 libtool git
 
 COPY run-tests.sh /usr/local/bin
