@@ -160,7 +160,7 @@ jobs:
            ;;
            codespell)
                 sudo docker build -t crun-codespell tests/codespell
-                sudo docker run --rm -w /crun -v ${PWD}:/crun:/crun crun-codespell codespell
+                sudo docker run --rm -w /crun -v ${PWD}/crun:/crun crun-codespell codespell
            ;;
         esac
 

@@ -2,4 +2,3 @@
 skip = libocispec,build-aux,contrib,*.1,.git,configure,Makefile,libtool,m4,autom4te.cache,*.m4,*.mk
 count =
 ignore-words-list = trun,ser
-
