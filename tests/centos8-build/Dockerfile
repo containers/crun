@@ -1,6 +1,6 @@
 FROM quay.io/centos/centos:stream8
 
-RUN yum --enablerepo='*' --disablerepo='media-*' install -y make automake autoconf gettext \
+RUN yum --enablerepo='powertools' install -y make automake autoconf gettext \
     criu-devel libtool gcc libcap-devel systemd-devel yajl-devel \
     libseccomp-devel python36 libtool git
 
