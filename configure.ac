@@ -38,7 +38,7 @@ case "${enableval}" in
 	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-yajl) ;;
 esac],[embedded_yajl=false])
 
-AM_CONDITIONAL([HAVE_EMBEDDED_YAJL], [test x"$embedded_yajl" == xtrue])
+AM_CONDITIONAL([HAVE_EMBEDDED_YAJL], [test x"$embedded_yajl" = xtrue])
 AM_COND_IF([HAVE_EMBEDDED_YAJL], [], [
 AC_SEARCH_LIBS(yajl_tree_get, [yajl], [AC_DEFINE([HAVE_YAJL], 1, [Define if libyajl is available])], [AC_MSG_ERROR([*** libyajl headers not found])])
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])

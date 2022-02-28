@@ -99,7 +99,7 @@ cleanup_filep (FILE **f)
 static inline void
 cleanup_closep (void *p)
 {
-  int *pp = p;
+  int *pp = (int *) p;
   if (*pp >= 0)
     TEMP_FAILURE_RETRY (close (*pp));
 }
@@ -107,7 +107,7 @@ cleanup_closep (void *p)
 static inline void
 cleanup_pidp (void *p)
 {
-  pid_t *pp = p;
+  pid_t *pp = (pid_t *) p;
   if (*pp > 0)
     {
       TEMP_FAILURE_RETRY (kill (*pp, SIGKILL));
@@ -127,7 +127,7 @@ make_libcrun_fd_map (size_t len)
   struct libcrun_fd_map *ret;
   size_t i;
 
-  ret = xmalloc (sizeof (*ret) + sizeof (int) * len);
+  ret = (struct libcrun_fd_map *) xmalloc (sizeof (*ret) + sizeof (int) * len);
   ret->nfds = len;
   for (i = 0; i < len; i++)
     ret->fds[i] = -1;
