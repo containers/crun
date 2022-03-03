@@ -1,3 +1,14 @@
+* crun-1.4.3
+
+- cgroup: avoid infinite loop when deleting a cgroup if it contains
+  processes that cannot be terminated.
+- support additional options for idmap mounts.  It is now possible to
+  specify what mappings must be used for the idmapped mount.
+- open the source for a bind mount in the host.  It is useful when
+  creating a user namespace so that the parent directories for the
+  source directory are not required to be accessible to the users in
+  the user namespace.
+
 * crun-1.4.2
 
 - CRIU: add pre-dump support.
