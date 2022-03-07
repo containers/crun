@@ -22,6 +22,7 @@
 #include "../container.h"
 #include "../utils.h"
 #include "../linux.h"
+#include "handler-utils.h"
 #include <unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -168,17 +169,7 @@ libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *path
 static int
 wasmedge_can_handle_container (libcrun_container_t *container, libcrun_error_t *err arg_unused)
 {
-  const char *annotation;
-
-  annotation = find_annotation (container, "run.oci.handler");
-  if (annotation)
-    return strcmp (annotation, "wasm") == 0 ? 1 : 0;
-
-  annotation = find_annotation (container, "module.wasm.image/variant");
-  if (annotation)
-    return strcmp (annotation, "compat") == 0 ? 1 : 0;
-
-  return 0;
+  return wasm_can_handle_container (container, err);
 }
 
 struct custom_handler_s handler_wasmedge = {

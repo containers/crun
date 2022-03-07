@@ -41,6 +41,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/signals.c \
 			src/libcrun/mount_flags.c \
 			src/libcrun/seccomp_notify.c \
+			src/libcrun/handlers/handler-utils.c \
 			src/libcrun/handlers/krun.c \
 			src/libcrun/handlers/wasmedge.c \
 			src/libcrun/handlers/wasmer.c
@@ -89,6 +90,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/cgroup-resources.h src/libcrun/cgroup-setup.h \
 	src/libcrun/cgroup-systemd.h src/libcrun/cgroup-utils.h \
 	src/libcrun/custom-handler.h \
+	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
 	src/libcrun/intprops.h crun.1.md crun.1 libcrun.lds
