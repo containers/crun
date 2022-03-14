@@ -1,0 +1,2 @@
+srpm:
+	make -C .. srpm
