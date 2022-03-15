@@ -179,7 +179,6 @@ def test_mount_dev():
         return -1
     return 0
 
-
 def test_userns_bind_mount():
     if is_rootless():
         return 77
@@ -209,7 +208,45 @@ def test_userns_bind_mount():
         run_and_get_output(conf, chown_rootfs_to=1)
     finally:
         shutil.rmtree(bind_dir)
+    return 0
 
+def test_userns_bind_mount_symlink():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    add_all_namespaces(conf, userns=True)
+
+    fullMapping = [
+        {
+            "containerID": 0,
+            "hostID": 1,
+            "size": 10
+        }
+    ]
+    conf['linux']['uidMappings'] = fullMapping
+    conf['linux']['gidMappings'] = fullMapping
+    sys.stderr.write("start")
+
+    bind_dir_parent = os.path.join(get_tests_root(), "bind-mount-userns-symlink")
+    bind_dir = os.path.join(bind_dir_parent, "m")
+    bind_dir_symlink = os.path.join(bind_dir_parent, "s")
+    try:
+        os.makedirs(bind_dir)
+        os.symlink(bind_dir, bind_dir_symlink)
+        with open(os.path.join(bind_dir, "content"), "w+") as f:
+            f.write("hello")
+        mount_opt = {"destination": "/foo", "type": "bind", "source": bind_dir_symlink, "options": ["bind", "ro"]}
+        conf['mounts'].append(mount_opt)
+        os.chown(bind_dir_parent, 0, 0)
+        os.chmod(bind_dir_parent, 0o000)
+
+        conf['process']['args'] = ['/init', 'cat', "/foo/content"]
+        out, _ = run_and_get_output(conf, chown_rootfs_to=1)
+        if out != "hello":
+            sys.stderr.write("wrong file owner, found %s instead of %s" % (out, "hello"))
+            return -1
+    finally:
+        shutil.rmtree(bind_dir)
     return 0
 
 def test_idmapped_mounts():
@@ -286,6 +323,7 @@ all_tests = {
     "mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
     "mount-userns-bind-mount" : test_userns_bind_mount,
     "mount-idmapped-mounts" : test_idmapped_mounts,
+    "mount-idmapped-mounts-symlink" : test_userns_bind_mount_symlink,
 }
 
 if __name__ == "__main__":
