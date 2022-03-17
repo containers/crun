@@ -18,7 +18,6 @@
 
 #define _GNU_SOURCE
 
-#include <config.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/un.h>
@@ -28,16 +27,20 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <signal.h>
 #include <stdio.h>
 
 #define error(status, errno, fmt, ...) do {                             \
-    if (errno)                                                          \
+    if (!errno)                                                          \
       fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
     else                                                                \
       fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
     if (status)                                                         \
       exit (status);                                                    \
   } while(0)
+
+struct termios tset;
+int fd;
 
 int
 open_unix_domain_socket (const char *path)
@@ -103,22 +106,43 @@ receive_fd_from_socket (int from)
   return fd;
 }
 
+void
+sigint_handler (int s)
+{
+  const char ctrlc = 3;
+  write(fd, &ctrlc, 1);
+}
+
+void
+register_handler (struct sigaction* handler)
+{
+  handler->sa_handler = sigint_handler;
+  sigemptyset(&handler->sa_mask);
+  handler->sa_flags = 0;
+  sigaction(SIGINT, handler, NULL);
+}
+
 int
 main (int argc, char **argv)
 {
   char buf[8192];
-  int ret, fd, socket;
+  int ret, socket;
+  struct sigaction ctrl_c_handler;
   if (argc < 2)
     error (EXIT_FAILURE, 0, "usage %s PATH\n", argv[0]);
 
   unlink (argv[1]);
 
+  register_handler(&ctrl_c_handler);
+
   socket = open_unix_domain_socket (argv[1]);
   while (1)
     {
-      struct termios tset;
       int conn;
+      int stdin_flags, term_flags;
+      int data;
 
+      printf("Press 'Ctrl \\' to exit.\nWaiting for connection ...\n");
       do
         conn = accept (socket, NULL, NULL);
       while (conn < 0 && errno == EINTR);
@@ -136,24 +160,64 @@ main (int argc, char **argv)
         error (0, errno, "failed to get console terminal settings");
 
       tset.c_oflag |= ONLCR;
+      tset.c_lflag &= ~ECHO;
 
       if (tcsetattr (fd, TCSANOW, &tset) == -1)
         error (0, errno, "failed to set console terminal settings");
 
+      stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
+      if (stdin_flags == -1)
+        error (EXIT_FAILURE, errno, "failed to obtain STDIN flags");
+
+      ret = fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+      if (ret == -1)
+        error (EXIT_FAILURE, errno, "failed to set STDIN to non-blocking");
+
+      term_flags = fcntl(fd, F_GETFL);
+      if (term_flags == -1)
+        error (EXIT_FAILURE, errno, "failed to obtain terminal flags");
+
+      ret = fcntl(fd, F_SETFL, term_flags | O_NONBLOCK);
+      if (ret == -1)
+        error (EXIT_FAILURE, errno, "failed to set terminal to non-blocking");
+
       while (1)
         {
+          data = 0;
           ret = read (fd, buf, sizeof (buf));
           if (ret == 0)
             break;
-          if (ret < 0)
+          if (ret < 0 && errno != EAGAIN && errno != EINTR)
             {
-              error (0, errno, "read");
-              close (conn);
+              error (0, errno, "read\n");
               break;
             }
-          write (1, buf, ret);
+          if (ret > 0)
+            {
+              write (STDOUT_FILENO, buf, ret);
+              data = 1;
+            }
+
+          ret = read (STDIN_FILENO, buf, sizeof(buf));
+          if (ret > 0)
+            {
+              ret = write (fd, buf, ret);
+              if (ret < 0 && errno != EAGAIN && errno != EINTR)
+                {
+                  error (0, errno, "write\n");
+                  break;
+                }
+              data = 1;
+            }
+          if (!data) usleep(10000);
         }
       close (conn);
+      ret = fcntl(STDIN_FILENO, F_SETFL, stdin_flags);
+      if (ret == -1)
+        error (EXIT_FAILURE, errno, "failed to reset STDIN to original setting");
+      ret = fcntl(fd, F_SETFL, term_flags);
+      if (ret == -1)
+        error (EXIT_FAILURE, errno, "failed to reset terminal to original setting");
     }
 
   return 0;
