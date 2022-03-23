@@ -304,8 +304,8 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
           capabilities->effective = exec_options.cap;
           capabilities->effective_len = exec_options.cap_size;
 
-          capabilities->inheritable = dup_array (exec_options.cap, exec_options.cap_size);
-          capabilities->inheritable_len = exec_options.cap_size;
+          capabilities->inheritable = NULL;
+          capabilities->inheritable_len = 0;
 
           capabilities->bounding = dup_array (exec_options.cap, exec_options.cap_size);
           capabilities->bounding_len = exec_options.cap_size;

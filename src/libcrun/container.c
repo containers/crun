@@ -120,9 +120,6 @@ static const char spec_file[] = "\
 				\"CAP_NET_BIND_SERVICE\"\n\
 			],\n\
 			\"inheritable\": [\n\
-				\"CAP_AUDIT_WRITE\",\n\
-				\"CAP_KILL\",\n\
-				\"CAP_NET_BIND_SERVICE\"\n\
 			],\n\
 			\"permitted\": [\n\
 				\"CAP_AUDIT_WRITE\",\n\
