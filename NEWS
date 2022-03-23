@@ -1,3 +1,9 @@
+* crun-1.4.4
+
+- wasm, kubernetes: support wasm for kubernetes infrastructure with side-cars
+- Resolve symlinks in bind mounts when creating a user namespace.
+- Fix CVE-2022-27650: exec does not set inheritable capabilities.
+
 * crun-1.4.3
 
 - cgroup: avoid infinite loop when deleting a cgroup if it contains
