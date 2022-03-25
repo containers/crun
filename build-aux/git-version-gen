@@ -1,6 +1,6 @@
 #!/bin/sh
 # Print a version string.
-scriptversion=2018-03-07.03; # UTC
+scriptversion=2022-03-25.09; # UTC
 
 # Copyright (C) 2007-2019 Free Software Foundation, Inc.
 #
@@ -186,7 +186,9 @@ then
 
     # Change the penultimate "-" to ".", for version-comparing tools.
     # Remove the "g" to save a byte.
-    v=`echo "$v" | sed 's/-\([^-]*\)-g\([^-]*\)$/.\1-\2/'`;
+    # Prepend a bunch of '.0', so that the version comparison doesn't
+    # conflict with a released version.
+    v=`echo "$v" | sed 's/-\([^-]*\)-g\([^-]*\)$/.0.0.0.\1-\2/'`;
     v_from_git=1
 elif test "x$fallback" = x || git --version >/dev/null 2>&1; then
     v=UNKNOWN
