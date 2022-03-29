@@ -291,10 +291,10 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->user = make_oci_process_user (exec_options.user);
 
       if (exec_options.process_label != NULL)
-        process->selinux_label = exec_options.process_label;
+        process->selinux_label = xstrdup (exec_options.process_label);
 
       if (exec_options.apparmor != NULL)
-        process->apparmor_profile = exec_options.apparmor;
+        process->apparmor_profile = xstrdup (exec_options.apparmor);
 
       if (exec_options.cap_size > 0)
         {
