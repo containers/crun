@@ -65,8 +65,41 @@ def test_simple_delete():
             os.rmdir("/sys/fs/cgroup/freezer/frozen/")
     return 0
 
+def test_multiple_containers_delete():
+    """Delete multiple containers with a regular expression"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+
+    out_test1, container_id_test1 = run_and_get_output(conf, detach=True, hide_stderr=True)
+    if out_test1 != "":
+        return -1
+    out_test2, container_id_test2 = run_and_get_output(conf, detach=True, hide_stderr=True)
+    if out_test2 != "":
+        return -1
+    try:
+        state_test1 = json.loads(run_crun_command(["state", container_id_test1]))
+        if state_test1['status'] != "running":
+            return -1
+        if state_test1['id'] != container_id_test1:
+            return -1
+        state_test2 = json.loads(run_crun_command(["state", container_id_test2]))
+        if state_test2['status'] != "running":
+            return -1
+        if state_test2['id'] != container_id_test2:
+            return -1
+    finally:
+        try:
+            output = run_crun_command_raw(["delete", "-f", "--regex", "test-*"])
+        except subprocess.CalledProcessError as exc:
+            print("Status : FAIL", exc.returncode, exc.output)
+            return -1
+    return 0
+
+
 all_tests = {
     "test_simple_delete" : test_simple_delete,
+    "test_multiple_containers_delete" : test_multiple_containers_delete,
 }
 
 if __name__ == "__main__":
