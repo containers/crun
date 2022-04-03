@@ -136,12 +136,54 @@ def test_exec_additional_gids():
         shutil.rmtree(tempdir)
     return 0
 
+def test_exec_add_capability():
+    """Specify an additional capability to add to the process"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    cid = None
+    cap_unknown_dict = {"CapInh":"0000000000000000", \
+                        "CapPrm":"0000000000000000", \
+                        "CapEff":"0000000000000000", \
+                        "CapBnd":"0000000000000000", \
+                        "CapAmb":"0000000000000000"}
+    cap_kill_dict = {"CapInh":"0000000000000000", \
+                     "CapPrm":"0000000000000020", \
+                     "CapEff":"0000000000000020", \
+                     "CapBnd":"0000000000000020", \
+                     "CapAmb":"0000000000000000"}
+    cap_sys_admin_dict = {"CapInh":"0000000000000000", \
+                          "CapPrm":"0000000000200000", \
+                          "CapEff":"0000000000200000", \
+                          "CapBnd":"0000000000200000", \
+                          "CapAmb":"0000000000000000"}
+    cap_dict = {"CAP_UNKNOWN": cap_unknown_dict, \
+                "CAP_KILL": cap_kill_dict, \
+                "CAP_SYS_ADMIN": cap_sys_admin_dict}
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        for cap, value in cap_dict.items():
+            out = run_crun_command(["exec", "--cap", cap, cid, "/init", "cat", "/proc/self/status"])
+            for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
+                conf['process']['capabilities'][i] = []
+            proc_status = parse_proc_status(out)
+
+            for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
+                if proc_status[i] != value[i]:
+                    return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
     "exec-detach-not-exists" : test_exec_detach_not_exists,
     "exec-detach-additional-gids" : test_exec_additional_gids,
     "exec-root-netns-with-userns" : test_exec_root_netns_with_userns,
+    "exec_add_capability" : test_exec_add_capability,
 }
 
 if __name__ == "__main__":
