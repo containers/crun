@@ -26,6 +26,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <regex.h>
+#ifdef HAVE_CRIU
+#  include <criu/criu.h>
+#endif
 
 #include "crun.h"
 #include "libcrun/container.h"
@@ -43,6 +46,7 @@ enum
   OPTION_FILE_LOCKS,
   OPTION_PARENT_PATH,
   OPTION_PRE_DUMP,
+  OPTION_MANAGE_CGROUPS_MODE,
 };
 
 static char doc[] = "OCI runtime";
@@ -61,11 +65,31 @@ static struct argp_option options[]
         { "parent-path", OPTION_PARENT_PATH, "DIR", 0, "path for previous criu image files in pre-dump", 0 },
         { "pre-dump", OPTION_PRE_DUMP, 0, 0, "dump container's memory information only, leave the container running after this", 0 },
 #endif
+        { "manage-cgroups-mode", OPTION_MANAGE_CGROUPS_MODE, "MODE", 0, "cgroups mode: 'soft' (default), 'ignore', 'full' and 'strict'", 0 },
         {
             0,
         } };
 
 static char args_doc[] = "checkpoint CONTAINER";
+
+int
+crun_parse_manage_cgroups_mode (char *param arg_unused)
+{
+#ifdef HAVE_CRIU
+  if (strcmp (param, "soft") == 0)
+    return CRIU_CG_MODE_SOFT;
+  else if (strcmp (param, "ignore") == 0)
+    return CRIU_CG_MODE_IGNORE;
+  else if (strcmp (param, "full") == 0)
+    return CRIU_CG_MODE_FULL;
+  else if (strcmp (param, "strict") == 0)
+    return CRIU_CG_MODE_STRICT;
+  else
+    libcrun_fail_with_error (0, "unknown cgroup mode specified");
+#else
+  return 0;
+#endif
+}
 
 static error_t
 parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
@@ -111,6 +135,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
       cr_options.file_locks = true;
       break;
 
+    case OPTION_MANAGE_CGROUPS_MODE:
+      cr_options.manage_cgroups_mode = crun_parse_manage_cgroups_mode (argp_mandatory_argument (arg, state));
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -130,6 +158,8 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
   libcrun_context_t crun_context = {
     0,
   };
+
+  cr_options.manage_cgroups_mode = -1;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
