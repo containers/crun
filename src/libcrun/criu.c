@@ -488,6 +488,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   criu_set_tcp_established (cr_options->tcp_established);
   criu_set_file_locks (cr_options->file_locks);
   criu_set_orphan_pts_master (true);
+  if (cr_options->manage_cgroups_mode == -1)
+    /* Defaulting to CRIU_CG_MODE_SOFT just as runc */
+    criu_set_manage_cgroups_mode (CRIU_CG_MODE_SOFT);
+  else
+    criu_set_manage_cgroups_mode (cr_options->manage_cgroups_mode);
   criu_set_manage_cgroups (true);
 
   ret = criu_dump ();

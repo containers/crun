@@ -28,6 +28,7 @@
 #include <regex.h>
 
 #include "crun.h"
+#include "checkpoint.h"
 #include "libcrun/container.h"
 #include "libcrun/status.h"
 #include "libcrun/utils.h"
@@ -42,6 +43,7 @@ enum
   OPTION_PID_FILE,
   OPTION_CONSOLE_SOCKET,
   OPTION_FILE_LOCKS,
+  OPTION_MANAGE_CGROUPS_MODE,
 };
 
 static char doc[] = "OCI runtime";
@@ -64,6 +66,7 @@ static struct argp_option options[]
         { "console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0,
           "path to a socket that will receive the master end of the tty", 0 },
         { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
+        { "manage-cgroups-mode", OPTION_MANAGE_CGROUPS_MODE, "MODE", 0, "cgroups mode: 'soft' (default), 'ignore', 'full' and 'strict'", 0 },
         {
             0,
         } };
@@ -116,6 +119,10 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 
     case OPTION_PID_FILE:
       crun_context.pid_file = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_MANAGE_CGROUPS_MODE:
+      cr_options.manage_cgroups_mode = crun_parse_manage_cgroups_mode (argp_mandatory_argument (arg, state));
       break;
 
     default:

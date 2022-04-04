@@ -351,6 +351,10 @@ the pre-dump. It is important to use a relative path from the actual
 checkpoint directory specified via **--image-path**. It will fail
 if an absolute path is used.
 
+**--manage-cgroups-mode**=_MODE_
+Specify which CRIU manage cgroup mode should be used. Permitted values are
+**soft**, **ignore**, **full** or **strict**. Default is **soft**.
+
 ## RESTORE OPTIONS
 
 crun [global options] restore [options] CONTAINER
@@ -378,6 +382,10 @@ Detach from the container's process
 
 **--pid-file**=_FILE_
 Where to write the PID of the container
+
+**--manage-cgroups-mode**=_MODE_
+Specify which CRIU manage cgroup mode should be used. Permitted values are
+**soft**, **ignore**, **full** or **strict**. Default is **soft**.
 
 # Extensions to OCI
 
