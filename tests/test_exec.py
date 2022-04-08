@@ -177,6 +177,43 @@ def test_exec_add_capability():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_exec_add_env():
+    """Add an environment variable"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    cid = None
+    env_args_list = []
+    env_dict_orig = {"HOME":"/", "PATH":"/bin"}
+    env_dict_new = {"HOME":"/tmp", "PATH":"/usr/bin","FOO":"BAR"}
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        # check original environment variable
+        for env, value in env_dict_orig.items():
+            out = run_crun_command(["exec", cid, "/init", "printenv", env])
+            if value not in out:
+                return -1
+        # check that the environment has the key/value pair we added
+        for env, value in env_dict_new.items():
+            out = run_crun_command(["exec", "--env", "%s=%s" %(env,value), \
+                                     cid, "/init", "printenv", env])
+            env_args_list.append("%s=%s" %(env,value))
+            if value not in out:
+                return -1
+
+        # set multiple environment variable at the same time
+        out = run_crun_command(["exec", "--env", env_args_list[0], \
+                                "-e", env_args_list[1], \
+                                "-e", env_args_list[2], \
+                                cid, "/init", "printenv", "PATH"])
+        if env_dict_new["PATH"] not in out:
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -184,6 +221,7 @@ all_tests = {
     "exec-detach-additional-gids" : test_exec_additional_gids,
     "exec-root-netns-with-userns" : test_exec_root_netns_with_userns,
     "exec_add_capability" : test_exec_add_capability,
+    "exec_add_environment_variable" : test_exec_add_env,
 }
 
 if __name__ == "__main__":
