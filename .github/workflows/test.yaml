@@ -86,6 +86,7 @@ jobs:
 
     - name: run autogen.sh
       run: |
+        git clean -fdx .
         ./autogen.sh
 
     - name: run test
