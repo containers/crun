@@ -689,7 +689,7 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 
   ret = TEMP_FAILURE_RETRY (write (fd, buffer, 1));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from exec.fifo");
+    return crun_make_error (err, errno, "write to exec.fifo");
 
   return strtoll (buffer, NULL, 10);
 }
