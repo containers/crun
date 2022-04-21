@@ -214,14 +214,42 @@ def test_exec_add_env():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_exec_set_user():
+    """specify the user in the form UID[:GID]"""
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+    cid = None
+    uid_gid_list = ["1000:1000", "0:0", "65535:65535"]
+
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        # check current user id
+        out = run_crun_command(["exec", cid, "/init", "id"])
+        if uid_gid_list[1] not in out:
+            return -1
+        # check that the uid and gid have the value we added
+        for id in uid_gid_list:
+            out = run_crun_command(["exec", "--user", id, cid, "/init", "id"])
+            if id not in out:
+                return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
     "exec-detach-not-exists" : test_exec_detach_not_exists,
     "exec-detach-additional-gids" : test_exec_additional_gids,
     "exec-root-netns-with-userns" : test_exec_root_netns_with_userns,
-    "exec_add_capability" : test_exec_add_capability,
-    "exec_add_environment_variable" : test_exec_add_env,
+    "exec-add-capability" : test_exec_add_capability,
+    "exec-add-environment_variable" : test_exec_add_env,
+    "exec-set-user-with-uid-gid" : test_exec_set_user,
 }
 
 if __name__ == "__main__":

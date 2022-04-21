@@ -430,6 +430,16 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "id") == 0)
+    {
+      int ret;
+
+      ret = printf ("%d:%d", getuid(), getgid());
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "printf");
+      return 0;
+    }
+
   if (strcmp (argv[1], "cwd") == 0)
     {
       int ret;
