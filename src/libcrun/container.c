@@ -711,7 +711,12 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   for (i = 0; i < hooks_len; i++)
     {
-      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, hooks[i]->env,
+      char **env = environ;
+
+      if (hooks[i]->env)
+        env = hooks[i]->env;
+
+      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
                                                  stdin, stdin_len, out_fd, err_fd, err);
       if (UNLIKELY (ret != 0))
         {
