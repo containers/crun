@@ -11,16 +11,20 @@ jobs:
       matrix:
         include:
           - arch: armv7
-            distro: ubuntu20.04
+            distro: ubuntu_latest
           - arch: aarch64
-            distro: ubuntu20.04
+            distro: ubuntu_latest
           - arch: s390x
-            distro: ubuntu20.04
+            distro: ubuntu_latest
           - arch: ppc64le
-            distro: ubuntu20.04
+            distro: ubuntu_latest
     steps:
-      - uses: actions/checkout@v2.1.0
-      - uses: uraimo/run-on-arch-action@v2.0.5
+      - uses: actions/checkout@v3.0.2
+        with:
+          submodules: true
+          set-safe-directory: true
+
+      - uses: uraimo/run-on-arch-action@v2.2.0
         name: Build
         id: build
         with:
@@ -34,6 +38,7 @@ jobs:
             apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
 
           run: |
+            find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
             ./autogen.sh
             ./configure CFLAGS='-Wall -Werror'
             make -j $(nproc) -C libocispec libocispec.la
@@ -87,6 +92,7 @@ jobs:
     - name: run autogen.sh
       run: |
         git clean -fdx .
+        find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
         ./autogen.sh
 
     - name: run test
@@ -190,6 +196,7 @@ jobs:
       - uses: lumaxis/shellcheck-problem-matchers@v1
       - name: shellcheck
         run: |
+          find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
           ./configure
           make shellcheck
