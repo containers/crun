@@ -59,7 +59,7 @@ These dependencies are required for the build:
 
 ```console
 $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel \
+    systemd-devel yajl-devel libseccomp-devel pkg-config \
     go-md2man glibc-static python3-libmount libtool
 ```
 
