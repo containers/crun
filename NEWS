@@ -1,3 +1,10 @@
+* crun-1.4.5
+
+- CRIU: add support for different manage cgroups modes.
+- linux: the hook processes inherit the crun process environment if
+  there is no environment block specified in the OCI configuration.
+- exec: fix double free when using --apparmor and --process-label.
+
 * crun-1.4.4
 
 - wasm, kubernetes: support wasm for kubernetes infrastructure with side-cars
