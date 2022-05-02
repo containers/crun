@@ -872,6 +872,13 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
+  if (cpu->idle_present)
+    {
+      len = sprintf (fmt_buf, "%" PRIi64, cpu->idle);
+      ret = write_cgroup_file (dirfd_cpu, "cpu.idle", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (cgroup2 && (quota > 0 || period > 0))
     {
