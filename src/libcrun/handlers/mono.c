@@ -111,7 +111,29 @@ mono_configure_container (void *cookie arg_unused, enum handler_configure_phase 
                           libcrun_context_t *context, libcrun_container_t *container,
                           const char *rootfs, libcrun_error_t *err)
 {
-  /* Any windows library mounts if neccessary */
+  int ret;
+  if (phase != HANDLER_CONFIGURE_MOUNTS)
+    return 0;
+
+  char *options[] = {
+    "ro",
+    "rprivate",
+    "nosuid",
+    "nodev",
+    "rbind"
+  };
+
+  ret = libcrun_container_do_bind_mount (container, "/etc/mono", "/etc/mono", options, 5, err);
+  if (ret != 0)
+    return ret;
+
+  ret = libcrun_container_do_bind_mount (container, "/usr/lib/mono", "/usr/lib/mono", options, 5, err);
+  if (ret != 0)
+    return ret;
+
+  /* release any error if set since we are going to be returning from here */
+  crun_error_release (err);
+
   return 0;
 }
 
