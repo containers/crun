@@ -2286,6 +2286,16 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (def->process && def->process->cwd)
+    {
+      libcrun_error_t tmp_err = NULL;
+      const char *rel_cwd = consume_slashes (def->process->cwd);
+      /* Ignore errors here and let it fail later.  */
+      (void) crun_safe_ensure_directory_at (rootfsfd, rootfs, strlen (rootfs),
+                                            rel_cwd, 0755, &tmp_err);
+      crun_error_release (&tmp_err);
+    }
+
   ret = do_masked_and_readonly_paths (container, err);
   if (UNLIKELY (ret < 0))
     return ret;

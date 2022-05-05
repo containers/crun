@@ -50,6 +50,17 @@ def test_cwd_relative_subdir():
         return -1
     return 0
 
+def test_cwd_not_exist():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    conf['process']['cwd'] = "/doesnotexist"
+    add_all_namespaces(conf)
+    try:
+        run_and_get_output(conf)
+    except:
+        return -1
+    return 0
+
 def test_cwd_absolute():
     conf = base_config()
     conf['process']['args'] = ['/init', 'echo', 'hello']
@@ -463,6 +474,7 @@ all_tests = {
     "cwd-relative": test_cwd_relative,
     "cwd-relative-subdir": test_cwd_relative_subdir,
     "cwd-absolute": test_cwd_absolute,
+    "cwd-not-exist" : test_cwd_not_exist,
     "empty-home": test_empty_home,
     "delete-in-created-state": test_delete_in_created_state,
     "run-rootless-netns-with-userns" : test_run_rootless_netns_with_userns,
