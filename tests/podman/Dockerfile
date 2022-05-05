@@ -16,6 +16,8 @@ RUN yum install -y golang python git gcc automake autoconf libcap-devel \
      make install.catatonit && \
      make)
 
+## Change default log driver to k8s-file for tests
+RUN sed -i 's/journald/k8s-file/g' /usr/share/containers/containers.conf
 COPY run-tests.sh /usr/local/bin
 WORKDIR /root/go/src/github.com/containers/podman
 ENTRYPOINT /usr/local/bin/run-tests.sh
