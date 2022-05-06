@@ -68,6 +68,7 @@ int libcrun_linux_container_update (libcrun_container_status_t *status, const ch
 int libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err);
 int libcrun_container_pause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
+int libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_source, char *mount_destination, char **mount_options, size_t mount_options_len, libcrun_error_t *err);
 int libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_personality (runtime_spec_schema_defs_linux_personality *p, libcrun_error_t *err);
 int libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err);

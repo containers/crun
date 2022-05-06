@@ -1948,6 +1948,70 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 }
 
 /*
+ * libcrun_container_do_bind_mount
+ *
+ *  Allows external plugins and handlers to perform bind `mounts` on container.
+ *  returns: 0 if successful anything else states `error` and configures `err` with relevent error.
+ */
+int
+libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_source, char *mount_destination, char **mount_options, size_t mount_options_len, libcrun_error_t *err)
+{
+  int ret, rootfsfd;
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
+
+  const char *target = consume_slashes (mount_destination);
+  cleanup_free char *data = NULL;
+  unsigned long flags = 0;
+  unsigned long extra_flags = 0;
+  cleanup_close int targetfd = -1;
+  int is_dir = 1;
+  uint64_t rec_clear = 0;
+  uint64_t rec_set = 0;
+  const char *rootfs = get_private_data (container)->rootfs;
+  rootfsfd = get_private_data (container)->rootfsfd;
+
+  if ((rootfsfd < 0) || (rootfs == NULL))
+    return crun_make_error (err, 0, "invalid rootfs state while performing bind mount from external plugin or handler");
+
+  if (mount_options == NULL)
+    flags = get_default_flags (container, mount_destination, &data);
+  else
+    {
+      size_t j;
+
+      for (j = 0; j < mount_options_len; j++)
+        flags |= get_mount_flags_or_option (mount_options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+    }
+
+  if (path_is_slash_dev (mount_destination))
+    get_private_data (container)->mount_dev_from_host = true;
+
+  if (mount_source && (flags & MS_BIND))
+    {
+      is_dir = crun_dir_p (mount_source, false, err);
+      if (UNLIKELY (is_dir < 0))
+        return is_dir;
+
+      data = append_mode_if_missing (data, "mode=1755");
+    }
+
+  /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
+  ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, rootfs_len, target,
+                                          is_dir ? 01755 : 0755, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  targetfd = ret;
+
+  int label_how = LABEL_MOUNT;
+  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, label_how, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+/*
   Open a fd to the NOTIFY_SOCKET end on the host.  If CONTAINER is NULL, then CONTEXT
   is used to retrieve the path to the socket.
 */
