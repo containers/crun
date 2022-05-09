@@ -12,6 +12,7 @@ SINGLE_RUN_TIME=$(( RUN_TIME / N_TESTS ))
 
 CORPUS=${CORPUS:=/testcases}
 
+git config --global --add safe.directory /crun
 git clean -fdx
 ./autogen.sh
 ./configure --enable-embedded-yajl HFUZZ_CC_UBSAN=1 HFUZZ_CC_ASAN=1 CC=hfuzz-clang CPPFLAGS="-D FUZZER" CFLAGS="-ggdb3 -fsanitize-coverage=trace-pc-guard,trace-cmp,trace-div,indirect-calls"
