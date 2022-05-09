@@ -2236,7 +2236,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 }
 
 int
-libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
+libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *unified_cgroup_path = NULL;
@@ -2285,6 +2285,11 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
   get_private_data (container)->rootfs = rootfs;
   get_private_data (container)->rootfsfd = rootfsfd;
   get_private_data (container)->rootfs_len = rootfs ? strlen (rootfs) : 0;
+
+  // configure handler mounts
+  ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_MOUNTS, container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "failed configuring mounts for handler");
 
   if (def->root->readonly)
     {

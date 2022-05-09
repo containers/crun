@@ -46,7 +46,7 @@ pid_t libcrun_run_linux_container (libcrun_container_t *container, container_ent
                                    int *sync_socket_out, libcrun_error_t *err);
 int get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *notify_socket_out,
                    libcrun_error_t *err);
-int libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err);
+int libcrun_set_mounts (struct container_entrypoint_s *args, libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err);
 int libcrun_init_caps (libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char *rootfs, libcrun_error_t *err);
 int libcrun_reopen_dev_null (libcrun_error_t *err);

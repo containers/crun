@@ -23,6 +23,13 @@
 #include <runtime_spec_schema_config_schema.h>
 #include "error.h"
 
+enum handler_configure_phase
+{
+  HANDLER_CONFIGURE_BEFORE_MOUNTS = 1,
+  HANDLER_CONFIGURE_AFTER_MOUNTS,
+  HANDLER_CONFIGURE_MOUNTS,
+};
+
 struct custom_handler_manager_s;
 
 struct libcrun_context_s
@@ -85,6 +92,8 @@ typedef struct libcrun_container_status_s libcrun_container_status_t;
 typedef struct libcrun_container_s libcrun_container_t;
 typedef struct libcrun_context_s libcrun_context_t;
 
+struct container_entrypoint_s;
+
 struct libcrun_checkpoint_restore_s
 {
   char *image_path;
@@ -127,6 +136,11 @@ LIBCRUN_PUBLIC int libcrun_container_start (libcrun_context_t *context, const ch
 
 LIBCRUN_PUBLIC int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out,
                                             libcrun_error_t *err);
+
+int libcrun_container_notify_handler (struct container_entrypoint_s *args,
+                                      enum handler_configure_phase phase,
+                                      libcrun_container_t *container, const char *rootfs,
+                                      libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_get_container_state_string (const char *id, libcrun_container_status_t *status,
                                                        const char *state_root, const char **container_status,
