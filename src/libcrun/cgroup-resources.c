@@ -417,7 +417,6 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
     "c 5:1 rwm",
     "c 136:* rwm",
     "c 5:2 rwm",
-    "c 10:200 rwm",
     NULL
   };
 
@@ -495,7 +494,6 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
     { 'c', 5, 1, "rwm" },
     { 'c', 136, -1, "rwm" },
     { 'c', 5, 2, "rwm" },
-    { 'c', 10, 200, "rwm" },
   };
 
   program = bpf_program_new (2048);
