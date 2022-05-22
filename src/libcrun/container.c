@@ -3126,7 +3126,7 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (getenv ("HOME") == NULL)
     {
-      ret = set_home_env (container->container_uid);
+      ret = set_home_env (container_uid);
       if (UNLIKELY (ret < 0 && errno != ENOTSUP))
         {
           setenv ("HOME", "/", 1);

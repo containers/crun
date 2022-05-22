@@ -137,6 +137,47 @@ def test_exec_additional_gids():
         shutil.rmtree(tempdir)
     return 0
 
+def test_exec_populate_home_env_from_process_uid():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            json.dump({
+	        "user": {
+	            "uid": 1000,
+	            "gid": 1000,
+                    "additionalGids": [1000]
+	        },
+                "terminal": False,
+	        "args": [
+                    "/init",
+                    "printenv",
+                    "HOME"
+	        ],
+	        "env": [
+	            "PATH=/bin",
+	            "TERM=xterm"
+	        ],
+	        "cwd": "/",
+	        "noNewPrivileges": True
+            }, f)
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        if "/var/empty" not in out:
+           return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+    return 0
+
 def test_exec_add_capability():
     """Specify an additional capability to add to the process"""
     conf = base_config()
@@ -306,6 +347,7 @@ all_tests = {
     "exec-set-user-with-uid-gid" : test_exec_set_user,
     "exec_add_no_new_privileges" : test_exec_no_new_privs,
     "exec_write_pid_file" : test_exec_write_pid_file,
+    "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
 }
 
 if __name__ == "__main__":
