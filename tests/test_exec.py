@@ -95,7 +95,7 @@ def test_exec_not_exists():
     return test_exec_not_exists_helper(False)
 
 def test_exec_detach_not_exists():
-    return test_exec_not_exists_helper(False)
+    return test_exec_not_exists_helper(True)
 
 def test_exec_additional_gids():
     if is_rootless():
