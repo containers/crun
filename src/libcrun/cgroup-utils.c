@@ -72,20 +72,82 @@ libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
 }
 
 int
+make_cgroup_threaded (const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path_type = NULL;
+  const char *const threaded = "threaded";
+  int ret;
+
+  path = consume_slashes (path);
+
+  if (path == NULL || path[0] == '\0')
+    return 0;
+
+  ret = append_paths (&cgroup_path_type, err, CGROUP_ROOT, path, "cgroup.type", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = write_file (cgroup_path_type, threaded, strlen (threaded), err);
+  if (UNLIKELY (ret < 0 && errno == EOPNOTSUPP))
+    {
+      cleanup_free char *buffer = xstrdup (path);
+      const char *parent = consume_slashes (dirname (buffer));
+      if (parent[0])
+        {
+          crun_error_release (err);
+
+          ret = make_cgroup_threaded (parent, err);
+          if (ret < 0)
+            return ret;
+
+          return write_file (cgroup_path_type, threaded, strlen (threaded), err);
+        }
+    }
+  return ret;
+}
+
+int
 move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_procs = NULL;
   char pid_str[16];
   int ret;
 
-  ret = append_paths (&cgroup_path_procs, err, CGROUP_ROOT, subsystem ? subsystem : "", path ? path : "",
+  ret = append_paths (&cgroup_path_procs, err, CGROUP_ROOT,
+                      subsystem ? subsystem : "", path ? path : "",
                       "cgroup.procs", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
   sprintf (pid_str, "%d", pid);
 
-  return write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+  if (UNLIKELY (ret < 0))
+    {
+      if (crun_error_get_errno (err) == EOPNOTSUPP)
+        {
+          libcrun_error_t tmp_err = NULL;
+          int mode;
+
+          mode = libcrun_get_cgroup_mode (&tmp_err);
+          if (UNLIKELY (mode < 0 || mode != CGROUP_MODE_UNIFIED))
+            {
+              crun_error_release (&tmp_err);
+              return ret;
+            }
+
+          crun_error_release (err);
+
+          ret = make_cgroup_threaded (path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          return write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+        }
+
+      return ret;
+    }
+  return ret;
 }
 
 int
@@ -174,7 +236,7 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
 
   tasksfd = openat (dfd, "cgroup.procs", O_RDONLY | O_CLOEXEC);
   if (tasksfd < 0)
-    return crun_make_error (err, errno, "open cgroup.procs");
+    return crun_make_error (err, errno, "open `cgroup.procs`");
 
   ret = read_all_fd (tasksfd, "cgroup.procs", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
@@ -648,7 +710,9 @@ read_available_controllers (const char *path, libcrun_error_t *err)
   char buf[256];
   ssize_t ret;
 
-  xasprintf (&controllers, "%s/cgroup.controllers", path);
+  ret = append_paths (&controllers, err, CGROUP_ROOT, path, "cgroup.controllers", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   fd = TEMP_FAILURE_RETRY (open (controllers, O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (fd < 0))
@@ -691,7 +755,9 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
       (controllers_to_enable & CGROUP_PIDS) ? "+pids" : "", (controllers_to_enable & CGROUP_CPUSET) ? "+cpuset" : "",
       (controllers_to_enable & CGROUP_HUGETLB) ? "+hugetlb" : "");
 
-  xasprintf (&subtree_control, "%s/cgroup.subtree_control", path);
+  ret = append_paths (&subtree_control, err, CGROUP_ROOT, path, "cgroup.subtree_control", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
   ret = write_file (subtree_control, controllers, controllers_len, err);
   if (UNLIKELY (ret < 0))
     {
@@ -702,7 +768,7 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
       int e;
 
       e = crun_error_get_errno (err);
-      if (e != EPERM && e != EACCES && e != EBUSY && e != ENOENT)
+      if (e != EPERM && e != EACCES && e != EBUSY && e != ENOENT && e != EOPNOTSUPP)
         return ret;
 
       /* ENOENT can mean both that the file doesn't exist or the controller is not present.  */
@@ -742,9 +808,19 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
               ret = write_file (subtree_control, token, strlen (token), err);
               if (ret < 0)
                 {
-                  if (crun_error_get_errno (err) == EBUSY)
-                    repeat = true;
+                  e = crun_error_get_errno (err);
                   crun_error_release (err);
+
+                  if (e == EBUSY)
+                    repeat = true;
+                  else if (e == EOPNOTSUPP)
+                    {
+                      ret = make_cgroup_threaded (path, err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+
+                      repeat = true;
+                    }
 
                   continue;
                 }
@@ -789,14 +865,14 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
   xasprintf (&tmp_path, "%s/", path);
 
-  ret = read_available_controllers (CGROUP_ROOT, err);
+  ret = read_available_controllers ("", err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   controllers_to_enable = ret;
 
   /* Enable all possible controllers in the root cgroup.  */
-  ret = write_controller_file (CGROUP_ROOT, controllers_to_enable, err);
+  ret = write_controller_file ("", controllers_to_enable, err);
   if (UNLIKELY (ret < 0))
     {
       /* Enabling +cpu when there are realtime processes fail with EINVAL.  */
@@ -804,7 +880,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
         {
           crun_error_release (err);
           controllers_to_enable &= ~CGROUP_CPU;
-          ret = write_controller_file (CGROUP_ROOT, controllers_to_enable, err);
+          ret = write_controller_file ("", controllers_to_enable, err);
         }
       if (UNLIKELY (ret < 0))
         return ret;
@@ -827,7 +903,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
       if (next_slash)
         {
-          ret = write_controller_file (cgroup_path, controllers_to_enable, err);
+          ret = write_controller_file (tmp_path, controllers_to_enable, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
