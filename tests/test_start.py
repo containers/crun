@@ -57,9 +57,10 @@ def test_cwd_not_exist():
     add_all_namespaces(conf)
     try:
         run_and_get_output(conf)
-    except:
+        sys.stderr.write("unexpected success\n")
         return -1
-    return 0
+    except Exception as e:
+        return 0
 
 def test_cwd_absolute():
     conf = base_config()
