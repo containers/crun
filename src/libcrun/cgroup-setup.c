@@ -379,7 +379,19 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
   if (LIKELY (ret >= 0))
     return ret;
 
-  /* If the cgroup is not being created, try to handle EBUSY.  */
+  if (UNLIKELY (crun_error_get_errno (err) == EOPNOTSUPP))
+    {
+      crun_error_release (err);
+
+      ret = make_cgroup_threaded (path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+      if (LIKELY (ret >= 0))
+        return ret;
+    }
+
   if (create_if_missing || crun_error_get_errno (err) != EBUSY)
     return ret;
 
