@@ -10,7 +10,7 @@
 ```
 
 ## Examples
-#### Compile and run `wasm` modules directly
+#### Compile and run `mono` compatible dotnet executables inside containers natively
 * Following example is using `mono` to compile a cross platform executable but you can also use visual studio or any other build tools on windows.
 * Add relevant function to `hello.cs` for this example we will be using a print.
  ```c#
