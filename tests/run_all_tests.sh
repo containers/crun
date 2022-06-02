@@ -18,6 +18,6 @@ do
     ./tap-driver.sh --test-name $i --log-file $i.log --trs-file $i.trs ${COLOR} --enable-hard-errors yes --expect-failure no -- /usr/bin/python $i
 done
 
-if grep FAIL *.trs; then
+if grep "FAIL\|ERROR" *.trs; then
     exit 1
 fi
