@@ -1169,7 +1169,7 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
       remaining = nread;
       while (remaining)
         {
-          ret = TEMP_FAILURE_RETRY (write (dst, buffer+nread-remaining, remaining));
+          ret = TEMP_FAILURE_RETRY (write (dst, buffer + nread - remaining, remaining));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write");
           remaining -= ret;
