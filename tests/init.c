@@ -434,7 +434,7 @@ main (int argc, char **argv)
     {
       int ret;
 
-      ret = printf ("%d:%d", getuid(), getgid());
+      ret = printf ("%d:%d", getuid (), getgid ());
       if (ret < 0)
         error (EXIT_FAILURE, errno, "printf");
       return 0;
