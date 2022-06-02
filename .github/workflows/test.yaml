@@ -75,101 +75,110 @@ jobs:
           - test: checkpoint-restore
           - test: fuzzing
           - test: codespell
+          - test: wasmedge-build
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
+      - name: checkout
+        uses: actions/checkout@v2
 
-    - name: install dependencies
-      run: |
-        # If Dockerfile is present in test directory, the test is run
-        # inside container, so these dependencies won't be needed.
-        test -f "tests/${{ matrix.test }}/Dockerfile" && exit 0
+      - name: install dependencies
+        run: |
+          # If Dockerfile is present in test directory, the test is run
+          # inside container, so these dependencies won't be needed.
+          test -f "tests/${{ matrix.test }}/Dockerfile" && exit 0
 
-        sudo add-apt-repository -y ppa:criu/ppa
-        # add-apt-repository runs apt-get update so we don't have to.
-        sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev containerd runc libasan6 libprotobuf-c-dev
+          sudo add-apt-repository -y ppa:criu/ppa
+          # add-apt-repository runs apt-get update so we don't have to.
+          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev containerd runc libasan6 libprotobuf-c-dev
 
-    - name: run autogen.sh
-      run: |
-        git clean -fdx .
-        find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
-        ./autogen.sh
+      - name: run autogen.sh
+        run: |
+          git clean -fdx .
+          find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+          ./autogen.sh
 
-    - name: run test
-      run: |
-        case "${{ matrix.test }}" in
-            disable-systemd)
-                ./configure --disable-systemd
-                make -j $(nproc)
-            ;;
-            check)
-                ./configure --disable-dl
-                make
-                make syntax-check
-                echo run tests as root
-                sudo make check ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
-                echo run tests as rootless
-                make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
-                echo run tests as rootless in a user namespace
-                unshare -r make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
+      - name: run test
+        run: |
+          case "${{ matrix.test }}" in
+              disable-systemd)
+                  ./configure --disable-systemd
+                  make -j $(nproc)
+              ;;
+              check)
+                  ./configure --disable-dl
+                  make
+                  make syntax-check
+                  echo run tests as root
+                  sudo make check ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
+                  echo run tests as rootless
+                  make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
+                  echo run tests as rootless in a user namespace
+                  unshare -r make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
 
-                # check that the working dir is clean
-                git describe --broken --dirty --all | grep -qv dirty
-            ;;
-            podman)
-                sudo mkdir -p /var/lib/containers /var/tmp
-                sudo docker build -t crun-podman tests/podman
-                sudo docker run --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-podman
-                ;;
-            cri-o)
-                sudo modprobe -a ip6_tables br_netfilter
-                sudo mkdir -p /var/lib/var-crio/tmp /var/lib/tmp-crio /var/lib/var-tmp-crio
-                sudo docker build -t crun-cri-o tests/cri-o
-                sudo docker run --net host --privileged --rm -v /dev/zero:/sys/module/apparmor/parameters/enabled -v /var/lib/tmp-crio:/tmp:rw -v /var/lib/var-tmp-crio:/var/tmp -v /var/lib/var-crio:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-cri-o
-                ;;
-            containerd)
-                sudo mkdir -p /var/lib/var-containerd
-                sudo docker build -t crun-containerd tests/containerd
-                sudo docker run --privileged --net host --rm -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave -v ${PWD}:/crun crun-containerd
-                ;;
-            oci-validation)
-                sudo docker build -t crun-oci-validation tests/oci-validation
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-oci-validation
-            ;;
-            alpine-build)
-                sudo docker build -t crun-alpine-build tests/alpine-build
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-alpine-build
-            ;;
-            centos8-build)
-                sudo docker build -t crun-centos8-build tests/centos8-build
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos8-build
-            ;;
-            centos9-build)
-                sudo docker build -t crun-centos9-build tests/centos9-build
-                sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos9-build
-            ;;
-            clang-format)
-                sudo docker build -t crun-clang-format tests/clang-format
-                sudo docker run --rm -w /crun -v ${PWD}:/crun crun-clang-format
-            ;;
-            clang-check)
-                sudo docker build -t crun-clang-check tests/clang-check
-                sudo docker run --privileged --rm -w /crun -v ${PWD}:/crun crun-clang-check
-            ;;
-            checkpoint-restore)
-                ./configure
-                make -j $(nproc)
-                sudo python3 tests/test_checkpoint_restore.py
-            ;;
-            fuzzing)
-                sudo docker build -t crun-fuzzing tests/fuzzing
-                sudo docker run -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
-           ;;
-           codespell)
-                sudo docker build -t crun-codespell tests/codespell
-                sudo docker run --rm -w /crun -v ${PWD}/crun:/crun crun-codespell codespell
-           ;;
-        esac
+                  # check that the working dir is clean
+                  git describe --broken --dirty --all | grep -qv dirty
+              ;;
+              podman)
+                  sudo mkdir -p /var/lib/containers /var/tmp
+                  sudo docker build -t crun-podman tests/podman
+                  sudo docker run --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-podman
+                  ;;
+              cri-o)
+                  sudo modprobe -a ip6_tables br_netfilter
+                  sudo mkdir -p /var/lib/var-crio/tmp /var/lib/tmp-crio /var/lib/var-tmp-crio
+                  sudo docker build -t crun-cri-o tests/cri-o
+                  sudo docker run --net host --privileged --rm -v /dev/zero:/sys/module/apparmor/parameters/enabled -v /var/lib/tmp-crio:/tmp:rw -v /var/lib/var-tmp-crio:/var/tmp -v /var/lib/var-crio:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-cri-o
+                  ;;
+              containerd)
+                  sudo mkdir -p /var/lib/var-containerd
+                  sudo docker build -t crun-containerd tests/containerd
+                  sudo docker run --privileged --net host --rm -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave -v ${PWD}:/crun crun-containerd
+                  ;;
+              oci-validation)
+                  sudo docker build -t crun-oci-validation tests/oci-validation
+                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-oci-validation
+              ;;
+              alpine-build)
+                  sudo docker build -t crun-alpine-build tests/alpine-build
+                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-alpine-build
+              ;;
+              centos8-build)
+                  sudo docker build -t crun-centos8-build tests/centos8-build
+                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos8-build
+              ;;
+              centos9-build)
+                  sudo docker build -t crun-centos9-build tests/centos9-build
+                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos9-build
+              ;;
+              clang-format)
+                  sudo docker build -t crun-clang-format tests/clang-format
+                  sudo docker run --rm -w /crun -v ${PWD}:/crun crun-clang-format
+              ;;
+              clang-check)
+                  sudo docker build -t crun-clang-check tests/clang-check
+                  sudo docker run --privileged --rm -w /crun -v ${PWD}:/crun crun-clang-check
+              ;;
+              checkpoint-restore)
+                  ./configure
+                  make -j $(nproc)
+                  sudo python3 tests/test_checkpoint_restore.py
+              ;;
+              fuzzing)
+                  sudo docker build -t crun-fuzzing tests/fuzzing
+                  sudo docker run -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
+              ;;
+              codespell)
+                  sudo docker build -t crun-codespell tests/codespell
+                  sudo docker run --rm -w /crun -v ${PWD}/crun:/crun crun-codespell codespell
+              ;;
+              wasmedge-build)
+                  echo "building with latest version"
+                  sudo docker build -t wasmedge tests/wasmedge-build
+                  sudo docker run --rm -w /crun -v ${PWD}:/crun wasmedge --with-wasmedge
+                  echo "building with legacy mode"
+                  sudo docker build -t wasmedge --build-arg=WASM_EDGE_VERSION=0.9.1 tests/wasmedge-build
+                  sudo docker run --rm -w /crun -v ${PWD}:/crun wasmedge --with-wasmedge --with-wasmedge-legacy
+              ;;
+          esac
 
   shellcheck:
     runs-on: ubuntu-20.04

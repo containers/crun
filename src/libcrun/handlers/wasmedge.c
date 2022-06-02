@@ -72,9 +72,8 @@ libwasmedge_unload (void *cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *pathname, char *const argv[])
+libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *container, const char *pathname, char *const argv[])
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   WasmEdge_ConfigureContext *(*WasmEdge_ConfigureCreate) (void);
   void (*WasmEdge_ConfigureDelete) (WasmEdge_ConfigureContext * Cxt);
   void (*WasmEdge_ConfigureAddProposal) (WasmEdge_ConfigureContext * Cxt, const enum WasmEdge_Proposal Prop);
