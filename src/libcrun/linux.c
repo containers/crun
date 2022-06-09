@@ -516,12 +516,55 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
   return 0;
 }
 
+static char *
+format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len, size_t *written, bool direct)
+{
+  char buffer[64];
+  char *ret;
+  size_t s;
+
+  *written = 0;
+
+  ret = xmalloc (sizeof (buffer) * mappings_len + 1);
+  for (s = 0; s < mappings_len; s++)
+    {
+      size_t len;
+
+      len = snprintf (buffer, sizeof (buffer), "%" PRIu32 " %" PRIu32 " %" PRIu32 "\n",
+                      direct ? mappings[s]->container_id : mappings[s]->host_id,
+                      direct ? mappings[s]->host_id : mappings[s]->container_id,
+                      mappings[s]->size);
+
+      memcpy (ret + *written, buffer, len);
+      *written += len;
+    }
+  return ret;
+}
+
+static char *
+format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, size_t *written, bool direct)
+{
+  runtime_spec_schema_defs_id_mapping mapping = {
+    .container_id = container_id,
+    .host_id = host_id,
+    .size = size,
+  };
+  runtime_spec_schema_defs_id_mapping *mappings[] = {
+    &mapping,
+    NULL,
+  };
+
+  return format_mount_mappings (mappings, 1, written, direct);
+}
+
 static pid_t
-create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, const char *options, libcrun_error_t *err)
+create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt,
+                                  const char *options, libcrun_error_t *err)
 {
   cleanup_free char *dup_options = xstrdup (options);
   char *option, *saveptr = NULL;
   cleanup_pid pid_t pid = -1;
+  char proc_file[64];
   pid_t xchg_pid;
 
   pid = syscall_clone (CLONE_NEWUSER | SIGCHLD, NULL);
@@ -536,11 +579,33 @@ create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, const 
       _exit (EXIT_SUCCESS);
     }
 
+  if (mnt->uid_mappings)
+    {
+      cleanup_free char *uid_map = NULL;
+      cleanup_free char *gid_map = NULL;
+      size_t written = 0;
+      int ret;
+
+      uid_map = format_mount_mappings (mnt->uid_mappings, mnt->uid_mappings_len, &written, false);
+      sprintf (proc_file, "/proc/%d/uid_map", pid);
+      ret = write_file (proc_file, uid_map, written, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      gid_map = format_mount_mappings (mnt->gid_mappings, mnt->gid_mappings_len, &written, false);
+      sprintf (proc_file, "/proc/%d/gid_map", pid);
+      ret = write_file (proc_file, gid_map, written, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      goto success;
+    }
+
+  /* If there are no OCI mappings specified, then parse the annotation.  */
   for (option = strtok_r (dup_options, ";", &saveptr); option; option = strtok_r (NULL, ";", &saveptr))
     {
       cleanup_free char *mappings = NULL;
       bool is_uids = false;
-      char proc_file[64];
       size_t len = 0;
       int ret;
 
@@ -563,13 +628,53 @@ create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, const 
         return ret;
     }
 
+success:
   xchg_pid = pid;
   pid = -1;
   return xchg_pid;
 }
 
+static bool
+has_same_mappings (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt)
+{
+  size_t s;
+
+  if (def->linux == NULL)
+    return mnt->uid_mappings_len == 0 && mnt->gid_mappings_len == 0;
+
+  if (mnt->uid_mappings_len != def->linux->uid_mappings_len)
+    return false;
+
+  if (mnt->gid_mappings_len != def->linux->gid_mappings_len)
+    return false;
+
+  /* Compare host id and container id.  */
+
+  for (s = 0; s < mnt->uid_mappings_len; s++)
+    {
+      if (mnt->uid_mappings[s]->host_id != def->linux->uid_mappings[s]->container_id)
+        return false;
+      if (mnt->uid_mappings[s]->container_id != def->linux->uid_mappings[s]->host_id)
+        return false;
+      if (mnt->uid_mappings[s]->size != def->linux->uid_mappings[s]->size)
+        return false;
+    }
+
+  for (s = 0; s < mnt->gid_mappings_len; s++)
+    {
+      if (mnt->gid_mappings[s]->host_id != def->linux->gid_mappings[s]->container_id)
+        return false;
+      if (mnt->gid_mappings[s]->container_id != def->linux->gid_mappings[s]->host_id)
+        return false;
+      if (mnt->gid_mappings[s]->size != def->linux->gid_mappings[s]->size)
+        return false;
+    }
+
+  return true;
+}
+
 static int
-get_idmapped_mount (runtime_spec_schema_config_schema *def, const char *src, const char *idmap_option, pid_t pid, libcrun_error_t *err)
+get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, const char *idmap_option, pid_t pid, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   cleanup_pid pid_t created_pid = -1;
@@ -577,14 +682,19 @@ get_idmapped_mount (runtime_spec_schema_config_schema *def, const char *src, con
     0,
   };
   cleanup_close int fd = -1;
+  bool need_new_userns;
   const char *options;
   char proc_path[64];
   int ret;
 
+  if (! ! (mnt->uid_mappings) != ! ! (mnt->gid_mappings))
+    return crun_make_error (err, 0, "invalid mappings specified for the mount on `%s`", mnt->destination);
+
   /* If there are options specified, create a new user namespace with the configured mappings.  */
-  if ((options = strchr (idmap_option, '=')))
+  need_new_userns = (def->linux == NULL || def->linux->uid_mappings_len == 0) || ! has_same_mappings (def, mnt) || (options = strchr (idmap_option, '='));
+  if (need_new_userns)
     {
-      created_pid = create_userns_for_idmapped_mount (def, options + 1, err);
+      created_pid = create_userns_for_idmapped_mount (def, mnt, options ? options + 1 : NULL, err);
       if (UNLIKELY (created_pid < 0))
         return created_pid;
 
@@ -596,17 +706,17 @@ get_idmapped_mount (runtime_spec_schema_config_schema *def, const char *src, con
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
-  open_tree_fd = syscall_open_tree (-1, src,
+  open_tree_fd = syscall_open_tree (-1, mnt->source,
                                     AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
   if (UNLIKELY (open_tree_fd < 0))
-    return crun_make_error (err, errno, "open `%s`", src);
+    return crun_make_error (err, errno, "open `%s`", mnt->source);
 
   attr.attr_set = MOUNT_ATTR_IDMAP;
   attr.userns_fd = fd;
 
   ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount_setattr `%s`", src);
+    return crun_make_error (err, errno, "mount_setattr `%s`", mnt->source);
 
   return get_and_reset (&open_tree_fd);
 }
@@ -1948,6 +2058,70 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 }
 
 /*
+ * libcrun_container_do_bind_mount
+ *
+ *  Allows external plugins and handlers to perform bind `mounts` on container.
+ *  returns: 0 if successful anything else states `error` and configures `err` with relevent error.
+ */
+int
+libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_source, char *mount_destination, char **mount_options, size_t mount_options_len, libcrun_error_t *err)
+{
+  int ret, rootfsfd;
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
+
+  const char *target = consume_slashes (mount_destination);
+  cleanup_free char *data = NULL;
+  unsigned long flags = 0;
+  unsigned long extra_flags = 0;
+  cleanup_close int targetfd = -1;
+  int is_dir = 1;
+  uint64_t rec_clear = 0;
+  uint64_t rec_set = 0;
+  const char *rootfs = get_private_data (container)->rootfs;
+  rootfsfd = get_private_data (container)->rootfsfd;
+
+  if ((rootfsfd < 0) || (rootfs == NULL))
+    return crun_make_error (err, 0, "invalid rootfs state while performing bind mount from external plugin or handler");
+
+  if (mount_options == NULL)
+    flags = get_default_flags (container, mount_destination, &data);
+  else
+    {
+      size_t j;
+
+      for (j = 0; j < mount_options_len; j++)
+        flags |= get_mount_flags_or_option (mount_options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+    }
+
+  if (path_is_slash_dev (mount_destination))
+    get_private_data (container)->mount_dev_from_host = true;
+
+  if (mount_source && (flags & MS_BIND))
+    {
+      is_dir = crun_dir_p (mount_source, false, err);
+      if (UNLIKELY (is_dir < 0))
+        return is_dir;
+
+      data = append_mode_if_missing (data, "mode=1755");
+    }
+
+  /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
+  ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, rootfs_len, target,
+                                          is_dir ? 01755 : 0755, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  targetfd = ret;
+
+  int label_how = LABEL_MOUNT;
+  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, label_how, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+/*
   Open a fd to the NOTIFY_SOCKET end on the host.  If CONTAINER is NULL, then CONTEXT
   is used to retrieve the path to the socket.
 */
@@ -2172,7 +2346,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 }
 
 int
-libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
+libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *unified_cgroup_path = NULL;
@@ -2221,6 +2395,11 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
   get_private_data (container)->rootfs = rootfs;
   get_private_data (container)->rootfsfd = rootfsfd;
   get_private_data (container)->rootfs_len = rootfs ? strlen (rootfs) : 0;
+
+  // configure handler mounts
+  ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_MOUNTS, container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "failed configuring mounts for handler");
 
   if (def->root->readonly)
     {
@@ -2285,6 +2464,16 @@ libcrun_set_mounts (libcrun_container_t *container, const char *rootfs, set_moun
   ret = do_finalize_notify_socket (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (def->process && def->process->cwd)
+    {
+      libcrun_error_t tmp_err = NULL;
+      const char *rel_cwd = consume_slashes (def->process->cwd);
+      /* Ignore errors here and let it fail later.  */
+      (void) crun_safe_ensure_directory_at (rootfsfd, rootfs, strlen (rootfs),
+                                            rel_cwd, 0755, &tmp_err);
+      crun_error_release (&tmp_err);
+    }
 
   ret = do_masked_and_readonly_paths (container, err);
   if (UNLIKELY (ret < 0))
@@ -2528,75 +2717,33 @@ libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error
 int
 libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
-#define MAPPING_FMT_SIZE ("%" PRIu32 " %" PRIu32 " %" PRIu32 "\n")
-#define MAPPING_FMT_1 ("%" PRIu32 " %" PRIu32 " 1\n")
   cleanup_free char *uid_map_file = NULL;
   cleanup_free char *gid_map_file = NULL;
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
-  int uid_map_len, gid_map_len;
+  size_t uid_map_len = 0, gid_map_len = 0;
   int ret = 0;
   runtime_spec_schema_config_schema *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
     return 0;
 
-  if (! def->linux->uid_mappings_len)
+  if (def->linux->uid_mappings_len)
+    uid_map = format_mount_mappings (def->linux->uid_mappings, def->linux->uid_mappings_len, &uid_map_len, true);
+  else
     {
       uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, 1);
       if (uid_map == NULL)
-        {
-          if (container->host_uid)
-            uid_map_len = xasprintf (&uid_map, MAPPING_FMT_1, 0, container->host_uid);
-          else
-            uid_map_len = xasprintf (&uid_map, MAPPING_FMT_SIZE, 0, container->host_uid, container->container_uid + 1);
-        }
+        uid_map = format_mount_mapping (0, container->host_uid, container->host_uid + 1, &uid_map_len, true);
     }
+
+  if (def->linux->gid_mappings_len)
+    gid_map = format_mount_mappings (def->linux->gid_mappings, def->linux->gid_mappings_len, &gid_map_len, true);
   else
-    {
-      size_t written = 0, s;
-      char buffer[64];
-      uid_map = xmalloc (sizeof (buffer) * def->linux->uid_mappings_len + 1);
-      for (s = 0; s < def->linux->uid_mappings_len; s++)
-        {
-          size_t len;
-
-          len = sprintf (buffer, MAPPING_FMT_SIZE, def->linux->uid_mappings[s]->container_id,
-                         def->linux->uid_mappings[s]->host_id, def->linux->uid_mappings[s]->size);
-          memcpy (uid_map + written, buffer, len);
-          written += len;
-        }
-      uid_map[written] = '\0';
-      uid_map_len = written;
-    }
-
-  if (! def->linux->gid_mappings_len)
     {
       gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, 0);
       if (gid_map == NULL)
-        {
-          if (container->host_gid)
-            gid_map_len = xasprintf (&gid_map, MAPPING_FMT_1, container->container_gid, container->host_gid);
-          else
-            gid_map_len = xasprintf (&gid_map, MAPPING_FMT_SIZE, 0, container->host_gid, container->container_gid + 1);
-        }
-    }
-  else
-    {
-      size_t written = 0, s;
-      char buffer[64];
-      gid_map = xmalloc (sizeof (buffer) * def->linux->gid_mappings_len + 1);
-      for (s = 0; s < def->linux->gid_mappings_len; s++)
-        {
-          size_t len;
-
-          len = sprintf (buffer, MAPPING_FMT_SIZE, def->linux->gid_mappings[s]->container_id,
-                         def->linux->gid_mappings[s]->host_id, def->linux->gid_mappings[s]->size);
-          memcpy (gid_map + written, buffer, len);
-          written += len;
-        }
-      gid_map[written] = '\0';
-      gid_map_len = written;
+        gid_map = format_mount_mapping (0, container->host_gid, container->host_gid + 1, &gid_map_len, true);
     }
 
   if (container->host_uid)
@@ -2615,14 +2762,15 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
       if (ret < 0 && ! def->linux->gid_mappings_len)
         {
           size_t single_mapping_len;
-          char single_mapping[32];
+          cleanup_free char *single_mapping = NULL;
           crun_error_release (err);
 
           ret = deny_setgroups (container, pid, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
-          single_mapping_len = sprintf (single_mapping, MAPPING_FMT_1, container->container_gid, container->host_gid);
+          single_mapping = format_mount_mapping (container->container_gid, container->host_gid, 1, &single_mapping_len, true);
+
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
         }
     }
@@ -2645,7 +2793,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
       if (ret < 0 && ! def->linux->uid_mappings_len)
         {
           size_t single_mapping_len;
-          char single_mapping[32];
+          cleanup_free char *single_mapping = NULL;
           crun_error_release (err);
 
           if (! get_private_data (container)->deny_setgroups)
@@ -2655,16 +2803,14 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
                 return ret;
             }
 
-          single_mapping_len = sprintf (single_mapping, MAPPING_FMT_1, container->container_uid, container->host_uid);
+          single_mapping = format_mount_mapping (container->container_uid, container->host_uid, 1, &single_mapping_len, true);
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
     }
   if (UNLIKELY (ret < 0))
     return ret;
-  return 0;
 
-#undef MAPPING_FMT_SIZE
-#undef MAPPING_FMT_1
+  return 0;
 }
 
 #define CAP_TO_MASK_0(x) (1L << ((x) &31))
@@ -3543,12 +3689,17 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
 
   for (i = 0; i < def->mounts_len; i++)
     {
-      const char *idmap_option = get_idmapped_option (def->mounts[i]);
-      if (idmap_option)
+      const char *idmap_option = "";
+      bool has_mappings = def->mounts[i]->uid_mappings || def->mounts[i]->gid_mappings;
+
+      if (! has_mappings)
+        idmap_option = get_idmapped_option (def->mounts[i]);
+
+      if (has_mappings)
         {
           int fd;
 
-          fd = get_idmapped_mount (def, def->mounts[i]->source, idmap_option, pid, err);
+          fd = get_idmapped_mount (def, def->mounts[i], idmap_option, pid, err);
           if (UNLIKELY (fd < 0))
             return fd;
 

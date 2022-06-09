@@ -975,11 +975,11 @@ maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
   return 0;
 }
 
-static inline int
-notify_handler (struct container_entrypoint_s *args,
-                enum handler_configure_phase phase,
-                libcrun_container_t *container, const char *rootfs,
-                libcrun_error_t *err)
+int
+libcrun_container_notify_handler (struct container_entrypoint_s *args,
+                                  enum handler_configure_phase phase,
+                                  libcrun_container_t *container, const char *rootfs,
+                                  libcrun_error_t *err)
 {
   struct custom_handler_s *h = args->custom_handler;
 
@@ -1055,16 +1055,16 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = notify_handler (entrypoint_args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, rootfs, err);
+  ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
-  ret = libcrun_set_mounts (container, rootfs, send_sync_cb, &sync_socket, err);
+  ret = libcrun_set_mounts (entrypoint_args, container, rootfs, send_sync_cb, &sync_socket, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = notify_handler (entrypoint_args, HANDLER_CONFIGURE_AFTER_MOUNTS, container, rootfs, err);
+  ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_AFTER_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3126,7 +3126,7 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (getenv ("HOME") == NULL)
     {
-      ret = set_home_env (container->container_uid);
+      ret = set_home_env (container_uid);
       if (UNLIKELY (ret < 0 && errno != ENOTSUP))
         {
           setenv ("HOME", "/", 1);

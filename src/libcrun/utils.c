@@ -1140,8 +1140,10 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
       cleanup_free char *buffer = NULL;
       ssize_t remaining;
 
+#define BUFFER_SIZE 4096
+
 #ifdef HAVE_COPY_FILE_RANGE
-      nread = copy_file_range (src, NULL, dst, NULL, 0, 0);
+      nread = copy_file_range (src, NULL, dst, NULL, BUFFER_SIZE, 0);
       if (nread < 0 && (errno == EINVAL || errno == EXDEV))
         goto fallback;
       if (consume && nread < 0 && errno == EAGAIN)
@@ -1150,10 +1152,10 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
         return 0;
       if (UNLIKELY (nread < 0))
         return crun_make_error (err, errno, "copy_file_range");
+      continue;
 
     fallback:
 #endif
-#define BUFFER_SIZE 4096
 
       buffer = xmalloc (BUFFER_SIZE);
       nread = TEMP_FAILURE_RETRY (read (src, buffer, BUFFER_SIZE));
@@ -1167,7 +1169,7 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
       remaining = nread;
       while (remaining)
         {
-          ret = TEMP_FAILURE_RETRY (write (dst, buffer, nread));
+          ret = TEMP_FAILURE_RETRY (write (dst, buffer + nread - remaining, remaining));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write");
           remaining -= ret;
@@ -1926,7 +1928,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open `%s/%s`", destname, de->d_name);
 
-          ret = copy_from_fd_to_fd (srcfd, destfd, 0, err);
+          ret = copy_from_fd_to_fd (srcfd, destfd, 1, err);
           if (UNLIKELY (ret < 0))
             return ret;
 

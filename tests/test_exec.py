@@ -17,6 +17,7 @@
 
 import json
 import os
+import re
 import shutil
 import tempfile
 from tests_utils import *
@@ -94,7 +95,7 @@ def test_exec_not_exists():
     return test_exec_not_exists_helper(False)
 
 def test_exec_detach_not_exists():
-    return test_exec_not_exists_helper(False)
+    return test_exec_not_exists_helper(True)
 
 def test_exec_additional_gids():
     if is_rootless():
@@ -130,6 +131,47 @@ def test_exec_additional_gids():
         out = run_crun_command(["exec", "--process", process_file, cid])
         if "432" not in out:
             return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+    return 0
+
+def test_exec_populate_home_env_from_process_uid():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            json.dump({
+	        "user": {
+	            "uid": 1000,
+	            "gid": 1000,
+                    "additionalGids": [1000]
+	        },
+                "terminal": False,
+	        "args": [
+                    "/init",
+                    "printenv",
+                    "HOME"
+	        ],
+	        "env": [
+	            "PATH=/bin",
+	            "TERM=xterm"
+	        ],
+	        "cwd": "/",
+	        "noNewPrivileges": True
+            }, f)
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        if "/var/empty" not in out:
+           return -1
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
@@ -241,6 +283,59 @@ def test_exec_set_user():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_exec_no_new_privs():
+    """Set the no new privileges value for the process"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        # check original value of NoNewPrivs
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/status"])
+        proc_status = parse_proc_status(out)
+        if proc_status["NoNewPrivs"] != "0":
+            return -1
+        out = run_crun_command(["exec", "--no-new-privs", cid, "/init", "cat", "/proc/self/status"])
+        # check no new privileges value of NoNewPrivs
+        proc_status = parse_proc_status(out)
+        if proc_status["NoNewPrivs"] != "1":
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+def test_exec_write_pid_file():
+    """Set the no new privileges value for the process"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    cid = None
+    tempdir = tempfile.mkdtemp()
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        pid_file = os.path.join(tempdir, cid)
+        out = run_crun_command(["exec", "--pid-file", pid_file, cid, "/init", "echo", "hello"])
+        if "hello" not in out:
+            return -1
+        if not os.path.exists(pid_file):
+            return -1
+
+        regu_cont = re.compile(r'\d{5}')
+        with open(pid_file, 'r') as fp:
+            contents = fp.read()
+            fp.close()
+            if not regu_cont.match(contents):
+                return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -250,6 +345,9 @@ all_tests = {
     "exec-add-capability" : test_exec_add_capability,
     "exec-add-environment_variable" : test_exec_add_env,
     "exec-set-user-with-uid-gid" : test_exec_set_user,
+    "exec_add_no_new_privileges" : test_exec_no_new_privs,
+    "exec_write_pid_file" : test_exec_write_pid_file,
+    "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
 }
 
 if __name__ == "__main__":

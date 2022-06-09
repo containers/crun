@@ -22,12 +22,6 @@
 #include "container.h"
 #include <stdio.h>
 
-enum handler_configure_phase
-{
-  HANDLER_CONFIGURE_BEFORE_MOUNTS = 1,
-  HANDLER_CONFIGURE_AFTER_MOUNTS,
-};
-
 struct custom_handler_s
 {
   const char *name;

@@ -243,6 +243,12 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     os.symlink("../usr/share/zoneinfo/Europe/Rome", os.path.join(rootfs, "etc/localtime"))
     os.symlink("../foo/bar/not/here", os.path.join(rootfs, "etc/not-existing"))
 
+    # Populate /etc/passwd inside container rootfs with users root and test for various test-cases.
+    passwd = open(os.path.join(rootfs, "usr/share/passwd"), "w")
+    passwd.writelines(["root:x:0:0:root:/root:/bin/bash", "\ntest:x:1000:1000:test:/var/empty:/bin/bash"])
+    passwd.close()
+    os.symlink("../usr/share/passwd", os.path.join(rootfs, "etc/passwd"))
+
     if chown_rootfs_to is not None:
         os.chown(temp_dir, chown_rootfs_to, chown_rootfs_to)
         for root, dirs, files in os.walk(temp_dir):

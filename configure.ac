@@ -60,6 +60,21 @@ AS_IF([test "x$enable_dl" != "xno"], [
 	AC_SEARCH_LIBS([dlopen], [dl], [AC_DEFINE([HAVE_DLOPEN], 1, [Define if DLOPEN is available])], [])
 ])
 
+AC_SUBST(MONO_CFLAGS)
+AC_SUBST(MONO_LIBS)
+dnl include support for mono (EXPERIMENTAL)
+AC_ARG_WITH([mono], AS_HELP_STRING([--with-mono], [build with mono support]))
+AS_IF([test "x$with_mono" = "xyes"], [
+	AC_CHECK_HEADERS([mono/metadata/environment.h], [], [AC_MSG_ERROR([*** Missing mono headers1])])
+	AS_IF([test "$ac_cv_header_mono_metadata_environment_h" = "yes"], [
+		AC_SEARCH_LIBS(mono_environment_exitcode_get, [mono-2.0], [AC_DEFINE([HAVE_MONO], 1, [Define if mono is available])], [AC_MSG_ERROR([*** Missing mono headers2])])
+		MONO_CFLAGS=`pkg-config --cflags mono-2`
+		MONO_LIBS=`pkg-config --libs mono-2`
+		CFLAGS="$CFLAGS `pkg-config --cflags mono-2`"
+		LIBS="$LIBS `pkg-config --libs mono-2`"
+	])
+])
+
 dnl include support for wasmer (EXPERIMENTAL)
 AC_ARG_WITH([wasmer], AS_HELP_STRING([--with-wasmer], [build with wasmer support]))
 AS_IF([test "x$with_wasmer" = "xyes"], AC_CHECK_HEADERS([wasmer.h], AC_DEFINE([HAVE_WASMER], 1, [Define if wasmer is available]), [AC_MSG_ERROR([*** Missing wasmer headers])]))
