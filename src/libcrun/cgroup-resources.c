@@ -406,17 +406,15 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   size_t i, len;
   int ret;
   char *default_devices[] = {
-    "c *:* m",
-    "b *:* m",
-    "c 1:3 rwm",
-    "c 1:8 rwm",
-    "c 1:7 rwm",
-    "c 5:0 rwm",
-    "c 1:5 rwm",
-    "c 1:9 rwm",
-    "c 5:1 rwm",
-    "c 136:* rwm",
-    "c 5:2 rwm",
+    "c 1:3 rw",
+    "c 1:8 rw",
+    "c 1:7 rw",
+    "c 5:0 rw",
+    "c 1:5 rw",
+    "c 1:9 rw",
+    "c 5:1 rw",
+    "c 136:* rw",
+    "c 5:2 rw",
     NULL
   };
 
@@ -483,17 +481,15 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
     const char *access;
   };
   struct default_dev_s default_devices[] = {
-    { 'c', -1, -1, "m" },
-    { 'b', -1, -1, "m" },
-    { 'c', 1, 3, "rwm" },
-    { 'c', 1, 8, "rwm" },
-    { 'c', 1, 7, "rwm" },
-    { 'c', 5, 0, "rwm" },
-    { 'c', 1, 5, "rwm" },
-    { 'c', 1, 9, "rwm" },
-    { 'c', 5, 1, "rwm" },
-    { 'c', 136, -1, "rwm" },
-    { 'c', 5, 2, "rwm" },
+    { 'c', 1, 3, "rw" },
+    { 'c', 1, 8, "rw" },
+    { 'c', 1, 7, "rw" },
+    { 'c', 5, 0, "rw" },
+    { 'c', 1, 5, "rw" },
+    { 'c', 1, 9, "rw" },
+    { 'c', 5, 1, "rw" },
+    { 'c', 136, -1, "rw" },
+    { 'c', 5, 2, "rw" },
   };
 
   program = bpf_program_new (2048);
