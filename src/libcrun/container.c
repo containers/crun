@@ -1064,10 +1064,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_AFTER_MOUNTS, container, rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   if (def->hooks && def->hooks->create_container_len)
     {
       ret = do_hooks (def, 0, container->context->id, false, NULL, "created", (hook **) def->hooks->create_container,
