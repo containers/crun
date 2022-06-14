@@ -1476,7 +1476,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, struct device_s *
             return fd;
         }
 
-      ret = do_mount (container, fullname, fd, device->path, NULL, MS_BIND | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, fullname, fd, device->path, NULL, MS_BIND | MS_PRIVATE | MS_NOEXEC | MS_NOSUID, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
