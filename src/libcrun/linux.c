@@ -2494,6 +2494,31 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
 }
 
 static int
+umount_or_hide (const char *target, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = umount2 (target, MNT_DETACH);
+  if (UNLIKELY (ret < 0))
+    {
+      int saved_errno = errno;
+
+      /* If the umount2 failed with EINVAL then the mount could
+         be locked.  Hide it by mounting a tmpfs on top of it.  */
+      if (errno == EINVAL)
+        {
+          ret = mount (NULL, target, "tmpfs", 0, "size=0k");
+          if (LIKELY (ret == 0))
+            return 0;
+        }
+
+      return crun_make_error (err, saved_errno, "umount `%s`", target);
+    }
+
+  return ret;
+}
+
+static int
 move_root (const char *rootfs, libcrun_error_t *err)
 {
   int ret;
@@ -2502,13 +2527,13 @@ move_root (const char *rootfs, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chdir to `%s`", rootfs);
 
-  ret = umount2 ("/sys", MNT_DETACH);
+  ret = umount_or_hide ("/sys", err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "umount /sys");
+    return ret;
 
-  ret = umount2 ("/proc", MNT_DETACH);
+  ret = umount_or_hide ("/proc", err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "umount /proc");
+    return ret;
 
   ret = mount (rootfs, "/", "", MS_MOVE, "");
   if (UNLIKELY (ret < 0))
