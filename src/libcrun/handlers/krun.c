@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <sys/param.h>
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sched.h>
@@ -36,6 +37,9 @@
 #ifdef HAVE_LIBKRUN
 #  include <libkrun.h>
 #endif
+
+/* libkrun has a hard-limit of 8 vCPUs per microVM. */
+#define LIBKRUN_MAX_VCPUS 8
 
 /* libkrun handler.  */
 #if HAVE_DLOPEN && HAVE_LIBKRUN
@@ -76,7 +80,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
 
   CPU_ZERO (&set);
   if (sched_getaffinity (getpid (), sizeof (set), &set) == 0)
-    num_vcpus = CPU_COUNT (&set);
+    num_vcpus = MIN (CPU_COUNT (&set), LIBKRUN_MAX_VCPUS);
 
   ctx_id = krun_create_ctx ();
   if (UNLIKELY (ctx_id < 0))
