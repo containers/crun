@@ -162,9 +162,9 @@ libkrun_load (void **cookie, libcrun_error_t *err arg_unused)
 {
   void *handle;
 
-  handle = dlopen ("libkrun.so", RTLD_NOW);
+  handle = dlopen ("libkrun.so.1", RTLD_NOW);
   if (handle == NULL)
-    return crun_make_error (err, 0, "could not load `libkrun.so`: %s", dlerror ());
+    return crun_make_error (err, 0, "could not load `libkrun.so.1`: %s", dlerror ());
 
   *cookie = handle;
 
