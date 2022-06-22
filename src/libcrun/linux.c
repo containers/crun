@@ -2649,13 +2649,13 @@ uidgidmap_helper (char *helper, pid_t pid, char *map_file, libcrun_error_t *err)
 static int
 newgidmap (pid_t pid, char *map_file, libcrun_error_t *err)
 {
-  return uidgidmap_helper ("/usr/bin/newgidmap", pid, map_file, err);
+  return uidgidmap_helper ("newgidmap", pid, map_file, err);
 }
 
 static int
 newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
 {
-  return uidgidmap_helper ("/usr/bin/newuidmap", pid, map_file, err);
+  return uidgidmap_helper ("newuidmap", pid, map_file, err);
 }
 
 static int
