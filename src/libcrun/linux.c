@@ -55,6 +55,8 @@
 #include <sys/personality.h>
 #include <net/if.h>
 #include <sys/xattr.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -4780,7 +4782,6 @@ libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
   int ret;
   size_t i;
   bool configure_network = false;
-  struct ifreq ifr_lo = { .ifr_name = "lo", .ifr_flags = IFF_UP | IFF_RUNNING };
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int sockfd = -1;
 
@@ -4801,12 +4802,71 @@ libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
     return 0;
 
   sockfd = socket (AF_INET, SOCK_DGRAM, 0);
-  if (sockfd < 0)
-    return crun_make_error (err, errno, "socket");
+  if (LIKELY (sockfd >= 0))
+    {
+      struct ifreq ifr_lo = { .ifr_name = "lo", .ifr_flags = IFF_UP | IFF_RUNNING };
 
-  ret = ioctl (sockfd, SIOCSIFFLAGS, &ifr_lo);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "ioctl(SIOCSIFFLAGS)");
+      ret = ioctl (sockfd, SIOCSIFFLAGS, &ifr_lo);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "ioctl(SIOCSIFFLAGS)");
+    }
+  else
+    {
+      struct nlmsghdr *hdr_recv;
+      char buf[sizeof (struct nlmsghdr) + sizeof (struct ifinfomsg)];
+      struct sockaddr_nl addr = {
+        .nl_family = AF_NETLINK,
+        .nl_pid = getpid (),
+      };
+      struct sockaddr_nl addr_to = {
+        .nl_family = AF_NETLINK,
+        .nl_pid = 0,
+      };
+      struct nlmsghdr hdr = {
+        .nlmsg_len = sizeof (struct nlmsghdr) + sizeof (struct ifinfomsg),
+        .nlmsg_type = RTM_NEWLINK,
+        .nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK,
+        .nlmsg_seq = 1,
+        .nlmsg_pid = 0,
+      };
+      struct ifinfomsg msg = {
+        .ifi_family = AF_UNSPEC,
+        .ifi_type = 0,
+        .ifi_index = 1,
+        .ifi_flags = IFF_UP,
+        .ifi_change = IFF_UP,
+      };
+
+      *((struct nlmsghdr *) buf) = hdr;
+      *((struct ifinfomsg *) (buf + sizeof (struct nlmsghdr))) = msg;
+
+      sockfd = socket (PF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+      if (UNLIKELY (sockfd < 0))
+        return crun_make_error (err, errno, "socket(PF_NETLINK)");
+
+      ret = bind (sockfd, (struct sockaddr *) &addr, sizeof (addr));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "bind(PF_NETLINK)");
+
+      ret = sendto (sockfd, buf, sizeof (buf), 0, (struct sockaddr *) &addr_to, sizeof (addr_to));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "sendto(PF_NETLINK)");
+
+      ret = recvfrom (sockfd, buf, sizeof (buf), 0, NULL, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "recvfrom(PF_NETLINK)");
+
+      hdr_recv = (struct nlmsghdr *) buf;
+
+      if (hdr_recv->nlmsg_type == NLMSG_ERROR)
+        {
+          /* The first 4 bytes in the data are the negative error code
+             in native endianness.  */
+          errno = -(*(int32_t *) (buf + sizeof (struct nlmsghdr)));
+          if (UNLIKELY (errno < 0))
+            return crun_make_error (err, errno, "recvfrom(PF_NETLINK)");
+        }
+    }
 
   return 0;
 }
