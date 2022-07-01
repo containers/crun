@@ -34,11 +34,6 @@
 #  include <dlfcn.h>
 #endif
 
-#ifdef HAVE_WASMEDGE_LEGACY
-// user probably wanted to set both, so set it for them
-#  define HAVE_WASMEDGE 1
-#endif
-
 #ifdef HAVE_WASMEDGE
 #  include <wasmedge/wasmedge.h>
 #endif
@@ -90,15 +85,6 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   WasmEdge_VMContext *vm;
   WasmEdge_Result result;
 
-#  ifdef HAVE_WASMEDGE_LEGACY
-  WasmEdge_ImportObjectContext *wasi_module;
-  WasmEdge_ImportObjectContext *proc_module;
-  WasmEdge_ImportObjectContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext * Cxt, const enum WasmEdge_HostRegistration Reg);
-  void (*WasmEdge_ImportObjectCreateWASI) (WasmEdge_ImportObjectContext * Cxt, const char *const *Args, const uint32_t ArgLen, const char *const *Envs, const uint32_t EnvLen, const char *const *Dirs, const uint32_t DirLen, const char *const *Preopens, const uint32_t PreopenLen);
-  void (*WasmEdge_ImportObjectCreateWasmEdgeProcess) (WasmEdge_ImportObjectContext * Cxt, const char *const *AllowedCmds, const uint32_t CmdsLen, const bool AllowAll);
-  WasmEdge_ImportObjectCreateWASI = dlsym (cookie, "WasmEdge_ImportObjectCreateWASI");
-  WasmEdge_ImportObjectCreateWasmEdgeProcess = dlsym (cookie, "WasmEdge_ImportObjectCreateWasmEdgeProcess");
-#  else
   WasmEdge_ModuleInstanceContext *wasi_module;
   WasmEdge_ModuleInstanceContext *proc_module;
   WasmEdge_ModuleInstanceContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext * Cxt, const enum WasmEdge_HostRegistration Reg);
@@ -106,7 +92,6 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   void (*WasmEdge_ModuleInstanceInitWasmEdgeProcess) (WasmEdge_ModuleInstanceContext * Cxt, const char *const *AllowedCmds, const uint32_t CmdsLen, const bool AllowAll);
   WasmEdge_ModuleInstanceInitWASI = dlsym (cookie, "WasmEdge_ModuleInstanceInitWASI");
   WasmEdge_ModuleInstanceInitWasmEdgeProcess = dlsym (cookie, "WasmEdge_ModuleInstanceInitWasmEdgeProcess");
-#  endif
 
   WasmEdge_ConfigureCreate = dlsym (cookie, "WasmEdge_ConfigureCreate");
   WasmEdge_ConfigureDelete = dlsym (cookie, "WasmEdge_ConfigureDelete");
@@ -123,11 +108,7 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   if (WasmEdge_ConfigureCreate == NULL || WasmEdge_ConfigureDelete == NULL || WasmEdge_ConfigureAddProposal == NULL
       || WasmEdge_ConfigureAddHostRegistration == NULL || WasmEdge_VMCreate == NULL || WasmEdge_VMDelete == NULL
       || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL
-#  ifdef HAVE_WASMEDGE_LEGACY
-      || WasmEdge_ImportObjectCreateWASI == NULL || WasmEdge_ImportObjectCreateWasmEdgeProcess == NULL
-#  else
       || WasmEdge_ModuleInstanceInitWASI == NULL || WasmEdge_ModuleInstanceInitWasmEdgeProcess == NULL
-#  endif
       || WasmEdge_VMRunWasmFromFile == NULL || WasmEdge_ResultOK == NULL
       || WasmEdge_StringCreateByCString == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmedge.so`");
@@ -168,13 +149,8 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   for (char *const *arg = argv; *arg != NULL; ++arg, ++argn)
     ;
 
-#  ifdef HAVE_WASMEDGE_LEGACY
-  WasmEdge_ImportObjectCreateWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
-  WasmEdge_ImportObjectCreateWasmEdgeProcess (proc_module, NULL, 0, true);
-#  else
   WasmEdge_ModuleInstanceInitWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
   WasmEdge_ModuleInstanceInitWasmEdgeProcess (proc_module, NULL, 0, true);
-#  endif
 
   result = WasmEdge_VMRunWasmFromFile (vm, pathname, WasmEdge_StringCreateByCString ("_start"), NULL, 0, NULL, 0);
 

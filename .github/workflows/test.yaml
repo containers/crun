@@ -171,12 +171,8 @@ jobs:
                   sudo docker run --rm -w /crun -v ${PWD}/crun:/crun crun-codespell codespell
               ;;
               wasmedge-build)
-                  echo "building with latest version"
                   sudo docker build -t wasmedge tests/wasmedge-build
-                  sudo docker run --rm -w /crun -v ${PWD}:/crun wasmedge --with-wasmedge
-                  echo "building with legacy mode"
-                  sudo docker build -t wasmedge --build-arg=WASM_EDGE_VERSION=0.9.1 tests/wasmedge-build
-                  sudo docker run --rm -w /crun -v ${PWD}:/crun wasmedge --with-wasmedge --with-wasmedge-legacy
+                  sudo docker run --rm -w /crun -v ${PWD}:/crun wasmedge
               ;;
           esac
 
