@@ -108,11 +108,27 @@ def test_allow_access():
         return -1
     return 0
 
+def test_mknod_device():
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+    conf['linux']['devices'] = [{"path": "/foo-dev", "type": "b", "major": 10, "minor": 229},
+                                {"path": "/subdir/foo-dev", "type": "b", "major": 10, "minor": 229},]
+    try:
+        run_and_get_output(conf)
+    except Exception as e:
+        return -1
+    return 0
+
 
 all_tests = {
     "deny-devices" : test_deny_devices,
     "allow-device" : test_allow_device,
     "allow-access" : test_allow_access,
+    "mknod-device" : test_mknod_device,
 }
 
 if __name__ == "__main__":
