@@ -278,9 +278,19 @@ def test_idmapped_mounts():
         template['linux']['gidMappings'] = fullMapping
         template['process']['args'] = ['/init', 'owner', '/foo/file']
 
-        def check(mappings, expected):
+        def check(annotation, uidMappings, gidMappings, expected):
             conf = copy.deepcopy(template)
-            mount_opt = {"destination": "/foo", "type": "bind", "source": source_dir, "options": ["bind", "ro", mappings]}
+            options = ["bind", "ro"]
+            if annotation is not None:
+                options.append(annotation)
+
+            mount_opt = {"destination": "/foo", "type": "bind", "source": source_dir, "options": options}
+
+            if uidMappings is not None:
+                mount_opt["uidMappings"] = uidMappings
+            if gidMappings is not None:
+                mount_opt["gidMappings"] = gidMappings
+
             conf['mounts'].append(mount_opt)
             out = run_and_get_output(conf, chown_rootfs_to=1)
             if expected not in out[0]:
@@ -288,17 +298,41 @@ def test_idmapped_mounts():
                 return True
             return False
 
-        if check("idmap", "0:0"):
+        # first test with the custom crun annotation
+        if check("idmap", None, None, "0:0"):
             return 1
 
-        if check("idmap=uids=0-1-10;gids=0-1-10", "0:0"):
+        if check("idmap=uids=0-1-10;gids=0-1-10", None, None, "0:0"):
             return 1
 
-        if check("idmap=uids=0-2-10#10-100-10;gids=0-1-10", "1:0"):
+        if check("idmap=uids=0-2-10#10-100-10;gids=0-1-10", None, None, "1:0"):
             return 1
 
         os.chown(target, 1, 2)
-        if check("idmap=uids=@0-1-10;gids=+0-1-10", "2:2"):
+        if check("idmap=uids=@0-1-10;gids=+0-1-10", None, None, "2:2"):
+            return 1
+
+        # and now test with uidMappings and gidMappings
+        os.chown(target, 0, 0)
+
+        mountMappings = [
+            {
+                "hostID": 0,
+                "containerID": 1,
+                "size": 10
+            }
+        ]
+        if check(None, mountMappings, mountMappings, "0:0"):
+            return 1
+
+        mountMappings = [
+            {
+                "hostID": 0,
+                "containerID": 2,
+                "size": 10
+            }
+        ]
+        if check(None, mountMappings, mountMappings, "1:1"):
             return 1
     finally:
         shutil.rmtree(source_dir)
