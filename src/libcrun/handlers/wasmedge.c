@@ -86,12 +86,9 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   WasmEdge_Result result;
 
   WasmEdge_ModuleInstanceContext *wasi_module;
-  WasmEdge_ModuleInstanceContext *proc_module;
   WasmEdge_ModuleInstanceContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext * Cxt, const enum WasmEdge_HostRegistration Reg);
   void (*WasmEdge_ModuleInstanceInitWASI) (WasmEdge_ModuleInstanceContext * Cxt, const char *const *Args, const uint32_t ArgLen, const char *const *Envs, const uint32_t EnvLen, const char *const *Dirs, const uint32_t DirLen, const char *const *Preopens, const uint32_t PreopenLen);
-  void (*WasmEdge_ModuleInstanceInitWasmEdgeProcess) (WasmEdge_ModuleInstanceContext * Cxt, const char *const *AllowedCmds, const uint32_t CmdsLen, const bool AllowAll);
   WasmEdge_ModuleInstanceInitWASI = dlsym (cookie, "WasmEdge_ModuleInstanceInitWASI");
-  WasmEdge_ModuleInstanceInitWasmEdgeProcess = dlsym (cookie, "WasmEdge_ModuleInstanceInitWasmEdgeProcess");
 
   WasmEdge_ConfigureCreate = dlsym (cookie, "WasmEdge_ConfigureCreate");
   WasmEdge_ConfigureDelete = dlsym (cookie, "WasmEdge_ConfigureDelete");
@@ -108,9 +105,8 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   if (WasmEdge_ConfigureCreate == NULL || WasmEdge_ConfigureDelete == NULL || WasmEdge_ConfigureAddProposal == NULL
       || WasmEdge_ConfigureAddHostRegistration == NULL || WasmEdge_VMCreate == NULL || WasmEdge_VMDelete == NULL
       || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL
-      || WasmEdge_ModuleInstanceInitWASI == NULL || WasmEdge_ModuleInstanceInitWasmEdgeProcess == NULL
-      || WasmEdge_VMRunWasmFromFile == NULL || WasmEdge_ResultOK == NULL
-      || WasmEdge_StringCreateByCString == NULL)
+      || WasmEdge_ModuleInstanceInitWASI == NULL || WasmEdge_VMRunWasmFromFile == NULL
+      || WasmEdge_ResultOK == NULL || WasmEdge_StringCreateByCString == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmedge.so`");
 
   configure = WasmEdge_ConfigureCreate ();
@@ -121,7 +117,6 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_ReferenceTypes);
   WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_SIMD);
   WasmEdge_ConfigureAddHostRegistration (configure, WasmEdge_HostRegistration_Wasi);
-  WasmEdge_ConfigureAddHostRegistration (configure, WasmEdge_HostRegistration_WasmEdge_Process);
 
   vm = WasmEdge_VMCreate (configure, NULL);
   if (UNLIKELY (vm == NULL))
@@ -138,19 +133,10 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
       error (EXIT_FAILURE, 0, "could not get wasmedge wasi module context");
     }
 
-  proc_module = WasmEdge_VMGetImportModuleContext (vm, WasmEdge_HostRegistration_WasmEdge_Process);
-  if (UNLIKELY (proc_module == NULL))
-    {
-      WasmEdge_VMDelete (vm);
-      WasmEdge_ConfigureDelete (configure);
-      error (EXIT_FAILURE, 0, "could not get wasmedge process module context");
-    }
-
   for (char *const *arg = argv; *arg != NULL; ++arg, ++argn)
     ;
 
   WasmEdge_ModuleInstanceInitWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
-  WasmEdge_ModuleInstanceInitWasmEdgeProcess (proc_module, NULL, 0, true);
 
   result = WasmEdge_VMRunWasmFromFile (vm, pathname, WasmEdge_StringCreateByCString ("_start"), NULL, 0, NULL, 0);
 
