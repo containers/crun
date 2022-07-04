@@ -1529,14 +1529,19 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, struct device_s *
           *tmp = '\0';
           basename = tmp + 1;
 
-          dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname,
-                               O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
-          if (dirfd < 0 && ensure_parent_dir)
+          if (dirname[0] == '\0')
+            dirfd = dup (rootfsfd);
+          else
             {
-              crun_error_release (err);
+              dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname,
+                                   O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
+              if (dirfd < 0 && ensure_parent_dir)
+                {
+                  crun_error_release (err);
 
-              dirfd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs,
-                                                        rootfs_len, dirname, 0755, err);
+                  dirfd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs,
+                                                            rootfs_len, dirname, 0755, err);
+                }
             }
           if (UNLIKELY (dirfd < 0))
             return dirfd;
