@@ -67,9 +67,8 @@ libwasmedge_unload (void *cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *pathname, char *const argv[])
+libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *container, const char *pathname, char *const argv[])
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   WasmEdge_ConfigureContext *(*WasmEdge_ConfigureCreate) (void);
   void (*WasmEdge_ConfigureDelete) (WasmEdge_ConfigureContext * Cxt);
   void (*WasmEdge_ConfigureAddProposal) (WasmEdge_ConfigureContext * Cxt, const enum WasmEdge_Proposal Prop);
@@ -77,9 +76,6 @@ libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *path
   WasmEdge_VMContext *(*WasmEdge_VMCreate) (const WasmEdge_ConfigureContext *ConfCxt, WasmEdge_StoreContext *StoreCxt);
   void (*WasmEdge_VMDelete) (WasmEdge_VMContext * Cxt);
   WasmEdge_Result (*WasmEdge_VMRegisterModuleFromFile) (WasmEdge_VMContext * Cxt, WasmEdge_String ModuleName, const char *Path);
-  WasmEdge_ImportObjectContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext * Cxt, const enum WasmEdge_HostRegistration Reg);
-  void (*WasmEdge_ImportObjectInitWASI) (WasmEdge_ImportObjectContext * Cxt, const char *const *Args, const uint32_t ArgLen, const char *const *Envs, const uint32_t EnvLen, const char *const *Dirs, const uint32_t DirLen, const char *const *Preopens, const uint32_t PreopenLen);
-  void (*WasmEdge_ImportObjectInitWasmEdgeProcess) (WasmEdge_ImportObjectContext * Cxt, const char *const *AllowedCmds, const uint32_t CmdsLen, const bool AllowAll);
   WasmEdge_Result (*WasmEdge_VMRunWasmFromFile) (WasmEdge_VMContext * Cxt, const char *Path, const WasmEdge_String FuncName, const WasmEdge_Value *Params, const uint32_t ParamLen, WasmEdge_Value *Returns, const uint32_t ReturnLen);
   bool (*WasmEdge_ResultOK) (const WasmEdge_Result Res);
   WasmEdge_String (*WasmEdge_StringCreateByCString) (const char *Str);
@@ -87,9 +83,15 @@ libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *path
   const char *dirs[1] = { "/:/" };
   WasmEdge_ConfigureContext *configure;
   WasmEdge_VMContext *vm;
-  WasmEdge_ImportObjectContext *wasi_module;
-  WasmEdge_ImportObjectContext *proc_module;
   WasmEdge_Result result;
+
+  WasmEdge_ModuleInstanceContext *wasi_module;
+  WasmEdge_ModuleInstanceContext *proc_module;
+  WasmEdge_ModuleInstanceContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext * Cxt, const enum WasmEdge_HostRegistration Reg);
+  void (*WasmEdge_ModuleInstanceInitWASI) (WasmEdge_ModuleInstanceContext * Cxt, const char *const *Args, const uint32_t ArgLen, const char *const *Envs, const uint32_t EnvLen, const char *const *Dirs, const uint32_t DirLen, const char *const *Preopens, const uint32_t PreopenLen);
+  void (*WasmEdge_ModuleInstanceInitWasmEdgeProcess) (WasmEdge_ModuleInstanceContext * Cxt, const char *const *AllowedCmds, const uint32_t CmdsLen, const bool AllowAll);
+  WasmEdge_ModuleInstanceInitWASI = dlsym (cookie, "WasmEdge_ModuleInstanceInitWASI");
+  WasmEdge_ModuleInstanceInitWasmEdgeProcess = dlsym (cookie, "WasmEdge_ModuleInstanceInitWasmEdgeProcess");
 
   WasmEdge_ConfigureCreate = dlsym (cookie, "WasmEdge_ConfigureCreate");
   WasmEdge_ConfigureDelete = dlsym (cookie, "WasmEdge_ConfigureDelete");
@@ -99,16 +101,15 @@ libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *path
   WasmEdge_VMDelete = dlsym (cookie, "WasmEdge_VMDelete");
   WasmEdge_VMRegisterModuleFromFile = dlsym (cookie, "WasmEdge_VMRegisterModuleFromFile");
   WasmEdge_VMGetImportModuleContext = dlsym (cookie, "WasmEdge_VMGetImportModuleContext");
-  WasmEdge_ImportObjectInitWASI = dlsym (cookie, "WasmEdge_ImportObjectInitWASI");
-  WasmEdge_ImportObjectInitWasmEdgeProcess = dlsym (cookie, "WasmEdge_ImportObjectInitWasmEdgeProcess");
   WasmEdge_VMRunWasmFromFile = dlsym (cookie, "WasmEdge_VMRunWasmFromFile");
   WasmEdge_ResultOK = dlsym (cookie, "WasmEdge_ResultOK");
   WasmEdge_StringCreateByCString = dlsym (cookie, "WasmEdge_StringCreateByCString");
 
   if (WasmEdge_ConfigureCreate == NULL || WasmEdge_ConfigureDelete == NULL || WasmEdge_ConfigureAddProposal == NULL
       || WasmEdge_ConfigureAddHostRegistration == NULL || WasmEdge_VMCreate == NULL || WasmEdge_VMDelete == NULL
-      || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL || WasmEdge_ImportObjectInitWASI == NULL
-      || WasmEdge_ImportObjectInitWasmEdgeProcess == NULL || WasmEdge_VMRunWasmFromFile == NULL || WasmEdge_ResultOK == NULL
+      || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL
+      || WasmEdge_ModuleInstanceInitWASI == NULL || WasmEdge_ModuleInstanceInitWasmEdgeProcess == NULL
+      || WasmEdge_VMRunWasmFromFile == NULL || WasmEdge_ResultOK == NULL
       || WasmEdge_StringCreateByCString == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmedge.so`");
 
@@ -148,9 +149,8 @@ libwasmedge_exec (void *cookie, libcrun_container_t *container, const char *path
   for (char *const *arg = argv; *arg != NULL; ++arg, ++argn)
     ;
 
-  WasmEdge_ImportObjectInitWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
-
-  WasmEdge_ImportObjectInitWasmEdgeProcess (proc_module, NULL, 0, true);
+  WasmEdge_ModuleInstanceInitWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
+  WasmEdge_ModuleInstanceInitWasmEdgeProcess (proc_module, NULL, 0, true);
 
   result = WasmEdge_VMRunWasmFromFile (vm, pathname, WasmEdge_StringCreateByCString ("_start"), NULL, 0, NULL, 0);
 
