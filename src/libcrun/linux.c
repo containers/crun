@@ -559,83 +559,6 @@ format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, si
   return format_mount_mappings (mappings, 1, written, direct);
 }
 
-static pid_t
-create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt,
-                                  const char *options, libcrun_error_t *err)
-{
-  cleanup_free char *dup_options = xstrdup (options);
-  char *option, *saveptr = NULL;
-  cleanup_pid pid_t pid = -1;
-  char proc_file[64];
-  pid_t xchg_pid;
-
-  pid = syscall_clone (CLONE_NEWUSER | SIGCHLD, NULL);
-  if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "clone");
-
-  if (pid == 0)
-    {
-      prctl (PR_SET_PDEATHSIG, SIGKILL);
-      while (1)
-        pause ();
-      _exit (EXIT_SUCCESS);
-    }
-
-  if (mnt->uid_mappings)
-    {
-      cleanup_free char *uid_map = NULL;
-      cleanup_free char *gid_map = NULL;
-      size_t written = 0;
-      int ret;
-
-      uid_map = format_mount_mappings (mnt->uid_mappings, mnt->uid_mappings_len, &written, false);
-      sprintf (proc_file, "/proc/%d/uid_map", pid);
-      ret = write_file (proc_file, uid_map, written, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      gid_map = format_mount_mappings (mnt->gid_mappings, mnt->gid_mappings_len, &written, false);
-      sprintf (proc_file, "/proc/%d/gid_map", pid);
-      ret = write_file (proc_file, gid_map, written, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      goto success;
-    }
-
-  /* If there are no OCI mappings specified, then parse the annotation.  */
-  for (option = strtok_r (dup_options, ";", &saveptr); option; option = strtok_r (NULL, ";", &saveptr))
-    {
-      cleanup_free char *mappings = NULL;
-      bool is_uids = false;
-      size_t len = 0;
-      int ret;
-
-      if (has_prefix (option, "uids="))
-        {
-          is_uids = true;
-          sprintf (proc_file, "/proc/%d/uid_map", pid);
-        }
-      else if (has_prefix (option, "gids="))
-        sprintf (proc_file, "/proc/%d/gid_map", pid);
-      else
-        return crun_make_error (err, 0, "invalid option `%s` specified", option);
-
-      ret = parse_idmapped_mount_option (def, is_uids, option + 5 /* strlen ("uids="), strlen ("gids=")*/, &mappings, &len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = write_file (proc_file, mappings, len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
-success:
-  xchg_pid = pid;
-  pid = -1;
-  return xchg_pid;
-}
-
 static bool
 has_same_mappings (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt)
 {
@@ -675,33 +598,143 @@ has_same_mappings (runtime_spec_schema_config_schema *def, runtime_spec_schema_d
   return true;
 }
 
+static pid_t
+maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
+                                        runtime_spec_schema_defs_mount *mnt,
+                                        const char *options, pid_t *pid_out,
+                                        libcrun_error_t *err)
+{
+  cleanup_pid pid_t pid = -1;
+  char proc_file[64];
+  bool need_new_userns = mnt->uid_mappings_len ? ! has_same_mappings (def, mnt) : options != NULL;
+
+  if (! need_new_userns)
+    return 0;
+
+  pid = syscall_clone (CLONE_NEWUSER | SIGCHLD, NULL);
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "clone");
+
+  if (pid == 0)
+    {
+      prctl (PR_SET_PDEATHSIG, SIGKILL);
+      while (1)
+        pause ();
+      _exit (EXIT_SUCCESS);
+    }
+
+  if (mnt->uid_mappings_len)
+    {
+      cleanup_free char *uid_map = NULL;
+      cleanup_free char *gid_map = NULL;
+      size_t written = 0;
+      int ret;
+
+      uid_map = format_mount_mappings (mnt->uid_mappings, mnt->uid_mappings_len, &written, false);
+      sprintf (proc_file, "/proc/%d/uid_map", pid);
+      ret = write_file (proc_file, uid_map, written, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      gid_map = format_mount_mappings (mnt->gid_mappings, mnt->gid_mappings_len, &written, false);
+      sprintf (proc_file, "/proc/%d/gid_map", pid);
+      ret = write_file (proc_file, gid_map, written, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      cleanup_free char *dup_options = NULL;
+      char *option, *saveptr = NULL;
+
+      if (! options)
+        return crun_make_error (err, 0, "internal error: no mappings found");
+
+      dup_options = xstrdup (options);
+
+      /* If there are no OCI mappings specified, then parse the annotation.  */
+      for (option = strtok_r (dup_options, ";", &saveptr); option; option = strtok_r (NULL, ";", &saveptr))
+        {
+          cleanup_free char *mappings = NULL;
+          bool is_uids = false;
+          size_t len = 0;
+          int ret;
+
+          if (has_prefix (option, "uids="))
+            {
+              is_uids = true;
+              sprintf (proc_file, "/proc/%d/uid_map", pid);
+            }
+          else if (has_prefix (option, "gids="))
+            sprintf (proc_file, "/proc/%d/gid_map", pid);
+          else
+            return crun_make_error (err, 0, "invalid option `%s` specified", option);
+
+          ret = parse_idmapped_mount_option (def, is_uids, option + 5 /* strlen ("uids="), strlen ("gids=")*/, &mappings, &len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = write_file (proc_file, mappings, len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
+  *pid_out = pid;
+  pid = -1;
+  return 0;
+}
+
+static char *
+get_idmapped_option (runtime_spec_schema_defs_mount *mnt)
+{
+  size_t i;
+
+  for (i = 0; i < mnt->options_len; i++)
+    if (has_prefix (mnt->options[i], "idmap"))
+      return mnt->options[i];
+  return NULL;
+}
+
 static int
-get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, const char *idmap_option, pid_t pid, libcrun_error_t *err)
+maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   cleanup_pid pid_t created_pid = -1;
   struct mount_attr_s attr = {
     0,
   };
+  const char *idmap_option = "";
   cleanup_close int fd = -1;
-  bool need_new_userns;
   const char *options;
   char proc_path[64];
+  bool has_mappings;
   int ret;
 
-  if (! ! (mnt->uid_mappings) != ! ! (mnt->gid_mappings))
+  *out_fd = -1;
+
+  has_mappings = mnt->uid_mappings_len > 0 || mnt->gid_mappings_len > 0 || (idmap_option = get_idmapped_option (mnt));
+  if (! has_mappings)
+    return 0;
+
+  if ((mnt->uid_mappings == NULL) != (mnt->gid_mappings == NULL))
     return crun_make_error (err, 0, "invalid mappings specified for the mount on `%s`", mnt->destination);
 
   /* If there are options specified, create a new user namespace with the configured mappings.  */
-  need_new_userns = (def->linux == NULL || def->linux->uid_mappings_len == 0) || ! has_same_mappings (def, mnt) || (options = strchr (idmap_option, '='));
-  if (need_new_userns)
+  options = strchr (idmap_option, '=');
+  if (options)
     {
-      created_pid = create_userns_for_idmapped_mount (def, mnt, options ? options + 1 : NULL, err);
-      if (UNLIKELY (created_pid < 0))
-        return created_pid;
-
-      pid = created_pid;
+      /* Skip the '=' itself.  */
+      options++;
+      if (options[0] == '\0')
+        options = NULL;
     }
+
+  ret = maybe_create_userns_for_idmapped_mount (def, mnt, options, &created_pid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (created_pid > 0)
+    pid = created_pid;
 
   sprintf (proc_path, "/proc/%d/ns/user", pid);
   fd = open (proc_path, O_RDONLY);
@@ -720,7 +753,8 @@ get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount_setattr `%s`", mnt->source);
 
-  return get_and_reset (&open_tree_fd);
+  *out_fd = get_and_reset (&open_tree_fd);
+  return 0;
 }
 
 int
@@ -3683,17 +3717,6 @@ get_fd_map (libcrun_container_t *container)
   return mount_fds;
 }
 
-static char *
-get_idmapped_option (runtime_spec_schema_defs_mount *mnt)
-{
-  size_t i;
-
-  for (i = 0; i < mnt->options_len; i++)
-    if (has_prefix (mnt->options[i], "idmap"))
-      return mnt->options[i];
-  return NULL;
-}
-
 static bool
 is_bind_mount (runtime_spec_schema_defs_mount *mnt)
 {
@@ -3726,23 +3749,13 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
 
   for (i = 0; i < def->mounts_len; i++)
     {
-      const char *idmap_option = "";
-      bool has_mappings = def->mounts[i]->uid_mappings || def->mounts[i]->gid_mappings;
+      mount_fds->fds[i] = -1;
 
-      if (! has_mappings)
-        idmap_option = get_idmapped_option (def->mounts[i]);
+      ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &(mount_fds->fds[i]), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
-      if (has_mappings)
-        {
-          int fd;
-
-          fd = get_idmapped_mount (def, def->mounts[i], idmap_option, pid, err);
-          if (UNLIKELY (fd < 0))
-            return fd;
-
-          mount_fds->fds[i] = fd;
-        }
-      else if (has_userns && is_bind_mount (def->mounts[i]))
+      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i]))
         {
           mount_fds->fds[i] = get_bind_mount (def->mounts[i]->source, err);
           if (UNLIKELY (mount_fds->fds[i] < 0))
