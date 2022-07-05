@@ -79,6 +79,10 @@ dnl include support for wasmer (EXPERIMENTAL)
 AC_ARG_WITH([wasmer], AS_HELP_STRING([--with-wasmer], [build with wasmer support]))
 AS_IF([test "x$with_wasmer" = "xyes"], AC_CHECK_HEADERS([wasmer.h], AC_DEFINE([HAVE_WASMER], 1, [Define if wasmer is available]), [AC_MSG_ERROR([*** Missing wasmer headers])]))
 
+dnl include support for wasmtime (EXPERIMENTAL)
+AC_ARG_WITH([wasmtime], AS_HELP_STRING([--with-wasmtime], [build with wasmtime support]))
+AS_IF([test "x$with_wasmtime" = "xyes"], AC_CHECK_HEADERS([wasmtime.h], AC_DEFINE([HAVE_WASMTIME], 1, [Define if wasmtime is available]), [AC_MSG_ERROR([*** Missing wasmtime headers])]))
+
 dnl include support for wasmedge (EXPERIMENTAL)
 AC_ARG_WITH([wasmedge], AS_HELP_STRING([--with-wasmedge], [build with WasmEdge support]))
 AS_IF([test "x$with_wasmedge" = "xyes"], AC_CHECK_HEADERS([wasmedge/wasmedge.h], AC_DEFINE([HAVE_WASMEDGE], 1, [Define if WasmEdge is available]), [AC_MSG_ERROR([*** Missing wasmedge headers])]))
