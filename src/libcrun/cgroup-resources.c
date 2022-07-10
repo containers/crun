@@ -212,9 +212,33 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       uint32_t val = blkio->weight;
 
       len = sprintf (fmt_buf, "%" PRIu32, val);
-      ret = write_cgroup_file (dirfd, cgroup2 ? "io.bfq.weight" : "blkio.weight", fmt_buf, len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (! cgroup2)
+        {
+          ret = write_cgroup_file (dirfd, "blkio.weight", fmt_buf, len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = write_cgroup_file (dirfd, "io.bfq.weight", fmt_buf, len, err);
+          if (UNLIKELY (ret < 0))
+            {
+              if (crun_error_get_errno (err) == ENOENT)
+                {
+                  crun_error_release (err);
+
+                  /* convert linearly from [10-1000] to [1-10000] */
+                  val = 1 + (val - 10) * 9999 / 990;
+
+                  len = sprintf (fmt_buf, "%" PRIu32, val);
+
+                  ret = write_cgroup_file (dirfd, "io.weight", fmt_buf, len, err);
+                }
+
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+        }
     }
   if (blkio->leaf_weight)
     {

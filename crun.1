@@ -879,6 +879,12 @@ l l l l .
 \fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
 weight	io.bfq.weight	y = x	
 weight_device	io.bfq.weight	y = x	
+weight	io.weight (fallback)	y = 1 + (x-10)*9999/990	T{
+convert linearly from [10-1000] to [1-10000]
+T}
+weight_device	io.weight (fallback)	y = 1 + (x-10)*9999/990	T{
+convert linearly from [10-1000] to [1-10000]
+T}
 rbps	io.max	y=x	
 wbps	io.max	y=x	
 riops	io.max	y=x	

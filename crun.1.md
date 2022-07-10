@@ -676,6 +676,8 @@ they are converted when needed from the cgroup v1 configuration.
 |---|---|---|---|
 | weight | io.bfq.weight | y = x ||
 | weight_device | io.bfq.weight | y = x ||
+| weight | io.weight (fallback) | y = 1 + (x-10)*9999/990 | convert linearly from [10-1000] to [1-10000] |
+| weight_device | io.weight (fallback) | y = 1 + (x-10)*9999/990 | convert linearly from [10-1000] to [1-10000] |
 | rbps | io.max | y=x ||
 | wbps | io.max | y=x ||
 | riops | io.max |y=x ||
