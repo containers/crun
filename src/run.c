@@ -73,7 +73,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'f':
-      config_file = crun_context.config_file = argp_mandatory_argument (arg, state);
+      config_file = argp_mandatory_argument (arg, state);
       break;
 
     case 'b':
@@ -141,7 +141,6 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
           if (config_file_cleanup == NULL)
             libcrun_fail_with_error (errno, "realpath `%s` failed", config_file);
           config_file = config_file_cleanup;
-          crun_context.config_file = config_file;
         }
     }
 

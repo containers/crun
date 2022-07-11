@@ -330,7 +330,6 @@ run_one_container (uint8_t *buf, size_t len, bool detach)
   ctx.id = id;
   ctx.bundle = "rootfs";
   ctx.detach = detach;
-  ctx.config_file_content = conf;
   ctx.fifo_exec_wait_fd = -1;
 
   libcrun_container_run (&ctx, container, LIBCRUN_RUN_OPTIONS_PREFORK, &err);
