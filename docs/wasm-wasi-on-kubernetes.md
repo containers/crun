@@ -1,7 +1,7 @@
 # Running wasi workload natively on kubernetes using crun
 
-Crun natively supports running wasm/wasi workload on using `wasmedge/wasmer`.
-Both `wasmedge/wasmer` comes with their own set of unique features.
+Crun natively supports running wasm/wasi workload on using `wasmedge`, `wasmer` and `wasmtime`.
+Each one of them (`wasmedge`, `wasmer` and `wasmtime`) comes with their own set of unique features.
 For instance `wasmer` can compile your `.wat` on the fly. Similarly `wasmedge` has its own perks.
 Crun can support only one of them at a time. Please build crun with whatever runtime suits you the best.
 
