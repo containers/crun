@@ -37,8 +37,6 @@ struct libcrun_context_s
   const char *state_root;
   const char *id;
   const char *bundle;
-  const char *config_file;
-  const char *config_file_content;
   const char *console_socket;
   const char *pid_file;
   const char *notify_socket;
@@ -78,6 +76,9 @@ struct libcrun_container_s
 
   uid_t container_uid;
   gid_t container_gid;
+
+  char *config_file;
+  char *config_file_content;
 
   bool use_intermediate_userns;
 

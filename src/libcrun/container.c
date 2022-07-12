@@ -478,13 +478,18 @@ need_intermediate_userns (runtime_spec_schema_config_schema *def)
 }
 
 static libcrun_container_t *
-make_container (runtime_spec_schema_config_schema *container_def)
+make_container (runtime_spec_schema_config_schema *container_def, const char *path, const char *config)
 {
   libcrun_container_t *container = xmalloc0 (sizeof (*container));
   container->container_def = container_def;
 
   container->host_uid = geteuid ();
   container->host_gid = getegid ();
+
+  if (path)
+    container->config_file = xstrdup (path);
+  if (config)
+    container->config_file_content = xstrdup (config);
 
   container->use_intermediate_userns = need_intermediate_userns (container_def);
 
@@ -502,7 +507,7 @@ libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
       crun_make_error (err, 0, "load: %s", oci_error);
       return NULL;
     }
-  return make_container (container_def);
+  return make_container (container_def, NULL, json);
 }
 
 libcrun_container_t *
@@ -516,7 +521,7 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
       crun_make_error (err, 0, "load `%s`: %s", path, oci_error);
       return NULL;
     }
-  return make_container (container_def);
+  return make_container (container_def, path, NULL);
 }
 
 void
@@ -531,6 +536,8 @@ libcrun_container_free (libcrun_container_t *ctr)
   if (ctr->container_def)
     free_runtime_spec_schema_config_schema (ctr->container_def);
 
+  free (ctr->config_file_content);
+  free (ctr->config_file);
   free (ctr);
 }
 
@@ -2499,7 +2506,7 @@ check_config_file (runtime_spec_schema_config_schema *def, libcrun_context_t *co
 }
 
 static int
-libcrun_copy_config_file (const char *id, const char *state_root, const char *config_file, const char *config_file_content, libcrun_error_t *err)
+libcrun_copy_config_file (const char *id, const char *state_root, libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *dest_path = NULL;
@@ -2515,18 +2522,18 @@ libcrun_copy_config_file (const char *id, const char *state_root, const char *co
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (config_file == NULL && config_file_content == NULL)
+  if (container->config_file == NULL && container->config_file_content == NULL)
     return crun_make_error (err, 0, "config file not specified");
 
-  if (config_file == NULL)
+  if (container->config_file == NULL)
     {
-      ret = write_file (dest_path, config_file_content, strlen (config_file_content), err);
+      ret = write_file (dest_path, container->config_file_content, strlen (container->config_file_content), err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   else
     {
-      ret = read_all_file (config_file, &buffer, &len, err);
+      ret = read_all_file (container->config_file, &buffer, &len, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2576,7 +2583,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 
   if (! detach && (options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
     {
-      ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, err);
+      ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2631,7 +2638,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
 
-  ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, &tmp_err);
+  ret = libcrun_copy_config_file (context->id, context->state_root, container, &tmp_err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
@@ -2691,7 +2698,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   if ((options & LIBCRUN_RUN_OPTIONS_PREFORK) == 0)
     {
-      ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, err);
+      ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
       if (UNLIKELY (ret < 0))
         return ret;
       ret = libcrun_container_run_internal (container, context, NULL, err);
@@ -2737,7 +2744,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "detach process");
 
-  ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, err);
+  ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error (errno, "copy config file");
 
@@ -3646,7 +3653,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_copy_config_file (context->id, context->state_root, context->config_file, context->config_file_content, err);
+  ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
