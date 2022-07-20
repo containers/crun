@@ -1,3 +1,22 @@
+* crun-1.5
+
+- add mono based native .NET handler
+- new Wasmtime backend for running WebAssembly
+- add support for wasmedge 0.10 and dropping support for wasmedge 0.9.x
+- dropping support for experimental `WasmEdgeProcess` from wasmedge handler
+- honor process user's uid when setting the HOME environment variable
+- create the current working directory if it is missing in the container
+- fallback to using a tmpfs mount if umount of /sys and /proc fails
+- fallback to netlink to setup lo device
+- fix creating devices in the rootfs
+- fallback to using io.weight if io.bfq.weight doesn't exist
+- remove tun/tap from the default allow list
+- linux: devices mounts have noexec and nosuid
+- fix copyup of files from the container to the tmpfs
+- honor $PATH for newgidmap and newguidmap
+- krun: limit the number of vCPUs to 8
+- cgroup: add support for cpu.idle
+
 * crun-1.4.5
 
 - CRIU: add support for different manage cgroups modes.
