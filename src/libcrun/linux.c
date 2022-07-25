@@ -4931,12 +4931,7 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
     {
       /* If pidfd_open is not supported, fallback to kill.  */
       if (errno == ENOSYS)
-        {
-          ret = kill (status->pid, signal);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "kill container");
-          return 0;
-        }
+        goto fallback_to_kill;
       return crun_make_error (err, errno, "open pidfd");
     }
 
@@ -4953,8 +4948,19 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
 
   ret = syscall_pidfd_send_signal (pidfd, signal, NULL, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "send signal to pidfd");
+    {
+      /* If pidfd_send_signal is not supported, fallback to kill.  */
+      if (errno == ENOSYS)
+        goto fallback_to_kill;
+      return crun_make_error (err, errno, "send signal to pidfd");
+    }
 
+  return 0;
+
+fallback_to_kill:
+  ret = kill (status->pid, signal);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "kill container");
   return 0;
 }
 
