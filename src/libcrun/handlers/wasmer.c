@@ -61,6 +61,14 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   wasm_extern_vec_t exports;
   size_t args_size = 0;
   cleanup_free char *wasi_args = NULL;
+  wasi_config_t *config;
+  char *const *arg;
+  wasi_env_t *wasi_env;
+  wasm_importtype_vec_t import_types;
+  wasm_extern_vec_t imports;
+  wasm_func_t *run_func;
+  wasm_val_vec_t args = WASM_EMPTY_VEC;
+  wasm_val_vec_t res = WASM_EMPTY_VEC;
 
   wasm_engine_t *(*wasm_engine_new) ();
   void (*wat2wasm) (const wasm_byte_vec_t *wat, wasm_byte_vec_t *out);
@@ -162,12 +170,12 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   module = wasm_module_new (store, &binary_bytes);
 
   if (! module)
-    error (EXIT_FAILURE, -1, "error compiling wasm module");
+    error (EXIT_FAILURE, 0, "error compiling wasm module");
 
-  wasi_config_t *config = wasi_config_new ("crun_wasi_program");
+  config = wasi_config_new ("crun_wasi_program");
 
   /* Count number of external arguments given.  */
-  for (char *const *arg = argv; *arg != NULL; ++arg)
+  for (arg = argv; *arg != NULL; ++arg)
     args_size++;
 
   if (args_size > 1)
@@ -177,61 +185,53 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
     }
 
   wasi_config_capture_stdout (config);
-  wasi_env_t *wasi_env = wasi_env_new (config);
+  wasi_env = wasi_env_new (config);
   if (! wasi_env)
     {
-      error (EXIT_FAILURE, -1, "error building wasi env");
+      error (EXIT_FAILURE, 0, "error building wasi env");
     }
 
   /* Instantiate.  */
-  wasm_importtype_vec_t import_types;
   wasm_module_imports (module, &import_types);
 
-  wasm_extern_vec_t imports;
   wasm_extern_vec_new_uninitialized (&imports, import_types.size);
   wasm_importtype_vec_delete (&import_types);
 
-  bool get_imports_result = wasi_get_imports (store, module, wasi_env, &imports);
-
-  if (! get_imports_result)
-    error (EXIT_FAILURE, -1, "error getting WASI imports");
+  if (! wasi_get_imports (store, module, wasi_env, &imports))
+    error (EXIT_FAILURE, 0, "error getting WASI imports");
 
   instance = wasm_instance_new (store, module, &imports, NULL);
 
   if (! instance)
-    error (EXIT_FAILURE, -1, "error instantiating module");
+    error (EXIT_FAILURE, 0, "error instantiating module");
 
   /* Extract export.  */
   wasm_instance_exports (instance, &exports);
   if (exports.size == 0)
-    error (EXIT_FAILURE, -1, "error getting instance exports");
+    error (EXIT_FAILURE, 0, "error getting instance exports");
 
-  wasm_func_t *run_func = wasi_get_start_function (instance);
+  run_func = wasi_get_start_function (instance);
   if (run_func == NULL)
-    error (EXIT_FAILURE, -1, "error accessing export");
+    error (EXIT_FAILURE, 0, "error accessing export");
 
   wasm_module_delete (module);
   wasm_instance_delete (instance);
-  wasm_val_vec_t args = WASM_EMPTY_VEC;
-  wasm_val_vec_t res = WASM_EMPTY_VEC;
 
   if (wasm_func_call (run_func, &args, &res))
-    error (EXIT_FAILURE, -1, "error calling wasm function");
+    error (EXIT_FAILURE, 0, "error calling wasm function");
 
-  {
-    do
-      {
-        data_read_size = wasi_env_read_stdout (wasi_env, buffer, WASMER_BUF_SIZE);
+  do
+    {
+      data_read_size = wasi_env_read_stdout (wasi_env, buffer, WASMER_BUF_SIZE);
 
-        if (data_read_size > 0)
-          {
-            /* Relay wasi output to stdout.  */
-            ret = safe_write (STDOUT_FILENO, buffer, (ssize_t) data_read_size);
-            if (UNLIKELY (ret < 0))
-              error (EXIT_FAILURE, errno, "error while writing wasi output to stdout");
-          }
-    } while (WASMER_BUF_SIZE == data_read_size);
-  }
+      if (data_read_size > 0)
+        {
+          /* Relay wasi output to stdout.  */
+          ret = safe_write (STDOUT_FILENO, buffer, (ssize_t) data_read_size);
+          if (UNLIKELY (ret < 0))
+            error (EXIT_FAILURE, errno, "error while writing wasi output to stdout");
+        }
+  } while (WASMER_BUF_SIZE == data_read_size);
 
   wasm_extern_vec_delete (&exports);
   wasm_extern_vec_delete (&imports);

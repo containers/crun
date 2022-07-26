@@ -8,15 +8,14 @@ local-checks-to-skip = \
     sc_prohibit_strcmp \
     sc_program_name \
     sc_bindtextdomain	 \
-    sc_error_message_period \
     sc_unmarked_diagnostics \
-    sc_prohibit_always_true_header_tests \
     sc_prohibit_intprops_without_use \
     sc_error_message_uppercase \
     sc_GPL_version \
-    sc_prohibit_atoi_atof \
-    sc_cast_of_x_alloc_return_value
-
+    sc_cast_of_x_alloc_return_value \
+    sc_indent \
+    sc_prohibit_always-defined_macros \
+    sc_prohibit_gnu_make_extensions
 
 #SHELL=bash -x
 show-vc-list-except:

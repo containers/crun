@@ -306,7 +306,7 @@ crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, 
     return ret;
 
   if (ret == 0)
-    return crun_make_error (err, ENOTDIR, "The path `%s` is not a directory", path);
+    return crun_make_error (err, ENOTDIR, "the path `%s` is not a directory", path);
 
   return 0;
 }
@@ -752,7 +752,7 @@ static int
 libcrun_is_selinux_enabled (libcrun_error_t *err)
 {
   if (selinux_enabled < 0)
-    return crun_make_error (err, 0, "SELinux not initialized correctly");
+    return crun_make_error (err, 0, "SELinux is not initialized correctly");
   return selinux_enabled;
 }
 
@@ -826,7 +826,7 @@ static int
 libcrun_is_apparmor_enabled (libcrun_error_t *err)
 {
   if (apparmor_enabled < 0)
-    return crun_make_error (err, 0, "AppArmor not initialized correctly");
+    return crun_make_error (err, 0, "AppArmor is not initialized correctly");
   return apparmor_enabled;
 }
 

@@ -216,7 +216,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 #  ifdef SECCOMP_FILTER_FLAG_NEW_LISTENER
       flags |= SECCOMP_FILTER_FLAG_NEW_LISTENER;
 #  else
-      return crun_make_error (err, 0, "SECCOMP_FILTER_FLAG_NEW_LISTENER not supported");
+      return crun_make_error (err, 0, "the SECCOMP_FILTER_FLAG_NEW_LISTENER flag is not supported");
 #  endif
     }
 
