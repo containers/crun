@@ -3309,7 +3309,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     return crun_make_error (err, 0, "error loading config.json");
 
   if (container_status == 0)
-    return crun_make_error (err, 0, "the container `%s` is not running.", id);
+    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   {
     cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
@@ -3322,7 +3322,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   }
 
   if (UNLIKELY (container_paused))
-    return crun_make_error (err, 0, "the container `%s` is paused.", id);
+    return crun_make_error (err, 0, "the container `%s` is paused", id);
 
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
