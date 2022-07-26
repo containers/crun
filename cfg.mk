@@ -15,8 +15,10 @@ local-checks-to-skip = \
     sc_error_message_uppercase \
     sc_GPL_version \
     sc_prohibit_atoi_atof \
-    sc_cast_of_x_alloc_return_value
-
+    sc_cast_of_x_alloc_return_value \
+    sc_indent \
+    sc_prohibit_always-defined_macros \
+    sc_prohibit_gnu_make_extensions
 
 #SHELL=bash -x
 show-vc-list-except:
