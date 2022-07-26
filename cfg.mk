@@ -12,7 +12,6 @@ local-checks-to-skip = \
     sc_prohibit_intprops_without_use \
     sc_error_message_uppercase \
     sc_GPL_version \
-    sc_prohibit_atoi_atof \
     sc_cast_of_x_alloc_return_value \
     sc_indent \
     sc_prohibit_always-defined_macros \
