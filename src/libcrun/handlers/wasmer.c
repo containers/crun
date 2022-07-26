@@ -162,7 +162,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   module = wasm_module_new (store, &binary_bytes);
 
   if (! module)
-    error (EXIT_FAILURE, -1, "error compiling wasm module");
+    error (EXIT_FAILURE, 0, "error compiling wasm module");
 
   wasi_config_t *config = wasi_config_new ("crun_wasi_program");
 
@@ -180,7 +180,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   wasi_env_t *wasi_env = wasi_env_new (config);
   if (! wasi_env)
     {
-      error (EXIT_FAILURE, -1, "error building wasi env");
+      error (EXIT_FAILURE, 0, "error building wasi env");
     }
 
   /* Instantiate.  */
@@ -194,21 +194,21 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   bool get_imports_result = wasi_get_imports (store, module, wasi_env, &imports);
 
   if (! get_imports_result)
-    error (EXIT_FAILURE, -1, "error getting WASI imports");
+    error (EXIT_FAILURE, 0, "error getting WASI imports");
 
   instance = wasm_instance_new (store, module, &imports, NULL);
 
   if (! instance)
-    error (EXIT_FAILURE, -1, "error instantiating module");
+    error (EXIT_FAILURE, 0, "error instantiating module");
 
   /* Extract export.  */
   wasm_instance_exports (instance, &exports);
   if (exports.size == 0)
-    error (EXIT_FAILURE, -1, "error getting instance exports");
+    error (EXIT_FAILURE, 0, "error getting instance exports");
 
   wasm_func_t *run_func = wasi_get_start_function (instance);
   if (run_func == NULL)
-    error (EXIT_FAILURE, -1, "error accessing export");
+    error (EXIT_FAILURE, 0, "error accessing export");
 
   wasm_module_delete (module);
   wasm_instance_delete (instance);
@@ -216,7 +216,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   wasm_val_vec_t res = WASM_EMPTY_VEC;
 
   if (wasm_func_call (run_func, &args, &res))
-    error (EXIT_FAILURE, -1, "error calling wasm function");
+    error (EXIT_FAILURE, 0, "error calling wasm function");
 
   {
     do
