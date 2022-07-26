@@ -26,9 +26,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mount.h>
-#ifdef HAVE_FSCONFIG_CMD_CREATE
+#ifdef HAVE_FSCONFIG_CMD_CREATE_LINUX_MOUNT_H
 #  include <linux/mount.h>
 #endif
+#if defined HAVE_FSCONFIG_CMD_CREATE_LINUX_MOUNT_H || defined HAVE_FSCONFIG_CMD_CREATE_SYS_MOUNT_H
+#  define HAVE_NEW_MOUNT_API
+#endif
+
 #include <sys/syscall.h>
 #include <sys/prctl.h>
 #ifdef HAVE_CAP
@@ -990,7 +994,7 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
 static int
 fsopen_mount (runtime_spec_schema_defs_mount *mount)
 {
-#ifdef HAVE_FSCONFIG_CMD_CREATE
+#ifdef HAVE_NEW_MOUNT_API
   cleanup_close int fsfd = -1;
   int ret;
 
@@ -1016,7 +1020,7 @@ fsopen_mount (runtime_spec_schema_defs_mount *mount)
 static int
 fs_move_mount_to (int fd, int dirfd, const char *name)
 {
-#ifdef HAVE_FSCONFIG_CMD_CREATE
+#ifdef HAVE_NEW_MOUNT_API
   if (name)
     return syscall_move_mount (fd, "", dirfd, name, MOVE_MOUNT_F_EMPTY_PATH);
 
