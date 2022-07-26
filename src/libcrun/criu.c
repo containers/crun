@@ -102,7 +102,7 @@ criu_check_mem_track (char *work_path, libcrun_error_t *err)
     return 1;
 
   return crun_make_error (err, 0,
-                          "Memory tracking not supported. Please check CRIU logfile %s/%s",
+                          "memory tracking not supported. Please check CRIU logfile %s/%s",
                           work_path, CRIU_CHECKPOINT_LOG_FILE);
 }
 
@@ -262,7 +262,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   int ret;
 
   if (geteuid ())
-    return crun_make_error (err, 0, "Checkpointing requires root");
+    return crun_make_error (err, 0, "checkpointing requires root");
 
   /* No CRIU version or feature checking yet. In configure.ac there
    * is a minimum CRIU version listed and so far it is good enough.
@@ -594,7 +594,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   int ret;
 
   if (geteuid ())
-    return crun_make_error (err, 0, "Restoring requires root");
+    return crun_make_error (err, 0, "restoring requires root");
 
   ret = criu_init_opts ();
   if (UNLIKELY (ret < 0))
@@ -773,7 +773,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           if (join_ns_support)
             criu_join_ns_add ("time", def->linux->namespaces[i]->path, NULL);
           else
-            return crun_make_error (err, 0, "Shared time namespace restore is supported in CRIU >= 3.16.1");
+            return crun_make_error (err, 0, "shared time namespace restore is supported in CRIU >= 3.16.1");
         }
 
       if (value == CLONE_NEWIPC && def->linux->namespaces[i]->path != NULL)
@@ -781,7 +781,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           if (join_ns_support)
             criu_join_ns_add ("ipc", def->linux->namespaces[i]->path, NULL);
           else
-            return crun_make_error (err, 0, "Shared ipc namespace restore is supported in CRIU >= 3.16.1");
+            return crun_make_error (err, 0, "shared ipc namespace restore is supported in CRIU >= 3.16.1");
         }
 
       if (value == CLONE_NEWUTS && def->linux->namespaces[i]->path != NULL)
@@ -789,7 +789,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           if (join_ns_support)
             criu_join_ns_add ("uts", def->linux->namespaces[i]->path, NULL);
           else
-            return crun_make_error (err, 0, "Shared uts namespace restore is supported in CRIU >= 3.16.1");
+            return crun_make_error (err, 0, "shared uts namespace restore is supported in CRIU >= 3.16.1");
         }
 #  endif
     }

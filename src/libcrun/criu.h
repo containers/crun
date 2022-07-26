@@ -39,7 +39,7 @@ libcrun_container_checkpoint_linux_criu (arg_unused libcrun_container_status_t *
                                          arg_unused libcrun_container_t *container,
                                          arg_unused libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
 {
-  return crun_make_error (err, 0, "Compiled without CRIU support. Checkpointing not available");
+  return crun_make_error (err, 0, "compiled without CRIU support. Checkpointing not available");
 }
 
 static inline int
@@ -47,7 +47,7 @@ libcrun_container_restore_linux_criu (arg_unused libcrun_container_status_t *sta
                                       arg_unused libcrun_container_t *container,
                                       arg_unused libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
 {
-  return crun_make_error (err, 0, "Compiled without CRIU support. Restore not available");
+  return crun_make_error (err, 0, "compiled without CRIU support. Restore not available");
 }
 
 #endif
