@@ -9,7 +9,6 @@ local-checks-to-skip = \
     sc_program_name \
     sc_bindtextdomain	 \
     sc_unmarked_diagnostics \
-    sc_prohibit_always_true_header_tests \
     sc_prohibit_intprops_without_use \
     sc_error_message_uppercase \
     sc_GPL_version \
