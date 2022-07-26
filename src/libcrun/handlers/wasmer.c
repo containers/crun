@@ -218,20 +218,18 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
   if (wasm_func_call (run_func, &args, &res))
     error (EXIT_FAILURE, 0, "error calling wasm function");
 
-  {
-    do
-      {
-        data_read_size = wasi_env_read_stdout (wasi_env, buffer, WASMER_BUF_SIZE);
+  do
+    {
+      data_read_size = wasi_env_read_stdout (wasi_env, buffer, WASMER_BUF_SIZE);
 
-        if (data_read_size > 0)
-          {
-            /* Relay wasi output to stdout.  */
-            ret = safe_write (STDOUT_FILENO, buffer, (ssize_t) data_read_size);
-            if (UNLIKELY (ret < 0))
-              error (EXIT_FAILURE, errno, "error while writing wasi output to stdout");
-          }
-    } while (WASMER_BUF_SIZE == data_read_size);
-  }
+      if (data_read_size > 0)
+        {
+          /* Relay wasi output to stdout.  */
+          ret = safe_write (STDOUT_FILENO, buffer, (ssize_t) data_read_size);
+          if (UNLIKELY (ret < 0))
+            error (EXIT_FAILURE, errno, "error while writing wasi output to stdout");
+        }
+  } while (WASMER_BUF_SIZE == data_read_size);
 
   wasm_extern_vec_delete (&exports);
   wasm_extern_vec_delete (&imports);
