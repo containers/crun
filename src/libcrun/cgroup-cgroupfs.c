@@ -40,23 +40,14 @@
 static int
 libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *out, libcrun_error_t *err)
 {
-  cleanup_free char *target_cgroup_cleanup = NULL;
   const char *cgroup_path = args->cgroup_path;
-  const char *process_target_cgroup = NULL;
-  const char *delegate_cgroup;
   const char *id = args->id;
   pid_t pid = args->pid;
   int cgroup_mode;
-  int ret;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
-
-  delegate_cgroup = find_delegate_cgroup (args->annotations);
-
-  if (cgroup_mode != CGROUP_MODE_UNIFIED && delegate_cgroup)
-    return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
 
   if (cgroup_path == NULL)
     xasprintf (&(out->path), "/%s", id);
@@ -68,27 +59,16 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
         xasprintf (&(out->path), "/%s", cgroup_path);
     }
 
-  if (delegate_cgroup == NULL)
-    process_target_cgroup = out->path;
-  else
-    {
-      ret = append_paths (&target_cgroup_cleanup, err, out->path, delegate_cgroup, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      process_target_cgroup = target_cgroup_cleanup;
-    }
-
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       int ret;
 
-      ret = enable_controllers (process_target_cgroup, err);
+      ret = enable_controllers (out->path, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
-  return enter_cgroup (cgroup_mode, pid, 0, process_target_cgroup, true, err);
+  return enter_cgroup (cgroup_mode, pid, 0, out->path, true, err);
 }
 
 static int

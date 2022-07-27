@@ -604,6 +604,10 @@ If the \fB\fCrun.oci.systemd.subgroup\fR annotation is specified, yet another
 sub-cgroup is created and the container process is moved here.
 
 .PP
+If a cgroup namespace is used, the cgroup namespace is created before
+moving the container to the delegated cgroup.
+
+.PP
 .RS
 
 .nf

@@ -79,22 +79,16 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
   char *from, *to;
   char *saveptr = NULL;
   cleanup_free char *cgroup_path = NULL;
-  const char *delegate_cgroup;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  delegate_cgroup = find_delegate_cgroup (args->annotations);
-
   switch (cgroup_mode)
     {
     case CGROUP_MODE_HYBRID:
     case CGROUP_MODE_LEGACY:
-      if (delegate_cgroup)
-        return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
-
       from = strstr (content, ":memory:");
       if (LIKELY (from != NULL))
         from += 8;
@@ -158,8 +152,6 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
 
     case CGROUP_MODE_UNIFIED:
       {
-        cleanup_free char *target_cgroup_cleanup = NULL;
-        const char *process_target_cgroup = NULL;
         cleanup_free char *dir = NULL;
 
         from = strstr (content, "0::");
@@ -181,7 +173,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
           }
         *to = '\n';
 
-        ret = append_paths (&dir, err, CGROUP_ROOT, path, delegate_cgroup, NULL);
+        ret = append_paths (&dir, err, CGROUP_ROOT, path, NULL);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -192,34 +184,17 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         if (UNLIKELY (ret < 0))
           return ret;
 
-        /* The difference between path and process_target_cgroup is:
-
-           - path is the cgroup path that is configured by the runtime.
-           - process_target_cgroup is the cgroup where the container process is moved to.
-
-           process_target_cgroup can be a sub-cgroup of PATH.  */
-        if (delegate_cgroup == NULL)
-          process_target_cgroup = path;
-        else
-          {
-            ret = append_paths (&target_cgroup_cleanup, err, path, delegate_cgroup, NULL);
-            if (UNLIKELY (ret < 0))
-              return ret;
-
-            process_target_cgroup = target_cgroup_cleanup;
-          }
-
-        ret = move_process_to_cgroup (pid, NULL, process_target_cgroup, err);
+        ret = move_process_to_cgroup (pid, NULL, path, err);
         if (UNLIKELY (ret < 0))
           return ret;
 
-        ret = enable_controllers (process_target_cgroup, err);
+        ret = enable_controllers (path, err);
         if (UNLIKELY (ret < 0))
           return ret;
 
-        if (suffix || delegate_cgroup)
+        if (suffix)
           {
-            ret = chown_cgroups (process_target_cgroup, args->root_uid, args->root_gid, err);
+            ret = chown_cgroups (path, args->root_uid, args->root_gid, err);
             if (UNLIKELY (ret < 0))
               return ret;
           }

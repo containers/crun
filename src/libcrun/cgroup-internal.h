@@ -49,7 +49,6 @@ struct libcrun_cgroup_manager
   int (*update_resources) (struct libcrun_cgroup_status *cgroup_status, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
 };
 
-const char *find_delegate_cgroup (json_map_string_string *annotations);
 int move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libcrun_error_t *err);
 int enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing,
                             libcrun_error_t *err);

@@ -477,6 +477,9 @@ e.g.
 If the `run.oci.systemd.subgroup` annotation is specified, yet another
 sub-cgroup is created and the container process is moved here.
 
+If a cgroup namespace is used, the cgroup namespace is created before
+moving the container to the delegated cgroup.
+
 ```
 /sys/fs/cgroup/$PATH/$SUBGROUP/$DELEGATED-CGROUP
 ```
