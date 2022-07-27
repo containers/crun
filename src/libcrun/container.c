@@ -2207,6 +2207,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   int cgroup_manager;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
+  struct libcrun_cgroup_args cg;
   struct container_entrypoint_s container_args = {
     .container = container,
     .context = context,
@@ -2315,22 +2316,19 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
      in the container user namespace.  */
   get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
-  {
-    struct libcrun_cgroup_args cg = {
-      .resources = def->linux ? def->linux->resources : NULL,
-      .annotations = def->annotations,
-      .cgroup_path = def->linux ? def->linux->cgroups_path : "",
-      .manager = cgroup_manager,
-      .pid = pid,
-      .root_uid = root_uid,
-      .root_gid = root_gid,
-      .id = context->id,
-    };
+  memset (&cg, 0, sizeof (cg));
+  cg.resources = def->linux ? def->linux->resources : NULL;
+  cg.annotations = def->annotations;
+  cg.cgroup_path = def->linux ? def->linux->cgroups_path : "";
+  cg.manager = cgroup_manager;
+  cg.pid = pid;
+  cg.root_uid = root_uid;
+  cg.root_gid = root_gid;
+  cg.id = context->id;
 
-    ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
-    if (UNLIKELY (ret < 0))
-      goto fail;
-  }
+  ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
 
   /* sync send own pid.  */
   ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
@@ -2349,6 +2347,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   /* sync 2.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
+  ret = libcrun_cgroup_enter_finalize (&cg, cgroup_status, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
@@ -3692,6 +3694,10 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     };
 
     ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    ret = libcrun_cgroup_enter_finalize (&cg, cgroup_status, err);
     if (UNLIKELY (ret < 0))
       return ret;
   }

@@ -360,6 +360,12 @@ success:
 }
 
 int
+libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *cgroup_status arg_unused, libcrun_error_t *err)
+{
+  return 0;
+}
+
+int
 libcrun_cgroup_has_oom (struct libcrun_cgroup_status *status, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
