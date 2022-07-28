@@ -41,6 +41,7 @@ sed -i -e 's|@test "image volume ignore" {|@test "image volume ignore" {\nskip\n
 sed -i -e 's|@test "image volume bind" {|@test "image volume bind" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "image volume user mkdir" {|@test "image volume user mkdir" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "crio restore with missing config.json" {|@test "crio restore with missing config.json" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "crio restore upon exiting KUBENSMNT" {|@test "crio restore upon exiting KUBENSMNT" {\nskip\n|g' test/*.bats
 
 
 # remove useless tests

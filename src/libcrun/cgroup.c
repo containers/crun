@@ -82,7 +82,7 @@ get_cgroup_manager (int manager, struct libcrun_cgroup_manager **out, libcrun_er
   return crun_make_error (err, EINVAL, "unknown cgroup manager specified %d", manager);
 }
 
-const char *
+static const char *
 find_delegate_cgroup (json_map_string_string *annotations)
 {
   const char *annotation;
@@ -356,6 +356,70 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
 success:
   *out = status;
   status = NULL;
+  return 0;
+}
+
+int
+libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *cgroup_status arg_unused, libcrun_error_t *err)
+{
+  cleanup_free char *target_cgroup = NULL;
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *content = NULL;
+  const char *delegate_cgroup;
+  cleanup_free char *dir = NULL;
+  char *current_cgroup, *to;
+  int cgroup_mode;
+  int ret;
+
+  delegate_cgroup = find_delegate_cgroup (args->annotations);
+  if (delegate_cgroup == NULL)
+    return 0;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
+
+  xasprintf (&cgroup_path, "/proc/%d/cgroup", args->pid);
+  ret = read_all_file (cgroup_path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  current_cgroup = strstr (content, "0::");
+  if (UNLIKELY (current_cgroup == NULL))
+    return crun_make_error (err, 0, "cannot find cgroup2 for the current process");
+  current_cgroup += 3;
+  to = strchr (current_cgroup, '\n');
+  if (UNLIKELY (to == NULL))
+    return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+  *to = '\0';
+
+  ret = append_paths (&target_cgroup, err, current_cgroup, delegate_cgroup, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (&dir, err, CGROUP_ROOT, target_cgroup, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = crun_ensure_directory (dir, 0755, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = move_process_to_cgroup (args->pid, NULL, target_cgroup, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = enable_controllers (target_cgroup, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = chown_cgroups (target_cgroup, args->root_uid, args->root_gid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   return 0;
 }
 
