@@ -1,10 +1,13 @@
 Summary: OCI runtime written in C
 Name: crun
+Epoch: 101
 Version: @RPM_VERSION@
-Release: 1%{?dist}
-Source0: https://github.com/containers/crun/releases/download/%{version}/%{name}-@VERSION@.tar.gz
+%define build_timestamp %{lua: print(os.date("%Y%m%d%H%M%S"))}
+Release: %{build_timestamp}%{?dist}
+# `make tarball-prep` will generate this from HEAD commit in the repo root dir
+Source0: %{name}-latest.tar.gz
 License: GPLv2+
-URL: https://github.com/containers/crun
+URL: https://github.com/containers/%{name}
 
 # We always run autogen.sh
 BuildRequires: autoconf
@@ -13,6 +16,7 @@ BuildRequires: gcc
 BuildRequires: python
 BuildRequires: git
 BuildRequires: libcap-devel
+BuildRequires: libkrun-devel
 BuildRequires: systemd-devel
 BuildRequires: yajl-devel
 BuildRequires: libseccomp-devel
@@ -21,22 +25,38 @@ BuildRequires: libtool
 BuildRequires: go-md2man
 
 %description
-crun is a OCI runtime
+%{name} is a OCI runtime
+
+%package -n krun
+Summary: %{name} with libkrun support
+Requires: libkrun
+
+%description -n krun
+krun is a symlink to the crun binary, with libkrun as an additional dependency.
 
 %prep
 %autosetup -n %{name}-@VERSION@
 
 %build
-./autogen.sh
-%configure --disable-silent-rules
-
+# autogen.sh and configure are run via Makefile
 %make_build
 
 %install
 %make_install
-rm -rf $RPM_BUILD_ROOT/usr/lib*
+rm -rf %{buildroot}%{_usr}/lib*
+
+ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
 
 %files
 %license COPYING
 %{_bindir}/%{name}
 %{_mandir}/man1/*
+
+%files -n krun
+%license COPYING
+%{_bindir}/krun
+
+%if ! 0%{?centos} <= 8
+%changelog
+%autochangelog
+%endif
