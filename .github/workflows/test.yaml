@@ -68,6 +68,7 @@ jobs:
           - test: containerd
           - test: oci-validation
           - test: alpine-build
+          - test: fedora-rawhide-mockbuild
           - test: centos8-build
           - test: centos9-build
           - test: clang-format
@@ -140,6 +141,10 @@ jobs:
               alpine-build)
                   sudo docker build -t crun-alpine-build tests/alpine-build
                   sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-alpine-build
+              ;;
+              fedora-rawhide-mockbuild)
+                  sudo docker build -t crun-fedora-rawhide-mockbuild tests/fedora-rawhide-mockbuild
+                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fedora-rawhide-mockbuild
               ;;
               centos8-build)
                   sudo docker build -t crun-centos8-build tests/centos8-build
