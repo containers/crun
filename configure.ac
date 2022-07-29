@@ -209,7 +209,10 @@ AC_SUBST([CRUN_LIBDIR], [$libdir/crun])
 
 [RPM_VERSION=$(echo $VERSION | sed -e's,^\([^-]*\).*$,\1,g')]
 
+[GIT_COMMIT_ID=$(git rev-parse --short HEAD)]
+
 AC_SUBST([RPM_VERSION])
+AC_SUBST([GIT_COMMIT_ID])
 
 AC_CHECK_TOOL(GPERF, gperf)
 if test -z "$GPERF"; then
