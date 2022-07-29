@@ -9,12 +9,11 @@ Source0: %{name}-latest.tar.gz
 License: GPLv2+
 URL: https://github.com/containers/%{name}
 
-# We always run autogen.sh
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
 BuildRequires: python
-BuildRequires: git
+BuildRequires: git-core
 BuildRequires: libcap-devel
 BuildRequires: libkrun-devel
 BuildRequires: systemd-devel

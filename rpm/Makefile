@@ -2,7 +2,7 @@ CWD:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 .ONESHELL:
 tarball-prep:
-	sudo dnf -y install git-core
+	dnf -y install autoconf automake git-core libcap-devel libkrun-devel libseccomp-devel libtool m4 systemd-devel yajl-devel &> /dev/null
 	cd "$(CWD)/..";
 	git submodule update --recursive --init
 	git archive --prefix=crun-latest/ -o crun-latest.tar.gz HEAD
@@ -14,4 +14,5 @@ setup: tarball-prep
 	./configure --disable-silent-rules --with-libkrun
 
 srpm: setup
+	make -C ../libocispec
 	make -C .. srpm
