@@ -1,11 +1,21 @@
+%if 0%{?fedora} >= 37
+%ifarch aarch64,x86_64
+%global krun_support enabled
+%endif
+%else
+%global krun_support disabled
+%endif
+
 Summary: OCI runtime written in C
 Name: crun
 Epoch: 101
-Version: @RPM_VERSION@
+#FIXME: copr build env replaces this with a strange version number
+#Version: @RPM_VERSION@
+Version: 0.0
 %define build_timestamp %{lua: print(os.date("%Y%m%d%H%M%S"))}
-Release: %{build_timestamp}%{?dist}
+Release: %{build_timestamp}.@GIT_COMMIT_ID@%{?dist}
 # `make tarball-prep` will generate this from HEAD commit in the repo root dir
-Source0: %{name}-latest.tar.gz
+Source0: %{name}-HEAD.tar.gz
 License: GPLv2+
 URL: https://github.com/containers/%{name}
 
@@ -15,47 +25,67 @@ BuildRequires: gcc
 BuildRequires: python
 BuildRequires: git-core
 BuildRequires: libcap-devel
+%if "%{krun_support}" == "enabled"
 BuildRequires: libkrun-devel
+%endif
 BuildRequires: systemd-devel
 BuildRequires: yajl-devel
 BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
 BuildRequires: go-md2man
+Provides: oci-runtime
 
 %description
 %{name} is a OCI runtime
 
+%if "%{krun_support}" == "enabled"
 %package -n krun
 Summary: %{name} with libkrun support
 Requires: libkrun
 
 %description -n krun
 krun is a symlink to the crun binary, with libkrun as an additional dependency.
+%endif
 
 %prep
-%autosetup -n %{name}-@VERSION@
+%autosetup -Sgit -n %{name}-HEAD
 
 %build
-# autogen.sh and configure are run via Makefile
+./autogen.sh
+
+%if "%{krun_support}" == "enabled"
+./configure --disable-silent-rules --with-libkrun
+%else
+./configure --disable-silent-rules
+%endif
+
 %make_build
 
 %install
-%make_install
+# FIXME: make_install no longer finds files as expected,
+# so need to run install steps explicitly
+#%%make_install
+install -dp %{buildroot}%{_bindir}
+install -Dp -m0755 %{name} %{buildroot}%{_bindir}
+install -dp %{buildroot}%{_mandir}/man1
+install -Dp -m0644 %{name}.1 %{buildroot}%{_mandir}/man1
 rm -rf %{buildroot}%{_usr}/lib*
 
+%if "%{krun_support}" == "enabled"
 ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
+%endif
 
 %files
 %license COPYING
 %{_bindir}/%{name}
 %{_mandir}/man1/*
 
+%if "%{krun_support}" == "enabled"
 %files -n krun
 %license COPYING
 %{_bindir}/krun
+%endif
 
-%if ! 0%{?centos} <= 8
 %changelog
 %autochangelog
-%endif

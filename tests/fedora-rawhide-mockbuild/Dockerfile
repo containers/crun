@@ -1,6 +1,6 @@
 FROM registry.fedoraproject.org/fedora:rawhide
 
-RUN dnf install -y git-core make rpm-build
+RUN dnf install -y git-core go-md2man make python python3-libmount rpm-build
 
 COPY run-mockbuild.sh /usr/local/bin
 

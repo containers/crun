@@ -3,16 +3,28 @@ SUBDIRS = libocispec
 ACLOCAL_AMFLAGS = -I m4
 
 WD := $(shell pwd)
+# outdir is needed by the make_srpm build type on Fedora copr
+# https://docs.pagure.org/copr.copr/user_documentation.html#make-srpm
+outdir ?= $(WD)
 
-rpm: dist-gzip rpm/crun.spec
-	echo $(VERSION)
-	$(MAKE) -C $(WD) dist-gzip
-	rpmbuild -ba --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
+RPM_OPTS ?= --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(outdir)" --define "_rpmdir $(outdir)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
 
-srpm: dist-gzip rpm/crun.spec
+# Clean any safe.directory values added to global gitconfig because of srpm and
+# rpm target runs
+clean-global-gitconfig:
+	$(shell git config --global --unset-all safe.directory $(shell pwd)/libocispec)
+	$(shell git config --global --unset-all safe.directory $(shell pwd)/rpm)
+	$(shell git config --global --unset-all safe.directory /crun)
+
+srpm:
 	echo $(VERSION)
-	$(MAKE) -C $(WD) dist-gzip
-	rpmbuild -bs --define "_sourcedir $(WD)" --define "_specdir $(WD)" --define "_builddir $(WD)" --define "_srcrpmdir $(WD)" --define "_rpmdir $(WD)" --define "_buildrootdir $(WD)/.build" rpm/crun.spec
+	$(MAKE) -C rpm tarball-prep
+	rpmbuild -bs $(RPM_OPTS) rpm/crun.spec
+	$(MAKE) clean-global-gitconfig
+
+rpm: srpm
+	rpmbuild -ba $(RPM_OPTS) rpm/crun.spec
+	$(MAKE) clean-global-gitconfig
 
 CLEANFILES = crun.spec
 
