@@ -588,6 +588,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_close int inherit_new_pid_fd = -1;
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
+  cleanup_free char *bundle_cleanup = NULL;
   cleanup_close int work_fd = -1;
   int ret_out;
   size_t i;
@@ -694,15 +695,20 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
     }
 
+  /* do realpath on root */
+  bundle_cleanup = realpath (status->bundle, NULL);
+  if (UNLIKELY (bundle_cleanup == NULL))
+    bundle_cleanup = xstrdup (status->bundle);
+
   /* Mount the container rootfs for CRIU. */
-  ret = append_paths (&root, err, status->bundle, "criu-root", NULL);
+  ret = append_paths (&root, err, bundle_cleanup, "criu-root", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))
     return crun_make_error (err, errno, "error creating restore directory %s", root);
-  /* do realpath on root */
+
   ret = mount (status->rootfs, root, NULL, MS_BIND | MS_REC, NULL);
   if (UNLIKELY (ret == -1))
     {
