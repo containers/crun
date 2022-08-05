@@ -1058,9 +1058,10 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (has_terminal && entrypoint_args->context->console_socket)
     console_socket = entrypoint_args->console_socket_fd;
 
-  ret = libcrun_set_sysctl (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  sysCtlReturn sysReturn;
+  sysReturn = libcrun_set_sysctl (container, err);
+  if (UNLIKELY (sysReturn.returnValue < 0))
+    return sysReturn.returnValue;
 
   ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
@@ -1239,6 +1240,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  // set sysctl after namespaces are created
+    ret = libcrun_set_additional_sysctl (&sysReturn, container, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
 
   capabilities = def->process ? def->process->capabilities : NULL;
   no_new_privs = def->process ? def->process->no_new_privileges : 1;

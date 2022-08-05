@@ -3098,7 +3098,7 @@ libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element *
       struct rlimit limit;
       char *type = new_rlimits[i]->type;
       int resource = get_rlimit_resource (type);
-      if (UNLIKELY (resource < 0))
+      if (UNLIKELY (resource < 0)) 
         return crun_make_error (err, 0, "invalid rlimit `%s`", type);
       limit.rlim_cur = new_rlimits[i]->soft;
       limit.rlim_max = new_rlimits[i]->hard;
@@ -3212,46 +3212,41 @@ fail:
   return crun_make_error (err, 0, "the sysctl `%s` requires a new %s namespace", original_value, namespace);
 }
 
-int
-libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
+
+int libcrun_set_additional_sysctl (sysCtlReturn *sysctls, libcrun_container_t *container, libcrun_error_t *err)
 {
   size_t i;
   cleanup_close int dirfd = -1;
   unsigned long namespaces_created = 0;
   runtime_spec_schema_config_schema *def = container->container_def;
 
+
   if (def->linux == NULL || def->linux->sysctl == NULL || def->linux->sysctl->len == 0)
     return 0;
 
-  for (i = 0; i < def->linux->namespaces_len; i++)
+
+ for (i = 0; i < def->linux->namespaces_len; i++)
     {
       int value;
-
       value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
-
+        return value;
       namespaces_created |= value;
     }
 
-  get_private_data (container);
-  dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY);
-  if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open /proc/sys");
-
-  for (i = 0; i < def->linux->sysctl->len; i++)
-    {
+  for (i = 0; i < sysctls->len; i++)
+      {
       cleanup_free char *name = NULL;
       cleanup_close int fd = -1;
       int ret;
       char *it;
 
-      name = xstrdup (def->linux->sysctl->keys[i]);
+      name = xstrdup (sysctls->keys[i]);
       for (it = name; *it; it++)
         if (*it == '.')
           *it = '/';
 
-      ret = validate_sysctl (def->linux->sysctl->keys[i], name, namespaces_created, err);
+      ret = validate_sysctl (sysctls->keys[i], name, namespaces_created, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -3259,11 +3254,126 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "open /proc/sys/%s", name);
 
-      ret = TEMP_FAILURE_RETRY (write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i])));
+      ret = TEMP_FAILURE_RETRY (write (fd, sysctls->values[i], strlen (sysctls->values[i])));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "write to /proc/sys/%s", name);
-    }
+      }
   return 0;
+}
+
+sysCtlReturn
+libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
+{
+  size_t i;
+  cleanup_close int dirfd = -1;
+  unsigned long namespaces_created = 0;
+  runtime_spec_schema_config_schema *def = container->container_def;
+  sysCtlReturn toReturn = {};
+  if (def->linux == NULL || def->linux->sysctl == NULL || def->linux->sysctl->len == 0) {
+    toReturn.returnValue = 0;
+    return toReturn;
+  }
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      int value;
+
+      value = libcrun_find_namespace (def->linux->namespaces[i]->type);
+      if (UNLIKELY (value < 0)) {
+        toReturn.returnValue = crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
+        return toReturn;
+      }
+
+      namespaces_created |= value;
+    }
+
+  get_private_data (container);
+  dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (dirfd < 0)) {
+    toReturn.returnValue = crun_make_error (err, errno, "open /proc/sys");
+    return toReturn;
+  }
+
+  for (i = 0; i < def->linux->sysctl->len; i++)
+    {
+      cleanup_free char *name = NULL;
+      cleanup_close int fd = -1;
+      int ret;
+      char *it;
+      size_t len, i;
+      __auto_free char *key;
+      __auto_free char *val;
+      __auto_free char **keys = NULL;
+      __auto_free char **values = NULL;
+      __auto_free char *new_key = NULL;
+      __auto_free char *new_value = NULL;
+
+      // ignore domainname until after namespaces setup
+      if (strcmp(def->linux->sysctl->keys[i], "kernel.domainname") == 0)
+        key = def->linux->sysctl->keys[i];
+        val = def->linux->sysctl->values[i];
+        new_key = strdup (key ? key : "");
+        if (new_key == NULL) {
+          toReturn.returnValue = -1;
+          return toReturn;
+        }
+
+        new_value = strdup (val ? val : "");
+        if (new_value == NULL) {
+          toReturn.returnValue = -1;
+          return toReturn;
+        }
+
+        len = toReturn.len + 1;
+        keys = realloc (toReturn.keys, len * sizeof (char *));
+        if (keys == NULL) {
+          toReturn.returnValue = -1;
+          return toReturn;
+        }
+        toReturn.keys = keys;
+        keys = NULL;
+        toReturn.keys[toReturn.len] = NULL;
+
+        values = realloc (toReturn.values, len * sizeof (char *));
+        if (values == NULL) {
+          toReturn.returnValue = -1;
+          return toReturn;
+        }
+
+        toReturn.keys[toReturn.len] = new_key;
+        new_key = NULL;
+        toReturn.values = values;
+        values = NULL;
+        toReturn.values[toReturn.len] = new_value;
+        new_value = NULL;
+
+        toReturn.len++;
+        continue;
+
+      name = xstrdup (def->linux->sysctl->keys[i]);
+      for (it = name; *it; it++)
+        if (*it == '.')
+            *it = '/';
+
+
+      ret = validate_sysctl (def->linux->sysctl->keys[i], name, namespaces_created, err);
+      if (UNLIKELY (ret < 0)) {
+        toReturn.returnValue = ret;
+        return toReturn;
+      }
+
+      fd = openat (dirfd, name, O_WRONLY);
+      if (UNLIKELY (fd < 0))
+          toReturn.returnValue = crun_make_error (err, errno, "open /proc/sys/%s", name);
+
+      ret = TEMP_FAILURE_RETRY (write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i])));
+      if (UNLIKELY (ret < 0)) {
+        ret = crun_make_error (err, errno, "write to /proc/sys/%s", name);
+        toReturn.returnValue = ret;
+        return toReturn;
+      }
+    }
+  return toReturn;
 }
 
 static uid_t

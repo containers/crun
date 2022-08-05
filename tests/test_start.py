@@ -200,34 +200,19 @@ def test_uts_sysctl():
                 run_crun_command(["delete", "-f", cid])
 
     conf = base_config()
-    conf['process']['args'] = ['/init', 'true']
-    add_all_namespaces(conf, utsns=False)
-    conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
+    conf['process']['args'] = ['./init', 'cat', '/etc/hosts']
+    add_all_namespaces(conf, utsns=True)
+    conf['linux']['sysctl'] = {'kernel.domainname' : 'baz.foo'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
-        sys.stderr.write("unexpected success\n")
-        return -1
-    except:
-        return 0
-    finally:
-        if cid is not None:
-            run_crun_command(["delete", "-f", cid])
-
-    conf = base_config()
-    conf['process']['args'] = ['/init', 'true']
-    add_all_namespaces(conf)
-    conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
-    cid = None
-    try:
-        _, cid = run_and_get_output(conf)
-        return 0
+        out, _ = run_and_get_output(conf)
+        if "baz.foo" not in str(out):
+            return -1
     except:
         return -1
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
-    return 0
 
 def test_start():
     conf = base_config()

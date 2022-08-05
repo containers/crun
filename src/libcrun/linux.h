@@ -38,6 +38,14 @@ struct device_s
   gid_t gid;
 };
 
+typedef struct
+{
+  int returnValue;
+  char **keys;
+  char **values;
+  size_t len;
+} sysCtlReturn;
+
 typedef int (*container_entrypoint_t) (void *args, char *notify_socket, int sync_socket, libcrun_error_t *err);
 
 typedef int (*set_mounts_cb_t) (void *args, libcrun_error_t *err);
@@ -59,7 +67,8 @@ int libcrun_set_selinux_exec_label (runtime_spec_schema_config_schema_process *p
 int libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
-int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
+sysCtlReturn libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_set_additional_sysctl (sysCtlReturn *sysctls, libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status,
                           const char *cgroup, int detach, int *terminal_fd, libcrun_error_t *err);
