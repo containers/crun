@@ -48,6 +48,8 @@ static int
 libwasmtime_exec (void *cookie, libcrun_container_t *container,
                   const char *pathname, char *const argv[])
 {
+  size_t args_size = 0;
+  char *const *arg;
   wasm_byte_vec_t error_message;
   wasm_engine_t *(*wasm_engine_new) ();
   void (*wasm_engine_delete) (wasm_engine_t *);
@@ -65,6 +67,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
       wasmtime_module_t **ret);
   void (*wasi_config_inherit_argv) (wasi_config_t * config);
   void (*wasi_config_inherit_env) (wasi_config_t * config);
+  void (*wasi_config_set_argv) (wasi_config_t * config, int argc, const char *argv[]);
   void (*wasi_config_inherit_stdin) (wasi_config_t * config);
   void (*wasi_config_inherit_stdout) (wasi_config_t * config);
   void (*wasi_config_inherit_stderr) (wasi_config_t * config);
@@ -99,6 +102,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
   wasm_byte_vec_delete = dlsym (cookie, "wasm_byte_vec_delete");
   wasm_byte_vec_new_uninitialized = dlsym (cookie, "wasm_byte_vec_new_uninitialized");
   wasi_config_new = dlsym (cookie, "wasi_config_new");
+  wasi_config_set_argv = dlsym (cookie, "wasi_config_set_argv");
   wasmtime_store_new = dlsym (cookie, "wasmtime_store_new");
   wasmtime_store_context = dlsym (cookie, "wasmtime_store_context");
   wasmtime_linker_new = dlsym (cookie, "wasmtime_linker_new");
@@ -125,7 +129,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
       || wasi_config_inherit_stdin == NULL || wasi_config_inherit_stderr == NULL
       || wasi_config_inherit_env == NULL || wasmtime_context_set_wasi == NULL
       || wasmtime_linker_module == NULL || wasmtime_linker_get_default == NULL || wasmtime_func_call == NULL
-      || wasmtime_module_delete == NULL || wasmtime_store_delete == NULL
+      || wasmtime_module_delete == NULL || wasmtime_store_delete == NULL || wasi_config_set_argv == NULL
       || wasmtime_error_delete == NULL || wasmtime_error_message == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
 
@@ -173,7 +177,12 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
   // Init WASI program
   wasi_config_t *wasi_config = wasi_config_new ("crun_wasi_program");
   assert (wasi_config);
-  wasi_config_inherit_argv (wasi_config);
+
+  // Calculate argc for `wasi_config_set_argv`
+  for (arg = argv; *arg != NULL; ++arg)
+    args_size++;
+
+  wasi_config_set_argv (wasi_config, args_size, (const char **) argv);
   wasi_config_inherit_env (wasi_config);
   wasi_config_inherit_stdin (wasi_config);
   wasi_config_inherit_stdout (wasi_config);
