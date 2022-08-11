@@ -1,9 +1,15 @@
+%global krun_opts %{nil}
+
 %if 0%{?fedora} >= 37
-%ifarch aarch64,x86_64
+%ifarch aarch64 || x86_64
 %global krun_support enabled
+%global krun_opts --with-libkrun
 %endif
-%else
-%global krun_support disabled
+%endif
+
+%if 0%{?fedora}
+%global wasmtime_support enabled
+%global wasmtime_opts --with-wasmtime
 %endif
 
 Summary: OCI runtime written in C
@@ -34,6 +40,9 @@ BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
 BuildRequires: go-md2man
+%if "%{wasmtime_support}" == "enabled"
+BuildRequires: wasmtime-c-api-devel
+%endif
 Provides: oci-runtime
 
 %description
@@ -53,13 +62,7 @@ krun is a symlink to the crun binary, with libkrun as an additional dependency.
 
 %build
 ./autogen.sh
-
-%if "%{krun_support}" == "enabled"
-./configure --disable-silent-rules --with-libkrun
-%else
-./configure --disable-silent-rules
-%endif
-
+./configure --disable-silent-rules %{wasmtime_opts} %{krun_opts}
 %make_build
 
 %install
@@ -86,6 +89,3 @@ ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
 %license COPYING
 %{_bindir}/krun
 %endif
-
-%changelog
-%autochangelog
