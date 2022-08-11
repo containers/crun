@@ -96,6 +96,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
   void (*wasmtime_store_delete) (wasmtime_store_t * store);
   void (*wasmtime_error_message) (const wasmtime_error_t *error, wasm_name_t *message);
   void (*wasmtime_error_delete) (wasmtime_error_t * error);
+  bool (*wasi_config_preopen_dir) (wasi_config_t * config, const char *path, const char *guest_path);
 
   wasm_engine_new = dlsym (cookie, "wasm_engine_new");
   wasm_engine_delete = dlsym (cookie, "wasm_engine_delete");
@@ -121,6 +122,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
   wasmtime_store_delete = dlsym (cookie, "wasmtime_store_delete");
   wasmtime_error_delete = dlsym (cookie, "wasmtime_error_delete");
   wasmtime_error_message = dlsym (cookie, "wasmtime_error_message");
+  wasi_config_preopen_dir = dlsym (cookie, "wasi_config_preopen_dir");
 
   if (wasm_engine_new == NULL || wasm_engine_delete == NULL || wasm_byte_vec_delete == NULL
       || wasm_byte_vec_new_uninitialized == NULL || wasi_config_new == NULL || wasmtime_store_new == NULL
@@ -130,7 +132,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
       || wasi_config_inherit_env == NULL || wasmtime_context_set_wasi == NULL
       || wasmtime_linker_module == NULL || wasmtime_linker_get_default == NULL || wasmtime_func_call == NULL
       || wasmtime_module_delete == NULL || wasmtime_store_delete == NULL || wasi_config_set_argv == NULL
-      || wasmtime_error_delete == NULL || wasmtime_error_message == NULL)
+      || wasmtime_error_delete == NULL || wasmtime_error_message == NULL || wasi_config_preopen_dir == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
 
   // Set up wasmtime context
@@ -187,6 +189,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
   wasi_config_inherit_stdin (wasi_config);
   wasi_config_inherit_stdout (wasi_config);
   wasi_config_inherit_stderr (wasi_config);
+  wasi_config_preopen_dir (wasi_config, ".", ".");
   wasm_trap_t *trap = NULL;
   err = wasmtime_context_set_wasi (context, wasi_config);
   if (err != NULL)
