@@ -42,6 +42,7 @@ BuildRequires: libtool
 BuildRequires: go-md2man
 %if "%{wasmtime_support}" == "enabled"
 BuildRequires: wasmtime-c-api-devel
+Requires: wasmtime-c-api
 %endif
 Provides: oci-runtime
 
