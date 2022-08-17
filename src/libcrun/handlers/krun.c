@@ -41,86 +41,140 @@
 /* libkrun has a hard-limit of 8 vCPUs per microVM. */
 #define LIBKRUN_MAX_VCPUS 8
 
+struct krun_config
+{
+  void *handle;
+  void *handle_sev;
+  bool sev;
+};
+
 /* libkrun handler.  */
 #if HAVE_DLOPEN && HAVE_LIBKRUN
 static int
 libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname, char *const argv[])
 {
   runtime_spec_schema_config_schema *def = container->container_def;
+  int32_t (*krun_set_log_level) (uint32_t level);
   int32_t (*krun_create_ctx) ();
   int (*krun_start_enter) (uint32_t ctx_id);
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
+  int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_workdir) (uint32_t ctx_id, const char *workdir_path);
   int32_t (*krun_set_exec) (uint32_t ctx_id, const char *exec_path, char *const argv[], char *const envp[]);
-  void *handle = cookie;
+  int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
+  struct krun_config *kconf = (struct krun_config *) cookie;
+  void *handle;
   uint32_t num_vcpus, ram_mib;
   int32_t ctx_id, ret;
   cpu_set_t set;
 
+  if (access ("/krun-sev.json", F_OK) == 0)
+    {
+      if (kconf->handle_sev == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
+      handle = kconf->handle_sev;
+      kconf->sev = true;
+    }
+  else
+    {
+      if (kconf->handle == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
+      handle = kconf->handle;
+      kconf->sev = false;
+    }
+
+  krun_set_log_level = dlsym (handle, "krun_set_log_level");
   krun_create_ctx = dlsym (handle, "krun_create_ctx");
   krun_start_enter = dlsym (handle, "krun_start_enter");
-  krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
-  krun_set_root = dlsym (handle, "krun_set_root");
-  krun_set_workdir = dlsym (handle, "krun_set_workdir");
-  krun_set_exec = dlsym (handle, "krun_set_exec");
-  if (krun_create_ctx == NULL || krun_start_enter == NULL
-      || krun_set_vm_config == NULL || krun_set_root == NULL
-      || krun_set_exec == NULL)
+  if (krun_set_log_level == NULL || krun_create_ctx == NULL
+      || krun_start_enter == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
 
-  /* If sched_getaffinity fails, default to 1 vcpu.  */
-  num_vcpus = 1;
-  /* If no memory limit is specified, default to 2G.  */
-  ram_mib = 2 * 1024;
-
-  if (def && def->linux && def->linux->resources && def->linux->resources->memory
-      && def->linux->resources->memory->limit_present)
-    ram_mib = def->linux->resources->memory->limit / (1024 * 1024);
-
-  CPU_ZERO (&set);
-  if (sched_getaffinity (getpid (), sizeof (set), &set) == 0)
-    num_vcpus = MIN (CPU_COUNT (&set), LIBKRUN_MAX_VCPUS);
+  /* Set log level to "error" */
+  krun_set_log_level (1);
 
   ctx_id = krun_create_ctx ();
   if (UNLIKELY (ctx_id < 0))
     error (EXIT_FAILURE, -ret, "could not create krun context");
 
-  ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
-  if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
-
-  ret = krun_set_root (ctx_id, "/");
-  if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, -ret, "could not set krun root");
-
-  if (krun_set_workdir && def && def->process && def->process->cwd)
+  if (kconf->sev)
     {
-      ret = krun_set_workdir (ctx_id, def->process->cwd);
-      if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not set krun working directory");
-    }
+      krun_set_root_disk = dlsym (handle, "krun_set_root_disk");
+      krun_set_tee_config_file = dlsym (handle, "krun_set_tee_config_file");
+      if (krun_set_root_disk == NULL || krun_set_tee_config_file == NULL)
+        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun-sev.so`");
 
-  ret = krun_set_exec (ctx_id, pathname, &argv[1], NULL);
-  if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, -ret, "could not set krun executable");
+      ret = krun_set_root_disk (ctx_id, "/disk.img");
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set root disk");
+
+      ret = krun_set_tee_config_file (ctx_id, "/krun-sev.json");
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun tee config file");
+    }
+  else
+    {
+      /* If sched_getaffinity fails, default to 1 vcpu.  */
+      num_vcpus = 1;
+      /* If no memory limit is specified, default to 2G.  */
+      ram_mib = 2 * 1024;
+
+      if (def && def->linux && def->linux->resources && def->linux->resources->memory
+          && def->linux->resources->memory->limit_present)
+        ram_mib = def->linux->resources->memory->limit / (1024 * 1024);
+
+      CPU_ZERO (&set);
+      if (sched_getaffinity (getpid (), sizeof (set), &set) == 0)
+        num_vcpus = MIN (CPU_COUNT (&set), LIBKRUN_MAX_VCPUS);
+
+      krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
+      krun_set_root = dlsym (handle, "krun_set_root");
+      krun_set_workdir = dlsym (handle, "krun_set_workdir");
+      krun_set_exec = dlsym (handle, "krun_set_exec");
+      if (krun_set_vm_config == NULL || krun_set_root == NULL
+          || krun_set_exec == NULL)
+        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
+
+      ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
+
+      ret = krun_set_root (ctx_id, "/");
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun root");
+
+      if (krun_set_workdir && def && def->process && def->process->cwd)
+        {
+          ret = krun_set_workdir (ctx_id, def->process->cwd);
+          if (UNLIKELY (ret < 0))
+            error (EXIT_FAILURE, -ret, "could not set krun working directory");
+        }
+
+      ret = krun_set_exec (ctx_id, pathname, &argv[1], NULL);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun executable");
+    }
 
   return krun_start_enter (ctx_id);
 }
 
 /* libkrun_create_kvm_device: explicitly adds kvm device.  */
 static int
-libkrun_configure_container (void *cookie arg_unused, enum handler_configure_phase phase,
+libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
                              libcrun_context_t *context, libcrun_container_t *container,
                              const char *rootfs, libcrun_error_t *err)
 {
   int ret, rootfsfd;
   size_t i;
+  struct krun_config *kconf = (struct krun_config *) cookie;
   struct device_s kvm_device = { "/dev/kvm", "c", 10, 232, 0666, 0, 0 };
+  struct device_s sev_device = { "/dev/sev", "c", 10, 124, 0666, 0, 0 };
   cleanup_close int devfd = -1;
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
   bool is_user_ns;
+  bool create_sev;
 
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
     return 0;
@@ -130,6 +184,16 @@ libkrun_configure_container (void *cookie arg_unused, enum handler_configure_pha
     {
       if (strcmp (def->linux->devices[i]->path, "/dev/kvm") == 0)
         return 0;
+    }
+
+  if (kconf->handle_sev != NULL)
+    {
+      create_sev = true;
+      for (i = 0; i < def->linux->devices_len; i++)
+        {
+          if (strcmp (def->linux->devices[i]->path, "/dev/sev") == 0)
+            create_sev = false;
+        }
     }
 
   if (rootfs == NULL)
@@ -154,19 +218,38 @@ libkrun_configure_container (void *cookie arg_unused, enum handler_configure_pha
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (create_sev)
+    {
+      ret = libcrun_create_dev (container, devfd, &sev_device, is_user_ns, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   return 0;
 }
 
 static int
 libkrun_load (void **cookie, libcrun_error_t *err arg_unused)
 {
+  struct krun_config *kconf;
   void *handle;
 
-  handle = dlopen ("libkrun.so.1", RTLD_NOW);
-  if (handle == NULL)
-    return crun_make_error (err, 0, "could not load `libkrun.so.1`: %s", dlerror ());
+  kconf = malloc (sizeof (struct krun_config));
+  if (kconf == NULL)
+    return crun_make_error (err, 0, "could not allocate memory for krun_config");
 
-  *cookie = handle;
+  kconf->handle = dlopen ("libkrun.so.1", RTLD_NOW);
+  kconf->handle_sev = dlopen ("libkrun-sev.so.1", RTLD_NOW);
+
+  if (kconf->handle == NULL && kconf->handle_sev == NULL)
+    {
+      free (kconf);
+      return crun_make_error (err, 0, "could not allocate memory for krun_config");
+    }
+
+  kconf->sev = false;
+
+  *cookie = kconf;
 
   return 0;
 }
