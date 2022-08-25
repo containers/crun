@@ -44,9 +44,9 @@ libwasmedge_load (void **cookie, libcrun_error_t *err arg_unused)
 {
   void *handle;
 
-  handle = dlopen ("libwasmedge_c.so", RTLD_NOW);
+  handle = dlopen ("libwasmedge.so", RTLD_NOW);
   if (handle == NULL)
-    return crun_make_error (err, 0, "could not load `libwasmedge_c.so`: %s", dlerror ());
+    return crun_make_error (err, 0, "could not load `libwasmedge.so`: %s", dlerror ());
   *cookie = handle;
 
   return 0;
