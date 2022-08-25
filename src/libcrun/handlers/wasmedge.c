@@ -44,9 +44,9 @@ libwasmedge_load (void **cookie, libcrun_error_t *err arg_unused)
 {
   void *handle;
 
-  handle = dlopen ("libwasmedge_c.so", RTLD_NOW);
+  handle = dlopen ("libwasmedge.so.0", RTLD_NOW);
   if (handle == NULL)
-    return crun_make_error (err, 0, "could not load `libwasmedge_c.so`: %s", dlerror ());
+    return crun_make_error (err, 0, "could not load `libwasmedge.so.0`: %s", dlerror ());
   *cookie = handle;
 
   return 0;
@@ -107,7 +107,7 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
       || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL
       || WasmEdge_ModuleInstanceInitWASI == NULL || WasmEdge_VMRunWasmFromFile == NULL
       || WasmEdge_ResultOK == NULL || WasmEdge_StringCreateByCString == NULL)
-    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmedge.so`");
+    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmedge.so.0`");
 
   configure = WasmEdge_ConfigureCreate ();
   if (UNLIKELY (configure == NULL))
