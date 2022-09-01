@@ -31,6 +31,7 @@ export JOBS=2
 sed -i 's/\.slice//g' test/testdata/*.json
 sed -i -e 's|@test "conmon custom cgroup" {|@test "conmon custom cgroup" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "privileged ctr device add" {|@test "privileged ctr device add" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "checkpoint and restore one container into a new pod using --export" {|@test "checkpoint and restore one container into a new pod using --export" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "ctr device add" {|@test "ctr device add" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "privileged ctr -- check for rw mounts" {|@test "privileged ctr -- check for rw mounts" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "kubernetes pod terminationGracePeriod passthru" {|@test "kubernetes pod terminationGracePeriod passthru" {\nskip\n|g' test/*.bats
