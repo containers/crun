@@ -80,8 +80,6 @@ struct libcrun_container_s
   char *config_file;
   char *config_file_content;
 
-  bool use_intermediate_userns;
-
   void *private_data;
   void (*cleanup_private_data) (void *private_data);
   struct libcrun_context_s *context;

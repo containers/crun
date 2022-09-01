@@ -440,43 +440,6 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   return 0;
 }
 
-/*
-  Create an intermediate user namespace if there is a single id mapped
-  inside of the container user namespace and the container wants to run
-  with a different UID/GID than root.
-*/
-static bool
-need_intermediate_userns (runtime_spec_schema_config_schema *def)
-{
-  runtime_spec_schema_config_schema_process *process = def->process;
-  uid_t container_uid;
-  gid_t container_gid;
-
-  if (process == NULL)
-    return false;
-
-  container_uid = process->user ? process->user->uid : 0;
-  container_gid = process->user ? process->user->gid : 0;
-
-  if (container_uid == 0 && container_gid == 0)
-    return false;
-
-  if (def->linux == NULL)
-    return false;
-
-  if (def->linux->uid_mappings_len != 1 || def->linux->gid_mappings_len != 1)
-    return false;
-
-  if (def->linux->uid_mappings[0]->size != 1 || def->linux->gid_mappings[0]->size != 1)
-    return false;
-
-  if (def->linux->uid_mappings[0]->container_id == container_uid
-      && def->linux->gid_mappings[0]->container_id == container_gid)
-    return false;
-
-  return true;
-}
-
 static libcrun_container_t *
 make_container (runtime_spec_schema_config_schema *container_def, const char *path, const char *config)
 {
@@ -490,8 +453,6 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
     container->config_file = xstrdup (path);
   if (config)
     container->config_file_content = xstrdup (config);
-
-  container->use_intermediate_userns = need_intermediate_userns (container_def);
 
   return container;
 }
@@ -1231,13 +1192,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
       close_and_reset (&entrypoint_args->seccomp_fd);
       close_and_reset (&entrypoint_args->seccomp_receiver_fd);
-    }
-
-  if (entrypoint_args->container->use_intermediate_userns)
-    {
-      ret = libcrun_create_final_userns (entrypoint_args->container, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
     }
 
   capabilities = def->process ? def->process->capabilities : NULL;
