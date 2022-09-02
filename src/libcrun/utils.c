@@ -1441,6 +1441,8 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
   cleanup_close int pipe_w = -1;
   sigset_t mask;
 
+  sigemptyset (&mask);
+
   ret = pipe (stdin_pipe);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
