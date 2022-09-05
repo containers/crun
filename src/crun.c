@@ -190,6 +190,7 @@ get_command (const char *arg)
 
 enum
 {
+  OPTION_VERSION = 'v',
   OPTION_DEBUG = 1000,
   OPTION_SYSTEMD_CGROUP,
   OPTION_CGROUP_MANAGER,
@@ -199,7 +200,6 @@ enum
   OPTION_ROOTLESS
 };
 
-const char *argp_program_version = PACKAGE_STRING;
 const char *argp_program_bug_address = "https://github.com/containers/crun/issues";
 
 static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce verbose output", 0 },
@@ -209,6 +209,7 @@ static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce 
                                         { "log-format", OPTION_LOG_FORMAT, "FORMAT", 0, NULL, 0 },
                                         { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },
                                         { "rootless", OPTION_ROOT, "VALUE", 0, NULL, 0 },
+                                        { "version", OPTION_VERSION, 0, 0, NULL, 0 },
                                         {
                                             0,
                                         } };
@@ -300,6 +301,9 @@ parse_opt (int key, char *arg, struct argp_state *state)
     case ARGP_KEY_NO_ARGS:
       libcrun_fail_with_error (0, "please specify a command");
 
+    case OPTION_VERSION:
+      print_version (stdout, state);
+      exit (EXIT_SUCCESS);
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -334,7 +338,6 @@ main (int argc, char **argv)
   libcrun_error_t err = NULL;
   int ret, first_argument = 0;
 
-  argp_program_version_hook = print_version;
 #ifdef HAVE_LIBKRUN
   if (strcmp (basename (argv[0]), "krun") == 0)
     {
