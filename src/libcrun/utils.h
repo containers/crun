@@ -50,6 +50,7 @@
 #define cleanup_dir __attribute__ ((cleanup (cleanup_dirp)))
 #define arg_unused __attribute__ ((unused))
 #define cleanup_pid __attribute__ ((cleanup (cleanup_pidp)))
+#define cleanup_mmap __attribute__ ((cleanup (cleanup_mmapp)))
 
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
@@ -113,6 +114,34 @@ cleanup_pidp (void *p)
       TEMP_FAILURE_RETRY (kill (*pp, SIGKILL));
       TEMP_FAILURE_RETRY (waitpid (*pp, NULL, 0));
     }
+}
+
+struct libcrun_mmap_s
+{
+  void *addr;
+  size_t length;
+};
+
+int libcrun_mmap (struct libcrun_mmap_s **ret, void *addr, size_t length,
+                  int prot, int flags, int fd, off_t offset,
+                  libcrun_error_t *err);
+
+int libcrun_munmap (struct libcrun_mmap_s *mmap, libcrun_error_t *err);
+
+static inline void
+cleanup_mmapp (void *p)
+{
+  int ret;
+  libcrun_error_t tmp_err = NULL;
+  struct libcrun_mmap_s **mm;
+
+  mm = (struct libcrun_mmap_s **) p;
+  if (*mm == NULL)
+    return;
+
+  ret = libcrun_munmap (*mm, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (&tmp_err);
 }
 
 struct libcrun_fd_map

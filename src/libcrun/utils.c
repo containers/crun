@@ -41,6 +41,7 @@
 #include <linux/magic.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <sys/mman.h>
 #ifdef HAVE_LINUX_OPENAT2_H
 #  include <linux/openat2.h>
 #endif
@@ -2290,4 +2291,38 @@ str_join_array (int offset, size_t size, char *const array[], const char *joint)
     }
   *p = '\0';
   return result;
+}
+
+int
+libcrun_mmap (struct libcrun_mmap_s **ret, void *addr, size_t length,
+              int prot, int flags, int fd, off_t offset,
+              libcrun_error_t *err)
+{
+  struct libcrun_mmap_s *mmap_s = NULL;
+
+  void *mapped = mmap (addr, length, prot, flags, fd, offset);
+  if (mapped == MAP_FAILED)
+    return crun_make_error (err, errno, "mmap");
+
+  mmap_s = xmalloc (sizeof (struct libcrun_mmap_s));
+  mmap_s->addr = mapped;
+  mmap_s->length = length;
+
+  *ret = mmap_s;
+
+  return 0;
+}
+
+int
+libcrun_munmap (struct libcrun_mmap_s *mmap, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = munmap (mmap->addr, mmap->length);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "munmap");
+
+  free (mmap);
+
+  return 0;
 }
