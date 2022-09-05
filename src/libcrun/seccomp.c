@@ -34,6 +34,13 @@
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+
+#if HAVE_STDATOMIC_H
+#  include <stdatomic.h>
+#else
+#  define atomic_int volatile int
+#endif
 
 #ifdef HAVE_SECCOMP
 #  include <seccomp.h>
@@ -173,11 +180,14 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
                        libcrun_error_t *err)
 {
 #ifdef HAVE_SECCOMP
-  int ret;
+  cleanup_mmap struct libcrun_mmap_s *mmap_region = NULL;
+  cleanup_close int listener_fd = -1;
+  cleanup_pid int helper_proc = -1;
   struct sock_fprog seccomp_filter;
   cleanup_free char *bpf = NULL;
   unsigned int flags = 0;
   size_t len;
+  int ret;
 
   if (infd < 0)
     return 0;
@@ -213,18 +223,81 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 
   if (listener_receiver_fd >= 0)
     {
+      cleanup_close int memfd = -1;
+      atomic_int *fd_received;
+
 #  ifdef SECCOMP_FILTER_FLAG_NEW_LISTENER
       flags |= SECCOMP_FILTER_FLAG_NEW_LISTENER;
 #  else
       return crun_make_error (err, 0, "the SECCOMP_FILTER_FLAG_NEW_LISTENER flag is not supported");
 #  endif
+
+      memfd = memfd_create ("seccomp-helper-memfd", O_RDWR);
+      if (UNLIKELY (memfd < 0))
+        return crun_make_error (err, errno, "memfd_create");
+
+      ret = ftruncate (memfd, sizeof (atomic_int));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "ftruncate seccomp memfd");
+
+      ret = libcrun_mmap (&mmap_region, NULL, sizeof (atomic_int),
+                          PROT_WRITE | PROT_READ, MAP_SHARED, memfd, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      /* memfd is not needed anymore.  */
+      close_and_reset (&memfd);
+
+      fd_received = mmap_region->addr;
+      *fd_received = -1;
+
+      /* The helper process shares the fd table with the current process.  */
+      helper_proc = syscall_clone (CLONE_FILES | SIGCHLD, NULL);
+      if (UNLIKELY (helper_proc < 0))
+        return crun_make_error (err, errno, "clone seccomp listener helper process");
+
+      /* helper process.  Wait that the seccomp listener fd is created then send it to the
+         receiver fd.  We use the helper process since the seccomp profile could block the
+         sendmsg syscall.   Its exit status is an errno value.  */
+      if (helper_proc == 0)
+        {
+          int fd, timeout = 0;
+
+          prctl (PR_SET_PDEATHSIG, SIGKILL);
+          for (;;)
+            {
+              fd = *fd_received;
+              if (fd == -1)
+                {
+                  usleep (1000);
+
+                  /* Do not wait longer than 5 seconds.  */
+                  if (timeout++ > 5000)
+                    _exit (EINVAL);
+                  continue;
+                }
+#  if ! HAVE_STDATOMIC_H
+              /* If stdatomic is not available, force a membarrier and read again.  */
+              __sync_synchronize ();
+              fd = *fd_received;
+#  endif
+              break;
+            }
+          ret = send_fd_to_socket_with_payload (listener_receiver_fd, fd,
+                                                receiver_fd_payload,
+                                                receiver_fd_payload_len,
+                                                err);
+          if (UNLIKELY (ret < 0))
+            _exit (crun_error_get_errno (err));
+          _exit (0);
+        }
     }
 
   ret = syscall_seccomp (SECCOMP_SET_MODE_FILTER, flags, &seccomp_filter);
   if (UNLIKELY (ret < 0))
     {
       /* If any of the flags is not supported, try again without specifying them:  */
-      if (errno == EINVAL)
+      if (errno == EINVAL && listener_receiver_fd < 0)
         ret = syscall_seccomp (SECCOMP_SET_MODE_FILTER, 0, &seccomp_filter);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "seccomp (SECCOMP_SET_MODE_FILTER)");
@@ -232,13 +305,22 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 
   if (listener_receiver_fd >= 0)
     {
-      int fd = ret;
+      atomic_int *fd_to_send = mmap_region->addr;
+      int status = 0;
 
-      ret = send_fd_to_socket_with_payload (listener_receiver_fd, fd,
-                                            receiver_fd_payload, receiver_fd_payload_len, err);
+      /* Write atomically the listener fd to the shared memory.  No syscalls are used between
+         the seccomp listener creation and the write.  */
+      *fd_to_send = listener_fd = ret;
+
+      ret = waitpid_ignore_stopped (helper_proc, &status, 0);
       if (UNLIKELY (ret < 0))
-        return crun_error_wrap (err, "send listener fd `%d` to receiver", fd);
+        return crun_make_error (err, errno, "waitpid seccomp listener helper process");
+
+      ret = get_process_exit_status (status);
+      if (ret != 0)
+        return crun_make_error (err, ret, "send listener fd `%d` to receiver", listener_fd);
     }
+
   return 0;
 #else
   return 0;
