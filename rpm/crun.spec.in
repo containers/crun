@@ -8,8 +8,10 @@
 %endif
 
 %if 0%{?fedora}
+%ifnarch %{ix86}
 %global wasmtime_support enabled
 %global wasmtime_opts --with-wasmtime
+%endif
 %endif
 
 Summary: OCI runtime written in C
