@@ -349,4 +349,32 @@ is_empty_string (const char *s)
   return s == NULL || s[0] == '\0';
 }
 
+static inline int
+waitpid_ignore_stopped (pid_t pid, int *status, int options)
+{
+  int ret, s = 0;
+  do
+    {
+      ret = TEMP_FAILURE_RETRY (waitpid (pid, &s, options));
+      if (ret < 0)
+        return ret;
+  } while (WIFSTOPPED (s) | WIFCONTINUED (s));
+
+  if (status)
+    *status = s;
+
+  return ret;
+}
+
+static inline int
+get_process_exit_status (int status)
+{
+  if (WIFEXITED (status))
+    return WEXITSTATUS (status);
+  if (WIFSIGNALED (status))
+    return 128 + WTERMSIG (status);
+
+  return -1;
+}
+
 #endif

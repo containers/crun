@@ -4187,7 +4187,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
             return crun_make_error (err, errno, "read pid from sync socket");
 
           /* Cleanup the first process.  */
-          ret = TEMP_FAILURE_RETRY (waitpid (pid, NULL, 0));
+          ret = waitpid_ignore_stopped (pid, NULL, 0);
 
           pid_to_clean = pid = new_pid;
 
@@ -4231,7 +4231,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
             return ret;
 
           /* Cleanup the first process.  */
-          waitpid (pid, NULL, 0);
+          waitpid_ignore_stopped (pid, NULL, 0);
 
           pid_to_clean = pid = grandchild;
         }
@@ -4325,7 +4325,7 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
     return crun_make_error (err, errno, "read from sync socket");
 
   /* Wait for the child pid so we ensure the grandchild gets properly reparented.  */
-  ret = TEMP_FAILURE_RETRY (waitpid (child_pid, &pid_status, 0));
+  ret = waitpid_ignore_stopped (child_pid, &pid_status, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 

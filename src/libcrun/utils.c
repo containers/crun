@@ -1558,15 +1558,11 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
     }
 
 read_waitpid:
-  r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
+  r = waitpid_ignore_stopped (pid, &status, 0);
   if (r < 0)
     ret = crun_make_error (err, errno, "waitpid");
-  else if (WIFEXITED (status))
-    ret = WEXITSTATUS (status);
-  else if (WIFSIGNALED (status))
-    ret = 127 + WTERMSIG (status);
   else
-    ret = crun_make_error (err, 0, "invalid return status for process");
+    ret = get_process_exit_status (status);
 
   /* Prevent to cleanup the pid again.  */
   pid = 0;
