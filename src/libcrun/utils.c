@@ -1429,17 +1429,63 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
   return written;
 }
 
-/* will leave SIGCHLD blocked if TIMEOUT is used.  */
+static void __attribute__ ((__noreturn__))
+run_process_child (char *path, char **args, const char *cwd, char **envp, int pipe_r,
+                   int pipe_w, int out_fd, int err_fd)
+{
+  char *tmp_args[] = { path, NULL };
+  libcrun_error_t err = NULL;
+  int dev_null_fd = -1;
+  int ret;
+
+  ret = mark_or_close_fds_ge_than (3, false, &err);
+  if (UNLIKELY (ret < 0))
+    libcrun_fail_with_error ((err)->status, "%s", (err)->msg);
+
+  if (out_fd < 0 || err_fd < 0)
+    {
+      dev_null_fd = open ("/dev/null", O_WRONLY);
+      if (UNLIKELY (dev_null_fd < 0))
+        _exit (EXIT_FAILURE);
+    }
+
+  TEMP_FAILURE_RETRY (close (pipe_w));
+  dup2 (pipe_r, 0);
+  TEMP_FAILURE_RETRY (close (pipe_r));
+
+  dup2 (out_fd >= 0 ? out_fd : dev_null_fd, 1);
+  dup2 (err_fd >= 0 ? err_fd : dev_null_fd, 2);
+
+  if (dev_null_fd >= 0)
+    TEMP_FAILURE_RETRY (close (dev_null_fd));
+  if (out_fd >= 0)
+    TEMP_FAILURE_RETRY (close (out_fd));
+  if (err_fd >= 0)
+    TEMP_FAILURE_RETRY (close (err_fd));
+
+  if (args == NULL)
+    args = tmp_args;
+
+  if (cwd && chdir (cwd) < 0)
+    _exit (EXIT_FAILURE);
+
+  execvpe (path, args, envp);
+  _exit (EXIT_FAILURE);
+}
+
+/* It changes the signals mask for the current process.  */
 int
-run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp, char *stdin,
-                                     size_t stdin_len, int out_fd, int err_fd, libcrun_error_t *err)
+run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout,
+                                     char **envp, char *stdin, size_t stdin_len, int out_fd,
+                                     int err_fd, libcrun_error_t *err)
 {
   int stdin_pipe[2];
   pid_t pid;
   int ret;
   cleanup_close int pipe_r = -1;
   cleanup_close int pipe_w = -1;
-  sigset_t mask;
+  sigset_t oldmask, mask;
+  int r, status;
 
   sigemptyset (&mask);
 
@@ -1452,101 +1498,93 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
   if (timeout > 0)
     {
       sigaddset (&mask, SIGCHLD);
-      ret = sigprocmask (SIG_BLOCK, &mask, NULL);
+      ret = sigprocmask (SIG_BLOCK, &mask, &oldmask);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "sigprocmask");
     }
 
   pid = fork ();
   if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "fork");
-
-  if (pid)
     {
-      int r, status;
+      ret = crun_make_error (err, errno, "fork");
+      goto restore_sig_mask_and_exit;
+    }
 
-      close_and_reset (&pipe_r);
+  if (pid == 0)
+    {
+      /* run_process_child doesn't return.  */
+      run_process_child (path, args, cwd, envp, pipe_r, pipe_w, out_fd, err_fd);
+    }
 
-      ret = TEMP_FAILURE_RETRY (write (pipe_w, stdin, stdin_len));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "writing to pipe");
+  close_and_reset (&pipe_r);
 
-      close_and_reset (&pipe_w);
+  ret = TEMP_FAILURE_RETRY (write (pipe_w, stdin, stdin_len));
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, errno, "writing to pipe");
+      goto restore_sig_mask_and_exit;
+    }
 
-      if (timeout)
+  close_and_reset (&pipe_w);
+
+  if (timeout)
+    {
+      time_t start = time (NULL);
+      time_t now;
+      for (now = start; now - start < timeout; now = time (NULL))
         {
-          time_t start = time (NULL);
-          time_t now;
-          for (now = start; now - start < timeout; now = time (NULL))
+          siginfo_t info;
+          int elapsed = now - start;
+          struct timespec ts_timeout = { .tv_sec = timeout - elapsed, .tv_nsec = 0 };
+
+          ret = sigtimedwait (&mask, &info, &ts_timeout);
+          if (UNLIKELY (ret < 0 && errno != EAGAIN))
             {
-              siginfo_t info;
-              int elapsed = now - start;
-              struct timespec ts_timeout = { .tv_sec = timeout - elapsed, .tv_nsec = 0 };
-
-              ret = sigtimedwait (&mask, &info, &ts_timeout);
-              if (UNLIKELY (ret < 0 && errno != EAGAIN))
-                return crun_make_error (err, errno, "sigtimedwait");
-
-              if (info.si_signo == SIGCHLD && info.si_pid == pid)
-                goto read_waitpid;
-
-              if (ret < 0 && errno == EAGAIN)
-                goto timeout;
+              ret = crun_make_error (err, errno, "sigtimedwait");
+              goto restore_sig_mask_and_exit;
             }
-        timeout:
-          kill (pid, SIGKILL);
-          return crun_make_error (err, 0, "timeout expired for `%s`", path);
-        }
 
-    read_waitpid:
-      r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
-      if (r < 0)
-        return crun_make_error (err, errno, "waitpid");
-      if (WIFEXITED (status))
-        return WEXITSTATUS (status);
-      if (WIFSIGNALED (status))
-        return 127 + WTERMSIG (status);
+          if (info.si_signo == SIGCHLD && info.si_pid == pid)
+            goto read_waitpid;
+
+          if (ret < 0 && errno == EAGAIN)
+            goto timeout;
+        }
+    timeout:
+      kill (pid, SIGKILL);
+
+      ret = crun_make_error (err, 0, "timeout expired for `%s`", path);
+      goto restore_sig_mask_and_exit;
     }
+
+read_waitpid:
+  r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
+  if (r < 0)
+    ret = crun_make_error (err, errno, "waitpid");
+  else if (WIFEXITED (status))
+    ret = WEXITSTATUS (status);
+  else if (WIFSIGNALED (status))
+    ret = 127 + WTERMSIG (status);
   else
+    ret = crun_make_error (err, 0, "invalid return status for process");
+
+  /* Prevent to cleanup the pid again.  */
+  pid = 0;
+
+restore_sig_mask_and_exit:
+  if (timeout > 0)
     {
-      char *tmp_args[] = { path, NULL };
-      int dev_null_fd = -1;
-
-      ret = mark_or_close_fds_ge_than (3, false, err);
-      if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-
-      if (out_fd < 0 || err_fd < 0)
+      /* Cleanup the zombie process.  */
+      if (pid > 0)
         {
-          dev_null_fd = open ("/dev/null", O_WRONLY);
-          if (UNLIKELY (dev_null_fd < 0))
-            _exit (EXIT_FAILURE);
+          kill (pid, SIGKILL);
+          TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
         }
-
-      TEMP_FAILURE_RETRY (close (pipe_w));
-      dup2 (pipe_r, 0);
-      TEMP_FAILURE_RETRY (close (pipe_r));
-
-      dup2 (out_fd >= 0 ? out_fd : dev_null_fd, 1);
-      dup2 (err_fd >= 0 ? err_fd : dev_null_fd, 2);
-
-      if (dev_null_fd >= 0)
-        TEMP_FAILURE_RETRY (close (dev_null_fd));
-      if (out_fd >= 0)
-        TEMP_FAILURE_RETRY (close (out_fd));
-      if (err_fd >= 0)
-        TEMP_FAILURE_RETRY (close (err_fd));
-
-      if (args == NULL)
-        args = tmp_args;
-
-      if (cwd && chdir (cwd) < 0)
-        _exit (EXIT_FAILURE);
-
-      execvpe (path, args, envp);
-      _exit (EXIT_FAILURE);
+      r = sigprocmask (SIG_UNBLOCK, &oldmask, NULL);
+      if (UNLIKELY (r < 0 && ret >= 0))
+        ret = crun_make_error (err, errno, "restoring signal mask with sigprocmask");
     }
-  return -1;
+  return ret;
 }
 
 int
