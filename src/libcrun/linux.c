@@ -33,7 +33,6 @@
 #  define HAVE_NEW_MOUNT_API
 #endif
 
-#include <sys/syscall.h>
 #include <sys/prctl.h>
 #ifdef HAVE_CAP
 #  include <sys/capability.h>
@@ -206,16 +205,6 @@ libcrun_find_namespace (const char *name)
     if (strcmp (it->name, name) == 0)
       return it->value;
   return -1;
-}
-
-static int
-syscall_clone (unsigned long flags, void *child_stack)
-{
-#if defined __s390__ || defined __CRIS__
-  return (int) syscall (__NR_clone, child_stack, flags);
-#else
-  return (int) syscall (__NR_clone, flags, child_stack);
-#endif
 }
 
 #ifndef __aligned_u64
