@@ -33,7 +33,6 @@
 #  define HAVE_NEW_MOUNT_API
 #endif
 
-#include <sys/syscall.h>
 #include <sys/prctl.h>
 #ifdef HAVE_CAP
 #  include <sys/capability.h>
@@ -206,16 +205,6 @@ libcrun_find_namespace (const char *name)
     if (strcmp (it->name, name) == 0)
       return it->value;
   return -1;
-}
-
-static int
-syscall_clone (unsigned long flags, void *child_stack)
-{
-#if defined __s390__ || defined __CRIS__
-  return (int) syscall (__NR_clone, child_stack, flags);
-#else
-  return (int) syscall (__NR_clone, flags, child_stack);
-#endif
 }
 
 #ifndef __aligned_u64
@@ -4198,7 +4187,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
             return crun_make_error (err, errno, "read pid from sync socket");
 
           /* Cleanup the first process.  */
-          ret = TEMP_FAILURE_RETRY (waitpid (pid, NULL, 0));
+          ret = waitpid_ignore_stopped (pid, NULL, 0);
 
           pid_to_clean = pid = new_pid;
 
@@ -4242,7 +4231,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
             return ret;
 
           /* Cleanup the first process.  */
-          waitpid (pid, NULL, 0);
+          waitpid_ignore_stopped (pid, NULL, 0);
 
           pid_to_clean = pid = grandchild;
         }
@@ -4336,7 +4325,7 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
     return crun_make_error (err, errno, "read from sync socket");
 
   /* Wait for the child pid so we ensure the grandchild gets properly reparented.  */
-  ret = TEMP_FAILURE_RETRY (waitpid (child_pid, &pid_status, 0));
+  ret = waitpid_ignore_stopped (child_pid, &pid_status, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 

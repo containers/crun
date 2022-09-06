@@ -1682,7 +1682,7 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
   while (1)
     {
       int status;
-      int r = waitpid (-1, &status, WNOHANG);
+      int r = waitpid_ignore_stopped (-1, &status, WNOHANG);
       if (r < 0)
         {
           if (errno == EINTR)
@@ -1699,10 +1699,7 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
       if (r != main_process)
         continue;
 
-      if (WIFSIGNALED (status))
-        *main_process_exit = 128 + WTERMSIG (status);
-      if (WIFEXITED (status))
-        *main_process_exit = WEXITSTATUS (status);
+      *main_process_exit = get_process_exit_status (status);
     }
   return 0;
 }
@@ -1995,7 +1992,7 @@ cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *de
         oom_message = "the memory limit could be too low";
 
       kill (init_pid, SIGKILL);
-      TEMP_FAILURE_RETRY (waitpid (init_pid, NULL, 0));
+      waitpid_ignore_stopped (init_pid, NULL, 0);
     }
 
   ret = sync_socket_wait_sync (context, sync_socket, true, &tmp_err);
@@ -2562,7 +2559,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
       int status;
       close_and_reset (&pipefd1);
 
-      TEMP_FAILURE_RETRY (waitpid (ret, &status, 0));
+      waitpid_ignore_stopped (ret, &status, 0);
 
       ret = TEMP_FAILURE_RETRY (read (pipefd0, &status, sizeof (status)));
       if (UNLIKELY (ret < 0))
@@ -2677,7 +2674,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       int exit_code;
       close_and_reset (&pipefd1);
 
-      TEMP_FAILURE_RETRY (waitpid (ret, NULL, 0));
+      waitpid_ignore_stopped (ret, NULL, 0);
 
       ret = TEMP_FAILURE_RETRY (read (pipefd0, &exit_code, sizeof (exit_code)));
       if (UNLIKELY (ret < 0))
@@ -3673,12 +3670,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   if (! cr_options->detach)
     {
       int wait_status;
-      ret = waitpid (status.pid, &wait_status, 0);
+      ret = waitpid_ignore_stopped (status.pid, &wait_status, 0);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "waitpid failed for container `%s` with %d", id, ret);
 
-      if (WEXITSTATUS (wait_status))
-        return WEXITSTATUS (wait_status);
+      return get_process_exit_status (wait_status);
     }
 
   return 0;

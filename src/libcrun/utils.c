@@ -41,6 +41,7 @@
 #include <linux/magic.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <sys/mman.h>
 #ifdef HAVE_LINUX_OPENAT2_H
 #  include <linux/openat2.h>
 #endif
@@ -1558,15 +1559,11 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
     }
 
 read_waitpid:
-  r = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
+  r = waitpid_ignore_stopped (pid, &status, 0);
   if (r < 0)
     ret = crun_make_error (err, errno, "waitpid");
-  else if (WIFEXITED (status))
-    ret = WEXITSTATUS (status);
-  else if (WIFSIGNALED (status))
-    ret = 127 + WTERMSIG (status);
   else
-    ret = crun_make_error (err, 0, "invalid return status for process");
+    ret = get_process_exit_status (status);
 
   /* Prevent to cleanup the pid again.  */
   pid = 0;
@@ -2294,4 +2291,38 @@ str_join_array (int offset, size_t size, char *const array[], const char *joint)
     }
   *p = '\0';
   return result;
+}
+
+int
+libcrun_mmap (struct libcrun_mmap_s **ret, void *addr, size_t length,
+              int prot, int flags, int fd, off_t offset,
+              libcrun_error_t *err)
+{
+  struct libcrun_mmap_s *mmap_s = NULL;
+
+  void *mapped = mmap (addr, length, prot, flags, fd, offset);
+  if (mapped == MAP_FAILED)
+    return crun_make_error (err, errno, "mmap");
+
+  mmap_s = xmalloc (sizeof (struct libcrun_mmap_s));
+  mmap_s->addr = mapped;
+  mmap_s->length = length;
+
+  *ret = mmap_s;
+
+  return 0;
+}
+
+int
+libcrun_munmap (struct libcrun_mmap_s *mmap, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = munmap (mmap->addr, mmap->length);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "munmap");
+
+  free (mmap);
+
+  return 0;
 }

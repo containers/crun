@@ -23,6 +23,7 @@
 #include "error.h"
 #include <errno.h>
 #include <argp.h>
+#include <sys/syscall.h>
 #include <runtime_spec_schema_config_schema.h>
 #include "container.h"
 #include "status.h"
@@ -37,6 +38,16 @@ struct device_s
   uid_t uid;
   gid_t gid;
 };
+
+static inline int
+syscall_clone (unsigned long flags, void *child_stack)
+{
+#if defined __s390__ || defined __CRIS__
+  return (int) syscall (__NR_clone, child_stack, flags);
+#else
+  return (int) syscall (__NR_clone, flags, child_stack);
+#endif
+}
 
 typedef int (*container_entrypoint_t) (void *args, char *notify_socket, int sync_socket, libcrun_error_t *err);
 
