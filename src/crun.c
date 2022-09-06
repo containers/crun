@@ -191,6 +191,7 @@ get_command (const char *arg)
 enum
 {
   OPTION_VERSION = 'v',
+  OPTION_VERSION_CAP = 'V',
   OPTION_DEBUG = 1000,
   OPTION_SYSTEMD_CGROUP,
   OPTION_CGROUP_MANAGER,
@@ -210,6 +211,8 @@ static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce 
                                         { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },
                                         { "rootless", OPTION_ROOT, "VALUE", 0, NULL, 0 },
                                         { "version", OPTION_VERSION, 0, 0, NULL, 0 },
+                                        // alias OPTION_VERSION_CAP with OPTION_VERSION
+                                        { NULL, OPTION_VERSION_CAP, 0, OPTION_ALIAS, NULL, 0 },
                                         {
                                             0,
                                         } };
@@ -302,6 +305,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       libcrun_fail_with_error (0, "please specify a command");
 
     case OPTION_VERSION:
+    case OPTION_VERSION_CAP:
       print_version (stdout, state);
       exit (EXIT_SUCCESS);
     default:
