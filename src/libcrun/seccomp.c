@@ -74,6 +74,10 @@
 #  define SECCOMP_FILTER_FLAG_SPEC_ALLOW (1UL << 2)
 #endif
 
+#ifndef SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV
+#  define SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV (1UL << 5)
+#endif
+
 static int
 syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 {
@@ -209,6 +213,8 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
             flags |= SECCOMP_FILTER_FLAG_SPEC_ALLOW;
           else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_LOG") == 0)
             flags |= SECCOMP_FILTER_FLAG_LOG;
+          else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV") == 0)
+            flags |= SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV;
           else
             return crun_make_error (err, 0, "unknown seccomp option %s", seccomp_flags[i]);
         }
