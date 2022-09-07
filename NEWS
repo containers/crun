@@ -1,3 +1,20 @@
+* crun-1.6
+
+- runc compatibility: -v now prints the version string.
+- build: fix build with glibc 2.36.
+- container: drop intermediate userns custom feature.
+- cgroup: change the delegate cgroup semantic so that the cgroup is
+  created in the container payload after the cgroup namespace is created.
+- seccomp: use helper process to send file descriptor to the listener
+  socket.  It enables to be notified on every syscall without hanging
+  the main process.
+- linux: add a fallback to using kill(2) if pidfd_send_signal(2) fails
+  with ENOSYS.
+- krun: add support for krun-sev.
+- wasmtime: always grant file system capability for workdir inside the container.
+- wasmtime: inherit arguments list from the handler instead of the current process.
+- wasmedge: use released wasmedge library instead of libwasmedge_c.so.
+
 * crun-1.5
 
 - add mono based native .NET handler
