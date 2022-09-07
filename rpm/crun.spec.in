@@ -7,11 +7,8 @@
 %endif
 %endif
 
-%if 0%{?fedora}
-%ifnarch %{ix86}
+%ifnarch %{ix86} || ppc64le
 %global wasmtime_support enabled
-%global wasmtime_opts --with-wasmtime
-%endif
 %endif
 
 Summary: OCI runtime written in C
@@ -30,7 +27,6 @@ URL: https://github.com/containers/%{name}
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
-BuildRequires: python
 BuildRequires: git-core
 BuildRequires: libcap-devel
 %if "%{krun_support}" == "enabled"
@@ -45,6 +41,11 @@ BuildRequires: go-md2man
 %if "%{wasmtime_support}" == "enabled"
 BuildRequires: wasmtime-c-api-devel
 Requires: wasmtime-c-api
+%endif
+%if 0%{?rhel} == 8
+BuildRequires: python3
+%else
+BuildRequires: python
 %endif
 Provides: oci-runtime
 
@@ -65,7 +66,11 @@ krun is a symlink to the crun binary, with libkrun as an additional dependency.
 
 %build
 ./autogen.sh
-./configure --disable-silent-rules %{wasmtime_opts} %{krun_opts}
+%if "%{wasmtime_support}" == "enabled"
+./configure --disable-silent-rules --with-wasmtime %{krun_opts}
+%else
+./configure --disable-silent-rules %{krun_opts}
+%endif
 %make_build
 
 %install
