@@ -848,7 +848,7 @@ exit:
 }
 
 static const char *
-find_systemd_subgroup (json_map_string_string *annotations, int cgroup_mode)
+find_systemd_subgroup (json_map_string_string *annotations)
 {
   const char *annotation;
 
@@ -860,10 +860,7 @@ find_systemd_subgroup (json_map_string_string *annotations, int cgroup_mode)
       return annotation;
     }
 
-  if (cgroup_mode == CGROUP_MODE_UNIFIED)
-    return "container";
-
-  return NULL;
+  return "container";
 }
 
 static int
@@ -892,7 +889,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  suffix = find_systemd_subgroup (args->annotations, cgroup_mode);
+  suffix = find_systemd_subgroup (args->annotations);
 
   ret = systemd_finalize (args, &path, cgroup_mode, suffix, err);
   if (UNLIKELY (ret < 0))
