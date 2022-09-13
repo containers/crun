@@ -3114,6 +3114,22 @@ libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 int
+libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int has_uts = get_private_data (container)->unshare_flags & CLONE_NEWUTS;
+  int ret;
+  if (is_empty_string (def->domainname))
+    return 0;
+  if (! has_uts)
+    return crun_make_error (err, 0, "domainname requires the UTS namespace");
+  ret = setdomainname (def->domainname, strlen (def->domainname));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "setdomainname");
+  return 0;
+}
+
+int
 libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;

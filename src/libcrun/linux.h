@@ -69,6 +69,7 @@ int libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_eleme
 int libcrun_set_selinux_exec_label (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
 int libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err);
