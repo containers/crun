@@ -468,7 +468,20 @@ main (int argc, char **argv)
         error (EXIT_FAILURE, errno, "printf");
       return 0;
     }
+  if (strcmp (argv[1], "getdomainname") == 0)
+    {
+      char buffer[64] = {};
+      int ret;
 
+      ret = getdomainname (buffer, sizeof (buffer) - 1);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "getdomainname");
+
+      ret = printf ("%s\n", buffer);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "printf");
+      return 0;
+    }
   if (strcmp (argv[1], "isatty") == 0)
     {
       int fd;

@@ -1155,6 +1155,10 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_set_domainname (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (container->container_def->linux && container->container_def->linux->personality)
     {
       ret = libcrun_set_personality (container->container_def->linux->personality, err);
