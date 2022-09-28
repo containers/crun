@@ -661,6 +661,25 @@ write_memory (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resource
 
   limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
 
+  if (cgroup2 && memory->check_before_update_present && memory->check_before_update)
+    {
+      cleanup_free char *current = NULL;
+      long long val;
+      int ret;
+
+      ret = read_all_file_at (dirfd, "memory.current", &current, NULL, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      errno = 0;
+      val = strtoll (current, NULL, 10);
+      if (UNLIKELY (errno))
+        return crun_make_error (err, errno, "parse memory.current");
+
+      if (memory->limit <= val)
+        return crun_make_error (err, 0, "cannot set the memory limit lower than its current usage");
+    }
+
   return write_cgroup_file (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
 }
 
