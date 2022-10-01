@@ -43,9 +43,53 @@ def test_domainname():
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
 
-    
+def test_domainname_conflict_sysctl():
+    # Setting sysctl `kernel.domainname` and OCI field `domainname` must fail
+    # since it produces unexpected behaviour for the end-users.
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'getdomainname']
+    conf['domainname'] = "foomachine"
+    add_all_namespaces(conf)
+    conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf)
+        if out == "(none)\n":
+            return 0
+        sys.stderr.write("unexpected success\n")
+        return -1
+    except:
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+def test_domainname_with_sysctl():
+    # Setting sysctl `kernel.domainname` and OCI field `domainname` must pass
+    # when both have exact same value
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'getdomainname']
+    conf['domainname'] = "foo"
+    add_all_namespaces(conf)
+    conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf)
+        if out == "(none)\n":
+            return 0
+        return 0
+    except:
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 all_tests = {
     "domainname" : test_domainname,
+    "domainname conflict with syctl" : test_domainname_conflict_sysctl,
+    "domainname with syctl" : test_domainname_with_sysctl,
 }
 
 if __name__ == "__main__":
