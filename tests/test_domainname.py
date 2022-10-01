@@ -28,8 +28,13 @@ def test_domainname():
     conf = base_config()
     conf['process']['args'] = ['/init', 'getdomainname']
     add_all_namespaces(conf, utsns=False)
+    # getdomainname returns `(none)` if domainname is not set or will return error,
+    # in both of the above situation the test should pass. Anything other than this
+    # must be considered as failure.
     try:
-        _, cid = run_and_get_output(conf)
+        out, cid = run_and_get_output(conf)
+        if out == "(none)\n":
+            return 0
         sys.stderr.write("unexpected success\n")
         return -1
     except:
