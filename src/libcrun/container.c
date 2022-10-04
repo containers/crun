@@ -2271,6 +2271,16 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
      in the container user namespace.  */
   get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
 
+  /* If the root in the container is different than the current root user, attempt to chown
+     the std streams before entering the user namespace.  Otherwise we might lose access
+     to the user (as it is not mapped in the user namespace) and cannot chown them.  */
+  if (root_uid > 0 || root_gid > 0)
+    {
+      ret = maybe_chown_std_streams (root_uid, root_gid, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+    }
+
   memset (&cg, 0, sizeof (cg));
   cg.resources = def->linux ? def->linux->resources : NULL;
   cg.annotations = def->annotations;
@@ -3635,6 +3645,16 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   /* If we are root (either on the host or in a namespace),
    * then chown the cgroup to root in the container user namespace. */
   get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
+
+  /* If the root in the container is different than the current root user, attempt to chown
+     the std streams before entering the user namespace.  Otherwise we might lose access
+     to the user (as it is not mapped in the user namespace) and cannot chown them.  */
+  if (root_uid > 0 || root_gid > 0)
+    {
+      ret = maybe_chown_std_streams (root_uid, root_gid, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   {
     struct libcrun_cgroup_args cg = {
