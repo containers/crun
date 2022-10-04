@@ -3161,7 +3161,7 @@ const char *sysctlRequiringIPC[] = {
 };
 
 static int
-validate_sysctl (const char *original_value, const char *name, unsigned long namespaces_created, libcrun_error_t *err)
+validate_sysctl (const char *original_key, const char *original_value, const char *name, unsigned long namespaces_created, runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
   const char *namespace = "";
 
@@ -3192,6 +3192,13 @@ validate_sysctl (const char *original_value, const char *name, unsigned long nam
 
       if (strcmp (name, "kernel/domainname") == 0)
         {
+          // Value of sysctl `kernel/domainname` is going to
+          // conflict with already set field `domainname` in
+          // OCI spec, in such scenario crun will fail to prevent
+          // unexpected behaviour for end user.
+          if (! is_empty_string (def->domainname) && (strcmp (original_value, def->domainname) != 0))
+            return crun_make_error (err, 0, "the sysctl `%s` conflicts with OCI field `domainname`", original_key);
+
           if (namespaces_created & CLONE_NEWUTS)
             return 0;
 
@@ -3200,7 +3207,7 @@ validate_sysctl (const char *original_value, const char *name, unsigned long nam
         }
 
       if (strcmp (name, "kernel/hostname") == 0)
-        return crun_make_error (err, 0, "the sysctl `%s` conflicts with OCI field `hostname`", original_value);
+        return crun_make_error (err, 0, "the sysctl `%s` conflicts with OCI field `hostname`", original_key);
     }
   if (has_prefix (name, "net/"))
     {
@@ -3211,10 +3218,10 @@ validate_sysctl (const char *original_value, const char *name, unsigned long nam
       goto fail;
     }
 
-  return crun_make_error (err, 0, "the sysctl `%s` is not namespaced", original_value);
+  return crun_make_error (err, 0, "the sysctl `%s` is not namespaced", original_key);
 
 fail:
-  return crun_make_error (err, 0, "the sysctl `%s` requires a new %s namespace", original_value, namespace);
+  return crun_make_error (err, 0, "the sysctl `%s` requires a new %s namespace", original_key, namespace);
 }
 
 int
@@ -3256,7 +3263,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
         if (*it == '.')
           *it = '/';
 
-      ret = validate_sysctl (def->linux->sysctl->keys[i], name, namespaces_created, err);
+      ret = validate_sysctl (def->linux->sysctl->keys[i], def->linux->sysctl->values[i], name, namespaces_created, def, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
