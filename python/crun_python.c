@@ -121,7 +121,7 @@ make_context (PyObject *self, PyObject *args, PyObject *kwargs)
   char *state_root = NULL;
   char *notify_socket = NULL;
   static char *kwlist[] =
-    { "id", "state-root", "systemd-cgroup", "notify-socket", "detach", NULL };
+    { "id", "bundle", "state-root", "systemd-cgroup", "notify-socket", "detach", NULL };
   libcrun_context_t *ctx = malloc (sizeof (*ctx));
   if (ctx == NULL)
     return NULL;
@@ -130,7 +130,7 @@ make_context (PyObject *self, PyObject *args, PyObject *kwargs)
   ctx->fifo_exec_wait_fd = -1;
 
   if (!PyArg_ParseTupleAndKeywords
-      (args, kwargs, "s|sssbsb", kwlist, &id, &bundle, &state_root,
+      (args, kwargs, "s|ssbsb", kwlist, &id, &bundle, &state_root,
        &ctx->systemd_cgroup, &notify_socket, &ctx->detach))
     return NULL;
 
