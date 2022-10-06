@@ -229,6 +229,10 @@ make_oci_process_user (const char *userspec)
 
 #define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
 
+#ifdef SHARED_LIBCRUN
+void __attribute__ ((weak)) free_runtime_spec_schema_config_schema_process (runtime_spec_schema_config_schema_process *ptr);
+#endif
+
 static inline void
 cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
 {

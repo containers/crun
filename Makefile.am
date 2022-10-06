@@ -90,9 +90,14 @@ endif
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \
-		src/checkpoint.c src/restore.c
+		src/checkpoint.c src/restore.c src/libcrun/cloned_binary.c
+
+if DYNLOAD_LIBCRUN
+crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS)
+else
 crun_LDADD = libcrun.la $(FOUND_LIBS) $(maybe_libyajl.la)
 crun_LDFLAGS = $(CRUN_LDFLAGS)
+endif
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in autogen.sh \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \

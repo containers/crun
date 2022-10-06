@@ -38,6 +38,16 @@ case "${enableval}" in
 	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-yajl) ;;
 esac],[embedded_yajl=false])
 
+AC_ARG_ENABLE(dynload-libcrun,
+AS_HELP_STRING([--enable-dynload-libcrun], [Dynamically load libcrun]),
+[
+case "${enableval}" in
+	yes) dynload_libcrun=true ;;
+	no)  dynload_libcrun=false ;;
+	*) AC_MSG_ERROR(bad value ${enableval} for --enable-dynload-libcrun) ;;
+esac],[dynload_libcrun=false])
+AM_CONDITIONAL([DYNLOAD_LIBCRUN], [test x"$dynload_libcrun" = xtrue])
+
 AM_CONDITIONAL([HAVE_EMBEDDED_YAJL], [test x"$embedded_yajl" = xtrue])
 AM_COND_IF([HAVE_EMBEDDED_YAJL], [], [
 AC_SEARCH_LIBS(yajl_tree_get, [yajl], [AC_DEFINE([HAVE_YAJL], 1, [Define if libyajl is available])], [AC_MSG_ERROR([*** libyajl headers not found])])
@@ -137,14 +147,34 @@ AS_IF([test "x$enable_bpf" != "xno"], [
 	])
 ])
 
+use_fPIC=no
+libcrun_public='__attribute__((visibility("default"))) extern'
+if test "x$enable_shared" = "xyes"; then
+        AC_DEFINE([SHARED_LIBCRUN], 1, [Define if shared libraries are enabled])
+        AC_SUBST([SHARED_LIBCRUN])
+        use_fPIC=yes
+        if test "x$dynload_libcrun" = "xyes"; then
+            libcrun_public='__attribute__((visibility("default"))) __attribute__((weak)) extern'
+            AC_DEFINE([DYNLOAD_LIBCRUN], 1, [Define if shared libraries are enabled])
+            AC_SUBST([DYNLOAD_LIBCRUN])
+        else
+            libcrun_public='__attribute__((visibility("default"))) extern'
+        fi
+fi
+
+AC_DEFINE_UNQUOTED([LIBCRUN_PUBLIC], [$libcrun_public], [LIBCRUN_PUBLIC])
 
 AC_ARG_WITH([python-bindings], AS_HELP_STRING([--with-python-bindings], [build the Python bindings]))
 AS_IF([test "x$with_python_bindings" = "xyes"], [
 	PKG_CHECK_MODULES([PYTHON], [python3], [], [AC_MSG_ERROR([*** python headers not found])])
+        use_fPIC=yes
+])
+
+AS_IF([test "x$use_fPIC" = "xyes"], [
 	# configure should not touch CFLAGS/LDFLAGS but we need it to propagate it
 	# to libocispec.
-	CFLAGS+=" -fPIC "
-	LDFLAGS+=" -fPIC "
+	export CFLAGS="$CFLAGS -fPIC"
+	export LDFLAGS="$LDFLAGS -fPIC"
 ])
 
 dnl criu
@@ -201,7 +231,6 @@ AC_COMPILE_IFELSE(
 		 AC_DEFINE([HAVE_SECCOMP_GET_NOTIF_SIZES], 1, [Define if SECCOMP_GET_NOTIF_SIZES is available])],
 		[AC_MSG_RESULT(no)])
 
-AC_DEFINE([LIBCRUN_PUBLIC], [__attribute__((visibility("default"))) extern], [LIBCRUN_PUBLIC])
 AC_SUBST([FOUND_LIBS])
 AC_SUBST([CRUN_LDFLAGS])
 
@@ -223,6 +252,7 @@ AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not f
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
 AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])
+AM_CONDITIONAL([SHARED_LIBCRUN], [test "x$enable_shared" = "xyes"])
 
 AC_CONFIG_FILES([Makefile rpm/crun.spec])
 
