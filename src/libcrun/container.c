@@ -3786,3 +3786,99 @@ libcrun_container_read_pids (libcrun_context_t *context, const char *id, bool re
 
   return libcrun_cgroup_read_pids (cgroup_status, recurse, pids, err);
 }
+
+int
+libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err)
+{
+  libcrun_container_list_t *list = NULL, *it;
+  const unsigned char *content = NULL;
+  yajl_gen gen = NULL;
+  size_t len;
+  int ret;
+
+  ret = libcrun_get_containers_list (&list, context->state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    {
+      ret = crun_make_error (err, 0, "cannot allocate json generator");
+      goto exit;
+    }
+
+  yajl_gen_config (gen, yajl_gen_beautify, 1);
+  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+  yajl_gen_array_open (gen);
+
+  for (it = list; it; it = it->next)
+    {
+      libcrun_container_status_t status;
+      int running = 0;
+      int pid;
+      const char *container_status = NULL;
+
+      ret = libcrun_read_container_status (&status, context->state_root, it->name, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+
+      pid = status.pid;
+
+      ret = libcrun_get_container_state_string (it->name, &status, context->state_root, &container_status,
+                                                &running, err);
+      if (UNLIKELY (ret < 0))
+        {
+          libcrun_error_write_warning_and_release (stderr, &err);
+          continue;
+        }
+
+      if (! running)
+        pid = 0;
+
+      yajl_gen_map_open (gen);
+      yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
+      yajl_gen_string (gen, YAJL_STR (it->name), strlen (it->name));
+      yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
+      yajl_gen_integer (gen, pid);
+      yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
+      yajl_gen_string (gen, YAJL_STR (container_status), strlen (container_status));
+      yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
+      yajl_gen_string (gen, YAJL_STR (status.bundle), strlen (status.bundle));
+      yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
+      yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
+      yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
+      yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
+      yajl_gen_map_close (gen);
+
+      libcrun_free_container_status (&status);
+    }
+
+  yajl_gen_array_close (gen);
+  if (yajl_gen_get_buf (gen, &content, &len) != yajl_gen_status_ok)
+    {
+      ret = libcrun_make_error (err, 0, "cannot generate json list");
+      goto exit;
+    }
+
+  while (len)
+    {
+      size_t written = fwrite (content, 1, len, out);
+      if (ferror (out))
+        {
+          ret = libcrun_make_error (err, errno, "error writing to file");
+          goto exit;
+        }
+      len -= written;
+      content += written;
+    }
+
+  ret = 0;
+
+exit:
+  if (list)
+    libcrun_free_containers_list (list);
+  if (gen)
+    yajl_gen_free (gen);
+
+  return ret;
+}
