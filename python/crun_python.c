@@ -211,7 +211,7 @@ container_delete (PyObject *self, PyObject *args)
   libcrun_context_t *ctx;
   int ret;
 
-  if (!PyArg_ParseTuple (args, "Osn", &ctx_obj, &id, &force))
+  if (!PyArg_ParseTuple (args, "Osb", &ctx_obj, &id, &force))
     return NULL;
 
   ctx = PyCapsule_GetPointer (ctx_obj, CONTEXT_OBJ_TAG);
