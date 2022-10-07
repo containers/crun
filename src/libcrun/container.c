@@ -3502,6 +3502,70 @@ libcrun_container_update_from_file (libcrun_context_t *context, const char *id, 
   return libcrun_container_update (context, id, content, len, err);
 }
 
+static int
+compare_update_values (const void *a, const void *b)
+{
+  const struct libcrun_update_value_s *aa = a;
+  const struct libcrun_update_value_s *bb = b;
+  int ret;
+
+  ret = strcmp (aa->section, bb->section);
+  if (ret)
+    return ret;
+  return strcmp (aa->name, bb->name);
+}
+
+int
+libcrun_container_update_from_values (libcrun_context_t *context, const char *id,
+                                      struct libcrun_update_value_s *values, size_t len,
+                                      libcrun_error_t *err)
+{
+  const char *current_section = NULL;
+  const unsigned char *buf;
+  yajl_gen gen = NULL;
+  size_t i, buf_len;
+  int ret;
+
+  gen = yajl_gen_alloc (NULL);
+  if (gen == NULL)
+    return crun_make_error (err, errno, "yajl_gen_create failed");
+  yajl_gen_map_open (gen);
+
+  qsort (values, len, sizeof (struct libcrun_update_value_s), compare_update_values);
+
+  for (i = 0; i < len; i++)
+    {
+      if (current_section == NULL || strcmp (values[i].section, current_section))
+        {
+          if (i > 0)
+            yajl_gen_map_close (gen);
+
+          current_section = values[i].section;
+          yajl_gen_string (gen, YAJL_STR (current_section), strlen (current_section));
+          yajl_gen_map_open (gen);
+        }
+
+      yajl_gen_string (gen, (const unsigned char *) values[i].name, strlen (values[i].name));
+
+      if (values[i].numeric)
+        yajl_gen_number (gen, (const char *) values[i].value, strlen (values[i].value));
+      else
+        yajl_gen_string (gen, (const unsigned char *) values[i].value, strlen (values[i].value));
+    }
+  if (len)
+    yajl_gen_map_close (gen);
+
+  yajl_gen_map_close (gen);
+
+  yajl_gen_get_buf (gen, &buf, &buf_len);
+
+  ret = libcrun_container_update (context, id, (const char *) buf, buf_len, err);
+
+  yajl_gen_free (gen);
+
+  return ret;
+}
+
 int
 libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
 {
