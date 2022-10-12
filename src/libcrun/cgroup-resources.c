@@ -661,25 +661,6 @@ write_memory (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resource
 
   limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
 
-  if (cgroup2 && memory->check_before_update_present && memory->check_before_update)
-    {
-      cleanup_free char *current = NULL;
-      long long val;
-      int ret;
-
-      ret = read_all_file_at (dirfd, "memory.current", &current, NULL, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      errno = 0;
-      val = strtoll (current, NULL, 10);
-      if (UNLIKELY (errno))
-        return crun_make_error (err, errno, "parse memory.current");
-
-      if (memory->limit <= val)
-        return crun_make_error (err, 0, "cannot set the memory limit lower than its current usage");
-    }
-
   return write_cgroup_file (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
 }
 
@@ -731,6 +712,40 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   int ret;
   char fmt_buf[32];
   bool memory_limits_written = false;
+
+  if (cgroup2 && memory->check_before_update_present && memory->check_before_update)
+    {
+      cleanup_free char *swap_current = NULL;
+      cleanup_free char *current = NULL;
+      uint64_t limit = 0;
+      uint64_t val, val_swap;
+      int ret;
+
+      ret = read_all_file_at (dirfd, "memory.current", &current, NULL, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = read_all_file_at (dirfd, "memory.swap.current", &swap_current, NULL, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      errno = 0;
+      val = strtoll (current, NULL, 10);
+      if (UNLIKELY (errno))
+        return crun_make_error (err, errno, "parse memory.current");
+
+      val_swap = strtoll (swap_current, NULL, 10);
+      if (UNLIKELY (errno))
+        return crun_make_error (err, errno, "parse memory.swap.current");
+
+      if (memory->limit_present && memory->limit >= 0)
+        limit = memory->limit;
+      if (memory->swap_present && memory->swap >= 0)
+        limit += memory->swap;
+
+      if (limit <= val + val_swap)
+        return crun_make_error (err, 0, "cannot set the memory limit lower than its current usage");
+    }
 
   if (memory->limit_present)
     {
