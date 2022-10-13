@@ -23,15 +23,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <yajl/yajl_tree.h>
-#include <yajl/yajl_gen.h>
 
 #include "crun.h"
 #include "libcrun/container.h"
 #include "libcrun/utils.h"
 #include "libcrun/status.h"
-
-#define YAJL_STR(x) ((const unsigned char *) (x))
 
 static char doc[] = "OCI runtime";
 
@@ -102,9 +98,6 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
     0,
   };
   libcrun_container_list_t *list, *it;
-  yajl_gen gen = NULL;
-  size_t len;
-  const unsigned char *buf = NULL;
 
   list_options.format = LIST_TABLE;
 
@@ -114,6 +107,9 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (list_options.format == LIST_JSON)
+    return libcrun_write_json_containers_list (&crun_context, stdout, err);
 
   ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
   if (UNLIKELY (ret < 0))
@@ -128,18 +124,9 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
 
   max_length++;
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    error (EXIT_FAILURE, 0, "yajl_gen_alloc failed");
-
-  if (! list_options.quiet && list_options.format == LIST_TABLE)
+  if (! list_options.quiet)
     printf ("%-*s%-10s%-8s %-39s %-30s %s\n", max_length, "NAME", "PID", "STATUS", "BUNDLE PATH", "CREATED", "OWNER");
-  else if (list_options.format == LIST_JSON)
-    {
-      yajl_gen_config (gen, yajl_gen_beautify, 1);
-      yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
-      yajl_gen_array_open (gen);
-    }
+
   for (it = list; it; it = it->next)
     {
       libcrun_container_status_t status;
@@ -150,7 +137,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           libcrun_error_write_warning_and_release (stderr, &err);
           continue;
         }
-      if (list_options.quiet && list_options.format == LIST_TABLE)
+      if (list_options.quiet)
         printf ("%s\n", it->name);
       else
         {
@@ -169,47 +156,11 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           if (! running)
             pid = 0;
 
-          switch (list_options.format)
-            {
-            case LIST_JSON:
-              yajl_gen_map_open (gen);
-              yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
-              yajl_gen_string (gen, YAJL_STR (it->name), strlen (it->name));
-              yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-              yajl_gen_integer (gen, pid);
-              yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
-              yajl_gen_string (gen, YAJL_STR (container_status), strlen (container_status));
-              yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-              yajl_gen_string (gen, YAJL_STR (status.bundle), strlen (status.bundle));
-              yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
-              yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
-              yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-              yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
-              yajl_gen_map_close (gen);
-              break;
-
-            case LIST_TABLE:
-              printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, it->name, pid, container_status, status.bundle, status.created, status.owner);
-              break;
-            }
+          printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, it->name, pid, container_status, status.bundle, status.created, status.owner);
         }
 
       libcrun_free_container_status (&status);
     }
-  if (list_options.format == LIST_JSON)
-    {
-      yajl_gen_array_close (gen);
-      if (yajl_gen_get_buf (gen, &buf, &len) != yajl_gen_status_ok)
-        {
-          ret = libcrun_make_error (err, 0, "cannot generate json list");
-          goto exit;
-        }
-      printf ("%s", buf);
-    }
-
-exit:
-  if (gen)
-    yajl_gen_free (gen);
 
   libcrun_free_containers_list (list);
   return ret >= 0 ? 0 : ret;

@@ -62,38 +62,42 @@ enum
 struct description_s
 {
   int id;
-  unsigned int section;
-  const char *key;
+  const char *section;
+  const char *name;
   int numeric;
 };
 
-static const char *sections[] = { "blockIO", "cpu", "memory", "pids" };
+static struct description_s descriptors[] = { { BLKIO_WEIGHT, "blockIO", "weight", 1 },
 
-static struct description_s descriptors[] = { { BLKIO_WEIGHT, 0, "weight", 1 },
+                                              { CPU_PERIOD, "cpu", "period", 1 },
+                                              { CPU_QUOTA, "cpu", "quota", 1 },
+                                              { CPU_SHARE, "cpu", "shares", 1 },
+                                              { CPU_RT_PERIOD, "cpu", "realtimePeriod", 1 },
+                                              { CPU_RT_RUNTIME, "cpu", "realtimeRuntime", 1 },
+                                              { CPUSET_CPUS, "cpu", "cpus", 0 },
+                                              { CPUSET_MEMS, "cpu", "mems", 0 },
 
-                                              { CPU_PERIOD, 1, "period", 1 },
-                                              { CPU_QUOTA, 1, "quota", 1 },
-                                              { CPU_SHARE, 1, "shares", 1 },
-                                              { CPU_RT_PERIOD, 1, "realtimePeriod", 1 },
-                                              { CPU_RT_RUNTIME, 1, "realtimeRuntime", 1 },
-                                              { CPUSET_CPUS, 1, "cpus", 0 },
-                                              { CPUSET_MEMS, 1, "mems", 0 },
+                                              { KERNEL_MEMORY, "memory", "kernel", 1 },
+                                              { KERNEL_MEMORY_TCP, "memory", "kernelTCP", 1 },
+                                              { MEMORY, "memory", "limit", 1 },
+                                              { MEMORY_RESERVATION, "memory", "reservation", 1 },
+                                              { MEMORY_SWAP, "memory", "swap", 1 },
 
-                                              { KERNEL_MEMORY, 2, "kernel", 1 },
-                                              { KERNEL_MEMORY_TCP, 2, "kernelTCP", 1 },
-                                              { MEMORY, 2, "limit", 1 },
-                                              { MEMORY_RESERVATION, 2, "reservation", 1 },
-                                              { MEMORY_SWAP, 2, "swap", 1 },
-
-                                              { PIDS_LIMIT, 3, "limit", 1 },
+                                              { PIDS_LIMIT, "pids", "limit", 1 },
                                               { 0 } };
 
-static const char *values[LAST_VALUE - FIRST_VALUE];
+static struct libcrun_update_value_s *values;
+size_t values_len = 0;
 
 static void
 set_value (int id, const char *value)
 {
-  values[id - FIRST_VALUE] = value;
+  values = xrealloc (values, (values_len + 1) * sizeof (struct libcrun_update_value_s));
+  values[values_len].section = descriptors[id - FIRST_VALUE].section;
+  values[values_len].name = descriptors[id - FIRST_VALUE].name;
+  values[values_len].numeric = descriptors[id - FIRST_VALUE].numeric;
+  values[values_len].value = value;
+  values_len++;
 }
 
 static struct argp_option options[]
@@ -115,76 +119,6 @@ static struct argp_option options[]
         {
             0,
         } };
-
-#define YAJL_STR(x) ((const unsigned char *) (x))
-
-static const unsigned char *
-build_file (size_t *len)
-{
-  size_t i;
-  yajl_gen gen = NULL;
-  size_t n_sections = sizeof (sections) / sizeof (sections[0]);
-  int has_sections[n_sections];
-  const unsigned char *buf;
-
-  memset (has_sections, 0, sizeof (has_sections));
-
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    error (EXIT_FAILURE, errno, "yajl_gen_alloc failed");
-
-  for (i = 0; i < LAST_VALUE - FIRST_VALUE; i++)
-    if (values[i])
-      has_sections[descriptors[i].section] = 1;
-
-  for (i = 0; i < n_sections; i++)
-    {
-      if (values[i])
-        has_sections[descriptors[i].section] = 1;
-    }
-
-  yajl_gen_config (gen, yajl_gen_beautify, 1);
-  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
-
-  yajl_gen_map_open (gen);
-  for (i = 0; i < n_sections; i++)
-    {
-      size_t j;
-
-      if (! has_sections[i])
-        continue;
-
-      yajl_gen_string (gen, YAJL_STR (sections[i]), strlen (sections[i]));
-      yajl_gen_map_open (gen);
-
-      for (j = 0; j < LAST_VALUE - FIRST_VALUE; j++)
-        {
-          struct description_s *d = &descriptors[j];
-          if (values[j] == NULL || d->section != i)
-            continue;
-
-          yajl_gen_string (gen, YAJL_STR (d->key), strlen (d->key));
-          if (! d->numeric)
-            yajl_gen_string (gen, YAJL_STR (values[j]), strlen (values[j]));
-          else
-            {
-              long value;
-              errno = 0;
-              value = strtoul (values[j], NULL, 10);
-              if (errno != 0)
-                error (EXIT_FAILURE, errno, "invalid setting");
-
-              yajl_gen_integer (gen, value);
-            }
-        }
-
-      yajl_gen_map_close (gen);
-    }
-  yajl_gen_map_close (gen);
-
-  yajl_gen_get_buf (gen, &buf, len);
-  return buf;
-}
 
 static char args_doc[] = "update [OPTION]... CONTAINER";
 
@@ -230,8 +164,6 @@ int
 crun_command_update (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg = 0, ret;
-  char *content = NULL;
-  size_t len;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
   crun_assert_n_args (argc - first_arg, 1, 1);
@@ -242,8 +174,9 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
 
   if (resources == NULL)
     {
-      content = (char *) build_file (&len);
-      return libcrun_container_update (&crun_context, argv[first_arg], content, len, err);
+      ret = libcrun_container_update_from_values (&crun_context, argv[first_arg], values, values_len, err);
+      free (values);
+      return ret;
     }
 
   return libcrun_container_update_from_file (&crun_context, argv[first_arg], resources, err);
