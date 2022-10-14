@@ -24,7 +24,7 @@
 #include <errno.h>
 #include <argp.h>
 #include <sys/syscall.h>
-#include <runtime_spec_schema_config_schema.h>
+#include <ocispec/runtime_spec_schema_config_schema.h>
 #include "container.h"
 #include "status.h"
 

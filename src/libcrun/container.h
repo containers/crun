@@ -20,7 +20,7 @@
 #define CONTAINER_H
 
 #include <config.h>
-#include <runtime_spec_schema_config_schema.h>
+#include <ocispec/runtime_spec_schema_config_schema.h>
 #include "error.h"
 
 enum handler_configure_phase
