@@ -29,6 +29,7 @@
 enum
 {
   LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL = 1 << 0,
+  LIBCRUN_SECCOMP_SKIP_CACHE = 1 << 1,
 };
 
 typedef char seccomp_checksum_t[65];
@@ -39,12 +40,14 @@ struct libcrun_seccomp_gen_ctx_s
   seccomp_checksum_t checksum;
   unsigned int options;
   bool create;
+  bool from_cache;
 
   /* Not owned here, it is the caller responsibility to close it.  */
   int fd;
 };
 
-static inline void libcrun_seccomp_gen_ctx_init (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_container_t *container, bool create, unsigned int seccomp_gen_options)
+static inline void
+libcrun_seccomp_gen_ctx_init (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_container_t *container, bool create, unsigned int seccomp_gen_options)
 {
   memset (ctx, 0, sizeof (*ctx));
   ctx->create = create;

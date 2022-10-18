@@ -2195,6 +2195,9 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       if (annotation && strcmp (annotation, "0") != 0)
         seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
 
+      if (seccomp_bpf_data)
+        seccomp_gen_options |= LIBCRUN_SECCOMP_SKIP_CACHE;
+
       libcrun_seccomp_gen_ctx_init (&seccomp_gen_ctx, container, true, seccomp_gen_options);
 
       ret = libcrun_open_seccomp_bpf (&seccomp_gen_ctx, &seccomp_fd, err);

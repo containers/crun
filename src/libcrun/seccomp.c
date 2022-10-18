@@ -33,6 +33,7 @@
 #include <sys/resource.h>
 #include <sys/sysmacros.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 
@@ -81,6 +82,21 @@
 #ifndef SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV
 #  define SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV (1UL << 5)
 #endif
+
+#define SECCOMP_CACHE_DIR ".cache/seccomp"
+
+/* On Linux 5.19.15 x86_64, tmpfs reports 20 bytes + 20 bytes for each entry, so allow
+   at least 32 entries.  */
+#define MIN_CACHE_DIR_INODE_SIZE (20 + 32 * 20)
+
+/* Heuristic to avoid the cache directory grows indefinitely.  The inode size for
+   the directory is proportional to the number of entries it contains and it is
+   cheaper to compute than iterating the cache directory.  */
+static inline off_t
+get_cache_dir_inode_max_size (off_t size_rundir)
+{
+  return size_rundir * 3 + MIN_CACHE_DIR_INODE_SIZE;
+}
 
 static int
 syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
@@ -344,15 +360,23 @@ seccomp_action_supports_errno (const char *action)
          || strcmp (action, "SCMP_ACT_TRACE") == 0;
 }
 
+/* Calculate a checksum for the specified seccomp configuration.
+
+   Returns:
+   < 0 in case of errors
+     0 if the checksum is not supported
+   > 0 the checksum is supported and the value is in OUT.
+ */
 static int
-calculate_seccomp_checksum (libcrun_container_t *container, unsigned int seccomp_gen_options, seccomp_checksum_t out, libcrun_error_t *err)
+calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, unsigned int seccomp_gen_options, seccomp_checksum_t out, libcrun_error_t *err)
 {
 #if HAVE_GCRYPT
-  runtime_spec_schema_config_linux_seccomp *seccomp;
   gcry_error_t gcrypt_err;
+  struct utsname utsbuf;
   unsigned char *res;
   gcry_md_hd_t hd;
   size_t i;
+  int ret;
 
 #  define PROCESS_STRING(X)                      \
     do                                           \
@@ -367,15 +391,6 @@ calculate_seccomp_checksum (libcrun_container_t *container, unsigned int seccomp
       {                                       \
         gcry_md_write (hd, &(X), sizeof (X)); \
     } while (0)
-
-  out[0] = 0;
-
-  if (container == NULL || container->container_def == NULL || container->container_def->linux == NULL)
-    return 0;
-
-  seccomp = container->container_def->linux->seccomp;
-  if (seccomp == NULL)
-    return 0;
 
   gcrypt_err = gcry_md_open (&hd, GCRY_MD_SHA256, 0);
   if (gcrypt_err)
@@ -392,6 +407,15 @@ calculate_seccomp_checksum (libcrun_container_t *container, unsigned int seccomp
     PROCESS_DATA (version->micro);
   }
 #  endif
+
+  memset (&utsbuf, 0, sizeof (utsbuf));
+  ret = uname (&utsbuf);
+  if (UNLIKELY (ret != 0))
+    return crun_make_error (err, errno, "uname");
+
+  PROCESS_STRING (utsbuf.release);
+  PROCESS_STRING (utsbuf.version);
+  PROCESS_STRING (utsbuf.machine);
 
   PROCESS_DATA (seccomp_gen_options);
 
@@ -429,13 +453,215 @@ calculate_seccomp_checksum (libcrun_container_t *container, unsigned int seccomp
 
 #  undef PROCESS_STRING
 #  undef PROCESS_DATA
+  return 1;
 #else
-  (void) container;
+  (void) seccomp;
   (void) seccomp_gen_options;
   (void) out;
   (void) err;
   out[0] = 0;
+  return 0;
 #endif
+}
+
+static int
+open_rundir_dirfd (const char *state_root, libcrun_error_t *err)
+{
+  cleanup_free char *dir = NULL;
+  int dirfd;
+
+  dir = libcrun_get_state_directory (state_root, NULL);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory");
+
+  dirfd = TEMP_FAILURE_RETRY (open (dir, O_PATH | O_DIRECTORY | O_CLOEXEC));
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", dir);
+
+  return dirfd;
+}
+
+struct cache_entry
+{
+  seccomp_checksum_t checksum;
+  struct timespec atime;
+};
+
+static int
+compare_entries_by_atime (const void *a, const void *b)
+{
+  const struct cache_entry *entry_a = a;
+  const struct cache_entry *entry_b = b;
+  int ret;
+
+  ret = entry_a->atime.tv_sec - entry_b->atime.tv_sec;
+  if (ret)
+    return ret;
+
+  return entry_a->atime.tv_nsec - entry_b->atime.tv_nsec;
+}
+
+static int
+evict_cache (int root_dfd, libcrun_error_t *err)
+{
+  cleanup_close int cache_dir_fd = -1;
+  off_t cache_dir_inode_max_size;
+  struct stat st;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (fstat (root_dfd, &st));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fstat rundir");
+
+  cache_dir_inode_max_size = get_cache_dir_inode_max_size (st.st_size);
+
+  cache_dir_fd = TEMP_FAILURE_RETRY (openat (root_dfd, SECCOMP_CACHE_DIR, O_DIRECTORY | O_CLOEXEC));
+  if (UNLIKELY (cache_dir_fd < 0))
+    {
+      if (errno == ENOENT)
+        return 0;
+      return crun_make_error (err, errno, "open `%s`", SECCOMP_CACHE_DIR);
+    }
+
+  ret = TEMP_FAILURE_RETRY (fstat (cache_dir_fd, &st));
+  if (ret == 0 && st.st_size > cache_dir_inode_max_size)
+    {
+      cleanup_free struct cache_entry *entries = NULL;
+      cleanup_dir DIR *d = NULL;
+      size_t i, n_entries = 0;
+      struct dirent *de;
+      int dfd;
+
+      d = fdopendir (cache_dir_fd);
+      if (d == NULL)
+        return crun_make_error (err, errno, "cannot open seccomp cache directory");
+      /* fdopendir owns the fd now.  */
+      cache_dir_fd = -1;
+
+      dfd = dirfd (d);
+      while ((de = readdir (d)))
+        {
+          if (de->d_name[0] == '.')
+            continue;
+
+          ret = TEMP_FAILURE_RETRY (fstatat (dfd, de->d_name, &st, AT_SYMLINK_NOFOLLOW));
+          if (UNLIKELY (ret < 0))
+            continue;
+
+          /* The cache file is already used, it is pointless to free it.  */
+          if (st.st_nlink > 1)
+            continue;
+
+          /* If the sticky bit is set, then ignore it.  */
+          if (st.st_mode & S_ISVTX)
+            continue;
+
+          if (strlen (de->d_name) != sizeof (seccomp_checksum_t) - 1)
+            {
+              /* No mercy for unknown files.  */
+              unlinkat (dfd, de->d_name, 0);
+              continue;
+            }
+          else
+            {
+              entries = xrealloc (entries, sizeof (struct cache_entry) * (n_entries + 1));
+
+              memcpy (entries[n_entries].checksum, de->d_name, sizeof (seccomp_checksum_t));
+              entries[n_entries].atime = st.st_atim;
+              n_entries++;
+            }
+        }
+
+      qsort (entries, n_entries, sizeof (struct cache_entry), compare_entries_by_atime);
+
+      /* Attempt to delete half of them.  */
+      for (i = 0; i < (n_entries == 1 ? 1 : n_entries / 2); i++)
+        unlinkat (dfd, entries[i].checksum, 0);
+    }
+  return 0;
+}
+
+static int
+store_seccomp_cache (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_error_t *err)
+{
+  libcrun_container_t *container = ctx->container;
+  cleanup_free char *src_path = NULL;
+  cleanup_free char *dest_path = NULL;
+  cleanup_close int dirfd = -1;
+  int ret;
+
+  if (ctx->options & LIBCRUN_SECCOMP_SKIP_CACHE)
+    return 0;
+
+  if (is_empty_string (ctx->checksum))
+    return 0;
+
+  dirfd = open_rundir_dirfd (container->context->state_root, err);
+  if (UNLIKELY (dirfd < 0))
+    return dirfd;
+
+  /* relative path to dirfd.  */
+  ret = append_paths (&src_path, err, container->context->id, "seccomp.bpf", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (&dest_path, err, SECCOMP_CACHE_DIR, ctx->checksum, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = crun_ensure_directory_at (dirfd, SECCOMP_CACHE_DIR, 0700, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = evict_cache (dirfd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = linkat (dirfd, src_path, dirfd, dest_path, 0);
+  if (UNLIKELY (ret < 0 && errno != EEXIST))
+    return crun_make_error (err, errno, "link `%s` to `%s`", src_path, dest_path);
+  return 0;
+}
+
+static inline runtime_spec_schema_config_linux_seccomp *
+get_seccomp_configuration (struct libcrun_seccomp_gen_ctx_s *ctx)
+{
+  if (ctx->container == NULL || ctx->container->container_def == NULL
+      || ctx->container->container_def->linux == NULL)
+    return 0;
+
+  return ctx->container->container_def->linux->seccomp;
+}
+
+static int
+find_in_cache (struct libcrun_seccomp_gen_ctx_s *ctx, int dirfd, const char *dest_path, bool *created, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_linux_seccomp *seccomp;
+  cleanup_free char *cache_file_path = NULL;
+  int ret;
+
+  if (ctx->options & LIBCRUN_SECCOMP_SKIP_CACHE)
+    return 0;
+
+  seccomp = get_seccomp_configuration (ctx);
+  if (seccomp == NULL)
+    return 0;
+
+  /* if the checksum could not be computed, returns early.  */
+  ret = calculate_seccomp_checksum (seccomp, ctx->options, ctx->checksum, err);
+  if (UNLIKELY (ret <= 0))
+    return ret;
+
+  ret = append_paths (&cache_file_path, err, SECCOMP_CACHE_DIR, ctx->checksum, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = TEMP_FAILURE_RETRY (linkat (dirfd, cache_file_path, dirfd, dest_path, 0));
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
+    return crun_make_error (err, errno, "linkat `%s` to `%s`", cache_file_path, dest_path);
+
+  *created = ret == 0;
+
   return 0;
 }
 
@@ -449,6 +675,10 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
   int action, default_action, default_errno_value = EPERM;
   const char *def_action = NULL;
+
+  /* The bpf filter was loaded from the cache, nothing to do here.  */
+  if (gen_ctx->from_cache)
+    return 0;
 
   if (gen_ctx->container == NULL || gen_ctx->container->container_def == NULL || gen_ctx->container->container_def->linux == NULL)
     return 0;
@@ -605,6 +835,8 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
       ret = seccomp_export_bpf (ctx, gen_ctx->fd);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "seccomp_export_bpf");
+
+      return store_seccomp_cache (gen_ctx, err);
     }
 
   return 0;
@@ -641,7 +873,6 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
 {
   cleanup_close int dirfd = -1;
   cleanup_free char *dest_path = NULL;
-  cleanup_free char *dir = NULL;
   libcrun_container_t *container = ctx->container;
   int ret;
 
@@ -650,13 +881,9 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
   if (container == NULL || container->context == NULL)
     return crun_make_error (err, EINVAL, "invalid internal state");
 
-  dir = libcrun_get_state_directory (container->context->state_root, NULL);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
-
-  dirfd = TEMP_FAILURE_RETRY (open (dir, O_PATH | O_DIRECTORY | O_CLOEXEC));
+  dirfd = open_rundir_dirfd (container->context->state_root, err);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", dir);
+    return dirfd;
 
   /* relative path to dirfd.  */
   ret = append_paths (&dest_path, err, container->context->id, "seccomp.bpf", NULL);
@@ -665,6 +892,18 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
 
   if (ctx->create)
     {
+      bool created = false;
+
+      ret = find_in_cache (ctx, dirfd, dest_path, &created, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if (created)
+        {
+          ctx->from_cache = true;
+          goto open_existing_file;
+        }
+
       ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_RDWR | O_CREAT, 0700));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "open `seccomp.bpf`");
@@ -672,6 +911,7 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
     }
   else
     {
+    open_existing_file:
       ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_RDONLY));
       if (UNLIKELY (ret < 0))
         {
