@@ -2174,6 +2174,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .custom_handler = NULL,
     .handler_cookie = NULL,
   };
+  const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
+  unsigned int seccomp_gen_options = 0;
 
   if (def->hooks
       && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
@@ -2222,8 +2224,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->linux && (def->linux->seccomp || find_annotation (container, "run.oci.seccomp_bpf_data")))
+  if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
     {
+      const char *annotation;
+
+      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
+      if (annotation && strcmp (annotation, "0") != 0)
+        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
+
       ret = open_seccomp_output (context->id, &seccomp_fd, false, context->state_root, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -2338,24 +2346,17 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (seccomp_fd >= 0)
     {
-      unsigned int seccomp_gen_options = 0;
-      const char *annotation;
-
-      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
-      if (annotation && strcmp (annotation, "0") != 0)
-        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
-
-      if ((annotation = find_annotation (container, "run.oci.seccomp_bpf_data")) != NULL)
+      if (seccomp_bpf_data != NULL)
         {
           cleanup_free char *bpf_data = NULL;
           size_t size = 0;
           size_t in_size;
           int consumed;
 
-          in_size = strlen (annotation);
+          in_size = strlen (seccomp_bpf_data);
           bpf_data = xmalloc (in_size + 1);
 
-          consumed = base64_decode (annotation, in_size, bpf_data, in_size, &size);
+          consumed = base64_decode (seccomp_bpf_data, in_size, bpf_data, in_size, &size);
           if (UNLIKELY (consumed != (int) in_size))
             {
               ret = crun_make_error (err, 0, "invalid seccomp BPF data");
@@ -3303,8 +3304,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   if (seccomp_fd >= 0)
     {
-      ret = get_seccomp_receiver_fd (container, &seccomp_receiver_fd, &own_seccomp_receiver_fd, &seccomp_notify_plugins,
-                                     err);
+      ret = get_seccomp_receiver_fd (container, &seccomp_receiver_fd,
+                                     &own_seccomp_receiver_fd,
+                                     &seccomp_notify_plugins, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
