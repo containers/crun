@@ -36,6 +36,10 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+#if HAVE_GCRYPT
+#  include <gcrypt.h>
+#endif
+
 #if HAVE_STDATOMIC_H
 #  include <stdatomic.h>
 #else
@@ -338,6 +342,101 @@ seccomp_action_supports_errno (const char *action)
 {
   return strcmp (action, "SCMP_ACT_ERRNO") == 0
          || strcmp (action, "SCMP_ACT_TRACE") == 0;
+}
+
+static int
+calculate_seccomp_checksum (libcrun_container_t *container, unsigned int seccomp_gen_options, seccomp_checksum_t out, libcrun_error_t *err)
+{
+#if HAVE_GCRYPT
+  runtime_spec_schema_config_linux_seccomp *seccomp;
+  gcry_error_t gcrypt_err;
+  unsigned char *res;
+  gcry_md_hd_t hd;
+  size_t i;
+
+#  define PROCESS_STRING(X)                      \
+    do                                           \
+      {                                          \
+        if (X)                                   \
+          {                                      \
+            gcry_md_write (hd, (X), strlen (X)); \
+          }                                      \
+    } while (0)
+#  define PROCESS_DATA(X)                     \
+    do                                        \
+      {                                       \
+        gcry_md_write (hd, &(X), sizeof (X)); \
+    } while (0)
+
+  out[0] = 0;
+
+  if (container == NULL || container->container_def == NULL || container->container_def->linux == NULL)
+    return 0;
+
+  seccomp = container->container_def->linux->seccomp;
+  if (seccomp == NULL)
+    return 0;
+
+  gcrypt_err = gcry_md_open (&hd, GCRY_MD_SHA256, 0);
+  if (gcrypt_err)
+    return crun_make_error (err, EINVAL, "internal libgcrypt error: %s", gcry_strerror (gcrypt_err));
+
+  PROCESS_STRING (PACKAGE_VERSION);
+
+#  ifdef HAVE_SECCOMP
+  {
+    const struct scmp_version *version = seccomp_version ();
+
+    PROCESS_DATA (version->major);
+    PROCESS_DATA (version->minor);
+    PROCESS_DATA (version->micro);
+  }
+#  endif
+
+  PROCESS_DATA (seccomp_gen_options);
+
+  PROCESS_STRING (seccomp->default_action);
+  for (i = 0; i < seccomp->flags_len; i++)
+    PROCESS_STRING (seccomp->flags[i]);
+  for (i = 0; i < seccomp->architectures_len; i++)
+    PROCESS_STRING (seccomp->architectures[i]);
+  for (i = 0; i < seccomp->syscalls_len; i++)
+    {
+      size_t j;
+
+      if (seccomp->syscalls[i]->action)
+        PROCESS_STRING (seccomp->syscalls[i]->action);
+      for (j = 0; j < seccomp->syscalls[i]->names_len; j++)
+        PROCESS_STRING (seccomp->syscalls[i]->names[j]);
+      for (j = 0; j < seccomp->syscalls[i]->args_len; j++)
+        {
+          if (seccomp->syscalls[i]->args[j]->index_present)
+            PROCESS_DATA (seccomp->syscalls[i]->args[j]->index);
+          if (seccomp->syscalls[i]->args[j]->value_present)
+            PROCESS_DATA (seccomp->syscalls[i]->args[j]->value);
+          if (seccomp->syscalls[i]->args[j]->value_two_present)
+            PROCESS_DATA (seccomp->syscalls[i]->args[j]->value_two);
+          PROCESS_STRING (seccomp->syscalls[i]->args[j]->op);
+        }
+    }
+
+  res = gcry_md_read (hd, GCRY_MD_SHA256);
+  for (i = 0; i < 32; i++)
+    sprintf (&out[i * 2], "%02x", res[i]);
+  out[64] = 0;
+
+  gcry_md_close (hd);
+
+#  undef PROCESS_STRING
+#  undef PROCESS_DATA
+#else
+  (void) container;
+  (void) seccomp_gen_options;
+  (void) out;
+  (void) err;
+  out[0] = 0;
+#endif
+  return 0;
 }
 
 int

@@ -31,6 +31,8 @@ enum
   LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL = 1 << 0,
 };
 
+typedef char seccomp_checksum_t[65];
+
 int libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err);
 int libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_fd_payload,
                            size_t receiver_fd_payload_len, char **flags, size_t flags_len, libcrun_error_t *err);
