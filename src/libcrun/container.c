@@ -3275,6 +3275,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (container == NULL)
     return crun_make_error (err, 0, "error loading config.json");
 
+  container->context = context;
+
   if (container_status == 0)
     return crun_make_error (err, 0, "the container `%s` is not running", id);
 
