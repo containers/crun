@@ -639,6 +639,7 @@ libcrun_copy_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, const char *b64
 int
 libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcrun_error_t *err)
 {
+  cleanup_close int dirfd = -1;
   cleanup_free char *dest_path = NULL;
   cleanup_free char *dir = NULL;
   libcrun_container_t *container = ctx->container;
@@ -649,29 +650,34 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
   if (container == NULL || container->context == NULL)
     return crun_make_error (err, EINVAL, "invalid internal state");
 
-  dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+  dir = libcrun_get_state_directory (container->context->state_root, NULL);
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
+  dirfd = TEMP_FAILURE_RETRY (open (dir, O_PATH | O_DIRECTORY | O_CLOEXEC));
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", dir);
+
+  /* relative path to dirfd.  */
+  ret = append_paths (&dest_path, err, container->context->id, "seccomp.bpf", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (ctx->create)
     {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDWR | O_CREAT, 0700));
+      ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_RDWR | O_CREAT, 0700));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "open seccomp.bpf");
+        return crun_make_error (err, errno, "open `seccomp.bpf`");
       ctx->fd = *fd = ret;
     }
   else
     {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDONLY));
+      ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_RDONLY));
       if (UNLIKELY (ret < 0))
         {
           if (errno == ENOENT)
             return 0;
-          return crun_make_error (err, errno, "open seccomp.bpf");
+          return crun_make_error (err, errno, "open `seccomp.bpf`");
         }
       ctx->fd = *fd = ret;
     }
