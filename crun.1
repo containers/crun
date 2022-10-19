@@ -648,16 +648,21 @@ It is an experimental feature.
 
 .PP
 If specified, run the specified handler for execing the container.
-The only supported value is \fB\fCkrun\fR\&.  When \fB\fCkrun\fR is specified, the
-\fB\fClibkrun.so\fR shared object is loaded and it is used to launch the
-container using libkrun.
+The only supported values are \fB\fCkrun\fR and \fB\fCwasm\fR\&.
 
-.SH \fB\fCrun.oci.handler=wasm\fR
-.PP
-If specified, run the wasm handler for container.
-Allows running wasm workload natively. Accepts a \fB\fC\&.wasm\fR binary as input
-and if \fB\fC\&.wat\fR is provided it will automatically compiled into a wasm module.
-Stdout of wasm module is relayed back via crun.
+.RS
+.IP \(bu 2
+
+.SS krunWhen \fB\fCkrun\fR is specified, the \fB\fClibkrun.so\fR shared object is loaded
+and it is used to launch the container using libkrun.
+.IP \(bu 2
+
+.SS wasmIf specified, run the wasm handler for container. Allows running wasm
+workload natively. Accepts a \fB\fC\&.wasm\fR binary as input and if \fB\fC\&.wat\fR is
+provided it will automatically compiled into a wasm module. Stdout of
+wasm module is relayed back via crun.
+
+.RE
 
 .SH tmpcopyup mount options
 .PP

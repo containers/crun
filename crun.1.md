@@ -512,16 +512,17 @@ doesn't already exist.
 It is an experimental feature.
 
 If specified, run the specified handler for execing the container.
-The only supported value is `krun`.  When `krun` is specified, the
-`libkrun.so` shared object is loaded and it is used to launch the
-container using libkrun.
+The only supported values are `krun` and `wasm`.
 
-## `run.oci.handler=wasm`
+* #### krun
+  When `krun` is specified, the `libkrun.so` shared object is loaded
+and it is used to launch the container using libkrun.
 
-If specified, run the wasm handler for container.
-Allows running wasm workload natively. Accepts a `.wasm` binary as input
-and if `.wat` is provided it will automatically compiled into a wasm module.
-Stdout of wasm module is relayed back via crun.
+* #### wasm
+  If specified, run the wasm handler for container. Allows running wasm
+workload natively. Accepts a `.wasm` binary as input and if `.wat` is
+provided it will automatically compiled into a wasm module. Stdout of
+wasm module is relayed back via crun.
 
 ## tmpcopyup mount options
 
