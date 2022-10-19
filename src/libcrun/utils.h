@@ -27,7 +27,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <signal.h>
-#include <runtime_spec_schema_config_schema.h>
+#include <ocispec/runtime_spec_schema_config_schema.h>
 #include <sys/wait.h>
 #include "container.h"
 

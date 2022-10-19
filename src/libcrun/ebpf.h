@@ -24,7 +24,7 @@
 #include "error.h"
 #include <errno.h>
 #include <argp.h>
-#include <runtime_spec_schema_config_schema.h>
+#include <ocispec/runtime_spec_schema_config_schema.h>
 #include "container.h"
 
 struct bpf_program;
