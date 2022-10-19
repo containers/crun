@@ -440,7 +440,7 @@ calculate_seccomp_checksum (libcrun_container_t *container, unsigned int seccomp
 }
 
 int
-libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err)
+libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_error_t *err)
 {
 #ifdef HAVE_SECCOMP
   runtime_spec_schema_config_linux_seccomp *seccomp;
@@ -450,10 +450,10 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
   int action, default_action, default_errno_value = EPERM;
   const char *def_action = NULL;
 
-  if (container == NULL || container->container_def == NULL || container->container_def->linux == NULL)
+  if (gen_ctx->container == NULL || gen_ctx->container->container_def == NULL || gen_ctx->container->container_def->linux == NULL)
     return 0;
 
-  seccomp = container->container_def->linux->seccomp;
+  seccomp = gen_ctx->container->container_def->linux->seccomp;
   if (seccomp == NULL)
     return 0;
 
@@ -531,7 +531,7 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 
           if (UNLIKELY (syscall == __NR_SCMP_ERROR))
             {
-              if (options & LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL)
+              if (gen_ctx->options & LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL)
                 return crun_make_error (err, 0, "invalid seccomp syscall `%s`", seccomp->syscalls[i]->names[j]);
 
               libcrun_warning ("unknown seccomp syscall `%s` ignored", seccomp->syscalls[i]->names[j]);
@@ -600,9 +600,9 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
         }
     }
 
-  if (outfd >= 0)
+  if (gen_ctx->fd >= 0)
     {
-      ret = seccomp_export_bpf (ctx, outfd);
+      ret = seccomp_export_bpf (ctx, gen_ctx->fd);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "seccomp_export_bpf");
     }
@@ -611,4 +611,47 @@ libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned in
 #else
   return 0;
 #endif
+}
+
+int
+libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcrun_error_t *err)
+{
+  cleanup_free char *dest_path = NULL;
+  cleanup_free char *dir = NULL;
+  libcrun_container_t *container = ctx->container;
+  int ret;
+
+  ctx->fd = *fd = -1;
+
+  if (container == NULL || container->context == NULL)
+    return crun_make_error (err, EINVAL, "invalid internal state");
+
+  dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory");
+
+  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ctx->create)
+    {
+      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDWR | O_CREAT, 0700));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open seccomp.bpf");
+      ctx->fd = *fd = ret;
+    }
+  else
+    {
+      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDONLY));
+      if (UNLIKELY (ret < 0))
+        {
+          if (errno == ENOENT)
+            return 0;
+          return crun_make_error (err, errno, "open seccomp.bpf");
+        }
+      ctx->fd = *fd = ret;
+    }
+
+  return 0;
 }

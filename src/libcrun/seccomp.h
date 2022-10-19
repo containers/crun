@@ -33,8 +33,28 @@ enum
 
 typedef char seccomp_checksum_t[65];
 
-int libcrun_generate_seccomp (libcrun_container_t *container, int outfd, unsigned int options, libcrun_error_t *err);
+struct libcrun_seccomp_gen_ctx_s
+{
+  libcrun_container_t *container;
+  seccomp_checksum_t checksum;
+  unsigned int options;
+  bool create;
+
+  /* Not owned here, it is the caller responsibility to close it.  */
+  int fd;
+};
+
+static inline void libcrun_seccomp_gen_ctx_init (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_container_t *container, bool create, unsigned int seccomp_gen_options)
+{
+  memset (ctx, 0, sizeof (*ctx));
+  ctx->create = create;
+  ctx->container = container;
+  ctx->options = seccomp_gen_options;
+}
+
+int libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_error_t *err);
 int libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_fd_payload,
                            size_t receiver_fd_payload_len, char **flags, size_t flags_len, libcrun_error_t *err);
+int libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcrun_error_t *err);
 
 #endif

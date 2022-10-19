@@ -142,6 +142,7 @@ generate_seccomp (uint8_t *buf, size_t len)
   cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *conf = NULL;
   cleanup_close int outfd = -1;
+  struct libcrun_seccomp_gen_ctx_s ctx;
 
   conf = make_nul_terminated (buf, len);
   if (conf == NULL)
@@ -158,7 +159,10 @@ generate_seccomp (uint8_t *buf, size_t len)
   if (outfd < 0)
     return 0;
 
-  libcrun_generate_seccomp (container, outfd, 0, &err);
+  libcrun_seccomp_gen_ctx_init (&ctx, container, true, 0);
+  ctx.fd = outfd;
+
+  libcrun_generate_seccomp (&ctx, &err);
   crun_error_release (&err);
   return 0;
 }

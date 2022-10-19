@@ -2015,44 +2015,6 @@ cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *de
   return -1;
 }
 
-static int
-open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_root, libcrun_error_t *err)
-{
-  int ret;
-  cleanup_free char *dest_path = NULL;
-  cleanup_free char *dir = NULL;
-
-  dir = libcrun_get_state_directory (state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
-
-  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  *fd = -1;
-  if (readonly)
-    {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDONLY));
-      if (UNLIKELY (ret < 0))
-        {
-          if (errno == ENOENT)
-            return 0;
-          return crun_make_error (err, errno, "open seccomp.bpf");
-        }
-      *fd = ret;
-    }
-  else
-    {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDWR | O_CREAT, 0700));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "open seccomp.bpf");
-      *fd = ret;
-    }
-
-  return 0;
-}
-
 /* Find the uid:gid that is mapped to root inside the container user namespace.  */
 void
 get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid, uid_t *uid,
@@ -2174,8 +2136,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .custom_handler = NULL,
     .handler_cookie = NULL,
   };
+  struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
-  unsigned int seccomp_gen_options = 0;
 
   if (def->hooks
       && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
@@ -2226,13 +2188,16 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
     {
+      unsigned int seccomp_gen_options = 0;
       const char *annotation;
 
       annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
       if (annotation && strcmp (annotation, "0") != 0)
         seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
 
-      ret = open_seccomp_output (context->id, &seccomp_fd, false, context->state_root, err);
+      libcrun_seccomp_gen_ctx_init (&seccomp_gen_ctx, container, true, seccomp_gen_options);
+
+      ret = libcrun_open_seccomp_bpf (&seccomp_gen_ctx, &seccomp_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2372,7 +2337,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         }
       else
         {
-          ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
+          ret = libcrun_generate_seccomp (&seccomp_gen_ctx, err);
           if (UNLIKELY (ret < 0))
             goto fail;
         }
@@ -3253,6 +3218,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   const char *seccomp_notify_plugins = NULL;
   __attribute__ ((unused)) cleanup_process_schema runtime_spec_schema_config_schema_process *process_cleanup = NULL;
   runtime_spec_schema_config_schema_process *process = opts->process;
+  struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   char b;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -3298,7 +3264,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = open_seccomp_output (context->id, &seccomp_fd, true, context->state_root, err);
+  libcrun_seccomp_gen_ctx_init (&seccomp_gen_ctx, container, false, 0);
+
+  ret = libcrun_open_seccomp_bpf (&seccomp_gen_ctx, &seccomp_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
