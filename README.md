@@ -61,7 +61,7 @@ These dependencies are required for the build:
 
 ```console
 $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel pkg-config \
+    systemd-devel yajl-devel libseccomp-devel pkg-config libgcrypt-devel \
     go-md2man glibc-static python3-libmount libtool
 ```
 
@@ -70,7 +70,7 @@ $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
 ```console
 $ sudo yum --enablerepo='*' --disablerepo='media-*' install -y make automake \
     autoconf gettext \
-    libtool gcc libcap-devel systemd-devel yajl-devel \
+    libtool gcc libcap-devel systemd-devel yajl-devel libgcrypt-devel \
     glibc-static libseccomp-devel python36 git
 ```
 
@@ -90,7 +90,7 @@ $ export PATH=$PATH:$GOPATH/bin
 ```console
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
-   go-md2man autoconf python3 automake
+   libgcrypt20-dev go-md2man autoconf python3 automake
 ```
 
 ### Alpine
