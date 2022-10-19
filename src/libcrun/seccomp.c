@@ -614,6 +614,29 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
 }
 
 int
+libcrun_copy_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, const char *b64_bpf, libcrun_error_t *err)
+{
+  cleanup_free char *bpf_data = NULL;
+  size_t size = 0;
+  size_t in_size;
+  int consumed;
+  int ret;
+
+  in_size = strlen (b64_bpf);
+  bpf_data = xmalloc (in_size + 1);
+
+  consumed = base64_decode (b64_bpf, in_size, bpf_data, in_size, &size);
+  if (UNLIKELY (consumed != (int) in_size))
+    return crun_make_error (err, 0, "invalid seccomp BPF data");
+
+  ret = safe_write (gen_ctx->fd, bpf_data, (ssize_t) size);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "write to seccomp fd");
+
+  return 0;
+}
+
+int
 libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcrun_error_t *err)
 {
   cleanup_free char *dest_path = NULL;

@@ -2313,27 +2313,9 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     {
       if (seccomp_bpf_data != NULL)
         {
-          cleanup_free char *bpf_data = NULL;
-          size_t size = 0;
-          size_t in_size;
-          int consumed;
-
-          in_size = strlen (seccomp_bpf_data);
-          bpf_data = xmalloc (in_size + 1);
-
-          consumed = base64_decode (seccomp_bpf_data, in_size, bpf_data, in_size, &size);
-          if (UNLIKELY (consumed != (int) in_size))
-            {
-              ret = crun_make_error (err, 0, "invalid seccomp BPF data");
-              goto fail;
-            }
-
-          ret = safe_write (seccomp_fd, bpf_data, (ssize_t) size);
+          ret = libcrun_copy_seccomp (&seccomp_gen_ctx, seccomp_bpf_data, err);
           if (UNLIKELY (ret < 0))
-            {
-              ret = crun_make_error (err, 0, "write to seccomp fd");
-              goto fail;
-            }
+            goto fail;
         }
       else
         {
