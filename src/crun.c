@@ -30,6 +30,7 @@
 #include "crun.h"
 #include "libcrun/utils.h"
 #include "libcrun/custom-handler.h"
+#include "libcrun/status.h"
 
 /* Commands.  */
 #include "run.h"
@@ -222,8 +223,10 @@ static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce 
 static void
 print_version (FILE *stream, struct argp_state *state arg_unused)
 {
+  cleanup_free char *rundir = libcrun_get_state_directory (arguments.root, NULL);
   fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
   fprintf (stream, "commit: %s\n", GIT_VERSION);
+  fprintf (stream, "rundir: %s\n", rundir);
   fprintf (stream, "spec: 1.0.0\n");
 #ifdef HAVE_SYSTEMD
   fprintf (stream, "+SYSTEMD ");
