@@ -1,0 +1,8 @@
+Print env::args()
+/hello.wasm
+arg1
+arg2
+Print env::vars()
+container: "podman"
+key: "value"
+This is from a main function from a wasm module

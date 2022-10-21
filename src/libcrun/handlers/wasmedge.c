@@ -80,6 +80,7 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   bool (*WasmEdge_ResultOK) (const WasmEdge_Result Res);
   WasmEdge_String (*WasmEdge_StringCreateByCString) (const char *Str);
   uint32_t argn = 0;
+  uint32_t envn = 0;
   const char *dirs[1] = { "/:/" };
   WasmEdge_ConfigureContext *configure;
   WasmEdge_VMContext *vm;
@@ -135,8 +136,11 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
 
   for (char *const *arg = argv; *arg != NULL; ++arg, ++argn)
     ;
+  extern char **environ;
+  for (char *const *env = environ; *env != NULL; ++env, ++envn)
+    ;
 
-  WasmEdge_ModuleInstanceInitWASI (wasi_module, (const char *const *) &argv[0], argn, NULL, 0, dirs, 1, NULL, 0);
+  WasmEdge_ModuleInstanceInitWASI (wasi_module, (const char *const *) &argv[0], argn, (const char *const *) &environ[0], envn, dirs, 1, NULL, 0);
 
   result = WasmEdge_VMRunWasmFromFile (vm, pathname, WasmEdge_StringCreateByCString ("_start"), NULL, 0, NULL, 0);
 
