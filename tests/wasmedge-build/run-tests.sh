@@ -29,9 +29,12 @@ cd /hello_wasm && \
 
 # Run hello.wasm with crun
 OUTPUT=$(podman run hellowasm-image:latest)
-EXPECTED_OUTPUT="This is from a main function from a wasm module"
-echo "$OUTPUT"
-if [[ "$OUTPUT" != "$EXPECTED_OUTPUT" ]]; then
+FILE1="tmp.output"
+FILE2="expected_output"
+echo "$OUTPUT" > "$FILE1"
+if cmp -s "$FILE1" "$FILE2"; then
+	echo "Run wasm success. The execution result is exactly matched"
+else
 	echo "Run wasm failed. The execution result is not matched"
 	exit 1
 fi
