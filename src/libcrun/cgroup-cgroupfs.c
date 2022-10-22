@@ -90,6 +90,7 @@ libcrun_destroy_cgroup_cgroupfs (struct libcrun_cgroup_status *cgroup_status,
 }
 
 struct libcrun_cgroup_manager cgroup_manager_cgroupfs = {
+  .precreate_cgroup = NULL,
   .create_cgroup = libcrun_cgroup_enter_cgroupfs,
   .destroy_cgroup = libcrun_destroy_cgroup_cgroupfs,
 };

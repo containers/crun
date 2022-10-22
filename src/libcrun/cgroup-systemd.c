@@ -1039,6 +1039,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
 #endif
 
 struct libcrun_cgroup_manager cgroup_manager_systemd = {
+  .precreate_cgroup = NULL,
   .create_cgroup = libcrun_cgroup_enter_systemd,
   .destroy_cgroup = libcrun_destroy_cgroup_systemd,
   .update_resources = libcrun_update_resources_systemd,
