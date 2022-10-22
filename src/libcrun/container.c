@@ -2136,6 +2136,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .custom_handler = NULL,
     .handler_cookie = NULL,
   };
+  cleanup_close int cgroup_dirfd = -1;
+  struct libcrun_dirfd_s cgroup_dirfd_s;
   struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
 
@@ -2222,9 +2224,41 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       container_args.console_socket_fd = console_socket_fd;
     }
 
-  pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, err);
+  cgroup_manager = CGROUP_MANAGER_CGROUPFS;
+  if (context->systemd_cgroup)
+    cgroup_manager = CGROUP_MANAGER_SYSTEMD;
+  else if (context->force_no_cgroup)
+    cgroup_manager = CGROUP_MANAGER_DISABLED;
+
+  /* If we are root (either on the host or in a namespace), then chown the cgroup to root
+     in the container user namespace.  */
+  get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
+
+  memset (&cg, 0, sizeof (cg));
+
+  cg.cgroup_path = def->linux ? def->linux->cgroups_path : "";
+  cg.manager = cgroup_manager;
+  cg.id = context->id;
+  cg.resources = def->linux ? def->linux->resources : NULL;
+  cg.annotations = def->annotations;
+  cg.cgroup_path = def->linux ? def->linux->cgroups_path : "";
+  cg.manager = cgroup_manager;
+  cg.root_uid = root_uid;
+  cg.root_gid = root_gid;
+
+  ret = libcrun_cgroup_preenter (&cg, &cgroup_dirfd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  cgroup_dirfd_s.dirfd = &cgroup_dirfd;
+  cgroup_dirfd_s.joined = false;
+
+  pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, &cgroup_dirfd_s, err);
   if (UNLIKELY (pid < 0))
     return pid;
+
+  cg.pid = pid;
+  cg.joined = cgroup_dirfd_s.joined;
 
   if (context->fifo_exec_wait_fd < 0 && context->notify_socket)
     {
@@ -2237,16 +2271,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (container_args.terminal_socketpair[1] >= 0)
     close_and_reset (&socket_pair_1);
 
-  cgroup_manager = CGROUP_MANAGER_CGROUPFS;
-  if (context->systemd_cgroup)
-    cgroup_manager = CGROUP_MANAGER_SYSTEMD;
-  else if (context->force_no_cgroup)
-    cgroup_manager = CGROUP_MANAGER_DISABLED;
-
-  /* If we are root (either on the host or in a namespace), then chown the cgroup to root
-     in the container user namespace.  */
-  get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
-
   /* If the root in the container is different than the current root user, attempt to chown
      the std streams before entering the user namespace.  Otherwise we might lose access
      to the user (as it is not mapped in the user namespace) and cannot chown them.  */
@@ -2256,16 +2280,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       if (UNLIKELY (ret < 0))
         goto fail;
     }
-
-  memset (&cg, 0, sizeof (cg));
-  cg.resources = def->linux ? def->linux->resources : NULL;
-  cg.annotations = def->annotations;
-  cg.cgroup_path = def->linux ? def->linux->cgroups_path : "";
-  cg.manager = cgroup_manager;
-  cg.pid = pid;
-  cg.root_uid = root_uid;
-  cg.root_gid = root_gid;
-  cg.id = context->id;
 
   ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
   if (UNLIKELY (ret < 0))

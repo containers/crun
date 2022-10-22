@@ -4062,7 +4062,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
 pid_t
 libcrun_run_linux_container (libcrun_container_t *container, container_entrypoint_t entrypoint, void *args,
-                             int *sync_socket_out, libcrun_error_t *err)
+                             int *sync_socket_out, struct libcrun_dirfd_s *cgroup_dirfd, libcrun_error_t *err)
 {
   __attribute__ ((cleanup (cleanup_free_init_statusp))) struct init_status_s init_status;
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -4171,9 +4171,30 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME | CLONE_NEWCGROUP);
     }
 
-  pid = syscall_clone (first_clone_args | SIGCHLD, NULL);
-  if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "clone");
+  pid = -1;
+  if (cgroup_dirfd && *cgroup_dirfd->dirfd >= 0)
+    {
+      struct _clone3_args clone3_args;
+      memset (&clone3_args, 0, sizeof (clone3_args));
+      clone3_args.exit_signal = SIGCHLD;
+      clone3_args.flags = first_clone_args;
+
+      clone3_args.flags |= CLONE_INTO_CGROUP;
+      clone3_args.cgroup = *cgroup_dirfd->dirfd;
+
+      pid = syscall_clone3 (&clone3_args);
+      if (pid >= 0)
+        cgroup_dirfd->joined = true;
+
+      close_and_reset (cgroup_dirfd->dirfd);
+    }
+  /* fallback to clone() for any error.  */
+  if (pid < 0)
+    {
+      pid = syscall_clone (first_clone_args | SIGCHLD, NULL);
+      if (UNLIKELY (pid < 0))
+        return crun_make_error (err, errno, "clone");
+    }
 
   init_status.namespaces_to_unshare &= ~first_clone_args;
 
