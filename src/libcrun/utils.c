@@ -2225,7 +2225,7 @@ base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t 
             }
         }
 
-      /* I have a entire block of data 32 bits get the output data.  */
+      /* I have an entire block of data 32 bits get the output data.  */
       if (i == 4)
         {
           *optr++ = (data[0] << 2) | ((data[1] & 0x30) >> 4);
