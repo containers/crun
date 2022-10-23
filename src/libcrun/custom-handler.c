@@ -270,7 +270,7 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
 
   annotation = find_annotation (container, "run.oci.handler");
 
-  /* Fail with EACCESS if global handler is already configured and there was a attempt to override it via spec.  */
+  /* Fail with EACCESS if global handler is already configured and there was an attempt to override it via spec.  */
   if (context->handler != NULL && annotation != NULL)
     return crun_make_error (err, EACCES, "invalid attempt to override already configured global handler: `%s`", context->handler);
 
