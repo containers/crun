@@ -652,14 +652,12 @@ The only supported values are \fB\fCkrun\fR and \fB\fCwasm\fR\&.
 
 .RS
 .IP \(bu 2
-
-.SS krunWhen \fB\fCkrun\fR is specified, the \fB\fClibkrun.so\fR shared object is loaded
+\fB\fCkrun\fR: When \fB\fCkrun\fR is specified, the \fB\fClibkrun.so\fR shared object is loaded
 and it is used to launch the container using libkrun.
 .IP \(bu 2
-
-.SS wasmIf specified, run the wasm handler for container. Allows running wasm
+\fB\fCwasm\fR: If specified, run the wasm handler for container. Allows running wasm
 workload natively. Accepts a \fB\fC\&.wasm\fR binary as input and if \fB\fC\&.wat\fR is
-provided it will automatically compiled into a wasm module. Stdout of
+provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
 .RE
