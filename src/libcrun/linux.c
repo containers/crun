@@ -4060,6 +4060,28 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   return 0;
 }
 
+static int
+handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcrun_error_t *err)
+{
+  cleanup_close int client_fd = -1;
+  cleanup_close int pidfd = -1;
+  const char *v;
+
+  v = find_annotation (container, "run.oci.pidfd_receiver");
+  if (v == NULL)
+    return 0;
+
+  pidfd = syscall_pidfd_open (pid, 0);
+  if (UNLIKELY (pidfd < 0))
+    return crun_make_error (err, errno, "pidfd_open");
+
+  client_fd = open_unix_domain_client_socket (v, 0, err);
+  if (UNLIKELY (client_fd < 0))
+    return client_fd;
+
+  return send_fd_to_socket (client_fd, pidfd, err);
+}
+
 pid_t
 libcrun_run_linux_container (libcrun_container_t *container, container_entrypoint_t entrypoint, void *args,
                              int *sync_socket_out, libcrun_error_t *err)
@@ -4269,6 +4291,10 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
         return ret;
 
       *sync_socket_out = get_and_reset (&sync_socket_host);
+
+      ret = handle_pidfd_receiver (pid, container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       pid_to_clean = 0;
       return pid;

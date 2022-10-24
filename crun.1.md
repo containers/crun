@@ -427,6 +427,14 @@ will skip the `setgroups` syscall that is used to either set the
 additional groups specified in the OCI configuration, or to reset the
 list of additional groups if none is specified.
 
+## `run.oci.pidfd_receiver=PATH`
+
+It is an experimental feature and will be removed once the feature is in the
+OCI runtime specs.
+
+If present, specify the path to the UNIX socket that will receive the
+pidfd for the container process.
+
 ## `run.oci.systemd.force_cgroup_v1=/PATH`
 
 If the annotation `run.oci.systemd.force_cgroup_v1=/PATH` is present, then crun
