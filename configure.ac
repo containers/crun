@@ -64,6 +64,9 @@ AS_IF([test "x$enable_caps" != "xno"], [
 	])
 ])
 
+dnl libgcrypt
+AC_SEARCH_LIBS([gcry_check_version], [gcrypt], [AC_DEFINE([HAVE_GCRYPT], 1, [Define if gcrypt is available])], [])
+
 dnl dl
 AC_ARG_ENABLE([dl], AS_HELP_STRING([--disable-dl], [Disable dynamic libraries support]))
 AS_IF([test "x$enable_dl" != "xno"], [

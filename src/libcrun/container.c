@@ -2015,44 +2015,6 @@ cleanup_watch (libcrun_context_t *context, runtime_spec_schema_config_schema *de
   return -1;
 }
 
-static int
-open_seccomp_output (const char *id, int *fd, bool readonly, const char *state_root, libcrun_error_t *err)
-{
-  int ret;
-  cleanup_free char *dest_path = NULL;
-  cleanup_free char *dir = NULL;
-
-  dir = libcrun_get_state_directory (state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
-
-  ret = append_paths (&dest_path, err, dir, "seccomp.bpf", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  *fd = -1;
-  if (readonly)
-    {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDONLY));
-      if (UNLIKELY (ret < 0))
-        {
-          if (errno == ENOENT)
-            return 0;
-          return crun_make_error (err, errno, "open seccomp.bpf");
-        }
-      *fd = ret;
-    }
-  else
-    {
-      ret = TEMP_FAILURE_RETRY (open (dest_path, O_RDWR | O_CREAT, 0700));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "open seccomp.bpf");
-      *fd = ret;
-    }
-
-  return 0;
-}
-
 /* Find the uid:gid that is mapped to root inside the container user namespace.  */
 void
 get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid, uid_t *uid,
@@ -2174,6 +2136,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .custom_handler = NULL,
     .handler_cookie = NULL,
   };
+  struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
+  const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
 
   if (def->hooks
       && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
@@ -2222,9 +2186,21 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->linux && (def->linux->seccomp || find_annotation (container, "run.oci.seccomp_bpf_data")))
+  if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
     {
-      ret = open_seccomp_output (context->id, &seccomp_fd, false, context->state_root, err);
+      unsigned int seccomp_gen_options = 0;
+      const char *annotation;
+
+      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
+      if (annotation && strcmp (annotation, "0") != 0)
+        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
+
+      if (seccomp_bpf_data)
+        seccomp_gen_options |= LIBCRUN_SECCOMP_SKIP_CACHE;
+
+      libcrun_seccomp_gen_ctx_init (&seccomp_gen_ctx, container, true, seccomp_gen_options);
+
+      ret = libcrun_open_seccomp_bpf (&seccomp_gen_ctx, &seccomp_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2338,40 +2314,15 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   if (seccomp_fd >= 0)
     {
-      unsigned int seccomp_gen_options = 0;
-      const char *annotation;
-
-      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
-      if (annotation && strcmp (annotation, "0") != 0)
-        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
-
-      if ((annotation = find_annotation (container, "run.oci.seccomp_bpf_data")) != NULL)
+      if (seccomp_bpf_data != NULL)
         {
-          cleanup_free char *bpf_data = NULL;
-          size_t size = 0;
-          size_t in_size;
-          int consumed;
-
-          in_size = strlen (annotation);
-          bpf_data = xmalloc (in_size + 1);
-
-          consumed = base64_decode (annotation, in_size, bpf_data, in_size, &size);
-          if (UNLIKELY (consumed != (int) in_size))
-            {
-              ret = crun_make_error (err, 0, "invalid seccomp BPF data");
-              goto fail;
-            }
-
-          ret = safe_write (seccomp_fd, bpf_data, (ssize_t) size);
+          ret = libcrun_copy_seccomp (&seccomp_gen_ctx, seccomp_bpf_data, err);
           if (UNLIKELY (ret < 0))
-            {
-              ret = crun_make_error (err, 0, "write to seccomp fd");
-              goto fail;
-            }
+            goto fail;
         }
       else
         {
-          ret = libcrun_generate_seccomp (container, seccomp_fd, seccomp_gen_options, err);
+          ret = libcrun_generate_seccomp (&seccomp_gen_ctx, err);
           if (UNLIKELY (ret < 0))
             goto fail;
         }
@@ -3252,6 +3203,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   const char *seccomp_notify_plugins = NULL;
   __attribute__ ((unused)) cleanup_process_schema runtime_spec_schema_config_schema_process *process_cleanup = NULL;
   runtime_spec_schema_config_schema_process *process = opts->process;
+  struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   char b;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -3275,6 +3227,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (container == NULL)
     return crun_make_error (err, 0, "error loading config.json");
 
+  container->context = context;
+
   if (container_status == 0)
     return crun_make_error (err, 0, "the container `%s` is not running", id);
 
@@ -3295,14 +3249,17 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = open_seccomp_output (context->id, &seccomp_fd, true, context->state_root, err);
+  libcrun_seccomp_gen_ctx_init (&seccomp_gen_ctx, container, false, 0);
+
+  ret = libcrun_open_seccomp_bpf (&seccomp_gen_ctx, &seccomp_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (seccomp_fd >= 0)
     {
-      ret = get_seccomp_receiver_fd (container, &seccomp_receiver_fd, &own_seccomp_receiver_fd, &seccomp_notify_plugins,
-                                     err);
+      ret = get_seccomp_receiver_fd (container, &seccomp_receiver_fd,
+                                     &own_seccomp_receiver_fd,
+                                     &seccomp_notify_plugins, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
