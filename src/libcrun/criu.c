@@ -58,6 +58,7 @@ criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
        * callback and we are passing it on to the '--console-socket'
        * if it exists. */
       cleanup_close int console_socket_fd = -1;
+      libcrun_error_t tmp_err = NULL;
       int master_fd;
       int ret;
 
@@ -65,12 +66,18 @@ criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
         return 0;
       master_fd = criu_get_orphan_pts_master_fd ();
 
-      console_socket_fd = open_unix_domain_client_socket (console_socket, 0, NULL);
+      console_socket_fd = open_unix_domain_client_socket (console_socket, 0, &tmp_err);
       if (UNLIKELY (console_socket_fd < 0))
-        return console_socket_fd;
-      ret = send_fd_to_socket (console_socket_fd, master_fd, NULL);
+        {
+          libcrun_error_release (&tmp_err);
+          return console_socket_fd;
+        }
+      ret = send_fd_to_socket (console_socket_fd, master_fd, &tmp_err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          libcrun_error_release (&tmp_err);
+          return ret;
+        }
     }
   return 0;
 }
