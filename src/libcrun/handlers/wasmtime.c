@@ -45,7 +45,7 @@
 
 #if HAVE_DLOPEN && HAVE_WASMTIME
 static int
-libwasmtime_exec (void *cookie, libcrun_container_t *container,
+libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
                   const char *pathname, char *const argv[])
 {
   size_t args_size = 0;
