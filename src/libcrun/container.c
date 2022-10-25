@@ -1111,7 +1111,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       *exec_path = find_executable (def->process->args[0], def->process->cwd);
       if (UNLIKELY (*exec_path == NULL))
         {
-          if (errno == ENOENT)
+          if (entrypoint_args->custom_handler == NULL && errno == ENOENT)
             return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
         }
       /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
@@ -1209,10 +1209,13 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       *exec_path = find_executable (def->process->args[0], def->process->cwd);
       if (UNLIKELY (*exec_path == NULL))
         {
-          if (errno == ENOENT)
+          /* If a custom handler is used, pass argv0 as specified.  e.g. with wasm the file could miss the +x bit.  */
+          if (entrypoint_args->custom_handler && ! is_empty_string (def->process->args[0]))
+            *exec_path = xstrdup (def->process->args[0]);
+          else if (errno == ENOENT)
             return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
-
-          return crun_make_error (err, errno, "open executable");
+          else
+            return crun_make_error (err, errno, "open executable");
         }
     }
 
