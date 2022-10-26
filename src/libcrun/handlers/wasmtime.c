@@ -45,7 +45,7 @@
 
 #if HAVE_DLOPEN && HAVE_WASMTIME
 static int
-libwasmtime_exec (void *cookie, libcrun_container_t *container,
+libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
                   const char *pathname, char *const argv[])
 {
   size_t args_size = 0;
@@ -149,7 +149,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "failed to link wasi: %s", error_message.data);
+      error (EXIT_FAILURE, 0, "failed to link wasi: %.*s", (int) error_message.size, error_message.data);
     }
 
   wasm_byte_vec_t wasm;
@@ -172,7 +172,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "failed to compile module:%s", error_message.data);
+      error (EXIT_FAILURE, 0, "failed to compile module: %.*s", (int) error_message.size, error_message.data);
     }
   wasm_byte_vec_delete (&wasm);
 
@@ -196,7 +196,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "failed to instantiate WASI: %s", error_message.data);
+      error (EXIT_FAILURE, 0, "failed to instantiate WASI: %.*s", (int) error_message.size, error_message.data);
     }
 
   // Init module
@@ -205,7 +205,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "failed to instantiate module: %s", error_message.data);
+      error (EXIT_FAILURE, 0, "failed to instantiate module: %.*s", (int) error_message.size, error_message.data);
     }
 
   // Actually run our .wasm
@@ -215,7 +215,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "failed to locate default export for module %s", error_message.data);
+      error (EXIT_FAILURE, 0, "failed to locate default export for module %.*s", (int) error_message.size, error_message.data);
     }
 
   err = wasmtime_func_call (context, &func, NULL, 0, NULL, 0, &trap);
@@ -223,7 +223,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container,
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "error calling default export: %s", error_message.data);
+      error (EXIT_FAILURE, 0, "error calling default export: %.*s", (int) error_message.size, error_message.data);
     }
 
   // Clean everything
