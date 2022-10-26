@@ -37,27 +37,71 @@
 #include <fcntl.h>
 #include <libgen.h>
 
+static char *
+make_cgroup_path (const char *path, const char *id)
+{
+  const char *cgroup_path = path;
+  char *ret;
+
+  if (cgroup_path == NULL)
+    xasprintf (&ret, "/%s", id);
+  else if (cgroup_path[0] == '/')
+    ret = xstrdup (cgroup_path);
+  else
+    xasprintf (&ret, "/%s", cgroup_path);
+
+  return ret;
+}
+
+static int
+libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd, libcrun_error_t *err)
+{
+  cleanup_free char *sub_path = make_cgroup_path (args->cgroup_path, args->id);
+  cleanup_free char *cgroup_path = NULL;
+  int ret;
+
+  /* No need to check the mode since this feature is supported only on cgroup v2, and
+     libcrun_cgroup_preenter already performs this check.  */
+
+  *dirfd = -1;
+
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, sub_path, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = crun_ensure_directory (cgroup_path, 0755, true, err);
+  if (UNLIKELY (ret < 0))
+    {
+      libcrun_error_release (err);
+      return 0;
+    }
+
+  ret = enable_controllers (sub_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  *dirfd = open (cgroup_path, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_RDONLY);
+  if (UNLIKELY (*dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", cgroup_path);
+
+  return 0;
+}
+
 static int
 libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *out, libcrun_error_t *err)
 {
-  const char *cgroup_path = args->cgroup_path;
-  const char *id = args->id;
   pid_t pid = args->pid;
   int cgroup_mode;
+
+  /* The cgroup was already joined, nothing more left to do.  */
+  if (args->joined)
+    return 0;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
-  if (cgroup_path == NULL)
-    xasprintf (&(out->path), "/%s", id);
-  else
-    {
-      if (cgroup_path[0] == '/')
-        out->path = xstrdup (cgroup_path);
-      else
-        xasprintf (&(out->path), "/%s", cgroup_path);
-    }
+  out->path = make_cgroup_path (args->cgroup_path, args->id);
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
@@ -90,6 +134,7 @@ libcrun_destroy_cgroup_cgroupfs (struct libcrun_cgroup_status *cgroup_status,
 }
 
 struct libcrun_cgroup_manager cgroup_manager_cgroupfs = {
+  .precreate_cgroup = libcrun_precreate_cgroup_cgroupfs,
   .create_cgroup = libcrun_cgroup_enter_cgroupfs,
   .destroy_cgroup = libcrun_destroy_cgroup_cgroupfs,
 };

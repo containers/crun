@@ -56,6 +56,7 @@ libcrun_destroy_cgroup_disabled (struct libcrun_cgroup_status *cgroup_status arg
 }
 
 struct libcrun_cgroup_manager cgroup_manager_disabled = {
+  .precreate_cgroup = NULL,
   .create_cgroup = libcrun_cgroup_enter_disabled,
   .destroy_cgroup = libcrun_destroy_cgroup_disabled,
 };
@@ -250,6 +251,32 @@ can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mod
     return 0;
 
   return 1;
+}
+
+int
+libcrun_cgroup_preenter (struct libcrun_cgroup_args *args, int *dirfd, libcrun_error_t *err)
+{
+  struct libcrun_cgroup_manager *cgroup_manager;
+  int cgroup_mode;
+  int ret;
+
+  *dirfd = -1;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    return 0;
+
+  ret = get_cgroup_manager (args->manager, &cgroup_manager, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (cgroup_manager->precreate_cgroup == NULL)
+    return 0;
+
+  return cgroup_manager->precreate_cgroup (args, dirfd, err);
 }
 
 int
