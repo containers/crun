@@ -468,3 +468,37 @@
 - reintroduce --no-pivot
 - do not add a cgroup path again if it was already specified in the
   OCI configuration
+
+* crun-0.7
+
+- support devices on cgroups v2 using eBPF.
+- new option --cgroup-manager=MANAGER. Accepted values are cgroupfs,
+  systemd and disabled.
+- can run without using cgroups also as root.
+- NOTIFY_SOCKET works also for containers created via create/start.
+- when using systemd, create the same name for the scope as runc does.
+
+* crun-0.6
+
+- tty: set the size on the exec tty.
+- cgroup: enable only the controllers needed.
+- cgroup: in unified mode report the errors also for rootless.
+- cgroup2: add support for the cpuset controller.
+- linux: ignore tmpcopyup.
+
+* crun-0.5
+
+- logging: support --log=syslog: and log=journald.
+- seccomp: if the syscall is not known, ignore it.
+- container: move set oom before entering userns.
+- status: always honor XDG_RUNTIME_DIR.
+- linux: resolve symlinks in the target for bind mounts.
+- fix all issues found by Coverity.
+- pass Kubernetes e2e tests on Fedora with CRI-O.
+
+* crun-0.4
+
+- partial support for cgroup v2 (cpu, io, memory, pids controllers).
+- pass all the OCI validation tests (https://github.com/opencontainers/runtime-tools).
+- implement --log-format. crun now works with containerd.
+- fixed some issues that prevented crun to work on older kernels.
