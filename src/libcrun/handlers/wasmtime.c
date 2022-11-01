@@ -51,7 +51,9 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   size_t args_size = 0;
   char *const *arg;
   wasm_byte_vec_t error_message;
+  wasm_byte_vec_t wasm_bytes;
   wasm_engine_t *(*wasm_engine_new) ();
+  wasmtime_error_t *(*wasmtime_wat2wasm) (const char *wat, size_t wat_len, wasm_byte_vec_t *out);
   void (*wasm_engine_delete) (wasm_engine_t *);
   void (*wasm_byte_vec_delete) (wasm_byte_vec_t *);
   void (*wasm_byte_vec_new_uninitialized) (wasm_byte_vec_t *, size_t);
@@ -98,6 +100,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   void (*wasmtime_error_delete) (wasmtime_error_t * error);
   bool (*wasi_config_preopen_dir) (wasi_config_t * config, const char *path, const char *guest_path);
 
+  wasmtime_wat2wasm = dlsym (cookie, "wasmtime_wat2wasm");
   wasm_engine_new = dlsym (cookie, "wasm_engine_new");
   wasm_engine_delete = dlsym (cookie, "wasm_engine_delete");
   wasm_byte_vec_delete = dlsym (cookie, "wasm_byte_vec_delete");
@@ -132,7 +135,8 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
       || wasi_config_inherit_env == NULL || wasmtime_context_set_wasi == NULL
       || wasmtime_linker_module == NULL || wasmtime_linker_get_default == NULL || wasmtime_func_call == NULL
       || wasmtime_module_delete == NULL || wasmtime_store_delete == NULL || wasi_config_set_argv == NULL
-      || wasmtime_error_delete == NULL || wasmtime_error_message == NULL || wasi_config_preopen_dir == NULL)
+      || wasmtime_error_delete == NULL || wasmtime_error_message == NULL || wasi_config_preopen_dir == NULL
+      || wasmtime_wat2wasm == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
 
   // Set up wasmtime context
@@ -164,6 +168,21 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   if (fread (wasm.data, file_size, 1, file) != 1)
     error (EXIT_FAILURE, 0, "error load");
   fclose (file);
+
+  // If entrypoint contains a webassembly text format
+  // compile it on the fly and convert to equivalent
+  // binary format.
+  if (has_suffix (pathname, "wat") > 0)
+    {
+      wasmtime_error_t *err = wasmtime_wat2wasm ((char *) &wasm_bytes, file_size, &wasm);
+      if (err != NULL)
+        {
+          wasmtime_error_message (err, &error_message);
+          wasmtime_error_delete (err);
+          error (EXIT_FAILURE, 0, "failed while compiling wat to wasm binary : %.*s", (int) error_message.size, error_message.data);
+        }
+      wasm = wasm_bytes;
+    }
 
   // Compile wasm modules
   wasmtime_module_t *module = NULL;
