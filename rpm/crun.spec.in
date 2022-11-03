@@ -1,4 +1,7 @@
 %global krun_opts %{nil}
+%global wasmedge_opts %{nil}
+%global wasmtime_opts %{nil}
+%global wasm_support disabled
 
 %if 0%{?fedora} >= 37
 %ifarch aarch64 || x86_64
@@ -7,8 +10,22 @@
 %endif
 %endif
 
+%if 0%{?fedora} >= 37
+%ifarch aarch64 || x86_64
+%global wasm_support enabled
+%global wasmedge_support enabled
+%global wasmedge_opts --with-wasmedge
+%endif
+%endif
+
+# FIXME: wasmtime builds for rhel are currently broken on copr probably
+# because of an older golang
+%if 0%{?fedora}
 %ifnarch %{ix86} || ppc64le
+%global wasm_support enabled
 %global wasmtime_support enabled
+%global wasmtime_opts --with-wasmtime
+%endif
 %endif
 
 Summary: OCI runtime written in C
@@ -23,7 +40,6 @@ Release: %{build_timestamp}.@GIT_COMMIT_ID@%{?dist}
 Source0: %{name}-HEAD.tar.gz
 License: GPLv2+
 URL: https://github.com/containers/%{name}
-
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
@@ -38,9 +54,11 @@ BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
 BuildRequires: go-md2man
+%if "%{wasmedge_support}" == "enabled"
+BuildRequires: wasmedge-devel
+%endif
 %if "%{wasmtime_support}" == "enabled"
 BuildRequires: wasmtime-c-api-devel
-Requires: wasmtime-c-api
 %endif
 %if 0%{?rhel} == 8
 BuildRequires: python3
@@ -53,12 +71,25 @@ Provides: oci-runtime
 %{name} is a OCI runtime
 
 %if "%{krun_support}" == "enabled"
-%package -n krun
+%package krun
 Summary: %{name} with libkrun support
 Requires: libkrun
+Requires: %{name} = %{epoch}:%{version}-%{release}
+Provides: krun = %{epoch}:%{version}-%{release}
 
-%description -n krun
-krun is a symlink to the crun binary, with libkrun as an additional dependency.
+%description krun
+krun is a symlink to the %{name} binary, with libkrun as an additional dependency.
+%endif
+
+%if "%{wasm_support}" == "enabled"
+%package wasm
+Summary: %{name} with wasm support
+Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: wasm-library
+Recommends: wasmedge
+
+%description wasm
+%{name}-wasm is a symlink to the %{name} binary, with wasm as an additional dependency.
 %endif
 
 %prep
@@ -66,11 +97,7 @@ krun is a symlink to the crun binary, with libkrun as an additional dependency.
 
 %build
 ./autogen.sh
-%if "%{wasmtime_support}" == "enabled"
-./configure --disable-silent-rules --with-wasmtime %{krun_opts}
-%else
-./configure --disable-silent-rules %{krun_opts}
-%endif
+./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts} %{wasmtime_opts}
 %make_build
 
 %install
@@ -87,13 +114,23 @@ rm -rf %{buildroot}%{_usr}/lib*
 ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
 %endif
 
+%if "%{wasm_support}" == "enabled"
+ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/%{name}-wasm
+%endif
+
 %files
 %license COPYING
 %{_bindir}/%{name}
 %{_mandir}/man1/*
 
 %if "%{krun_support}" == "enabled"
-%files -n krun
+%files krun
 %license COPYING
 %{_bindir}/krun
+%endif
+
+%if "%{wasm_support}" == "enabled"
+%files wasm
+%license COPYING
+%{_bindir}/%{name}-wasm
 %endif
