@@ -336,7 +336,12 @@ int set_blocking_fd (int fd, int blocking, libcrun_error_t *err);
 
 int parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
 
-int has_prefix (const char *str, const char *prefix);
+static inline int
+has_prefix (const char *str, const char *prefix)
+{
+  size_t prefix_len = strlen (prefix);
+  return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
+}
 
 char *find_executable (const char *executable_path, const char *cwd);
 
