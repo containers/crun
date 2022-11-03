@@ -21,9 +21,7 @@
 #include <stdlib.h>
 #include <argp.h>
 #include <string.h>
-#ifdef HAVE_LIBKRUN
-#  include <libgen.h>
-#endif
+#include <libgen.h>
 
 #include <dlfcn.h>
 
@@ -343,6 +341,21 @@ static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL 
 
 int ensure_cloned_binary (void);
 
+static void
+fill_handler_from_argv0 (char *argv0, struct crun_global_arguments *args)
+{
+  const char *b = basename (argv0);
+#ifdef HAVE_LIBKRUN
+  if (strcmp (b, "krun") == 0)
+    {
+      args->handler = "krun";
+      return;
+    }
+#endif
+  if (has_prefix (b, "crun-") && b[5] != '\0')
+    args->handler = b + 5;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -360,12 +373,7 @@ main (int argc, char **argv)
     error (EXIT_FAILURE, 0, "dlopen: %s", dlerror ());
 #endif
 
-#ifdef HAVE_LIBKRUN
-  if (strcmp (basename (argv[0]), "krun") == 0)
-    {
-      arguments.handler = "krun";
-    }
-#endif
+  fill_handler_from_argv0 (argv[0], &arguments);
 
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);
 
