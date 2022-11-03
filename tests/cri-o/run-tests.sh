@@ -43,6 +43,9 @@ sed -i -e 's|@test "image volume bind" {|@test "image volume bind" {\nskip\n|g' 
 sed -i -e 's|@test "image volume user mkdir" {|@test "image volume user mkdir" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "crio restore with missing config.json" {|@test "crio restore with missing config.json" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "crio restore upon exiting KUBENSMNT" {|@test "crio restore upon exiting KUBENSMNT" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "seccomp notifier with runtime/default" {|@test "seccomp notifier with runtime/default" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "seccomp notifier with custom profile" {|@test "seccomp notifier with custom profile" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "seccomp notifier with runtime/default but not stop" {|@test "seccomp notifier with runtime/default but not stop" {\nskip\n|g' test/*.bats
 
 
 # remove useless tests
