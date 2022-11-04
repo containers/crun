@@ -1500,7 +1500,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, struct device_s *
         {
           const char *rel_path = consume_slashes (device->path);
 
-          fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0700, err);
+          fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0755, err);
           if (UNLIKELY (fd < 0))
             return fd;
         }
