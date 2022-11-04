@@ -288,6 +288,7 @@ libwasmtime_can_handle_container (libcrun_container_t *container, libcrun_error_
 
 struct custom_handler_s handler_wasmtime = {
   .name = "wasmtime",
+  .alias = "wasm",
   .feature_string = "WASM:wasmtime",
   .load = libwasmtime_load,
   .unload = libwasmtime_unload,

@@ -280,6 +280,7 @@ libwasmer_can_handle_container (libcrun_container_t *container, libcrun_error_t 
 
 struct custom_handler_s handler_wasmer = {
   .name = "wasmer",
+  .alias = "wasm",
   .feature_string = "WASM:wasmer",
   .load = libwasmer_load,
   .unload = libwasmer_unload,

@@ -270,6 +270,7 @@ libkrun_unload (void *cookie, libcrun_error_t *err arg_unused)
 
 struct custom_handler_s handler_libkrun = {
   .name = "krun",
+  .alias = NULL,
   .feature_string = "LIBKRUN",
   .load = libkrun_load,
   .unload = libkrun_unload,

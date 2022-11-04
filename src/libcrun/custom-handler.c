@@ -195,8 +195,12 @@ handler_by_name (struct custom_handler_manager_s *manager, const char *name)
   size_t i;
 
   for (i = 0; i < manager->handlers_len; i++)
-    if (strcmp (manager->handlers[i]->name, name) == 0)
-      return manager->handlers[i];
+    {
+      if (strcmp (manager->handlers[i]->name, name) == 0)
+        return manager->handlers[i];
+      if (manager->handlers[i]->alias && strcmp (manager->handlers[i]->alias, name) == 0)
+        return manager->handlers[i];
+    }
   return NULL;
 }
 

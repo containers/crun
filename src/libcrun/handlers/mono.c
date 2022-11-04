@@ -165,6 +165,7 @@ mono_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
 
 struct custom_handler_s handler_mono = {
   .name = "dotnet",
+  .alias = NULL,
   .feature_string = ".NET:mono",
   .load = mono_load,
   .unload = mono_unload,

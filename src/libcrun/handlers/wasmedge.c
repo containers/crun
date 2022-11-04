@@ -164,6 +164,7 @@ wasmedge_can_handle_container (libcrun_container_t *container, libcrun_error_t *
 
 struct custom_handler_s handler_wasmedge = {
   .name = "wasmedge",
+  .alias = "wasm",
   .feature_string = "WASM:wasmedge",
   .load = libwasmedge_load,
   .unload = libwasmedge_unload,
