@@ -10,7 +10,7 @@
 %endif
 %endif
 
-%if 0%{?fedora} >= 37
+%if 0%{?fedora} >= 36
 %ifarch aarch64 || x86_64
 %global wasm_support enabled
 %global wasmedge_support enabled
@@ -19,7 +19,7 @@
 %endif
 
 # FIXME: wasmtime builds for rhel are currently broken on copr probably
-# because of an older golang
+# because of an older rust compiler.
 %if 0%{?fedora}
 %ifnarch %{ix86} || ppc64le
 %global wasm_support enabled
