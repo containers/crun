@@ -27,6 +27,8 @@ struct custom_handler_s
   const char *name;
   const char *feature_string;
 
+  const char *alias;
+
   int (*load) (void **cookie, libcrun_error_t *err);
   int (*unload) (void *cookie, libcrun_error_t *err);
 
