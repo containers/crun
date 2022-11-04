@@ -58,6 +58,9 @@ struct libcrun_context_s
   bool force_no_cgroup;
   bool no_pivot;
 
+  char **argv;
+  int argc;
+
   struct custom_handler_manager_s *handler_manager;
 };
 
