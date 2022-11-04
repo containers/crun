@@ -96,6 +96,8 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   con->force_no_cgroup = glob->option_force_no_cgroup;
   con->notify_socket = getenv ("NOTIFY_SOCKET");
   con->fifo_exec_wait_fd = -1;
+  con->argc = glob->argc;
+  con->argv = glob->argv;
 
   ret = libcrun_init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
   if (UNLIKELY (ret < 0))
@@ -361,6 +363,9 @@ main (int argc, char **argv)
 {
   libcrun_error_t err = NULL;
   int ret, first_argument = 0;
+
+  arguments.argc = argc;
+  arguments.argv = argv;
 
 #ifdef DYNLOAD_LIBCRUN
   if (ensure_cloned_binary () < 0)

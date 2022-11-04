@@ -27,6 +27,9 @@ struct crun_global_arguments
   char *log_format;
   const char *handler;
 
+  int argc;
+  char **argv;
+
   bool command;
   bool debug;
   bool option_systemd_cgroup;

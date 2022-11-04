@@ -1259,6 +1259,34 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
   return 0;
 }
 
+static void
+rewrite_argv (char **argv, int argc, const char *name, char **args, size_t args_len)
+{
+  cleanup_free char *decorated_name = NULL;
+  size_t available_len = argv[argc - 1] - argv[0] + strlen (argv[argc - 1]) + 1;
+  cleanup_free char *new_argv = NULL;
+  size_t i, so_far = 0, needed = 0;
+
+  needed = xasprintf (&decorated_name, "[libcrun:%s]", name) + 1;
+  for (i = 0; i < args_len; i++)
+    needed += strlen (args[i]) + 1;
+
+  new_argv = xmalloc0 (needed + 1);
+  strcpy (new_argv, decorated_name);
+  so_far = strlen (decorated_name) + 1;
+  for (i = 0; i < args_len; i++)
+    {
+      strcpy (new_argv + so_far, args[i]);
+      so_far += strlen (args[i]) + 1;
+    }
+
+  if (so_far >= available_len)
+    so_far = available_len - 1;
+
+  memset (argv[0], 0, available_len);
+  memcpy (argv[0], new_argv, so_far);
+}
+
 /* Entrypoint to the container.  */
 static int
 container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_t *err)
@@ -1391,12 +1419,26 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
+      prctl (PR_SET_NAME, entrypoint_args->custom_handler->name);
+
+      if (entrypoint_args->context->argv)
+        {
+          rewrite_argv (entrypoint_args->context->argv, entrypoint_args->context->argc,
+                        entrypoint_args->custom_handler->name, def->process->args,
+                        def->process->args_len);
+
+          /* It is a quite destructive operation as we might be referencing data from the old
+             argv, so make sure the context is not reused.  */
+          entrypoint_args->context->argv = NULL;
+          entrypoint_args->context = NULL;
+        }
+
       ret = entrypoint_args->custom_handler->exec_func (entrypoint_args->handler_cookie,
                                                         entrypoint_args->container,
                                                         exec_path,
                                                         def->process->args);
       if (ret != 0)
-        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->context->handler);
+        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->name);
 
       return ret;
     }
