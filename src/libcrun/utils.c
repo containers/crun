@@ -266,10 +266,14 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
 
       if (parent_created || errno != ENOENT)
         {
+          libcrun_error_t tmp_err = NULL;
+
           /* On errors check if the directory already exists.  */
-          ret = crun_dir_p (path, false, err);
+          ret = crun_dir_p (path, false, &tmp_err);
           if (ret > 0)
             return 0;
+          if (ret < 0)
+            crun_error_release (&tmp_err);
 
           return crun_make_error (err, errno, "create directory `%s`", path);
         }
