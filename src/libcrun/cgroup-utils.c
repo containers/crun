@@ -702,26 +702,20 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 static int
 read_available_controllers (const char *path, libcrun_error_t *err)
 {
-  cleanup_close int fd;
+  cleanup_free char *controllers = NULL;
+  cleanup_free char *buf = NULL;
   char *saveptr = NULL;
   const char *token;
-  char *controllers;
   int available = 0;
-  char buf[256];
   ssize_t ret;
 
   ret = append_paths (&controllers, err, CGROUP_ROOT, path, "cgroup.controllers", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  fd = TEMP_FAILURE_RETRY (open (controllers, O_RDONLY | O_CLOEXEC));
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "error opening file `%s`", path);
-
-  ret = TEMP_FAILURE_RETRY (read (fd, buf, sizeof (buf) - 1));
+  ret = read_all_file (controllers, &buf, NULL, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error reading from file `%s`", path);
-  buf[ret] = '\0';
+    return crun_make_error (err, errno, "error reading from file `%s`", controllers);
 
   for (token = strtok_r (buf, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
     {
