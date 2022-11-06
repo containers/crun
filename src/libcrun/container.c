@@ -2744,7 +2744,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
   cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
   runtime_spec_schema_config_schema *def;
-  libcrun_container_status_t status = {};
+  cleanup_container_status libcrun_container_status_t status = {};
   cleanup_close int fd = -1;
   int ret;
 
