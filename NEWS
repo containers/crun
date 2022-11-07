@@ -1,3 +1,16 @@
+* crun-1.7
+
+- seccomp: use a cache for the generated BPF.
+- add support for setting the domainname through the OCI spec.
+- handlers: define wasm and krun.
+- wasmtime: add support for compiling .wat format.
+- cgroup: honor checkBeforeUpdate on cgroupv2.
+- crun: chown std streams before joining the user namespace.
+- crun: display rundir in --version output.
+- container: with cgroupfs use clone3 to join directly the target cgroup.
+- linux: create parent directories for created devices with mode 0755.
+- wasm: inherit environment variables in the WasmEdge handler.
+
 * crun-1.6
 
 - runc compatibility: -v now prints the version string.
