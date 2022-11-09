@@ -1437,6 +1437,14 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
           entrypoint_args->context = NULL;
         }
 
+      ret = libcrun_set_selinux_label (def->process, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = libcrun_set_apparmor_profile (def->process, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = entrypoint_args->custom_handler->exec_func (entrypoint_args->handler_cookie,
                                                         entrypoint_args->container,
                                                         exec_path,
