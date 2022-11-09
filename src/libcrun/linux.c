@@ -3010,10 +3010,10 @@ read_caps (unsigned long caps[2], char **values, size_t len)
 }
 
 int
-libcrun_set_selinux_exec_label (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
+libcrun_set_selinux_label (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
 {
   if (proc->selinux_label)
-    return set_selinux_exec_label (proc->selinux_label, err);
+    return set_selinux_label (proc->selinux_label, now, err);
 
   return 0;
 }

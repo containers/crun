@@ -1043,7 +1043,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (def->process)
     {
-      ret = libcrun_set_selinux_exec_label (def->process, err);
+      ret = libcrun_set_selinux_label (def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -3118,7 +3118,7 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  ret = libcrun_set_selinux_exec_label (process, err);
+  ret = libcrun_set_selinux_label (process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
