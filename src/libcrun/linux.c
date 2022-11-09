@@ -3019,10 +3019,10 @@ libcrun_set_selinux_label (runtime_spec_schema_config_schema_process *proc, bool
 }
 
 int
-libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
+libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
 {
   if (proc->apparmor_profile)
-    return set_apparmor_profile (proc->apparmor_profile, err);
+    return set_apparmor_profile (proc->apparmor_profile, now, err);
   return 0;
 }
 

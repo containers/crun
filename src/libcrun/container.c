@@ -1047,7 +1047,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_set_apparmor_profile (def->process, err);
+      ret = libcrun_set_apparmor_profile (def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -3122,7 +3122,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_apparmor_profile (process, err);
+  ret = libcrun_set_apparmor_profile (process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
