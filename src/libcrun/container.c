@@ -1274,10 +1274,14 @@ rewrite_argv (char **argv, int argc, const char *name, char **args, size_t args_
   new_argv = xmalloc0 (needed + 1);
   strcpy (new_argv, decorated_name);
   so_far = strlen (decorated_name) + 1;
-  for (i = 0; i < args_len; i++)
+
+  if (available_len >= needed)
     {
-      strcpy (new_argv + so_far, args[i]);
-      so_far += strlen (args[i]) + 1;
+      for (i = 0; i < args_len; i++)
+        {
+          strcpy (new_argv + so_far, args[i]);
+          so_far += strlen (args[i]) + 1;
+        }
     }
 
   if (so_far >= available_len)
