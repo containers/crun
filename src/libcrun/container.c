@@ -1043,11 +1043,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (def->process)
     {
-      ret = libcrun_set_selinux_exec_label (def->process, err);
+      ret = libcrun_set_selinux_label (def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_set_apparmor_profile (def->process, err);
+      ret = libcrun_set_apparmor_profile (def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1274,10 +1274,14 @@ rewrite_argv (char **argv, int argc, const char *name, char **args, size_t args_
   new_argv = xmalloc0 (needed + 1);
   strcpy (new_argv, decorated_name);
   so_far = strlen (decorated_name) + 1;
-  for (i = 0; i < args_len; i++)
+
+  if (available_len >= needed)
     {
-      strcpy (new_argv + so_far, args[i]);
-      so_far += strlen (args[i]) + 1;
+      for (i = 0; i < args_len; i++)
+        {
+          strcpy (new_argv + so_far, args[i]);
+          so_far += strlen (args[i]) + 1;
+        }
     }
 
   if (so_far >= available_len)
@@ -1432,6 +1436,14 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
           entrypoint_args->context->argv = NULL;
           entrypoint_args->context = NULL;
         }
+
+      ret = libcrun_set_selinux_label (def->process, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = libcrun_set_apparmor_profile (def->process, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = entrypoint_args->custom_handler->exec_func (entrypoint_args->handler_cookie,
                                                         entrypoint_args->container,
@@ -3114,11 +3126,11 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  ret = libcrun_set_selinux_exec_label (process, err);
+  ret = libcrun_set_selinux_label (process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_apparmor_profile (process, err);
+  ret = libcrun_set_apparmor_profile (process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

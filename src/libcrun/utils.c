@@ -809,7 +809,7 @@ write_file_and_check_fs_type (const char *file, const char *data, size_t len, un
 }
 
 int
-set_selinux_exec_label (const char *label, libcrun_error_t *err)
+set_selinux_label (const char *label, bool now, libcrun_error_t *err)
 {
   int ret;
 
@@ -819,7 +819,9 @@ set_selinux_exec_label (const char *label, libcrun_error_t *err)
 
   if (ret)
     {
-      ret = write_file_and_check_fs_type ("/proc/thread-self/attr/exec", label, strlen (label), PROC_SUPER_MAGIC,
+      const char *fname = now ? "/proc/thread-self/attr/current" : "/proc/thread-self/attr/exec";
+      ret = write_file_and_check_fs_type (fname, label,
+                                          strlen (label), PROC_SUPER_MAGIC,
                                           "procfs", err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -836,7 +838,7 @@ libcrun_is_apparmor_enabled (libcrun_error_t *err)
 }
 
 int
-set_apparmor_profile (const char *profile, libcrun_error_t *err)
+set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err)
 {
   int ret;
 
@@ -845,11 +847,12 @@ set_apparmor_profile (const char *profile, libcrun_error_t *err)
     return ret;
   if (ret)
     {
+      const char *fname = now ? "/proc/thread-self/attr/current" : "/proc/thread-self/attr/exec";
       cleanup_free char *buf = NULL;
 
       xasprintf (&buf, "exec %s", profile);
 
-      ret = write_file_and_check_fs_type ("/proc/thread-self/attr/exec", buf, strlen (buf), PROC_SUPER_MAGIC, "procfs",
+      ret = write_file_and_check_fs_type (fname, buf, strlen (buf), PROC_SUPER_MAGIC, "procfs",
                                           err);
       if (UNLIKELY (ret < 0))
         return ret;

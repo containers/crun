@@ -73,8 +73,8 @@ int libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *ca
                       int no_new_privileges, libcrun_error_t *err);
 int libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element **rlimits, size_t len,
                          libcrun_error_t *err);
-int libcrun_set_selinux_exec_label (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
-int libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err);
+int libcrun_set_selinux_label (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
+int libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
