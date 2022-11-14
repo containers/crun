@@ -43,6 +43,7 @@ enum
 
 static int log_format;
 static bool log_also_to_stderr;
+static int output_verbosity = LIBCRUN_VERBOSITY_ERROR;
 
 #define MAKE_ERROR(FUNC_NAME)                                            \
   int FUNC_NAME (libcrun_error_t *err, int status, const char *msg, ...) \
@@ -224,6 +225,8 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
           *new_output_handler_arg = fopen (arg, "a+");
           if (*new_output_handler_arg == NULL)
             return crun_make_error (err, errno, "open log file %s\n", log);
+          if (output_verbosity >= LIBCRUN_VERBOSITY_WARNING)
+            setlinebuf (*new_output_handler_arg);
           break;
 
         case LOG_TYPE_SYSLOG:
@@ -299,7 +302,6 @@ log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_
 
 static crun_output_handler output_handler = log_write_to_stderr;
 static void *output_handler_arg = NULL;
-static int output_verbosity = LIBCRUN_VERBOSITY_ERROR;
 
 void
 libcrun_set_verbosity (int verbosity)
