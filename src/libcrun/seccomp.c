@@ -371,12 +371,26 @@ static int
 calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, unsigned int seccomp_gen_options, seccomp_checksum_t out, libcrun_error_t *err)
 {
 #if HAVE_GCRYPT
+  static atomic_bool initialized = false;
   gcry_error_t gcrypt_err;
   struct utsname utsbuf;
   unsigned char *res;
   gcry_md_hd_t hd;
   size_t i;
   int ret;
+
+  if (! initialized && ! gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P))
+    {
+      const char *needed_version = "1.0.0";
+      if (! gcry_check_version (needed_version))
+        {
+          return libcrun_make_error (err, 0, "libgcrypt is too old (need %s, have %s)",
+                                     needed_version, gcry_check_version (NULL));
+        }
+      gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+      gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+      initialized = true;
+    }
 
 #  define PROCESS_STRING(X)                      \
     do                                           \
