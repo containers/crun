@@ -51,6 +51,8 @@
 
 static const char *console_socket = NULL;
 
+#  define LIBCRIU_MIN_VERSION 31500
+
 struct libcriu_wrapper_s
 {
   void *handle;
@@ -626,6 +628,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "CRIU init failed with %d", ret);
 
+  if (! libcriu_wrapper->criu_check_version (LIBCRIU_MIN_VERSION))
+    return crun_make_error (err, 0, "libcriu is too old");
+
   if (UNLIKELY (cr_options->image_path == NULL))
     return crun_make_error (err, 0, "image path not set");
 
@@ -946,6 +951,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = libcriu_wrapper->criu_init_opts ();
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "CRIU init failed with %d", ret);
+
+  if (! libcriu_wrapper->criu_check_version (LIBCRIU_MIN_VERSION))
+    return crun_make_error (err, 0, "libcriu is too old");
 
   if (UNLIKELY (cr_options->image_path == NULL))
     return crun_make_error (err, 0, "image path not set");
