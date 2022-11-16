@@ -316,14 +316,14 @@
 #if _GL_HAS_BUILTIN_OVERFLOW
 #  define _GL_INT_OP_WRAPV(a, b, r, op, builtin, overflow) builtin (a, b, r)
 #elif 201112 <= __STDC_VERSION__ && ! _GL__GENERIC_BOGUS
-#  define _GL_INT_OP_WRAPV(a, b, r, op, builtin, overflow)                                                          \
-    (_Generic(*(r), signed char                                                                                     \
-              : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, signed char, SCHAR_MIN, SCHAR_MAX), short int \
-              : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, short int, SHRT_MIN, SHRT_MAX), int           \
-              : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, int, INT_MIN, INT_MAX), long int              \
-              : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned long int, long int, LONG_MIN, LONG_MAX),           \
-                long long int                                                                                       \
-              : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned long long int, long long int, LLONG_MIN, LLONG_MAX)))
+#  define _GL_INT_OP_WRAPV(a, b, r, op, builtin, overflow)                                                           \
+    (_Generic (*(r), signed char                                                                                     \
+               : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, signed char, SCHAR_MIN, SCHAR_MAX), short int \
+               : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, short int, SHRT_MIN, SHRT_MAX), int           \
+               : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned int, int, INT_MIN, INT_MAX), long int              \
+               : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned long int, long int, LONG_MIN, LONG_MAX),           \
+                 long long int                                                                                       \
+               : _GL_INT_OP_CALC (a, b, r, op, overflow, unsigned long long int, long long int, LLONG_MIN, LLONG_MAX)))
 #else
 #  define _GL_INT_OP_WRAPV(a, b, r, op, builtin, overflow)                                                        \
     (sizeof *(r) == sizeof (signed char)                                                                          \
