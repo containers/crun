@@ -163,7 +163,7 @@ get_timestamp (timestamp_t *timestamp, const char *suffix)
   gettimeofday (&tv, NULL);
   gmtime_r (&tv.tv_sec, &now);
   strftime ((char *) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
-  sprintf (((char *) timestamp) + 19, ".%09ldZ%.8s", tv.tv_usec, suffix);
+  sprintf (((char *) timestamp) + 19, ".%06ldZ%.8s", tv.tv_usec, suffix);
 }
 
 static void *
