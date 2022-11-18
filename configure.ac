@@ -191,7 +191,6 @@ AS_IF([test "x$enable_criu" != "xno"], [
 	        AC_MSG_NOTICE([CRIU version doesn't support for pre-dumping])])
 	AS_IF([test "$have_criu" = "yes"], [
 		AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
-		AC_SEARCH_LIBS(criu_init_opts, [criu])
 	])
 	AS_IF([test "$have_criu_join_ns" = "yes"], [
 		AC_DEFINE([CRIU_JOIN_NS_SUPPORT], 1, [Define if CRIU join NS support is available])

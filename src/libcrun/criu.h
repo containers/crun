@@ -24,7 +24,7 @@
 #include "error.h"
 #include "utils.h"
 
-#ifdef HAVE_CRIU
+#if HAVE_CRIU && HAVE_DLOPEN
 
 int libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
                                              libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err);
