@@ -1403,7 +1403,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 size_t
-format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is_uid)
+format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid)
 {
   uint32_t from, available;
   cleanup_free char *buffer = NULL;
@@ -1411,7 +1411,7 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_id, int is
 
   *ret = NULL;
 
-  if (getsubidrange (host_id, is_uid, &from, &available) < 0)
+  if (getsubidrange (host_uid, is_uid, &from, &available) < 0)
     return 0;
 
   /* More than enough space for all the mappings.  */
