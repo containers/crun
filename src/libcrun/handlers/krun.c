@@ -68,6 +68,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   uint32_t num_vcpus, ram_mib;
   int32_t ctx_id, ret;
   cpu_set_t set;
+  char *const envp[] = { 0 };
 
   if (access ("/krun-sev.json", F_OK) == 0)
     {
@@ -151,7 +152,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
             error (EXIT_FAILURE, -ret, "could not set krun working directory");
         }
 
-      ret = krun_set_exec (ctx_id, pathname, &argv[1], NULL);
+      ret = krun_set_exec (ctx_id, pathname, &argv[1], &envp[0]);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun executable");
     }
