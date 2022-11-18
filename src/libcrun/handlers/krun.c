@@ -68,6 +68,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   uint32_t num_vcpus, ram_mib;
   int32_t ctx_id, ret;
   cpu_set_t set;
+  char *const envp[] = { 0 };
 
   if (access ("/krun-sev.json", F_OK) == 0)
     {
@@ -151,7 +152,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
             error (EXIT_FAILURE, -ret, "could not set krun working directory");
         }
 
-      ret = krun_set_exec (ctx_id, pathname, &argv[1], NULL);
+      ret = krun_set_exec (ctx_id, pathname, &argv[1], &envp[0]);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun executable");
     }
@@ -176,6 +177,39 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   bool is_user_ns;
   bool create_sev;
 
+  if (rootfs == NULL)
+    rootfsfd = AT_FDCWD;
+  else
+    {
+      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH);
+      if (UNLIKELY (rootfsfd < 0))
+        return crun_make_error (err, errno, "open `%s`", rootfs);
+    }
+
+  if (phase == HANDLER_CONFIGURE_BEFORE_MOUNTS)
+    {
+      cleanup_free char *origin_config_path = NULL;
+      cleanup_free char *state_dir = NULL;
+      cleanup_free char *config = NULL;
+      size_t config_size;
+
+      state_dir = libcrun_get_state_directory (context->state_root, context->id);
+      if (UNLIKELY (state_dir == NULL))
+        return crun_make_error (err, 0, "could not retrieve the state directory");
+
+      ret = append_paths (&origin_config_path, err, state_dir, "config.json", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = read_all_file (origin_config_path, &config, &config_size, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = write_file_at (rootfsfd, ".krun_config.json", config, config_size, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
     return 0;
 
@@ -194,15 +228,6 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
           if (strcmp (def->linux->devices[i]->path, "/dev/sev") == 0)
             create_sev = false;
         }
-    }
-
-  if (rootfs == NULL)
-    rootfsfd = AT_FDCWD;
-  else
-    {
-      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH);
-      if (UNLIKELY (rootfsfd < 0))
-        return crun_make_error (err, errno, "open `%s`", rootfs);
     }
 
   devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
