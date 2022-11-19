@@ -2796,7 +2796,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     uid_map = format_mount_mappings (def->linux->uid_mappings, def->linux->uid_mappings_len, &uid_map_len, true);
   else
     {
-      uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, 1);
+      uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, container->host_uid, 1);
       if (uid_map == NULL)
         uid_map = format_mount_mapping (0, container->host_uid, container->host_uid + 1, &uid_map_len, true);
     }
@@ -2805,7 +2805,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     gid_map = format_mount_mappings (def->linux->gid_mappings, def->linux->gid_mappings_len, &gid_map_len, true);
   else
     {
-      gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, 0);
+      gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, container->host_gid, 0);
       if (gid_map == NULL)
         gid_map = format_mount_mapping (0, container->host_gid, container->host_gid + 1, &gid_map_len, true);
     }
