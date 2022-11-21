@@ -514,23 +514,23 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
 static char *
 format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len, size_t *written, bool direct)
 {
-  char buffer[64];
+  /* 64 is more than enough room to print 3 uint32.  */
+  const size_t max_len_mapping = 64;
   char *ret;
   size_t s;
 
   *written = 0;
 
-  ret = xmalloc (sizeof (buffer) * mappings_len + 1);
+  ret = xmalloc (max_len_mapping * mappings_len + 1);
   for (s = 0; s < mappings_len; s++)
     {
       size_t len;
 
-      len = snprintf (buffer, sizeof (buffer), "%" PRIu32 " %" PRIu32 " %" PRIu32 "\n",
+      len = snprintf (ret + *written, max_len_mapping, "%" PRIu32 " %" PRIu32 " %" PRIu32 "\n",
                       direct ? mappings[s]->container_id : mappings[s]->host_id,
                       direct ? mappings[s]->host_id : mappings[s]->container_id,
                       mappings[s]->size);
 
-      memcpy (ret + *written, buffer, len);
       *written += len;
     }
   return ret;
