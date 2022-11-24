@@ -524,7 +524,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
               /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
               ret = openat (cwd, cur, O_CLOEXEC | O_PATH, 0);
               if (ret < 0)
-                return crun_make_error (err, errno, "open `%s/%s`", dirpath, cur);
+                return crun_make_error (err, errno, "open `%s/%s`", dirpath, npath);
             }
 
           if (do_open)
@@ -538,7 +538,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
       if (ret < 0)
         {
           if (errno != EEXIST)
-            return crun_make_error (err, errno, "mkdir `%s`", cur);
+            return crun_make_error (err, errno, "mkdir `/%s`", npath);
         }
 
       cwd = safe_openat (dirfd, dirpath, dirpath_len, npath, O_CLOEXEC | O_PATH, 0, err);
