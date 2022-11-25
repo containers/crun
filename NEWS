@@ -1,3 +1,16 @@
+* crun-1.7.1
+
+- criu: load libcriu dynamically.
+- seccomp: initialize libgcrypt.
+- handlers: fix rewriting the argv if the full cmdline doesn't fit.
+- utils: honor SELinux label when using a custom handler.
+- utils: honor AppArmor label when using a custom handler.
+- krun: copy the OCI configuration file into the container.
+- utils: fix creating the default user namespace when running with euid != 0.
+- Add setlinebuf() when --debug and --log=file: are used.
+- Fix timestamp format in the error messages.
+- krun: disable libkrun's collection of env vars
+
 * crun-1.7
 
 - seccomp: use a cache for the generated BPF.
