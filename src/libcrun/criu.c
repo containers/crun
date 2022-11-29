@@ -220,9 +220,9 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
 {
   cleanup_free struct libcriu_wrapper_s *wrapper = xmalloc0 (sizeof (*wrapper));
 
-  wrapper->handle = dlopen ("libcriu.so", RTLD_NOW);
+  wrapper->handle = dlopen ("libcriu.so.2", RTLD_NOW);
   if (wrapper->handle == NULL)
-    return crun_make_error (err, 0, "could not load `libcriu.so`");
+    return crun_make_error (err, 0, "could not load `libcriu.so.2`");
 
 #  define LOAD_CRIU_FUNCTION(X)                                                                \
     do                                                                                         \
