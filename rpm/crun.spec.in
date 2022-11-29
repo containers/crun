@@ -10,13 +10,10 @@
 %endif
 %endif
 
-# wasmedge available on Fedora 36 and EPEL 9
-%if 0%{?fedora} >= 36 || 0%{?rhel} >= 9
 %ifarch aarch64 || x86_64
 %global wasm_support enabled
 %global wasmedge_support enabled
 %global wasmedge_opts --with-wasmedge
-%endif
 %endif
 
 # FIXME: wasmtime builds for rhel are currently broken on copr probably
