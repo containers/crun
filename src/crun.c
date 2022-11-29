@@ -150,7 +150,7 @@ struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create
                                  { COMMAND_UPDATE, "update", crun_command_update },
                                  { COMMAND_PAUSE, "pause", crun_command_pause },
                                  { COMMAND_UNPAUSE, "resume", crun_command_unpause },
-#ifdef HAVE_CRIU
+#if HAVE_CRIU && HAVE_DLOPEN
                                  { COMMAND_CHECKPOINT, "checkpoint", crun_command_checkpoint },
                                  { COMMAND_RESTORE, "restore", crun_command_restore },
 #endif
@@ -159,7 +159,7 @@ struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create
                                  } };
 
 static char doc[] = "\nCOMMANDS:\n"
-#ifdef HAVE_CRIU
+#if HAVE_CRIU && HAVE_DLOPEN
                     "\tcheckpoint  - checkpoint a container\n"
 #endif
                     "\tcreate      - create a container\n"
@@ -168,7 +168,7 @@ static char doc[] = "\nCOMMANDS:\n"
                     "\tlist        - list known containers\n"
                     "\tkill        - send a signal to the container init process\n"
                     "\tps          - show the processes in the container\n"
-#ifdef HAVE_CRIU
+#if HAVE_CRIU && HAVE_DLOPEN
                     "\trestore     - restore a container\n"
 #endif
                     "\trun         - run a container\n"

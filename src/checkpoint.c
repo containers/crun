@@ -26,7 +26,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <regex.h>
-#ifdef HAVE_CRIU
+#if HAVE_CRIU && HAVE_DLOPEN
 #  include <criu/criu.h>
 #endif
 
@@ -75,7 +75,7 @@ static char args_doc[] = "checkpoint CONTAINER";
 int
 crun_parse_manage_cgroups_mode (char *param arg_unused)
 {
-#ifdef HAVE_CRIU
+#if HAVE_CRIU && HAVE_DLOPEN
   if (strcmp (param, "soft") == 0)
     return CRIU_CG_MODE_SOFT;
   else if (strcmp (param, "ignore") == 0)

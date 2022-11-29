@@ -1,3 +1,9 @@
+* crun-1.7.2
+
+- criu: hardcode library name to libcriu.so.2.
+- cgroup: always enable all controllers, even if the cgroup was already joined.
+  Regression caused by crun-1.7.
+
 * crun-1.7.1
 
 - criu: load libcriu dynamically.
