@@ -93,10 +93,6 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
   pid_t pid = args->pid;
   int cgroup_mode;
 
-  /* The cgroup was already joined, nothing more left to do.  */
-  if (args->joined)
-    return 0;
-
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
@@ -111,6 +107,10 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  /* The cgroup was already joined, nothing more left to do.  */
+  if (args->joined)
+    return 0;
 
   return enter_cgroup (cgroup_mode, pid, 0, out->path, true, err);
 }
