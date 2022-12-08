@@ -121,7 +121,7 @@ jobs:
               podman)
                   sudo mkdir -p /var/lib/containers /var/tmp
                   sudo docker build -t crun-podman tests/podman
-                  sudo docker run --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-podman
+                  sudo docker run --cgroupns=host --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-podman
                   ;;
               cri-o)
                   sudo modprobe -a ip6_tables br_netfilter
@@ -132,27 +132,27 @@ jobs:
               containerd)
                   sudo mkdir -p /var/lib/var-containerd
                   sudo docker build -t crun-containerd tests/containerd
-                  sudo docker run --privileged --net host --rm -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave -v ${PWD}:/crun crun-containerd
+                  sudo docker run --cgroupns=host --privileged --net host --rm -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave -v ${PWD}:/crun crun-containerd
                   ;;
               oci-validation)
                   sudo docker build -t crun-oci-validation tests/oci-validation
-                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-oci-validation
+                  sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-oci-validation
               ;;
               alpine-build)
                   sudo docker build -t crun-alpine-build tests/alpine-build
-                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-alpine-build
+                  sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-alpine-build
               ;;
               fedora-rawhide-mockbuild)
                   sudo docker build -t crun-fedora-rawhide-mockbuild tests/fedora-rawhide-mockbuild
-                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fedora-rawhide-mockbuild
+                  sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fedora-rawhide-mockbuild
               ;;
               centos8-build)
                   sudo docker build -t crun-centos8-build tests/centos8-build
-                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos8-build
+                  sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos8-build
               ;;
               centos9-build)
                   sudo docker build -t crun-centos9-build tests/centos9-build
-                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos9-build
+                  sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos9-build
               ;;
               clang-format)
                   sudo docker build -t crun-clang-format tests/clang-format
@@ -169,7 +169,7 @@ jobs:
               ;;
               fuzzing)
                   sudo docker build -t crun-fuzzing tests/fuzzing
-                  sudo docker run -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
+                  sudo docker run --cgroupns=host -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
               ;;
               codespell)
                   sudo docker build -t crun-codespell tests/codespell
@@ -177,7 +177,7 @@ jobs:
               ;;
               wasmedge-build)
                   sudo docker build -t wasmedge tests/wasmedge-build
-                  sudo docker run --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave  -w /crun -v ${PWD}:/crun wasmedge
+                  sudo docker run --privileged --cgroupns=host --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave  -w /crun -v ${PWD}:/crun wasmedge
               ;;
           esac
 
