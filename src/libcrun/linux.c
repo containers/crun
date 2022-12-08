@@ -2778,6 +2778,24 @@ libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error
   return 0;
 }
 
+// determine whether the uid/gid mappings only contain a single entry
+// that maps the host uid/gid on the process->user->uid/gid
+int
+is_single_mapping (runtime_spec_schema_defs_id_mapping **mappings, size_t len,
+                   uint32_t host_id, uint32_t container_id)
+{
+  if (len != 1)
+    return 0;
+
+  if (mappings[0]->size != 1)
+    return 0;
+
+  if (mappings[0]->container_id != container_id || mappings[0]->host_id != host_id)
+    return 0;
+
+  return 1;
+}
+
 int
 libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
@@ -2823,7 +2841,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
 
       xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
       ret = write_file (gid_map_file, gid_map, gid_map_len, err);
-      if (ret < 0 && ! def->linux->gid_mappings_len)
+      if (ret < 0 && (! def->linux->gid_mappings_len || is_single_mapping (def->linux->gid_mappings, def->linux->gid_mappings_len, container->host_gid, container->container_gid)))
         {
           size_t single_mapping_len;
           cleanup_free char *single_mapping = NULL;
@@ -2854,7 +2872,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
 
       xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
       ret = write_file (uid_map_file, uid_map, uid_map_len, err);
-      if (ret < 0 && ! def->linux->uid_mappings_len)
+      if (ret < 0 && (! def->linux->uid_mappings_len || is_single_mapping (def->linux->uid_mappings, def->linux->uid_mappings_len, container->host_uid, container->container_uid)))
         {
           size_t single_mapping_len;
           cleanup_free char *single_mapping = NULL;
@@ -2868,6 +2886,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
             }
 
           single_mapping = format_mount_mapping (container->container_uid, container->host_uid, 1, &single_mapping_len, true);
+
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
     }
