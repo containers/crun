@@ -850,7 +850,7 @@ set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err)
       const char *fname = now ? "/proc/thread-self/attr/current" : "/proc/thread-self/attr/exec";
       cleanup_free char *buf = NULL;
 
-      xasprintf (&buf, "exec %s", profile);
+      xasprintf (&buf, "%s %s", now ? "changeprofile" : "exec", profile);
 
       ret = write_file_and_check_fs_type (fname, buf, strlen (buf), PROC_SUPER_MAGIC, "procfs",
                                           err);
