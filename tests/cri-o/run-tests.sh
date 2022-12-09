@@ -46,7 +46,11 @@ sed -i -e 's|@test "crio restore upon exiting KUBENSMNT" {|@test "crio restore u
 sed -i -e 's|@test "seccomp notifier with runtime/default" {|@test "seccomp notifier with runtime/default" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "seccomp notifier with custom profile" {|@test "seccomp notifier with custom profile" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "seccomp notifier with runtime/default but not stop" {|@test "seccomp notifier with runtime/default but not stop" {\nskip\n|g' test/*.bats
-
+sed -i -e 's|@test "test workload pod gets configured to defaults" {|@test "test workload pod gets configured to defaults" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "test workload can override pod defaults" {|@test "test workload can override pod defaults" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "test workload pod should not be set if not defaulted or specified" {|@test "test workload pod should not be set if not defaulted or specified" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "test workload pod should not be set if annotation not specified" {|@test "test workload pod should not be set if annotation not specified" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "test workload pod should override infra_ctr_cpuset option" {|@test "test workload pod should override infra_ctr_cpuset option" {\nskip\n|g' test/*.bats
 
 # remove useless tests
 rm test/image.* test/config* test/reload_config.bats test/crio-wipe.bats test/network_ping.bats
