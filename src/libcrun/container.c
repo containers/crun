@@ -2298,7 +2298,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cg.id = context->id;
   cg.resources = def->linux ? def->linux->resources : NULL;
   cg.annotations = def->annotations;
-  cg.cgroup_path = def->linux ? def->linux->cgroups_path : "";
   cg.manager = cgroup_manager;
   cg.root_uid = root_uid;
   cg.root_gid = root_gid;

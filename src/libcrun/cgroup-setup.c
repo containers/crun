@@ -322,6 +322,11 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
 
       subsystem = controller[0] == '\0' ? "unified" : controller;
 
+      if (strcmp (subsystem, "net_prio,net_cls") == 0)
+        subsystem = "net_cls,net_prio";
+      if (strcmp (subsystem, "cpuacct,cpu") == 0)
+        subsystem = "cpu,cpuacct";
+
       snprintf (subsystem_path, sizeof (subsystem_path), CGROUP_ROOT "/%s", subsystem);
       ret = crun_path_exists (subsystem_path, err);
       if (UNLIKELY (ret < 0))
