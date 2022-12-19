@@ -3815,17 +3815,13 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
 }
 
 static int
-receive_mounts (libcrun_container_t *container, int sync_socket_container, libcrun_error_t *err)
+receive_mounts (struct libcrun_fd_map *fds, int sync_socket_container, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i, how_many = 0;
-  struct libcrun_fd_map *mount_fds = NULL;
   int ret;
 
-  if (def->mounts_len == 0)
+  if (fds->nfds == 0)
     return 0;
-
-  mount_fds = get_fd_map (container);
 
   ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &how_many, sizeof (how_many)));
   if (UNLIKELY (ret < 0))
@@ -3838,13 +3834,13 @@ receive_mounts (libcrun_container_t *container, int sync_socket_container, libcr
       ret = receive_fd_from_socket_with_payload (sync_socket_container, (char *) &index, sizeof (index), err);
       if (UNLIKELY (ret < 0))
         return ret;
-      if (index >= def->mounts_len)
+      if (index >= fds->nfds)
         return crun_make_error (err, 0, "invalid mount data received");
 
-      if (mount_fds->fds[index] >= 0)
-        TEMP_FAILURE_RETRY (close (mount_fds->fds[index]));
+      if (fds->fds[index] >= 0)
+        TEMP_FAILURE_RETRY (close (fds->fds[index]));
 
-      mount_fds->fds[index] = ret;
+      fds->fds[index] = ret;
     }
 
   return 0;
@@ -4076,7 +4072,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
     }
 
   /* Receive the mounts sent by `prepare_and_send_mounts`.  */
-  ret = receive_mounts (container, sync_socket_container, err);
+  ret = receive_mounts (get_fd_map (container), sync_socket_container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
