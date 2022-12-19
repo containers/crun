@@ -1098,7 +1098,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                 }
             }
 
-          return crun_make_error (err, saved_errno, "mount `%s` to `/%s`", source, target);
+          return crun_make_error (err, saved_errno, "mount `%s` to `%s`", source, target);
         }
 
       if (targetfd >= 0)
