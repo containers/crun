@@ -122,6 +122,7 @@ struct private_data_s
   int notify_socket_tree_fd;
 
   struct libcrun_fd_map *mount_fds;
+  struct libcrun_fd_map *dev_fds;
 
   /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
    * and needed during restore. */
@@ -144,6 +145,8 @@ cleanup_private_data (void *private_data)
     TEMP_FAILURE_RETRY (close (p->rootfsfd));
   if (p->mount_fds)
     cleanup_close_mapp (&(p->mount_fds));
+  if (p->dev_fds)
+    cleanup_close_mapp (&(p->dev_fds));
 
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
@@ -3727,6 +3730,22 @@ root_mapped_in_container_p (runtime_spec_schema_defs_id_mapping **mappings, size
 }
 
 static struct libcrun_fd_map *
+get_devices_fd_map (libcrun_container_t *container)
+{
+  struct libcrun_fd_map *dev_fds = get_private_data (container)->dev_fds;
+
+  if (dev_fds == NULL)
+    {
+      runtime_spec_schema_config_schema *def = container->container_def;
+      size_t len = def->linux ? def->linux->devices_len : 0;
+
+      dev_fds = make_libcrun_fd_map (len);
+      get_private_data (container)->dev_fds = dev_fds;
+    }
+  return dev_fds;
+}
+
+static struct libcrun_fd_map *
 get_fd_map (libcrun_container_t *container)
 {
   struct libcrun_fd_map *mount_fds = get_private_data (container)->mount_fds;
@@ -3778,7 +3797,7 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
 }
 
 static int
-prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
@@ -3812,6 +3831,53 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
     }
 
   return send_mounts (sync_socket_host, mount_fds, how_many, def->mounts_len, err);
+}
+
+static int
+prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_host, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close_map struct libcrun_fd_map *dev_fds = NULL;
+  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
+  size_t how_many = 0;
+  size_t i;
+  int ret;
+
+  if (def->linux == NULL || def->linux->devices_len == 0)
+    return 0;
+
+  dev_fds = make_libcrun_fd_map (def->linux->devices_len);
+
+  for (i = 0; i < def->linux->devices_len; i++)
+    {
+      if (has_userns)
+        {
+          dev_fds->fds[i] = -1;
+          if (UNLIKELY (dev_fds->fds[i] < 0))
+            crun_error_release (err);
+        }
+
+      if (dev_fds->fds[i] >= 0)
+        how_many++;
+    }
+
+  return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
+}
+
+static int
+prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = prepare_and_send_mount_mounts (container, pid, sync_socket_host, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = prepare_and_send_dev_mounts (container, sync_socket_host, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
 }
 
 static int
@@ -4073,6 +4139,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
   /* Receive the mounts sent by `prepare_and_send_mounts`.  */
   ret = receive_mounts (get_fd_map (container), sync_socket_container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = receive_mounts (get_devices_fd_map (container), sync_socket_container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
