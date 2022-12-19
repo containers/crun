@@ -984,13 +984,13 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
 
 /* Attempt to open a mount of the specified type.  */
 static int
-fsopen_mount (runtime_spec_schema_defs_mount *mount)
+fsopen_mount (const char *type)
 {
 #ifdef HAVE_NEW_MOUNT_API
   cleanup_close int fsfd = -1;
   int ret;
 
-  fsfd = syscall_fsopen (mount->type, FSOPEN_CLOEXEC);
+  fsfd = syscall_fsopen (type, FSOPEN_CLOEXEC);
   if (fsfd < 0)
     return fsfd;
 
@@ -1000,7 +1000,7 @@ fsopen_mount (runtime_spec_schema_defs_mount *mount)
 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
 #else
-  (void) mount;
+  (void) type;
   (void) syscall_fsopen;
   (void) syscall_fsconfig;
   (void) syscall_fsmount;
@@ -4038,9 +4038,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
              An error will be generated later if it is not possible to join the namespace.
           */
           if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-            fd = fsopen_mount (def->mounts[i]);
+            fd = fsopen_mount (def->mounts[i]->type);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            fd = fsopen_mount (def->mounts[i]);
+            fd = fsopen_mount (def->mounts[i]->type);
 
           if (fd >= 0)
             {
