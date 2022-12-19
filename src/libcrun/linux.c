@@ -408,7 +408,7 @@ do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set
 }
 
 static int
-get_bind_mount (const char *src, libcrun_error_t *err)
+get_bind_mount (int dirfd, const char *src, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   struct mount_attr_s attr = {
@@ -416,7 +416,7 @@ get_bind_mount (const char *src, libcrun_error_t *err)
   };
   int ret;
 
-  open_tree_fd = syscall_open_tree (-1, src,
+  open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
   if (UNLIKELY (open_tree_fd < 0))
     return crun_make_error (err, errno, "open `%s`", src);
@@ -3821,7 +3821,7 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
 
       if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i]))
         {
-          mount_fds->fds[i] = get_bind_mount (def->mounts[i]->source, err);
+          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, err);
           if (UNLIKELY (mount_fds->fds[i] < 0))
             crun_error_release (err);
         }
