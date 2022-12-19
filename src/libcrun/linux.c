@@ -3756,6 +3756,28 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt)
 }
 
 static int
+send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, size_t total, libcrun_error_t *err)
+{
+  size_t i;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &how_many, sizeof (how_many)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  for (i = 0; i < total; i++)
+    {
+      if (fds->fds[i] >= 0)
+        {
+          ret = send_fd_to_socket_with_payload (sync_socket_host, fds->fds[i], (char *) &i, sizeof (i), err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+  return 0;
+}
+
+static int
 prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -3789,21 +3811,7 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
         how_many++;
     }
 
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &how_many, sizeof (how_many)));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to sync socket");
-
-  for (i = 0; i < def->mounts_len; i++)
-    {
-      if (mount_fds->fds[i] >= 0)
-        {
-          ret = send_fd_to_socket_with_payload (sync_socket_host, mount_fds->fds[i], (char *) &i, sizeof (i), err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-    }
-
-  return 0;
+  return send_mounts (sync_socket_host, mount_fds, how_many, def->mounts_len, err);
 }
 
 static int
