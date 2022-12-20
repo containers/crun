@@ -452,7 +452,8 @@ static ssize_t fd_to_fd(int outfd, int infd)
 
 static int clone_binary(void)
 {
-	int binfd, execfd;
+	cleanup_close int binfd = -1;
+	cleanup_close int execfd = -1;
 	struct stat statbuf = {};
 	ssize_t sent = 0;
 	int fdtype = EFD_NONE;
@@ -462,8 +463,12 @@ static int clone_binary(void)
 	 * by getting a handle for a read-only bind-mount of the execfd.
 	 */
 	execfd = try_bindfd();
-	if (execfd >= 0)
-		return execfd;
+	if (execfd >= 0) {
+		/* Transfer ownership to caller */
+		int ret_execfd = execfd;
+		execfd = -1;
+		return ret_execfd;
+	}
 
 	/*
 	 * Dammit, that didn't work -- time to copy the binary to a safe place we
@@ -478,7 +483,7 @@ static int clone_binary(void)
 		goto error;
 
 	if (fstat(binfd, &statbuf) < 0)
-		goto error_binfd;
+		goto error;
 
 	while (sent < statbuf.st_size) {
 		int n = sendfile(execfd, binfd, NULL, statbuf.st_size - sent);
@@ -486,7 +491,7 @@ static int clone_binary(void)
 			/* sendfile can fail so we fallback to a dumb user-space copy. */
 			n = fd_to_fd(execfd, binfd);
 			if (n < 0)
-				goto error_binfd;
+				goto error;
 		}
 		sent += n;
 	}
@@ -497,12 +502,13 @@ static int clone_binary(void)
 	if (seal_execfd(&execfd, fdtype) < 0)
 		goto error;
 
-	return execfd;
-
-error_binfd:
-	close(binfd);
+	{
+		/* Transfer ownership to caller */
+		int ret_execfd = execfd;
+		execfd = -1;
+		return ret_execfd;
+	}
 error:
-	close(execfd);
 	return -EIO;
 }
 
@@ -511,7 +517,7 @@ extern char **environ;
 
 int ensure_cloned_binary(void)
 {
-	int execfd;
+	cleanup_close int execfd = -1;
 	char **argv = NULL;
 
 	/* Check that we're not self-cloned, and if we are then bail. */
@@ -531,6 +537,5 @@ int ensure_cloned_binary(void)
 
 	fexecve(execfd, argv, environ);
 error:
-	close(execfd);
 	return -ENOEXEC;
 }
