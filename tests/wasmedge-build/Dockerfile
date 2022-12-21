@@ -5,11 +5,12 @@ ARG WASM_EDGE_VERSION="0.11.0"
 RUN dnf update -y && dnf install -y make python git gcc automake autoconf libcap-devel \
 		systemd-devel yajl-devel libseccomp-devel pkg-config diffutils \
 		libgcrypt-devel systemd-devel yajl-devel libseccomp-devel pkg-config \
-		go-md2man glibc-static python3-libmount libtool buildah podman
+		go-md2man glibc-static python3-libmount libtool buildah podman which
 
 # Install WasmEdge
 RUN curl -sSf -o install.sh https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh
-RUN bash ./install.sh -p /usr/local -v $WASM_EDGE_VERSION
+RUN bash ./install.sh -p /usr -v $WASM_EDGE_VERSION
+RUN cp -P /usr/lib/libwasmedge* /usr/lib64/
 
 # The hello_wasm contains:
 # 1. The example rust application called hello, which will print something to console.

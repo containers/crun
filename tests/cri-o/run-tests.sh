@@ -51,6 +51,8 @@ sed -i -e 's|@test "test workload can override pod defaults" {|@test "test workl
 sed -i -e 's|@test "test workload pod should not be set if not defaulted or specified" {|@test "test workload pod should not be set if not defaulted or specified" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "test workload pod should not be set if annotation not specified" {|@test "test workload pod should not be set if annotation not specified" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "test workload pod should override infra_ctr_cpuset option" {|@test "test workload pod should override infra_ctr_cpuset option" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "checkpoint and restore one container into a new pod (drop infra:true)" {|@test "checkpoint and restore one container into a new pod (drop infra:true)" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "checkpoint and restore one container into a new pod (drop infra:false)" {|@test "checkpoint and restore one container into a new pod (drop infra:false)" {\nskip\n|g' test/*.bats
 
 # remove useless tests
 rm test/image.* test/config* test/reload_config.bats test/crio-wipe.bats test/network_ping.bats
