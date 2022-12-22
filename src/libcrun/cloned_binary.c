@@ -127,6 +127,17 @@ static int is_self_cloned(void)
 		goto out;
 	}
 
+	/* Is the binary on a read-only filesystem? We can't detect bind-mounts in
+	 * particular (in-kernel they are identical to regular mounts) but we can
+	 * at least be sure that it's read-only.  This occurs for multiple cases,
+	 * such as truly read-only filesystems like squashfs/erofs as well as
+	 * things like the ostree read-only bind mount.
+	 */
+	if (fstatfs(fd, &fsbuf) >= 0 && (fsbuf.f_flags & MS_RDONLY)) {
+		is_cloned = true;
+		goto out;
+	}
+
 	/*
 	 * All other forms require CLONED_BINARY_ENV, since they are potentially
 	 * writeable (or we can't tell if they're fully safe) and thus we must
@@ -136,15 +147,6 @@ static int is_self_cloned(void)
 		is_cloned = false;
 		goto out;
 	}
-
-	/*
-	 * Is the binary on a read-only filesystem? We can't detect bind-mounts in
-	 * particular (in-kernel they are identical to regular mounts) but we can
-	 * at least be sure that it's read-only. In addition, to make sure that
-	 * it's *our* bind-mount we check CLONED_BINARY_ENV.
-	 */
-	if (fstatfs(fd, &fsbuf) >= 0)
-		is_cloned |= (fsbuf.f_flags & MS_RDONLY);
 
 	/*
 	 * Okay, we're a tmpfile -- or we're currently running on RHEL <=7.6
