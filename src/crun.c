@@ -23,7 +23,9 @@
 #include <string.h>
 #include <libgen.h>
 
+#ifdef HAVE_DLOPEN
 #include <dlfcn.h>
+#endif
 
 #include "crun.h"
 #include "libcrun/utils.h"
