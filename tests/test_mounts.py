@@ -55,6 +55,55 @@ def test_mount_symlink():
         return 0
     return -1
 
+def test_ro_cgroup():
+    for cgroupns in [True, False]:
+        for netns in [True, False]:
+            for has_cgroup_mount in [True, False]:
+                conf = base_config()
+                conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+                add_all_namespaces(conf, cgroupns=cgroupns, netns=netns)
+                mounts = [
+                    {
+	                "destination": "/sys",
+	                "type": "sysfs",
+	                "source": "sysfs",
+	                "options": [
+		            "nosuid",
+		            "noexec",
+		            "nodev",
+		            "ro"
+	                ]
+	            },
+                    {
+	                "destination": "/proc",
+	                "type": "proc"
+	            }
+                ]
+
+                if has_cgroup_mount:
+                    mounts.append({
+                        "destination": "/sys/fs/cgroup",
+                        "type": "cgroup",
+                        "source": "cgroup",
+                        "options": [
+                            "nosuid",
+                            "noexec",
+                            "nodev",
+                            "relatime",
+                            "ro"
+                        ]
+                    })
+
+                conf['mounts'] = mounts
+                out, _ = run_and_get_output(conf, hide_stderr=True)
+                for i in reversed(out.split("\n")):
+                    if i.find("/sys/fs/cgroup") >= 0:
+                        if i.find("ro,") < 0:
+                            print("fail with cgroupns=%s, netns=%s and cgroup_mount=%s, got %s" % (cgroupns, netns, has_cgroup_mount, i), file=sys.stderr)
+                            return -1
+                        break
+    return 0
+
 def test_mount_symlink_not_existing():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
@@ -358,6 +407,7 @@ all_tests = {
     "mount-userns-bind-mount" : test_userns_bind_mount,
     "mount-idmapped-mounts" : test_idmapped_mounts,
     "mount-idmapped-mounts-symlink" : test_userns_bind_mount_symlink,
+    "mount-ro-cgroup": test_ro_cgroup,
 }
 
 if __name__ == "__main__":
