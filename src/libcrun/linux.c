@@ -1191,6 +1191,18 @@ try_umount (int targetfd, const char *target)
   umount2 (real_target, MNT_DETACH);
 }
 
+static bool
+container_has_cgroupns (libcrun_container_t *container)
+{
+  bool has_cgroupns = false;
+
+#if CLONE_NEWCGROUP
+  has_cgroupns = get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
+#endif
+
+  return has_cgroupns;
+}
+
 static int
 do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *target, unsigned long mountflags,
                     const char *unified_cgroup_path, libcrun_error_t *err)
@@ -1301,11 +1313,6 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
   char *from;
   cleanup_close int tmpfsdirfd = -1;
   char *saveptr = NULL;
-  bool has_cgroupns = false;
-
-#if CLONE_NEWCGROUP
-  has_cgroupns = get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
-#endif
 
   ret = do_mount (container, source, targetfd, target, "tmpfs", mountflags & ~MS_RDONLY, "size=1024k", LABEL_MOUNT,
                   err);
@@ -1374,7 +1381,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (UNLIKELY (subsystemfd < 0))
         return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
-      if (has_cgroupns)
+      if (container_has_cgroupns (container))
         {
           ret = do_mount (container, source_path, subsystemfd, subsystem_path, "cgroup", mountflags, subsystem_fqn,
                           LABEL_NONE, err);
