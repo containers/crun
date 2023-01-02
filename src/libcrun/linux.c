@@ -1220,6 +1220,8 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
       errno = crun_error_get_errno (err);
       if (errno == EPERM || errno == EBUSY)
         {
+          const char *src_cgroup;
+
           crun_error_release (err);
 
           if (errno == EBUSY)
@@ -1242,7 +1244,8 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
             }
 
           /* If everything else failed, bind mount from the current cgroup.  */
-          return do_mount (container, unified_cgroup_path ?: CGROUP_ROOT, targetfd, target, NULL,
+          src_cgroup = unified_cgroup_path && container_has_cgroupns (container) ? unified_cgroup_path : CGROUP_ROOT;
+          return do_mount (container, src_cgroup, targetfd, target, NULL,
                            MS_BIND | mountflags, NULL, LABEL_NONE, err);
         }
 
