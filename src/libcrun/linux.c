@@ -419,7 +419,7 @@ get_bind_mount (int dirfd, const char *src, libcrun_error_t *err)
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
   if (UNLIKELY (open_tree_fd < 0))
-    return crun_make_error (err, errno, "open `%s`", src);
+    return crun_make_error (err, errno, "open_tree `%s`", src);
 
   ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
