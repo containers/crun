@@ -18,6 +18,37 @@
 import os
 from tests_utils import *
 
+def test_owner_device():
+    if is_rootless():
+        return 77
+
+    for have_userns in [True, False]:
+        conf = base_config()
+        add_all_namespaces(conf, userns=have_userns)
+        if have_userns:
+            fullMapping = [
+                {
+                    "containerID": 0,
+                    "hostID": 0,
+                    "size": 4294967295
+                }
+            ]
+            conf['linux']['uidMappings'] = fullMapping
+            conf['linux']['gidMappings'] = fullMapping
+
+        conf['process']['args'] = ['/init', 'owner', '/dev/foo']
+        conf['linux']['devices'] = [{"path": "/dev/foo", "type": "b", "major": 1, "minor": 5, "uid": 10, "gid": 11},]
+        try:
+            expected = "10:11"
+            out = run_and_get_output(conf)
+            if expected not in out[0]:
+                sys.stderr.write("wrong file owner, found %s instead of %s with userns=%s" % (out[0], expected, have_userns))
+                return True
+            return False
+        except Exception as e:
+            return -1
+    return 0
+
 def test_deny_devices():
     if is_rootless():
         return 77
@@ -125,6 +156,7 @@ def test_mknod_device():
 
 
 all_tests = {
+    "owner-device" : test_owner_device,
     "deny-devices" : test_deny_devices,
     "allow-device" : test_allow_device,
     "allow-access" : test_allow_access,

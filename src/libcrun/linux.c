@@ -122,6 +122,7 @@ struct private_data_s
   int notify_socket_tree_fd;
 
   struct libcrun_fd_map *mount_fds;
+  struct libcrun_fd_map *dev_fds;
 
   /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
    * and needed during restore. */
@@ -144,6 +145,8 @@ cleanup_private_data (void *private_data)
     TEMP_FAILURE_RETRY (close (p->rootfsfd));
   if (p->mount_fds)
     cleanup_close_mapp (&(p->mount_fds));
+  if (p->dev_fds)
+    cleanup_close_mapp (&(p->dev_fds));
 
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
@@ -405,7 +408,7 @@ do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set
 }
 
 static int
-get_bind_mount (const char *src, libcrun_error_t *err)
+get_bind_mount (int dirfd, const char *src, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   struct mount_attr_s attr = {
@@ -413,7 +416,7 @@ get_bind_mount (const char *src, libcrun_error_t *err)
   };
   int ret;
 
-  open_tree_fd = syscall_open_tree (-1, src,
+  open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
   if (UNLIKELY (open_tree_fd < 0))
     return crun_make_error (err, errno, "open `%s`", src);
@@ -981,13 +984,13 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
 
 /* Attempt to open a mount of the specified type.  */
 static int
-fsopen_mount (runtime_spec_schema_defs_mount *mount)
+fsopen_mount (const char *type)
 {
 #ifdef HAVE_NEW_MOUNT_API
   cleanup_close int fsfd = -1;
   int ret;
 
-  fsfd = syscall_fsopen (mount->type, FSOPEN_CLOEXEC);
+  fsfd = syscall_fsopen (type, FSOPEN_CLOEXEC);
   if (fsfd < 0)
     return fsfd;
 
@@ -997,7 +1000,7 @@ fsopen_mount (runtime_spec_schema_defs_mount *mount)
 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
 #else
-  (void) mount;
+  (void) type;
   (void) syscall_fsopen;
   (void) syscall_fsconfig;
   (void) syscall_fsmount;
@@ -1095,7 +1098,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                 }
             }
 
-          return crun_make_error (err, saved_errno, "mount `%s` to `/%s`", source, target);
+          return crun_make_error (err, saved_errno, "mount `%s` to `%s`", source, target);
         }
 
       if (targetfd >= 0)
@@ -1467,8 +1470,9 @@ relative_path_under_dev (const char *path)
 }
 
 int
-libcrun_create_dev (libcrun_container_t *container, int devfd, struct device_s *device,
-                    bool binds, bool ensure_parent_dir, libcrun_error_t *err)
+libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
+                    struct device_s *device, bool binds, bool ensure_parent_dir,
+                    libcrun_error_t *err)
 {
   int ret;
   dev_t dev;
@@ -1503,6 +1507,13 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, struct device_s *
           fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0755, err);
           if (UNLIKELY (fd < 0))
             return fd;
+        }
+
+      if (srcfd >= 0)
+        {
+          ret = syscall_move_mount (srcfd, "", fd, "", MOVE_MOUNT_T_EMPTY_PATH | MOVE_MOUNT_F_EMPTY_PATH);
+          if (LIKELY (ret >= 0))
+            return 0;
         }
 
       ret = do_mount (container, fullname, fd, device->path, NULL, MS_BIND | MS_PRIVATE | MS_NOEXEC | MS_NOSUID, NULL, LABEL_MOUNT, err);
@@ -1624,6 +1635,10 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   runtime_spec_schema_config_schema *def = container->container_def;
   const char *rootfs = get_private_data (container)->rootfs;
   int rootfsfd = get_private_data (container)->rootfsfd;
+  cleanup_close_map struct libcrun_fd_map *dev_fds = NULL;
+
+  dev_fds = get_private_data (container)->dev_fds;
+  get_private_data (container)->dev_fds = NULL;
 
   devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
@@ -1643,7 +1658,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
 
       if (! def->linux->devices[i]->file_mode_present)
         device.mode = 0666;
-      ret = libcrun_create_dev (container, devfd, &device, binds, true, err);
+      ret = libcrun_create_dev (container, devfd, dev_fds->fds[i], &device, binds, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1651,7 +1666,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   for (it = needed_devs; it->path; it++)
     {
       /* make sure the parent directory exists only on the first iteration.  */
-      ret = libcrun_create_dev (container, devfd, it, binds, it == needed_devs, err);
+      ret = libcrun_create_dev (container, devfd, -1, it, binds, it == needed_devs, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -3727,6 +3742,22 @@ root_mapped_in_container_p (runtime_spec_schema_defs_id_mapping **mappings, size
 }
 
 static struct libcrun_fd_map *
+get_devices_fd_map (libcrun_container_t *container)
+{
+  struct libcrun_fd_map *dev_fds = get_private_data (container)->dev_fds;
+
+  if (dev_fds == NULL)
+    {
+      runtime_spec_schema_config_schema *def = container->container_def;
+      size_t len = def->linux ? def->linux->devices_len : 0;
+
+      dev_fds = make_libcrun_fd_map (len);
+      get_private_data (container)->dev_fds = dev_fds;
+    }
+  return dev_fds;
+}
+
+static struct libcrun_fd_map *
 get_fd_map (libcrun_container_t *container)
 {
   struct libcrun_fd_map *mount_fds = get_private_data (container)->mount_fds;
@@ -3755,8 +3786,86 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt)
   return false;
 }
 
+static uid_t
+get_id_in_user_namespace (uid_t id, bool is_uid, runtime_spec_schema_config_schema *def)
+{
+  runtime_spec_schema_defs_id_mapping **mappings;
+  size_t len;
+  size_t i;
+
+  mappings = is_uid ? def->linux->uid_mappings : def->linux->gid_mappings;
+  len = is_uid ? def->linux->uid_mappings_len : def->linux->gid_mappings_len;
+
+  for (i = 0; i < len; i++)
+    {
+      if (mappings[i]->container_id <= id
+          && id < mappings[i]->container_id + mappings[i]->size)
+        return id - mappings[i]->container_id + mappings[i]->host_id;
+    }
+
+  return is_uid ? get_overflow_uid () : get_overflow_gid ();
+}
+
 static int
-prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  runtime_spec_schema_defs_linux_device *device;
+  uid_t uid = get_overflow_uid ();
+  gid_t gid = get_overflow_gid ();
+  char name[64];
+  mode_t type;
+  dev_t dev;
+  int ret;
+
+  snprintf (name, sizeof (name), "%zu", i);
+
+  device = def->linux->devices[i];
+
+  type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
+  dev = makedev (device->major, device->minor);
+
+  ret = mknodat (devs_dirfd, name, device->file_mode | type, dev);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mknod `%s`", device->path);
+
+  if (def->linux)
+    {
+      uid = get_id_in_user_namespace (device->uid, true, def);
+      gid = get_id_in_user_namespace (device->gid, false, def);
+    }
+
+  ret = fchownat (devs_dirfd, name, uid, gid, 0); /* lgtm [cpp/toctou-race-condition] */
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chown `%s`", device->path);
+
+  return get_bind_mount (devs_dirfd, name, err);
+}
+
+static int
+send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, size_t total, libcrun_error_t *err)
+{
+  size_t i;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &how_many, sizeof (how_many)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  for (i = 0; i < total; i++)
+    {
+      if (fds->fds[i] >= 0)
+        {
+          ret = send_fd_to_socket_with_payload (sync_socket_host, fds->fds[i], (char *) &i, sizeof (i), err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+  return 0;
+}
+
+static int
+prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
@@ -3780,7 +3889,7 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
 
       if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i]))
         {
-          mount_fds->fds[i] = get_bind_mount (def->mounts[i]->source, err);
+          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, err);
           if (UNLIKELY (mount_fds->fds[i] < 0))
             crun_error_release (err);
         }
@@ -3789,35 +3898,140 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
         how_many++;
     }
 
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &how_many, sizeof (how_many)));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to sync socket");
+  return send_mounts (sync_socket_host, mount_fds, how_many, def->mounts_len, err);
+}
 
-  for (i = 0; i < def->mounts_len; i++)
+static int
+prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_host, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close_map struct libcrun_fd_map *dev_fds = NULL;
+  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
+  cleanup_close int current_mountns = -1;
+  cleanup_free char *state_dir = NULL;
+  cleanup_free char *devs_path = NULL;
+  cleanup_close int devs_mountfd = -1;
+  cleanup_close int targetfd = -1;
+  size_t how_many = 0;
+  size_t i;
+  int ret;
+
+  if (def->linux == NULL || def->linux->devices_len == 0)
+    return 0;
+
+  dev_fds = make_libcrun_fd_map (def->linux->devices_len);
+
+  if (! has_userns || is_empty_string (container->context->id))
+    return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
+
+  state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+  if (state_dir == NULL)
+    return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
+
+  ret = append_paths (&devs_path, err, state_dir, "devs", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = mkdir (devs_path, 0700);
+  if (UNLIKELY (ret < 0) && errno != EEXIST)
+    return crun_make_error (err, errno, "mkdir `%s`", devs_path);
+
+  current_mountns = open ("/proc/self/ns/mnt", O_RDONLY);
+  if (UNLIKELY (current_mountns < 0))
+    return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
+
+  ret = unshare (CLONE_NEWNS);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "unshare `CLONE_NEWNS`");
+
+  ret = mount (NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL);
+  if (UNLIKELY (ret < 0))
     {
-      if (mount_fds->fds[i] >= 0)
-        {
-          ret = send_fd_to_socket_with_payload (sync_socket_host, mount_fds->fds[i], (char *) &i, sizeof (i), err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = crun_make_error (err, errno, "mount `MS_REC | MS_PRIVATE`");
+      goto restore_mountns;
     }
+
+  devs_mountfd = fsopen_mount ("tmpfs");
+  if (UNLIKELY (devs_mountfd < 0))
+    {
+      ret = crun_make_error (err, errno, "fsopen_mount `tmpfs`");
+      goto restore_mountns;
+    }
+
+  targetfd = open (devs_path, O_DIRECTORY | O_CLOEXEC);
+  if (targetfd < 0)
+    {
+      ret = crun_make_error (err, errno, "open `%s`", devs_path);
+      goto restore_mountns;
+    }
+
+  ret = fs_move_mount_to (devs_mountfd, targetfd, NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, errno, "fs_move_mount_to `%s`", devs_path);
+      goto restore_mountns;
+    }
+
+  close_and_reset (&targetfd);
+
+  targetfd = openat (devs_mountfd, ".", O_DIRECTORY | O_CLOEXEC);
+  if (targetfd < 0)
+    {
+      ret = crun_make_error (err, errno, "open `%s`", devs_path);
+      goto restore_mountns;
+    }
+
+  for (i = 0; i < def->linux->devices_len; i++)
+    {
+      ret = precreate_device (container, targetfd, i, err);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_error_release (err);
+          continue;
+        }
+
+      dev_fds->fds[i] = ret;
+
+      if (dev_fds->fds[i] >= 0)
+        how_many++;
+    }
+
+  ret = send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
+restore_mountns:
+  {
+    int setns_ret;
+
+    setns_ret = setns (current_mountns, CLONE_NEWNS);
+    if (UNLIKELY (setns_ret < 0 && ret >= 0))
+      crun_make_error (err, errno, "setns `CLONE_NEWNS`");
+  }
+  return ret;
+}
+
+static int
+prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = prepare_and_send_mount_mounts (container, pid, sync_socket_host, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = prepare_and_send_dev_mounts (container, sync_socket_host, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return 0;
 }
 
 static int
-receive_mounts (libcrun_container_t *container, int sync_socket_container, libcrun_error_t *err)
+receive_mounts (struct libcrun_fd_map *fds, int sync_socket_container, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   size_t i, how_many = 0;
-  struct libcrun_fd_map *mount_fds = NULL;
   int ret;
 
-  if (def->mounts_len == 0)
+  if (fds->nfds == 0)
     return 0;
-
-  mount_fds = get_fd_map (container);
 
   ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &how_many, sizeof (how_many)));
   if (UNLIKELY (ret < 0))
@@ -3830,13 +4044,13 @@ receive_mounts (libcrun_container_t *container, int sync_socket_container, libcr
       ret = receive_fd_from_socket_with_payload (sync_socket_container, (char *) &index, sizeof (index), err);
       if (UNLIKELY (ret < 0))
         return ret;
-      if (index >= def->mounts_len)
+      if (index >= fds->nfds)
         return crun_make_error (err, 0, "invalid mount data received");
 
-      if (mount_fds->fds[index] >= 0)
-        TEMP_FAILURE_RETRY (close (mount_fds->fds[index]));
+      if (fds->fds[index] >= 0)
+        TEMP_FAILURE_RETRY (close (fds->fds[index]));
 
-      mount_fds->fds[index] = ret;
+      fds->fds[index] = ret;
     }
 
   return 0;
@@ -3968,9 +4182,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
              An error will be generated later if it is not possible to join the namespace.
           */
           if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-            fd = fsopen_mount (def->mounts[i]);
+            fd = fsopen_mount (def->mounts[i]->type);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            fd = fsopen_mount (def->mounts[i]);
+            fd = fsopen_mount (def->mounts[i]->type);
 
           if (fd >= 0)
             {
@@ -4068,7 +4282,11 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
     }
 
   /* Receive the mounts sent by `prepare_and_send_mounts`.  */
-  ret = receive_mounts (container, sync_socket_container, err);
+  ret = receive_mounts (get_fd_map (container), sync_socket_container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = receive_mounts (get_devices_fd_map (container), sync_socket_container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

@@ -45,6 +45,11 @@
 #ifdef HAVE_LINUX_OPENAT2_H
 #  include <linux/openat2.h>
 #endif
+#if HAVE_STDATOMIC_H
+#  include <stdatomic.h>
+#else
+#  define atomic_long volatile long
+#endif
 
 #ifndef CLOSE_RANGE_CLOEXEC
 #  define CLOSE_RANGE_CLOEXEC (1U << 2)
@@ -2325,4 +2330,57 @@ libcrun_munmap (struct libcrun_mmap_s *mmap, libcrun_error_t *err)
   free (mmap);
 
   return 0;
+}
+
+static long
+read_file_as_long_or_default (const char *path, long def_value)
+{
+  cleanup_free char *content = NULL;
+  libcrun_error_t tmp_err = NULL;
+  char *endptr;
+  long val;
+  int ret;
+
+  ret = read_all_file (path, &content, NULL, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&tmp_err);
+      return def_value;
+    }
+
+  errno = 0;
+  val = strtol (content, &endptr, 10);
+  if (UNLIKELY (errno))
+    return def_value;
+  if (endptr == content || (*endptr && *endptr != '\n'))
+    return def_value;
+  return val;
+}
+
+#define DEFAULT_OVERFLOW_ID 65534
+
+uid_t
+get_overflow_uid (void)
+{
+  static atomic_long cached_uid = -1;
+  atomic_long uid = cached_uid;
+  if (uid == -1)
+    {
+      uid = read_file_as_long_or_default ("/proc/sys/kernel/overflowuid", DEFAULT_OVERFLOW_ID);
+      cached_uid = uid;
+    }
+  return uid;
+}
+
+gid_t
+get_overflow_gid (void)
+{
+  static atomic_long cached_gid = -1;
+  atomic_long gid = cached_gid;
+  if (gid == -1)
+    {
+      gid = read_file_as_long_or_default ("/proc/sys/kernel/overflowgid", DEFAULT_OVERFLOW_ID);
+      cached_gid = gid;
+    }
+  return gid;
 }

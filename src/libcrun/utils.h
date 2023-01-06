@@ -411,4 +411,7 @@ get_process_exit_status (int status)
   return -1;
 }
 
+uid_t get_overflow_uid (void);
+gid_t get_overflow_gid (void);
+
 #endif

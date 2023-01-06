@@ -109,7 +109,7 @@ int libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t
 int libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
 
 int libcrun_create_dev (libcrun_container_t *container, int devfd,
-                        struct device_s *device, bool binds,
+                        int srcfd, struct device_s *device, bool binds,
                         bool ensure_parent_dir, libcrun_error_t *err);
 
 int parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uids, char *option, char **out,

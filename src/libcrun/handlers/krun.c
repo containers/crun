@@ -239,13 +239,13 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
     return ret;
   is_user_ns = ret;
 
-  ret = libcrun_create_dev (container, devfd, &kvm_device, is_user_ns, true, err);
+  ret = libcrun_create_dev (container, devfd, -1, &kvm_device, is_user_ns, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (create_sev)
     {
-      ret = libcrun_create_dev (container, devfd, &sev_device, is_user_ns, true, err);
+      ret = libcrun_create_dev (container, devfd, -1, &sev_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
