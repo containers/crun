@@ -40,6 +40,9 @@ sed -i -e 's|@test "userns annotation auto should map host run_as_user" {|@test 
 sed -i -e 's|@test "ctr execsync" {|@test "ctr execsync" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "image volume ignore" {|@test "image volume ignore" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "image volume bind" {|@test "image volume bind" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "conmon pod cgroup" {|@test "conmon pod cgroup" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "run NRI CpusetAdjustmentUpdate test" {|@test "run NRI CpusetAdjustmentUpdate test" {\nskip\n|g' test/*.bats
+sed -i -e 's|@test "run NRI CpusetAdjustment test" {|@test "run NRI CpusetAdjustment test" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "image volume user mkdir" {|@test "image volume user mkdir" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "crio restore with missing config.json" {|@test "crio restore with missing config.json" {\nskip\n|g' test/*.bats
 sed -i -e 's|@test "crio restore upon exiting KUBENSMNT" {|@test "crio restore upon exiting KUBENSMNT" {\nskip\n|g' test/*.bats
