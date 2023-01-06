@@ -58,24 +58,29 @@ handle_async (struct seccomp_notif_sizes *sizes, struct seccomp_notif *sreq, int
 
   args->resp = malloc (sizes->seccomp_notif_resp);
   if (args->resp == NULL)
-    return -errno;
+    goto exit_error;
 
   args->id = sreq->id;
   args->seccomp_fd = seccomp_fd;
 
   if (pthread_attr_init (&attr) < 0)
-    return -errno;
+    goto exit_error;
 
   if (pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED) < 0)
-    return -errno;
+    goto exit_error;
 
   if (pthread_create (&thread, &attr, start_routine, args) < 0)
-    return -errno;
+    goto exit_error;
 
   if (pthread_attr_destroy (&attr) < 0)
-    return -errno;
+    goto exit_error;
 
   return 0;
+
+exit_error:
+  free (args->resp);
+  free (args);
+  return -errno;
 }
 
 int
