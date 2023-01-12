@@ -53,12 +53,14 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   if (cpus[0] == '\0')
     {
       cpus_fd = openat (dirfd, "cpuset.cpus", O_RDWR);
+      if (UNLIKELY (cpus_fd < 0 && errno == ENOENT))
+        cpus_fd = openat (dirfd, "cpus", O_RDWR);
       if (UNLIKELY (cpus_fd < 0))
-        return crun_make_error (err, errno, "open '%s/%s'", path, "cpuset.cpus");
+        return crun_make_error (err, errno, "open `%s/%s`", path, "cpuset.cpus");
 
       b_len = TEMP_FAILURE_RETRY (read (cpus_fd, cpus, 256));
       if (UNLIKELY (b_len < 0))
-        return crun_make_error (err, errno, "read from 'cpuset.cpus'");
+        return crun_make_error (err, errno, "read from `cpuset.cpus`");
       cpus[b_len] = '\0';
       if (cpus[0] == '\n')
         cpus[0] = '\0';
@@ -67,12 +69,14 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   if (mems[0] == '\0')
     {
       mems_fd = openat (dirfd, "cpuset.mems", O_RDWR);
+      if (UNLIKELY (mems_fd < 0 && errno == ENOENT))
+        mems_fd = openat (dirfd, "mems", O_RDWR);
       if (UNLIKELY (mems_fd < 0))
-        return crun_make_error (err, errno, "open '%s/%s'", path, "cpuset.mems");
+        return crun_make_error (err, errno, "open `%s/%s`", path, "cpuset.mems");
 
       b_len = TEMP_FAILURE_RETRY (read (mems_fd, mems, 256));
       if (UNLIKELY (b_len < 0))
-        return crun_make_error (err, errno, "read from 'cpuset.mems'");
+        return crun_make_error (err, errno, "read from `cpuset.mems`");
       mems[b_len] = '\0';
       if (mems[0] == '\n')
         mems[0] = '\0';
@@ -103,14 +107,14 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
     {
       b_len = TEMP_FAILURE_RETRY (write (cpus_fd, cpus, strlen (cpus)));
       if (UNLIKELY (b_len < 0))
-        return crun_make_error (err, errno, "write 'cpuset.cpus'");
+        return crun_make_error (err, errno, "write `cpuset.cpus`");
     }
 
   if (mems_fd >= 0)
     {
       b_len = TEMP_FAILURE_RETRY (write (mems_fd, mems, strlen (mems)));
       if (UNLIKELY (b_len < 0))
-        return crun_make_error (err, errno, "write 'cpuset.mems'");
+        return crun_make_error (err, errno, "write `cpuset.mems`");
     }
 
   return 0;
