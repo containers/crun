@@ -324,11 +324,11 @@ crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, 
 static int
 check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *fdname, libcrun_error_t *err)
 {
-  int ret;
+  proc_fd_path_t fdpath;
   char link[PATH_MAX];
-  char fdpath[64];
+  int ret;
 
-  sprintf (fdpath, "/proc/self/fd/%d", fd);
+  get_proc_self_fd_path (fdpath, fd);
   ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "readlink `%s`", fdname);
@@ -934,7 +934,7 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
 {
   struct sockaddr_un addr = {};
   int ret;
-  char name_buf[32];
+  proc_fd_path_t name_buf;
   cleanup_close int destfd = -1;
   cleanup_close int fd = -1;
 
@@ -948,7 +948,8 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
       if (UNLIKELY (destfd < 0))
         return crun_make_error (err, errno, "error opening `%s`", path);
 
-      sprintf (name_buf, "/proc/self/fd/%d", destfd);
+      get_proc_self_fd_path (name_buf, destfd);
+
       path = name_buf;
     }
 
@@ -968,15 +969,15 @@ int
 open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
 {
   struct sockaddr_un addr = {};
+  proc_fd_path_t name_buf;
   int ret;
-  char name_buf[32];
   cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error creating UNIX socket");
 
   if (strlen (path) >= sizeof (addr.sun_path))
     {
-      sprintf (name_buf, "/proc/self/fd/%d", fd);
+      get_proc_self_fd_path (name_buf, fd);
       path = name_buf;
     }
   strcpy (addr.sun_path, path);
@@ -1655,7 +1656,7 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
         {
           ret = fcntl (val, F_SETFD, FD_CLOEXEC);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "cannot set CLOEXEC fd for '/proc/self/fd/%s'", name);
+            return crun_make_error (err, errno, "cannot set CLOEXEC fd for `/proc/self/fd/%s`", name);
         }
     }
   return 0;
@@ -2048,14 +2049,15 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
         {
           if (errno == ENOTSUP)
             {
-              char proc_path[32];
+              proc_fd_path_t proc_path;
               cleanup_close int fd = -1;
 
               fd = openat (destdirfd, de->d_name, O_PATH | O_NOFOLLOW);
               if (UNLIKELY (fd < 0))
                 return crun_make_error (err, errno, "open `%s/%s`", destname, de->d_name);
 
-              sprintf (proc_path, "/proc/self/fd/%d", fd);
+              get_proc_self_fd_path (proc_path, fd);
+
               ret = chmod (proc_path, mode & ALLPERMS);
             }
 

@@ -901,12 +901,12 @@ static int
 do_remount (int targetfd, const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
 {
   int ret;
-  char target_buffer[64];
+  proc_fd_path_t target_buffer;
   const char *real_target = target;
 
   if (targetfd >= 0)
     {
-      sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+      get_proc_self_fd_path (target_buffer, targetfd);
       real_target = target_buffer;
     }
 
@@ -1087,8 +1087,9 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
 
   if (readonly)
     {
-      char source_buffer[64];
-      sprintf (source_buffer, "/proc/self/fd/%d", pathfd);
+      proc_fd_path_t source_buffer;
+
+      get_proc_self_fd_path (source_buffer, pathfd);
 
       ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL,
                       LABEL_NONE, err);
@@ -1119,10 +1120,10 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
   cleanup_free char *data_with_label = NULL;
   const char *real_target = target;
   bool single_instance = false;
+  proc_fd_path_t target_buffer;
   bool needs_remount = false;
   cleanup_close int fd = -1;
   const char *label = NULL;
-  char target_buffer[64];
   int ret = 0;
 
 #define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
@@ -1135,7 +1136,8 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (targetfd >= 0)
     {
-      sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+      get_proc_self_fd_path (target_buffer, targetfd);
+
       real_target = target_buffer;
     }
 
@@ -1202,8 +1204,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 #ifdef HAVE_FGETXATTR
           if (label_how == LABEL_XATTR)
             {
-              char proc_file[32];
-              sprintf (proc_file, "/proc/self/fd/%d", fd);
+              proc_fd_path_t proc_file;
+
+              get_proc_self_fd_path (proc_file, fd);
 
               /* We need to go through the proc_file since fd itself is opened as O_PATH.  */
               (void) setxattr (proc_file, "security.selinux", label, strlen (label), 0);
@@ -1211,7 +1214,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 #endif
 
           targetfd = fd;
-          sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+          get_proc_self_fd_path (target_buffer, targetfd);
           real_target = target_buffer;
         }
     }
@@ -1271,12 +1274,12 @@ static void
 try_umount (int targetfd, const char *target)
 {
   const char *real_target = target;
-  char target_buffer[64];
+  proc_fd_path_t target_buffer;
 
   if (targetfd >= 0)
     {
       /* Best effort cleanup for the tmpfs.  */
-      sprintf (target_buffer, "/proc/self/fd/%d", targetfd);
+      get_proc_self_fd_path (target_buffer, targetfd);
       real_target = target_buffer;
     }
   umount2 (real_target, MNT_DETACH);
@@ -1609,7 +1612,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
     }
   else
     {
-      char fd_buffer[64];
+      proc_fd_path_t fd_buffer;
 
       dev = makedev (device->major, device->minor);
 
@@ -1630,7 +1633,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (fd < 0))
             return fd;
 
-          sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+          get_proc_self_fd_path (fd_buffer, fd);
 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
@@ -1683,7 +1686,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (fd < 0))
             return crun_make_error (err, errno, "open `%s`", device->path);
 
-          sprintf (fd_buffer, "/proc/self/fd/%d", fd);
+          get_proc_self_fd_path (fd_buffer, fd);
 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
@@ -1781,9 +1784,9 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
                   cleanup_close int tfd = openat (devfd, symlinks[i].target, O_CLOEXEC | O_PATH | O_NOFOLLOW);
                   if (tfd >= 0)
                     {
-                      char procpath[32];
-                      sprintf (procpath, "/proc/self/fd/%d", tfd);
+                      proc_fd_path_t procpath;
 
+                      get_proc_self_fd_path (procpath, tfd);
                       if (umount2 (procpath, MNT_DETACH) == 0)
                         goto retry_unlink;
                     }
@@ -1791,7 +1794,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
               if (ret == 0)
                 goto retry_symlink;
             }
-          return crun_make_error (err, saved_errno, "creating symlink for /dev/%s", symlinks[i].target);
+          return crun_make_error (err, saved_errno, "creating symlink for `/dev/%s`", symlinks[i].target);
         }
     }
 
@@ -1993,11 +1996,11 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 
       if (def->mounts[i]->source && (flags & MS_BIND))
         {
-          char proc_buf[64];
+          proc_fd_path_t proc_buf;
           const char *path = def->mounts[i]->source;
           if (mount_fds->fds[i] >= 0)
             {
-              sprintf (proc_buf, "/proc/self/fd/%d", mount_fds->fds[i]);
+              get_proc_self_fd_path (proc_buf, mount_fds->fds[i]);
               path = proc_buf;
             }
 
@@ -3402,13 +3405,11 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
   /* Remember original stdin, stdout, stderr for container restore.  */
   for (i = 0; i < 3; i++)
     {
-      char fd_path[64];
+      proc_fd_path_t fd_path;
       char link_path[PATH_MAX];
 
-      if (pid)
-        sprintf (fd_path, "/proc/%d/fd/%d", pid, i);
-      else
-        sprintf (fd_path, "/proc/self/fd/%d", i);
+      get_proc_fd_path (fd_path, pid, i);
+
       ret = readlink (fd_path, link_path, PATH_MAX - 1);
       if (UNLIKELY (ret < 0))
         {
