@@ -878,7 +878,7 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
     return crun_make_error (err, errno, "error stat'ing file `%s`", description);
 
   /* NUL terminate the buffer.  */
-  allocated = size;
+  allocated = size + 1;
   if (size == 0)
     allocated = 4096;
   buf = xmalloc (allocated + 1);
@@ -894,8 +894,11 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
 
       nread += ret;
 
-      allocated += 4096;
-      buf = xrealloc (buf, allocated + 1);
+      if (nread == allocated)
+        {
+          allocated += 4096;
+          buf = xrealloc (buf, allocated + 1);
+        }
     }
   buf[nread] = '\0';
   *out = buf;
