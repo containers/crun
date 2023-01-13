@@ -414,4 +414,43 @@ get_process_exit_status (int status)
 uid_t get_overflow_uid (void);
 gid_t get_overflow_gid (void);
 
+/* Adapted from systemd.  Include space for the NUL byte.  */
+#define DECIMAL_STR_MAX(type)                                        \
+  ((size_t) 2U + (sizeof (type) <= 1 ? 3U : sizeof (type) <= 2 ? 5U  \
+                                        : sizeof (type) <= 4   ? 10U \
+                                        : sizeof (type) <= 8   ? 20U \
+                                                               : sizeof (int[-2 * (sizeof (type) > 8)])))
+
+#define _STRLEN(s) (sizeof (s) - 1)
+
+/* _STRLEN("self") < DECIMAL_STR_MAX (pid_t), so we don't need to calculate the length of both.  */
+#define PROC_PID_FD_STRLEN (_STRLEN ("/proc/") + DECIMAL_STR_MAX (pid_t) \
+                            + _STRLEN ("/fd/") + DECIMAL_STR_MAX (int))
+
+/* A buffer long enough to hold either /proc/self/fd/$FD or a /proc/$PID/fd/$FD path.  */
+typedef char proc_fd_path_t[PROC_PID_FD_STRLEN];
+
+#undef _STRLEN
+
+static inline void
+get_proc_fd_path (proc_fd_path_t path, pid_t pid, int fd)
+{
+  const size_t max_len = sizeof (proc_fd_path_t);
+  size_t n;
+
+  if (pid)
+    n = snprintf (path, max_len, "/proc/%d/fd/%d", pid, fd);
+  else
+    n = snprintf (path, max_len, "/proc/self/fd/%d", fd);
+
+  if (UNLIKELY (n >= max_len))
+    abort ();
+}
+
+static inline void
+get_proc_self_fd_path (proc_fd_path_t path, int fd)
+{
+  get_proc_fd_path (path, 0, fd);
+}
+
 #endif
