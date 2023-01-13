@@ -880,7 +880,7 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
   /* NUL terminate the buffer.  */
   allocated = size + 1;
   if (size == 0)
-    allocated = 4096;
+    allocated = 1023;
   buf = xmalloc (allocated + 1);
   nread = 0;
   while ((size && nread < (size_t) size) || size == 0)
