@@ -75,7 +75,7 @@ let
       export LDFLAGS='-s -w -static-libgcc -static'
       export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
       export CRUN_LDFLAGS='-all-static'
-      export LIBS='${criu}/lib/libcriu.a ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${protobufc}/lib/libprotobuf-c.a ${protobuf}/lib/libprotobuf.a ${lib.getLib systemd}/lib/libsystemd.a ${yajl}/lib/libyajl_s.a'
+      export LIBS='${criu}/lib/libcriu.a ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${protobufc}/lib/libprotobuf-c.a ${lib.getLib systemd}/lib/libsystemd.a ${yajl}/lib/libyajl_s.a'
     '';
     buildPhase = ''
       patchShebangs .
