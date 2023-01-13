@@ -962,14 +962,34 @@ write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_confi
       ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.cpus", cpu->cpus, strlen (cpu->cpus),
                                                  err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (! cgroup2 && errno == ENOENT)
+            {
+              crun_error_release (err);
+
+              ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpus", cpu->cpus, strlen (cpu->cpus),
+                                                         err);
+            }
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
   if (cpu->mems)
     {
       ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.mems", cpu->mems, strlen (cpu->mems),
                                                  err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (! cgroup2 && errno == ENOENT)
+            {
+              crun_error_release (err);
+
+              ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "mems", cpu->mems, strlen (cpu->mems),
+                                                         err);
+            }
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
   return 0;
 }
