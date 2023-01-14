@@ -4,6 +4,7 @@ let
   pkgs = (import ./nixpkgs.nix {
     config = {
       packageOverrides = pkg: {
+        gcrypt = (static pkg.libgcrypt);
         criu = (static pkg.criu);
         gpgme = (static pkg.gpgme);
         libassuan = (static pkg.libassuan);
@@ -58,6 +59,7 @@ let
       which
     ];
     buildInputs = [
+      gcrypt
       criu
       glibc
       glibc.static
@@ -73,7 +75,7 @@ let
       export LDFLAGS='-s -w -static-libgcc -static'
       export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
       export CRUN_LDFLAGS='-all-static'
-      export LIBS='${criu}/lib/libcriu.a ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.getLib systemd}/lib/libsystemd.a ${yajl}/lib/libyajl_s.a'
+      export LIBS='${criu}/lib/libcriu.a ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.getLib systemd}/lib/libsystemd.a ${yajl}/lib/libyajl_s.a ${gcrypt}/lib/libgcrypt.a'
     '';
     buildPhase = ''
       patchShebangs .
