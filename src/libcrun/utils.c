@@ -900,6 +900,14 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
           buf = xrealloc (buf, allocated + 1);
         }
     }
+  if (nread + 1 < allocated)
+    {
+      /* shrink the buffer to the used size if it was allocated a bigger block.  */
+      char *tmp = realloc (buf, nread + 1);
+      if (tmp)
+        buf = tmp;
+    }
+
   buf[nread] = '\0';
   *out = buf;
   buf = NULL;
