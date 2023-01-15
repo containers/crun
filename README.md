@@ -3,6 +3,7 @@
 </p>
 
 [![Coverity Status](https://scan.coverity.com/projects/17787/badge.svg)](https://scan.coverity.com/projects/giuseppe-crun)
+[![CodeQL](https://github.com/containers/crun/workflows/CodeQL/badge.svg)](https://github.com/containers/crun/actions?query=workflow%3ACodeQL)
 
 A fast and low-memory footprint OCI Container Runtime fully written in
 C.
