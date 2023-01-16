@@ -5,6 +5,8 @@ set -xeuo pipefail
 SKIP_GPG=${SKIP_GPG:-}
 SKIP_CHECKS=${SKIP_CHECKS:-}
 
+NIX_IMAGE=${NIX_IMAGE:-nixos/nix:2.12.0}
+
 test -e Makefile && make distclean
 
 ./autogen.sh
@@ -41,27 +43,41 @@ RUNTIME_EXTRA_ARGS=${RUNTIME_EXTRA_ARGS:-}
 
 mkdir -p /nix
 
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
-    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/
+NIX_ARGS="--extra-experimental-features nix-command --print-build-logs --option cores $(nproc) --option max-jobs $(nproc)"
+
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64
 
 rm -rf result
 
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
-    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/ --arg enableSystemd false
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/ --arg enableSystemd false
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64-disable-systemd
 
 rm -rf result
 
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
-    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/default-arm64.nix
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/default-arm64.nix
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64
 
 rm -rf result
 
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} nixos/nix:2.3.12 \
-    nix --print-build-logs --option cores 8 --option max-jobs 8 build --file nix/default-arm64.nix --arg enableSystemd false
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/default-arm64.nix --arg enableSystemd false
 cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64-disable-systemd
+
+rm -rf result
+
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/default-ppc64le.nix
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-ppc64le
+
+rm -rf result
+
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/default-ppc64le.nix --arg enableSystemd false
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-ppc64le-disable-systemd
 
 rm -rf result
 
