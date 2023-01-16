@@ -112,7 +112,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
-	src/libcrun/intprops.h crun.1.md crun.1 libcrun.lds
+	crun.1.md crun.1 libcrun.lds
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
