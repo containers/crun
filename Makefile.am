@@ -145,7 +145,7 @@ PY_LOG_COMPILER = $(PYTHON)
 PY_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 
-TESTS = tests/test_capabilities.py \
+PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_cwd.py \
 	tests/test_checkpoint_restore.py \
 	tests/test_devices.py \
@@ -166,8 +166,9 @@ TESTS = tests/test_capabilities.py \
 	tests/test_resources.py \
 	tests/test_start.py \
 	tests/test_exec.py \
-	tests/test_seccomp.py \
-	$(UNIT_TESTS)
+	tests/test_seccomp.py
+
+TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
 
 .version:
 	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@
@@ -185,7 +186,7 @@ dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 	$(AM__GEN)cp git-version.h $(distdir)/git-version.h
 
-EXTRA_DIST += $(TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf src/libcrun/mount_flags.perf
+EXTRA_DIST += $(PYTHON_TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen .version git-version.h src/libcrun/signals.perf src/libcrun/mount_flags.perf
 BUILT_SOURCES = .version git-version.h
 
 man1_MANS = crun.1
