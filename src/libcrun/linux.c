@@ -4146,10 +4146,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   int ret;
   const char success = 0;
 
-  ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
-
   if (init_status->idx_pidns_to_join_immediately >= 0 || init_status->idx_timens_to_join_immediately >= 0)
     {
       pid_t new_pid;
@@ -4295,6 +4291,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
             return ret;
         }
     }
+
+  ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
 
   if (init_status->must_fork)
     {
