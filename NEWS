@@ -1,3 +1,15 @@
+* crun-1.8
+
+- linux: precreate devices on the host.
+- cgroup: support cpuset mounted with noprefix.
+- linux: mount the source cgroup if cgroupns=host.
+- libcrun: don't clone self from read-only mount.
+- build: fix build without dlfcn.h.
+- linux: set PR_SET_DUMPABLE.
+- utils: fix applying AppArmor profile.
+- linux: write setgroups=deny when mapping a single uid/gid.
+- cgroup: fix enter cgroupv1 mount on RHEL 7.
+
 * crun-1.7.2
 
 - criu: hardcode library name to libcriu.so.2.
