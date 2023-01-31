@@ -2309,6 +2309,16 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (container_args.custom_handler && container_args.custom_handler->modify_oci_configuration)
+    {
+      ret = container_args.custom_handler->modify_oci_configuration (container_args.handler_cookie,
+                                                                     container_args.context,
+                                                                     container->container_def,
+                                                                     err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, &cgroup_dirfd_s, err);
   if (UNLIKELY (pid < 0))
     return pid;
