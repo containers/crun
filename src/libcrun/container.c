@@ -977,15 +977,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
 
-  ret = libcrun_configure_handler (entrypoint_args->context->handler_manager,
-                                   entrypoint_args->context,
-                                   container,
-                                   &(entrypoint_args->custom_handler),
-                                   &(entrypoint_args->handler_cookie),
-                                   err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   ret = initialize_security (def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2308,6 +2299,15 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   cgroup_dirfd_s.dirfd = &cgroup_dirfd;
   cgroup_dirfd_s.joined = false;
+
+  ret = libcrun_configure_handler (container_args.context->handler_manager,
+                                   container_args.context,
+                                   container,
+                                   &(container_args.custom_handler),
+                                   &(container_args.handler_cookie),
+                                   err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, &cgroup_dirfd_s, err);
   if (UNLIKELY (pid < 0))
