@@ -101,6 +101,9 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   con->argc = glob->argc;
   con->argv = glob->argv;
 
+  /* Check if global handler is configured and pass it down to crun context */
+  con->handler = glob->handler;
+
   ret = libcrun_init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
   if (UNLIKELY (ret < 0))
     return ret;
