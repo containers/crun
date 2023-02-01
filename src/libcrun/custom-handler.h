@@ -20,6 +20,7 @@
 #define CUSTOM_HANDLER_H
 
 #include "container.h"
+#include "utils.h"
 #include <stdio.h>
 
 struct custom_handler_s
@@ -68,5 +69,26 @@ LIBCRUN_PUBLIC int libcrun_configure_handler (struct custom_handler_manager_s *m
                                               libcrun_error_t *err);
 
 typedef struct custom_handler_s *(*run_oci_get_handler_cb) ();
+
+#define cleanup_custom_handler_instance __attribute__ ((cleanup (cleanup_custom_handler_instancep)))
+
+static inline void
+cleanup_custom_handler_instancep (struct custom_handler_instance_s **p)
+{
+  struct custom_handler_instance_s *handler = (struct custom_handler_instance_s *) *p;
+  if (handler)
+    {
+      if (handler->vtable)
+        {
+          libcrun_error_t tmp_err = NULL;
+          int tmp_ret;
+
+          tmp_ret = handler->vtable->unload (handler->cookie, &tmp_err);
+          if (UNLIKELY (tmp_ret < 0))
+            crun_error_release (&tmp_err);
+        }
+      free (handler);
+    }
+}
 
 #endif
