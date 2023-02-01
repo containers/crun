@@ -3519,7 +3519,9 @@ int
 libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len arg_unused,
                           libcrun_error_t *err)
 {
+  cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
   runtime_spec_schema_config_linux_resources *resources = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
   struct parser_context ctx = { 0, stderr };
   libcrun_container_status_t status = {};
@@ -3528,6 +3530,18 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_configure_handler (context->handler_manager,
+                                   context,
+                                   container,
+                                   &custom_handler,
+                                   err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3540,6 +3554,23 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
     {
       ret = crun_make_error (err, errno, "cannot parse resources");
       goto cleanup;
+    }
+
+  if (custom_handler && custom_handler->vtable->modify_oci_configuration)
+    {
+      /* Adapt RESOURCES to be used from the modify_oci_configuration hook.  */
+      cleanup_free runtime_spec_schema_config_linux *linux = xmalloc0 (sizeof (*linux));
+      cleanup_free runtime_spec_schema_config_schema *def = xmalloc0 (sizeof (*def));
+
+      def->linux = linux;
+      linux->resources = resources;
+
+      ret = custom_handler->vtable->modify_oci_configuration (custom_handler->cookie,
+                                                              context,
+                                                              def,
+                                                              err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = libcrun_linux_container_update (&status, resources, err);
