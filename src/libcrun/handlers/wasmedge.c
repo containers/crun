@@ -168,7 +168,7 @@ struct custom_handler_s handler_wasmedge = {
   .feature_string = "WASM:wasmedge",
   .load = libwasmedge_load,
   .unload = libwasmedge_unload,
-  .exec_func = libwasmedge_exec,
+  .run_func = libwasmedge_exec,
   .can_handle_container = wasmedge_can_handle_container,
 };
 

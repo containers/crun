@@ -353,7 +353,7 @@ struct custom_handler_s handler_libkrun = {
   .feature_string = "LIBKRUN",
   .load = libkrun_load,
   .unload = libkrun_unload,
-  .exec_func = libkrun_exec,
+  .run_func = libkrun_exec,
   .configure_container = libkrun_configure_container,
   .modify_oci_configuration = libkrun_modify_oci_configuration,
 };

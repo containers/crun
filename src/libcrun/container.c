@@ -1439,7 +1439,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = entrypoint_args->custom_handler->vtable->exec_func (entrypoint_args->custom_handler->cookie,
+      ret = entrypoint_args->custom_handler->vtable->run_func (entrypoint_args->custom_handler->cookie,
                                                                 entrypoint_args->container,
                                                                 exec_path,
                                                                 def->process->args);

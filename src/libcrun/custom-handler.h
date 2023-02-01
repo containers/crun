@@ -33,7 +33,7 @@ struct custom_handler_s
   int (*load) (void **cookie, libcrun_error_t *err);
   int (*unload) (void *cookie, libcrun_error_t *err);
 
-  int (*exec_func) (void *cookie, libcrun_container_t *container,
+  int (*run_func) (void *cookie, libcrun_container_t *container,
                     const char *pathname, char *const argv[]);
 
   int (*configure_container) (void *cookie, enum handler_configure_phase phase,

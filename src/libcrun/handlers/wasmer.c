@@ -284,7 +284,7 @@ struct custom_handler_s handler_wasmer = {
   .feature_string = "WASM:wasmer",
   .load = libwasmer_load,
   .unload = libwasmer_unload,
-  .exec_func = libwasmer_exec,
+  .run_func = libwasmer_exec,
   .can_handle_container = libwasmer_can_handle_container,
 };
 
