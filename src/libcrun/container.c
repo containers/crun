@@ -3516,18 +3516,42 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 }
 
 int
-libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len,
+libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len arg_unused,
                           libcrun_error_t *err)
 {
-  int ret;
-  libcrun_container_status_t status = {};
+  runtime_spec_schema_config_linux_resources *resources = NULL;
   const char *state_root = context->state_root;
+  struct parser_context ctx = { 0, stderr };
+  libcrun_container_status_t status = {};
+  parser_error parser_err = NULL;
+  yajl_val tree = NULL;
+  int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return libcrun_linux_container_update (&status, content, len, err);
+  ret = parse_json_file (&tree, content, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
+  if (UNLIKELY (resources == NULL))
+    {
+      ret = crun_make_error (err, errno, "cannot parse resources");
+      goto cleanup;
+    }
+
+  ret = libcrun_linux_container_update (&status, resources, err);
+
+cleanup:
+  if (tree)
+    yajl_tree_free (tree);
+  free (parser_err);
+  if (resources)
+    free_runtime_spec_schema_config_linux_resources (resources);
+
+  return ret;
 }
 
 int
