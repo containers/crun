@@ -55,11 +55,17 @@ LIBCRUN_PUBLIC void handler_manager_free (struct custom_handler_manager_s *manag
 LIBCRUN_PUBLIC struct custom_handler_s *handler_by_name (struct custom_handler_manager_s *manager, const char *name);
 LIBCRUN_PUBLIC void libcrun_handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out);
 
+struct custom_handler_instance_s
+{
+  struct custom_handler_s *vtable;
+  void *cookie;
+};
+
 LIBCRUN_PUBLIC int libcrun_configure_handler (struct custom_handler_manager_s *manager,
                                               libcrun_context_t *context,
                                               libcrun_container_t *container,
-                                              struct custom_handler_s **out,
-                                              void **cookie, libcrun_error_t *err);
+                                              struct custom_handler_instance_s **out,
+                                              libcrun_error_t *err);
 
 typedef struct custom_handler_s *(*run_oci_get_handler_cb) ();
 

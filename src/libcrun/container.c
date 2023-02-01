@@ -78,8 +78,7 @@ struct container_entrypoint_s
   int hooks_out_fd;
   int hooks_err_fd;
 
-  struct custom_handler_s *custom_handler;
-  void *handler_cookie;
+  struct custom_handler_instance_s *custom_handler;
 };
 
 struct sync_socket_message_s
@@ -949,12 +948,16 @@ libcrun_container_notify_handler (struct container_entrypoint_s *args,
                                   libcrun_container_t *container, const char *rootfs,
                                   libcrun_error_t *err)
 {
-  struct custom_handler_s *h = args->custom_handler;
+  struct custom_handler_s *h;
 
+  if (args->custom_handler == NULL)
+    return 0;
+
+  h = args->custom_handler->vtable;
   if (h == NULL || h->configure_container == NULL)
     return 0;
 
-  return h->configure_container (args->handler_cookie, phase,
+  return h->configure_container (args->custom_handler->cookie, phase,
                                  args->context, container,
                                  rootfs, err);
 }
@@ -1414,12 +1417,12 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      prctl (PR_SET_NAME, entrypoint_args->custom_handler->name);
+      prctl (PR_SET_NAME, entrypoint_args->custom_handler->vtable->name);
 
       if (entrypoint_args->context->argv)
         {
           rewrite_argv (entrypoint_args->context->argv, entrypoint_args->context->argc,
-                        entrypoint_args->custom_handler->name, def->process->args,
+                        entrypoint_args->custom_handler->vtable->name, def->process->args,
                         def->process->args_len);
 
           /* It is a quite destructive operation as we might be referencing data from the old
@@ -1436,12 +1439,12 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = entrypoint_args->custom_handler->exec_func (entrypoint_args->handler_cookie,
-                                                        entrypoint_args->container,
-                                                        exec_path,
-                                                        def->process->args);
+      ret = entrypoint_args->custom_handler->vtable->exec_func (entrypoint_args->custom_handler->cookie,
+                                                                entrypoint_args->container,
+                                                                exec_path,
+                                                                def->process->args);
       if (ret != 0)
-        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->name);
+        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->vtable->name);
 
       return ret;
     }
@@ -2182,7 +2185,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .hooks_err_fd = -1,
     .seccomp_receiver_fd = -1,
     .custom_handler = NULL,
-    .handler_cookie = NULL,
   };
   cleanup_close int cgroup_dirfd = -1;
   struct libcrun_dirfd_s cgroup_dirfd_s;
@@ -2304,17 +2306,16 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
                                    container_args.context,
                                    container,
                                    &(container_args.custom_handler),
-                                   &(container_args.handler_cookie),
                                    err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (container_args.custom_handler && container_args.custom_handler->modify_oci_configuration)
+  if (container_args.custom_handler && container_args.custom_handler->vtable->modify_oci_configuration)
     {
-      ret = container_args.custom_handler->modify_oci_configuration (container_args.handler_cookie,
-                                                                     container_args.context,
-                                                                     container->container_def,
-                                                                     err);
+      ret = container_args.custom_handler->vtable->modify_oci_configuration (container_args.custom_handler->cookie,
+                                                                             container_args.context,
+                                                                             container->container_def,
+                                                                             err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
