@@ -1440,9 +1440,9 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
         return ret;
 
       ret = entrypoint_args->custom_handler->vtable->run_func (entrypoint_args->custom_handler->cookie,
-                                                                entrypoint_args->container,
-                                                                exec_path,
-                                                                def->process->args);
+                                                               entrypoint_args->container,
+                                                               exec_path,
+                                                               def->process->args);
       if (ret != 0)
         return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->vtable->name);
 
@@ -3077,6 +3077,7 @@ exec_process_entrypoint (libcrun_context_t *context,
                          int pipefd1,
                          int seccomp_fd,
                          int seccomp_receiver_fd,
+                         struct custom_handler_instance_s *custom_handler,
                          libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
@@ -3252,6 +3253,22 @@ exec_process_entrypoint (libcrun_context_t *context,
   TEMP_FAILURE_RETRY (close (pipefd1));
   pipefd1 = -1;
 
+  if (custom_handler)
+    {
+      if (custom_handler->vtable->exec_func == NULL)
+        return crun_make_error (err, 0, "the handler does not support exec");
+
+      ret = custom_handler->vtable->exec_func (custom_handler->cookie,
+                                               container,
+                                               exec_path,
+                                               process->args);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      _exit (EXIT_FAILURE);
+      return 0;
+    }
+
   TEMP_FAILURE_RETRY (execv (exec_path, process->args));
   libcrun_fail_with_error (errno, "exec");
   _exit (EXIT_FAILURE);
@@ -3264,6 +3281,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                      struct libcrun_container_exec_options_s *opts,
                                      libcrun_error_t *err)
 {
+  cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
   int container_status, ret;
   bool container_paused = false;
   pid_t pid;
@@ -3325,6 +3343,14 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   if (UNLIKELY (container_paused))
     return crun_make_error (err, 0, "the container `%s` is paused", id);
+
+  ret = libcrun_configure_handler (context->handler_manager,
+                                   context,
+                                   container,
+                                   &custom_handler,
+                                   err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
@@ -3425,7 +3451,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
 
-      exec_process_entrypoint (context, container, process, pipefd1, seccomp_fd, seccomp_receiver_fd, err);
+      exec_process_entrypoint (context, container, process, pipefd1, seccomp_fd, seccomp_receiver_fd, custom_handler, err);
       /* It gets here only on errors.  */
       if (*err)
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
