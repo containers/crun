@@ -494,6 +494,20 @@ Specify which CRIU manage cgroup mode should be used. Permitted values are
 
 
 .SH Extensions to OCI
+.SH \fB\fCrun.oci.mount_context_type=context\fR
+.PP
+Set the mount context type on volumes mounted with SELinux labels.
+
+.PP
+Valid context types are:
+  context (default)
+  fscontext
+  defcontext
+  rootcontext
+
+.PP
+More information on how the context mount flags works see the \fB\fCmount(8)\fR man page.
+
 .SH \fB\fCrun.oci.seccomp.receiver=PATH\fR
 .PP
 If the annotation \fB\fCrun.oci.seccomp.receiver=PATH\fR is specified, the
