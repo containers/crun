@@ -55,8 +55,6 @@
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
 
-extern char *contex_type
-
 __attribute__ ((malloc)) static inline void *
 xmalloc (size_t size)
 {
