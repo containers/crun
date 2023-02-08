@@ -1143,7 +1143,11 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (label_how == LABEL_MOUNT)
     {
-      ret = add_selinux_mount_label (&data_with_label, data, label, err);
+      const char *context_type = find_annotation (container, "run.oci.mount_context_type");
+      if (! context_type)
+        context_type = "context";
+
+      ret = add_selinux_mount_label (&data_with_label, data, label, context_type, err);
       if (ret < 0)
         return ret;
       data = data_with_label;

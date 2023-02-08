@@ -64,7 +64,6 @@ Checkpoint a running container using CRIU
 
 **restore**
 Restore a container from a checkpoint
-
 # STATE
 
 By default, when running as root user, crun saves its state under the
@@ -388,6 +387,18 @@ Specify which CRIU manage cgroup mode should be used. Permitted values are
 **soft**, **ignore**, **full** or **strict**. Default is **soft**.
 
 # Extensions to OCI
+
+## `run.oci.mount_context_type=context`
+
+Set the mount context type on volumes mounted with SELinux labels.
+
+Valid context types are:
+  context (default)
+  fscontext
+  defcontext
+  rootcontext
+
+More information on how the context mount flags works see the `mount(8)` man page.
 
 ## `run.oci.seccomp.receiver=PATH`
 

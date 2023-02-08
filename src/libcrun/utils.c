@@ -767,7 +767,7 @@ libcrun_is_selinux_enabled (libcrun_error_t *err)
 }
 
 int
-add_selinux_mount_label (char **retlabel, const char *data, const char *label, libcrun_error_t *err arg_unused)
+add_selinux_mount_label (char **retlabel, const char *data, const char *label, const char *context_type, libcrun_error_t *err arg_unused)
 {
   int ret;
 
@@ -778,9 +778,9 @@ add_selinux_mount_label (char **retlabel, const char *data, const char *label, l
   if (label && ret)
     {
       if (data && *data)
-        xasprintf (retlabel, "%s,context=\"%s\"", data, label);
+        xasprintf (retlabel, "%s,%s=\"%s\"", data, context_type, label);
       else
-        xasprintf (retlabel, "context=\"%s\"", label);
+        xasprintf (retlabel, "%s=\"%s\"", context_type, label);
       return 0;
     }
   *retlabel = xstrdup (data);
