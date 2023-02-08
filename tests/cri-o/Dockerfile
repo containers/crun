@@ -32,7 +32,7 @@ RUN yum install -y python git gcc automake autoconf libcap-devel \
     git clone https://github.com/kubernetes-sigs/cri-tools && \
     cd /root/go/src/github.com/kubernetes-sigs/cri-tools && \
     make && \
-    cp build/bin/crictl /usr/local/bin/)
+    cp build/bin/linux/*/crictl /usr/local/bin/)
 
 COPY run-tests.sh /usr/local/bin
 WORKDIR /root/go/src/github.com/cri-o/cri-o
