@@ -66,6 +66,8 @@
 
 #define MAX_READLINKS 32
 
+char *context_type="context"
+
 static int
 syscall_close_range (unsigned int fd, unsigned int max_fd, unsigned int flags)
 {
@@ -778,9 +780,9 @@ add_selinux_mount_label (char **retlabel, const char *data, const char *label, l
   if (label && ret)
     {
       if (data && *data)
-        xasprintf (retlabel, "%s,context=\"%s\"", data, label);
+	xasprintf (retlabel, "%s,%s=\"%s\"", data, context_type, label);
       else
-        xasprintf (retlabel, "context=\"%s\"", label);
+        xasprintf (retlabel, "%s=\"%s\"", context_type,label);
       return 0;
     }
   *retlabel = xstrdup (data);

@@ -2198,6 +2198,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
 
+  char *annotation = find_annotation (container, "run.oci.mount_context_type");
+  if (annotation)
+    {
+	    context_type=annotation
+    }
+
+
   if (def->hooks
       && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
           || def->hooks->create_container_len || def->hooks->start_container_len))
