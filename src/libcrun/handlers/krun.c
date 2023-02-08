@@ -322,7 +322,8 @@ libkrun_modify_oci_configuration (void *cookie, libcrun_context_t *context,
                                   libcrun_error_t *err)
 {
   const size_t device_size = sizeof (runtime_spec_schema_defs_linux_device_cgroup);
-  struct stat st;
+  struct stat st_kvm, st_sev;
+  bool has_sev = true;
   size_t len;
   int ret;
 
@@ -332,17 +333,27 @@ libkrun_modify_oci_configuration (void *cookie, libcrun_context_t *context,
 
   /* Always allow the /dev/kvm device.  */
 
-  ret = stat ("/dev/kvm", &st);
+  ret = stat ("/dev/kvm", &st_kvm);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "stat `/dev/kvm`");
 
+  ret = stat ("/dev/sev", &st_sev);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno != ENOENT)
+        return crun_make_error (err, errno, "stat `/dev/sev`");
+      has_sev = false;
+    }
+
   len = def->linux->resources->devices_len;
   def->linux->resources->devices = xrealloc (def->linux->resources->devices,
-                                             device_size * (len + 2));
+                                             device_size * (len + 2 + (has_sev ? 1 : 0)));
 
-  def->linux->resources->devices[len] = make_oci_spec_dev ("a", st.st_rdev, true, "rwm");
+  def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_kvm.st_rdev, true, "rwm");
+  if (has_sev)
+    def->linux->resources->devices[len + 1] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
 
-  def->linux->resources->devices_len++;
+  def->linux->resources->devices_len += has_sev ? 2 : 1;
 
   return 0;
 }
