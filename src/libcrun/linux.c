@@ -2153,7 +2153,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
  * libcrun_container_do_bind_mount
  *
  *  Allows external plugins and handlers to perform bind `mounts` on container.
- *  returns: 0 if successful anything else states `error` and configures `err` with relevent error.
+ *  returns: 0 if successful anything else states `error` and configures `err` with relevant error.
  */
 int
 libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_source, char *mount_destination, char **mount_options, size_t mount_options_len, libcrun_error_t *err)

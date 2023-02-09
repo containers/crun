@@ -173,7 +173,7 @@ jobs:
               ;;
               codespell)
                   sudo docker build -t crun-codespell tests/codespell
-                  sudo docker run --rm -w /crun -v ${PWD}/crun:/crun crun-codespell codespell
+                  sudo docker run --rm -w /crun -v ${PWD}:/crun crun-codespell codespell -q 0
               ;;
               wasmedge-build)
                   sudo docker build -t wasmedge tests/wasmedge-build
