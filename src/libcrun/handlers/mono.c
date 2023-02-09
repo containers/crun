@@ -169,7 +169,7 @@ struct custom_handler_s handler_mono = {
   .feature_string = ".NET:mono",
   .load = mono_load,
   .unload = mono_unload,
-  .exec_func = mono_exec,
+  .run_func = mono_exec,
   .can_handle_container = mono_can_handle_container,
   .configure_container = mono_configure_container,
 };

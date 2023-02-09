@@ -214,17 +214,26 @@ libcrun_handler_manager_print_feature_tags (struct custom_handler_manager_s *man
       fprintf (out, "+%s ", manager->handlers[i]->feature_string);
 }
 
+static inline struct custom_handler_instance_s *
+make_custom_handler_instance_s (struct custom_handler_s *vtable)
+{
+  struct custom_handler_instance_s *ret = xmalloc0 (sizeof (struct custom_handler_instance_s));
+
+  ret->vtable = vtable;
+  ret->cookie = NULL;
+
+  return ret;
+}
+
 static int
 find_handler_for_container (struct custom_handler_manager_s *manager,
                             libcrun_container_t *container,
-                            struct custom_handler_s **out,
-                            void **cookie,
+                            struct custom_handler_instance_s **out,
                             libcrun_error_t *err)
 {
   size_t i;
 
-  *out = NULL;
-  *cookie = NULL;
+  memset (out, 0, sizeof (*out));
 
   for (i = 0; i < manager->handlers_len; i++)
     {
@@ -239,9 +248,9 @@ find_handler_for_container (struct custom_handler_manager_s *manager,
 
       if (ret)
         {
-          *out = manager->handlers[i];
-          if ((*out)->load)
-            return (*out)->load (cookie, err);
+          *out = make_custom_handler_instance_s (manager->handlers[i]);
+          if ((*out)->vtable->load)
+            return (*out)->vtable->load (&((*out)->cookie), err);
 
           return 0;
         }
@@ -254,15 +263,13 @@ int
 libcrun_configure_handler (struct custom_handler_manager_s *manager,
                            libcrun_context_t *context,
                            libcrun_container_t *container,
-                           struct custom_handler_s **out,
-                           void **cookie,
+                           struct custom_handler_instance_s **out,
                            libcrun_error_t *err)
 {
   const char *explicit_handler;
   const char *annotation;
 
   *out = NULL;
-  *cookie = NULL;
 
   // Kubernetes sandbox containers must be executed as regular process
   // Example sandbox container can contain pause process
@@ -283,22 +290,23 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
   /* If an explicit handler was requested, use it.  */
   if (explicit_handler)
     {
+      struct custom_handler_s *h;
+
       if (manager == NULL)
         return crun_make_error (err, 0, "handler requested but no manager configured: `%s`", context->handler);
 
-      *out = handler_by_name (manager, explicit_handler);
-      if (*out)
+      h = handler_by_name (manager, explicit_handler);
+      if (h)
         {
-          if ((*out)->load)
-            return (*out)->load (cookie, err);
+          *out = make_custom_handler_instance_s (h);
+          if ((*out)->vtable->load)
+            return (*out)->vtable->load (&((*out)->cookie), err);
           return 0;
         }
-
-      return find_handler_for_container (manager, container, out, cookie, err);
     }
 
   if (manager == NULL)
     return 0;
 
-  return find_handler_for_container (manager, container, out, cookie, err);
+  return find_handler_for_container (manager, container, out, err);
 }

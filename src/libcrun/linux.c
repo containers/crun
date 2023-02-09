@@ -5050,39 +5050,13 @@ exit:
 }
 
 int
-libcrun_linux_container_update (libcrun_container_status_t *status, const char *content, size_t len arg_unused,
-                                libcrun_error_t *err)
+libcrun_linux_container_update (libcrun_container_status_t *status, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
 {
-  int ret;
-  yajl_val tree = NULL;
-  parser_error parser_err = NULL;
-  runtime_spec_schema_config_linux_resources *resources = NULL;
-  struct parser_context ctx = { 0, stderr };
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
-
-  ret = parse_json_file (&tree, content, &ctx, err);
-  if (UNLIKELY (ret < 0))
-    return -1;
-
-  resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
-  if (UNLIKELY (resources == NULL))
-    {
-      ret = crun_make_error (err, errno, "cannot parse resources");
-      goto cleanup;
-    }
 
   cgroup_status = libcrun_cgroup_make_status (status);
 
-  ret = libcrun_update_cgroup_resources (cgroup_status, resources, err);
-
-cleanup:
-  if (tree)
-    yajl_tree_free (tree);
-  free (parser_err);
-  if (resources)
-    free_runtime_spec_schema_config_linux_resources (resources);
-
-  return ret;
+  return libcrun_update_cgroup_resources (cgroup_status, resources, err);
 }
 
 static int

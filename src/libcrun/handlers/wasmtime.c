@@ -292,7 +292,7 @@ struct custom_handler_s handler_wasmtime = {
   .feature_string = "WASM:wasmtime",
   .load = libwasmtime_load,
   .unload = libwasmtime_unload,
-  .exec_func = libwasmtime_exec,
+  .run_func = libwasmtime_exec,
   .can_handle_container = libwasmtime_can_handle_container,
 };
 

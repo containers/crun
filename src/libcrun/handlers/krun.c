@@ -27,8 +27,10 @@
 #include <errno.h>
 #include <sys/param.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <ocispec/runtime_spec_schema_config_schema.h>
 
 #ifdef HAVE_DLOPEN
 #  include <dlfcn.h>
@@ -293,14 +295,78 @@ libkrun_unload (void *cookie, libcrun_error_t *err arg_unused)
   return 0;
 }
 
+static runtime_spec_schema_defs_linux_device_cgroup *
+make_oci_spec_dev (const char *type, dev_t device, bool allow, const char *access)
+{
+  runtime_spec_schema_defs_linux_device_cgroup *dev = xmalloc0 (sizeof (*dev));
+
+  dev->allow = allow;
+  dev->allow_present = 1;
+
+  dev->type = xstrdup (type);
+
+  dev->major = major (device);
+  dev->major_present = 1;
+
+  dev->minor = minor (device);
+  dev->minor_present = 1;
+
+  dev->access = xstrdup (access);
+
+  return dev;
+}
+
+static int
+libkrun_modify_oci_configuration (void *cookie, libcrun_context_t *context,
+                                  runtime_spec_schema_config_schema *def,
+                                  libcrun_error_t *err)
+{
+  const size_t device_size = sizeof (runtime_spec_schema_defs_linux_device_cgroup);
+  struct stat st_kvm, st_sev;
+  bool has_sev = true;
+  size_t len;
+  int ret;
+
+  if (def->linux == NULL || def->linux->resources == NULL
+      || def->linux->resources->devices == NULL)
+    return 0;
+
+  /* Always allow the /dev/kvm device.  */
+
+  ret = stat ("/dev/kvm", &st_kvm);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "stat `/dev/kvm`");
+
+  ret = stat ("/dev/sev", &st_sev);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno != ENOENT)
+        return crun_make_error (err, errno, "stat `/dev/sev`");
+      has_sev = false;
+    }
+
+  len = def->linux->resources->devices_len;
+  def->linux->resources->devices = xrealloc (def->linux->resources->devices,
+                                             device_size * (len + 2 + (has_sev ? 1 : 0)));
+
+  def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_kvm.st_rdev, true, "rwm");
+  if (has_sev)
+    def->linux->resources->devices[len + 1] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
+
+  def->linux->resources->devices_len += has_sev ? 2 : 1;
+
+  return 0;
+}
+
 struct custom_handler_s handler_libkrun = {
   .name = "krun",
   .alias = NULL,
   .feature_string = "LIBKRUN",
   .load = libkrun_load,
   .unload = libkrun_unload,
-  .exec_func = libkrun_exec,
+  .run_func = libkrun_exec,
   .configure_container = libkrun_configure_container,
+  .modify_oci_configuration = libkrun_modify_oci_configuration,
 };
 
 #endif

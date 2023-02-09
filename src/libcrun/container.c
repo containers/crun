@@ -78,8 +78,7 @@ struct container_entrypoint_s
   int hooks_out_fd;
   int hooks_err_fd;
 
-  struct custom_handler_s *custom_handler;
-  void *handler_cookie;
+  struct custom_handler_instance_s *custom_handler;
 };
 
 struct sync_socket_message_s
@@ -949,12 +948,16 @@ libcrun_container_notify_handler (struct container_entrypoint_s *args,
                                   libcrun_container_t *container, const char *rootfs,
                                   libcrun_error_t *err)
 {
-  struct custom_handler_s *h = args->custom_handler;
+  struct custom_handler_s *h;
 
+  if (args->custom_handler == NULL)
+    return 0;
+
+  h = args->custom_handler->vtable;
   if (h == NULL || h->configure_container == NULL)
     return 0;
 
-  return h->configure_container (args->handler_cookie, phase,
+  return h->configure_container (args->custom_handler->cookie, phase,
                                  args->context, container,
                                  rootfs, err);
 }
@@ -976,15 +979,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   runtime_spec_schema_config_schema_process_capabilities *capabilities;
   cleanup_free char *rootfs = NULL;
   int no_new_privs;
-
-  ret = libcrun_configure_handler (entrypoint_args->context->handler_manager,
-                                   entrypoint_args->context,
-                                   container,
-                                   &(entrypoint_args->custom_handler),
-                                   &(entrypoint_args->handler_cookie),
-                                   err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = initialize_security (def->process, err);
   if (UNLIKELY (ret < 0))
@@ -1423,12 +1417,12 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      prctl (PR_SET_NAME, entrypoint_args->custom_handler->name);
+      prctl (PR_SET_NAME, entrypoint_args->custom_handler->vtable->name);
 
       if (entrypoint_args->context->argv)
         {
           rewrite_argv (entrypoint_args->context->argv, entrypoint_args->context->argc,
-                        entrypoint_args->custom_handler->name, def->process->args,
+                        entrypoint_args->custom_handler->vtable->name, def->process->args,
                         def->process->args_len);
 
           /* It is a quite destructive operation as we might be referencing data from the old
@@ -1445,12 +1439,12 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = entrypoint_args->custom_handler->exec_func (entrypoint_args->handler_cookie,
-                                                        entrypoint_args->container,
-                                                        exec_path,
-                                                        def->process->args);
+      ret = entrypoint_args->custom_handler->vtable->run_func (entrypoint_args->custom_handler->cookie,
+                                                               entrypoint_args->container,
+                                                               exec_path,
+                                                               def->process->args);
       if (ret != 0)
-        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->name);
+        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->vtable->name);
 
       return ret;
     }
@@ -2191,7 +2185,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .hooks_err_fd = -1,
     .seccomp_receiver_fd = -1,
     .custom_handler = NULL,
-    .handler_cookie = NULL,
   };
   cleanup_close int cgroup_dirfd = -1;
   struct libcrun_dirfd_s cgroup_dirfd_s;
@@ -2308,6 +2301,24 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   cgroup_dirfd_s.dirfd = &cgroup_dirfd;
   cgroup_dirfd_s.joined = false;
+
+  ret = libcrun_configure_handler (container_args.context->handler_manager,
+                                   container_args.context,
+                                   container,
+                                   &(container_args.custom_handler),
+                                   err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (container_args.custom_handler && container_args.custom_handler->vtable->modify_oci_configuration)
+    {
+      ret = container_args.custom_handler->vtable->modify_oci_configuration (container_args.custom_handler->cookie,
+                                                                             container_args.context,
+                                                                             container->container_def,
+                                                                             err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   pid = libcrun_run_linux_container (container, container_init, &container_args, &sync_socket, &cgroup_dirfd_s, err);
   if (UNLIKELY (pid < 0))
@@ -3066,6 +3077,7 @@ exec_process_entrypoint (libcrun_context_t *context,
                          int pipefd1,
                          int seccomp_fd,
                          int seccomp_receiver_fd,
+                         struct custom_handler_instance_s *custom_handler,
                          libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
@@ -3241,6 +3253,22 @@ exec_process_entrypoint (libcrun_context_t *context,
   TEMP_FAILURE_RETRY (close (pipefd1));
   pipefd1 = -1;
 
+  if (custom_handler)
+    {
+      if (custom_handler->vtable->exec_func == NULL)
+        return crun_make_error (err, 0, "the handler does not support exec");
+
+      ret = custom_handler->vtable->exec_func (custom_handler->cookie,
+                                               container,
+                                               exec_path,
+                                               process->args);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      _exit (EXIT_FAILURE);
+      return 0;
+    }
+
   TEMP_FAILURE_RETRY (execv (exec_path, process->args));
   libcrun_fail_with_error (errno, "exec");
   _exit (EXIT_FAILURE);
@@ -3253,6 +3281,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                      struct libcrun_container_exec_options_s *opts,
                                      libcrun_error_t *err)
 {
+  cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
   int container_status, ret;
   bool container_paused = false;
   pid_t pid;
@@ -3314,6 +3343,14 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   if (UNLIKELY (container_paused))
     return crun_make_error (err, 0, "the container `%s` is paused", id);
+
+  ret = libcrun_configure_handler (context->handler_manager,
+                                   context,
+                                   container,
+                                   &custom_handler,
+                                   err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
@@ -3414,7 +3451,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
 
-      exec_process_entrypoint (context, container, process, pipefd1, seccomp_fd, seccomp_receiver_fd, err);
+      exec_process_entrypoint (context, container, process, pipefd1, seccomp_fd, seccomp_receiver_fd, custom_handler, err);
       /* It gets here only on errors.  */
       if (*err)
         libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
@@ -3505,18 +3542,73 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 }
 
 int
-libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len,
+libcrun_container_update (libcrun_context_t *context, const char *id, const char *content, size_t len arg_unused,
                           libcrun_error_t *err)
 {
-  int ret;
-  libcrun_container_status_t status = {};
+  cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
+  runtime_spec_schema_config_linux_resources *resources = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
+  struct parser_context ctx = { 0, stderr };
+  libcrun_container_status_t status = {};
+  parser_error parser_err = NULL;
+  yajl_val tree = NULL;
+  int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return libcrun_linux_container_update (&status, content, len, err);
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_configure_handler (context->handler_manager,
+                                   context,
+                                   container,
+                                   &custom_handler,
+                                   err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_json_file (&tree, content, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
+  if (UNLIKELY (resources == NULL))
+    {
+      ret = crun_make_error (err, errno, "cannot parse resources");
+      goto cleanup;
+    }
+
+  if (custom_handler && custom_handler->vtable->modify_oci_configuration)
+    {
+      /* Adapt RESOURCES to be used from the modify_oci_configuration hook.  */
+      cleanup_free runtime_spec_schema_config_linux *linux = xmalloc0 (sizeof (*linux));
+      cleanup_free runtime_spec_schema_config_schema *def = xmalloc0 (sizeof (*def));
+
+      def->linux = linux;
+      linux->resources = resources;
+
+      ret = custom_handler->vtable->modify_oci_configuration (custom_handler->cookie,
+                                                              context,
+                                                              def,
+                                                              err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = libcrun_linux_container_update (&status, resources, err);
+
+cleanup:
+  if (tree)
+    yajl_tree_free (tree);
+  free (parser_err);
+  if (resources)
+    free_runtime_spec_schema_config_linux_resources (resources);
+
+  return ret;
 }
 
 int
