@@ -618,6 +618,38 @@ append_resources (sd_bus_message *m,
 }
 
 static int
+reset_failed_unit (sd_bus *bus, const char *unit)
+{
+  int sd_err;
+  sd_bus_error error = SD_BUS_ERROR_NULL;
+  sd_bus_message *m = NULL, *reply = NULL;
+
+  sd_err = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                                           "org.freedesktop.systemd1.Manager", "ResetFailedUnit");
+  if (UNLIKELY (sd_err < 0))
+    goto exit;
+
+  sd_err = sd_bus_message_append (m, "s", unit);
+  if (UNLIKELY (sd_err < 0))
+    goto exit;
+
+  sd_err = sd_bus_call (bus, m, 0, &error, &reply);
+  if (UNLIKELY (sd_err < 0))
+    goto exit;
+
+  sd_err = 0;
+
+exit:
+  if (m)
+    sd_bus_message_unref (m);
+  if (reply)
+    sd_bus_message_unref (reply);
+  sd_bus_error_free (&error);
+
+  return sd_err;
+}
+
+static int
 enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                             int cgroup_mode,
                             json_map_string_string *annotations,
@@ -629,7 +661,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   sd_bus_message *reply = NULL;
   int sd_err, ret = 0;
   sd_bus_error error = SD_BUS_ERROR_NULL;
-  const char *object;
+  const char *object = NULL;
   struct systemd_job_removed_s job_data = {};
   int i;
   const char *boolean_opts[10];
@@ -762,8 +794,22 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   sd_err = sd_bus_call (bus, m, 0, &error, &reply);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
-      goto exit;
+      if (reset_failed_unit (bus, scope) == 0)
+        {
+          sd_bus_error_free (&error);
+          if (reply)
+            sd_bus_message_unref (reply);
+
+          error = SD_BUS_ERROR_NULL;
+          reply = NULL;
+
+          sd_err = sd_bus_call (bus, m, 0, &error, &reply);
+        }
+      if (sd_err < 0)
+        {
+          ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
+          goto exit;
+        }
     }
 
   sd_err = sd_bus_message_read (reply, "o", &object);
