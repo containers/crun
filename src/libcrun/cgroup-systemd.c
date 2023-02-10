@@ -729,6 +729,8 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
       goto exit;
     }
 
+  sd_err = sd_bus_message_append (m, "(sv)", "DefaultDependencies", "b", 0);
+
   for (i = 0; boolean_opts[i]; i++)
     {
       sd_err = sd_bus_message_append (m, "(sv)", boolean_opts[i], "b", 1);
