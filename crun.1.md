@@ -629,8 +629,8 @@ For example, the mapping: `uids=@1-3-10`, given a configuration like
 ```
 
 will be converted to the absolute value `uids=1-4-10`, where 4 is
-calculated by adding 3 (container ID in the `uids=` mapping)
-+ 1 (`hostID - containerID` for the user namespace mapping where
+calculated by adding 3 (container ID in the `uids=` mapping) and 1
+(`hostID - containerID` for the user namespace mapping where
 `containerID = 1` is found).
 
 The current implementation doesn't take into account multiple
