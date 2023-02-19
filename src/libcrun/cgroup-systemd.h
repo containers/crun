@@ -23,6 +23,8 @@
 
 int parse_sd_array (char *s, char **out, char **next, libcrun_error_t *err);
 
+char *get_cgroup_scope_path (const char *cgroup_path, const char *scope);
+
 extern struct libcrun_cgroup_manager cgroup_manager_systemd;
 
 #endif
