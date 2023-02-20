@@ -2485,7 +2485,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   return ret;
 
 fail:
-  return cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
+  ret = cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
+  if (cgroup_status)
+    {
+      libcrun_error_t tmp_err = NULL;
+      libcrun_cgroup_destroy (cgroup_status, &tmp_err);
+      crun_error_release (&tmp_err);
+    }
+  return ret;
 }
 
 static int

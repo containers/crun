@@ -951,10 +951,39 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   return 0;
 }
 
+char *
+get_cgroup_scope_path (const char *cgroup_path, const char *scope)
+{
+  char *path_to_scope = NULL;
+  char *cur;
+
+  path_to_scope = xstrdup (cgroup_path);
+
+  cur = strchr (path_to_scope, '/');
+  while (cur)
+    {
+      char *next = strchr (cur + 1, '/');
+      if (next == NULL)
+        break;
+
+      *next = '\0';
+      if (strcmp (cur, scope) == 0)
+        return path_to_scope;
+      *next = '/';
+
+      cur = next;
+      while (*cur == '/')
+        cur++;
+    }
+
+  return path_to_scope;
+}
+
 static int
 libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
                                 libcrun_error_t *err)
 {
+  cleanup_free char *path_to_scope = NULL;
   int mode;
   int ret;
 
@@ -970,7 +999,9 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
-  return destroy_cgroup_path (cgroup_status->path, mode, err);
+  path_to_scope = get_cgroup_scope_path (cgroup_status->path, cgroup_status->scope);
+
+  return destroy_cgroup_path (path_to_scope, mode, err);
 }
 
 static int

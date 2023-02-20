@@ -398,6 +398,30 @@ test_parse_sd_array ()
   }
   return 0;
 }
+
+static int
+test_get_scope_path ()
+{
+#  define CHECK(x, y)                                      \
+    {                                                      \
+      cleanup_free char *r = x;                            \
+      if (strcmp (r, y))                                   \
+        {                                                  \
+          fprintf (stderr, "expected %s, got %s\n", y, r); \
+          return -1;                                       \
+        }                                                  \
+    }
+
+  CHECK (get_cgroup_scope_path ("foo.scope", "foo.scope"), "foo.scope");
+  CHECK (get_cgroup_scope_path ("/foo/bar/user.slice/foo.scope/a/b/c", "foo.scope"), "/foo/bar/user.slice/foo.scope");
+  CHECK (get_cgroup_scope_path ("/foo/bar-foo.scope/user.slice/foo.scope/a/b/c", "foo.scope"), "/foo/bar-foo.scope/user.slice/foo.scope");
+  CHECK (get_cgroup_scope_path ("/foo/foo.scope-bar/user.slice/foo.scope/a/b/c", "foo.scope"), "/foo/foo.scope-bar/user.slice/foo.scope");
+  CHECK (get_cgroup_scope_path ("////foo.scope", "foo.scope"), "////foo.scope");
+
+#  undef CHECK
+  return 0;
+}
+
 #endif
 
 static void
@@ -423,7 +447,7 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..9\n");
+  printf ("1..10\n");
 #else
   printf ("1..8\n");
 #endif
@@ -437,6 +461,7 @@ main ()
   RUN_TEST (test_path_is_slash_dev);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
+  RUN_TEST (test_get_scope_path);
 #endif
   return 0;
 }
