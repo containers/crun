@@ -521,7 +521,7 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
 }
 
 static char *
-format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len, size_t *written, bool direct)
+format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len, size_t *written)
 {
   /* 64 is more than enough room to print 3 uint32.  */
   const size_t max_len_mapping = 64;
@@ -536,8 +536,8 @@ format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t ma
       size_t len;
 
       len = snprintf (ret + *written, max_len_mapping, "%" PRIu32 " %" PRIu32 " %" PRIu32 "\n",
-                      direct ? mappings[s]->container_id : mappings[s]->host_id,
-                      direct ? mappings[s]->host_id : mappings[s]->container_id,
+                      mappings[s]->container_id,
+                      mappings[s]->host_id,
                       mappings[s]->size);
 
       *written += len;
@@ -546,7 +546,7 @@ format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t ma
 }
 
 static char *
-format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, size_t *written, bool direct)
+format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, size_t *written)
 {
   runtime_spec_schema_defs_id_mapping mapping = {
     .container_id = container_id,
@@ -558,7 +558,7 @@ format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, si
     NULL,
   };
 
-  return format_mount_mappings (mappings, 1, written, direct);
+  return format_mount_mappings (mappings, 1, written);
 }
 
 static bool
@@ -575,13 +575,11 @@ has_same_mappings (runtime_spec_schema_config_schema *def, runtime_spec_schema_d
   if (mnt->gid_mappings_len != def->linux->gid_mappings_len)
     return false;
 
-  /* Compare host id and container id.  */
-
   for (s = 0; s < mnt->uid_mappings_len; s++)
     {
-      if (mnt->uid_mappings[s]->host_id != def->linux->uid_mappings[s]->container_id)
+      if (mnt->uid_mappings[s]->container_id != def->linux->uid_mappings[s]->container_id)
         return false;
-      if (mnt->uid_mappings[s]->container_id != def->linux->uid_mappings[s]->host_id)
+      if (mnt->uid_mappings[s]->host_id != def->linux->uid_mappings[s]->host_id)
         return false;
       if (mnt->uid_mappings[s]->size != def->linux->uid_mappings[s]->size)
         return false;
@@ -589,9 +587,9 @@ has_same_mappings (runtime_spec_schema_config_schema *def, runtime_spec_schema_d
 
   for (s = 0; s < mnt->gid_mappings_len; s++)
     {
-      if (mnt->gid_mappings[s]->host_id != def->linux->gid_mappings[s]->container_id)
+      if (mnt->gid_mappings[s]->container_id != def->linux->gid_mappings[s]->container_id)
         return false;
-      if (mnt->gid_mappings[s]->container_id != def->linux->gid_mappings[s]->host_id)
+      if (mnt->gid_mappings[s]->host_id != def->linux->gid_mappings[s]->host_id)
         return false;
       if (mnt->gid_mappings[s]->size != def->linux->gid_mappings[s]->size)
         return false;
@@ -632,13 +630,13 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
       size_t written = 0;
       int ret;
 
-      uid_map = format_mount_mappings (mnt->uid_mappings, mnt->uid_mappings_len, &written, false);
+      uid_map = format_mount_mappings (mnt->uid_mappings, mnt->uid_mappings_len, &written);
       sprintf (proc_file, "/proc/%d/uid_map", pid);
       ret = write_file (proc_file, uid_map, written, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      gid_map = format_mount_mappings (mnt->gid_mappings, mnt->gid_mappings_len, &written, false);
+      gid_map = format_mount_mappings (mnt->gid_mappings, mnt->gid_mappings_len, &written);
       sprintf (proc_file, "/proc/%d/gid_map", pid);
       ret = write_file (proc_file, gid_map, written, err);
       if (UNLIKELY (ret < 0))
@@ -2869,21 +2867,21 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     return 0;
 
   if (def->linux->uid_mappings_len)
-    uid_map = format_mount_mappings (def->linux->uid_mappings, def->linux->uid_mappings_len, &uid_map_len, true);
+    uid_map = format_mount_mappings (def->linux->uid_mappings, def->linux->uid_mappings_len, &uid_map_len);
   else
     {
       uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, container->host_uid, 1);
       if (uid_map == NULL)
-        uid_map = format_mount_mapping (0, container->host_uid, container->host_uid + 1, &uid_map_len, true);
+        uid_map = format_mount_mapping (0, container->host_uid, container->host_uid + 1, &uid_map_len);
     }
 
   if (def->linux->gid_mappings_len)
-    gid_map = format_mount_mappings (def->linux->gid_mappings, def->linux->gid_mappings_len, &gid_map_len, true);
+    gid_map = format_mount_mappings (def->linux->gid_mappings, def->linux->gid_mappings_len, &gid_map_len);
   else
     {
       gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, container->host_gid, 0);
       if (gid_map == NULL)
-        gid_map = format_mount_mapping (0, container->host_gid, container->host_gid + 1, &gid_map_len, true);
+        gid_map = format_mount_mapping (0, container->host_gid, container->host_gid + 1, &gid_map_len);
     }
 
   if (container->host_uid)
@@ -2909,7 +2907,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           if (UNLIKELY (ret < 0))
             return ret;
 
-          single_mapping = format_mount_mapping (container->container_gid, container->host_gid, 1, &single_mapping_len, true);
+          single_mapping = format_mount_mapping (container->container_gid, container->host_gid, 1, &single_mapping_len);
 
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
         }
@@ -2943,7 +2941,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
                 return ret;
             }
 
-          single_mapping = format_mount_mapping (container->container_uid, container->host_uid, 1, &single_mapping_len, true);
+          single_mapping = format_mount_mapping (container->container_uid, container->host_uid, 1, &single_mapping_len);
 
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
