@@ -707,6 +707,19 @@ check_running_in_user_namespace (libcrun_error_t *err)
   return ret;
 }
 
+static size_t
+get_page_size ()
+{
+  static atomic_long cached_pagesize = 0;
+  atomic_long pagesize = cached_pagesize;
+  if (pagesize == 0)
+    {
+      pagesize = (long) sysconf (_SC_PAGESIZE);
+      cached_pagesize = pagesize;
+    }
+  return (size_t) pagesize;
+}
+
 static int selinux_enabled = -1;
 static int apparmor_enabled = -1;
 
@@ -725,7 +738,7 @@ libcrun_initialize_selinux (libcrun_error_t *err)
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open /proc/mounts");
 
-  ret = read_all_fd (fd, "/proc/mounts", &out, &len, err);
+  ret = read_all_fd_with_size_hint (fd, "/proc/mounts", &out, &len, get_page_size (), err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -866,21 +879,26 @@ set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err)
 }
 
 int
-read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_error_t *err)
+read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t *len, size_t size_hint, libcrun_error_t *err)
 {
-  int ret;
-  size_t nread, allocated;
-  off_t size = 0;
   cleanup_free char *buf = NULL;
+  size_t nread, allocated;
+  size_t pagesize = 0;
+  off_t size = 0;
+  int ret;
 
-  ret = get_file_size (fd, &size);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error stat'ing file `%s`", description);
+  if (size_hint)
+    allocated = size_hint;
+  else
+    {
+      ret = get_file_size (fd, &size);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "error stat'ing file `%s`", description);
+
+      allocated = size == 0 ? 1023 : size;
+    }
 
   /* NUL terminate the buffer.  */
-  allocated = size + 1;
-  if (size == 0)
-    allocated = 1023;
   buf = xmalloc (allocated + 1);
   nread = 0;
   while ((size && nread < (size_t) size) || size == 0)
@@ -896,6 +914,9 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
 
       if (nread == allocated)
         {
+          if (size)
+            break;
+
           allocated += 4096;
           buf = xrealloc (buf, allocated + 1);
         }
