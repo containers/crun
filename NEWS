@@ -1,3 +1,17 @@
+* crun-1.8.1
+
+- linux: idmapped mounts expect the same configuration as the user
+  namespace mappings.  Before they were expecting the inverted
+  mapping.  It is a breaking change, but the behavior was aligned to
+  what runc will do as well.
+- krun: always allow /dev/kvm in the cgroup configuration.
+- handlers: disable exec for handlers that do not support it.
+- selinux: allow setting fscontext using a custom annotation.
+- cgroup: reset systemd unit if start fails.
+- cgroup: rmdir the entire systemd scope.  It fixes a leak on cgroupv1.
+- cgroup: always delete the cgroup on errors. On some errors it could
+  have been leaked before.
+
 * crun-1.8
 
 - linux: precreate devices on the host.
