@@ -63,12 +63,12 @@ jobs:
           name: crun-linux-ppc64le
           path: /tmp/artifact/crun-linux-ppc64le
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: crun-linux-ppc64le-disable-systemd
           path: /tmp/artifact/crun-linux-ppc64le-disable-systemd
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: crun.tar.gz
           path: /tmp/artifact/crun.tar.gz
