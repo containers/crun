@@ -216,7 +216,16 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
         {
           ret = write_cgroup_file (dirfd, "blkio.weight", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
-            return ret;
+            {
+              if (crun_error_get_errno (err) != ENOENT)
+                return ret;
+
+              crun_error_release (err);
+
+              ret = write_cgroup_file (dirfd, "blkio.bfq.weight", fmt_buf, len, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
         }
       else
         {
@@ -274,17 +283,29 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
         }
       else
         {
-          cleanup_close int w_device_fd = -1;
+          const char *leaf_weight_device_file_name = "blkio.leaf_weight_device";
+          const char *weight_device_file_name = "blkio.weight_device";
           cleanup_close int w_leafdevice_fd = -1;
+          cleanup_close int w_device_fd = -1;
           size_t i;
 
-          w_device_fd = openat (dirfd, "blkio.weight_device", O_WRONLY);
+          w_device_fd = openat (dirfd, weight_device_file_name, O_WRONLY);
           if (UNLIKELY (w_device_fd < 0))
-            return crun_make_error (err, errno, "open blkio.weight_device");
+            {
+              if (errno != ENOENT)
+                return crun_make_error (err, errno, "open `%s`", weight_device_file_name);
 
-          w_leafdevice_fd = openat (dirfd, "blkio.leaf_weight_device", O_WRONLY);
+              leaf_weight_device_file_name = "blkio.bfq.leaf_weight_device";
+              weight_device_file_name = "blkio.bfq.weight_device";
+
+              w_device_fd = openat (dirfd, weight_device_file_name, O_WRONLY);
+              if (UNLIKELY (w_device_fd < 0))
+                return crun_make_error (err, errno, "open `%s`", weight_device_file_name);
+            }
+
+          w_leafdevice_fd = openat (dirfd, leaf_weight_device_file_name, O_WRONLY);
           if (UNLIKELY (w_leafdevice_fd < 0))
-            return crun_make_error (err, errno, "open blkio.leaf_weight_device");
+            w_leafdevice_fd = openat (dirfd, leaf_weight_device_file_name, O_WRONLY);
 
           for (i = 0; i < blkio->weight_device_len; i++)
             {
@@ -292,13 +313,16 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
                              blkio->weight_device[i]->minor, blkio->weight_device[i]->weight);
               ret = TEMP_FAILURE_RETRY (write (w_device_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "write blkio.weight_device");
+                return crun_make_error (err, errno, "write `%s`", weight_device_file_name);
 
-              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major,
-                             blkio->weight_device[i]->minor, blkio->weight_device[i]->leaf_weight);
-              ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
-              if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "write blkio.leaf_weight_device");
+              if (w_leafdevice_fd >= 0)
+                {
+                  len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major,
+                                 blkio->weight_device[i]->minor, blkio->weight_device[i]->leaf_weight);
+                  ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
+                  if (UNLIKELY (ret < 0))
+                    return crun_make_error (err, errno, "write `%s`", leaf_weight_device_file_name);
+                }
             }
         }
     }
