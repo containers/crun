@@ -21,6 +21,7 @@ import re
 import shutil
 import tempfile
 from tests_utils import *
+import time
 
 def test_exec():
     conf = base_config()
@@ -35,6 +36,38 @@ def test_exec():
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
+    return 0
+
+def test_uid_tty():
+    # we need at least two uids
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    conf['process']['terminal'] = True
+    add_all_namespaces(conf)
+    cid = None
+    ret = 1
+    try:
+        cid = "container-%s" % os.getpid()
+        proc = run_and_get_output(conf, command='run', id_container=cid, use_popen=True)
+        for i in range(0, 500):
+            try:
+                out = run_crun_command(["exec", "-t", "--user", "1", cid, "/init", "owner", "/proc/self/fd/0"])
+                if "1:" in out:
+                    ret = 0
+                    break
+            except:
+                pass
+            time.sleep(0.01)
+        return ret
+    finally:
+        if cid is not None:
+            try:
+                run_crun_command(["delete", "-f", cid])
+            except:
+                pass
     return 0
 
 def test_exec_root_netns_with_userns():
@@ -348,6 +381,7 @@ all_tests = {
     "exec_add_no_new_privileges" : test_exec_no_new_privs,
     "exec_write_pid_file" : test_exec_write_pid_file,
     "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
+    "exec-test-uid-tty": test_uid_tty,
 }
 
 if __name__ == "__main__":

@@ -3448,7 +3448,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
 
   pid = libcrun_join_process (container, status.pid, &status, opts->cgroup, context->detach,
-                              process->terminal ? &terminal_fd : NULL, err);
+                              process, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
 
