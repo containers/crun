@@ -482,7 +482,7 @@ static PyMethodDef CrunMethods[] = {
   {"load_from_memory", container_load_from_memory, METH_VARARGS,
    "Load an OCI container from memory."},
   {"run", container_run, METH_VARARGS, "Run a container."},
-  {"create", container_run, METH_VARARGS, "Create a container."},
+  {"create", container_create, METH_VARARGS, "Create a container."},
   {"delete", container_delete, METH_VARARGS, "Delete a container."},
   {"kill", container_kill, METH_VARARGS, "Kill a container."},
   {"list", containers_list, METH_VARARGS, "List the containers."},
