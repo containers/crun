@@ -45,6 +45,38 @@ write_cgroup_file (int dirfd, const char *name, const void *data, size_t len, li
 }
 
 static int
+write_cgroup_file_or_alias (int dirfd, const char *name, const char *alias, const void *data, size_t len, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, name, data, len, err);
+  if (UNLIKELY (alias != NULL && ret < 0 && crun_error_get_errno (err) == ENOENT))
+    {
+      crun_error_release (err);
+      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, alias, data, len, err);
+    }
+  return ret;
+}
+
+static inline int
+openat_with_alias (int dirfd, const char *name, const char *alias, const char **used_name, int flags, libcrun_error_t *err)
+{
+  int ret;
+
+  *used_name = name;
+
+  ret = openat (dirfd, name, flags);
+  if (UNLIKELY (ret < 0 && alias != NULL && errno == ENOENT))
+    {
+      *used_name = alias;
+      ret = openat (dirfd, alias, flags);
+    }
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "open `%s`", name);
+  return ret;
+}
+
+static int
 is_rwm (const char *str, libcrun_error_t *err)
 {
   const char *it;
@@ -132,12 +164,12 @@ check_cgroup_v2_controller_available_wrapper (int ret, int cgroup_dirfd, const c
 }
 
 static int
-write_file_and_check_controllers_at (bool cgroup2, int dirfd, const char *name, const void *data, size_t len,
-                                     libcrun_error_t *err)
+write_file_and_check_controllers_at (bool cgroup2, int dirfd, const char *name, const char *name_alias,
+                                     const void *data, size_t len, libcrun_error_t *err)
 {
   int ret;
 
-  ret = write_cgroup_file (dirfd, name, data, len, err);
+  ret = write_cgroup_file_or_alias (dirfd, name, name_alias, data, len, err);
   if (cgroup2)
     return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
   return ret;
@@ -214,18 +246,9 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       len = sprintf (fmt_buf, "%" PRIu32, val);
       if (! cgroup2)
         {
-          ret = write_cgroup_file (dirfd, "blkio.weight", fmt_buf, len, err);
+          ret = write_cgroup_file_or_alias (dirfd, "blkio.weight", "blkio.bfq.weight", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
-            {
-              if (crun_error_get_errno (err) != ENOENT)
-                return ret;
-
-              crun_error_release (err);
-
-              ret = write_cgroup_file (dirfd, "blkio.bfq.weight", fmt_buf, len, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
+            return ret;
         }
       else
         {
@@ -283,29 +306,24 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
         }
       else
         {
-          const char *leaf_weight_device_file_name = "blkio.leaf_weight_device";
-          const char *weight_device_file_name = "blkio.weight_device";
+          const char *leaf_weight_device_file_name = NULL;
+          const char *weight_device_file_name = NULL;
           cleanup_close int w_leafdevice_fd = -1;
           cleanup_close int w_device_fd = -1;
           size_t i;
 
-          w_device_fd = openat (dirfd, weight_device_file_name, O_WRONLY);
+          w_device_fd = openat_with_alias (dirfd, "blkio.weight_device", "blkio.bfq.weight_device",
+                                           &weight_device_file_name, O_WRONLY, err);
           if (UNLIKELY (w_device_fd < 0))
-            {
-              if (errno != ENOENT)
-                return crun_make_error (err, errno, "open `%s`", weight_device_file_name);
+            return w_device_fd;
 
-              leaf_weight_device_file_name = "blkio.bfq.leaf_weight_device";
-              weight_device_file_name = "blkio.bfq.weight_device";
-
-              w_device_fd = openat (dirfd, weight_device_file_name, O_WRONLY);
-              if (UNLIKELY (w_device_fd < 0))
-                return crun_make_error (err, errno, "open `%s`", weight_device_file_name);
-            }
-
-          w_leafdevice_fd = openat (dirfd, leaf_weight_device_file_name, O_WRONLY);
+          w_leafdevice_fd = openat_with_alias (dirfd, "blkio.leaf_weight_device", "blkio.bfq.leaf_weight_device",
+                                               &leaf_weight_device_file_name, O_WRONLY, err);
           if (UNLIKELY (w_leafdevice_fd < 0))
-            w_leafdevice_fd = openat (dirfd, leaf_weight_device_file_name, O_WRONLY);
+            {
+              /* If the .leaf_weight_device file is missing, just ignore it.  */
+              crun_error_release (err);
+            }
 
           for (i = 0; i < blkio->weight_device_len; i++)
             {
@@ -440,7 +458,7 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
       xasprintf (&filename, "hugetlb.%s.%s", htlb[i]->page_size, suffix);
 
       len = sprintf (fmt_buf, "%" PRIu64, htlb[i]->limit);
-      ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -830,7 +848,7 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
     {
       len = sprintf (fmt_buf, "%" PRIu64, memory->reservation);
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes",
-                                                 fmt_buf, len, err);
+                                                 NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -878,7 +896,7 @@ write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_
       int ret;
 
       len = cg_itoa (fmt_buf, pids->limit, cgroup2);
-      ret = write_file_and_check_controllers_at (cgroup2, dirfd, "pids.max", fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd, "pids.max", NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -905,8 +923,8 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
 
       len = sprintf (fmt_buf, "%u", val);
 
-      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, cgroup2 ? "cpu.weight" : "cpu.shares", fmt_buf,
-                                                 len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, cgroup2 ? "cpu.weight" : "cpu.shares",
+                                                 NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -968,7 +986,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         len = sprintf (fmt_buf, "max %" PRIi64, period);
       else
         len = sprintf (fmt_buf, "%" PRIi64 " %" PRIi64, quota, period);
-      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, "cpu.max", fmt_buf, len, err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, "cpu.max", NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -983,37 +1001,17 @@ write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_confi
 
   if (cpu->cpus)
     {
-      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.cpus", cpu->cpus, strlen (cpu->cpus),
-                                                 err);
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.cpus", "cpus",
+                                                 cpu->cpus, strlen (cpu->cpus), err);
       if (UNLIKELY (ret < 0))
-        {
-          if (! cgroup2 && errno == ENOENT)
-            {
-              crun_error_release (err);
-
-              ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpus", cpu->cpus, strlen (cpu->cpus),
-                                                         err);
-            }
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+        return ret;
     }
   if (cpu->mems)
     {
-      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.mems", cpu->mems, strlen (cpu->mems),
+      ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.mems", "mems", cpu->mems, strlen (cpu->mems),
                                                  err);
       if (UNLIKELY (ret < 0))
-        {
-          if (! cgroup2 && errno == ENOENT)
-            {
-              crun_error_release (err);
-
-              ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "mems", cpu->mems, strlen (cpu->mems),
-                                                         err);
-            }
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+        return ret;
     }
   return 0;
 }
@@ -1198,7 +1196,7 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
 
       len = strlen (resources->unified->values[i]);
       ret = write_file_and_check_controllers_at (true, cgroup_dirfd, resources->unified->keys[i],
-                                                 resources->unified->values[i], len, err);
+                                                 NULL, resources->unified->values[i], len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
