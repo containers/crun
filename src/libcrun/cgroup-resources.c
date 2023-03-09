@@ -45,6 +45,20 @@ write_cgroup_file (int dirfd, const char *name, const void *data, size_t len, li
 }
 
 static int
+write_cgroup_file_or_alias (int dirfd, const char *name, const char *alias, const void *data, size_t len, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, name, data, len, err);
+  if (UNLIKELY (alias != NULL && ret < 0 && crun_error_get_errno (err) == ENOENT))
+    {
+      crun_error_release (err);
+      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, alias, data, len, err);
+    }
+  return ret;
+}
+
+static int
 is_rwm (const char *str, libcrun_error_t *err)
 {
   const char *it;
@@ -214,18 +228,9 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       len = sprintf (fmt_buf, "%" PRIu32, val);
       if (! cgroup2)
         {
-          ret = write_cgroup_file (dirfd, "blkio.weight", fmt_buf, len, err);
+          ret = write_cgroup_file_or_alias (dirfd, "blkio.weight", "blkio.bfq.weight", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
-            {
-              if (crun_error_get_errno (err) != ENOENT)
-                return ret;
-
-              crun_error_release (err);
-
-              ret = write_cgroup_file (dirfd, "blkio.bfq.weight", fmt_buf, len, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
+            return ret;
         }
       else
         {
