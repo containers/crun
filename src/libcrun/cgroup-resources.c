@@ -58,6 +58,24 @@ write_cgroup_file_or_alias (int dirfd, const char *name, const char *alias, cons
   return ret;
 }
 
+static inline int
+openat_with_alias (int dirfd, const char *name, const char *alias, const char **used_name, int flags, libcrun_error_t *err)
+{
+  int ret;
+
+  *used_name = name;
+
+  ret = openat (dirfd, name, flags);
+  if (UNLIKELY (ret < 0 && alias != NULL && errno == ENOENT))
+    {
+      *used_name = alias;
+      ret = openat (dirfd, alias, flags);
+    }
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "open `%s`", name);
+  return ret;
+}
+
 static int
 is_rwm (const char *str, libcrun_error_t *err)
 {
@@ -288,29 +306,24 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
         }
       else
         {
-          const char *leaf_weight_device_file_name = "blkio.leaf_weight_device";
-          const char *weight_device_file_name = "blkio.weight_device";
+          const char *leaf_weight_device_file_name = NULL;
+          const char *weight_device_file_name = NULL;
           cleanup_close int w_leafdevice_fd = -1;
           cleanup_close int w_device_fd = -1;
           size_t i;
 
-          w_device_fd = openat (dirfd, weight_device_file_name, O_WRONLY);
+          w_device_fd = openat_with_alias (dirfd, "blkio.weight_device", "blkio.bfq.weight_device",
+                                           &weight_device_file_name, O_WRONLY, err);
           if (UNLIKELY (w_device_fd < 0))
-            {
-              if (errno != ENOENT)
-                return crun_make_error (err, errno, "open `%s`", weight_device_file_name);
+            return w_device_fd;
 
-              leaf_weight_device_file_name = "blkio.bfq.leaf_weight_device";
-              weight_device_file_name = "blkio.bfq.weight_device";
-
-              w_device_fd = openat (dirfd, weight_device_file_name, O_WRONLY);
-              if (UNLIKELY (w_device_fd < 0))
-                return crun_make_error (err, errno, "open `%s`", weight_device_file_name);
-            }
-
-          w_leafdevice_fd = openat (dirfd, leaf_weight_device_file_name, O_WRONLY);
+          w_leafdevice_fd = openat_with_alias (dirfd, "blkio.leaf_weight_device", "blkio.bfq.leaf_weight_device",
+                                               &leaf_weight_device_file_name, O_WRONLY, err);
           if (UNLIKELY (w_leafdevice_fd < 0))
-            w_leafdevice_fd = openat (dirfd, leaf_weight_device_file_name, O_WRONLY);
+            {
+              /* If the .leaf_weight_device file is missing, just ignore it.  */
+              crun_error_release (err);
+            }
 
           for (i = 0; i < blkio->weight_device_len; i++)
             {
