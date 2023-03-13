@@ -31,6 +31,7 @@
 #include <signal.h>
 #include <sys/vfs.h>
 #include <inttypes.h>
+#include <fcntl.h>
 #include <time.h>
 
 #ifdef HAVE_SYSTEMD
@@ -68,17 +69,79 @@ get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **sco
     }
 }
 
+/* set the rt-runtime for the current cgroup and its parent if the path is not a scope.  */
+static int
+setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
+                  const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_close int dirfd = -1;
+  bool need_set_parent = true;
+  char fmt_buf[64];
+  size_t len;
+  int ret;
+
+  if (resources == NULL || resources->cpu == NULL)
+    return 0;
+
+  if (has_suffix (path, ".scope"))
+    need_set_parent = false;
+
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, "cpu", path, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", cgroup_path);
+
+  if (resources->cpu->realtime_period)
+    {
+      len = sprintf (fmt_buf, "%" PRIu64, resources->cpu->realtime_period);
+
+      if (need_set_parent)
+        {
+          ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "../cpu.rt_period_us", fmt_buf, len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "cpu.rt_period_us", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (resources->cpu->realtime_runtime)
+    {
+      len = sprintf (fmt_buf, "%" PRIu64, resources->cpu->realtime_runtime);
+
+      if (need_set_parent)
+        {
+          ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "../cpu.rt_runtime_us", fmt_buf, len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "cpu.rt_runtime_us", fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+
 static int
 systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_linux_resources *resources = args->resources;
+  cleanup_free char *cgroup_path = NULL;
   cleanup_free char *content = NULL;
   cleanup_free char *path = NULL;
   pid_t pid = args->pid;
   int ret;
   char *from, *to;
   char *saveptr = NULL;
-  cleanup_free char *cgroup_path = NULL;
 
   xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
   ret = read_all_file (cgroup_path, &content, NULL, err);
@@ -148,6 +211,11 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                 }
             }
         }
+
+      ret = setup_rt_runtime (resources, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       break;
 
     case CGROUP_MODE_UNIFIED:
@@ -1070,6 +1138,10 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       ret = crun_make_error (err, sd_bus_error_get_errno (&error), "sd-bus call: %s", error.message ?: error.name);
       goto exit;
     }
+
+  ret = setup_rt_runtime (resources, cgroup_status->path, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   ret = 0;
 
