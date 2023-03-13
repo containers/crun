@@ -60,6 +60,7 @@
 #include <sys/xattr.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <sched.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -4650,7 +4651,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 }
 
 static int
-join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
+join_process_parent_helper (libcrun_container_t *container,
+                            pid_t child_pid, int sync_socket_fd,
                             libcrun_container_status_t *status,
                             bool need_move_to_cgroup, const char *sub_cgroup,
                             int *terminal_fd, libcrun_error_t *err)
@@ -4700,6 +4702,11 @@ join_process_parent_helper (pid_t child_pid, int sync_socket_fd,
           if (UNLIKELY (ret < 0))
             return ret;
         }
+
+      /* Join the scheduler immediately after joining the cgroup.  */
+      ret = libcrun_set_scheduler (pid, container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   /* The write unblocks the grandchild process so it can run once we setup
@@ -4944,6 +4951,16 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
 
   pid = syscall_clone3 (&clone3_args);
 
+  if (pid > 0)
+    {
+      /* We need to set the scheduler as soon as possible after joining the cgroup,
+         because if it is a RT scheduler, other processes in the container could already
+         take the entire cpu time and stall the new process.  */
+      ret = libcrun_set_scheduler (pid, container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   /* On errors, fall back to fork().  */
   if (pid < 0)
     {
@@ -4961,8 +4978,9 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
     {
       close_and_reset (&sync_socket_fd[1]);
       sync_fd = sync_socket_fd[0];
-      return join_process_parent_helper (pid, sync_fd, status, need_move_to_cgroup,
-                                         sub_cgroup, terminal_fd, err);
+      return join_process_parent_helper (container, pid, sync_fd, status,
+                                         need_move_to_cgroup, sub_cgroup,
+                                         terminal_fd, err);
     }
 
   close_and_reset (&sync_socket_fd[0]);
@@ -5268,5 +5286,83 @@ fallback_to_kill:
   ret = kill (status->pid, signal);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "kill container");
+  return 0;
+}
+
+int
+libcrun_set_scheduler (pid_t pid, libcrun_container_t *container, libcrun_error_t *err)
+{
+  cleanup_free char *copy = NULL;
+  struct sched_param param;
+  int ret, policy, option;
+  char *v_priority;
+  const char *v;
+  char *sptr;
+  struct
+  {
+    const char *name;
+    int value;
+    int option_value;
+  } policies[] = {
+    { "SCHED_OTHER", SCHED_OTHER, 0 },
+    { "SCHED_BATCH", SCHED_BATCH, 0 },
+    { "SCHED_IDLE", SCHED_IDLE, 0 },
+    { "SCHED_FIFO", SCHED_FIFO, 0 },
+    { "SCHED_RR", SCHED_RR, 0 },
+    { "SCHED_RESET_ON_FORK", 0, SCHED_RESET_ON_FORK },
+    { NULL, 0, 0 },
+  };
+
+  v = find_annotation (container, "run.oci.scheduler");
+  if (LIKELY (v == NULL))
+    return 0;
+
+  memset (&param, 0, sizeof (param));
+
+  copy = xstrdup (v);
+  v_priority = strchr (copy, '#');
+  if (v_priority)
+    *v_priority = '\0';
+
+  policy = 0;
+  option = 0;
+  for (v = strtok_r (copy, "|", &sptr); v; v = strtok_r (NULL, "|", &sptr))
+    {
+      int i;
+
+      for (i = 0; policies[i].name; i++)
+        if (strcmp (v, policies[i].name) == 0)
+          {
+            policy |= policies[i].value;
+            option |= policies[i].option_value;
+            break;
+          }
+      if (UNLIKELY (policies[i].name == NULL))
+        return crun_make_error (err, 0, "invalid scheduler `%s`", v);
+    }
+
+  if (v_priority)
+    {
+      long long priority;
+      char *ep = NULL;
+
+      errno = 0;
+      priority = strtoll (v_priority + 1, &ep, 10);
+      if (UNLIKELY (ep != NULL && *ep != '\0'))
+        return crun_make_error (err, EINVAL, "parse scheduler annotation");
+      if (UNLIKELY (errno))
+        return crun_make_error (err, errno, "parse scheduler annotation");
+
+      if (priority >= INT_MAX || priority <= INT_MIN
+          || priority < sched_get_priority_min (policy) || priority > sched_get_priority_max (policy))
+        return crun_make_error (err, 0, "scheduler priority value `%lli` out of range", priority);
+
+      param.sched_priority = (int) priority;
+    }
+
+  ret = sched_setscheduler (pid, option | policy, &param);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sched_setscheduler");
+
   return 0;
 }

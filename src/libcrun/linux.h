@@ -116,4 +116,6 @@ int libcrun_create_dev (libcrun_container_t *container, int devfd,
 int parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uids, char *option, char **out,
                                  size_t *len, libcrun_error_t *err);
 
+int libcrun_set_scheduler (pid_t pid, libcrun_container_t *container, libcrun_error_t *err);
+
 #endif

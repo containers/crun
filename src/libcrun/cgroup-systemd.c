@@ -129,7 +129,6 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
   return 0;
 }
 
-
 static int
 systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)

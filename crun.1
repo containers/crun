@@ -685,6 +685,21 @@ wasm module is relayed back via crun.
 
 .RE
 
+.SH \fB\fCrun.oci.scheduler\fR
+.PP
+The \fB\fCrun.oci.scheduler\fR annotation allows you to set the scheduling
+policy for the container process.  The value of the annotation should
+be in the format \fB\fCPOLICY[|OPTION][#PRIORITY]\fR, where \fB\fCPOLICY\fR is the
+name of the scheduling policy, \fB\fCOPTION\fR can be \fB\fCSCHED_RESET_ON_FORK\fR
+and \fB\fCPRIORITY\fR is an optional integer priority value.
+
+.PP
+It is an experimental feature and will be removed once the feature is in the
+OCI runtime specs.
+
+.PP
+Please refer to \fB\fCsched_setscheduler(2)\fR for more information.
+
 .SH tmpcopyup mount options
 .PP
 If the \fB\fCtmpcopyup\fR option is specified for a tmpfs, then the path that
@@ -814,8 +829,8 @@ For example, the mapping: \fB\fCuids=@1-3-10\fR, given a configuration like
 
 .PP
 will be converted to the absolute value \fB\fCuids=1-4-10\fR, where 4 is
-calculated by adding 3 (container ID in the \fB\fCuids=\fR mapping)
-+ 1 (\fB\fChostID - containerID\fR for the user namespace mapping where
+calculated by adding 3 (container ID in the \fB\fCuids=\fR mapping) and 1
+(\fB\fChostID - containerID\fR for the user namespace mapping where
 \fB\fCcontainerID = 1\fR is found).
 
 .PP
