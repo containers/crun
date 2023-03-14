@@ -2742,7 +2742,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
             {
               libcrun_error_t tmp_err = NULL;
               libcrun_container_delete (context, def, context->id, true, &tmp_err);
-              crun_error_release (err);
+              crun_error_release (&tmp_err);
             }
           return -exit_code;
         }
