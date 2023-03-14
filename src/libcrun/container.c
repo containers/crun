@@ -2376,6 +2376,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  ret = libcrun_set_scheduler (pid, container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   /* The container is waiting that we write back.  In this phase we can launch the
      prestart hooks.  */
   if (def->hooks && def->hooks->prestart_len)

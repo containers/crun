@@ -541,6 +541,19 @@ workload natively. Accepts a `.wasm` binary as input and if `.wat` is
 provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
+## `run.oci.scheduler`
+
+The `run.oci.scheduler` annotation allows you to set the scheduling
+policy for the container process.  The value of the annotation should
+be in the format `POLICY[|OPTION][#PRIORITY]`, where `POLICY` is the
+name of the scheduling policy, `OPTION` can be `SCHED_RESET_ON_FORK`
+and `PRIORITY` is an optional integer priority value.
+
+It is an experimental feature and will be removed once the feature is in the
+OCI runtime specs.
+
+Please refer to `sched_setscheduler(2)` for more information.
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that
