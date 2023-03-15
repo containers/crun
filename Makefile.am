@@ -43,6 +43,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 			src/libcrun/custom-handler.c \
 			src/libcrun/linux.c \
 			src/libcrun/seccomp.c \
+			src/libcrun/scheduler.c \
 			src/libcrun/ebpf.c \
 			src/libcrun/error.c \
 			src/libcrun/status.c \
@@ -109,7 +110,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/custom-handler.h \
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
-	src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
+	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
 	crun.1.md crun.1 libcrun.lds
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
