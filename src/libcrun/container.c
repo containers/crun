@@ -23,6 +23,7 @@
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
+#include "scheduler.h"
 #include "seccomp_notify.h"
 #include "custom-handler.h"
 #include <stdbool.h>

@@ -49,6 +49,7 @@
 #include "cgroup-utils.h"
 #include "status.h"
 #include "criu.h"
+#include "scheduler.h"
 #include <sys/socket.h>
 #include <libgen.h>
 #include <sys/wait.h>
@@ -5286,83 +5287,5 @@ fallback_to_kill:
   ret = kill (status->pid, signal);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "kill container");
-  return 0;
-}
-
-int
-libcrun_set_scheduler (pid_t pid, libcrun_container_t *container, libcrun_error_t *err)
-{
-  cleanup_free char *copy = NULL;
-  struct sched_param param;
-  int ret, policy, option;
-  char *v_priority;
-  const char *v;
-  char *sptr;
-  struct
-  {
-    const char *name;
-    int value;
-    int option_value;
-  } policies[] = {
-    { "SCHED_OTHER", SCHED_OTHER, 0 },
-    { "SCHED_BATCH", SCHED_BATCH, 0 },
-    { "SCHED_IDLE", SCHED_IDLE, 0 },
-    { "SCHED_FIFO", SCHED_FIFO, 0 },
-    { "SCHED_RR", SCHED_RR, 0 },
-    { "SCHED_RESET_ON_FORK", 0, SCHED_RESET_ON_FORK },
-    { NULL, 0, 0 },
-  };
-
-  v = find_annotation (container, "run.oci.scheduler");
-  if (LIKELY (v == NULL))
-    return 0;
-
-  memset (&param, 0, sizeof (param));
-
-  copy = xstrdup (v);
-  v_priority = strchr (copy, '#');
-  if (v_priority)
-    *v_priority = '\0';
-
-  policy = 0;
-  option = 0;
-  for (v = strtok_r (copy, "|", &sptr); v; v = strtok_r (NULL, "|", &sptr))
-    {
-      int i;
-
-      for (i = 0; policies[i].name; i++)
-        if (strcmp (v, policies[i].name) == 0)
-          {
-            policy |= policies[i].value;
-            option |= policies[i].option_value;
-            break;
-          }
-      if (UNLIKELY (policies[i].name == NULL))
-        return crun_make_error (err, 0, "invalid scheduler `%s`", v);
-    }
-
-  if (v_priority)
-    {
-      long long priority;
-      char *ep = NULL;
-
-      errno = 0;
-      priority = strtoll (v_priority + 1, &ep, 10);
-      if (UNLIKELY (ep != NULL && *ep != '\0'))
-        return crun_make_error (err, EINVAL, "parse scheduler annotation");
-      if (UNLIKELY (errno))
-        return crun_make_error (err, errno, "parse scheduler annotation");
-
-      if (priority >= INT_MAX || priority <= INT_MIN
-          || priority < sched_get_priority_min (policy) || priority > sched_get_priority_max (policy))
-        return crun_make_error (err, 0, "scheduler priority value `%lli` out of range", priority);
-
-      param.sched_priority = (int) priority;
-    }
-
-  ret = sched_setscheduler (pid, option | policy, &param);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "sched_setscheduler");
-
   return 0;
 }

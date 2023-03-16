@@ -687,6 +687,65 @@ wasm module is relayed back via crun.
 
 .SH \fB\fCrun.oci.scheduler\fR
 .PP
+The \fB\fCrun.oci.scheduler\fR annotation is used to specify the scheduling
+policy and attributes of a process within a container.
+
+.PP
+The \fB\fCrun.oci.scheduler\fR annotation has the following format: \fB\fCPOLICY[#OPTION:VALUE]#...]\fR
+
+.PP
+Where \fB\fCPOLICY\fR is the scheduling policy to set and \fB\fCOPTION\fR is an
+optional scheduling attribute to set.
+
+.PP
+The following scheduling policies are supported:
+
+.RS
+.IP \(bu 2
+SCHED_OTHER
+.IP \(bu 2
+SCHED_BATCH
+.IP \(bu 2
+SCHED_IDLE
+.IP \(bu 2
+SCHED_FIFO
+.IP \(bu 2
+SCHED_RR
+.IP \(bu 2
+SCHED_DEADLINE
+
+.RE
+
+.PP
+The following attributes can be set:
+
+.RS
+.IP \(bu 2
+runtime=VALUE.
+.IP \(bu 2
+deadline=VALUE.
+.IP \(bu 2
+period=VALUE.
+.IP \(bu 2
+prio=VALUE.
+.IP \(bu 2
+flag_reset_on_fork=1.
+.IP \(bu 2
+flag_reclaim=1.
+.IP \(bu 2
+flag_dl_overrun=1.
+.IP \(bu 2
+flag_keep_policy=1.
+.IP \(bu 2
+flag_keep_params=1.
+.IP \(bu 2
+flag_util_clamp_min=1.
+.IP \(bu 2
+flag_util_clamp_max=1.
+
+.RE
+
+.PP
 The \fB\fCrun.oci.scheduler\fR annotation allows you to set the scheduling
 policy for the container process.  The value of the annotation should
 be in the format \fB\fCPOLICY[|OPTION][#PRIORITY]\fR, where \fB\fCPOLICY\fR is the
@@ -698,7 +757,7 @@ It is an experimental feature and will be removed once the feature is in the
 OCI runtime specs.
 
 .PP
-Please refer to \fB\fCsched_setscheduler(2)\fR for more information.
+Please refer to \fB\fCsched_setattr(2)\fR for more information.
 
 .SH tmpcopyup mount options
 .PP
