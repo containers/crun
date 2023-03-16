@@ -176,3 +176,7 @@ $ sudo su -
 # molecule converge
 # molecule verify
 ```
+
+## Lua bindings
+
+A Lua binding is available. See [the README](lua/README.md) for more information.
