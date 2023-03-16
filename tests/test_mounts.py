@@ -115,6 +115,43 @@ def test_mount_symlink_not_existing():
         return 0
     return -1
 
+def test_mount_readonly_should_inherit_options_from_parent():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    mount_opt = {"destination": "/test", "type": "bind", "source": "/tmp", "options": ["rbind", "nosuid","noexec","nodev"]}
+    conf['mounts'].append(mount_opt)
+    mount_opt = {"destination": "/test/world", "type": "bind", "source": "/etc", "options": ["rbind", "nosuid","noexec","nodev"]}
+    conf['mounts'].append(mount_opt)
+
+    # Move test/world to a readonly path
+    conf['linux']['readonlyPaths'] = ["/test/world"]
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+
+    # final mount info must contain /test/world which is converted to readonly
+    # but also inherits the flags from its parent
+    if "/test/world ro,nosuid,nodev,noexec,relatime" in out:
+        return 0
+    return -1
+
+def test_proc_readonly_should_inherit_options_from_parent():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    for mount in conf['mounts']:
+        if mount['destination'] == "/proc":
+           mount['options'] = ["nosuid", "noexec","nodev"]
+
+    # Move test/world to a readonly path
+    conf['linux']['readonlyPaths'] = ["/proc/bus"]
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+
+    # final mount info must contain /proc/bus which is converted to readonly
+    # but also inherits the flags from /proc
+    if "/proc/bus ro,nosuid,nodev,noexec,relatime" in out:
+        return 0
+    return -1
+
 def test_mount_path_with_multiple_slashes():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
@@ -407,6 +444,8 @@ all_tests = {
     "mount-userns-bind-mount" : test_userns_bind_mount,
     "mount-idmapped-mounts" : test_idmapped_mounts,
     "mount-idmapped-mounts-symlink" : test_userns_bind_mount_symlink,
+    "mount-linux-readonly-should-inherit-flags": test_mount_readonly_should_inherit_options_from_parent,
+    "proc-linux-readonly-should-inherit-flags": test_proc_readonly_should_inherit_options_from_parent,
     "mount-ro-cgroup": test_ro_cgroup,
 }
 

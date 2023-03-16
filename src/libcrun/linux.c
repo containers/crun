@@ -1062,13 +1062,15 @@ has_mount_for (libcrun_container_t *container, const char *destination)
 }
 
 static int
-do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path, bool readonly,
+do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path, bool readonly, bool keep_flags,
                             libcrun_error_t *err)
 {
+  unsigned long mount_flags = 0;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *rootfs = get_private_data (container)->rootfs;
   int rootfsfd = get_private_data (container)->rootfsfd;
   cleanup_close int pathfd = -1;
+  struct statfs sfs;
   int ret;
   mode_t mode;
 
@@ -1090,8 +1092,21 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
       proc_fd_path_t source_buffer;
 
       get_proc_self_fd_path (source_buffer, pathfd);
+      mount_flags = MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC;
+      if (keep_flags)
+        {
+          ret = statfs (source_buffer, &sfs);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "statfs `%s`", source_buffer);
+          mount_flags = mount_flags | sfs.f_flags;
 
-      ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC, NULL,
+          // Parent might contain `MS_REMOUNT` but the new readonly path is not
+          // actually mounted. Specifically in the case of `/proc` this will end
+          // up with EINVAL therefore remove `MS_REMOUNT` if its getting
+          // inherited from the parent.
+          mount_flags = mount_flags & ~MS_REMOUNT;
+        }
+      ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, mount_flags, NULL,
                       LABEL_NONE, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1180,7 +1195,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                       if (UNLIKELY (ret < 0))
                         return crun_make_error (err, errno, "bind mount /sys from the host");
 
-                      return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, err);
+                      return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, false, err);
                     }
 
                   mountfd = get_bind_mount (-1, "/sys", true, true, err);
@@ -1821,13 +1836,13 @@ do_masked_and_readonly_paths (libcrun_container_t *container, libcrun_error_t *e
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
-      ret = do_masked_or_readonly_path (container, def->linux->masked_paths[i], false, err);
+      ret = do_masked_or_readonly_path (container, def->linux->masked_paths[i], false, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   for (i = 0; i < def->linux->readonly_paths_len; i++)
     {
-      ret = do_masked_or_readonly_path (container, def->linux->readonly_paths[i], true, err);
+      ret = do_masked_or_readonly_path (container, def->linux->readonly_paths[i], true, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
