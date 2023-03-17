@@ -86,6 +86,20 @@ python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS)
 python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS) $(maybe_libyajl.la)
 endif
 
+if LUA_BINDINGS
+noinst_LTLIBRARIES = libcrun-bundled.la
+luaexec_LTLIBRARIES = luacrun.la
+luacrun_la_SOURCES = lua/lua_crun.c
+luacrun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src -I $(abs_top_builddir)/src $(LUA_INCLUDE)
+luacrun_la_LDFLAGS = -avoid-version -module
+luacrun_la_LIBADD = libcrun-bundled.la $(LUA_LIB) $(FOUND_LIBS)
+
+libcrun_bundled_la_SOURCES = $(libcrun_SOURCES)
+libcrun_bundled_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
+libcrun_bundled_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
+libcrun_bundled_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+endif
+
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \

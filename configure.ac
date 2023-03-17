@@ -173,6 +173,15 @@ AS_IF([test "x$with_python_bindings" = "xyes"], [
         use_fPIC=yes
 ])
 
+AC_ARG_WITH([lua-bindings], AS_HELP_STRING([--with-lua-bindings], [build the Lua bindings]))
+
+AS_IF([test "x$with_lua_bindings" = "xyes"], [
+	AX_PROG_LUA([5.4], [5.5], [], [AC_MSG_ERROR([*** lua interpreter not found])])
+	AX_LUA_HEADERS([], [AC_MSG_ERROR([*** lua headers not found])])
+	AX_LUA_LIBS([], [AC_MSG_ERROR([*** lua libs not found])])
+	use_fPIC=yes
+])
+
 AS_IF([test "x$use_fPIC" = "xyes"], [
 	# configure should not touch CFLAGS/LDFLAGS but we need it to propagate it
 	# to libocispec.
@@ -253,6 +262,7 @@ fi
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
+AM_CONDITIONAL([LUA_BINDINGS], [test "x$with_lua_bindings" = "xyes"])
 AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])
 AM_CONDITIONAL([SHARED_LIBCRUN], [test "x$enable_shared" = "xyes"])
 
