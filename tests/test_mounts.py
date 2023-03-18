@@ -142,7 +142,7 @@ def test_proc_readonly_should_inherit_options_from_parent():
         if mount['destination'] == "/proc":
            mount['options'] = ["nosuid", "noexec","nodev"]
 
-    # Move test/world to a readonly path
+    # Move `/proc/bus` to a readonly path
     conf['linux']['readonlyPaths'] = ["/proc/bus"]
     out, _ = run_and_get_output(conf, hide_stderr=True)
 
