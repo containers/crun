@@ -1134,6 +1134,18 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   return 0;
 }
 
+static inline const char *
+get_selinux_context_type (libcrun_container_t *container)
+{
+  const char *context_type;
+
+  context_type = find_annotation (container, "run.oci.mount_context_type");
+  if (context_type)
+    return context_type;
+
+  return "context";
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1165,9 +1177,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (label_how == LABEL_MOUNT)
     {
-      const char *context_type = find_annotation (container, "run.oci.mount_context_type");
-      if (! context_type)
-        context_type = "context";
+      const char *context_type = get_selinux_context_type (container);
 
       ret = add_selinux_mount_label (&data_with_label, data, label, context_type, err);
       if (ret < 0)
