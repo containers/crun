@@ -3986,6 +3986,8 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   cleanup_free char *devs_path = NULL;
   cleanup_close int devs_mountfd = -1;
   cleanup_close int targetfd = -1;
+  const char *context_type = NULL;
+  const char *label = NULL;
   size_t how_many = 0;
   size_t i;
   int ret;
@@ -4025,7 +4027,13 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
       goto restore_mountns;
     }
 
-  devs_mountfd = fsopen_mount ("tmpfs", NULL, NULL);
+  if (container->container_def->linux && container->container_def->linux->mount_label)
+    {
+      label = container->container_def->linux->mount_label;
+      context_type = get_selinux_context_type (container);
+    }
+
+  devs_mountfd = fsopen_mount ("tmpfs", context_type, label);
   if (UNLIKELY (devs_mountfd < 0))
     {
       ret = crun_make_error (err, errno, "fsopen_mount `tmpfs`");
