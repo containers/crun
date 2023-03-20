@@ -81,7 +81,7 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   WasmEdge_String (*WasmEdge_StringCreateByCString) (const char *Str);
   uint32_t argn = 0;
   uint32_t envn = 0;
-  const char *dirs[1] = { "/:/" };
+  const char *dirs[2] = { "/:/", ".:." };
   WasmEdge_ConfigureContext *configure;
   WasmEdge_VMContext *vm;
   WasmEdge_Result result;
