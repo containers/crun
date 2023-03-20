@@ -990,18 +990,25 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
 
 /* Attempt to open a mount of the specified type.  */
 static int
-fsopen_mount (const char *type)
+fsopen_mount (const char *type, const char *labeltype, const char *label)
 {
 #ifdef HAVE_NEW_MOUNT_API
   cleanup_close int fsfd = -1;
   int ret;
 
   fsfd = syscall_fsopen (type, FSOPEN_CLOEXEC);
-  if (fsfd < 0)
+  if (UNLIKELY (fsfd < 0))
     return fsfd;
 
+  if (labeltype)
+    {
+      ret = syscall_fsconfig (fsfd, FSCONFIG_SET_STRING, labeltype, label, 0);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = syscall_fsconfig (fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     return ret;
 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
@@ -4008,7 +4015,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
       goto restore_mountns;
     }
 
-  devs_mountfd = fsopen_mount ("tmpfs");
+  devs_mountfd = fsopen_mount ("tmpfs", NULL, NULL);
   if (UNLIKELY (devs_mountfd < 0))
     {
       ret = crun_make_error (err, errno, "fsopen_mount `tmpfs`");
@@ -4239,9 +4246,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
              An error will be generated later if it is not possible to join the namespace.
           */
           if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-            fd = fsopen_mount (def->mounts[i]->type);
+            fd = fsopen_mount (def->mounts[i]->type, NULL, NULL);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            fd = fsopen_mount (def->mounts[i]->type);
+            fd = fsopen_mount (def->mounts[i]->type, NULL, NULL);
 
           if (fd >= 0)
             {
