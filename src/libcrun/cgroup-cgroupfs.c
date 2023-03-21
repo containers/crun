@@ -40,15 +40,14 @@
 static char *
 make_cgroup_path (const char *path, const char *id)
 {
-  const char *cgroup_path = path;
   char *ret;
 
-  if (cgroup_path == NULL)
+  if (path == NULL)
     xasprintf (&ret, "/%s", id);
-  else if (cgroup_path[0] == '/')
-    ret = xstrdup (cgroup_path);
+  else if (path[0] == '/')
+    ret = xstrdup (path);
   else
-    xasprintf (&ret, "/%s", cgroup_path);
+    xasprintf (&ret, "/%s", path);
 
   return ret;
 }
