@@ -1,3 +1,16 @@
+* crun-1.8.2
+
+- lua bindings for libcrun.
+- wasmedge: add current directory to preopen paths.
+- linux: inherit parent mount flags when making a path masked.
+- libcrun: custom annotation to set the scheduler for the container process.
+- cgroup: fallback to blkio.bfq files if blkio is not available on cgroup v1.
+- cgroup: initialize rt limits when using systemd.
+- tty: chown the tty to the exec user instead of the user specified
+  to create the container.
+- cgroup: fallback to create cgroupfs as sibling of the current cgroup if there
+  is none specified and it cannot be created in the root cgroup.
+
 * crun-1.8.1
 
 - linux: idmapped mounts expect the same configuration as the user
