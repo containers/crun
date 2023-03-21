@@ -40,15 +40,14 @@
 static char *
 make_cgroup_path (const char *path, const char *id)
 {
-  const char *cgroup_path = path;
   char *ret;
 
-  if (cgroup_path == NULL)
+  if (path == NULL)
     xasprintf (&ret, "/%s", id);
-  else if (cgroup_path[0] == '/')
-    ret = xstrdup (cgroup_path);
+  else if (path[0] == '/')
+    ret = xstrdup (path);
   else
-    xasprintf (&ret, "/%s", cgroup_path);
+    xasprintf (&ret, "/%s", path);
 
   return ret;
 }
@@ -88,6 +87,23 @@ libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd,
 }
 
 static int
+make_new_sibling_cgroup (char **out, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *current_cgroup = NULL;
+  char *dir;
+  int ret;
+
+  ret = libcrun_get_current_unified_cgroup (&current_cgroup, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  dir = dirname (current_cgroup);
+
+  append_paths (out, err, dir, id, NULL);
+  return 0;
+}
+
+static int
 libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *out, libcrun_error_t *err)
 {
   pid_t pid = args->pid;
@@ -105,7 +121,30 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
 
       ret = enable_controllers (out->path, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          /* If the generated path cannot be used attempt to create the new cgroup
+             as a sibling of the current one.  */
+          if (args->cgroup_path == NULL)
+            {
+              libcrun_error_t tmp_err = NULL;
+              int tmp_ret;
+
+              free (out->path);
+              out->path = NULL;
+
+              tmp_ret = make_new_sibling_cgroup (&out->path, args->id, &tmp_err);
+              if (UNLIKELY (tmp_ret < 0))
+                {
+                  crun_error_release (&tmp_err);
+                  return ret;
+                }
+
+              crun_error_release (err);
+              ret = enable_controllers (out->path, err);
+            }
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   /* The cgroup was already joined, nothing more left to do.  */

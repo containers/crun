@@ -2546,7 +2546,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       /* Read the cgroup path before we enter the cgroupns.  */
-      ret = libcrun_get_current_unified_cgroup (&unified_cgroup_path, err);
+      ret = libcrun_get_current_unified_cgroup (&unified_cgroup_path, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }

@@ -151,7 +151,7 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
 }
 
 int
-libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err)
+libcrun_get_current_unified_cgroup (char **path, bool absolute, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
   size_t content_size;
@@ -172,7 +172,11 @@ libcrun_get_current_unified_cgroup (char **path, libcrun_error_t *err)
     return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
   *to = '\0';
 
-  return append_paths (path, err, CGROUP_ROOT, from, NULL);
+  if (absolute)
+    return append_paths (path, err, CGROUP_ROOT, from, NULL);
+
+  *path = xstrdup (from);
+  return 0;
 }
 
 #ifndef CGROUP2_SUPER_MAGIC
