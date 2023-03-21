@@ -990,18 +990,25 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
 
 /* Attempt to open a mount of the specified type.  */
 static int
-fsopen_mount (const char *type)
+fsopen_mount (const char *type, const char *labeltype, const char *label)
 {
 #ifdef HAVE_NEW_MOUNT_API
   cleanup_close int fsfd = -1;
   int ret;
 
   fsfd = syscall_fsopen (type, FSOPEN_CLOEXEC);
-  if (fsfd < 0)
+  if (UNLIKELY (fsfd < 0))
     return fsfd;
 
+  if (labeltype)
+    {
+      ret = syscall_fsconfig (fsfd, FSCONFIG_SET_STRING, labeltype, label, 0);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = syscall_fsconfig (fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
-  if (ret < 0)
+  if (UNLIKELY (ret < 0))
     return ret;
 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
@@ -1127,6 +1134,18 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   return 0;
 }
 
+static inline const char *
+get_selinux_context_type (libcrun_container_t *container)
+{
+  const char *context_type;
+
+  context_type = find_annotation (container, "run.oci.mount_context_type");
+  if (context_type)
+    return context_type;
+
+  return "context";
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1158,9 +1177,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (label_how == LABEL_MOUNT)
     {
-      const char *context_type = find_annotation (container, "run.oci.mount_context_type");
-      if (! context_type)
-        context_type = "context";
+      const char *context_type = get_selinux_context_type (container);
 
       ret = add_selinux_mount_label (&data_with_label, data, label, context_type, err);
       if (ret < 0)
@@ -3969,6 +3986,8 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   cleanup_free char *devs_path = NULL;
   cleanup_close int devs_mountfd = -1;
   cleanup_close int targetfd = -1;
+  const char *context_type = NULL;
+  const char *label = NULL;
   size_t how_many = 0;
   size_t i;
   int ret;
@@ -4008,7 +4027,13 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
       goto restore_mountns;
     }
 
-  devs_mountfd = fsopen_mount ("tmpfs");
+  if (container->container_def->linux && container->container_def->linux->mount_label)
+    {
+      label = container->container_def->linux->mount_label;
+      context_type = get_selinux_context_type (container);
+    }
+
+  devs_mountfd = fsopen_mount ("tmpfs", context_type, label);
   if (UNLIKELY (devs_mountfd < 0))
     {
       ret = crun_make_error (err, errno, "fsopen_mount `tmpfs`");
@@ -4239,9 +4264,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
              An error will be generated later if it is not possible to join the namespace.
           */
           if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-            fd = fsopen_mount (def->mounts[i]->type);
+            fd = fsopen_mount (def->mounts[i]->type, NULL, NULL);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            fd = fsopen_mount (def->mounts[i]->type);
+            fd = fsopen_mount (def->mounts[i]->type, NULL, NULL);
 
           if (fd >= 0)
             {
