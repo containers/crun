@@ -9,8 +9,16 @@
 ...
 ```
 
+
 ## Examples
-#### Compile and run `wasm` modules directly
+
+#### Try out example with pre-built image and podman.
+
+```console
+podman run -it -p 8080:8080  --name=wasm-example  --platform=wasi/wasm32   michaelirwin244/wasm-example
+```
+
+#### Compiling and running `wasm` modules
 * Following example is using `rust` to compile a webassembly module but you can use any supported language.
 * Create a new rust binary using `cargo new hello_wasm --bin`.
 * Add relevant function to `src/main.rs` for this example we will be using a print.
