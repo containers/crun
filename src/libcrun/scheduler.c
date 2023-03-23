@@ -22,6 +22,7 @@
 #include "linux.h"
 #include "utils.h"
 #include <sched.h>
+#include <linux/sched.h>
 #include <sys/sysmacros.h>
 #include <limits.h>
 #include <inttypes.h>
