@@ -1,3 +1,7 @@
+* crun-1.8.3
+
+- update: initialize the rt limits only on cgroup v1.
+
 * crun-1.8.2
 
 - lua bindings for libcrun.

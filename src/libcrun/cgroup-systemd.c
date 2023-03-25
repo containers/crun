@@ -1138,9 +1138,12 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       goto exit;
     }
 
-  ret = setup_rt_runtime (resources, cgroup_status->path, err);
-  if (UNLIKELY (ret < 0))
-    goto exit;
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    {
+      ret = setup_rt_runtime (resources, cgroup_status->path, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+    }
 
   ret = 0;
 
