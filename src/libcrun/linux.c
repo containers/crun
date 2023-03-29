@@ -4516,6 +4516,18 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME | CLONE_NEWCGROUP);
     }
 
+  init_status.namespaces_to_unshare &= ~first_clone_args;
+
+  /* Check if there are still namespaces that require a fork().  */
+  if (init_status.namespaces_to_unshare & (CLONE_NEWPID | CLONE_NEWTIME))
+    {
+      /* If we need to make another fork(), make sure the NEWPID is always
+         created as part of that.  */
+      first_clone_args &= ~CLONE_NEWPID;
+      init_status.namespaces_to_unshare |= CLONE_NEWPID;
+      init_status.must_fork = true;
+    }
+
   pid = -1;
   if (cgroup_dirfd && *cgroup_dirfd->dirfd >= 0)
     {
@@ -4540,12 +4552,6 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       if (UNLIKELY (pid < 0))
         return crun_make_error (err, errno, "clone");
     }
-
-  init_status.namespaces_to_unshare &= ~first_clone_args;
-
-  /* Check if there are still namespaces that require a fork().  */
-  if (init_status.namespaces_to_unshare & (CLONE_NEWPID | CLONE_NEWTIME))
-    init_status.must_fork = true;
 
   if (pid)
     {
