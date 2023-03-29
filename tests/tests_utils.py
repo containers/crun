@@ -143,7 +143,7 @@ def parse_proc_status(content):
         r[k] = v.strip()
     return r
 
-def add_all_namespaces(conf, cgroupns=False, userns=False, netns=True, ipcns=True, utsns=True, pidns=True):
+def add_all_namespaces(conf, cgroupns=False, userns=False, netns=True, ipcns=True, utsns=True, pidns=True,time=False):
     has = {}
     for i in conf['linux']['namespaces']:
         has[i['type']] = i['type']
@@ -160,6 +160,8 @@ def add_all_namespaces(conf, cgroupns=False, userns=False, netns=True, ipcns=Tru
         namespaces = namespaces + ["user"]
     if netns:
         namespaces = namespaces + ["network"]
+    if time:
+        namespaces = namespaces + ["time"]
     for i in namespaces:
         if i not in has:
             conf['linux']['namespaces'].append({"type" : i})
