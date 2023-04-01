@@ -466,11 +466,6 @@ mount cgroup -t cgroup /sys/fs/cgroup/systemd -o none,name=systemd,xattr
 chown -R the_user.the_user /sys/fs/cgroup/systemd
 ```
 
-## `run.oci.timens_offset=ID SEC NSEC`
-
-Specify the offset to be written to /proc/self/timens_offsets when creating
-a time namespace.
-
 ## `run.oci.systemd.subgroup=SUBGROUP`
 
 Override the name for the systemd sub cgroup created under the systemd

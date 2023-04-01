@@ -4326,14 +4326,27 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return crun_make_error (err, errno, "unshare");
     }
 
-  if (init_status->all_namespaces & CLONE_NEWTIME)
+  if (def->linux->time_offsets)
     {
-      const char *v = find_annotation (container, "run.oci.timens_offset");
-      if (v)
+      char fmt_buffer[128];
+      cleanup_close int fd = -1;
+
+      fd = open ("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+      if (UNLIKELY (fd < 0))
+        return crun_make_error (err, errno, "open /proc/self/timens_offsets");
+      if (def->linux->time_offsets->boottime)
         {
-          ret = write_file ("/proc/self/timens_offsets", v, strlen (v), err);
+          sprintf (fmt_buffer, "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
+          ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_make_error (err, errno, "write /proc/self/timens_offsets");
+        }
+      if (def->linux->time_offsets->monotonic)
+        {
+          sprintf (fmt_buffer, "monotonic %" PRIi64 " %" PRIu32, def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
+          ret = write (fd, fmt_buffer, strlen (fmt_buffer));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write /proc/self/timens_offsets");
         }
     }
 
@@ -4516,6 +4529,18 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME | CLONE_NEWCGROUP);
     }
 
+  init_status.namespaces_to_unshare &= ~first_clone_args;
+
+  /* Check if there are still namespaces that require a fork().  */
+  if (init_status.namespaces_to_unshare & (CLONE_NEWPID | CLONE_NEWTIME))
+    {
+      /* If we need to make another fork(), make sure the NEWPID is always
+         created as part of that.  */
+      first_clone_args &= ~CLONE_NEWPID;
+      init_status.namespaces_to_unshare |= CLONE_NEWPID;
+      init_status.must_fork = true;
+    }
+
   pid = -1;
   if (cgroup_dirfd && *cgroup_dirfd->dirfd >= 0)
     {
@@ -4540,12 +4565,6 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       if (UNLIKELY (pid < 0))
         return crun_make_error (err, errno, "clone");
     }
-
-  init_status.namespaces_to_unshare &= ~first_clone_args;
-
-  /* Check if there are still namespaces that require a fork().  */
-  if (init_status.namespaces_to_unshare & (CLONE_NEWPID | CLONE_NEWTIME))
-    init_status.must_fork = true;
 
   if (pid)
     {
