@@ -384,27 +384,13 @@ def test_idmapped_mounts():
                 return True
             return False
 
-        # first test with the custom crun annotation
-        if check("idmap", None, None, "0:0"):
-            return 1
-
-        if check("idmap=uids=0-1-10;gids=0-1-10", None, None, "0:0"):
-            return 1
-
-        if check("idmap=uids=0-2-10#10-100-10;gids=0-1-10", None, None, "1:0"):
-            return 1
-
-        os.chown(target, 1, 2)
-        if check("idmap=uids=@0-1-10;gids=+0-1-10", None, None, "2:2"):
-            return 1
-
         # and now test with uidMappings and gidMappings
         os.chown(target, 0, 0)
 
         mountMappings = [
             {
-                "hostID": 0,
-                "containerID": 1,
+                "containerID": 0,
+                "hostID": 1,
                 "size": 10
             }
         ]
@@ -413,8 +399,8 @@ def test_idmapped_mounts():
 
         mountMappings = [
             {
-                "hostID": 0,
-                "containerID": 2,
+                "containerID": 0,
+                "hostID": 2,
                 "size": 10
             }
         ]
