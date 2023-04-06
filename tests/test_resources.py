@@ -199,6 +199,30 @@ def test_resources_cpu_weight():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_resources_cpu_quota_minus_one():
+    if is_cgroup_v2_unified() or is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'cat', '/sys/fs/cgroup/cpu/cpu.cfs_quota_us']
+
+    conf['linux']['resources'] = {}
+    conf['linux']['resources']['cpu'] = {
+            "quota": -1
+    }
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf, command='run')
+        if "-1" not in out:
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
+
 def test_resources_cpu_weight_systemd():
     if not is_cgroup_v2_unified() or is_rootless():
         return 77
@@ -288,6 +312,7 @@ all_tests = {
     "resources-fail-with-enoent" : test_resources_fail_with_enoent,
     "resources-cpu-weight" : test_resources_cpu_weight,
     "resources-cpu-weight-systemd" : test_resources_cpu_weight_systemd,
+    "resources-cpu-quota-minus-one" : test_resources_cpu_quota_minus_one,
 }
 
 if __name__ == "__main__":

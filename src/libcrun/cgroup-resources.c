@@ -946,7 +946,7 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         quota = cpu->quota;
       else
         {
-          len = sprintf (fmt_buf, "%" PRIu64, cpu->quota);
+          len = sprintf (fmt_buf, "%" PRIi64, cpu->quota);
           ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
