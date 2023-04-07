@@ -6,7 +6,7 @@ ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 RUN yum install -y python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel go-md2man conntrack-tools which \
     glibc-static python3-libmount libtool make podman xz nmap-ncat jq bats \
-    libgcrypt-devel iproute openssl iputils socat criu-libs && \
+    libgcrypt-devel iproute openssl iputils socat criu-libs irqbalance && \
     dnf install -y 'dnf-command(builddep)' && dnf builddep -y podman && \
     dnf remove -y golang && \
     sudo dnf update -y && \
