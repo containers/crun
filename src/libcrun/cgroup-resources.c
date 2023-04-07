@@ -908,11 +908,12 @@ static int
 write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
                      libcrun_error_t *err)
 {
-  size_t len;
+  size_t len, period_len;
   int ret;
   char fmt_buf[64];
   int64_t period = -1;
   int64_t quota = -1;
+  cleanup_free char *period_str = NULL;
 
   if (cpu->shares)
     {
@@ -937,7 +938,20 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
           len = sprintf (fmt_buf, "%" PRIu64, cpu->period);
           ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_period_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
-            return ret;
+            {
+              /*
+                Sometimes when the period to be set is smaller than the current one,
+                it is rejected by the kernel (EINVAL) as old_quota/new_period exceeds
+                the parent cgroup quota limit. If this happens and the quota is going
+                to be set, ignore the error for now and retry after setting the quota.
+               */
+              if (! cpu->quota || crun_error_get_errno (err) != EINVAL)
+                return ret;
+
+              crun_error_release (err);
+              period_str = xstrdup (fmt_buf);
+              period_len = len;
+            }
         }
     }
   if (cpu->quota)
@@ -950,6 +964,12 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
           ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
+          if (period_str != NULL)
+            {
+              ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_period_us", period_str, period_len, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
         }
     }
   if (cpu->realtime_period)
