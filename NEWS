@@ -1,3 +1,14 @@
+* crun-1.8.4
+
+- fix build on CentOS 7.
+- drop custom annotation to set the time namespace and use the OCI
+  specs instead.
+- cgroup: workaround cpu quota/period issue with v1.  Sometimes
+  setting CPU quota period fails when a new period is lower, and a
+  parent cgroup has CPU quota limit set.
+- cgroup: fix set quota to -1 on cgroup v1.
+- criu: drop loading unused functions.
+
 * crun-1.8.3
 
 - update: initialize the rt limits only on cgroup v1.
