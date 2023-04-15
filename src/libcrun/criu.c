@@ -63,7 +63,9 @@ struct libcriu_wrapper_s
   int (*criu_dump) (void);
   int (*criu_get_orphan_pts_master_fd) (void);
   int (*criu_init_opts) (void);
+#  ifdef CRIU_JOIN_NS_SUPPORT
   int (*criu_join_ns_add) (const char *ns, const char *ns_file, const char *extra_opt);
+#  endif
 #  ifdef CRIU_PRE_DUMP_SUPPORT
   int (*criu_feature_check) (struct criu_feature_check *features, size_t size);
   int (*criu_pre_dump) (void);
@@ -135,7 +137,17 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_dump);
   LOAD_CRIU_FUNCTION (criu_get_orphan_pts_master_fd);
   LOAD_CRIU_FUNCTION (criu_init_opts);
-  LOAD_CRIU_FUNCTION (criu_join_ns_add);
+
+#  ifdef CRIU_JOIN_NS_SUPPORT
+  /* criu_join_ns_add() API was introduced with CRIU version 3.16.1
+   * Here we check if this API is available at build time to support
+   * compiling with older version of CRIU, and at runtime to support
+   * running crun with older versions of libcriu.so.2.
+   */
+  if (wrapper->criu_check_version (31601) == 1)
+    LOAD_CRIU_FUNCTION (criu_join_ns_add);
+#  endif
+
 #  ifdef CRIU_PRE_DUMP_SUPPORT
   LOAD_CRIU_FUNCTION (criu_feature_check);
   LOAD_CRIU_FUNCTION (criu_pre_dump);
@@ -873,15 +885,6 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       goto out_umount;
     }
 
-#  ifdef CRIU_JOIN_NS_SUPPORT
-  /* criu_join_ns_add() API was introduced with CRIU version 3.16.1
-   * Here we check if this API is available at build time to support
-   * compiling with older version of CRIU, and at runtime to support
-   * running crun with older versions of libcriu.so.2.
-   */
-  bool join_ns_support = libcriu_wrapper->criu_check_version (31601) == 1;
-#  endif
-
   /* If a namespace defined in config.json we are telling
    * CRIU use that namespace when restoring the process tree.
    *
@@ -915,7 +918,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 #  ifdef CRIU_JOIN_NS_SUPPORT
       if (value == CLONE_NEWTIME && def->linux->namespaces[i]->path != NULL)
         {
-          if (join_ns_support)
+          if (libcriu_wrapper->criu_join_ns_add != NULL)
             libcriu_wrapper->criu_join_ns_add ("time", def->linux->namespaces[i]->path, NULL);
           else
             return crun_make_error (err, 0, "shared time namespace restore is supported in CRIU >= 3.16.1");
@@ -923,7 +926,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
       if (value == CLONE_NEWIPC && def->linux->namespaces[i]->path != NULL)
         {
-          if (join_ns_support)
+          if (libcriu_wrapper->criu_join_ns_add != NULL)
             libcriu_wrapper->criu_join_ns_add ("ipc", def->linux->namespaces[i]->path, NULL);
           else
             return crun_make_error (err, 0, "shared ipc namespace restore is supported in CRIU >= 3.16.1");
@@ -931,7 +934,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
       if (value == CLONE_NEWUTS && def->linux->namespaces[i]->path != NULL)
         {
-          if (join_ns_support)
+          if (libcriu_wrapper->criu_join_ns_add != NULL)
             libcriu_wrapper->criu_join_ns_add ("uts", def->linux->namespaces[i]->path, NULL);
           else
             return crun_make_error (err, 0, "shared uts namespace restore is supported in CRIU >= 3.16.1");
