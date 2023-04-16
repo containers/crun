@@ -347,7 +347,7 @@ def test_idmapped_mounts():
             f.write("")
         os.chown(target, 0, 0)
 
-        idmapped_mounts_status = subprocess.call(["./tests/init", "check-feature", "idmapped-mounts", source_dir])
+        idmapped_mounts_status = subprocess.call([get_init_path(), "check-feature", "idmapped-mounts", source_dir])
         if idmapped_mounts_status != 0:
             return 77
 

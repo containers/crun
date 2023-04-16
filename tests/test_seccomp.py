@@ -24,7 +24,7 @@ import array
 from tests_utils import *
 
 def is_seccomp_listener_supported():
-    r = subprocess.call(["./tests/init", "check-feature", "open_tree"])
+    r = subprocess.call([get_init_path(), "check-feature", "open_tree"])
     return r == 0
 
 # taken from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg

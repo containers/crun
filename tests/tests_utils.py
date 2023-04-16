@@ -198,6 +198,9 @@ def get_tests_root():
 def get_tests_root_status():
     return os.path.join(get_tests_root(), "root")
 
+def get_init_path():
+    return os.path.abspath(os.getenv("INIT") or "tests/init")
+
 def get_crun_path():
     cwd = os.getcwd()
     return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
@@ -234,7 +237,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         conf = json.dumps(config)
         config_file.write(conf)
 
-    init = os.getenv("INIT") or "tests/init"
+    init = get_init_path()
     crun = get_crun_path()
 
     os.makedirs(os.path.join(rootfs, "sbin"))
