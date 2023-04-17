@@ -369,8 +369,8 @@ def test_sd_notify_proxy():
     if is_rootless():
         return 77
 
-    has_open_tree_status = subprocess.call(["./tests/init", "check-feature", "open_tree"])
-    has_move_mount_status = subprocess.call(["./tests/init", "check-feature", "move_mount"])
+    has_open_tree_status = subprocess.call([get_init_path(), "check-feature", "open_tree"])
+    has_move_mount_status = subprocess.call([get_init_path(), "check-feature", "move_mount"])
     if has_open_tree_status != 0 or has_move_mount_status != 0:
         return 77
 
