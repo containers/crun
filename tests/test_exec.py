@@ -357,7 +357,7 @@ def test_exec_write_pid_file():
         if not os.path.exists(pid_file):
             return -1
 
-        regu_cont = re.compile(r'\d{5}')
+        regu_cont = re.compile(r'\d+')
         with open(pid_file, 'r') as fp:
             contents = fp.read()
             fp.close()
