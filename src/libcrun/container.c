@@ -92,7 +92,7 @@ struct sync_socket_message_s
 typedef runtime_spec_schema_defs_hook hook;
 
 static const char spec_file[] = "\
-  {\n\
+{\n\
 	\"ociVersion\": \"1.0.0\",\n\
 	\"process\": {\n\
 		\"terminal\": true,\n\
@@ -277,12 +277,12 @@ static const char *spec_pts_tty_group = ",\n\
 
 static const char *spec_user = "\
 			{\n\
-				\"type\": \"user\"\n \
+				\"type\": \"user\"\n\
 			},\n";
 
 static const char *spec_cgroupns = "\
 			{\n\
-				\"type\": \"cgroup\"\n \
+				\"type\": \"cgroup\"\n\
 			},\n";
 
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
