@@ -58,25 +58,25 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   void (*wasm_byte_vec_delete) (wasm_byte_vec_t *);
   void (*wasm_byte_vec_new_uninitialized) (wasm_byte_vec_t *, size_t);
   wasi_config_t *(*wasi_config_new) (const char *);
-  wasmtime_store_t *(*wasmtime_store_new) (wasm_engine_t * engine, void *data, void (*finalizer) (void *));
-  wasmtime_context_t *(*wasmtime_store_context) (wasmtime_store_t * store);
-  wasmtime_linker_t *(*wasmtime_linker_new) (wasm_engine_t * engine);
-  wasmtime_error_t *(*wasmtime_linker_define_wasi) (wasmtime_linker_t * linker);
+  wasmtime_store_t *(*wasmtime_store_new) (wasm_engine_t *engine, void *data, void (*finalizer) (void *));
+  wasmtime_context_t *(*wasmtime_store_context) (wasmtime_store_t *store);
+  wasmtime_linker_t *(*wasmtime_linker_new) (wasm_engine_t *engine);
+  wasmtime_error_t *(*wasmtime_linker_define_wasi) (wasmtime_linker_t *linker);
   wasmtime_error_t *(*wasmtime_module_new) (
-      wasm_engine_t * engine,
+      wasm_engine_t *engine,
       const uint8_t *wasm,
       size_t wasm_len,
       wasmtime_module_t **ret);
-  void (*wasi_config_inherit_argv) (wasi_config_t * config);
-  void (*wasi_config_inherit_env) (wasi_config_t * config);
-  void (*wasi_config_set_argv) (wasi_config_t * config, int argc, const char *argv[]);
-  void (*wasi_config_inherit_stdin) (wasi_config_t * config);
-  void (*wasi_config_inherit_stdout) (wasi_config_t * config);
-  void (*wasi_config_inherit_stderr) (wasi_config_t * config);
-  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t * context, wasi_config_t * wasi);
+  void (*wasi_config_inherit_argv) (wasi_config_t *config);
+  void (*wasi_config_inherit_env) (wasi_config_t *config);
+  void (*wasi_config_set_argv) (wasi_config_t *config, int argc, const char *argv[]);
+  void (*wasi_config_inherit_stdin) (wasi_config_t *config);
+  void (*wasi_config_inherit_stdout) (wasi_config_t *config);
+  void (*wasi_config_inherit_stderr) (wasi_config_t *config);
+  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t *context, wasi_config_t *wasi);
   wasmtime_error_t *(*wasmtime_linker_module) (
-      wasmtime_linker_t * linker,
-      wasmtime_context_t * store,
+      wasmtime_linker_t *linker,
+      wasmtime_context_t *store,
       const char *name,
       size_t name_len,
       const wasmtime_module_t *module);
@@ -87,18 +87,18 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
       size_t name_len,
       wasmtime_func_t *func);
   wasmtime_error_t *(*wasmtime_func_call) (
-      wasmtime_context_t * store,
+      wasmtime_context_t *store,
       const wasmtime_func_t *func,
       const wasmtime_val_t *args,
       size_t nargs,
       wasmtime_val_t *results,
       size_t nresults,
       wasm_trap_t **trap);
-  void (*wasmtime_module_delete) (wasmtime_module_t * m);
-  void (*wasmtime_store_delete) (wasmtime_store_t * store);
+  void (*wasmtime_module_delete) (wasmtime_module_t *m);
+  void (*wasmtime_store_delete) (wasmtime_store_t *store);
   void (*wasmtime_error_message) (const wasmtime_error_t *error, wasm_name_t *message);
-  void (*wasmtime_error_delete) (wasmtime_error_t * error);
-  bool (*wasi_config_preopen_dir) (wasi_config_t * config, const char *path, const char *guest_path);
+  void (*wasmtime_error_delete) (wasmtime_error_t *error);
+  bool (*wasi_config_preopen_dir) (wasi_config_t *config, const char *path, const char *guest_path);
 
   wasmtime_wat2wasm = dlsym (cookie, "wasmtime_wat2wasm");
   wasm_engine_new = dlsym (cookie, "wasm_engine_new");
