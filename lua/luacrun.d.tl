@@ -148,7 +148,7 @@ local record luacrun
     status_container: (function (ctx: Ctx, id: string): ContainerStat | nil, string | nil)
 
     -- Start the container.
-    -- Return `true` if success; `false` and the error messgae if failed
+    -- Return `true` if success; `false` and the error message if failed
     start_container: (function (ctx: Ctx, id: string): boolean, string | nil)
 
     -- Iterate all container names in `ctx`.

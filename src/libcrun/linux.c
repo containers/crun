@@ -3997,7 +3997,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
 
   dev_fds = make_libcrun_fd_map (def->linux->devices_len);
 
-  if (! has_userns || is_empty_string (container->context->id))
+  if (! has_userns || is_empty_string (container->context->id) || geteuid () > 0)
     return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
 
   state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
