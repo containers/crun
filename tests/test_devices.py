@@ -79,6 +79,31 @@ def test_deny_devices():
             return 0
     return -1
 
+def test_create_or_bind_mount_device():
+    try:
+        os.stat("/dev/fuse")
+    except:
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'access', '/dev/fuse']
+    conf['linux']['devices'] = [{ "path": "/dev/fuse",
+                                 "type": "c",
+                                 "major": 10,
+                                 "minor": 229,
+                                 "fileMode": 0o775,
+                                 "uid": 0,
+                                 "gid": 0
+                                }]
+    try:
+        run_and_get_output(conf)
+    except Exception as e:
+        sys.stderr.write(str(e) + "\n")
+        return -1
+    return 0
+
+
 def test_allow_device():
     if is_rootless():
         return 77
@@ -161,6 +186,7 @@ all_tests = {
     "allow-device" : test_allow_device,
     "allow-access" : test_allow_access,
     "mknod-device" : test_mknod_device,
+    "create-or-bind-mount-device" : test_create_or_bind_mount_device,
 }
 
 if __name__ == "__main__":
