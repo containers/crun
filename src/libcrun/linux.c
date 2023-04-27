@@ -5305,6 +5305,35 @@ libcrun_container_restore_linux (libcrun_container_status_t *status, libcrun_con
   return 0;
 }
 
+/* Fallback to use kill(2) on systems where pidfd is not available.  */
+static int
+libcrun_kill_linux_no_pidfd (libcrun_container_status_t *status, bool check_pid, int signal, libcrun_error_t *err)
+{
+  int ret;
+
+  /* There is still a possibility that the pid is killed between the check
+     and the time we send the signal, but attempt to reduce the window of time when
+     it is possible.  */
+  if (check_pid)
+    {
+      ret = libcrun_check_pid_valid (status, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      /* The pid is not valid anymore, return an error.  */
+      if (ret == 0)
+        {
+          errno = ESRCH;
+          return crun_make_error (err, errno, "kill container");
+        }
+    }
+
+  ret = kill (status->pid, signal);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "kill container");
+  return 0;
+}
+
 int
 libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err)
 {
@@ -5316,7 +5345,8 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
     {
       /* If pidfd_open is not supported, fallback to kill.  */
       if (errno == ENOSYS)
-        goto fallback_to_kill;
+        return libcrun_kill_linux_no_pidfd (status, true, signal, err);
+
       return crun_make_error (err, errno, "open pidfd");
     }
 
@@ -5336,15 +5366,9 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
     {
       /* If pidfd_send_signal is not supported, fallback to kill.  */
       if (errno == ENOSYS)
-        goto fallback_to_kill;
+        return libcrun_kill_linux_no_pidfd (status, false, signal, err);
       return crun_make_error (err, errno, "send signal to pidfd");
     }
 
-  return 0;
-
-fallback_to_kill:
-  ret = kill (status->pid, signal);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "kill container");
   return 0;
 }
