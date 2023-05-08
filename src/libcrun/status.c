@@ -624,7 +624,7 @@ libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t *er
   if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
     return 0; /* stopped */
 
-  return 1;   /* running, created, or paused */
+  return 1; /* running, created, or paused */
 }
 
 int
