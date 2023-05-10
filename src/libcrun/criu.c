@@ -577,14 +577,15 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
-      cleanup_free char *external = NULL;
       int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
+          cleanup_free char *external = NULL;
           struct stat statbuf;
+
           ret = stat (def->linux->namespaces[i]->path, &statbuf);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
@@ -595,7 +596,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
       if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
         {
+          cleanup_free char *external = NULL;
           struct stat statbuf;
+
           ret = stat (def->linux->namespaces[i]->path, &statbuf);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
