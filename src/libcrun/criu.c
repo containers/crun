@@ -91,17 +91,6 @@ struct libcriu_wrapper_s
   void (*criu_set_work_dir_fd) (int fd);
 };
 
-#  define LOAD_CRIU_FUNCTION(X)                                                                \
-    do                                                                                         \
-      {                                                                                        \
-        wrapper->X = dlsym (wrapper->handle, #X);                                              \
-        if (wrapper->X == NULL)                                                                \
-          {                                                                                    \
-            dlclose (wrapper->handle);                                                         \
-            return crun_make_error (err, 0, "could not find symbol `%s` in `libcriu.so`", #X); \
-          }                                                                                    \
-    } while (0)
-
 static struct libcriu_wrapper_s *libcriu_wrapper;
 
 static inline void
@@ -126,17 +115,28 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
 {
   cleanup_free struct libcriu_wrapper_s *wrapper = xmalloc0 (sizeof (*wrapper));
 
+#  define LOAD_CRIU_FUNCTION(X, ALLOW_NULL)                                                    \
+    do                                                                                         \
+      {                                                                                        \
+        wrapper->X = dlsym (wrapper->handle, #X);                                              \
+        if (! ALLOW_NULL && wrapper->X == NULL)                                                \
+          {                                                                                    \
+            dlclose (wrapper->handle);                                                         \
+            return crun_make_error (err, 0, "could not find symbol `%s` in `libcriu.so`", #X); \
+          }                                                                                    \
+    } while (0)
+
   wrapper->handle = dlopen ("libcriu.so.2", RTLD_NOW);
   if (wrapper->handle == NULL)
     return crun_make_error (err, 0, "could not load `libcriu.so.2`");
 
-  LOAD_CRIU_FUNCTION (criu_add_ext_mount);
-  LOAD_CRIU_FUNCTION (criu_add_external);
-  LOAD_CRIU_FUNCTION (criu_add_inherit_fd);
-  LOAD_CRIU_FUNCTION (criu_check_version);
-  LOAD_CRIU_FUNCTION (criu_dump);
-  LOAD_CRIU_FUNCTION (criu_get_orphan_pts_master_fd);
-  LOAD_CRIU_FUNCTION (criu_init_opts);
+  LOAD_CRIU_FUNCTION (criu_add_ext_mount, false);
+  LOAD_CRIU_FUNCTION (criu_add_external, false);
+  LOAD_CRIU_FUNCTION (criu_add_inherit_fd, false);
+  LOAD_CRIU_FUNCTION (criu_check_version, false);
+  LOAD_CRIU_FUNCTION (criu_dump, false);
+  LOAD_CRIU_FUNCTION (criu_get_orphan_pts_master_fd, false);
+  LOAD_CRIU_FUNCTION (criu_init_opts, false);
 
 #  ifdef CRIU_JOIN_NS_SUPPORT
   /* criu_join_ns_add() API was introduced with CRIU version 3.16.1
@@ -144,36 +144,36 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
    * compiling with older version of CRIU, and at runtime to support
    * running crun with older versions of libcriu.so.2.
    */
-  if (wrapper->criu_check_version (31601) == 1)
-    LOAD_CRIU_FUNCTION (criu_join_ns_add);
+  LOAD_CRIU_FUNCTION (criu_join_ns_add, true);
 #  endif
 
 #  ifdef CRIU_PRE_DUMP_SUPPORT
-  LOAD_CRIU_FUNCTION (criu_feature_check);
-  LOAD_CRIU_FUNCTION (criu_pre_dump);
+  LOAD_CRIU_FUNCTION (criu_feature_check, false);
+  LOAD_CRIU_FUNCTION (criu_pre_dump, false);
 #  endif
-  LOAD_CRIU_FUNCTION (criu_restore_child);
-  LOAD_CRIU_FUNCTION (criu_set_ext_unix_sk);
-  LOAD_CRIU_FUNCTION (criu_set_file_locks);
-  LOAD_CRIU_FUNCTION (criu_set_freeze_cgroup);
-  LOAD_CRIU_FUNCTION (criu_set_images_dir_fd);
-  LOAD_CRIU_FUNCTION (criu_set_leave_running);
-  LOAD_CRIU_FUNCTION (criu_set_log_file);
-  LOAD_CRIU_FUNCTION (criu_set_log_level);
-  LOAD_CRIU_FUNCTION (criu_set_manage_cgroups);
-  LOAD_CRIU_FUNCTION (criu_set_manage_cgroups_mode);
-  LOAD_CRIU_FUNCTION (criu_set_notify_cb);
-  LOAD_CRIU_FUNCTION (criu_set_orphan_pts_master);
-  LOAD_CRIU_FUNCTION (criu_set_parent_images);
-  LOAD_CRIU_FUNCTION (criu_set_pid);
-  LOAD_CRIU_FUNCTION (criu_set_root);
-  LOAD_CRIU_FUNCTION (criu_set_shell_job);
-  LOAD_CRIU_FUNCTION (criu_set_tcp_established);
-  LOAD_CRIU_FUNCTION (criu_set_track_mem);
-  LOAD_CRIU_FUNCTION (criu_set_work_dir_fd);
+  LOAD_CRIU_FUNCTION (criu_restore_child, false);
+  LOAD_CRIU_FUNCTION (criu_set_ext_unix_sk, false);
+  LOAD_CRIU_FUNCTION (criu_set_file_locks, false);
+  LOAD_CRIU_FUNCTION (criu_set_freeze_cgroup, false);
+  LOAD_CRIU_FUNCTION (criu_set_images_dir_fd, false);
+  LOAD_CRIU_FUNCTION (criu_set_leave_running, false);
+  LOAD_CRIU_FUNCTION (criu_set_log_file, false);
+  LOAD_CRIU_FUNCTION (criu_set_log_level, false);
+  LOAD_CRIU_FUNCTION (criu_set_manage_cgroups, false);
+  LOAD_CRIU_FUNCTION (criu_set_manage_cgroups_mode, false);
+  LOAD_CRIU_FUNCTION (criu_set_notify_cb, false);
+  LOAD_CRIU_FUNCTION (criu_set_orphan_pts_master, false);
+  LOAD_CRIU_FUNCTION (criu_set_parent_images, false);
+  LOAD_CRIU_FUNCTION (criu_set_pid, false);
+  LOAD_CRIU_FUNCTION (criu_set_root, false);
+  LOAD_CRIU_FUNCTION (criu_set_shell_job, false);
+  LOAD_CRIU_FUNCTION (criu_set_tcp_established, false);
+  LOAD_CRIU_FUNCTION (criu_set_track_mem, false);
+  LOAD_CRIU_FUNCTION (criu_set_work_dir_fd, false);
 
   libcriu_wrapper = *wrapper_out = wrapper;
   wrapper = NULL;
+#  undef LOAD_CRIU_FUNCTION
   return 0;
 }
 
