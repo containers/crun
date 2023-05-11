@@ -2377,7 +2377,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  ret = libcrun_set_scheduler (pid, container, err);
+  ret = libcrun_set_scheduler (pid, def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

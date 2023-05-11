@@ -4711,7 +4711,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 }
 
 static int
-join_process_parent_helper (libcrun_container_t *container,
+join_process_parent_helper (runtime_spec_schema_config_schema_process *process,
                             pid_t child_pid, int sync_socket_fd,
                             libcrun_container_status_t *status,
                             bool need_move_to_cgroup, const char *sub_cgroup,
@@ -4764,7 +4764,7 @@ join_process_parent_helper (libcrun_container_t *container,
         }
 
       /* Join the scheduler immediately after joining the cgroup.  */
-      ret = libcrun_set_scheduler (pid, container, err);
+      ret = libcrun_set_scheduler (pid, process, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -5016,7 +5016,7 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
       /* We need to set the scheduler as soon as possible after joining the cgroup,
          because if it is a RT scheduler, other processes in the container could already
          take the entire cpu time and stall the new process.  */
-      ret = libcrun_set_scheduler (pid, container, err);
+      ret = libcrun_set_scheduler (pid, process, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -5038,8 +5038,10 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
     {
       close_and_reset (&sync_socket_fd[1]);
       sync_fd = sync_socket_fd[0];
-      return join_process_parent_helper (container, pid, sync_fd, status,
-                                         need_move_to_cgroup, sub_cgroup,
+      return join_process_parent_helper (process,
+                                         pid, sync_fd, status,
+                                         need_move_to_cgroup,
+                                         sub_cgroup,
                                          terminal_fd, err);
     }
 

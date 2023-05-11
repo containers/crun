@@ -26,6 +26,7 @@
 #include <sys/sysmacros.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <ocispec/runtime_spec_schema_config_schema.h>
 
 #ifndef SCHED_FLAG_RESET_ON_FORK
 #  define SCHED_FLAG_RESET_ON_FORK 0x01
@@ -78,14 +79,11 @@ syscall_sched_setattr (pid_t pid, struct sched_attr_s *attr, unsigned int flags)
 }
 
 int
-libcrun_set_scheduler (pid_t pid, libcrun_container_t *container, libcrun_error_t *err)
+libcrun_set_scheduler (pid_t pid, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err)
 {
-  cleanup_free char *copy = NULL;
   struct sched_attr_s attr;
-  const char *annotation;
-  char *v, *v_options;
-  int ret, policy;
-  char *sptr;
+  int i, ret, policy;
+  size_t s;
   struct
   {
     const char *name;
@@ -100,101 +98,62 @@ libcrun_set_scheduler (pid_t pid, libcrun_container_t *container, libcrun_error_
     { NULL, 0 },
   };
 
+  if (process == NULL || process->scheduler == NULL)
+    return 0;
+
   memset (&attr, 0, sizeof (attr));
   attr.size = sizeof (attr);
 
-  annotation = find_annotation (container, "run.oci.scheduler");
-  if (LIKELY (annotation == NULL))
-    return 0;
-
-  copy = xstrdup (annotation);
-  v_options = strchr (copy, '#');
-  if (v_options)
-    *v_options = '\0';
+  if (is_empty_string (process->scheduler->policy))
+    return crun_make_error (err, 0, "scheduler policy not defined");
 
   policy = -1;
-  for (int i = 0; policies[i].name; i++)
-    if (strcmp (copy, policies[i].name) == 0)
+  for (i = 0; policies[i].name; i++)
+    if (strcmp (process->scheduler->policy, policies[i].name) == 0)
       {
-        policy = policies[i].value;
+        policy = i;
         break;
       }
-  if (UNLIKELY (policy == -1))
-    return crun_make_error (err, 0, "invalid scheduler `%s`", copy);
+  if (UNLIKELY (policy < 0))
+    return crun_make_error (err, 0, "invalid scheduler `%s`", process->scheduler->policy);
 
-  attr.sched_policy = policy;
+  attr.sched_policy = policies[policy].value;
 
-  if (v_options)
+  if (process->scheduler->nice_present)
+    attr.sched_nice = process->scheduler->nice;
+
+  if (process->scheduler->priority_present)
+    attr.sched_priority = process->scheduler->priority;
+
+  if (process->scheduler->runtime_present)
+    attr.sched_runtime = process->scheduler->runtime;
+
+  if (process->scheduler->deadline_present)
+    attr.sched_deadline = process->scheduler->deadline;
+
+  if (process->scheduler->period_present)
+    attr.sched_period = process->scheduler->period;
+
+  for (s = 0; s < process->scheduler->flags_len; s++)
     {
-      v_options++;
-      for (v = strtok_r (v_options, "#", &sptr); v; v = strtok_r (NULL, "#", &sptr))
-        {
-          char *key = v;
-          char *value;
-          char *ep = NULL;
+      char *key = process->scheduler->flags[s];
 
-          value = strchr (v, ':');
-          if (UNLIKELY (value == NULL))
-            return crun_make_error (err, 0, "invalid scheduler option `%s`", v);
-          *value++ = '\0';
-
-          if (strcmp (key, "flag_reset_on_fork") == 0)
-            attr.sched_flags |= SCHED_FLAG_RESET_ON_FORK;
-          else if (strcmp (key, "flag_reclaim") == 0)
-            attr.sched_flags |= SCHED_FLAG_RECLAIM;
-          else if (strcmp (key, "flag_dl_overrun") == 0)
-            attr.sched_flags |= SCHED_FLAG_DL_OVERRUN;
-          else if (strcmp (key, "flag_keep_policy") == 0)
-            attr.sched_flags |= SCHED_FLAG_KEEP_POLICY;
-          else if (strcmp (key, "flag_keep_params") == 0)
-            attr.sched_flags |= SCHED_FLAG_KEEP_PARAMS;
-          else if (strcmp (key, "flag_util_clamp_min") == 0)
-            attr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MIN;
-          else if (strcmp (key, "flag_util_clamp_max") == 0)
-            attr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MAX;
-          else if (strcmp (key, "prio") == 0)
-            {
-
-              errno = 0;
-              attr.sched_priority = strtoul (value, &ep, 10);
-              if (UNLIKELY (ep != NULL && *ep != '\0'))
-                return crun_make_error (err, EINVAL, "parse scheduler annotation");
-              if (UNLIKELY (errno))
-                return crun_make_error (err, errno, "parse scheduler annotation");
-
-              if (attr.sched_priority < (uint32_t) sched_get_priority_min (policy)
-                  || attr.sched_priority > (uint32_t) sched_get_priority_max (policy))
-                return crun_make_error (err, 0, "scheduler priority value `%ul` out of range", attr.sched_priority);
-            }
-          else if (strcmp (key, "runtime") == 0)
-            {
-              attr.sched_runtime = strtoull (value, &ep, 10);
-              if (UNLIKELY (ep != NULL && *ep != '\0'))
-                return crun_make_error (err, EINVAL, "parse scheduler annotation");
-              if (UNLIKELY (errno))
-                return crun_make_error (err, errno, "parse scheduler annotation");
-            }
-          else if (strcmp (key, "deadline") == 0)
-            {
-              attr.sched_deadline = strtoull (value, &ep, 10);
-              if (UNLIKELY (ep != NULL && *ep != '\0'))
-                return crun_make_error (err, EINVAL, "parse scheduler annotation");
-              if (UNLIKELY (errno))
-                return crun_make_error (err, errno, "parse scheduler annotation");
-            }
-          else if (strcmp (key, "period") == 0)
-            {
-              attr.sched_period = strtoull (value, &ep, 10);
-              if (UNLIKELY (ep != NULL && *ep != '\0'))
-                return crun_make_error (err, EINVAL, "parse scheduler annotation");
-              if (UNLIKELY (errno))
-                return crun_make_error (err, errno, "parse scheduler annotation");
-            }
-          else
-            {
-              return crun_make_error (err, 0, "invalid scheduler option `%s`", key);
-            }
-        }
+      if (strcmp (key, "SCHED_FLAG_RESET_ON_FORK") == 0)
+        attr.sched_flags |= SCHED_FLAG_RESET_ON_FORK;
+      else if (strcmp (key, "SCHED_FLAG_RECLAIM") == 0)
+        attr.sched_flags |= SCHED_FLAG_RECLAIM;
+      else if (strcmp (key, "SCHED_FLAG_DL_OVERRUN") == 0)
+        attr.sched_flags |= SCHED_FLAG_DL_OVERRUN;
+      else if (strcmp (key, "SCHED_FLAG_KEEP_POLICY") == 0)
+        attr.sched_flags |= SCHED_FLAG_KEEP_POLICY;
+      else if (strcmp (key, "SCHED_FLAG_KEEP_PARAMS") == 0)
+        attr.sched_flags |= SCHED_FLAG_KEEP_PARAMS;
+      else if (strcmp (key, "SCHED_FLAG_UTIL_CLAMP_MIN") == 0)
+        attr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MIN;
+      else if (strcmp (key, "SCHED_FLAG_UTIL_CLAMP_MAX") == 0)
+        attr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MAX;
+      else
+        return crun_make_error (err, 0, "invalid scheduler option `%s`", key);
     }
 
   ret = syscall_sched_setattr (pid, &attr, 0);

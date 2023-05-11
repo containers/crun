@@ -536,51 +536,6 @@ workload natively. Accepts a `.wasm` binary as input and if `.wat` is
 provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
-## `run.oci.scheduler`
-
-The `run.oci.scheduler` annotation is used to specify the scheduling
-policy and attributes of a process within a container.
-
-The `run.oci.scheduler` annotation has the following format: `POLICY[#OPTION:VALUE]#...]`
-
-Where `POLICY` is the scheduling policy to set and `OPTION` is an
-optional scheduling attribute to set.
-
-The following scheduling policies are supported:
-
-- SCHED_OTHER
-- SCHED_BATCH
-- SCHED_IDLE
-- SCHED_FIFO
-- SCHED_RR
-- SCHED_DEADLINE
-
-The following attributes can be set:
-
-- runtime=VALUE.
-- deadline=VALUE.
-- period=VALUE.
-- prio=VALUE.
-- flag_reset_on_fork=1.
-- flag_reclaim=1.
-- flag_dl_overrun=1.
-- flag_keep_policy=1.
-- flag_keep_params=1.
-- flag_util_clamp_min=1.
-- flag_util_clamp_max=1.
-
-
-The `run.oci.scheduler` annotation allows you to set the scheduling
-policy for the container process.  The value of the annotation should
-be in the format `POLICY[|OPTION][#PRIORITY]`, where `POLICY` is the
-name of the scheduling policy, `OPTION` can be `SCHED_RESET_ON_FORK`
-and `PRIORITY` is an optional integer priority value.
-
-It is an experimental feature and will be removed once the feature is in the
-OCI runtime specs.
-
-Please refer to `sched_setattr(2)` for more information.
-
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that
