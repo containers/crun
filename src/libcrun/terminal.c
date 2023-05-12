@@ -62,7 +62,7 @@ libcrun_new_terminal (char **pty, libcrun_error_t *err)
 }
 
 static int
-set_raw (int fd, libcrun_error_t *err)
+set_raw (int fd, void **current_status, libcrun_error_t *err)
 {
   int ret;
   struct termios termios;
@@ -70,6 +70,14 @@ set_raw (int fd, libcrun_error_t *err)
   ret = tcgetattr (fd, &termios);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "tcgetattr");
+
+  if (current_status)
+    {
+      struct terminal_status_s *s = xmalloc (sizeof (*s));
+      s->fd = fd;
+      memcpy (&(s->termios), &termios, sizeof (termios));
+      *current_status = s;
+    }
 
   cfmakeraw (&termios);
 
@@ -116,19 +124,11 @@ libcrun_setup_terminal_ptmx (int fd, void **current_status, libcrun_error_t *err
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "tcgetattr");
 
-  if (current_status)
-    {
-      struct terminal_status_s *s = xmalloc (sizeof (*s));
-      s->fd = 0;
-      memcpy (&(s->termios), &termios, sizeof (termios));
-      *current_status = s;
-    }
-
   ret = tcsetattr (fd, TCSANOW, &termios);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "tcsetattr");
 
-  return set_raw (0, err);
+  return set_raw (0, current_status, err);
 }
 
 void
