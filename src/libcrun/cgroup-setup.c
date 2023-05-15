@@ -392,7 +392,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
     {
       crun_error_release (err);
 
-      ret = make_cgroup_threaded (path, err);
+      ret = maybe_make_cgroup_threaded (path, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
