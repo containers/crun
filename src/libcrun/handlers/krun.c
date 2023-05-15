@@ -260,18 +260,20 @@ libkrun_load (void **cookie, libcrun_error_t *err arg_unused)
 {
   struct krun_config *kconf;
   void *handle;
+  const char *libkrun_so = "libkrun.so.1";
+  const char *libkrun_sev_so = "libkrun-sev.so.1";
 
   kconf = malloc (sizeof (struct krun_config));
   if (kconf == NULL)
     return crun_make_error (err, 0, "could not allocate memory for krun_config");
 
-  kconf->handle = dlopen ("libkrun.so.1", RTLD_NOW);
-  kconf->handle_sev = dlopen ("libkrun-sev.so.1", RTLD_NOW);
+  kconf->handle = dlopen (libkrun_so, RTLD_NOW);
+  kconf->handle_sev = dlopen (libkrun_sev_so, RTLD_NOW);
 
   if (kconf->handle == NULL && kconf->handle_sev == NULL)
     {
       free (kconf);
-      return crun_make_error (err, 0, "could not allocate memory for krun_config");
+      return crun_make_error (err, 0, "failed to open %s and %s for krun_config", libkrun_so, libkrun_sev_so);
     }
 
   kconf->sev = false;
