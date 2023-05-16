@@ -72,10 +72,15 @@ libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
 }
 
 int
-make_cgroup_threaded (const char *path, libcrun_error_t *err)
+maybe_make_cgroup_threaded (const char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path_type = NULL;
   const char *const threaded = "threaded";
+  cleanup_free char *content = NULL;
+  cleanup_free char *buffer = NULL;
+  const char *parent;
+  size_t size;
+  char *it;
   int ret;
 
   path = consume_slashes (path);
@@ -87,23 +92,29 @@ make_cgroup_threaded (const char *path, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file (cgroup_path_type, threaded, strlen (threaded), err);
-  if (UNLIKELY (ret < 0 && errno == EOPNOTSUPP))
+  ret = read_all_file (cgroup_path_type, &content, &size, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (size > 0)
     {
-      cleanup_free char *buffer = xstrdup (path);
-      const char *parent = consume_slashes (dirname (buffer));
-      if (parent[0])
-        {
-          crun_error_release (err);
-
-          ret = make_cgroup_threaded (parent, err);
-          if (ret < 0)
-            return ret;
-
-          return write_file (cgroup_path_type, threaded, strlen (threaded), err);
-        }
+      it = content + size - 1;
+      while (*it == '\n' && it > content)
+        *it-- = '\0';
     }
-  return ret;
+
+  if (strcmp (content, "domain") == 0 || strcmp (content, "domain threaded") == 0)
+    return 0;
+
+  buffer = xstrdup (path);
+  parent = consume_slashes (dirname (buffer));
+  if (parent[0] && strcmp (parent, "."))
+    {
+      ret = maybe_make_cgroup_threaded (parent, err);
+      if (ret < 0)
+        return ret;
+    }
+  return write_file (cgroup_path_type, threaded, strlen (threaded), err);
 }
 
 int
@@ -138,7 +149,7 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
 
           crun_error_release (err);
 
-          ret = make_cgroup_threaded (path, err);
+          ret = maybe_make_cgroup_threaded (path, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -788,6 +799,13 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
 
       crun_error_release (err);
 
+      if (e == EOPNOTSUPP)
+        {
+          ret = maybe_make_cgroup_threaded (path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
       /* It seems the kernel can return EBUSY when a process was moved to a sub-cgroup
          and the controllers are enabled in its parent cgroup.  Retry a few times when
          it happens.  */
@@ -811,14 +829,6 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
 
                   if (e == EBUSY)
                     repeat = true;
-                  else if (e == EOPNOTSUPP)
-                    {
-                      ret = make_cgroup_threaded (path, err);
-                      if (UNLIKELY (ret < 0))
-                        return ret;
-
-                      repeat = true;
-                    }
 
                   continue;
                 }
