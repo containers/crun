@@ -629,6 +629,18 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
 }
 
 static inline int
+get_memory_limit (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
+{
+  if (resources->memory && resources->memory->limit_present)
+    {
+      *limit = resources->memory->limit;
+      return 1;
+    }
+
+  return get_value_from_unified_map (resources, "memory.max", limit, err);
+}
+
+static inline int
 get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
 {
   if (resources->cpu && resources->cpu->shares_present)
@@ -649,17 +661,28 @@ append_resources (sd_bus_message *m,
                   int cgroup_mode,
                   libcrun_error_t *err)
 {
+  uint64_t memory_limit;
   int sd_err;
+  int ret;
 
   if (resources == NULL)
     return 0;
+
+  ret = get_memory_limit (resources, &memory_limit, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret)
+    {
+      sd_err = sd_bus_message_append (m, "(sv)", "MemoryLimit", "t", memory_limit);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append MemoryLimit");
+    }
 
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
       {
         uint64_t weight;
-        int ret;
 
         ret = get_weight (resources, &weight, err);
         if (UNLIKELY (ret < 0))
