@@ -606,6 +606,28 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
   return 0;
 }
 
+static int
+get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name,
+                            uint64_t *value, libcrun_error_t *err)
+{
+  size_t i;
+
+  if (resources == NULL || resources->unified == NULL)
+    return 0;
+
+  for (i = 0; i < resources->unified->len; i++)
+    if (strcmp (resources->unified->keys[i], name) == 0)
+      {
+        errno = 0;
+        *value = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
+        if (UNLIKELY (errno))
+          return crun_make_error (err, errno, "invalid value for `%s`: %s", name,
+                                  resources->unified->values[i]);
+        return 1;
+      }
+  return 0;
+}
+
 static inline int
 get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
 {
@@ -618,22 +640,7 @@ get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *wei
       return 1;
     }
 
-  if (resources->unified)
-    {
-      size_t i;
-
-      for (i = 0; i < resources->unified->len; i++)
-        if (strcmp (resources->unified->keys[i], "cpu.weight") == 0)
-          {
-            errno = 0;
-            *weight = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
-            if (UNLIKELY (errno))
-              return crun_make_error (err, errno, "invalid value for `cpu.weight`: %s",
-                                      resources->unified->values[i]);
-            return 1;
-          }
-    }
-  return 0;
+  return get_value_from_unified_map (resources, "cpu.weight", weight, err);
 }
 
 static int
