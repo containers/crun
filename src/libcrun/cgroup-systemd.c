@@ -606,6 +606,40 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
   return 0;
 }
 
+static int
+get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name,
+                            uint64_t *value, libcrun_error_t *err)
+{
+  size_t i;
+
+  if (resources == NULL || resources->unified == NULL)
+    return 0;
+
+  for (i = 0; i < resources->unified->len; i++)
+    if (strcmp (resources->unified->keys[i], name) == 0)
+      {
+        errno = 0;
+        *value = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
+        if (UNLIKELY (errno))
+          return crun_make_error (err, errno, "invalid value for `%s`: %s", name,
+                                  resources->unified->values[i]);
+        return 1;
+      }
+  return 0;
+}
+
+static inline int
+get_memory_limit (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
+{
+  if (resources->memory && resources->memory->limit_present)
+    {
+      *limit = resources->memory->limit;
+      return 1;
+    }
+
+  return get_value_from_unified_map (resources, "memory.max", limit, err);
+}
+
 static inline int
 get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
 {
@@ -618,22 +652,7 @@ get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *wei
       return 1;
     }
 
-  if (resources->unified)
-    {
-      size_t i;
-
-      for (i = 0; i < resources->unified->len; i++)
-        if (strcmp (resources->unified->keys[i], "cpu.weight") == 0)
-          {
-            errno = 0;
-            *weight = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
-            if (UNLIKELY (errno))
-              return crun_make_error (err, errno, "invalid value for `cpu.weight`: %s",
-                                      resources->unified->values[i]);
-            return 1;
-          }
-    }
-  return 0;
+  return get_value_from_unified_map (resources, "cpu.weight", weight, err);
 }
 
 static int
@@ -642,17 +661,28 @@ append_resources (sd_bus_message *m,
                   int cgroup_mode,
                   libcrun_error_t *err)
 {
+  uint64_t memory_limit;
   int sd_err;
+  int ret;
 
   if (resources == NULL)
     return 0;
+
+  ret = get_memory_limit (resources, &memory_limit, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret)
+    {
+      sd_err = sd_bus_message_append (m, "(sv)", "MemoryLimit", "t", memory_limit);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append MemoryLimit");
+    }
 
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
       {
         uint64_t weight;
-        int ret;
 
         ret = get_weight (resources, &weight, err);
         if (UNLIKELY (ret < 0))
