@@ -1,3 +1,21 @@
+* crun-1.8.5
+
+- scheduler: use definition from the OCI configuration file instead of the custom
+  label that is now dropped and not supported anymore.
+- cgroup: fix creating cgroup under "domain threaded".
+- cgroup, systemd: set the memory limit on the system scope.
+- restore tty settings from the correct file descriptor.  It was previously
+  restoring the settings from the wrong file descriptor causing the tty settings
+  to be changed on the calling terminal.
+- criu: check if the criu_join_ns_add function exists.  Fix a segfault with new
+  versions of CRIU.
+- linux: do not precreate devs with euid > 0.  Fix creating devices when running
+  the OCI runtime as non root user.
+- linux: improve PID detection on systems that lack pidfd.  While there is still a
+  window of time that the PID could be recycled, now it is now reduced to a minimum.
+- criu: fix memory leak.
+- logging: improve error message when dlopen fails.
+
 * crun-1.8.4
 
 - fix build on CentOS 7.
