@@ -17,8 +17,8 @@
  */
 #define _GNU_SOURCE
 
-#include <linux/limits.h>
 #include <config.h>
+#include <linux/limits.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
