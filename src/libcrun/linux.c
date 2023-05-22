@@ -50,6 +50,8 @@
 #include "status.h"
 #include "criu.h"
 #include "scheduler.h"
+#include "io_priority.h"
+
 #include <sys/socket.h>
 #include <libgen.h>
 #include <sys/wait.h>
@@ -4768,6 +4770,10 @@ join_process_parent_helper (runtime_spec_schema_config_schema_process *process,
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  ret = libcrun_set_io_priority (pid, process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   /* The write unblocks the grandchild process so it can run once we setup
      the cgroups.  */
