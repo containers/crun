@@ -38,6 +38,7 @@
 #include "status.h"
 #include "linux.h"
 #include "terminal.h"
+#include "io_priority.h"
 #include "cgroup.h"
 #include "cgroup-utils.h"
 #include <sys/prctl.h>
@@ -2378,6 +2379,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     goto fail;
 
   ret = libcrun_set_scheduler (pid, def->process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_set_io_priority (pid, def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

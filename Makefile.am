@@ -31,33 +31,34 @@ lib_LTLIBRARIES = libcrun.la
 check_LIBRARIES = libcrun_testing.a
 
 libcrun_SOURCES = src/libcrun/utils.c \
-			src/libcrun/cloned_binary.c \
-			src/libcrun/container.c \
-			src/libcrun/cgroup.c \
-			src/libcrun/cgroup-cgroupfs.c \
-			src/libcrun/cgroup-resources.c \
-			src/libcrun/cgroup-setup.c \
-			src/libcrun/cgroup-systemd.c \
-			src/libcrun/cgroup-utils.c \
-			src/libcrun/criu.c \
-			src/libcrun/custom-handler.c \
-			src/libcrun/linux.c \
-			src/libcrun/seccomp.c \
-			src/libcrun/scheduler.c \
-			src/libcrun/ebpf.c \
-			src/libcrun/error.c \
-			src/libcrun/status.c \
-			src/libcrun/terminal.c \
-			src/libcrun/chroot_realpath.c \
-			src/libcrun/signals.c \
-			src/libcrun/mount_flags.c \
-			src/libcrun/seccomp_notify.c \
-			src/libcrun/handlers/handler-utils.c \
-			src/libcrun/handlers/krun.c \
-			src/libcrun/handlers/wasmedge.c \
-			src/libcrun/handlers/mono.c \
-			src/libcrun/handlers/wasmtime.c \
-			src/libcrun/handlers/wasmer.c
+		src/libcrun/cgroup-cgroupfs.c \
+		src/libcrun/cgroup-resources.c \
+		src/libcrun/cgroup-setup.c \
+		src/libcrun/cgroup-systemd.c \
+		src/libcrun/cgroup-utils.c \
+		src/libcrun/cgroup.c \
+		src/libcrun/chroot_realpath.c \
+		src/libcrun/cloned_binary.c \
+		src/libcrun/container.c \
+		src/libcrun/criu.c \
+		src/libcrun/custom-handler.c \
+		src/libcrun/ebpf.c \
+		src/libcrun/error.c \
+		src/libcrun/handlers/handler-utils.c \
+		src/libcrun/handlers/krun.c \
+		src/libcrun/handlers/mono.c \
+		src/libcrun/handlers/wasmedge.c \
+		src/libcrun/handlers/wasmer.c \
+		src/libcrun/handlers/wasmtime.c \
+		src/libcrun/io_priority.c \
+		src/libcrun/linux.c \
+		src/libcrun/mount_flags.c \
+		src/libcrun/scheduler.c \
+		src/libcrun/seccomp.c \
+		src/libcrun/seccomp_notify.c \
+		src/libcrun/signals.c \
+		src/libcrun/status.c \
+		src/libcrun/terminal.c
 
 if HAVE_EMBEDDED_YAJL
 maybe_libyajl.la = libocispec/yajl/libyajl.la
@@ -121,7 +122,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/cgroup-internal.h \
 	src/libcrun/cgroup-resources.h src/libcrun/cgroup-setup.h \
 	src/libcrun/cgroup-systemd.h src/libcrun/cgroup-utils.h \
-	src/libcrun/custom-handler.h \
+	src/libcrun/custom-handler.h src/libcrun/io_priority.h \
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
