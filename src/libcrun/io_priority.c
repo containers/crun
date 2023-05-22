@@ -33,7 +33,7 @@
 static int
 syscall_ioprio_set (int which, int who, int ioprio)
 {
-#  ifdef __NR_sched_setattr
+#  ifdef __NR_ioprio_set
   return syscall (__NR_ioprio_set, which, who, ioprio);
 #  else
   (void) which;
