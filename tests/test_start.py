@@ -462,6 +462,47 @@ def test_listen_pid_env():
         return -1
     return 0
 
+def test_ioprio():
+    IOPRIO_CLASS_NONE = 0
+    IOPRIO_CLASS_RT = 1
+    IOPRIO_CLASS_BE = 2
+    IOPRIO_CLASS_IDLE = 3
+
+    IOPRIO_CLASS_SHIFT = 13
+    IOPRIO_CLASS_MASK = 0x07
+    IOPRIO_PRIO_MASK = (1 << IOPRIO_CLASS_SHIFT) - 1
+
+    supported = subprocess.call([get_init_path(), "check-feature", "ioprio"])
+    if supported != 0:
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf, netns=False)
+
+    conf['process']['args'] = ['/init', 'ioprio']
+    conf['process']['ioPriority'] = {
+        "class": "IOPRIO_CLASS_IDLE",
+        "priority": 11
+    }
+
+    cid = None
+    try:
+        output, cid = run_and_get_output(conf, command='run')
+        value = int(output)
+        if ((value >> IOPRIO_CLASS_SHIFT) & IOPRIO_CLASS_MASK) != IOPRIO_CLASS_IDLE:
+            print("invalid ioprio class returned")
+            return 1
+        if value & IOPRIO_PRIO_MASK != 11:
+            print("invalid ioprio priority returned")
+            return 1
+        return 0
+    except Exception as e:
+        return 1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -482,6 +523,7 @@ all_tests = {
     "not-allowed-net-sysctl": test_not_allowed_net_sysctl,
     "uts-sysctl": test_uts_sysctl,
     "unknown-sysctl": test_unknown_sysctl,
+    "ioprio": test_ioprio,
 }
 
 if __name__ == "__main__":

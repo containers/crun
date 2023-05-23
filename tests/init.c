@@ -17,8 +17,8 @@
  */
 #define _GNU_SOURCE
 
-#include <linux/limits.h>
 #include <config.h>
+#include <linux/limits.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -37,6 +37,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sched.h>
+
+#ifdef HAVE_LINUX_IOPRIO_H
+#  include <linux/ioprio.h>
+#endif
 
 #ifdef HAVE_SECCOMP
 #  include <linux/seccomp.h>
@@ -73,6 +77,22 @@
         if (status)                                           \
           exit (status);                                      \
     } while (0)
+#endif
+
+#ifdef HAVE_LINUX_IOPRIO_H
+static int
+syscall_ioprio_get (int which, int who)
+{
+#  ifdef __NR_ioprio_get
+  return syscall (__NR_ioprio_get, which, who);
+#  else
+  (void) which;
+  (void) who;
+  (void) ioprio;
+  errno = ENOSYS;
+  return -1;
+#  endif
+}
 #endif
 
 struct mount_attr_s
@@ -555,6 +575,21 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "ioprio") == 0)
+    {
+#ifdef HAVE_LINUX_IOPRIO_H
+      int ret = syscall_ioprio_get (IOPRIO_WHO_PROCESS, 0);
+      if (ret >= 0)
+        {
+          printf ("%d\n", ret);
+          return 0;
+        }
+      error (EXIT_FAILURE, errno, "`ioprio_get` failed");
+#else
+      error (EXIT_FAILURE, 0, "`ioprio_get` not supported");
+#endif
+    }
+
   if (strcmp (argv[1], "ls") == 0)
     {
       /* Fork so that ls /proc/1/fd doesn't show more fd's.  */
@@ -585,6 +620,14 @@ main (int argc, char **argv)
       if (argc < 3)
         error (EXIT_FAILURE, 0, "`check-feature` requires an argument");
 
+      if (strcmp (argv[2], "ioprio") == 0)
+        {
+#ifdef HAVE_LINUX_IOPRIO_H
+          if (syscall_ioprio_get (IOPRIO_WHO_PROCESS, 0) >= 0)
+            return 0;
+#endif
+          return 1;
+        }
       if (strcmp (argv[2], "idmapped-mounts") == 0)
         {
           if (argc < 4)
