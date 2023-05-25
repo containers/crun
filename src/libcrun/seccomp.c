@@ -43,8 +43,12 @@
 
 #if HAVE_STDATOMIC_H
 #  include <stdatomic.h>
-#else
-#  define atomic_int volatile int
+#  ifndef HAVE_ATOMIC_INT
+#    define atomic_int volatile int
+#  endif
+#  ifndef HAVE_ATOMIC_BOOL
+#    define atomic_bool volatile int
+#  endif
 #endif
 
 #ifdef HAVE_SECCOMP
