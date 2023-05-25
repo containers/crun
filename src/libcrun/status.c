@@ -124,7 +124,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
           memset (st, 0, sizeof (*st));
           return 0;
         }
-      return crun_make_error (err, errno, "open state file %s", pid_stat_file);
+      return crun_make_error (err, errno, "open state file `%s`", pid_stat_file);
     }
 
   ret = read_all_fd (fd, pid_stat_file, &buffer, NULL, err);
@@ -347,13 +347,13 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 
   tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
   if (UNLIKELY (tree == NULL))
-    return crun_make_error (err, 0, "cannot parse status file: %s", err_buffer);
+    return crun_make_error (err, 0, "cannot parse status file: `%s`", err_buffer);
 
   {
     const char *pid_path[] = { "pid", NULL };
     tmp = yajl_tree_get (tree, pid_path, yajl_t_number);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "'pid' missing in %s", file);
+      return crun_make_error (err, 0, "`pid` missing in `%s`", file);
     status->pid = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
   }
   {
@@ -368,7 +368,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *cgroup_path[] = { "cgroup-path", NULL };
     tmp = yajl_tree_get (tree, cgroup_path, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "'cgroup-path' missing in %s", file);
+      return crun_make_error (err, 0, "`cgroup-path` missing in `%s`", file);
     status->cgroup_path = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
@@ -380,7 +380,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *rootfs[] = { "rootfs", NULL };
     tmp = yajl_tree_get (tree, rootfs, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "'rootfs' missing in %s", file);
+      return crun_make_error (err, 0, "`rootfs` missing in `%s`", file);
     status->rootfs = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
@@ -391,14 +391,14 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *bundle[] = { "bundle", NULL };
     tmp = yajl_tree_get (tree, bundle, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "'bundle' missing in %s", file);
+      return crun_make_error (err, 0, "`bundle` missing in `%s`", file);
     status->bundle = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
     const char *created[] = { "created", NULL };
     tmp = yajl_tree_get (tree, created, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "'created' missing in %s", file);
+      return crun_make_error (err, 0, "`created` missing in `%s`", file);
     status->created = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
@@ -510,7 +510,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   dfd = openat (rundir_dfd, id, O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dfd < 0))
-    return crun_make_error (err, errno, "cannot open directory '%s/%s'", dir, id);
+    return crun_make_error (err, errno, "cannot open directory `%s/%s`", dir, id);
 
   ret = rmdirfd (dir, dfd, err);
 

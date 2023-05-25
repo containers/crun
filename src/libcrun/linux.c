@@ -1876,7 +1876,7 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY);
 
   if (UNLIKELY (oldrootfd < 0))
-    return crun_make_error (err, errno, "open '/'");
+    return crun_make_error (err, errno, "open `/`");
   if (UNLIKELY (newrootfd < 0))
     return crun_make_error (err, errno, "open `%s`", rootfs);
 
@@ -2663,7 +2663,7 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = mount (rootfs, "/", "", MS_MOVE, "");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount MS_MOVE to '/'");
+    return crun_make_error (err, errno, "mount MS_MOVE to `/`");
 
   ret = chroot (".");
   if (UNLIKELY (ret < 0))
@@ -3252,10 +3252,10 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   sprintf (oom_buffer, "%i", def->process->oom_score_adj);
   fd = open ("/proc/self/oom_score_adj", O_RDWR);
   if (fd < 0)
-    return crun_make_error (err, errno, "open /proc/self/oom_score_adj");
+    return crun_make_error (err, errno, "open `/proc/self/oom_score_adj`");
   ret = TEMP_FAILURE_RETRY (write (fd, oom_buffer, strlen (oom_buffer)));
   if (ret < 0)
-    return crun_make_error (err, errno, "write to /proc/self/oom_score_adj");
+    return crun_make_error (err, errno, "write to `/proc/self/oom_score_adj`");
   return 0;
 }
 

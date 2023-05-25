@@ -745,7 +745,7 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
 #  ifdef SECCOMP_ARCH_RESOLVE_NAME
       arch_token = seccomp_arch_resolve_name (lowercase_arch);
       if (arch_token == 0)
-        return crun_make_error (err, 0, "seccomp unknown architecture %s", arch);
+        return crun_make_error (err, 0, "seccomp unknown architecture `%s`", arch);
 #  else
       arch_token = SCMP_ARCH_NATIVE;
 #  endif
@@ -805,7 +805,7 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
 
                   index = seccomp->syscalls[i]->args[k]->index;
                   if (index >= 6)
-                    return crun_make_error (err, 0, "invalid seccomp index %zu", i);
+                    return crun_make_error (err, 0, "invalid seccomp index `%zu`", i);
 
                   count[index]++;
                   if (count[index] > 1)

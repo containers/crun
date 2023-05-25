@@ -433,11 +433,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = mkdir (cr_options->image_path, 0700);
   if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-    return crun_make_error (err, errno, "error creating checkpoint directory %s", cr_options->image_path);
+    return crun_make_error (err, errno, "error creating checkpoint directory `%s`", cr_options->image_path);
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory %s", cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory `%s`", cr_options->image_path);
 
   libcriu_wrapper->criu_set_images_dir_fd (image_fd);
 
@@ -457,7 +457,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory %s", cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
 
       libcriu_wrapper->criu_set_work_dir_fd (work_fd);
     }
@@ -522,7 +522,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = libcriu_wrapper->criu_set_root (path);
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, 0, "error setting CRIU root to %s", path);
+    return crun_make_error (err, 0, "error setting CRIU root to `%s`", path);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -702,7 +702,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
 
       root_fd = open (root, O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (root_fd == -1))
-        return crun_make_error (err, errno, "error opening container root directory %s", root);
+        return crun_make_error (err, errno, "error opening container root directory `%s`", root);
 
       if (is_dir)
         {
@@ -760,7 +760,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   image_fd = open (cr_options->image_path, O_DIRECTORY);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory %s", cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory `%s`", cr_options->image_path);
 
   libcriu_wrapper->criu_set_images_dir_fd (image_fd);
 
@@ -787,7 +787,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
      * and stderr being correctly redirected. */
     tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
     if (UNLIKELY (tree == NULL))
-      return crun_make_error (err, 0, "cannot parse descriptors file %s", DESCRIPTORS_FILENAME);
+      return crun_make_error (err, 0, "cannot parse descriptors file `%s`", DESCRIPTORS_FILENAME);
 
     if (tree && YAJL_IS_ARRAY (tree))
       {
@@ -816,7 +816,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory %s", cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
 
       libcriu_wrapper->criu_set_work_dir_fd (work_fd);
     }
@@ -861,12 +861,12 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))
-    return crun_make_error (err, errno, "error creating restore directory %s", root);
+    return crun_make_error (err, errno, "error creating restore directory `%s`", root);
 
   ret = mount (status->rootfs, root, NULL, MS_BIND | MS_REC, NULL);
   if (UNLIKELY (ret == -1))
     {
-      ret = crun_make_error (err, errno, "error mounting restore directory %s", root);
+      ret = crun_make_error (err, errno, "error mounting restore directory `%s`", root);
       goto out;
     }
 
@@ -884,7 +884,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = libcriu_wrapper->criu_set_root (root);
   if (UNLIKELY (ret != 0))
     {
-      ret = crun_make_error (err, 0, "error setting CRIU root to %s", root);
+      ret = crun_make_error (err, 0, "error setting CRIU root to `%s`", root);
       goto out_umount;
     }
 
@@ -972,7 +972,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   if (UNLIKELY (ret <= 0))
     {
       ret = crun_make_error (err, 0,
-                             "CRIU restoring failed %d.  Please check CRIU logfile %s/%s",
+                             "CRIU restoring failed %d.  Please check CRIU logfile `%s/%s`",
                              ret, cr_options->work_path, CRIU_RESTORE_LOG_FILE);
       goto out_umount;
     }
@@ -989,14 +989,14 @@ out_umount:
   if (UNLIKELY (ret_out == -1))
     {
       rmdir (root);
-      return crun_make_error (err, errno, "error unmounting restore directory %s", root);
+      return crun_make_error (err, errno, "error unmounting restore directory `%s`", root);
     }
 out:
   ret_out = rmdir (root);
   if (UNLIKELY (ret == -1))
     return ret;
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno, "error removing restore directory %s", root);
+    return crun_make_error (err, errno, "error removing restore directory `%s`", root);
   return ret;
 }
 #endif

@@ -304,7 +304,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
     {
       ret = TEMP_FAILURE_RETRY (kill (args->pid, SIGSTOP));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "cannot stop container process '%d' with SIGSTOP", args->pid);
+        return crun_make_error (err, errno, "cannot stop container process `%d` with SIGSTOP", args->pid);
 
       /* Send SIGCONT as soon as the function exits.  */
       sigcont_cleanup = args->pid;

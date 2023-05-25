@@ -1164,7 +1164,7 @@ epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
       ev.data.fd = *it;
       ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_ctl add '%d'", *it);
+        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it);
     }
   for (it = levelfds; *it >= 0; it++)
     {
@@ -1172,7 +1172,7 @@ epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
       ev.data.fd = *it;
       ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_ctl add '%d'", *it);
+        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it);
     }
 
   ret = epollfd;
