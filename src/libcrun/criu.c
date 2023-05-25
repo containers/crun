@@ -274,12 +274,12 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
   if (! has_cgroup_mount)
     return 0;
 
-  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  ret = read_all_file (PROC_SELF_CGROUP, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from `/proc/self/cgroup`");
+    return crun_make_error (err, 0, "invalid content from `%s`", PROC_SELF_CGROUP);
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -342,12 +342,12 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
   if (! has_cgroup_mount)
     return 0;
 
-  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  ret = read_all_file (PROC_SELF_CGROUP, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from `/proc/self/cgroup`");
+    return crun_make_error (err, 0, "invalid content from `%s`", PROC_SELF_CGROUP);
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {

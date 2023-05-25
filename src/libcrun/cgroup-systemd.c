@@ -165,7 +165,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
 
       to = strchr (from, '\n');
       if (UNLIKELY (to == NULL))
-        return crun_make_error (err, 0, "cannot parse `/proc/self/cgroup`");
+        return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
       *to = '\0';
       if (suffix == NULL)
         path = xstrdup (from);
@@ -228,7 +228,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         from += 3;
         to = strchr (from, '\n');
         if (UNLIKELY (to == NULL))
-          return crun_make_error (err, 0, "cannot parse `/proc/self/cgroup`");
+          return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
         *to = '\0';
         if (suffix == NULL)
           path = xstrdup (from);
