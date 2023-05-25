@@ -1876,7 +1876,7 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY);
 
   if (UNLIKELY (oldrootfd < 0))
-    return crun_make_error (err, errno, "open '/'");
+    return crun_make_error (err, errno, "open `/`");
   if (UNLIKELY (newrootfd < 0))
     return crun_make_error (err, errno, "open `%s`", rootfs);
 
@@ -2663,7 +2663,7 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = mount (rootfs, "/", "", MS_MOVE, "");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount MS_MOVE to '/'");
+    return crun_make_error (err, errno, "mount MS_MOVE to `/`");
 
   ret = chroot (".");
   if (UNLIKELY (ret < 0))

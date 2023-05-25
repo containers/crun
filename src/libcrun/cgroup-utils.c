@@ -206,14 +206,14 @@ detect_cgroup_mode (libcrun_error_t *err)
 
   ret = statfs (CGROUP_ROOT, &stat);
   if (ret < 0)
-    return crun_make_error (err, errno, "statfs '" CGROUP_ROOT "'");
+    return crun_make_error (err, errno, "statfs `" CGROUP_ROOT "`");
   if (stat.f_type == CGROUP2_SUPER_MAGIC)
     return CGROUP_MODE_UNIFIED;
   if (stat.f_type != TMPFS_MAGIC)
-    return crun_make_error (err, 0, "invalid file system type on '" CGROUP_ROOT "'");
+    return crun_make_error (err, 0, "invalid file system type on `" CGROUP_ROOT "`");
   ret = statfs (CGROUP_ROOT "/unified", &stat);
   if (ret < 0 && errno != ENOENT)
-    return crun_make_error (err, errno, "statfs '" CGROUP_ROOT "/unified'");
+    return crun_make_error (err, errno, "statfs `" CGROUP_ROOT "/unified`");
   if (ret < 0)
     return CGROUP_MODE_LEGACY;
   return stat.f_type == CGROUP2_SUPER_MAGIC ? CGROUP_MODE_HYBRID : CGROUP_MODE_LEGACY;
