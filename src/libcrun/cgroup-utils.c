@@ -180,7 +180,7 @@ libcrun_get_current_unified_cgroup (char **path, bool absolute, libcrun_error_t 
   from += 3;
   to = strchr (from, '\n');
   if (UNLIKELY (to == NULL))
-    return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+    return crun_make_error (err, 0, "cannot parse `/proc/self/cgroup`");
   *to = '\0';
 
   if (absolute)
@@ -422,7 +422,7 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
       break;
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode %d", mode);
+      return crun_make_error (err, 0, "invalid cgroup mode `%d`", mode);
     }
 
   dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
@@ -704,7 +704,7 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
     {
       ret = kill (pids[i], signal);
       if (UNLIKELY (ret < 0 && errno != ESRCH))
-        return crun_make_error (err, errno, "kill process %d", pids[i]);
+        return crun_make_error (err, errno, "kill process `%d`", pids[i]);
     }
 
   ret = libcrun_cgroup_pause_unpause_path (path, false, err);

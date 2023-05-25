@@ -165,7 +165,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
 
       to = strchr (from, '\n');
       if (UNLIKELY (to == NULL))
-        return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+        return crun_make_error (err, 0, "cannot parse `/proc/self/cgroup`");
       *to = '\0';
       if (suffix == NULL)
         path = xstrdup (from);
@@ -228,7 +228,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         from += 3;
         to = strchr (from, '\n');
         if (UNLIKELY (to == NULL))
-          return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+          return crun_make_error (err, 0, "cannot parse `/proc/self/cgroup`");
         *to = '\0';
         if (suffix == NULL)
           path = xstrdup (from);
@@ -269,7 +269,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
       break;
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
+      return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
 
   *path_out = path;
@@ -302,7 +302,7 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
     {
       d->terminated = 1;
       if (strcmp (result, "done") != 0)
-        crun_make_error (&d->err, 0, "error %s systemd unit `%s`: got `%s`", d->op, unit, result);
+        crun_make_error (&d->err, 0, "error `%s` systemd unit `%s`: got `%s`", d->op, unit, result);
     }
   return 0;
 }
@@ -708,7 +708,7 @@ append_resources (sd_bus_message *m,
       break;
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
+      return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
 
   return 0;

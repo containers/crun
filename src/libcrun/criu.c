@@ -279,7 +279,7 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
+    return crun_make_error (err, 0, "invalid content from `/proc/self/cgroup`");
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -347,7 +347,7 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
+    return crun_make_error (err, 0, "invalid content from `/proc/self/cgroup`");
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
