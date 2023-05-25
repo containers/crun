@@ -65,7 +65,7 @@ libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
         {
           if (errno == ENOENT || errno == EEXIST)
             continue;
-          return crun_make_error (err, errno, "symlinkat %s", cgroup_symlinks[i].name);
+          return crun_make_error (err, errno, "symlinkat `%s`", cgroup_symlinks[i].name);
         }
     }
   return 0;

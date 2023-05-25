@@ -216,7 +216,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
       int log_type = get_log_type (log, &arg);
 
       if (log_type < 0)
-        return crun_make_error (err, errno, "unknown log type %s\n", log);
+        return crun_make_error (err, errno, "unknown log type `%s`", log);
 
       switch (log_type)
         {
@@ -224,7 +224,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
           *new_output_handler = log_write_to_stream;
           *new_output_handler_arg = fopen (arg, "a+");
           if (*new_output_handler_arg == NULL)
-            return crun_make_error (err, errno, "open log file %s\n", log);
+            return crun_make_error (err, errno, "open log file `%s`", log);
           if (output_verbosity >= LIBCRUN_VERBOSITY_WARNING)
             setlinebuf (*new_output_handler_arg);
           break;
@@ -440,7 +440,7 @@ libcrun_set_log_format (const char *format, libcrun_error_t *err)
   else if (strcmp (format, "json") == 0)
     log_format = LOG_FORMAT_JSON;
   else
-    return crun_make_error (err, 0, "unknown log format type %s", format);
+    return crun_make_error (err, 0, "unknown log format type `%s`", format);
 
   return 0;
 }

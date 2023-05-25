@@ -247,7 +247,7 @@ copy_owner (const char *from, const char *to, libcrun_error_t *err)
 
   ret = get_file_owner (from, &uid, &gid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot get file owner for %s", from);
+    return crun_make_error (err, errno, "cannot get file owner for `%s`", from);
 
   if (uid == 0 && gid == 0)
     return 0;
@@ -271,7 +271,7 @@ read_unified_cgroup_pid (pid_t pid, char **path, libcrun_error_t *err)
 
   from = strstr (content, "0::");
   if (UNLIKELY (from == NULL))
-    return crun_make_error (err, -1, "cannot find cgroup2 for the process %d", pid);
+    return crun_make_error (err, -1, "cannot find cgroup2 for the process `%d`", pid);
 
   from += 3;
 

@@ -124,7 +124,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
           memset (st, 0, sizeof (*st));
           return 0;
         }
-      return crun_make_error (err, errno, "open state file %s", pid_stat_file);
+      return crun_make_error (err, errno, "open state file `%s`", pid_stat_file);
     }
 
   ret = read_all_fd (fd, pid_stat_file, &buffer, NULL, err);
@@ -347,7 +347,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 
   tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
   if (UNLIKELY (tree == NULL))
-    return crun_make_error (err, 0, "cannot parse status file: %s", err_buffer);
+    return crun_make_error (err, 0, "cannot parse status file: `%s`", err_buffer);
 
   {
     const char *pid_path[] = { "pid", NULL };

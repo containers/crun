@@ -466,7 +466,7 @@ libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
   container_def = runtime_spec_schema_config_schema_parse_data (json, NULL, &oci_error);
   if (container_def == NULL)
     {
-      crun_make_error (err, 0, "load: %s", oci_error);
+      crun_make_error (err, 0, "load: `%s`", oci_error);
       return NULL;
     }
   return make_container (container_def, NULL, json);
@@ -1657,7 +1657,7 @@ libcrun_container_kill (libcrun_context_t *context, const char *id, const char *
 
   sig = str2sig (signal);
   if (UNLIKELY (sig < 0))
-    return crun_make_error (err, 0, "unknown signal %s", signal);
+    return crun_make_error (err, 0, "unknown signal `%s`", signal);
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -1676,7 +1676,7 @@ libcrun_container_killall (libcrun_context_t *context, const char *id, const cha
 
   sig = str2sig (signal);
   if (UNLIKELY (sig < 0))
-    return crun_make_error (err, 0, "unknown signal %s", signal);
+    return crun_make_error (err, 0, "unknown signal `%s`", signal);
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -3413,7 +3413,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
       if (UNLIKELY (process == NULL))
         {
-          ret = crun_make_error (err, errno, "cannot parse process file: %s", parser_err);
+          ret = crun_make_error (err, errno, "cannot parse process file: `%s`", parser_err);
           free (parser_err);
           if (tree)
             yajl_tree_free (tree);

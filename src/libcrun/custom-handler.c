@@ -174,7 +174,7 @@ libcrun_handler_manager_load_directory (struct custom_handler_manager_s *manager
 
       handle = dlopen (fpath, RTLD_NOW);
       if (UNLIKELY (handle == NULL))
-        return crun_make_error (err, 0, "cannot load `%s`: %s", fpath, dlerror ());
+        return crun_make_error (err, 0, "cannot load `%s`: `%s`", fpath, dlerror ());
 
       ret = handler_manager_add_so (manager, handle, err);
       if (UNLIKELY (ret < 0))

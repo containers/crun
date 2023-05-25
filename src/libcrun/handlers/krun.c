@@ -273,7 +273,7 @@ libkrun_load (void **cookie, libcrun_error_t *err arg_unused)
   if (kconf->handle == NULL && kconf->handle_sev == NULL)
     {
       free (kconf);
-      return crun_make_error (err, 0, "failed to open %s and %s for krun_config", libkrun_so, libkrun_sev_so);
+      return crun_make_error (err, 0, "failed to open `%s` and `%s` for krun_config", libkrun_so, libkrun_sev_so);
     }
 
   kconf->sev = false;
@@ -292,7 +292,7 @@ libkrun_unload (void *cookie, libcrun_error_t *err arg_unused)
     {
       r = dlclose (cookie);
       if (UNLIKELY (r < 0))
-        return crun_make_error (err, 0, "could not unload handle: %s", dlerror ());
+        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
     }
   return 0;
 }
