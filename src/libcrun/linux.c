@@ -3013,20 +3013,21 @@ static unsigned long cap_last_cap;
 int
 libcrun_init_caps (libcrun_error_t *err)
 {
+  const char *const cap_last_cap_file = "/proc/sys/kernel/cap_last_cap";
   cleanup_close int fd = -1;
   int ret;
   char buffer[16];
-  fd = open ("/proc/sys/kernel/cap_last_cap", O_RDONLY);
+  fd = open (cap_last_cap_file, O_RDONLY);
   if (fd < 0)
-    return crun_make_error (err, errno, "open `/proc/sys/kernel/cap_last_cap`");
+    return crun_make_error (err, errno, "open `%s`", cap_last_cap_file);
   ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from `/proc/sys/kernel/cap_last_cap`");
+    return crun_make_error (err, errno, "read from `%s`", cap_last_cap_file);
 
   errno = 0;
   cap_last_cap = strtoul (buffer, NULL, 10);
   if (errno != 0)
-    return crun_make_error (err, errno, "strtoul() from `/proc/sys/kernel/cap_last_cap`");
+    return crun_make_error (err, errno, "strtoul() from `%s`", cap_last_cap_file);
   return 0;
 }
 
