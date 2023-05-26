@@ -240,7 +240,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
           else if (strcmp (seccomp_flags[i], "SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV") == 0)
             flags |= SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV;
           else
-            return crun_make_error (err, 0, "unknown seccomp option %s", seccomp_flags[i]);
+            return crun_make_error (err, 0, "unknown seccomp option `%s`", seccomp_flags[i]);
         }
     }
 
@@ -259,7 +259,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 #  ifdef SECCOMP_FILTER_FLAG_NEW_LISTENER
       flags |= SECCOMP_FILTER_FLAG_NEW_LISTENER;
 #  else
-      return crun_make_error (err, 0, "the SECCOMP_FILTER_FLAG_NEW_LISTENER flag is not supported");
+      return crun_make_error (err, 0, "the `SECCOMP_FILTER_FLAG_NEW_LISTENER` flag is not supported");
 #  endif
 
       memfd = memfd_create ("seccomp-helper-memfd", O_RDWR);
@@ -388,7 +388,7 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
       const char *needed_version = "1.0.0";
       if (! gcry_check_version (needed_version))
         {
-          return libcrun_make_error (err, 0, "libgcrypt is too old (need %s, have %s)",
+          return libcrun_make_error (err, 0, "libgcrypt is too old (need `%s`, have `%s`)",
                                      needed_version, gcry_check_version (NULL));
         }
       gcry_control (GCRYCTL_DISABLE_SECMEM, 0);

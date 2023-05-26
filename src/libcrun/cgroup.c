@@ -80,7 +80,7 @@ get_cgroup_manager (int manager, struct libcrun_cgroup_manager **out, libcrun_er
     }
 
   *out = NULL;
-  return crun_make_error (err, EINVAL, "unknown cgroup manager specified %d", manager);
+  return crun_make_error (err, EINVAL, "unknown cgroup manager specified `%d`", manager);
 }
 
 static const char *
@@ -420,7 +420,7 @@ libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_
   current_cgroup += 3;
   to = strchr (current_cgroup, '\n');
   if (UNLIKELY (to == NULL))
-    return crun_make_error (err, 0, "cannot parse /proc/self/cgroup");
+    return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
   *to = '\0';
 
   ret = append_paths (&target_cgroup, err, current_cgroup, delegate_cgroup, NULL);
@@ -510,7 +510,7 @@ libcrun_cgroup_has_oom (struct libcrun_cgroup_status *status, libcrun_error_t *e
       }
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
+      return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
 
   it = content;

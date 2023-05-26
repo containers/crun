@@ -25,6 +25,10 @@
 #  define CGROUP_ROOT "/sys/fs/cgroup"
 #endif
 
+#ifndef PROC_SELF_CGROUP
+#  define PROC_SELF_CGROUP "/proc/self/cgroup"
+#endif
+
 enum
 {
   CGROUP_MODE_UNIFIED = 1,

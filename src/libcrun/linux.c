@@ -1212,7 +1212,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                     {
                       ret = mount ("/sys", real_target, NULL, MS_BIND | MS_REC, NULL);
                       if (UNLIKELY (ret < 0))
-                        return crun_make_error (err, errno, "bind mount /sys from the host");
+                        return crun_make_error (err, errno, "bind mount `/sys` from the host");
 
                       return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, false, err);
                     }
@@ -1445,12 +1445,12 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
     return tmpfsdirfd;
   targetfd = tmpfsdirfd;
 
-  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  ret = read_all_file (PROC_SELF_CGROUP, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
+    return crun_make_error (err, 0, "invalid content from `%s`", PROC_SELF_CGROUP);
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -1570,7 +1570,7 @@ do_mount_cgroup (libcrun_container_t *container, const char *source, int targetf
       return do_mount_cgroup_v1 (container, source, targetfd, target, mountflags, err);
     }
 
-  return crun_make_error (err, 0, "unknown cgroups mode %d", cgroup_mode);
+  return crun_make_error (err, 0, "unknown cgroup mode `%d`", cgroup_mode);
 }
 
 struct device_s needed_devs[] = { { "/dev/null", "c", 1, 3, 0666, 0, 0 },
@@ -2349,7 +2349,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
         {
           ret = chown (host_notify_socket_path, container_root_uid, container_root_gid);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown %d:%d `%s`", container_root_uid, container_root_gid,
+            return crun_make_error (err, errno, "chown `%d:%d` `%s`", container_root_uid, container_root_gid,
                                     host_notify_socket_path);
         }
     }
@@ -2420,7 +2420,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
         /* do nothing; we will try mount(2) next */
         ;
       else
-        return crun_make_error (err, errno, "move_mount %d -> `%s`", notify_socket_tree_fd,
+        return crun_make_error (err, errno, "move_mount `%d` -> `%s`", notify_socket_tree_fd,
                                 container_notify_socket_path_dir);
     }
 
@@ -2709,7 +2709,7 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to /");
+    return crun_make_error (err, errno, "chdir to `/`");
 
   return 0;
 }
@@ -2728,21 +2728,21 @@ libcrun_reopen_dev_null (libcrun_error_t *err)
   /* Open /dev/null inside of the container. */
   fd = open ("/dev/null", O_RDWR);
   if (UNLIKELY (fd == -1))
-    return crun_make_error (err, errno, "failed open()ing /dev/null");
+    return crun_make_error (err, errno, "failed open()ing `/dev/null`");
 
   if (UNLIKELY (fstat (fd, &dev_null) == -1))
-    return crun_make_error (err, errno, "failed stat()ing /dev/null");
+    return crun_make_error (err, errno, "failed stat()ing `/dev/null`");
 
   for (i = 0; i <= 2; i++)
     {
       if (UNLIKELY (fstat (i, &statbuf) == -1))
-        return crun_make_error (err, errno, "failed stat()ing fd %d", i);
+        return crun_make_error (err, errno, "failed stat()ing fd `%d`", i);
       if (statbuf.st_rdev == dev_null.st_rdev)
         {
           /* This FD is pointing to /dev/null. Point it to /dev/null inside
            * of the container. */
           if (UNLIKELY (dup2 (fd, i) == -1))
-            return crun_make_error (err, errno, "failed dup2()ing %d", i);
+            return crun_make_error (err, errno, "failed dup2()ing `%d`", i);
         }
     }
   return 0;
@@ -2927,7 +2927,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
       if (ret < 0)
         {
           if (! def->linux->uid_mappings_len)
-            libcrun_warning ("unable to invoke newgidmap, will try creating a user namespace with single mapping as an alternative");
+            libcrun_warning ("unable to invoke `newgidmap`, will try creating a user namespace with single mapping as an alternative");
           crun_error_release (err);
         }
 
@@ -2958,7 +2958,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
       if (ret < 0)
         {
           if (! def->linux->uid_mappings_len)
-            libcrun_warning ("unable to invoke newuidmap, will try creating a user namespace with single mapping as an alternative");
+            libcrun_warning ("unable to invoke `newuidmap`, will try creating a user namespace with single mapping as an alternative");
           crun_error_release (err);
         }
 
@@ -3013,20 +3013,21 @@ static unsigned long cap_last_cap;
 int
 libcrun_init_caps (libcrun_error_t *err)
 {
+  const char *const cap_last_cap_file = "/proc/sys/kernel/cap_last_cap";
   cleanup_close int fd = -1;
   int ret;
   char buffer[16];
-  fd = open ("/proc/sys/kernel/cap_last_cap", O_RDONLY);
+  fd = open (cap_last_cap_file, O_RDONLY);
   if (fd < 0)
-    return crun_make_error (err, errno, "open /proc/sys/kernel/cap_last_cap");
+    return crun_make_error (err, errno, "open `%s`", cap_last_cap_file);
   ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from /proc/sys/kernel/cap_last_cap");
+    return crun_make_error (err, errno, "read from `%s`", cap_last_cap_file);
 
   errno = 0;
   cap_last_cap = strtoul (buffer, NULL, 10);
   if (errno != 0)
-    return crun_make_error (err, errno, "strtoul() from /proc/sys/kernel/cap_last_cap");
+    return crun_make_error (err, errno, "strtoul() from `%s`", cap_last_cap_file);
   return 0;
 }
 
@@ -3059,15 +3060,15 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
 
   ret = prctl (PR_SET_KEEPCAPS, 1, 0, 0, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error while setting PR_SET_KEEPCAPS");
+    return crun_make_error (err, errno, "error while setting `PR_SET_KEEPCAPS`");
 
   ret = setresgid (gid, gid, gid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot setresgid to %d", gid);
+    return crun_make_error (err, errno, "cannot setresgid to `%d`", gid);
 
   ret = setresuid (uid, uid, uid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot setresuid to %d", uid);
+    return crun_make_error (err, errno, "cannot setresuid to `%d`", uid);
 
   ret = capset (&hdr, data);
   if (UNLIKELY (ret < 0))
@@ -3360,7 +3361,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
   get_private_data (container);
   dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open /proc/sys");
+    return crun_make_error (err, errno, "open `/proc/sys`");
 
   for (i = 0; i < def->linux->sysctl->len; i++)
     {
@@ -3380,11 +3381,11 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 
       fd = openat (dirfd, name, O_WRONLY);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open /proc/sys/%s", name);
+        return crun_make_error (err, errno, "open `/proc/sys/%s`", name);
 
       ret = TEMP_FAILURE_RETRY (write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i])));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write to /proc/sys/%s", name);
+        return crun_make_error (err, errno, "write to `/proc/sys/%s`", name);
     }
   return 0;
 }
@@ -4173,11 +4174,11 @@ set_id_init (libcrun_container_t *container, libcrun_error_t *err)
 
   ret = setresuid (uid, uid, uid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "setresuid to %d", uid);
+    return crun_make_error (err, errno, "setresuid to `%d`", uid);
 
   ret = setresgid (gid, gid, gid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "setresgid to %d", gid);
+    return crun_make_error (err, errno, "setresgid to `%d`", gid);
 
   return 0;
 }
@@ -4330,25 +4331,26 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
   if (def->linux->time_offsets)
     {
+      const char *const timens_offsets_file = "/proc/self/timens_offsets";
       char fmt_buffer[128];
       cleanup_close int fd = -1;
 
-      fd = open ("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+      fd = open (timens_offsets_file, O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open /proc/self/timens_offsets");
+        return crun_make_error (err, errno, "open `%s`", timens_offsets_file);
       if (def->linux->time_offsets->boottime)
         {
           sprintf (fmt_buffer, "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write /proc/self/timens_offsets");
+            return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
         }
       if (def->linux->time_offsets->monotonic)
         {
           sprintf (fmt_buffer, "monotonic %" PRIi64 " %" PRIu32, def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write /proc/self/timens_offsets");
+            return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
         }
     }
 

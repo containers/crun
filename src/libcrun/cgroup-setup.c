@@ -303,7 +303,7 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
   if (UNLIKELY (rootless < 0))
     return rootless;
 
-  ret = read_all_file ("/proc/self/cgroup", &content, &content_size, err);
+  ret = read_all_file (PROC_SELF_CGROUP, &content, &content_size, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) == ENOENT)

@@ -43,7 +43,7 @@ libcrun_new_terminal (char **pty, libcrun_error_t *err)
   int ret;
   cleanup_close int fd = open ("/dev/ptmx", O_RDWR | O_NOCTTY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open /dev/ptmx");
+    return crun_make_error (err, errno, "open `/dev/ptmx`");
 
   ret = ptsname_r (fd, buf, sizeof (buf));
   if (UNLIKELY (ret < 0))

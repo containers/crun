@@ -736,7 +736,7 @@ libcrun_initialize_selinux (libcrun_error_t *err)
 
   fd = open ("/proc/mounts", O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open /proc/mounts");
+    return crun_make_error (err, errno, "open `/proc/mounts`");
 
   ret = read_all_fd_with_size_hint (fd, "/proc/mounts", &out, &len, get_page_size (), err);
   if (UNLIKELY (ret < 0))
@@ -1646,11 +1646,11 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
   if (ret == 0)
     return 0;
   if (ret < 0 && errno != EINVAL && errno != ENOSYS && errno != EPERM)
-    return crun_make_error (err, errno, "close_range from %d", n);
+    return crun_make_error (err, errno, "close_range from `%d`", n);
 
   cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (cfd < 0))
-    return crun_make_error (err, errno, "open /proc/self/fd");
+    return crun_make_error (err, errno, "open `/proc/self/fd`");
 
   ret = fstatfs (cfd, &sfs);
   if (UNLIKELY (ret < 0))
@@ -1661,7 +1661,7 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
 
   dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot fdopendir /proc/self/fd");
+    return crun_make_error (err, errno, "cannot fdopendir `/proc/self/fd`");
 
   /* Now it is owned by dir.  */
   cfd = -1;

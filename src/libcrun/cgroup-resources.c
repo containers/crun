@@ -1340,6 +1340,6 @@ update_cgroup_resources (const char *path,
       return update_cgroup_v1_resources (resources, path, err);
 
     default:
-      return crun_make_error (err, 0, "invalid cgroup mode %d", cgroup_mode);
+      return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
 }
