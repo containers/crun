@@ -78,3 +78,4 @@ compile_commands.json
 /luarocks
 /lua_modules
 /.luarocks
+*.rock
