@@ -30,10 +30,27 @@ See `luacrun.d.tl`.
 
 ## Works with your LuaRocks project
 
-You can configure the prefix as your `lua_modules` to access this library in your project.
+You can build rocks (in luarocks) if lua bindings is enabled.
+
+````sh
+./configure --with-lua-bindings
+make dist-luarock
+````
+
+The options here for `./configure` won't affect the final output, see `luacrun.rockspec` for the building options.
+
+`dist-luarock` target packs a source rock. You can use `luarocks build luacrun-xxx.src.rock --pack-binary-rock` to pack binary rocks.
+
+````sh
+# Assume the filename is luacrun-1.8.4-0.src.rock
+luarocks build luacrun-1.8.4-0.src.rock --pack-binary-rock
+````
+
+Another way is, configure the prefix to your `lua_modules` to access this library in your project.
 
 ````sh
 ./configure --with-lua-bindings --enable-shared --prefix $(pwd)/lua_modules
+make && make install
 ````
 
 ## Interpreter may restart?

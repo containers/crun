@@ -26,7 +26,11 @@ rpm: srpm
 	rpmbuild -ba $(RPM_OPTS) rpm/crun.spec
 	$(MAKE) clean-global-gitconfig
 
+if ENABLE_LIBCRUN
 lib_LTLIBRARIES = libcrun.la
+else
+noinst_LTLIBRARIES = libcrun.la
+endif
 
 check_LIBRARIES = libcrun_testing.a
 
@@ -99,6 +103,30 @@ libcrun_bundled_la_SOURCES = $(libcrun_SOURCES)
 libcrun_bundled_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
 libcrun_bundled_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
 libcrun_bundled_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+
+LUACRUN_CLEAN_VERSION = $(shell git describe --tags | sed 's/-g[0-9a-f]\{7,9\}//')
+
+LUACRUN_RELEASE_VERSION = $(shell git describe --tags | sed 's/-[0-9]*-g[0-9a-f]\{7,9\}//')
+
+LUACRUN_ROCKSPEC = luacrun-$(LUACRUN_CLEAN_VERSION).rockspec
+
+$(LUACRUN_ROCKSPEC): lua/luacrun.rockspec
+	sed -e 's/@RELEASEVERSION/$(LUACRUN_RELEASE_VERSION)/g' < lua/luacrun.rockspec | \
+	sed -e 's/@CLEANVERSION/$(LUACRUN_CLEAN_VERSION)/g' > $@
+
+LUACRUN_ROCK = luacrun-$(LUACRUN_CLEAN_VERSION).src.rock
+
+$(LUACRUN_ROCK): dist-gzip $(LUACRUN_ROCKSPEC)
+	rm -f $(LUACRUN_ROCK)
+	mv "$(distdir).tar.gz" "crun-$(LUACRUN_RELEASE_VERSION).tar.gz"
+	tar -xzf "crun-$(LUACRUN_RELEASE_VERSION).tar.gz" --transform="s/crun-$(VERSION)\(.*\)$$/crun-$(LUACRUN_RELEASE_VERSION)\1/"
+	tar -czf "crun-$(LUACRUN_RELEASE_VERSION).tar.gz" "crun-$(LUACRUN_RELEASE_VERSION)"
+	rm -rf "crun-$(LUACRUN_RELEASE_VERSION)"
+	zip -j $(LUACRUN_ROCK) $(LUACRUN_ROCKSPEC) "crun-$(LUACRUN_RELEASE_VERSION).tar.gz"
+	rm -f "crun-$(LUACRUN_RELEASE_VERSION).tar.gz"
+
+dist-luarock: $(LUACRUN_ROCK)
+
 endif
 
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
@@ -126,12 +154,19 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec.in
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
-	crun.1.md crun.1 libcrun.lds
+	crun.1.md crun.1 libcrun.lds \
+	lua/luacrun.rockspec
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
 
+if ENABLE_CRUN
 bin_PROGRAMS = crun
-noinst_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
+noinst_PROGRAMS =
+else
+noinst_PROGRAMS = crun
+endif
+
+noinst_PROGRAMS += tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
 
 TESTS_LDADD = libcrun_testing.a $(FOUND_LIBS) $(maybe_libyajl.la)
 
@@ -207,9 +242,11 @@ dist-hook:
 EXTRA_DIST += $(PYTHON_TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen src/libcrun/signals.perf src/libcrun/mount_flags.perf
 BUILT_SOURCES = .version git-version.h
 
-CLEANFILES = crun.spec .version git-version.h
+CLEANFILES = crun.spec .version git-version.h $(LUACRUN_ROCKSPEC)
 
+if ENABLE_CRUN
 man1_MANS = crun.1
+endif
 
 crun.1: $(abs_srcdir)/crun.1.md
 if HAVE_MD2MAN

@@ -31,6 +31,29 @@ AC_CHECK_TYPES([atomic_bool], [], [], [[#include <stdatomic.h>]])
 
 AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid)
 
+AC_ARG_ENABLE(crun,
+AS_HELP_STRING([--enable-crun], [Include crun executable in installation (default: yes)]),
+[
+case "${enableval}" in
+	yes) enable_crun=true ;;
+	no) enable_crun=false ;;
+	*) AC_MSG_ERROR(bad value $(enableval) for --disable-crun) ;;
+esac],
+[enable_crun=true])
+AM_CONDITIONAL([ENABLE_CRUN], [test "x${enable_crun}" = xtrue])
+
+AC_ARG_ENABLE(libcrun,
+AS_HELP_STRING([--enable-libcrun], [Include libcrun in installation (default: yes)]),
+[
+case "${enableval}" in
+	yes) enable_libcrun=true ;;
+	no) enable_libcrun=false ;;
+	*) AC_MSG_ERROR(bad value ${enablevaal} for --enable-libcrun) ;;
+esac
+],
+[enable_libcrun=true])
+AM_CONDITIONAL([ENABLE_LIBCRUN], [test "x${enable_libcrun}" = xtrue])
+
 dnl embedded yajl
 AC_ARG_ENABLE(embedded-yajl,
 AS_HELP_STRING([--enable-embedded-yajl], [Statically link a modified yajl version]),
