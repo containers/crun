@@ -82,6 +82,11 @@ libcrun_set_io_priority (pid_t pid, runtime_spec_schema_config_schema_process *p
 
   return 0;
 #else
+  // If io_priority is not set then return without doing
+  // anything.
+  if (process == NULL || process->io_priority == NULL)
+    return 0;
+
   (void) pid;
   (void) process;
   return crun_make_error (err, 0, "io priority not supported");
