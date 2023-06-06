@@ -1,4 +1,4 @@
-FROM fedora:rawhide
+FROM fedora:latest
 ARG WASM_EDGE_VERSION="0.11.0"
 
 # Install the deps for building crun

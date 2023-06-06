@@ -15,6 +15,8 @@ make install
 # Remove the installed crun to make sure the built crun is used
 rm -rf /usr/bin/crun
 ln -s /usr/local/bin/crun /usr/bin/crun
+ln -s /usr/local/bin/crun /usr/local/bin/crun-wasm
+ln -s /usr/local/bin/crun /usr/bin/crun-wasm
 
 # Test crun is used in podman
 if [[ $(podman info | grep SYSTEMD) != *WASM:wasmedge* ]]; then
@@ -25,7 +27,7 @@ fi
 # Build hellowasm image
 cd /hello_wasm && \
 	chmod +x ./hello.wasm && \
-	buildah build --annotation "module.wasm.image/variant=compat-smart" -t hellowasm-image .
+	buildah build --platform wasi/wasm -t hellowasm-image .
 
 # Run hello.wasm with crun
 OUTPUT=$(podman run hellowasm-image:latest)
