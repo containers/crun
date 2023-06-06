@@ -42,9 +42,9 @@ This is from a main function from a wasm module
 COPY hello.wasm /
 CMD ["/hello.wasm"]
  ```
-* Build wasm image using buildah with annotation `module.wasm.image/variant=compat`
+* Build wasm image using buildah
 ```console
-$ buildah build --annotation "module.wasm.image/variant=compat" -t mywasm-image .
+$ buildah build --platform=wasi/wasm -t mywasm-image .
 ```
 * Make sure your podman points to oci runtime `crun` build with `wasm` support.
 * Run image using podman
