@@ -95,6 +95,59 @@ typedef struct libcrun_container_s libcrun_container_t;
 typedef struct libcrun_context_s libcrun_context_t;
 
 struct container_entrypoint_s;
+struct cgroup_info_s
+{
+  bool v1;
+  bool v2;
+  bool systemd;
+  bool systemd_user;
+};
+
+struct seccomp_info_s
+{
+  bool enabled;
+  char **actions;
+  char **operators;
+  char **archs;
+};
+
+struct apparmor_info_s
+{
+  bool enabled;
+};
+
+struct selinux_info_s
+{
+  bool enabled;
+};
+
+struct linux_info_s
+{
+  char **namespaces;
+  char **capabilities;
+  struct cgroup_info_s cgroup;
+  struct seccomp_info_s seccomp;
+  struct apparmor_info_s apparmor;
+  struct selinux_info_s selinux;
+};
+
+struct annotations_info_s
+{
+  char *io_github_seccomp_libseccomp_version;
+  bool run_oci_crun_checkpoint_enabled;
+  char *run_oci_crun_commit;
+  char *run_oci_crun_version;
+};
+
+struct features_info_s
+{
+  char *oci_version_min;
+  char *oci_version_max;
+  char **hooks;
+  char **mount_options;
+  struct linux_info_s linux;
+  struct annotations_info_s annotations;
+};
 
 struct libcrun_checkpoint_restore_s
 {
@@ -184,6 +237,9 @@ LIBCRUN_PUBLIC int libcrun_container_update_from_values (libcrun_context_t *cont
                                                          struct libcrun_update_value_s *values, size_t len,
                                                          libcrun_error_t *err);
 
+LIBCRUN_PUBLIC int libcrun_container_get_features (libcrun_context_t *context, struct features_info_s **info,
+                                                   libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
@@ -212,5 +268,70 @@ cleanup_containerp (libcrun_container_t **c)
 }
 
 #define cleanup_container __attribute__ ((cleanup (cleanup_containerp)))
+
+static inline void
+cleanup_struct_features_free (struct features_info_s **info)
+{
+  size_t i;
+  struct features_info_s *ptr = *info;
+  if (info == NULL || *info == NULL)
+    return;
+
+  // Free oci_version_min if it is not NULL
+  if (ptr->oci_version_min != NULL)
+    {
+      free (ptr->oci_version_min);
+      ptr->oci_version_min = NULL; // Set to NULL after freeing
+    }
+
+  // Free oci_version_max if it is not NULL
+  if (ptr->oci_version_max != NULL)
+    {
+      free (ptr->oci_version_max);
+      ptr->oci_version_max = NULL; // Set to NULL after freeing
+    }
+  if (ptr->hooks != NULL)
+    {
+      for (i = 0; ptr->hooks[i] != NULL; i++)
+        free (ptr->hooks[i]);
+      free (ptr->hooks);
+    }
+  if (ptr->mount_options != NULL)
+    {
+      for (i = 0; ptr->mount_options[i] != NULL; i++)
+        free (ptr->mount_options[i]);
+      free (ptr->mount_options);
+    }
+  if (ptr->linux.namespaces != NULL)
+    {
+      for (i = 0; ptr->linux.namespaces[i] != NULL; i++)
+        free (ptr->linux.namespaces[i]);
+      free (ptr->linux.namespaces);
+    }
+
+  if (ptr->linux.capabilities != NULL)
+    {
+      for (size_t i = 0; ptr->linux.capabilities[i] != NULL; i++)
+        free (ptr->linux.capabilities[i]);
+      free (ptr->linux.capabilities);
+    }
+  if (ptr->linux.seccomp.actions != NULL)
+    {
+      for (i = 0; ptr->linux.seccomp.actions[i] != NULL; i++)
+        free (ptr->linux.seccomp.actions[i]);
+      free (ptr->linux.seccomp.actions);
+    }
+  if (ptr->linux.seccomp.operators != NULL)
+    {
+      for (i = 0; ptr->linux.seccomp.operators[i] != NULL; i++)
+        free (ptr->linux.seccomp.operators[i]);
+      free (ptr->linux.seccomp.operators);
+    }
+
+  free (ptr);
+  *info = NULL;
+}
+
+#define cleanup_struct_features __attribute__ ((cleanup (cleanup_struct_features_free)))
 
 #endif

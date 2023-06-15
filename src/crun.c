@@ -45,6 +45,7 @@
 #include "spec.h"
 #include "pause.h"
 #include "unpause.h"
+#include "oci_features.h"
 #include "ps.h"
 #include "checkpoint.h"
 #include "restore.h"
@@ -137,6 +138,7 @@ enum
   COMMAND_UPDATE,
   COMMAND_PAUSE,
   COMMAND_UNPAUSE,
+  COMMAND_FEATURES,
   COMMAND_PS,
   COMMAND_CHECKPOINT,
   COMMAND_RESTORE,
@@ -155,6 +157,7 @@ struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create
                                  { COMMAND_UPDATE, "update", crun_command_update },
                                  { COMMAND_PAUSE, "pause", crun_command_pause },
                                  { COMMAND_UNPAUSE, "resume", crun_command_unpause },
+                                 { COMMAND_FEATURES, "features", crun_command_features },
 #if HAVE_CRIU && HAVE_DLOPEN
                                  { COMMAND_CHECKPOINT, "checkpoint", crun_command_checkpoint },
                                  { COMMAND_RESTORE, "restore", crun_command_restore },
@@ -170,6 +173,7 @@ static char doc[] = "\nCOMMANDS:\n"
                     "\tcreate      - create a container\n"
                     "\tdelete      - remove definition for a container\n"
                     "\texec        - exec a command in a running container\n"
+                    "\tfeatures    - show the enabled features\n"
                     "\tlist        - list known containers\n"
                     "\tkill        - send a signal to the container init process\n"
                     "\tps          - show the processes in the container\n"

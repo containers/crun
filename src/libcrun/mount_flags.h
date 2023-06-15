@@ -35,5 +35,6 @@ struct propagation_flags_s
 };
 
 const struct propagation_flags_s *libcrun_str2mount_flags (const char *name);
+const struct propagation_flags_s *get_mount_flags_from_wordlist ();
 
 #endif
