@@ -94,7 +94,7 @@ crun_path_exists (const char *path, libcrun_error_t *err arg_unused)
 {
   int ret = access (path, F_OK);
   if (ret < 0)
-    return 0;
+    return errno == ENOENT ? 0 : ret;
   return 1;
 }
 
