@@ -576,7 +576,10 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
         }
 
       if (! exists)
-        continue;
+        {
+          libcrun_error (errno, "error opening file `%s`", status_file);
+          continue;
+        }
 
       next_container = xmalloc (sizeof (libcrun_container_list_t));
       next_container->name = xstrdup (next->d_name);
