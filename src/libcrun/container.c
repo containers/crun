@@ -3920,7 +3920,7 @@ libcrun_container_get_features (libcrun_context_t *context arg_unused, struct fe
   }
 #endif
 
-#if HAVE_CRIU && HAVE_DLOPEN
+#if HAVE_CRIU
   (*info)->annotations.run_oci_crun_checkpoint_enabled = true;
 #endif
   (*info)->annotations.run_oci_crun_commit = GIT_VERSION;
