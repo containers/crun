@@ -23,6 +23,7 @@
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
+#include <seccomp.h>
 #include "scheduler.h"
 #include "seccomp_notify.h"
 #include "custom-handler.h"
@@ -36,6 +37,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include "status.h"
+#include "mount_flags.h"
 #include "linux.h"
 #include "terminal.h"
 #include "io_priority.h"
@@ -45,7 +47,9 @@
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/capability.h>
 #include <grp.h>
+#include <git-version.h>
 
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-daemon.h>
@@ -91,6 +95,69 @@ struct sync_socket_message_s
 };
 
 typedef runtime_spec_schema_defs_hook hook;
+
+// linux hooks
+char *hooks[] = {
+  "prestart",
+  "createRuntime",
+  "createContainer",
+  "startContainer",
+  "poststart",
+  "poststop"
+};
+
+// linux namespaces
+static char *namespaces[] = {
+  "cgroup",
+  "ipc",
+  "mount",
+  "network",
+  "pid",
+  "user",
+  "uts"
+};
+
+static char *actions[] = {
+  "SCMP_ACT_ALLOW",
+  "SCMP_ACT_ERRNO",
+  "SCMP_ACT_KILL",
+  "SCMP_ACT_KILL_PROCESS",
+  "SCMP_ACT_KILL_THREAD",
+  "SCMP_ACT_LOG",
+  "SCMP_ACT_NOTIFY",
+  "SCMP_ACT_TRACE",
+  "SCMP_ACT_TRAP"
+};
+
+static char *operators[] = {
+  "SCMP_CMP_NE",
+  "SCMP_CMP_LT",
+  "SCMP_CMP_LE",
+  "SCMP_CMP_EQ",
+  "SCMP_CMP_GE",
+  "SCMP_CMP_GT",
+  "SCMP_CMP_MASKED_EQ",
+};
+
+static char *archs[] = {
+  "SCMP_ARCH_AARCH64",
+  "SCMP_ARCH_ARM",
+  "SCMP_ARCH_MIPS",
+  "SCMP_ARCH_MIPS64",
+  "SCMP_ARCH_MIPS64N32",
+  "SCMP_ARCH_MIPSEL",
+  "SCMP_ARCH_MIPSEL64",
+  "SCMP_ARCH_MIPSEL64N32",
+  "SCMP_ARCH_PPC",
+  "SCMP_ARCH_PPC64",
+  "SCMP_ARCH_PPC64LE",
+  "SCMP_ARCH_RISCV64",
+  "SCMP_ARCH_S390",
+  "SCMP_ARCH_S390X",
+  "SCMP_ARCH_X32",
+  "SCMP_ARCH_X86",
+  "SCMP_ARCH_X86_64"
+};
 
 static const char spec_file[] = "\
 {\n\
@@ -3704,6 +3771,165 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
   yajl_gen_free (gen);
 
   return ret;
+}
+
+static void
+populate_array_field (char ***field, char *array[], size_t num_elements)
+{
+  size_t i;
+
+  *field = xmalloc0 ((num_elements + 1) * sizeof (char *));
+  for (i = 0; i < num_elements; i++)
+    (*field)[i] = xstrdup (array[i]);
+
+  (*field)[i] = NULL;
+}
+
+static void
+populate_capabilities (struct features_info_s *info, char ***capabilities, size_t *num_capabilities)
+{
+  size_t index = 0;
+  cap_value_t i;
+  char *endptr;
+  int j;
+
+  *num_capabilities = 0;
+  for (i = 0;; i++)
+    {
+      char *v = cap_to_name (i);
+      if (v == NULL)
+        break;
+      strtol (v, &endptr, 10);
+      if (endptr != v)
+        {
+          // Non-numeric or non-zero value encountered, break the loop
+          break;
+        }
+      (*num_capabilities)++;
+    }
+
+  *capabilities = xmalloc0 ((*num_capabilities + 1) * sizeof (const char *));
+  for (i = 0; i < (cap_value_t) *num_capabilities; i++)
+    {
+      char *v = cap_to_name (i);
+      if (v == NULL)
+        break;
+      strtol (v, &endptr, 10);
+      if (endptr != v)
+        {
+          // Non-numeric or non-zero value encountered, break the loop
+          break;
+        }
+
+      // Convert capability name to uppercase
+      for (j = 0; v[j] != '\0'; j++)
+        v[j] = toupper (v[j]);
+
+      (*capabilities)[index] = v;
+      index++;
+    }
+
+  (*capabilities)[index] = NULL; // Terminate the array with NULL
+  populate_array_field (&(info->linux.capabilities), *capabilities, *num_capabilities);
+}
+
+static void
+retrieve_mount_options (struct features_info_s **info)
+{
+  const struct propagation_flags_s *mount_options_list;
+  size_t num_mount_options = 0;
+
+  // Retrieve mount options from wordlist
+  mount_options_list = get_mount_flags_from_wordlist ();
+
+  // Calculate the number of mount options
+  while (mount_options_list[num_mount_options].name != NULL)
+    num_mount_options++;
+
+  // Allocate memory for mount options in info struct
+  (*info)->mount_options = xmalloc0 ((num_mount_options + 1) * sizeof (char *));
+
+  // Copy mount options to info struct
+  for (size_t i = 0; i < num_mount_options; i++)
+    (*info)->mount_options[i] = xstrdup (mount_options_list[i].name);
+}
+
+int
+libcrun_container_get_features (libcrun_context_t *context, struct features_info_s **info, libcrun_error_t *err arg_unused)
+{
+  // Allocate memory for the features_info_s structure
+  size_t num_namspaces = sizeof (namespaces) / sizeof (namespaces[0]);
+  size_t num_operators = sizeof (operators) / sizeof (operators[0]);
+  size_t num_actions = sizeof (actions) / sizeof (actions[0]);
+  size_t num_hooks = sizeof (hooks) / sizeof (hooks[0]);
+  size_t num_archs = sizeof (archs) / sizeof (archs[0]);
+  size_t num_capabilities = 0;
+  char **capabilities = NULL;
+
+  *info = xmalloc0 (sizeof (struct features_info_s));
+
+  // Hardcoded feature information
+  (*info)->oci_version_min = xstrdup ("1.0.0");
+  (*info)->oci_version_max = xstrdup ("1.1.0-rc.3");
+
+  // Populate hooks
+  populate_array_field (&((*info)->hooks), hooks, num_hooks);
+
+  // Populate mount_options
+  retrieve_mount_options (info);
+
+  // Populate namespaces
+  populate_array_field (&((*info)->linux.namespaces), namespaces, num_namspaces);
+
+  // Populate capabilities
+  populate_capabilities (*info, &capabilities, &num_capabilities);
+
+  // Hardcode the values for cgroup
+  (*info)->linux.cgroup.v1 = true;
+  (*info)->linux.cgroup.v2 = true;
+#ifdef HAVE_SYSTEMD
+  (*info)->linux.cgroup.systemd = true;
+  (*info)->linux.cgroup.systemd_user = true;
+#endif
+
+  // Put seccomp values
+#ifdef HAVE_SECCOMP
+  (*info)->linux.seccomp.enabled = true;
+  // Populate actions
+  populate_array_field (&((*info)->linux.seccomp.actions), actions, num_actions);
+  // Populate operators
+  populate_array_field (&((*info)->linux.seccomp.operators), operators, num_operators);
+  // Populate archs
+  populate_array_field (&((*info)->linux.seccomp.archs), archs, num_archs);
+#else
+  (*info)->linux.seccomp.enabled = false;
+#endif
+
+  // Put values for apparmor and selinux
+  (*info)->linux.apparmor.enabled = true;
+  (*info)->linux.selinux.enabled = true;
+
+  // Populate the values for annotations
+#ifdef HAVE_SECCOMP
+  {
+    const struct scmp_version *version = seccomp_version ();
+    int size = snprintf (NULL, 0, "%u.%u.%u", version->major, version->minor, version->micro) + 1;
+    char *version_string = xmalloc0 (size);
+    snprintf (version_string, size, "%u.%u.%u", version->major, version->minor, version->micro);
+    (*info)->annotations.io_github_seccomp_libseccomp_version = xstrdup (version_string);
+  }
+#endif
+
+  if (context->handler_manager && handler_by_name (context->handler_manager, "wasm"))
+    (*info)->annotations.run_oci_crun_wasm = true;
+
+#if HAVE_CRIU
+  (*info)->annotations.run_oci_crun_checkpoint_enabled = true;
+#endif
+  (*info)->annotations.run_oci_crun_commit = GIT_VERSION;
+  (*info)->annotations.run_oci_crun_version = PACKAGE_VERSION;
+
+  return 0;
 }
 
 int
