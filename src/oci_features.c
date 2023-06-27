@@ -183,6 +183,8 @@ crun_features_add_annotations_info (yajl_gen json_gen, const struct annotations_
   add_string_to_json (json_gen, "run.oci.crun.commit", annotation->run_oci_crun_commit);
   add_string_to_json (json_gen, "run.oci.crun.version", annotation->run_oci_crun_version);
 
+  add_bool_to_json (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
+
   yajl_gen_map_close (json_gen);
 }
 

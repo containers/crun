@@ -3855,7 +3855,7 @@ retrieve_mount_options (struct features_info_s **info)
 }
 
 int
-libcrun_container_get_features (libcrun_context_t *context arg_unused, struct features_info_s **info, libcrun_error_t *err arg_unused)
+libcrun_container_get_features (libcrun_context_t *context, struct features_info_s **info, libcrun_error_t *err arg_unused)
 {
   // Allocate memory for the features_info_s structure
   size_t num_namspaces = sizeof (namespaces) / sizeof (namespaces[0]);
@@ -3919,6 +3919,9 @@ libcrun_container_get_features (libcrun_context_t *context arg_unused, struct fe
     (*info)->annotations.io_github_seccomp_libseccomp_version = xstrdup (version_string);
   }
 #endif
+
+  if (context->handler_manager && handler_by_name (context->handler_manager, "wasm"))
+    (*info)->annotations.run_oci_crun_wasm = true;
 
 #if HAVE_CRIU
   (*info)->annotations.run_oci_crun_checkpoint_enabled = true;

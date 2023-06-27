@@ -137,6 +137,7 @@ struct annotations_info_s
   bool run_oci_crun_checkpoint_enabled;
   char *run_oci_crun_commit;
   char *run_oci_crun_version;
+  bool run_oci_crun_wasm;
 };
 
 struct features_info_s

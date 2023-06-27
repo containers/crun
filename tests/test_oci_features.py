@@ -193,6 +193,11 @@ def test_crun_features():
                     sys.stderr.write("wrong value for run.oci.crun.commit\n")
                     return -1
 
+                if ('WASM' in get_crun_feature_string()
+                    and annotations.get("run.oci.crun.wasm") is not True):
+                    sys.stderr.write("wrong value for run.oci.crun.wasm\n")
+                    return -1
+
                 if 'CRIU' in get_crun_feature_string():
                     if annotations.get("org.opencontainers.runc.checkpoint.enabled") is not True:
                         sys.stderr.write("wrong value for org.opencontainers.runc.checkpoint.enabled\n")
