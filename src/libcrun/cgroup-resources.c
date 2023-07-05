@@ -720,7 +720,10 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
     return 0;
 
   swap = memory->swap;
-  if (cgroup2 && memory->swap != -1)
+  // Cgroupv2 apply limit must check if swap > 0, since `0` and `-1` are special case
+  // 0: This means process will not be able to use any swap space.
+  // -1: This means that the process can use as much swap as it needs.
+  if (cgroup2 && memory->swap > 0)
     {
       if (! memory->limit_present)
         return crun_make_error (err, 0, "cannot set swap limit without the memory limit");

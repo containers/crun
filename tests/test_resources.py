@@ -199,6 +199,29 @@ def test_resources_cpu_weight():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_resources_cgroupv2_swap_0():
+    if not is_cgroup_v2_unified() or is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'pause']
+
+    conf['linux']['resources'] = {}
+    conf['linux']['resources']['memory'] = {
+            "swap": 0
+    }
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/memory.swap.max"])
+        if "0" not in out:
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_resources_cpu_quota_minus_one():
     if is_cgroup_v2_unified() or is_rootless():
         return 77
@@ -303,6 +326,7 @@ def test_resources_exec_cgroup():
 
 
 all_tests = {
+    "resources-v2-swap-disabled": test_resources_cgroupv2_swap_0,
     "resources-pid-limit" : test_resources_pid_limit,
     "resources-pid-limit-userns" : test_resources_pid_limit_userns,
     "resources-unified" : test_resources_unified,
