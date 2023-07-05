@@ -114,14 +114,14 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
     {
     case PS_JSON:
       printf ("[\n");
-      for (i = 0; pids[i]; i++)
+      for (i = 0; pids && pids[i]; i++)
         printf ("  %d%s\n", pids[i], pids[i + 1] ? "," : "");
       printf ("]\n");
       break;
 
     case PS_TABLE:
       printf ("PID\n");
-      for (i = 0; pids[i]; i++)
+      for (i = 0; pids && pids[i]; i++)
         printf ("%d\n", pids[i]);
       break;
     }
