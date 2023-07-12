@@ -27,7 +27,7 @@ def is_seccomp_enabled():
 
 def get_crun_commit():
     try:
-        output = subprocess.check_output(["./crun", "--version"]).decode()
+        output = subprocess.check_output([get_crun_path(), "--version"]).decode()
         commit_match = re.search(r"commit: ([\w]+)", output)
 
         if commit_match:
