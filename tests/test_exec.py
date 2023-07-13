@@ -43,6 +43,9 @@ def test_uid_tty():
     if is_rootless():
         return 77
 
+    if os.isatty(1) == False:
+        return 77
+
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
     conf['process']['terminal'] = True

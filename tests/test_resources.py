@@ -237,6 +237,7 @@ def test_resources_cpu_weight_systemd():
 
     conf['linux']['resources'] = {}
     conf['linux']['resources']['unified'] = {
+
             "cpu.weight": "1234"
     }
     cid = None
@@ -251,6 +252,10 @@ def test_resources_cpu_weight_systemd():
         scope = json.loads(state)['systemd-scope']
 
         out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
+        # try once more against the user manager, as if one exists, crun will prefer it; see bug #1197
+        if out != "1234":
+            out = subprocess.check_output(['systemctl', '--user', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
+
         if out != "1234":
             sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
             return 1
@@ -265,6 +270,10 @@ def test_resources_cpu_weight_systemd():
             return -1
 
         out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
+        # as above
+        if out != expected_weight:
+            out = subprocess.check_output(['systemctl', '--user', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
+
         if out != expected_weight:
             sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
             return 1
