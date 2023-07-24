@@ -292,7 +292,7 @@ AM_CONDITIONAL([LUA_BINDINGS], [test "x$with_lua_bindings" = "xyes"])
 AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])
 AM_CONDITIONAL([SHARED_LIBCRUN], [test "x$enable_shared" = "xyes"])
 
-AC_CONFIG_FILES([Makefile rpm/crun.spec])
+AC_CONFIG_FILES([Makefile])
 
 AC_CONFIG_SUBDIRS([libocispec])
 AC_OUTPUT

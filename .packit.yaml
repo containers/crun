@@ -1,0 +1,45 @@
+---
+# See the documentation for more information:
+# https://packit.dev/docs/configuration/
+
+# Build targets can be found at:
+# https://copr.fedorainfracloud.org/coprs/rhcontainerbot/packit-builds/
+
+specfile_path: rpm/crun.spec
+
+jobs:
+  - &copr
+    job: copr_build
+    trigger: pull_request
+    owner: rhcontainerbot
+    project: packit-builds
+    enable_net: true
+    srpm_build_deps:
+      - git-archive-all
+      - make
+    actions:
+      create-archive:
+        - "git-archive-all -v --force-submodules rpm/crun-HEAD.tar.xz"
+        - bash -c "ls -1 rpm/crun-HEAD.tar.xz"
+
+  - <<: *copr
+    # Run on commit to main branch
+    trigger: commit
+    branch: main
+    project: podman-next
+
+  - job: propose_downstream
+    trigger: release
+    update_release: false
+    dist_git_branches:
+      - fedora-all
+
+  - job: koji_build
+    trigger: commit
+    dist_git_branches:
+      - fedora-all
+
+  - job: bodhi_update
+    trigger: commit
+    dist_git_branches:
+      - fedora-branched # rawhide updates are created automatically

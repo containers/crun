@@ -1,49 +1,52 @@
 %global krun_opts %{nil}
 %global wasmedge_opts %{nil}
 %global wasmtime_opts %{nil}
-%global wasm_support disabled
 
-%if 0%{?fedora} >= 37
+# krun and wasm[edge,time] support only on aarch64 and x86_64
 %ifarch aarch64 || x86_64
-%global krun_support enabled
-%global krun_opts --with-libkrun
-%endif
-%endif
+%global wasm_support 1
 
-%ifarch aarch64 || x86_64
-%global wasm_support enabled
-%global wasmedge_support enabled
+# wasmedge only found on Fedora and environments with epel enabled
+%if %{defined fedora} || (%{defined copr_project} && "%{copr_project}" == "podman-next")
+%global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif
 
-# FIXME: wasmtime builds for rhel are currently broken on copr probably
-# because of an older rust compiler.
-%if 0%{?fedora}
-%ifnarch %{ix86} || ppc64le
-%global wasm_support enabled
-%global wasmtime_support enabled
+# krun only exists on fedora
+%if %{defined fedora}
+%global krun_support 1
+%global krun_opts --with-libkrun
+%endif
+
+# wasmtime exists only on podman-next copr for now
+%if %{defined copr_project} && "%{?copr_project}" == "podman-next"
+%global wasmtime_support 1
 %global wasmtime_opts --with-wasmtime
 %endif
+
 %endif
 
 Summary: OCI runtime written in C
 Name: crun
-Epoch: 101
-#FIXME: copr build env replaces this with a strange version number
+Epoch: 102
 #Version: @RPM_VERSION@
-Version: 0.0
-%define build_timestamp %{lua: print(os.date("%Y%m%d%H%M%S"))}
-Release: %{build_timestamp}.@GIT_COMMIT_ID@%{?dist}
-# `make tarball-prep` will generate this from HEAD commit in the repo root dir
-Source0: %{name}-HEAD.tar.gz
-License: GPLv2+
+Version: 0
+Release: %autorelease
+Source0: %{url}/releases/download/%{version}/%{name}-%{version}.tar.xz
+License: GPL-2.0-only
 URL: https://github.com/containers/%{name}
+%if %{defined golang_arches_future}
+ExclusiveArch: %{golang_arches_future}
+%else
+ExclusiveArch: aarch64 ppc64le s390x x86_64
+%endif
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
 BuildRequires: git-core
+BuildRequires: gperf
 BuildRequires: libcap-devel
-%if "%{krun_support}" == "enabled"
+%if %{defined krun_support}
 BuildRequires: libkrun-devel
 %endif
 BuildRequires: systemd-devel
@@ -51,14 +54,14 @@ BuildRequires: yajl-devel
 BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
-BuildRequires: go-md2man
-%if "%{wasmedge_support}" == "enabled"
+BuildRequires: %{_bindir}/go-md2man
+%if %{defined wasmedge_support}
 BuildRequires: wasmedge-devel
 %endif
-%if "%{wasmtime_support}" == "enabled"
+%if %{defined wasmtime_support}
 BuildRequires: wasmtime-c-api-devel
 %endif
-%if 0%{?rhel} == 8
+%if %{defined rhel} && 0%{?rhel} == 8
 BuildRequires: python3
 %else
 BuildRequires: python
@@ -68,7 +71,7 @@ Provides: oci-runtime
 %description
 %{name} is a OCI runtime
 
-%if "%{krun_support}" == "enabled"
+%if %{defined krun_support}
 %package krun
 Summary: %{name} with libkrun support
 Requires: libkrun
@@ -79,7 +82,7 @@ Provides: krun = %{epoch}:%{version}-%{release}
 krun is a symlink to the %{name} binary, with libkrun as an additional dependency.
 %endif
 
-%if "%{wasm_support}" == "enabled"
+%if %{defined wasm_support}
 %package wasm
 Summary: %{name} with wasm support
 Requires: %{name} = %{epoch}:%{version}-%{release}
@@ -91,7 +94,7 @@ Recommends: wasmedge
 %endif
 
 %prep
-%autosetup -Sgit -n %{name}-HEAD
+%autosetup -Sgit -n %{name}-%{version}
 
 %build
 ./autogen.sh
@@ -99,20 +102,14 @@ Recommends: wasmedge
 %make_build
 
 %install
-# FIXME: make_install no longer finds files as expected,
-# so need to run install steps explicitly
-#%%make_install
-install -dp %{buildroot}%{_bindir}
-install -Dp -m0755 %{name} %{buildroot}%{_bindir}
-install -dp %{buildroot}%{_mandir}/man1
-install -Dp -m0644 %{name}.1 %{buildroot}%{_mandir}/man1
-rm -rf %{buildroot}%{_usr}/lib*
+%make_install prefix=%{_prefix}
+rm -rf %{buildroot}%{_prefix}/lib*
 
-%if "%{krun_support}" == "enabled"
+%if %{defined krun_support}
 ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
 %endif
 
-%if "%{wasm_support}" == "enabled"
+%if %{defined wasm_support}
 ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/%{name}-wasm
 %endif
 
@@ -121,14 +118,25 @@ ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/%{name}-wasm
 %{_bindir}/%{name}
 %{_mandir}/man1/*
 
-%if "%{krun_support}" == "enabled"
+%if %{defined krun_support}
 %files krun
 %license COPYING
 %{_bindir}/krun
 %endif
 
-%if "%{wasm_support}" == "enabled"
+%if %{defined wasm_support}
 %files wasm
 %license COPYING
 %{_bindir}/%{name}-wasm
+%endif
+
+%changelog
+%if %{defined autochangelog}
+%autochangelog
+%else
+# NOTE: This changelog will be visible on CentOS 8 Stream builds
+# Other envs are capable of handling autochangelog
+* Tue Jun 13 2023 RH Container Bot <rhcontainerbot@fedoraproject.org>
+- Placeholder changelog for envs that are not autochangelog-ready.
+- Contact upstream if you need to report an issue with the build.
 %endif
