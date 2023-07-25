@@ -5,7 +5,7 @@ ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 
 RUN dnf install -y golang python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel go-md2man libgcrypt-devel \
-    glibc-static python3-libmount libtool make podman xz nmap-ncat \
+    glibc-static python3-libmount libtool make podman xz nmap-ncat procps-ng \
     containernetworking-plugins 'dnf-command(builddep)' && \
     dnf builddep -y podman && \
     chmod 755 /root && \
