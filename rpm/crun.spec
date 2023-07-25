@@ -28,8 +28,15 @@
 
 Summary: OCI runtime written in C
 Name: crun
+%if %{defined copr_username}
 Epoch: 102
-#Version: @RPM_VERSION@
+%endif
+# DO NOT TOUCH the Version string!
+# The TRUE source of this specfile is:
+# https://github.com/containers/crun/blob/main/rpm/crun.spec
+# If that's what you're reading, Version must be 0, and will be updated by Packit for
+# copr and koji builds.
+# If you're reading this on dist-git, the version is automatically filled in by Packit.
 Version: 0
 Release: %autorelease
 Source0: %{url}/releases/download/%{version}/%{name}-%{version}.tar.xz
