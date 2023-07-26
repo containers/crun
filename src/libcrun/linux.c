@@ -4098,6 +4098,10 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
 {
   int ret;
 
+  ret = expect_success_from_sync_socket (sync_socket_host, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = prepare_and_send_mount_mounts (container, pid, sync_socket_host, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -4383,6 +4387,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   /* Receive the mounts sent by `prepare_and_send_mounts`.  */
   ret = receive_mounts (get_fd_map (container), sync_socket_container, err);
