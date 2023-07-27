@@ -1,3 +1,14 @@
+* crun-1.8.6
+
+- crun: new command "crun features".
+- linux: fix handling of idmapped mounts when the container joins
+  an existing PID namespace.
+- linux: support io_priority from the OCI specs.
+- linux: handle correctly the case where the status file is not
+  written yet for a container.
+- crun: fix segfault for "ps" when the container is not using cgroups.
+- cgroup: allow setting swap to 0.
+
 * crun-1.8.5
 
 - scheduler: use definition from the OCI configuration file instead of the custom
