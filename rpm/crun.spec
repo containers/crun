@@ -82,8 +82,8 @@ Provides: oci-runtime
 %package krun
 Summary: %{name} with libkrun support
 Requires: libkrun
-Requires: %{name} = %{epoch}:%{version}-%{release}
-Provides: krun = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
+Provides: krun = %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description krun
 krun is a symlink to the %{name} binary, with libkrun as an additional dependency.
@@ -92,7 +92,7 @@ krun is a symlink to the %{name} binary, with libkrun as an additional dependenc
 %if %{defined wasm_support}
 %package wasm
 Summary: %{name} with wasm support
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 Requires: wasm-library
 Recommends: wasmedge
 
