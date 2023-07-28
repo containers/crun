@@ -3601,6 +3601,19 @@ send_error_to_sync_socket (int sync_socket_fd, bool has_fd, libcrun_error_t *err
   return true;
 }
 
+static inline int
+send_success_to_sync_socket (int sync_socket, libcrun_error_t *err)
+{
+  const char success = 0;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (write (sync_socket, &success, 1));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to sync socket");
+
+  return 0;
+}
+
 static __attribute__ ((noreturn)) void
 send_error_to_sync_socket_and_die (int sync_socket_fd, bool has_terminal, libcrun_error_t *err)
 {
@@ -3636,7 +3649,7 @@ expect_success_from_sync_socket (int sync_fd, libcrun_error_t *err)
   if (read_error_from_sync_socket (sync_fd, &err_code, &err_str))
     return crun_make_error (err, err_code, "%s", err_str);
 
-  return crun_error_wrap (err, "read from sync socket");
+  return crun_make_error (err, 0, "read from sync socket");
 }
 
 static int
@@ -4196,7 +4209,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   pid_t pid_container = 0;
   size_t i;
   int ret;
-  const char success = 0;
 
   if (init_status->idx_pidns_to_join_immediately >= 0 || init_status->idx_timens_to_join_immediately >= 0)
     {
@@ -4227,7 +4239,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       if (new_pid)
         {
           /* Report the new PID to the parent and exit immediately.  */
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          ret = send_success_to_sync_socket (sync_socket_container, err);
           if (UNLIKELY (ret < 0))
             kill (new_pid, SIGKILL);
 
@@ -4294,7 +4306,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
           init_status->namespaces_to_unshare &= ~CLONE_NEWUSER;
 
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          ret = send_success_to_sync_socket (sync_socket_container, err);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write to sync socket");
         }
@@ -4372,7 +4384,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       /* Report back the new PID.  */
       if (pid_container)
         {
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+          ret = send_success_to_sync_socket (sync_socket_container, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -4388,7 +4400,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return ret;
     }
 
-  ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+  ret = send_success_to_sync_socket (sync_socket_container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4442,7 +4454,6 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   __attribute__ ((unused)) cleanup_close int restore_pidns = -1;
   int first_clone_args = 0;
   const char failure = 1;
-  const char success = 0;
   int sync_socket[2];
   pid_t pid;
   size_t i;
@@ -4611,7 +4622,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
           pid_to_clean = pid = new_pid;
 
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &success, 1));
+          ret = send_success_to_sync_socket (sync_socket_host, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -4646,7 +4657,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "read pid from sync socket");
 
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_host, &success, 1));
+          ret = send_success_to_sync_socket (sync_socket_host, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -4697,9 +4708,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     }
   else
     {
-      ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &success, 1));
+      ret = send_success_to_sync_socket (sync_socket_container, err);
       if (UNLIKELY (ret < 0))
-        libcrun_fail_with_error (errno, "%s", "write to sync socket");
+        libcrun_fail_with_error (crun_error_get_errno (err), "%s", (*err)->msg);
     }
 
   /* Jump into the specified entrypoint.  */
