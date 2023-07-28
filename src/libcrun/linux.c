@@ -4313,11 +4313,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
       if (init_status->userns_index < 0)
         {
-          char tmp;
-
-          ret = TEMP_FAILURE_RETRY (read (sync_socket_container, &tmp, 1));
+          ret = expect_success_from_sync_socket (sync_socket_container, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "read from sync socket");
+            return ret;
         }
       else
         {
@@ -4640,7 +4638,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = TEMP_FAILURE_RETRY (write (sync_socket_host, "1", 1));
+          ret = send_success_to_sync_socket (sync_socket_host, err);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write to sync socket");
         }
