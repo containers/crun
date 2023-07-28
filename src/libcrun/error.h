@@ -67,8 +67,6 @@ void log_write_to_stream (int errno_, const char *msg, bool warning, void *arg);
 
 void log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg);
 
-int crun_make_error (libcrun_error_t *err, int status, const char *msg, ...) __attribute__ ((format (printf, 3, 4)));
-
 int crun_error_wrap (libcrun_error_t *err, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 
 int crun_error_get_errno (libcrun_error_t *err);
@@ -82,6 +80,8 @@ LIBCRUN_PUBLIC void libcrun_warning (const char *msg, ...) __attribute__ ((forma
 LIBCRUN_PUBLIC void libcrun_error (int errno_, const char *msg, ...) __attribute__ ((format (printf, 2, 3)));
 
 LIBCRUN_PUBLIC int libcrun_make_error (libcrun_error_t *err, int status, const char *msg, ...) __attribute__ ((format (printf, 3, 4)));
+
+#define crun_make_error libcrun_make_error
 
 LIBCRUN_PUBLIC void libcrun_error_write_warning_and_release (FILE *out, libcrun_error_t **err);
 
