@@ -212,7 +212,7 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
   // Prepare the JSON output
   json_gen = yajl_gen_alloc (NULL);
   if (json_gen == NULL)
-    return crun_make_error (err, errno, "Failed to initialize json structure");
+    return libcrun_make_error (err, 0, "Failed to initialize json structure");
 
   yajl_gen_config (json_gen, yajl_gen_beautify, 1); // Optional: Enable pretty formatting
 
