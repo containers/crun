@@ -45,23 +45,22 @@ static int log_format;
 static bool log_also_to_stderr;
 static int output_verbosity = LIBCRUN_VERBOSITY_ERROR;
 
-#define MAKE_ERROR(FUNC_NAME)                                            \
-  int FUNC_NAME (libcrun_error_t *err, int status, const char *msg, ...) \
-  {                                                                      \
-    va_list args_list;                                                   \
-    libcrun_error_t ptr;                                                 \
-    va_start (args_list, msg);                                           \
-    *err = xmalloc (sizeof (struct libcrun_error_s));                    \
-    ptr = *err;                                                          \
-    ptr->status = status;                                                \
-    if (vasprintf (&(ptr->msg), msg, args_list) < 0)                     \
-      OOM ();                                                            \
-    va_end (args_list);                                                  \
-    return -status - 1;                                                  \
-  }
+int
+libcrun_make_error (libcrun_error_t *err, int status, const char *msg, ...)
+{
+  va_list args_list;
+  libcrun_error_t ptr;
 
-MAKE_ERROR (crun_make_error);
-MAKE_ERROR (libcrun_make_error);
+  va_start (args_list, msg);
+  *err = xmalloc (sizeof (struct libcrun_error_s));
+  ptr = *err;
+  ptr->status = status;
+  if (vasprintf (&(ptr->msg), msg, args_list) < 0)
+    OOM ();
+  va_end (args_list);
+
+  return -status - 1;
+}
 
 int
 crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
