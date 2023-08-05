@@ -4309,7 +4309,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
           ret = send_success_to_sync_socket (sync_socket_container, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to sync socket");
+            return ret;
         }
 
       if (init_status->userns_index < 0)
@@ -4640,7 +4640,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
           ret = send_success_to_sync_socket (sync_socket_host, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to sync socket");
+            return ret;
         }
 
       if (init_status.must_fork)
