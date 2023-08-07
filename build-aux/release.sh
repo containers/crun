@@ -81,6 +81,18 @@ cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-ppc64le-disable-systemd
 
 rm -rf result
 
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/default-riscv64.nix
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-riscv64
+
+rm -rf result
+
+$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    nix $NIX_ARGS build --file nix/default-riscv64.nix --arg enableSystemd false
+cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-riscv64-disable-systemd
+
+rm -rf result
+
 if test x$SKIP_GPG = x; then
     for i in $OUTDIR/*; do
         gpg2 -b --armour $i
