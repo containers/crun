@@ -45,7 +45,7 @@ URL: https://github.com/containers/%{name}
 %if %{defined golang_arches_future}
 ExclusiveArch: %{golang_arches_future}
 %else
-ExclusiveArch: aarch64 ppc64le s390x x86_64
+ExclusiveArch: aarch64 ppc64le riscv64 s390x x86_64
 %endif
 BuildRequires: autoconf
 BuildRequires: automake

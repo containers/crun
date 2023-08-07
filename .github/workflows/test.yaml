@@ -18,6 +18,8 @@ jobs:
             distro: ubuntu_latest
           - arch: ppc64le
             distro: ubuntu_latest
+          - arch: riscv64
+            distro: ubuntu_latest
     steps:
       - uses: actions/checkout@v3
         with:
