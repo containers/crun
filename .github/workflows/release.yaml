@@ -28,14 +28,10 @@ jobs:
 
       - run: |
           sudo mv release-* /tmp/artifact
-          sudo mv /tmp/artifact/crun-*-linux-amd64 /tmp/artifact/crun-linux-amd64
-          sudo mv /tmp/artifact/crun-*-linux-amd64-disable-systemd /tmp/artifact/crun-linux-amd64-disable-systemd
-          sudo mv /tmp/artifact/crun-*-linux-arm64 /tmp/artifact/crun-linux-arm64
-          sudo mv /tmp/artifact/crun-*-linux-arm64-disable-systemd /tmp/artifact/crun-linux-arm64-disable-systemd
-          sudo mv /tmp/artifact/crun-*-linux-ppc64le /tmp/artifact/crun-linux-ppc64le
-          sudo mv /tmp/artifact/crun-*-linux-ppc64le-disable-systemd /tmp/artifact/crun-linux-ppc64le-disable-systemd
-          sudo mv /tmp/artifact/crun-*-linux-riscv64 /tmp/artifact/crun-linux-riscv64
-          sudo mv /tmp/artifact/crun-*-linux-riscv64-disable-systemd /tmp/artifact/crun-linux-riscv64-disable-systemd
+          for ARCH in amd64 arm64 ppc64le riscv64; do
+            sudo mv /tmp/artifact/crun-*-linux-${ARCH} /tmp/artifact/crun-linux-${ARCH}
+            sudo mv /tmp/artifact/crun-*-linux-${ARCH}-disable-systemd /tmp/artifact/crun-linux-${ARCH}-disable-systemd
+          done
           sudo mv /tmp/artifact/*.tar.gz /tmp/artifact/crun.tar.gz
           sudo mv /tmp/artifact/*.tar.xz /tmp/artifact/crun.tar.xz
           (cd /tmp/artifact; sha256sum * | sudo tee CHECKSUMS)
