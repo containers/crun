@@ -2,30 +2,35 @@
 # See the documentation for more information:
 # https://packit.dev/docs/configuration/
 
-# Build targets can be found at:
-# https://copr.fedorainfracloud.org/coprs/rhcontainerbot/packit-builds/
-
 specfile_path: rpm/crun.spec
 
-jobs:
-  - &copr
-    job: copr_build
-    trigger: pull_request
-    owner: rhcontainerbot
-    project: packit-builds
-    enable_net: true
-    srpm_build_deps:
-      - git-archive-all
-      - make
-    actions:
-      create-archive:
-        - "git-archive-all -v --force-submodules rpm/crun-HEAD.tar.xz"
-        - bash -c "ls -1 rpm/crun-HEAD.tar.xz"
+srpm_build_deps:
+  - git-archive-all
+  - make
+actions:
+  create-archive:
+    - "git-archive-all -v --force-submodules rpm/crun-HEAD.tar.xz"
+    - bash -c "ls -1 rpm/crun-HEAD.tar.xz"
 
-  - <<: *copr
-    # Run on commit to main branch
+jobs:
+  - job: copr_build
+    trigger: pull_request
+    # keep in sync with https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next
+    targets:
+      - fedora-all-x86_64
+      - fedora-all-aarch64
+      - centos-stream+epel-next-8-x86_64
+      - centos-stream+epel-next-8-aarch64
+      - centos-stream+epel-next-9-x86_64
+      - centos-stream+epel-next-9-aarch64
+    additional_repos:
+      - "copr://rhcontainerbot/podman-next"
+
+  # Run on commit to main branch
+  - job: copr_build
     trigger: commit
     branch: main
+    owner: rhcontainerbot
     project: podman-next
 
   - job: propose_downstream
