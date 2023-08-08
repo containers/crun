@@ -48,6 +48,8 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/capability.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #include <grp.h>
 #include <git-version.h>
 
@@ -1980,6 +1982,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   while (1)
     {
       struct signalfd_siginfo si;
+      struct winsize ws;
       ssize_t res;
       struct epoll_event events[10];
       int i, nr_events;
@@ -2038,6 +2041,19 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
                     return ret;
                   if (last_process)
                     return container_exit_code;
+                }
+              else if (si.ssi_signo == SIGWINCH)
+                {
+                  if (UNLIKELY (args->terminal_fd < 0))
+                    return 0;
+
+                  ret = ioctl (0, TIOCGWINSZ, &ws);
+                  if (UNLIKELY (ret < 0))
+                    return crun_error_wrap (err, "copy terminal size from stdin");
+
+                  ret = ioctl (args->terminal_fd, TIOCSWINSZ, &ws);
+                  if (UNLIKELY (ret < 0))
+                    return crun_error_wrap (err, "copy terminal size to pty");
                 }
               else
                 {
