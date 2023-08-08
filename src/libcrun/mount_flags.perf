@@ -96,3 +96,17 @@ libcrun_str2mount_flags (const char *name)
 {
   return libcrun_mount_flag_in_word_set (name, strlen (name));
 }
+
+const struct propagation_flags_s *
+get_mount_flags_from_wordlist (void)
+{
+  struct propagation_flags_s *flags;
+  size_t i;
+  size_t num_wordlist_flags = sizeof (wordlist) / sizeof (wordlist[0]);
+
+  flags = xmalloc0 ((sizeof (struct propagation_flags_s) + 1) * num_wordlist_flags);
+  for (i = 0; i < num_wordlist_flags; i++)
+    flags[i].name = wordlist[i].name;
+
+  return flags;
+}
