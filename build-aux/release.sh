@@ -45,53 +45,19 @@ mkdir -p /nix
 
 NIX_ARGS="--extra-experimental-features nix-command --print-build-logs --option cores $(nproc) --option max-jobs $(nproc)"
 
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64
+for ARCH in amd64 arm64 ppc64le riscv64; do
+    $RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+        nix $NIX_ARGS build --file nix/default-${ARCH}.nix
+    cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-${ARCH}
 
-rm -rf result
+    rm -rf result
 
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/ --arg enableSystemd false
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-amd64-disable-systemd
+    $RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+        nix $NIX_ARGS build --file nix/default-${ARCH}.nix --arg enableSystemd false
+    cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-${ARCH}-disable-systemd
 
-rm -rf result
-
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/default-arm64.nix
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64
-
-rm -rf result
-
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/default-arm64.nix --arg enableSystemd false
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-arm64-disable-systemd
-
-rm -rf result
-
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/default-ppc64le.nix
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-ppc64le
-
-rm -rf result
-
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/default-ppc64le.nix --arg enableSystemd false
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-ppc64le-disable-systemd
-
-rm -rf result
-
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/default-riscv64.nix
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-riscv64
-
-rm -rf result
-
-$RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
-    nix $NIX_ARGS build --file nix/default-riscv64.nix --arg enableSystemd false
-cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-riscv64-disable-systemd
-
-rm -rf result
+    rm -rf result
+done
 
 if test x$SKIP_GPG = x; then
     for i in $OUTDIR/*; do
