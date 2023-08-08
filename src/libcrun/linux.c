@@ -4849,28 +4849,9 @@ try_setns_with_pidfd (pid_t pid_to_join, libcrun_container_t *container, libcrun
   for (i = 0; namespaces[i].ns_file; i++)
     all_flags |= namespaces[i].value;
 
-  if (all_flags & CLONE_NEWUSER)
-    {
-      ret = setns (pidfd_pid_to_join, CLONE_NEWUSER);
-      if (UNLIKELY (ret < 0))
-        {
-          /* Ignore the EINVAL error code.  The kernel might not support setns + pidfd.  */
-          if (errno == EINVAL)
-            return 0;
-
-          return crun_make_error (err, errno, "setns(pid=%d, CLONE_NEWUSER)", pid_to_join);
-        }
-    }
-
   ret = setns (pidfd_pid_to_join, all_flags);
   if (UNLIKELY (ret < 0))
-    {
-      /* Ignore the EINVAL error code.  The kernel might not support setns + pidfd.  */
-      if (errno == EINVAL)
-        return 0;
-
-      return crun_make_error (err, errno, "setns(pid=%d, CLONE_*)", pid_to_join);
-    }
+    return 0;
 
   return 1;
 }
@@ -4896,7 +4877,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
   if (LIKELY (ret > 0))
     return 0;
 
-  /* If setns with the target pidfd, fall-back to join each namespace individually.  */
+  /* If setns fails with the target pidfd, fall-back to join each namespace individually.  */
 
   if (def->linux->namespaces_len >= MAX_NAMESPACES)
     return crun_make_error (err, 0, "invalid configuration");
