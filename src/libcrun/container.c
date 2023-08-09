@@ -2049,11 +2049,11 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 
                   ret = ioctl (0, TIOCGWINSZ, &ws);
                   if (UNLIKELY (ret < 0))
-                    return crun_error_wrap (err, "copy terminal size from stdin");
+                    return crun_make_error (err, errno, "copy terminal size from stdin");
 
                   ret = ioctl (args->terminal_fd, TIOCSWINSZ, &ws);
                   if (UNLIKELY (ret < 0))
-                    return crun_error_wrap (err, "copy terminal size to pty");
+                    return crun_make_error (err, errno, "copy terminal size to pty");
                 }
               else
                 {
