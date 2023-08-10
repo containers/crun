@@ -6,8 +6,8 @@
 %ifarch aarch64 || x86_64
 %global wasm_support 1
 
-# wasmedge only found on Fedora and environments with epel enabled
-%if %{defined fedora} || (%{defined copr_project} && "%{copr_project}" == "podman-next")
+# wasmedge not present on Fedora ELN environments
+%if !0%{?eln}
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif
@@ -39,9 +39,9 @@ Epoch: 102
 # If you're reading this on dist-git, the version is automatically filled in by Packit.
 Version: 0
 Release: %autorelease
+URL: https://github.com/containers/%{name}
 Source0: %{url}/releases/download/%{version}/%{name}-%{version}.tar.xz
 License: GPL-2.0-only
-URL: https://github.com/containers/%{name}
 %if %{defined golang_arches_future}
 ExclusiveArch: %{golang_arches_future}
 %else
@@ -65,7 +65,6 @@ BuildRequires: protobuf-c-devel
 BuildRequires: criu-devel >= 3.17.1-2
 Recommends: criu >= 3.17.1
 Recommends: criu-libs
-BuildRequires: %{_bindir}/go-md2man
 %if %{defined wasmedge_support}
 BuildRequires: wasmedge-devel
 %endif
