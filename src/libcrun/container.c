@@ -3949,7 +3949,7 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 }
 
 int
-libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err arg_unused)
+libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err)
 {
   int cgroup_mode;
 

@@ -74,7 +74,7 @@ static struct argp_option options[]
 static char args_doc[] = "restore CONTAINER";
 
 static error_t
-parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
+parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {

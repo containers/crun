@@ -780,7 +780,7 @@ libcrun_is_selinux_enabled (libcrun_error_t *err)
 }
 
 int
-add_selinux_mount_label (char **retlabel, const char *data, const char *label, const char *context_type, libcrun_error_t *err arg_unused)
+add_selinux_mount_label (char **retlabel, const char *data, const char *label, const char *context_type, libcrun_error_t *err)
 {
   int ret;
 

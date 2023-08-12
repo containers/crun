@@ -42,8 +42,8 @@
 
 #if HAVE_DLOPEN && HAVE_MONO
 static int
-mono_exec (void *cookie, libcrun_container_t *container,
-           const char *pathname, char *const argv[])
+mono_exec (void *cookie arg_unused, libcrun_container_t *container arg_unused,
+           const char *pathname, char *const argv[] arg_unused)
 {
   MonoDomain *domain;
   char *path = (char *) pathname;
@@ -94,7 +94,7 @@ mono_exec (void *cookie, libcrun_container_t *container,
 }
 
 static int
-mono_load (void **cookie, libcrun_error_t *err arg_unused)
+mono_load (void **cookie, libcrun_error_t *err)
 {
   void *handle;
 
@@ -108,8 +108,8 @@ mono_load (void **cookie, libcrun_error_t *err arg_unused)
 
 static int
 mono_configure_container (void *cookie arg_unused, enum handler_configure_phase phase,
-                          libcrun_context_t *context, libcrun_container_t *container,
-                          const char *rootfs, libcrun_error_t *err)
+                          libcrun_context_t *context arg_unused, libcrun_container_t *container,
+                          const char *rootfs arg_unused, libcrun_error_t *err)
 {
   int ret;
   if (phase != HANDLER_CONFIGURE_MOUNTS)
@@ -138,7 +138,7 @@ mono_configure_container (void *cookie arg_unused, enum handler_configure_phase 
 }
 
 static int
-mono_unload (void *cookie, libcrun_error_t *err arg_unused)
+mono_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 

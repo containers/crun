@@ -254,7 +254,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
 }
 
 static int
-libwasmtime_load (void **cookie, libcrun_error_t *err arg_unused)
+libwasmtime_load (void **cookie, libcrun_error_t *err)
 {
   void *handle;
 
@@ -267,7 +267,7 @@ libwasmtime_load (void **cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmtime_unload (void *cookie, libcrun_error_t *err arg_unused)
+libwasmtime_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 
@@ -281,7 +281,7 @@ libwasmtime_unload (void *cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmtime_can_handle_container (libcrun_container_t *container, libcrun_error_t *err arg_unused)
+libwasmtime_can_handle_container (libcrun_container_t *container, libcrun_error_t *err)
 {
   return wasm_can_handle_container (container, err);
 }
