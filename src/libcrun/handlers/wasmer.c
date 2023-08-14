@@ -41,7 +41,7 @@
 #if HAVE_DLOPEN && HAVE_WASMER
 #  define WASMER_BUF_SIZE 128
 static int
-libwasmer_exec (void *cookie, libcrun_container_t *container,
+libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
                 const char *pathname, char *const argv[])
 {
   int ret;
@@ -246,7 +246,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container,
 }
 
 static int
-libwasmer_load (void **cookie, libcrun_error_t *err arg_unused)
+libwasmer_load (void **cookie, libcrun_error_t *err)
 {
   void *handle;
 
@@ -259,7 +259,7 @@ libwasmer_load (void **cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmer_unload (void *cookie, libcrun_error_t *err arg_unused)
+libwasmer_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 
@@ -273,7 +273,7 @@ libwasmer_unload (void *cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmer_can_handle_container (libcrun_container_t *container, libcrun_error_t *err arg_unused)
+libwasmer_can_handle_container (libcrun_container_t *container, libcrun_error_t *err)
 {
   return wasm_can_handle_container (container, err);
 }

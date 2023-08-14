@@ -55,7 +55,7 @@ static struct argp_option options[] = { { "bundle", 'b', "DIR", 0, "path to the 
 static char args_doc[] = "spec";
 
 static error_t
-parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
+parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {

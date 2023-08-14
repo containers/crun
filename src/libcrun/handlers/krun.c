@@ -256,7 +256,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
 }
 
 static int
-libkrun_load (void **cookie, libcrun_error_t *err arg_unused)
+libkrun_load (void **cookie, libcrun_error_t *err)
 {
   struct krun_config *kconf;
   void *handle;
@@ -284,7 +284,7 @@ libkrun_load (void **cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libkrun_unload (void *cookie, libcrun_error_t *err arg_unused)
+libkrun_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 
@@ -319,7 +319,7 @@ make_oci_spec_dev (const char *type, dev_t device, bool allow, const char *acces
 }
 
 static int
-libkrun_modify_oci_configuration (void *cookie, libcrun_context_t *context,
+libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *context arg_unused,
                                   runtime_spec_schema_config_schema *def,
                                   libcrun_error_t *err)
 {

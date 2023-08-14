@@ -40,7 +40,7 @@
 
 #if HAVE_DLOPEN && HAVE_WASMEDGE
 static int
-libwasmedge_load (void **cookie, libcrun_error_t *err arg_unused)
+libwasmedge_load (void **cookie, libcrun_error_t *err)
 {
   void *handle;
 
@@ -53,7 +53,7 @@ libwasmedge_load (void **cookie, libcrun_error_t *err arg_unused)
 }
 
 static int
-libwasmedge_unload (void *cookie, libcrun_error_t *err arg_unused)
+libwasmedge_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 
@@ -157,7 +157,7 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
 }
 
 static int
-wasmedge_can_handle_container (libcrun_container_t *container, libcrun_error_t *err arg_unused)
+wasmedge_can_handle_container (libcrun_container_t *container, libcrun_error_t *err)
 {
   return wasm_can_handle_container (container, err);
 }

@@ -92,7 +92,7 @@ crun_parse_manage_cgroups_mode (char *param arg_unused)
 }
 
 static error_t
-parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
+parse_opt (int key, char *arg, struct argp_state *state)
 {
   switch (key)
     {
