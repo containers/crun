@@ -3886,7 +3886,7 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 
   // Hardcoded feature information
   (*info)->oci_version_min = xstrdup ("1.0.0");
-  (*info)->oci_version_max = xstrdup ("1.1.0-rc.3");
+  (*info)->oci_version_max = xstrdup ("1.1.0");
 
   // Populate hooks
   populate_array_field (&((*info)->hooks), hooks, num_hooks);
