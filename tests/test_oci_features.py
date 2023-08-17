@@ -45,7 +45,7 @@ def test_crun_features():
         features = json.loads(output)
         expected_features = {
             "ociVersionMin": "1.0.0",
-            "ociVersionMax": "1.1.0-rc.3",
+            "ociVersionMax": "1.1.0",
             "hooks": [
                 "prestart",
                 "createRuntime",
@@ -158,8 +158,8 @@ def test_crun_features():
                 }
             },
             "annotations": {
-                "org.opencontainers.runc.checkpoint.enabled": True,
-                "run.oci.checkpoint.enabled": True,
+                "org.opencontainers.runc.checkpoint.enabled": "true",
+                "run.oci.checkpoint.enabled": "true",
                 "run.oci.commit": get_crun_commit(),
             }
         }
@@ -194,15 +194,15 @@ def test_crun_features():
                     return -1
 
                 if ('WASM' in get_crun_feature_string()
-                    and annotations.get("run.oci.crun.wasm") is not True):
+                    and annotations.get("run.oci.crun.wasm") != "true"):
                     sys.stderr.write("wrong value for run.oci.crun.wasm\n")
                     return -1
 
                 if 'CRIU' in get_crun_feature_string():
-                    if annotations.get("org.opencontainers.runc.checkpoint.enabled") is not True:
+                    if annotations.get("org.opencontainers.runc.checkpoint.enabled") != "true":
                         sys.stderr.write("wrong value for org.opencontainers.runc.checkpoint.enabled\n")
                         return -1
-                    if annotations.get("run.oci.crun.checkpoint.enabled") is not True:
+                    if annotations.get("run.oci.crun.checkpoint.enabled") != "true":
                         sys.stderr.write("wrong value for run.oci.crun.checkpoint.enabled\n")
                         return -1
             else:
