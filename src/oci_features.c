@@ -68,6 +68,23 @@ add_bool_to_json (yajl_gen json_gen, const char *key, int value)
 }
 
 void
+add_bool_str_to_json (yajl_gen json_gen, const char *key, int value)
+{
+  char *val = "";
+  if (value)
+    {
+      val = "true";
+    }
+  else
+    {
+      val = "false";
+    }
+
+  yajl_gen_string (json_gen, (const unsigned char *) key, strlen (key));
+  yajl_gen_string (json_gen, (const unsigned char *) val, strlen (val));
+}
+
+void
 add_array_to_json (yajl_gen json_gen, const char *key, char **array)
 {
   size_t i;
@@ -177,13 +194,13 @@ crun_features_add_annotations_info (yajl_gen json_gen, const struct annotations_
 
   add_string_to_json (json_gen, "io.github.seccomp.libseccomp.version", annotation->io_github_seccomp_libseccomp_version);
 
-  add_bool_to_json (json_gen, "org.opencontainers.runc.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
-  add_bool_to_json (json_gen, "run.oci.crun.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
+  add_bool_str_to_json (json_gen, "org.opencontainers.runc.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
+  add_bool_str_to_json (json_gen, "run.oci.crun.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
 
   add_string_to_json (json_gen, "run.oci.crun.commit", annotation->run_oci_crun_commit);
   add_string_to_json (json_gen, "run.oci.crun.version", annotation->run_oci_crun_version);
 
-  add_bool_to_json (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
+  add_bool_str_to_json (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
 
   yajl_gen_map_close (json_gen);
 }
