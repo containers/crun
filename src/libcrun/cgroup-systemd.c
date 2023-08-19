@@ -1139,7 +1139,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   sd_err = sd_bus_message_append (m, "sb", cgroup_status->scope, 1);
   if (UNLIKELY (sd_err < 0))
     {
-      ret = crun_make_error (err, -ret, "sd-bus message append");
+      ret = crun_make_error (err, -sd_err, "sd-bus message append");
       goto exit;
     }
 
