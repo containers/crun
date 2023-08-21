@@ -1,3 +1,20 @@
+* crun-1.8.7
+
+- linux: fix a race condition when an exec was performed
+  immediately after the start and the setns with the procfd failed.
+- features: Fix annotations formatting.
+- linux: do not write some errors twice.
+- libcrun: handle SIGWINCH by resizing the terminal file descriptor.
+
+- crun: new command "crun features".
+- linux: fix handling of idmapped mounts when the container joins
+  an existing PID namespace.
+- linux: support io_priority from the OCI specs.
+- linux: handle correctly the case where the status file is not
+  written yet for a container.
+- crun: fix segfault for "ps" when the container is not using cgroups.
+- cgroup: allow setting swap to 0.
+
 * crun-1.8.6
 
 - crun: new command "crun features".
