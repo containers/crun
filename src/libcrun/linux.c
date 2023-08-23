@@ -4953,6 +4953,8 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
     }
   for (i = 0; namespaces[i].ns_file; i++)
     {
+      if (fds_joined[i])
+        continue;
       ret = setns (fds[i], 0);
       if (ret == 0)
         fds_joined[i] = 1;
