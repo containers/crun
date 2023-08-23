@@ -647,11 +647,11 @@ luacrun_ctx_update_container (lua_State *S)
     }
 
   struct parser_context parser_ctx = { .options = 0, .errfile = stderr };
-  runtime_spec_schema_config_schema_process *rt_sepc_process;
+  runtime_spec_schema_config_schema_process *rt_spec_process;
   parser_error p_err = NULL;
-  rt_sepc_process = make_runtime_spec_schema_config_schema_process (parsed_json, &parser_ctx, &p_err);
+  rt_spec_process = make_runtime_spec_schema_config_schema_process (parsed_json, &parser_ctx, &p_err);
   yajl_tree_free (parsed_json);
-  if (rt_sepc_process == NULL)
+  if (rt_spec_process == NULL)
     {
       lua_pushboolean (S, false);
       lua_pushfstring (S, "cannot parse process: \"%s\"", p_err);
@@ -660,8 +660,8 @@ luacrun_ctx_update_container (lua_State *S)
     }
 
   libcrun_error_t crun_err = NULL;
-  int ret = libcrun_container_exec (ctx, id, rt_sepc_process, &crun_err);
-  free_runtime_spec_schema_config_schema_process (rt_sepc_process);
+  int ret = libcrun_container_exec (ctx, id, rt_spec_process, &crun_err);
+  free_runtime_spec_schema_config_schema_process (rt_spec_process);
   luacrun_SoftErrIf (S, ret < 0, &crun_err, lua_pushboolean (S, false), 1);
 
   lua_pushboolean (S, true);
