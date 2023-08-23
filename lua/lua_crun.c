@@ -282,7 +282,7 @@ luacrun_new_container_from_string (lua_State *S)
   libcrun_container_t **cont = lua_newuserdata (S, sizeof (libcrun_container_t *));
   luaL_setmetatable (S, LUA_CRUN_TAG_CONT);
   *cont = libcrun_container_load_from_memory (def, &crun_err);
-  if (cont == NULL)
+  if (*cont == NULL)
     {
       lua_pushnil (S);
       return luacrun_error (S, &crun_err) + 1;
@@ -299,7 +299,7 @@ luacrun_new_container_from_file (lua_State *S)
   luaL_setmetatable (S, LUA_CRUN_TAG_CONT);
   // create the userdata before calling crun, so we don't need to cleanup when Lua failed
   *cont = libcrun_container_load_from_file (path, &crun_err);
-  if (cont == NULL)
+  if (*cont == NULL)
     {
       lua_pushnil (S);
       return luacrun_error (S, &crun_err) + 1;
