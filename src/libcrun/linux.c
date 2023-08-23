@@ -3819,7 +3819,7 @@ get_idmapped_option (runtime_spec_schema_defs_mount *mnt)
 static int
 maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
 {
-  cleanup_close int open_tree_fd = -1;
+  cleanup_close int newfs_fd = -1;
   cleanup_pid pid_t created_pid = -1;
   struct mount_attr_s attr = {
     0,
@@ -3861,19 +3861,38 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
-  open_tree_fd = syscall_open_tree (-1, mnt->source,
+  if (is_bind_mount (mnt))
+    {
+      newfs_fd = syscall_open_tree (-1, mnt->source,
                                     AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
-  if (UNLIKELY (open_tree_fd < 0))
-    return crun_make_error (err, errno, "open `%s`", mnt->source);
+      if (UNLIKELY (newfs_fd < 0))
+        return crun_make_error (err, errno, "open `%s`", mnt->source);
+    }
+  else
+    {
+      cleanup_close int fsopen_fd = -1;
+
+      fsopen_fd = syscall_fsopen (mnt->type, FSOPEN_CLOEXEC);
+      if (UNLIKELY (fsopen_fd < 0))
+        return crun_make_error (err, errno, "fsopen `%s`", mnt->type);
+
+      ret = syscall_fsconfig (fsopen_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fsconfig create `%s`", mnt->type);
+
+      newfs_fd = syscall_fsmount (fsopen_fd, FSMOUNT_CLOEXEC, 0);
+      if (UNLIKELY (newfs_fd < 0))
+        return crun_make_error (err, errno, "fsmount `%s`", mnt->type);
+    }
 
   attr.attr_set = MOUNT_ATTR_IDMAP;
   attr.userns_fd = fd;
 
-  ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr);
+  ret = syscall_mount_setattr (newfs_fd, "", AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount_setattr `%s`", mnt->source);
+    return crun_make_error (err, errno, "mount_setattr `%s`", mnt->destination);
 
-  *out_fd = get_and_reset (&open_tree_fd);
+  *out_fd = get_and_reset (&newfs_fd);
   return 0;
 }
 
