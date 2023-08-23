@@ -689,78 +689,6 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
   return 0;
 }
 
-static char *
-get_idmapped_option (runtime_spec_schema_defs_mount *mnt)
-{
-  size_t i;
-
-  for (i = 0; i < mnt->options_len; i++)
-    if (has_prefix (mnt->options[i], "idmap"))
-      return mnt->options[i];
-  return NULL;
-}
-
-static int
-maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
-{
-  cleanup_close int open_tree_fd = -1;
-  cleanup_pid pid_t created_pid = -1;
-  struct mount_attr_s attr = {
-    0,
-  };
-  const char *idmap_option = "";
-  cleanup_close int fd = -1;
-  const char *options;
-  char proc_path[64];
-  bool has_mappings;
-  int ret;
-
-  *out_fd = -1;
-
-  has_mappings = mnt->uid_mappings_len > 0 || mnt->gid_mappings_len > 0 || (idmap_option = get_idmapped_option (mnt));
-  if (! has_mappings)
-    return 0;
-
-  if ((mnt->uid_mappings == NULL) != (mnt->gid_mappings == NULL))
-    return crun_make_error (err, 0, "invalid mappings specified for the mount on `%s`", mnt->destination);
-
-  /* If there are options specified, create a new user namespace with the configured mappings.  */
-  options = strchr (idmap_option, '=');
-  if (options)
-    {
-      /* Skip the '=' itself.  */
-      options++;
-      if (options[0] == '\0')
-        options = NULL;
-    }
-
-  ret = maybe_create_userns_for_idmapped_mount (def, mnt, options, &created_pid, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (created_pid > 0)
-    pid = created_pid;
-
-  sprintf (proc_path, "/proc/%d/ns/user", pid);
-  fd = open (proc_path, O_RDONLY);
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", proc_path);
-
-  open_tree_fd = syscall_open_tree (-1, mnt->source,
-                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
-  if (UNLIKELY (open_tree_fd < 0))
-    return crun_make_error (err, errno, "open `%s`", mnt->source);
-
-  attr.attr_set = MOUNT_ATTR_IDMAP;
-  attr.userns_fd = fd;
-
-  ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH, &attr);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount_setattr `%s`", mnt->source);
-
-  *out_fd = get_and_reset (&open_tree_fd);
-  return 0;
-}
-
 int
 libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err)
 {
@@ -3875,6 +3803,97 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt)
         return true;
     }
   return false;
+}
+
+static char *
+get_idmapped_option (runtime_spec_schema_defs_mount *mnt)
+{
+  size_t i;
+
+  for (i = 0; i < mnt->options_len; i++)
+    if (has_prefix (mnt->options[i], "idmap"))
+      return mnt->options[i];
+  return NULL;
+}
+
+static int
+maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
+{
+  cleanup_close int newfs_fd = -1;
+  cleanup_pid pid_t created_pid = -1;
+  struct mount_attr_s attr = {
+    0,
+  };
+  const char *idmap_option = "";
+  cleanup_close int fd = -1;
+  const char *options;
+  char proc_path[64];
+  bool has_mappings;
+  int ret;
+
+  *out_fd = -1;
+
+  has_mappings = mnt->uid_mappings_len > 0 || mnt->gid_mappings_len > 0 || (idmap_option = get_idmapped_option (mnt));
+  if (! has_mappings)
+    return 0;
+
+  if ((mnt->uid_mappings == NULL) != (mnt->gid_mappings == NULL))
+    return crun_make_error (err, 0, "invalid mappings specified for the mount on `%s`", mnt->destination);
+
+  /* If there are options specified, create a new user namespace with the configured mappings.  */
+  options = strchr (idmap_option, '=');
+  if (options)
+    {
+      /* Skip the '=' itself.  */
+      options++;
+      if (options[0] == '\0')
+        options = NULL;
+    }
+
+  ret = maybe_create_userns_for_idmapped_mount (def, mnt, options, &created_pid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (created_pid > 0)
+    pid = created_pid;
+
+  sprintf (proc_path, "/proc/%d/ns/user", pid);
+  fd = open (proc_path, O_RDONLY);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `%s`", proc_path);
+
+  if (is_bind_mount (mnt))
+    {
+      newfs_fd = syscall_open_tree (-1, mnt->source,
+                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+      if (UNLIKELY (newfs_fd < 0))
+        return crun_make_error (err, errno, "open `%s`", mnt->source);
+    }
+  else
+    {
+      cleanup_close int fsopen_fd = -1;
+
+      fsopen_fd = syscall_fsopen (mnt->type, FSOPEN_CLOEXEC);
+      if (UNLIKELY (fsopen_fd < 0))
+        return crun_make_error (err, errno, "fsopen `%s`", mnt->type);
+
+      ret = syscall_fsconfig (fsopen_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fsconfig create `%s`", mnt->type);
+
+      newfs_fd = syscall_fsmount (fsopen_fd, FSMOUNT_CLOEXEC, 0);
+      if (UNLIKELY (newfs_fd < 0))
+        return crun_make_error (err, errno, "fsmount `%s`", mnt->type);
+    }
+
+  attr.attr_set = MOUNT_ATTR_IDMAP;
+  attr.userns_fd = fd;
+
+  ret = syscall_mount_setattr (newfs_fd, "", AT_EMPTY_PATH, &attr);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mount_setattr `%s`", mnt->destination);
+
+  *out_fd = get_and_reset (&newfs_fd);
+  return 0;
 }
 
 static uid_t
