@@ -45,7 +45,7 @@ def test_crun_features():
         features = json.loads(output)
         expected_features = {
             "ociVersionMin": "1.0.0",
-            "ociVersionMax": "1.1.0",
+            "ociVersionMax": "1.1.0+dev",
             "hooks": [
                 "prestart",
                 "createRuntime",
@@ -155,6 +155,11 @@ def test_crun_features():
                 },
                 "selinux": {
                     "enabled": True
+                },
+                "mountExtensions": {
+                    "idmap": {
+                        "enabled": True,
+                    },
                 }
             },
             "annotations": {

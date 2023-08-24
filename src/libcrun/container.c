@@ -3886,7 +3886,7 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 
   // Hardcoded feature information
   (*info)->oci_version_min = xstrdup ("1.0.0");
-  (*info)->oci_version_max = xstrdup ("1.1.0");
+  (*info)->oci_version_max = xstrdup ("1.1.0+dev");
 
   // Populate hooks
   populate_array_field (&((*info)->hooks), hooks, num_hooks);
@@ -3924,6 +3924,9 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   // Put values for apparmor and selinux
   (*info)->linux.apparmor.enabled = true;
   (*info)->linux.selinux.enabled = true;
+
+  // Put the values for mount extensions
+  (*info)->linux.mount_ext.idmap.enabled = true;
 
   // Populate the values for annotations
 #ifdef HAVE_SECCOMP

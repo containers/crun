@@ -121,6 +121,16 @@ struct selinux_info_s
   bool enabled;
 };
 
+struct idmap_info_s
+{
+  bool enabled;
+};
+
+struct mount_ext_info_s
+{
+  struct idmap_info_s idmap;
+};
+
 struct linux_info_s
 {
   char **namespaces;
@@ -129,6 +139,7 @@ struct linux_info_s
   struct seccomp_info_s seccomp;
   struct apparmor_info_s apparmor;
   struct selinux_info_s selinux;
+  struct mount_ext_info_s mount_ext;
 };
 
 struct annotations_info_s
