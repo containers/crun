@@ -1039,7 +1039,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
 
           // Parent might contain `MS_REMOUNT` but the new readonly path is not
           // actually mounted. Specifically in the case of `/proc` this will end
-          // up with EINVAL therefore remove `MS_REMOUNT` if its getting
+          // up with EINVAL therefore remove `MS_REMOUNT` if it's getting
           // inherited from the parent.
           mount_flags = mount_flags & ~MS_REMOUNT;
         }
@@ -2225,7 +2225,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
 #  ifdef HAVE_FGETXATTR
   if (container && container->container_def->linux && container->container_def->linux->mount_label)
     {
-      /* Ignore the error, the worse that can happen is that the container fails to notify it is ready.  */
+      /* Ignore the error. The worst that can happen is that the container fails to notify it is ready.  */
       (void) setxattr (host_path, "security.selinux", container->container_def->linux->mount_label,
                        strlen (container->container_def->linux->mount_label), 0);
     }

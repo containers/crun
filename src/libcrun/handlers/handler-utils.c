@@ -38,8 +38,8 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
   if (annotation)
     {
 
-      /* wasm-smart: annotation is a smart switch which only toggles wasm if its necessary,
-         following annotation is very useful for cases where users intends to run wasm workload on
+      /* wasm-smart: annotation is a smart switch which only toggles wasm if it's necessary,
+         following annotation is very useful for cases where users intend to run wasm workload on
          kubernetes cluster but workload also contains side-cars which could execute non-wasm workload.
          Example: Kubernetes clusters with service-mesh such as istio, linkerd etc
       */
@@ -54,8 +54,8 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
   if (annotation)
     {
 
-      /* compat-smart: annotation is a smart switch which only toggles wasm if its necessary,
-         following annotation is very useful for cases where users intends to run wasm workload on
+      /* compat-smart: annotation is a smart switch which only toggles wasm if it's necessary,
+         following annotation is very useful for cases where users intend to run wasm workload on
          kubernetes cluster but workload also contains side-cars which could execute non-wasm workload.
          Example: Kubernetes clusters with service-mesh such as istio, linkerd etc
       */
