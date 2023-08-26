@@ -96,7 +96,7 @@ luacrun_xstrdup (lua_State *S, const char *s)
     {
       size_t size = strlen (s) + 1;
       char *ret = lua_newuserdata (S, size);
-      /* `lua_newuserdatauv` always return a valid address,
+      /* `lua_newuserdatauv` always returns a valid address,
       no need to check if the allocation is success */
       memcpy (ret, s, size);
       return ret;
@@ -297,7 +297,7 @@ luacrun_new_container_from_file (lua_State *S)
   const char *path = luaL_checkstring (S, 1);
   libcrun_container_t **cont = lua_newuserdata (S, sizeof (libcrun_container_t *));
   luaL_setmetatable (S, LUA_CRUN_TAG_CONT);
-  // create the userdata before calling crun, so we don't need to cleanup when Lua failed
+  // create the userdata before calling crun, so we don't need to clean up when Lua failed
   *cont = libcrun_container_load_from_file (path, &crun_err);
   if (*cont == NULL)
     {
@@ -447,7 +447,7 @@ luacrun_ctx_status_container (lua_State *S)
   lua_createtable (S, 0, 0);
   int tabidx = lua_gettop (S);
 
-  // We know here are two frames available on the stack from this point.
+  // We know there are two frames available on the stack from this point.
 
   lua_pushstring (S, "1.0.0");
   lua_setfield (S, tabidx, "ociVersion");
@@ -781,7 +781,7 @@ luacrun_setup_cont_metatable (lua_State *S)
   lua_setfield (S, mtab_idx, "__gc");
   // Can we do better than a finalizer?
   // Indirect pointer and wild memory make
-  // Lua GC could not regconize the memory usage.
+  // Lua GC could not recognize the memory usage.
   lua_pop (S, 1);
   return 0;
 }
