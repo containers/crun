@@ -3791,28 +3791,44 @@ get_fd_map (libcrun_container_t *container)
 }
 
 static bool
-is_bind_mount (runtime_spec_schema_defs_mount *mnt)
+is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
 {
   size_t i;
 
   for (i = 0; i < mnt->options_len; i++)
     {
       if (strcmp (mnt->options[i], "bind") == 0)
-        return true;
+        {
+          *recursive = false;
+          return true;
+        }
       if (strcmp (mnt->options[i], "rbind") == 0)
-        return true;
+        {
+          *recursive = true;
+          return true;
+        }
     }
   return false;
 }
 
 static char *
-get_idmapped_option (runtime_spec_schema_defs_mount *mnt)
+get_idmapped_option (runtime_spec_schema_defs_mount *mnt, bool *recursive)
 {
   size_t i;
 
   for (i = 0; i < mnt->options_len; i++)
-    if (has_prefix (mnt->options[i], "idmap"))
-      return mnt->options[i];
+    {
+      if (has_prefix (mnt->options[i], "idmap"))
+        {
+          *recursive = false;
+          return mnt->options[i];
+        }
+      if (has_prefix (mnt->options[i], "ridmap"))
+        {
+          *recursive = true;
+          return mnt->options[i];
+        }
+    }
   return NULL;
 }
 
@@ -3824,8 +3840,10 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   struct mount_attr_s attr = {
     0,
   };
-  const char *idmap_option = "";
+  bool recursive_bind_mount = false;
   cleanup_close int fd = -1;
+  const char *idmap_option;
+  bool recursive = false;
   const char *options;
   char proc_path[64];
   bool has_mappings;
@@ -3833,7 +3851,9 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
 
   *out_fd = -1;
 
-  has_mappings = mnt->uid_mappings_len > 0 || mnt->gid_mappings_len > 0 || (idmap_option = get_idmapped_option (mnt));
+  idmap_option = get_idmapped_option (mnt, &recursive);
+
+  has_mappings = mnt->uid_mappings_len > 0 || mnt->gid_mappings_len > 0 || (idmap_option != NULL);
   if (! has_mappings)
     return 0;
 
@@ -3841,13 +3861,16 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
     return crun_make_error (err, 0, "invalid mappings specified for the mount on `%s`", mnt->destination);
 
   /* If there are options specified, create a new user namespace with the configured mappings.  */
-  options = strchr (idmap_option, '=');
-  if (options)
+  if (idmap_option)
     {
-      /* Skip the '=' itself.  */
-      options++;
-      if (options[0] == '\0')
-        options = NULL;
+      options = strchr (idmap_option, '=');
+      if (options)
+        {
+          /* Skip the '=' itself.  */
+          options++;
+          if (options[0] == '\0')
+            options = NULL;
+        }
     }
 
   ret = maybe_create_userns_for_idmapped_mount (def, mnt, options, &created_pid, err);
@@ -3861,10 +3884,9 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
-  if (is_bind_mount (mnt))
+  if (is_bind_mount (mnt, &recursive_bind_mount))
     {
-      newfs_fd = syscall_open_tree (-1, mnt->source,
-                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+      newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
       if (UNLIKELY (newfs_fd < 0))
         return crun_make_error (err, errno, "open `%s`", mnt->source);
     }
@@ -3888,7 +3910,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   attr.attr_set = MOUNT_ATTR_IDMAP;
   attr.userns_fd = fd;
 
-  ret = syscall_mount_setattr (newfs_fd, "", AT_EMPTY_PATH, &attr);
+  ret = syscall_mount_setattr (newfs_fd, "", AT_EMPTY_PATH | (recursive ? AT_RECURSIVE : 0), &attr);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount_setattr `%s`", mnt->destination);
 
@@ -3991,15 +4013,17 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
 
   for (i = 0; i < def->mounts_len; i++)
     {
+      bool recursive = false;
+
       mount_fds->fds[i] = -1;
 
       ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &(mount_fds->fds[i]), err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i]))
+      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i], &recursive))
         {
-          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, false, false, err);
+          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, recursive, false, err);
           if (UNLIKELY (mount_fds->fds[i] < 0))
             crun_error_release (err);
         }
