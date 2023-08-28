@@ -364,11 +364,13 @@ def test_idmapped_mounts():
         template['linux']['gidMappings'] = fullMapping
         template['process']['args'] = ['/init', 'owner', '/foo/file']
 
-        def check(annotation, uidMappings, gidMappings, expected):
+        def check(uidMappings, gidMappings, recursive, expected):
+            # to properly check recursive we'd need to add a mount on the host.  But we don't want to perform
+            # any mount on the host, so we just check that the recursive option at least doesn't fail and works
+            # as a regular idmapped mount.
             conf = copy.deepcopy(template)
-            options = ["bind", "ro"]
-            if annotation is not None:
-                options.append(annotation)
+            idmapOption = "ridmap" if recursive else "idmap"
+            options = ["bind", "ro", idmapOption]
 
             mount_opt = {"destination": "/foo", "type": "bind", "source": source_dir, "options": options}
 
@@ -394,7 +396,9 @@ def test_idmapped_mounts():
                 "size": 10
             }
         ]
-        if check(None, mountMappings, mountMappings, "0:0"):
+        if check(mountMappings, mountMappings, False, "0:0"):
+            return 1
+        if check(mountMappings, mountMappings, True, "0:0"):
             return 1
 
         mountMappings = [
@@ -404,7 +408,9 @@ def test_idmapped_mounts():
                 "size": 10
             }
         ]
-        if check(None, mountMappings, mountMappings, "1:1"):
+        if check(mountMappings, mountMappings, False, "1:1"):
+            return 1
+        if check(mountMappings, mountMappings, True, "1:1"):
             return 1
     finally:
         shutil.rmtree(source_dir)
