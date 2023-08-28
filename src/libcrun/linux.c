@@ -3791,16 +3791,22 @@ get_fd_map (libcrun_container_t *container)
 }
 
 static bool
-is_bind_mount (runtime_spec_schema_defs_mount *mnt)
+is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
 {
   size_t i;
 
   for (i = 0; i < mnt->options_len; i++)
     {
       if (strcmp (mnt->options[i], "bind") == 0)
-        return true;
+        {
+          *recursive = false;
+          return true;
+        }
       if (strcmp (mnt->options[i], "rbind") == 0)
-        return true;
+        {
+          *recursive = true;
+          return true;
+        }
     }
   return false;
 }
@@ -3824,6 +3830,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   struct mount_attr_s attr = {
     0,
   };
+  bool recursive_bind_mount = false;
   const char *idmap_option = "";
   cleanup_close int fd = -1;
   const char *options;
@@ -3861,10 +3868,9 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
-  if (is_bind_mount (mnt))
+  if (is_bind_mount (mnt, &recursive_bind_mount))
     {
-      newfs_fd = syscall_open_tree (-1, mnt->source,
-                                    AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+      newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
       if (UNLIKELY (newfs_fd < 0))
         return crun_make_error (err, errno, "open `%s`", mnt->source);
     }
@@ -3991,15 +3997,17 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
 
   for (i = 0; i < def->mounts_len; i++)
     {
+      bool recursive = false;
+
       mount_fds->fds[i] = -1;
 
       ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &(mount_fds->fds[i]), err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i]))
+      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i], &recursive))
         {
-          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, false, false, err);
+          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, recursive, false, err);
           if (UNLIKELY (mount_fds->fds[i] < 0))
             crun_error_release (err);
         }

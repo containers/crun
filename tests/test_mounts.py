@@ -156,7 +156,7 @@ def test_mount_path_with_multiple_slashes():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
     add_all_namespaces(conf)
-    mount_opt = {"destination": "/test//test", "type": "bind", "source": "/tmp", "options": ["bind"]}
+    mount_opt = {"destination": "/test//test", "type": "bind", "source": "/tmp", "options": ["rbind"]}
     conf['mounts'].append(mount_opt)
     out, _ = run_and_get_output(conf, hide_stderr=True)
     if "test/test" in out:
