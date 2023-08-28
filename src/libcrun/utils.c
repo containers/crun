@@ -333,7 +333,7 @@ check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *f
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "readlink `%s`", fdname);
 
-  if (((size_t) ret) <= rootfslen || memcmp (link, rootfs, rootfslen) != 0)
+  if (((size_t) ret) <= rootfslen || memcmp (link, rootfs, rootfslen) != 0 || link[rootfslen] != '/')
     return crun_make_error (err, 0, "target `%s` not under the directory `%s`", fdname, rootfs);
 
   return 0;
