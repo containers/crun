@@ -92,17 +92,11 @@ python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS) $(maybe_libyajl.
 endif
 
 if LUA_BINDINGS
-noinst_LTLIBRARIES = libcrun-bundled.la
 luaexec_LTLIBRARIES = luacrun.la
 luacrun_la_SOURCES = lua/lua_crun.c
 luacrun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src -I $(abs_top_builddir)/src $(LUA_INCLUDE)
 luacrun_la_LDFLAGS = -avoid-version -module
-luacrun_la_LIBADD = libcrun-bundled.la $(LUA_LIB) $(FOUND_LIBS)
-
-libcrun_bundled_la_SOURCES = $(libcrun_SOURCES)
-libcrun_bundled_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
-libcrun_bundled_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
-libcrun_bundled_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+luacrun_la_LIBADD = libcrun.la $(LUA_LIB) $(FOUND_LIBS)
 
 LUACRUN_CLEAN_VERSION = $(shell git describe --tags | sed 's/-g[0-9a-f]\{7,9\}//')
 
