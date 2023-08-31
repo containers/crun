@@ -4,54 +4,58 @@ Bare libcrun interface for Lua.
 
 There are some problems still and the API is a subject to change.
 
-## Build
+## LuaRocks build
 
-Only build static archive, to be bundled with another program:
+To build luacrun luarocks package, you must have:
 
-````sh
-./configure --with-lua-bindings
+- Dependencies for building libcrun
+- Lua 5.4 and its development files
+- LuaRocks 3.x
+- `sed`, `git` and `zip`
+
+Started by `./configure`:
+
+```
+./autogen.sh && ./configure --with-lua-bindings
+```
+
+This is only to enable the option to build source rocks. The options to build the rocks is hard-coded at "lua/luacrun.rockspec".
+
+Create the source rock:
+
+```
+make dist-luarock
+```
+
+You can find the new rock file as `luacrun-x.x.x-xx.src.rock`.
+
+If you want the binary rock, use luarocks:
+```
+luarocks build <the-rock-file-name> --pack-binary-rock
+```
+
+## Regular build
+
+Requirements:
+- Dependencies for building libcrun
+- Lua 5.4 and its development files
+
+You can still build this module for regular directory structure, like:
+
+```
+./autogen.sh && ./configure --with-lua-bindings --disable-libcrun --disable-crun --enable-shared
+```
+
+The options here for `./configure` will affect the final output.
+
+```
 make && make install
-````
+```
 
-Since the final product bundle libcrun, you don't need to link libcrun at runtime.
-
-
-For the library using at runtime, add option `--enable-shared`:
-````sh
-./configure --with-lua-bindings --enable-shared
-make && make install
-````
-
-Other options to build libcrun may affect the bundled libcrun.
 
 ## Usage
 
 See `luacrun.d.tl`.
-
-## Works with your LuaRocks project
-
-You can build rocks (in luarocks) if lua bindings is enabled.
-
-````sh
-./configure --with-lua-bindings
-make dist-luarock
-````
-
-The options here for `./configure` won't affect the final output, see `luacrun.rockspec` for the building options.
-
-`dist-luarock` target packs a source rock. You can use `luarocks build luacrun-xxx.src.rock --pack-binary-rock` to pack binary rocks.
-
-````sh
-# Assume the filename is luacrun-1.8.4-0.src.rock
-luarocks build luacrun-1.8.4-0.src.rock --pack-binary-rock
-````
-
-Another way is, configure the prefix to your `lua_modules` to access this library in your project.
-
-````sh
-./configure --with-lua-bindings --enable-shared --prefix $(pwd)/lua_modules
-make && make install
-````
 
 ## Interpreter may restart?
 
@@ -135,3 +139,8 @@ The tests assume environment variable `INIT` exists. It's the `init` program com
 ````sh
 INIT=$(pwd)/tests/init lua_modules/bin/busted lua
 ````
+
+## Additional Build Options
+
+- `--with-lua-bindings` enables the building options about the lua binding
+- `--enable-lua-path-guessing`/`--disable-lua-path-guessing` enable or disable the lua module path guessing. If disabled, the install path for this module will be set to `libdir`.

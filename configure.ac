@@ -201,10 +201,26 @@ AS_IF([test "x$with_python_bindings" = "xyes"], [
 
 AC_ARG_WITH([lua-bindings], AS_HELP_STRING([--with-lua-bindings], [build the Lua bindings]))
 
+AC_ARG_ENABLE(
+	[lua-path-guessing],
+	AS_HELP_STRING([--enable-lua-path-guessing], [guessing lua module path based on variables (default: yes), disable to use libdir as luaexecdir]),
+[
+case "${enableval}" in
+	yes) enable_lua_path_guessing=true ;;
+	no) enable_lua_path_guessing=false ;;
+	*) AC_MSG_ERROR(bad value ${enablevaal} for --enable-lua-path-guessing) ;;
+esac
+],
+[enable_lua_path_guessing=true]
+)
+
 AS_IF([test "x$with_lua_bindings" = "xyes"], [
 	AX_PROG_LUA([5.4], [5.5], [], [AC_MSG_ERROR([*** lua interpreter not found])])
 	AX_LUA_HEADERS([], [AC_MSG_ERROR([*** lua headers not found])])
 	AX_LUA_LIBS([], [AC_MSG_ERROR([*** lua libs not found])])
+	AS_IF([test "x$enable_lua_path_guessing" = "xfalse"], [
+		AC_SUBST([luaexecdir], [$libdir])
+	])
 	use_fPIC=yes
 ])
 
