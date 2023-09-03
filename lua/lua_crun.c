@@ -65,6 +65,11 @@ LUA_API int
 luacrun_error (lua_State *S, libcrun_error_t *err)
 {
   luaL_checkstack (S, 1, NULL);
+  if (*err == NULL)
+    {
+      lua_pushstring (S, "the error is NULL, this may be a bug in luacrun");
+      return 1;
+    }
   if ((*err)->status == 0)
     {
       lua_pushfstring (S, "crun: %s", (*err)->msg);
@@ -253,6 +258,8 @@ luacrun_new_ctx (lua_State *S)
   if (lua_istable (S, 1))
     {
       luacrun_ctx_setup (S, ctx_idx, 1);
+    } else if (!lua_isnoneornil(S, 1)) {
+      luaL_argerror(S, 1, "expect table, nil or none");
     }
   luaL_setmetatable (S, LUA_CRUN_TAG_CTX);
   return 1;
@@ -267,7 +274,7 @@ luacrun_container_spec (lua_State *S)
   luaL_checkstack (S, 1, NULL);
   char buf[4096] = {};
   FILE *memfile = fmemopen (buf, 4095, "w");
-  int ret = libcrun_container_spec (rootless, memfile, &crun_err); // the crun_err is not used
+  int ret = libcrun_container_spec (rootless, memfile, &crun_err);
   fclose (memfile);
   luacrun_SoftErrIf (S, ret < 0, &crun_err, lua_pushnil (S), 1);
   lua_pushlstring (S, buf, ret);
@@ -365,8 +372,12 @@ luacrun_ctx_run (lua_State *S)
   int ret = libcrun_container_run (ctx, *cont, flags, &crun_err);
   if (ret < 0)
     {
-      lua_pushnil (S);
-      return luacrun_error (S, &crun_err) + 1;
+      if (crun_err != NULL) {
+        lua_pushnil (S);
+        return luacrun_error (S, &crun_err) + 1;
+      } else {
+        luaL_error(S, "failed to run container");
+      }
     }
   else
     {
@@ -407,8 +418,9 @@ luacrun_ctx_delete_container (lua_State *S)
   libcrun_error_t crun_err = NULL;
   luaL_checkstack (S, 1, NULL);
   int ret = libcrun_container_delete (ctx, NULL, id, force, &crun_err);
-  luacrun_SoftErrIf (S, ret < 0, &crun_err, lua_pushboolean (S, false), 1);
-  lua_pushboolean (S, true);
+  bool has_error = ret < 0 && crun_err != NULL;
+  luacrun_SoftErrIf (S, has_error, &crun_err, lua_pushboolean (S, false), 1);
+  lua_pushboolean (S, ret >= 0); // false if failed to read the exec.fifo in the state dir
   return 1;
 }
 
@@ -462,7 +474,13 @@ luacrun_ctx_status_container (lua_State *S)
   const char *container_status = NULL;
   int running;
   ret = libcrun_get_container_state_string (id, &status, state_root, &container_status, &running, &crun_err);
-  luacrun_SoftErrIf (S, ret < 0, &crun_err, lua_pushnil (S), 1);
+  luacrun_SoftErrIf (S, ret < 0 && crun_err != NULL, &crun_err, lua_pushnil (S), 1);
+  if (ret < 0) {
+    // Failed to read the exec.fifo in the state dir
+    lua_pushnil(S);
+    lua_pushstring(S, "failed to read state");
+    return 2;
+  }
 
   lua_pushinteger (S, running ? status.pid : 0);
   lua_setfield (S, tabidx, "pid");
@@ -613,8 +631,11 @@ luacrun_ctx_iter_containers (lua_State *S)
 
   libcrun_container_list_t *containers;
   int ret = libcrun_get_containers_list (&containers, ctx->state_root, &crun_err);
-  if (ret < 0)
+  if (ret < 0 && crun_err != NULL)
     luacrun_set_error (S, &crun_err);
+  // ret < 0 && crun_err == NULL: the status file does not exists
+  // The `containers` is still NULL,
+  // the iterator function knows how to handle the situation
   struct luacrun_ctx_containers_iterator *it = lua_newuserdata (S, sizeof (struct luacrun_ctx_containers_iterator));
   *it = (struct luacrun_ctx_containers_iterator){
     .closed = false,
