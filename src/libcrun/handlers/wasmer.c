@@ -92,12 +92,13 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   void (*wasm_func_delete) (wasm_func_t *);
   wasm_trap_t *(*wasm_func_call) (const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
   wasi_config_t *(*wasi_config_new) (const char *);
-  wasi_env_t *(*wasi_env_new) (struct wasi_config_t *);
-  bool (*wasi_get_imports) (const wasm_store_t *, const wasm_module_t *, const struct wasi_env_t *, wasm_extern_vec_t *);
+  wasi_env_t *(*wasi_env_new) (wasm_store_t *, struct wasi_config_t *);
+  bool (*wasi_get_imports) (const wasm_store_t *, const struct wasi_env_t *, const wasm_module_t *, wasm_extern_vec_t *);
   wasm_func_t *(*wasi_get_start_function) (wasm_instance_t *);
   intptr_t (*wasi_env_read_stdout) (struct wasi_env_t *, char *, uintptr_t);
   void (*wasi_env_delete) (struct wasi_env_t *);
-  void (*wasi_config_arg) (struct wasi_config_t *config, const char *arg);
+  void (*wasi_config_arg) (struct wasi_config_t * config, const char *arg);
+  bool (*wasi_env_initialize_instance) (struct wasi_env_t *, wasm_store_t *, wasm_instance_t *);
 
   wat2wasm = dlsym (cookie, "wat2wasm");
   wasm_module_delete = dlsym (cookie, "wasm_module_delete");
@@ -127,6 +128,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   wasi_env_read_stdout = dlsym (cookie, "wasi_env_read_stdout");
   wasi_env_delete = dlsym (cookie, "wasi_env_delete");
   wasm_func_delete = dlsym (cookie, "wasm_func_delete");
+  wasi_env_initialize_instance = dlsym (cookie, "wasi_env_initialize_instance");
 
   if (wat2wasm == NULL || wasm_module_delete == NULL || wasm_instance_delete == NULL
       || wasm_engine_delete == NULL || wasm_store_delete == NULL || wasm_func_call == NULL
@@ -185,25 +187,23 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
     }
 
   wasi_config_capture_stdout (config);
-  wasi_env = wasi_env_new (config);
+  wasi_env = wasi_env_new (store, config);
   if (! wasi_env)
     {
       error (EXIT_FAILURE, 0, "error building wasi env");
     }
 
   /* Instantiate.  */
-  wasm_module_imports (module, &import_types);
-
-  wasm_extern_vec_new_uninitialized (&imports, import_types.size);
-  wasm_importtype_vec_delete (&import_types);
-
-  if (! wasi_get_imports (store, module, wasi_env, &imports))
+  if (! wasi_get_imports (store, wasi_env, module, &imports))
     error (EXIT_FAILURE, 0, "error getting WASI imports");
 
   instance = wasm_instance_new (store, module, &imports, NULL);
 
   if (! instance)
     error (EXIT_FAILURE, 0, "error instantiating module");
+
+  if (! wasi_env_initialize_instance (wasi_env, store, instance))
+    error (EXIT_FAILURE, 0, "error init wasi env");
 
   /* Extract export.  */
   wasm_instance_exports (instance, &exports);
@@ -213,9 +213,6 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   run_func = wasi_get_start_function (instance);
   if (run_func == NULL)
     error (EXIT_FAILURE, 0, "error accessing export");
-
-  wasm_module_delete (module);
-  wasm_instance_delete (instance);
 
   if (wasm_func_call (run_func, &args, &res))
     error (EXIT_FAILURE, 0, "error calling wasm function");
@@ -237,6 +234,8 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   wasm_extern_vec_delete (&imports);
 
   /* Shut down.  */
+  wasm_module_delete (module);
+  wasm_instance_delete (instance);
   wasm_func_delete (run_func);
   wasi_env_delete (wasi_env);
   wasm_store_delete (store);
