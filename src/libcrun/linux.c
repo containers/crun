@@ -3176,7 +3176,7 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   cleanup_close int fd = -1;
   int ret;
   char oom_buffer[16];
-  if (def->process == NULL || def->process->oom_score_adj == 0)
+  if (def->process == NULL || ! def->process->oom_score_adj_present)
     return 0;
   sprintf (oom_buffer, "%i", def->process->oom_score_adj);
   fd = open ("/proc/self/oom_score_adj", O_RDWR);
