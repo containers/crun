@@ -88,6 +88,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   void (*wasm_byte_vec_new_uninitialized) (wasm_byte_vec_t *, size_t);
   void (*wasm_extern_vec_new_uninitialized) (wasm_extern_vec_t *, size_t);
   void (*wasi_config_capture_stdout) (struct wasi_config_t *);
+  void (*wasi_config_inherit_stdout) (struct wasi_config_t *);
   void (*wasm_module_imports) (const wasm_module_t *, wasm_importtype_vec_t *);
   void (*wasm_func_delete) (wasm_func_t *);
   wasm_trap_t *(*wasm_func_call) (const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
@@ -97,7 +98,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   wasm_func_t *(*wasi_get_start_function) (wasm_instance_t *);
   intptr_t (*wasi_env_read_stdout) (struct wasi_env_t *, char *, uintptr_t);
   void (*wasi_env_delete) (struct wasi_env_t *);
-  void (*wasi_config_arg) (struct wasi_config_t * config, const char *arg);
+  void (*wasi_config_arg) (struct wasi_config_t *config, const char *arg);
   bool (*wasi_env_initialize_instance) (struct wasi_env_t *, wasm_store_t *, wasm_instance_t *);
 
   wat2wasm = dlsym (cookie, "wat2wasm");
@@ -120,6 +121,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
   wasi_config_new = dlsym (cookie, "wasi_config_new");
   wasi_config_arg = dlsym (cookie, "wasi_config_arg");
   wasi_config_capture_stdout = dlsym (cookie, "wasi_config_capture_stdout");
+  wasi_config_inherit_stdout = dlsym (cookie, "wasi_config_inherit_stdout");
   wasi_env_new = dlsym (cookie, "wasi_env_new");
   wasm_module_imports = dlsym (cookie, "wasm_module_imports");
   wasm_extern_vec_new_uninitialized = dlsym (cookie, "wasm_extern_vec_new_uninitialized");
@@ -139,7 +141,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
       || wasi_config_capture_stdout == NULL || wasi_env_new == NULL || wasm_module_imports == NULL
       || wasi_env_read_stdout == NULL || wasi_env_delete == NULL || wasm_func_delete == NULL
       || wasm_importtype_vec_delete == NULL || wasm_extern_vec_new_uninitialized == NULL
-      || wasi_get_imports == NULL || wasi_get_start_function == NULL)
+      || wasi_get_imports == NULL || wasi_get_start_function == NULL || wasi_config_inherit_stdout == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmer.so`");
 
   wat_wasm_file = fopen (pathname, "rb");
@@ -186,7 +188,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
       wasi_config_arg (config, wasi_args);
     }
 
-  wasi_config_capture_stdout (config);
+  wasi_config_inherit_stdout (config);
   wasi_env = wasi_env_new (store, config);
   if (! wasi_env)
     {
@@ -216,19 +218,6 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
 
   if (wasm_func_call (run_func, &args, &res))
     error (EXIT_FAILURE, 0, "error calling wasm function");
-
-  do
-    {
-      data_read_size = wasi_env_read_stdout (wasi_env, buffer, WASMER_BUF_SIZE);
-
-      if (data_read_size > 0)
-        {
-          /* Relay wasi output to stdout.  */
-          ret = safe_write (STDOUT_FILENO, buffer, (ssize_t) data_read_size);
-          if (UNLIKELY (ret < 0))
-            error (EXIT_FAILURE, errno, "error while writing wasi output to stdout");
-        }
-  } while (WASMER_BUF_SIZE == data_read_size);
 
   wasm_extern_vec_delete (&exports);
   wasm_extern_vec_delete (&imports);
