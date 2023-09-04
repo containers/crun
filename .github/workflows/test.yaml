@@ -21,7 +21,7 @@ jobs:
           - arch: riscv64
             distro: ubuntu_latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           set-safe-directory: true
@@ -80,7 +80,7 @@ jobs:
           - test: wasmedge-build
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: install dependencies
         run: |
@@ -180,7 +180,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: vars
         run: |
           echo 'VERSION=v0.8.0' >> $GITHUB_ENV
