@@ -31,7 +31,7 @@ end
 local function mktestenv()
     local format = string.format
     local init_path = os.getenv("INIT")
-    assert(init_path, "no INIT env var for init program")
+    assert(type(init_path) == "string" and #init_path > 0, "no INIT env var for init program")
     local path, errmsg = stdlib.mkdtemp("/tmp/luacrun-test-XXXXXX")
     assert(path, errmsg)
     local rootfs_path = string.format("%s/%s", path, "rootfs")
@@ -142,6 +142,21 @@ insulate("luacrun", function()
         end
         local stat, err = luacrun.delete_container(ctx, names[1])
         assert(stat, err)
+
+        -- Make sure no container after deleted
+        local names_after_deleted = {}
+        for i, name in ctx:iter_names() do names_after_deleted[#names_after_deleted + 1] = name end
+        assert(#names_after_deleted == 0, string.format("names length is %d", #names))
+    end)
+
+    describe("new_ctx()", function ()
+        it("error if the argument has invalid type", function ()
+            for i, v in ipairs({1, 1.0, false}) do
+                assert.has_error((function ()
+                    luacrun.new_ctx(v)
+                end))
+            end
+        end)
     end)
 
     describe("Ctx", function()
@@ -171,6 +186,20 @@ insulate("luacrun", function()
             assert.is_false(ctx:systemd_cgroup())
             ctx:set_systemd_cgroup(true)
             assert.is_true(ctx:systemd_cgroup())
+        end)
+
+        describe("iter_names()", function ()
+            it("acts as empty iterator if no container", function ()
+                local touch = false
+                local ctx = luacrun.new_ctx {
+                    id = "luacrun-test-empty",
+                }
+
+                for i, name in ctx:iter_names() do
+                    touch = true
+                end
+                assert.is_false(touch)
+            end)
         end)
     end)
 end)
