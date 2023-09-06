@@ -984,6 +984,9 @@ libcrun_destroy_systemd_cgroup_scope (struct libcrun_cgroup_status *cgroup_statu
 
   ret = systemd_check_job_status (bus, &job_data, object, "removing", err);
 
+  /* In case of a failed unit, call reset-failed so systemd can remove it. */
+  reset_failed_unit (bus, scope);
+
 exit:
   if (bus)
     sd_bus_unref (bus);
