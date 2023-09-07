@@ -149,6 +149,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h src/libcrun/mount_flags.h \
 	crun.1.md crun.1 libcrun.lds \
+	krun.1.md krun.1 \
 	lua/luacrun.rockspec
 
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors
@@ -240,7 +241,7 @@ BUILT_SOURCES = .version git-version.h
 CLEANFILES = crun.spec .version git-version.h $(LUACRUN_ROCKSPEC)
 
 if ENABLE_CRUN
-man1_MANS = crun.1
+man1_MANS = crun.1 krun.1
 endif
 
 crun.1: $(abs_srcdir)/crun.1.md
@@ -248,7 +249,12 @@ if HAVE_MD2MAN
 	$(MD2MAN) -in $(abs_srcdir)/crun.1.md -out crun.1
 endif HAVE_MD2MAN
 
-generate-man: crun.1
+krun.1: $(abs_srcdir)/krun.1.md
+if HAVE_MD2MAN
+	$(MD2MAN) -in $(abs_srcdir)/krun.1.md -out krun.1
+endif HAVE_MD2MAN
+
+generate-man: crun.1 krun.1
 
 sync:
 	(cd libocispec; git pull https://github.com/containers/libocispec main)

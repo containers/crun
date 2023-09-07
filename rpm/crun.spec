@@ -126,12 +126,13 @@ ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/%{name}-wasm
 %files
 %license COPYING
 %{_bindir}/%{name}
-%{_mandir}/man1/*
+%{_mandir}/man1/crun.1
 
 %if %{defined krun_support}
 %files krun
 %license COPYING
 %{_bindir}/krun
+%{_mandir}/man1/krun.1
 %endif
 
 %if %{defined wasm_support}
