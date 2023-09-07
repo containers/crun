@@ -1,3 +1,21 @@
+* crun-1.9
+
+- linux: support arbitrary idmapped mounts.  Now it is possible to
+  specify a mapping for any type of mount, not only bind mounts.
+- linux: add support for "ridmap" mount option to support recursive
+  idmapped mounts.
+- crun delete: call systemd's reset-failed.  In case systemd cgroup
+  driver is used, and the systemd unit has failed (e.g. oom-killed),
+  systemd won't remove the unit (that is, unless the "CollectMode:
+  inactive-or-failed" property is set).
+- linux: fix check for oom_score_adj.  Write the oom_score_adj file
+  even when the new value is 0.
+- features: Support mountExtensions.
+- linux: correctly handle unknown signal string when it doesn't start
+  with a digit.
+- linux: do not attempt to join again already joined namespace.
+- wasmer: use latest wasix API.
+
 * crun-1.8.7
 
 - linux: fix a race condition when an exec was performed
