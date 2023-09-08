@@ -92,6 +92,18 @@
 #  define MOVE_MOUNT_T_EMPTY_PATH 0x00000040
 #endif
 
+#ifndef FSOPEN_CLOEXEC
+#  define FSOPEN_CLOEXEC 0x00000001
+#endif
+
+#ifndef FSMOUNT_CLOEXEC
+#  define FSMOUNT_CLOEXEC 0x00000001
+#endif
+
+#ifndef FSCONFIG_CMD_CREATE
+#  define FSCONFIG_CMD_CREATE 6
+#endif
+
 struct remount_s
 {
   struct remount_s *next;

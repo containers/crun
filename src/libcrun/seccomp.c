@@ -262,9 +262,13 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
       return crun_make_error (err, 0, "the `SECCOMP_FILTER_FLAG_NEW_LISTENER` flag is not supported");
 #  endif
 
+#  ifdef HAVE_MEMFD_CREATE
       memfd = memfd_create ("seccomp-helper-memfd", O_RDWR);
       if (UNLIKELY (memfd < 0))
         return crun_make_error (err, errno, "memfd_create");
+#  else
+      return crun_make_error (err, ENOSYS, "memfd_create non supported");
+#  endif
 
       ret = ftruncate (memfd, sizeof (atomic_int));
       if (UNLIKELY (ret < 0))
