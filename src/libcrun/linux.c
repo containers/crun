@@ -1094,6 +1094,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           int label_how, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
+  cleanup_close int ms_move_fd = -1;
   const char *real_target = target;
   bool single_instance = false;
   proc_fd_path_t target_buffer;
@@ -1125,6 +1126,23 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       if (ret < 0)
         return ret;
       data = data_with_label;
+    }
+
+  if (mountflags & MS_MOVE)
+    {
+      if ((mountflags & MS_BIND) || fstype)
+        return crun_make_error (err, 0, "internal error: cannot use MS_MOVE with MS_BIND or fstype");
+
+      ret = mount (source, real_target, NULL, MS_MOVE, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "move mount `%s` to `%s`", source, target);
+      mountflags &= ~MS_MOVE;
+
+      /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
+      ms_move_fd = open_mount_target (container, target, err);
+      if (UNLIKELY (ms_move_fd < 0))
+        return fd;
+      targetfd = ms_move_fd;
     }
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
