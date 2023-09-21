@@ -2437,6 +2437,25 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  /* Reset the inherited cpu affinity. Old kernels do that automatically, but
+     new kernels remember the affinity that was set before the cgroup move.
+     This is undesirable, because it inherits the systemd affinity when the container
+     should really move to the container space cpus.
+
+     The sched_setaffinity call will always return an error (EINVAL or ENODEV)
+     when used like this. This is expected and part of the backward compatibility.
+
+     See: https://issues.redhat.com/browse/OCPBUGS-15102   */
+  ret = sched_setaffinity (pid, 0, NULL);
+  if (LIKELY (ret < 0))
+    {
+      if (UNLIKELY (!((errno == EINVAL) || (errno == ENODEV))))
+        {
+          crun_make_error (err, errno, "failed to reset affinity");
+          goto fail;
+        }
+    }
+
   /* sync send own pid.  */
   ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
   if (UNLIKELY (ret != sizeof (pid)))
