@@ -33,6 +33,7 @@
 #include <inttypes.h>
 #include <time.h>
 
+#include <sched.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -458,8 +459,33 @@ int
 enter_cgroup (int cgroup_mode, pid_t pid, pid_t init_pid, const char *path,
               bool create_if_missing, libcrun_error_t *err)
 {
+  int ret;
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
-    return enter_cgroup_v2 (pid, init_pid, path, create_if_missing, err);
+    {
+      ret = enter_cgroup_v2 (pid, init_pid, path, create_if_missing, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      ret = enter_cgroup_v1 (pid, path, create_if_missing, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  /* Reset the inherited cpu affinity. Old kernels do that automatically, but
+     new kernels remember the affinity that was set before the cgroup move.
+     This is undesirable, because it inherits the systemd affinity when the container
+     should really move to the container space cpus.
 
-  return enter_cgroup_v1 (pid, path, create_if_missing, err);
+     The sched_setaffinity call will always return an error (EINVAL or ENODEV)
+     when used like this. This is expected and part of the backward compatibility.
+
+     See: https://issues.redhat.com/browse/OCPBUGS-15102   */
+  ret = sched_setaffinity (pid, 0, NULL);
+  if (LIKELY (ret < 0))
+    {
+      if (UNLIKELY (! ((errno == EINVAL) || (errno == ENODEV))))
+        return crun_make_error (err, errno, "failed to reset affinity");
+    }
+  return 0;
 }
