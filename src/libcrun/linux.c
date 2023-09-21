@@ -1317,8 +1317,37 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
           if (errno == EBUSY)
             {
               /* If we got EBUSY it means the cgroup file system is already mounted at the targetfd and we
-                 cannot stack another one on top of it.  Place a tmpfs in the middle, then try again.  */
-              ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", 0, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
+                 cannot stack another one on top of it.  First attempt with a temporary mount and then move
+                 it to the destination directory.  If that cannot be used try mounting a tmpfs below the
+                 cgroup mount.  */
+              cleanup_free char *state_dir = NULL;
+
+              state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+
+              if (state_dir)
+                {
+                  cleanup_free char *tmp_mount_dir = NULL;
+
+                  ret = append_paths (&tmp_mount_dir, err, state_dir, "tmpmount", NULL);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+
+                  ret = crun_ensure_directory (tmp_mount_dir, 0700, true, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+
+                  ret = mount ("cgroup2", tmp_mount_dir, "cgroup2", 0, NULL);
+                  if (LIKELY (ret == 0))
+                    {
+                      ret = do_mount (container, tmp_mount_dir, targetfd, target, NULL, MS_MOVE | mountflags, NULL, LABEL_NONE, err);
+                      if (LIKELY (ret == 0))
+                        return 0;
+
+                      crun_error_release (err);
+                    }
+                }
+
+              ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", MS_PRIVATE, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
               if (LIKELY (ret == 0))
                 {
                   ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);

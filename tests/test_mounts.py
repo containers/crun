@@ -417,6 +417,56 @@ def test_idmapped_mounts():
 
     return 0
 
+def test_cgroup_mount_without_netns():
+    for cgroupns in [True, False]:
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+        add_all_namespaces(conf, cgroupns=cgroupns, netns=False)
+        mounts = [
+            {
+	        "destination": "/proc",
+	        "type": "proc"
+	    },
+            {
+	        "destination": "/sys",
+	        "type": "bind",
+	        "source": "/sys",
+	        "options": [
+                    "rprivate",
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "ro",
+                    "rbind"
+	        ]
+	    },
+            {
+                "destination": "/sys/fs/cgroup",
+                "type": "cgroup",
+                "source": "cgroup",
+                "options": [
+	            "rprivate",
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "rprivate",
+                    "relatime",
+                    "ro"
+                ]
+            }
+        ]
+
+        conf['mounts'] = mounts
+
+        out, _ = run_and_get_output(conf)
+        print(out)
+        for i in out.split("\n"):
+            if i.find("/sys/fs/cgroup") >= 0:
+                if i.find("tmpfs") >= 0:
+                    print("tmpfs temporary mount still present with cgroupns=%s %s" % (cgroupns, i))
+                    return -1
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rw" : test_mount_rw,
@@ -439,6 +489,7 @@ all_tests = {
     "mount-linux-readonly-should-inherit-flags": test_mount_readonly_should_inherit_options_from_parent,
     "proc-linux-readonly-should-inherit-flags": test_proc_readonly_should_inherit_options_from_parent,
     "mount-ro-cgroup": test_ro_cgroup,
+    "cgroup-mount-without-netns": test_cgroup_mount_without_netns,
 }
 
 if __name__ == "__main__":
