@@ -2079,19 +2079,9 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
       ret = fchmodat (destdirfd, de->d_name, mode & ALLPERMS, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
         {
+          /* If the operation fails with ENOTSUP we are dealing with a symlink, so ignore it.  */
           if (errno == ENOTSUP)
-            {
-              proc_fd_path_t proc_path;
-              cleanup_close int fd = -1;
-
-              fd = openat (destdirfd, de->d_name, O_PATH | O_NOFOLLOW);
-              if (UNLIKELY (fd < 0))
-                return crun_make_error (err, errno, "open `%s/%s`", destname, de->d_name);
-
-              get_proc_self_fd_path (proc_path, fd);
-
-              ret = chmod (proc_path, mode & ALLPERMS);
-            }
+            return 0;
 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "chmod `%s/%s`", destname, de->d_name);
