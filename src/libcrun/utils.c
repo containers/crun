@@ -546,9 +546,10 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
             return crun_make_error (err, errno, "mkdir `/%s`", npath);
         }
 
-      cwd = safe_openat (dirfd, dirpath, dirpath_len, npath, O_CLOEXEC | O_PATH, 0, err);
+      cwd = safe_openat (dirfd, dirpath, dirpath_len, npath,
+                         ((dir || ! last_component) ? O_DIRECTORY : 0) | O_CLOEXEC | O_PATH, 0, err);
       if (UNLIKELY (cwd < 0))
-        return cwd;
+        return crun_error_wrap (err, "creating `/%s`", path);
 
       close_and_replace (&wd_cleanup, cwd);
 
