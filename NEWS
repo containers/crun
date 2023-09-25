@@ -1,3 +1,13 @@
+* crun-1.9.1
+
+- utils: ignore ENOTSUP when chmod a symlink. It fixes a problem on
+  Linux 6.6 that always refuses chmod on a symlink.
+- build: fix build on CentOS 7
+- linux: add new fallback when mount fails with EBUSY, so that there
+  is not an additional tmpfs mount if not needed.
+- utils: improve error message when a directory cannot be created as
+  a component of the path is already existing as a non directory.
+
 * crun-1.9
 
 - linux: support arbitrary idmapped mounts.  Now it is possible to
