@@ -1094,6 +1094,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           int label_how, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
+  cleanup_close int ms_move_fd = -1;
   const char *real_target = target;
   bool single_instance = false;
   proc_fd_path_t target_buffer;
@@ -1125,6 +1126,23 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       if (ret < 0)
         return ret;
       data = data_with_label;
+    }
+
+  if (mountflags & MS_MOVE)
+    {
+      if ((mountflags & MS_BIND) || fstype)
+        return crun_make_error (err, 0, "internal error: cannot use MS_MOVE with MS_BIND or fstype");
+
+      ret = mount (source, real_target, NULL, MS_MOVE, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "move mount `%s` to `%s`", source, target);
+      mountflags &= ~MS_MOVE;
+
+      /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
+      ms_move_fd = open_mount_target (container, target, err);
+      if (UNLIKELY (ms_move_fd < 0))
+        return fd;
+      targetfd = ms_move_fd;
     }
 
   if ((fstype && fstype[0]) || (mountflags & MS_BIND))
@@ -1299,8 +1317,37 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
           if (errno == EBUSY)
             {
               /* If we got EBUSY it means the cgroup file system is already mounted at the targetfd and we
-                 cannot stack another one on top of it.  Place a tmpfs in the middle, then try again.  */
-              ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", 0, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
+                 cannot stack another one on top of it.  First attempt with a temporary mount and then move
+                 it to the destination directory.  If that cannot be used try mounting a tmpfs below the
+                 cgroup mount.  */
+              cleanup_free char *state_dir = NULL;
+
+              state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+
+              if (state_dir)
+                {
+                  cleanup_free char *tmp_mount_dir = NULL;
+
+                  ret = append_paths (&tmp_mount_dir, err, state_dir, "tmpmount", NULL);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+
+                  ret = crun_ensure_directory (tmp_mount_dir, 0700, true, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+
+                  ret = mount ("cgroup2", tmp_mount_dir, "cgroup2", 0, NULL);
+                  if (LIKELY (ret == 0))
+                    {
+                      ret = do_mount (container, tmp_mount_dir, targetfd, target, NULL, MS_MOVE | mountflags, NULL, LABEL_NONE, err);
+                      if (LIKELY (ret == 0))
+                        return 0;
+
+                      crun_error_release (err);
+                    }
+                }
+
+              ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", MS_PRIVATE, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
               if (LIKELY (ret == 0))
                 {
                   ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
