@@ -205,6 +205,7 @@ fallback:
 int
 get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path)
 {
+  int empty_path = path == NULL ? AT_EMPTY_PATH : 0;
   struct stat st;
   int ret;
 
@@ -213,7 +214,7 @@ get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path)
     0,
   };
 
-  ret = statx (dirfd, path, (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
+  ret = statx (dirfd, path ?: "", empty_path | (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | AT_STATX_DONT_SYNC, STATX_TYPE, &stx);
   if (UNLIKELY (ret < 0))
     {
       if (errno == ENOSYS || errno == EINVAL)
@@ -226,7 +227,7 @@ get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path)
 
 fallback:
 #endif
-  ret = fstatat (dirfd, path, &st, nofollow ? AT_SYMLINK_NOFOLLOW : 0);
+  ret = fstatat (dirfd, path ?: "", &st, empty_path | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
   *mode = st.st_mode;
   return ret;
 }
@@ -546,10 +547,28 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
             return crun_make_error (err, errno, "mkdir `/%s`", npath);
         }
 
-      cwd = safe_openat (dirfd, dirpath, dirpath_len, npath,
-                         ((dir || ! last_component) ? O_DIRECTORY : 0) | O_CLOEXEC | O_PATH, 0, err);
+      cwd = safe_openat (dirfd, dirpath, dirpath_len, npath, (last_component ? O_PATH : 0) | O_CLOEXEC, 0, err);
       if (UNLIKELY (cwd < 0))
         return crun_error_wrap (err, "creating `/%s`", path);
+
+      if (! last_component)
+        {
+          mode_t st_mode;
+
+          ret = get_file_type_at (cwd, &st_mode, true, NULL);
+          if (UNLIKELY (ret < 0))
+            {
+              int saved_errno = errno;
+
+              close (cwd);
+              return crun_make_error (err, saved_errno, "error stat'ing file `%s`", npath);
+            }
+          if ((st_mode & S_IFMT) != S_IFDIR)
+            {
+              close (cwd);
+              return crun_make_error (err, ENOTDIR, "error creating directory `%s` since `%s` exists and it is not a directory", path, npath);
+            }
+        }
 
       close_and_replace (&wd_cleanup, cwd);
 
