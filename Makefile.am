@@ -240,8 +240,14 @@ BUILT_SOURCES = .version git-version.h
 
 CLEANFILES = crun.spec .version git-version.h $(LUACRUN_ROCKSPEC)
 
+man1_MANS =
+
 if ENABLE_CRUN
-man1_MANS = crun.1 krun.1
+man1_MANS += crun.1
+endif
+
+if ENABLE_KRUN
+man1_MANS += krun.1
 endif
 
 crun.1: $(abs_srcdir)/crun.1.md
