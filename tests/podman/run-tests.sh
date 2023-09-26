@@ -5,7 +5,8 @@ if test "$(id -u)" != 0; then
 	exit 1
 fi
 
-set -e
+set -xeuo pipefail
+
 (
 cd /crun
 git config --global --add safe.directory /crun
@@ -15,6 +16,9 @@ git clean -fdx
 make -j "$(nproc)"
 make install
 )
+
+uname -a
+cat /proc/self/mountinfo
 
 export OCI_RUNTIME=/usr/bin/crun
 export CGROUP_MANAGER=cgroupfs
