@@ -117,6 +117,9 @@ rm -rf %{buildroot}%{_prefix}/lib*
 
 %if %{defined krun_support}
 ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
+%else
+# remove krun man page if krun not supported
+rm -f %{buildroot}%{_mandir}/man1/krun.1
 %endif
 
 %if %{defined wasm_support}
@@ -126,13 +129,13 @@ ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/%{name}-wasm
 %files
 %license COPYING
 %{_bindir}/%{name}
-%{_mandir}/man1/crun.1
+%{_mandir}/man1/%{name}.1.gz
 
 %if %{defined krun_support}
 %files krun
 %license COPYING
 %{_bindir}/krun
-%{_mandir}/man1/krun.1
+%{_mandir}/man1/krun.1.gz
 %endif
 
 %if %{defined wasm_support}
