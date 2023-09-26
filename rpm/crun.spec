@@ -117,9 +117,6 @@ rm -rf %{buildroot}%{_prefix}/lib*
 
 %if %{defined krun_support}
 ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
-%else
-# remove krun man page if krun not supported
-rm -f %{buildroot}%{_mandir}/man1/krun.1
 %endif
 
 %if %{defined wasm_support}
