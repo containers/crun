@@ -1333,17 +1333,17 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
                     return ret;
 
                   ret = crun_ensure_directory (tmp_mount_dir, 0700, true, err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-
-                  ret = mount ("cgroup2", tmp_mount_dir, "cgroup2", 0, NULL);
-                  if (LIKELY (ret == 0))
+                  if (ret == 0)
                     {
-                      ret = do_mount (container, tmp_mount_dir, targetfd, target, NULL, MS_MOVE | mountflags, NULL, LABEL_NONE, err);
+                      ret = mount ("cgroup2", tmp_mount_dir, "cgroup2", 0, NULL);
                       if (LIKELY (ret == 0))
-                        return 0;
+                        {
+                          ret = do_mount (container, tmp_mount_dir, targetfd, target, NULL, MS_MOVE | mountflags, NULL, LABEL_NONE, err);
+                          if (LIKELY (ret == 0))
+                            return 0;
 
-                      crun_error_release (err);
+                          crun_error_release (err);
+                        }
                     }
                 }
 
