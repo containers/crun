@@ -1,3 +1,10 @@
+* crun-1.9.2
+
+- cgroup: reset the inherited cpu affinity after moving to cgroup.
+  Old kernels do that automatically, but new kernels remember the
+  affinity that was set before the cgroup move, so we need to reset
+  it in order to honor the cpuset configuration.
+
 * crun-1.9.1
 
 - utils: ignore ENOTSUP when chmod a symlink. It fixes a problem on
@@ -33,7 +40,6 @@
 - features: Fix annotations formatting.
 - linux: do not write some errors twice.
 - libcrun: handle SIGWINCH by resizing the terminal file descriptor.
-
 - crun: new command "crun features".
 - linux: fix handling of idmapped mounts when the container joins
   an existing PID namespace.
