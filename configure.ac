@@ -129,6 +129,10 @@ AS_IF([test "x$with_wasmedge" = "xyes"], AC_CHECK_HEADERS([wasmedge/wasmedge.h],
 dnl include support for libkrun (EXPERIMENTAL)
 AC_ARG_WITH([libkrun], AS_HELP_STRING([--with-libkrun], [build with libkrun support]))
 AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE([HAVE_LIBKRUN], 1, [Define if libkrun is available]), [AC_MSG_ERROR([*** Missing libkrun headers])]))
+
+AM_CONDITIONAL([ENABLE_KRUN], [test "x$with_libkrun" = xyes])
+
+
 dnl libseccomp
 AC_ARG_ENABLE([seccomp],
 	AS_HELP_STRING([--disable-seccomp], [Ignore libseccomp and disable support]))
