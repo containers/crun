@@ -4068,6 +4068,18 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
   if (def->mounts_len == 0)
     return 0;
 
+  if (! has_userns)
+    {
+      int is_in_userns;
+
+      is_in_userns = check_running_in_user_namespace (err);
+      if (UNLIKELY (is_in_userns < 0))
+        return is_in_userns;
+
+      if (is_in_userns > 0)
+        has_userns = true;
+    }
+
   mount_fds = make_libcrun_fd_map (def->mounts_len);
 
   for (i = 0; i < def->mounts_len; i++)
