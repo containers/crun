@@ -3094,7 +3094,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
     ret = append_paths (&config_file, err, dir, "config.json", NULL);
     if (UNLIKELY (ret < 0))
-      return ret;
+      goto exit;
 
     container = libcrun_container_load_from_file (config_file, err);
     if (UNLIKELY (container == NULL))
