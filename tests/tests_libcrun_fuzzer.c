@@ -36,6 +36,8 @@
 
 static int test_mode = -1;
 
+extern int compare_rdt_configurations (const char *a, const char *b);
+
 static char *
 make_nul_terminated (uint8_t *buf, size_t len)
 {
@@ -407,9 +409,17 @@ run_one_test (int mode, uint8_t *buf, size_t len)
       test_parse_idmapped_mounts (buf, len);
       break;
 
+    case 8:
+      {
+        cleanup_free char *a = make_nul_terminated (buf, len / 2);
+        cleanup_free char *b = make_nul_terminated (buf + len / 2, len / 2);
+        compare_rdt_configurations (a, b);
+      }
+      break;
+
       /* ALL mode.  */
     case -1:
-      for (i = 0; i <= 5; i++)
+      for (i = 0; i <= 8; i++)
         run_one_test (i, buf, len);
       break;
 

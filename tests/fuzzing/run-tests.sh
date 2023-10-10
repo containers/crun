@@ -38,3 +38,4 @@ run_test 4 $CORPUS/paths
 run_test 5 random-data
 run_test 6 $CORPUS/annotations
 run_test 7 $CORPUS/idmapped-mounts-option
+run_test 8 $CORPUS/intelrdt
