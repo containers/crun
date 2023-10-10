@@ -4295,3 +4295,26 @@ exit:
 
   return ret;
 }
+
+int
+libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, struct libcrun_intel_rdt_update *update, libcrun_error_t *err)
+{
+  cleanup_container libcrun_container_t *container = NULL;
+  cleanup_free char *config_file = NULL;
+  cleanup_free char *dir = NULL;
+  int ret;
+
+  dir = libcrun_get_state_directory (context->state_root, id);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory");
+
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  container = libcrun_container_load_from_file (config_file, err);
+  if (UNLIKELY (container == NULL))
+    return crun_make_error (err, 0, "error loading config.json");
+
+  return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, err);
+}

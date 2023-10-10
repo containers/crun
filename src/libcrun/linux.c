@@ -5586,3 +5586,13 @@ libcrun_destroy_intelrdt (const char *name, libcrun_error_t *err)
 {
   return resctl_destroy (name, err);
 }
+
+int
+libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *container, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
+{
+  const char *name;
+
+  name = libcrun_get_intelrdt_name (ctr_name, container, NULL);
+
+  return resctl_update (name, l3_cache_schema, mem_bw_schema, err);
+}

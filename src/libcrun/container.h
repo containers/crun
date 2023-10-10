@@ -249,6 +249,15 @@ LIBCRUN_PUBLIC int libcrun_container_update_from_values (libcrun_context_t *cont
                                                          struct libcrun_update_value_s *values, size_t len,
                                                          libcrun_error_t *err);
 
+struct libcrun_intel_rdt_update
+{
+  const char *l3_cache_schema;
+  const char *mem_bw_schema;
+};
+
+LIBCRUN_PUBLIC int libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id,
+                                                       struct libcrun_intel_rdt_update *update, libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_get_features (libcrun_context_t *context, struct features_info_s **info,
                                                    libcrun_error_t *err);
 
