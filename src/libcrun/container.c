@@ -1696,6 +1696,13 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         }
     }
 
+  if (! is_empty_string (status.intelrdt))
+    {
+      ret = libcrun_destroy_intelrdt (status.intelrdt, err);
+      if (UNLIKELY (ret < 0))
+        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+    }
+
   if (status.cgroup_path)
     {
       ret = libcrun_cgroup_destroy (cgroup_status, err);
@@ -1766,15 +1773,32 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
 {
   cleanup_free char *cwd = getcwd (NULL, 0);
   cleanup_free char *owner = get_user_name (geteuid ());
+  cleanup_free char *intelrdt = NULL;
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
   char created[35];
+
+  if (container_has_intelrdt (container))
+    {
+      bool explicit = false;
+      const char *tmp;
+
+      tmp = libcrun_get_intelrdt_name (context->id, container, &explicit);
+      if (tmp == NULL)
+        return crun_make_error (err, 0, "internal error: cannot get intelrdt name");
+      /* It is stored in the status only for cleanup purposes.  Delete the group only
+         if it was not explicitly set.  */
+      if (! explicit)
+        intelrdt = xstrdup (tmp);
+    }
+
   libcrun_container_status_t status = {
     .pid = pid,
     .rootfs = rootfs,
     .bundle = cwd,
     .created = created,
     .owner = owner,
+    .intelrdt = intelrdt,
     .systemd_cgroup = context->systemd_cgroup,
     .detached = context->detach,
     .external_descriptors = external_descriptors,
@@ -2434,6 +2458,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
+  ret = libcrun_apply_intelrdt (context->id, container, pid, LIBCRUN_INTELRDT_CREATE_UPDATE_MOVE, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
@@ -3540,7 +3568,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
 
-  pid = libcrun_join_process (container, status.pid, &status, opts->cgroup, context->detach,
+  pid = libcrun_join_process (context, container, status.pid, &status, opts->cgroup, context->detach,
                               process, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;

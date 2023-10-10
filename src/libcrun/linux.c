@@ -50,6 +50,7 @@
 #include "status.h"
 #include "criu.h"
 #include "scheduler.h"
+#include "intelrdt.h"
 #include "io_priority.h"
 
 #include <sys/socket.h>
@@ -4836,7 +4837,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 }
 
 static int
-join_process_parent_helper (runtime_spec_schema_config_schema_process *process,
+join_process_parent_helper (libcrun_context_t *context,
+                            libcrun_container_t *container,
+                            runtime_spec_schema_config_schema_process *process,
                             pid_t child_pid, int sync_socket_fd,
                             libcrun_container_status_t *status,
                             bool need_move_to_cgroup, const char *sub_cgroup,
@@ -4893,6 +4896,10 @@ join_process_parent_helper (runtime_spec_schema_config_schema_process *process,
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  ret = libcrun_apply_intelrdt (context->id, container, pid, LIBCRUN_INTELRDT_MOVE, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_set_io_priority (pid, process, err);
   if (UNLIKELY (ret < 0))
@@ -5071,10 +5078,15 @@ exit:
 }
 
 int
-libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
-                      libcrun_container_status_t *status, const char *sub_cgroup,
-                      int detach, runtime_spec_schema_config_schema_process *process,
-                      int *terminal_fd, libcrun_error_t *err)
+libcrun_join_process (libcrun_context_t *context,
+                      libcrun_container_t *container,
+                      pid_t pid_to_join,
+                      libcrun_container_status_t *status,
+                      const char *sub_cgroup,
+                      int detach,
+                      runtime_spec_schema_config_schema_process *process,
+                      int *terminal_fd,
+                      libcrun_error_t *err)
 {
   pid_t pid;
   int ret;
@@ -5150,11 +5162,10 @@ libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join,
     {
       close_and_reset (&sync_socket_fd[1]);
       sync_fd = sync_socket_fd[0];
-      return join_process_parent_helper (process,
-                                         pid, sync_fd, status,
-                                         need_move_to_cgroup,
-                                         sub_cgroup,
-                                         terminal_fd, err);
+      return join_process_parent_helper (context, container,
+                                         process, pid, sync_fd,
+                                         status, need_move_to_cgroup,
+                                         sub_cgroup, terminal_fd, err);
     }
 
   close_and_reset (&sync_socket_fd[0]);
@@ -5495,4 +5506,83 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
     }
 
   return 0;
+}
+
+const char *
+libcrun_get_intelrdt_name (const char *ctr_name, libcrun_container_t *container, bool *explicit)
+{
+  runtime_spec_schema_config_schema *def = NULL;
+
+  def = container->container_def;
+
+  if (def == NULL || def->linux == NULL || def->linux->intel_rdt == NULL || def->linux->intel_rdt->clos_id == NULL)
+    {
+      if (explicit)
+        *explicit = false;
+      return ctr_name;
+    }
+
+  if (explicit)
+    *explicit = true;
+  return def->linux->intel_rdt->clos_id;
+}
+
+int
+libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pid_t pid, int actions, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = NULL;
+  bool explicit = false;
+  bool created = false;
+  const char *name;
+  int ret;
+
+  if (container)
+    def = container->container_def;
+
+  if (def == NULL || def->linux == NULL || def->linux->intel_rdt == NULL)
+    return 0;
+
+  name = libcrun_get_intelrdt_name (ctr_name, container, &explicit);
+
+  if (actions & LIBCRUN_INTELRDT_CREATE)
+    {
+      ret = resctl_create (name, explicit, &created, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (actions & LIBCRUN_INTELRDT_UPDATE)
+    {
+      ret = resctl_update (name, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+    }
+
+  if (actions & LIBCRUN_INTELRDT_MOVE)
+    {
+      ret = resctl_move_task_to (name, pid, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+    }
+
+  return 0;
+
+fail:
+  /* Cleanup only if the resctl was created as part of this call.  */
+  if (created)
+    {
+      libcrun_error_t tmp_err = NULL;
+      int tmp_ret;
+
+      tmp_ret = resctl_destroy (name, &tmp_err);
+      if (tmp_ret < 0)
+        crun_error_release (&tmp_err);
+    }
+  return ret;
+}
+
+int
+libcrun_destroy_intelrdt (const char *name, libcrun_error_t *err)
+{
+  return resctl_destroy (name, err);
 }

@@ -80,9 +80,9 @@ int libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err);
-int libcrun_join_process (libcrun_container_t *container, pid_t pid_to_join, libcrun_container_status_t *status,
-                          const char *cgroup, int detach, runtime_spec_schema_config_schema_process *process,
-                          int *terminal_fd, libcrun_error_t *err);
+int libcrun_join_process (libcrun_context_t *context, libcrun_container_t *container, pid_t pid_to_join,
+                          libcrun_container_status_t *status, const char *cgroup, int detach,
+                          runtime_spec_schema_config_schema_process *process, int *terminal_fd, libcrun_error_t *err);
 int libcrun_linux_container_update (libcrun_container_status_t *status,
                                     runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
 int libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err);
@@ -115,5 +115,30 @@ int libcrun_create_dev (libcrun_container_t *container, int devfd,
 
 int parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uids, char *option, char **out,
                                  size_t *len, libcrun_error_t *err);
+
+enum
+{
+  LIBCRUN_INTELRDT_CREATE = (1 << 0),
+  LIBCRUN_INTELRDT_UPDATE = (1 << 1),
+  LIBCRUN_INTELRDT_MOVE = (1 << 2),
+};
+
+#define LIBCRUN_INTELRDT_CREATE_UPDATE_MOVE (LIBCRUN_INTELRDT_CREATE | LIBCRUN_INTELRDT_UPDATE | LIBCRUN_INTELRDT_MOVE)
+
+static inline bool
+container_has_intelrdt (libcrun_container_t *container)
+{
+  runtime_spec_schema_config_schema *def = NULL;
+
+  def = container->container_def;
+
+  return def != NULL && def->linux != NULL && def->linux->intel_rdt != NULL;
+}
+
+const char *libcrun_get_intelrdt_name (const char *ctr_name, libcrun_container_t *container, bool *explicit);
+
+int libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pid_t pid, int actions, libcrun_error_t *err);
+
+int libcrun_destroy_intelrdt (const char *name, libcrun_error_t *err);
 
 #endif

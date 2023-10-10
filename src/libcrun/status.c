@@ -237,6 +237,15 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
 
+  r = yajl_gen_string (gen, YAJL_STR ("intelrdt"), strlen ("intelrdt"));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
+  tmp = status->intelrdt ? status->intelrdt : "";
+  r = yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
+  if (UNLIKELY (r != yajl_gen_status_ok))
+    goto yajl_error;
+
   r = yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
@@ -375,6 +384,11 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *scope[] = { "scope", NULL };
     tmp = yajl_tree_get (tree, scope, yajl_t_string);
     status->scope = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
+  }
+  {
+    const char *intelrdt[] = { "intelrdt", NULL };
+    tmp = yajl_tree_get (tree, intelrdt, yajl_t_string);
+    status->intelrdt = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
   }
   {
     const char *rootfs[] = { "rootfs", NULL };
@@ -538,6 +552,7 @@ libcrun_free_container_status (libcrun_container_status_t *status)
   free (status->external_descriptors);
   free (status->created);
   free (status->scope);
+  free (status->intelrdt);
   free (status->owner);
 }
 
