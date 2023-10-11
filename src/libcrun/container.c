@@ -3953,6 +3953,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   (*info)->linux.apparmor.enabled = true;
   (*info)->linux.selinux.enabled = true;
 
+  (*info)->linux.intel_rdt.enabled = true;
+
   // Put the values for mount extensions
   (*info)->linux.mount_ext.idmap.enabled = true;
 
