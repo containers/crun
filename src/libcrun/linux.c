@@ -743,8 +743,10 @@ libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *er
 
 out:
   /* Best effort attempt to reset the SELinux label used for new keyrings.  */
-  if (label_set)
-    (void) write (labelfd, "", 0);
+  if (label_set && write (labelfd, "", 0) < 0)
+    {
+      /* Braces around empty body, to fix warning for [-Wunused-result] and error for [-Werror=empty-body]. */
+    }
   return ret;
 }
 
