@@ -1696,6 +1696,13 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         }
     }
 
+  if (! is_empty_string (status.intelrdt))
+    {
+      ret = libcrun_destroy_intelrdt (status.intelrdt, err);
+      if (UNLIKELY (ret < 0))
+        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+    }
+
   if (status.cgroup_path)
     {
       ret = libcrun_cgroup_destroy (cgroup_status, err);
@@ -1766,15 +1773,32 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
 {
   cleanup_free char *cwd = getcwd (NULL, 0);
   cleanup_free char *owner = get_user_name (geteuid ());
+  cleanup_free char *intelrdt = NULL;
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
   char created[35];
+
+  if (container_has_intelrdt (container))
+    {
+      bool explicit = false;
+      const char *tmp;
+
+      tmp = libcrun_get_intelrdt_name (context->id, container, &explicit);
+      if (tmp == NULL)
+        return crun_make_error (err, 0, "internal error: cannot get intelrdt name");
+      /* It is stored in the status only for cleanup purposes.  Delete the group only
+         if it was not explicitly set.  */
+      if (! explicit)
+        intelrdt = xstrdup (tmp);
+    }
+
   libcrun_container_status_t status = {
     .pid = pid,
     .rootfs = rootfs,
     .bundle = cwd,
     .created = created,
     .owner = owner,
+    .intelrdt = intelrdt,
     .systemd_cgroup = context->systemd_cgroup,
     .detached = context->detach,
     .external_descriptors = external_descriptors,
@@ -2437,6 +2461,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  ret = libcrun_apply_intelrdt (context->id, container, pid, LIBCRUN_INTELRDT_CREATE_UPDATE_MOVE, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
   /* sync send own pid.  */
   ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
   if (UNLIKELY (ret != sizeof (pid)))
@@ -3094,7 +3122,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
     ret = append_paths (&config_file, err, dir, "config.json", NULL);
     if (UNLIKELY (ret < 0))
-      return ret;
+      goto exit;
 
     container = libcrun_container_load_from_file (config_file, err);
     if (UNLIKELY (container == NULL))
@@ -3540,7 +3568,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
 
-  pid = libcrun_join_process (container, status.pid, &status, opts->cgroup, context->detach,
+  pid = libcrun_join_process (context, container, status.pid, &status, opts->cgroup, context->detach,
                               process, process->terminal ? &terminal_fd : NULL, err);
   if (UNLIKELY (pid < 0))
     return pid;
@@ -3925,6 +3953,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   (*info)->linux.apparmor.enabled = true;
   (*info)->linux.selinux.enabled = true;
 
+  (*info)->linux.intel_rdt.enabled = true;
+
   // Put the values for mount extensions
   (*info)->linux.mount_ext.idmap.enabled = true;
 
@@ -4266,4 +4296,27 @@ exit:
     yajl_gen_free (gen);
 
   return ret;
+}
+
+int
+libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, struct libcrun_intel_rdt_update *update, libcrun_error_t *err)
+{
+  cleanup_container libcrun_container_t *container = NULL;
+  cleanup_free char *config_file = NULL;
+  cleanup_free char *dir = NULL;
+  int ret;
+
+  dir = libcrun_get_state_directory (context->state_root, id);
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, 0, "cannot get state directory");
+
+  ret = append_paths (&config_file, err, dir, "config.json", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  container = libcrun_container_load_from_file (config_file, err);
+  if (UNLIKELY (container == NULL))
+    return crun_make_error (err, 0, "error loading config.json");
+
+  return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, err);
 }

@@ -56,6 +56,10 @@ enum
 
   PIDS_LIMIT,
 
+  /* not in the resources block.  */
+  L3_CACHE_SCHEMA,
+  MEM_BW_SCHEMA,
+
   LAST_VALUE,
 };
 
@@ -100,6 +104,9 @@ set_value (int id, const char *value)
   values_len++;
 }
 
+static char *l3_cache_schema;
+static char *mem_bw_schema;
+
 static struct argp_option options[]
     = { { "resources", 'r', "FILE", 0, "path to the file containing the resources to update", 0 },
         { "blkio-weight", BLKIO_WEIGHT, "VALUE", 0, "Specifies per cgroup weight", 0 },
@@ -116,6 +123,8 @@ static struct argp_option options[]
         { "memory-reservation", MEMORY_RESERVATION, "VALUE", 0, "Memory reservation or soft_limit", 0 },
         { "memory-swap", MEMORY_SWAP, "VALUE", 0, "Total memory usage", 0 },
         { "pids-limit", PIDS_LIMIT, "VALUE", 0, "Maximum number of pids allowed in the container", 0 },
+        { "l3-cache-schema", L3_CACHE_SCHEMA, "VALUE", 0, "The string of Intel RDT/CAT L3 cache schema", 0 },
+        { "mem-bw-schema", MEM_BW_SCHEMA, "VALUE", 0, "The string of Intel RDT/MBA memory bandwidth schema", 0 },
         {
             0,
         } };
@@ -151,6 +160,14 @@ parse_opt (int key, char *arg, struct argp_state *state)
       set_value (key, argp_mandatory_argument (arg, state));
       break;
 
+    case L3_CACHE_SCHEMA:
+      l3_cache_schema = argp_mandatory_argument (arg, state);
+      break;
+
+    case MEM_BW_SCHEMA:
+      mem_bw_schema = argp_mandatory_argument (arg, state);
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -176,8 +193,27 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
     {
       ret = libcrun_container_update_from_values (&crun_context, argv[first_arg], values, values_len, err);
       free (values);
-      return ret;
+      if (ret < 0)
+        return ret;
+    }
+  else
+    {
+      ret = libcrun_container_update_from_file (&crun_context, argv[first_arg], resources, err);
+      if (ret < 0)
+        return ret;
     }
 
-  return libcrun_container_update_from_file (&crun_context, argv[first_arg], resources, err);
+  if (l3_cache_schema || mem_bw_schema)
+    {
+      struct libcrun_intel_rdt_update update = {
+        .l3_cache_schema = l3_cache_schema,
+        .mem_bw_schema = mem_bw_schema,
+      };
+
+      ret = libcrun_container_update_intel_rdt (&crun_context, argv[first_arg], &update, err);
+      if (ret < 0)
+        return ret;
+    }
+
+  return 0;
 }
