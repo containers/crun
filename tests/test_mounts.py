@@ -489,7 +489,7 @@ all_tests = {
     "mount-linux-readonly-should-inherit-flags": test_mount_readonly_should_inherit_options_from_parent,
     "proc-linux-readonly-should-inherit-flags": test_proc_readonly_should_inherit_options_from_parent,
     "mount-ro-cgroup": test_ro_cgroup,
-    "cgroup-mount-without-netns": test_cgroup_mount_without_netns,
+    "mount-cgroup-without-netns": test_cgroup_mount_without_netns,
 }
 
 if __name__ == "__main__":
