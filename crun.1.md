@@ -542,6 +542,14 @@ If the `tmpcopyup` option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
 
+## copy-symlink mount options
+
+If the `copy-symlink` option is specified, if the source of a bind
+mount is a symlink, the symlink is recreated at the specified
+destination instead of attempting a mount that would resolve the
+symlink itself.  If the destination already exists and it is not a
+symlink with the expected content, crun will return an error.
+
 ## r$FLAG mount options
 
 If a `r$FLAG` mount option is specified then the flag `$FLAG` is set

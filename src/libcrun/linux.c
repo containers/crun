@@ -1963,6 +1963,53 @@ append_mode_if_missing (char *data, const char *mode)
   return new_data;
 }
 
+static int
+safe_create_symlink (int rootfsfd, const char *rootfs, size_t rootfs_len, const char *target, const char *destination, libcrun_error_t *err)
+{
+  cleanup_close int parent_dir_fd = -1;
+  cleanup_free char *buffer = NULL;
+  char *part;
+  int ret;
+
+  if (is_empty_string (destination))
+    return crun_make_error (err, 0, "empty destination for symlink `%s`", target);
+
+  buffer = xstrdup (destination);
+  part = dirname (buffer);
+
+  parent_dir_fd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs, rootfs_len,
+                                                    part, 0755, err);
+  if (UNLIKELY (parent_dir_fd < 0))
+    return crun_make_error (err, errno, "symlink creation");
+
+  /* It is safe to reuse the buffer since it was created with xstrdup (destination).  */
+  strcpy (buffer, destination);
+  part = basename (buffer);
+
+  ret = symlinkat (target, parent_dir_fd, part);
+  if (UNLIKELY (ret < 0))
+    {
+      /* If it exists, check if it has the same content, if so just ignore the error.  */
+      if (errno == EEXIST)
+        {
+          cleanup_free char *link = NULL;
+          ssize_t len;
+
+          len = safe_readlinkat (parent_dir_fd, part, &link, 0, err);
+          if (UNLIKELY (len < 0))
+            return len;
+
+          if ((((size_t) len) == strlen (target)) && strncmp (link, target, len) == 0)
+            return 0;
+
+          return crun_make_error (err, 0, "symlink `%s` already exists with a different content", destination);
+        }
+      return crun_make_error (err, errno, "symlink creation `%s`", target);
+    }
+
+  return 0;
+}
+
 static const char *
 get_force_cgroup_v1_annotation (libcrun_container_t *container)
 {
@@ -1990,7 +2037,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
       char *source;
       unsigned long flags = 0;
       unsigned long extra_flags = 0;
-      int is_dir = 1;
+      mode_t src_mode = S_IFDIR;
       cleanup_close int copy_from_fd = -1;
       cleanup_close int targetfd = -1;
       bool mounted = false;
@@ -2026,20 +2073,39 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
         {
           proc_fd_path_t proc_buf;
           const char *path = def->mounts[i]->source;
-          if (mount_fds->fds[i] >= 0)
+
+          /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
+          if (mount_fds->fds[i] >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
             {
               get_proc_self_fd_path (proc_buf, mount_fds->fds[i]);
               path = proc_buf;
             }
 
-          is_dir = crun_dir_p (path, false, err);
-          if (UNLIKELY (is_dir < 0))
-            return is_dir;
+          ret = get_file_type (&src_mode, (extra_flags & OPTION_COPY_SYMLINK) ? true : false, path);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "cannot stat `%s`", path);
 
           data = append_mode_if_missing (data, "mode=1755");
         }
 
-      if (is_sysfs_or_proc)
+      if (S_ISLNK (src_mode))
+        {
+          cleanup_free char *target = NULL;
+          ssize_t len;
+
+          /* If we got here, it means the OPTION_COPY_SYMLINK was provided, so we need to copy the origin
+             symlink instead of performing the mount operation.  */
+          len = safe_readlinkat (AT_FDCWD, def->mounts[i]->source, &target, 0, err);
+          if (UNLIKELY (len < 0))
+            return len;
+
+          ret = safe_create_symlink (rootfsfd, rootfs, rootfs_len, target, def->mounts[i]->destination, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          mounted = true;
+        }
+      else if (is_sysfs_or_proc)
         {
           /* Enforce sysfs and proc to be mounted on a regular directory.  */
           ret = openat (rootfsfd, target, O_NOFOLLOW | O_DIRECTORY);
@@ -2068,6 +2134,8 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
         }
       else
         {
+          bool is_dir = S_ISDIR (src_mode);
+
           /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
           ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, rootfs_len, target,
                                                   is_dir ? 01755 : 0755, err);
@@ -2096,7 +2164,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
       /* Check if there is already a mount for the requested file system.  */
-      if (mount_fds && mount_fds->fds[i] >= 0)
+      if (! mounted && mount_fds && mount_fds->fds[i] >= 0)
         {
           cleanup_close int mfd = get_and_reset (&(mount_fds->fds[i]));
 

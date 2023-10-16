@@ -89,6 +89,7 @@ rstrictatime, 0, MS_STRICTATIME, OPTION_RECURSIVE
 rnostrictatime, 1, MS_STRICTATIME, OPTION_RECURSIVE
 tmpcopyup, 0, 0, OPTION_TMPCOPYUP
 idmap, 0, 0, OPTION_IDMAP
+copy-symlink, 0, 0, OPTION_COPY_SYMLINK
 %%
 
 const struct propagation_flags_s *

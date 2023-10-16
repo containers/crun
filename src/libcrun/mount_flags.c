@@ -48,14 +48,14 @@
 struct propagation_flags_s;
 enum
   {
-    TOTAL_KEYWORDS = 56,
+    TOTAL_KEYWORDS = 57,
     MIN_WORD_LENGTH = 2,
     MAX_WORD_LENGTH = 14,
     MIN_HASH_VALUE = 2,
-    MAX_HASH_VALUE = 69
+    MAX_HASH_VALUE = 74
   };
 
-/* maximum key range = 68, duplicates = 0 */
+/* maximum key range = 73, duplicates = 0 */
 
 #ifdef __GNUC__
 __inline
@@ -69,32 +69,32 @@ hash (register const char *str, register size_t len)
 {
   static const unsigned char asso_values[] =
     {
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70,  8, 29,  3,
-       3, 21, 18, 70, 21,  0, 70, 70, 15, 10,
-       0,  4, 32, 70,  0, 19,  8, 17, 22,  0,
-      16, 27, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70, 70, 70, 70, 70,
-      70, 70, 70, 70, 70, 70
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75,  8, 29, 12,
+       3, 21,  0, 75, 31,  0, 75, 75, 15, 10,
+       0,  4, 16, 75,  0, 19,  8, 17, 26,  0,
+      16, 26, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
+      75, 75, 75, 75, 75, 75
     };
   register unsigned int hval = len;
 
@@ -148,6 +148,8 @@ static const struct propagation_flags_s wordlist[] =
     {"ratime", 1, MS_NOATIME, OPTION_RECURSIVE},
 #line 80 "src/libcrun/mount_flags.perf"
     {"rmand", 0, MS_MANDLOCK, OPTION_RECURSIVE},
+#line 66 "src/libcrun/mount_flags.perf"
+    {"rprivate", 0, MS_REC|MS_PRIVATE, 0},
 #line 51 "src/libcrun/mount_flags.perf"
     {"mand", 0, MS_MANDLOCK, 0},
 #line 91 "src/libcrun/mount_flags.perf"
@@ -178,8 +180,8 @@ static const struct propagation_flags_s wordlist[] =
     {"strictatime", 0, MS_STRICTATIME, 0},
 #line 88 "src/libcrun/mount_flags.perf"
     {"rstrictatime", 0, MS_STRICTATIME, OPTION_RECURSIVE},
-#line 66 "src/libcrun/mount_flags.perf"
-    {"rprivate", 0, MS_REC|MS_PRIVATE, 0},
+#line 36 "src/libcrun/mount_flags.perf"
+    {"defaults", 0, 0, 0},
 #line 71 "src/libcrun/mount_flags.perf"
     {"rsuid", 1, MS_NOSUID, OPTION_RECURSIVE},
 #line 50 "src/libcrun/mount_flags.perf"
@@ -196,40 +198,40 @@ static const struct propagation_flags_s wordlist[] =
     {"noexec", 0, MS_NOEXEC, 0},
 #line 64 "src/libcrun/mount_flags.perf"
     {"rslave", 0, MS_REC|MS_SLAVE, 0},
-#line 43 "src/libcrun/mount_flags.perf"
-    {"dev", 1, MS_NODEV, 0},
-#line 73 "src/libcrun/mount_flags.perf"
-    {"rdev", 1, MS_NODEV, OPTION_RECURSIVE},
+#line 65 "src/libcrun/mount_flags.perf"
+    {"private", 0, MS_PRIVATE, 0},
 #line 77 "src/libcrun/mount_flags.perf"
     {"rsync", 0, MS_SYNCHRONOUS, OPTION_RECURSIVE},
 #line 57 "src/libcrun/mount_flags.perf"
     {"relatime", 0, MS_RELATIME, 0},
-#line 47 "src/libcrun/mount_flags.perf"
-    {"sync", 0, MS_SYNCHRONOUS, 0},
-#line 61 "src/libcrun/mount_flags.perf"
-    {"shared", 0, MS_SHARED, 0},
-#line 62 "src/libcrun/mount_flags.perf"
-    {"rshared", 0, MS_REC|MS_SHARED, 0},
+#line 43 "src/libcrun/mount_flags.perf"
+    {"dev", 1, MS_NODEV, 0},
+#line 73 "src/libcrun/mount_flags.perf"
+    {"rdev", 1, MS_NODEV, OPTION_RECURSIVE},
+#line 90 "src/libcrun/mount_flags.perf"
+    {"tmpcopyup", 0, 0, OPTION_TMPCOPYUP},
 #line 67 "src/libcrun/mount_flags.perf"
     {"unbindable", 0, MS_UNBINDABLE, 0},
 #line 68 "src/libcrun/mount_flags.perf"
     {"runbindable", 0, MS_REC|MS_UNBINDABLE, 0},
-#line 36 "src/libcrun/mount_flags.perf"
-    {"defaults", 0, 0, 0},
 #line 48 "src/libcrun/mount_flags.perf"
     {"async", 1, MS_SYNCHRONOUS, 0},
 #line 78 "src/libcrun/mount_flags.perf"
     {"rasync", 1, MS_SYNCHRONOUS, OPTION_RECURSIVE},
-#line 65 "src/libcrun/mount_flags.perf"
-    {"private", 0, MS_PRIVATE, 0},
-#line 90 "src/libcrun/mount_flags.perf"
-    {"tmpcopyup", 0, 0, OPTION_TMPCOPYUP},
+#line 47 "src/libcrun/mount_flags.perf"
+    {"sync", 0, MS_SYNCHRONOUS, 0},
 #line 75 "src/libcrun/mount_flags.perf"
     {"rexec", 1, MS_NOEXEC, OPTION_RECURSIVE},
-#line 45 "src/libcrun/mount_flags.perf"
-    {"exec", 1, MS_NOEXEC, 0},
+#line 61 "src/libcrun/mount_flags.perf"
+    {"shared", 0, MS_SHARED, 0},
+#line 62 "src/libcrun/mount_flags.perf"
+    {"rshared", 0, MS_REC|MS_SHARED, 0},
+#line 92 "src/libcrun/mount_flags.perf"
+    {"copy-symlink", 0, 0, OPTION_COPY_SYMLINK},
 #line 63 "src/libcrun/mount_flags.perf"
-    {"slave", 0, MS_SLAVE, 0}
+    {"slave", 0, MS_SLAVE, 0},
+#line 45 "src/libcrun/mount_flags.perf"
+    {"exec", 1, MS_NOEXEC, 0}
   };
 
 const struct propagation_flags_s *
@@ -290,85 +292,85 @@ libcrun_mount_flag_in_word_set (register const char *str, register size_t len)
               case 21:
                 resword = &wordlist[14];
                 goto compare;
-              case 23:
+              case 22:
                 resword = &wordlist[15];
                 goto compare;
-              case 24:
+              case 23:
                 resword = &wordlist[16];
                 goto compare;
-              case 25:
+              case 24:
                 resword = &wordlist[17];
                 goto compare;
-              case 26:
+              case 25:
                 resword = &wordlist[18];
                 goto compare;
-              case 27:
+              case 26:
                 resword = &wordlist[19];
                 goto compare;
-              case 28:
+              case 27:
                 resword = &wordlist[20];
                 goto compare;
-              case 29:
+              case 28:
                 resword = &wordlist[21];
                 goto compare;
-              case 30:
+              case 29:
                 resword = &wordlist[22];
                 goto compare;
-              case 31:
+              case 30:
                 resword = &wordlist[23];
                 goto compare;
-              case 32:
+              case 31:
                 resword = &wordlist[24];
                 goto compare;
-              case 33:
+              case 32:
                 resword = &wordlist[25];
                 goto compare;
-              case 34:
+              case 33:
                 resword = &wordlist[26];
                 goto compare;
-              case 35:
+              case 34:
                 resword = &wordlist[27];
                 goto compare;
-              case 36:
+              case 35:
                 resword = &wordlist[28];
                 goto compare;
-              case 37:
+              case 36:
                 resword = &wordlist[29];
                 goto compare;
-              case 38:
+              case 37:
                 resword = &wordlist[30];
                 goto compare;
-              case 39:
+              case 38:
                 resword = &wordlist[31];
                 goto compare;
-              case 40:
+              case 39:
                 resword = &wordlist[32];
                 goto compare;
-              case 41:
+              case 40:
                 resword = &wordlist[33];
                 goto compare;
-              case 42:
+              case 41:
                 resword = &wordlist[34];
                 goto compare;
-              case 43:
+              case 42:
                 resword = &wordlist[35];
                 goto compare;
-              case 44:
+              case 43:
                 resword = &wordlist[36];
                 goto compare;
-              case 45:
+              case 44:
                 resword = &wordlist[37];
                 goto compare;
-              case 46:
+              case 45:
                 resword = &wordlist[38];
                 goto compare;
-              case 47:
+              case 46:
                 resword = &wordlist[39];
                 goto compare;
-              case 48:
+              case 47:
                 resword = &wordlist[40];
                 goto compare;
-              case 49:
+              case 48:
                 resword = &wordlist[41];
                 goto compare;
               case 50:
@@ -395,23 +397,26 @@ libcrun_mount_flag_in_word_set (register const char *str, register size_t len)
               case 57:
                 resword = &wordlist[49];
                 goto compare;
-              case 58:
+              case 59:
                 resword = &wordlist[50];
                 goto compare;
-              case 59:
+              case 61:
                 resword = &wordlist[51];
                 goto compare;
-              case 60:
+              case 62:
                 resword = &wordlist[52];
                 goto compare;
-              case 61:
+              case 63:
                 resword = &wordlist[53];
                 goto compare;
-              case 63:
+              case 68:
                 resword = &wordlist[54];
                 goto compare;
-              case 67:
+              case 71:
                 resword = &wordlist[55];
+                goto compare;
+              case 72:
+                resword = &wordlist[56];
                 goto compare;
             }
           return 0;
@@ -426,7 +431,7 @@ libcrun_mount_flag_in_word_set (register const char *str, register size_t len)
     }
   return 0;
 }
-#line 92 "src/libcrun/mount_flags.perf"
+#line 93 "src/libcrun/mount_flags.perf"
 
 
 const struct propagation_flags_s *

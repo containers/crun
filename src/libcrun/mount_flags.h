@@ -24,6 +24,7 @@ enum
   OPTION_TMPCOPYUP = (1 << 0),
   OPTION_RECURSIVE = (1 << 1),
   OPTION_IDMAP = (1 << 2),
+  OPTION_COPY_SYMLINK = (1 << 3),
 };
 
 struct propagation_flags_s

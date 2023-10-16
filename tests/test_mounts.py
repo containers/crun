@@ -152,6 +152,23 @@ def test_proc_readonly_should_inherit_options_from_parent():
         return 0
     return -1
 
+def test_copy_symlink():
+    root = get_tests_root()
+    symlink = os.path.join(root, "a-broken-link")
+    target = "point-to-nowhere"
+
+    os.symlink(target, symlink)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'readlink', '/a/sym/link']
+    add_all_namespaces(conf)
+    mount_opt = {"destination": "/a/sym/link", "type": "bind", "source": symlink, "options": ["rbind", "copy-symlink"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    if target in out:
+        return 0
+    return -1
+
 def test_mount_path_with_multiple_slashes():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
@@ -490,6 +507,7 @@ all_tests = {
     "proc-linux-readonly-should-inherit-flags": test_proc_readonly_should_inherit_options_from_parent,
     "mount-ro-cgroup": test_ro_cgroup,
     "mount-cgroup-without-netns": test_cgroup_mount_without_netns,
+    "mount-copy-symlink": test_copy_symlink,
 }
 
 if __name__ == "__main__":
