@@ -422,7 +422,7 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
   return safe_openat_fallback (dirfd, rootfs, rootfs_len, path, flags, mode, err);
 }
 
-static ssize_t
+ssize_t
 safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err)
 {
   ssize_t buf_size = hint > 0 ? hint + 1 : 512;
