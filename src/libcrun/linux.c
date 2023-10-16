@@ -2147,7 +2147,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 
           destfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY, 0, err);
           if (UNLIKELY (destfd < 0))
-            return crun_make_error (err, errno, "open target to write for tmpcopyup");
+            return crun_error_wrap (err, "open target to write for tmpcopyup");
 
           /* take ownership for the fd.  */
           tmpfd = get_and_reset (&copy_from_fd);
