@@ -463,6 +463,8 @@ def test_listen_pid_env():
     return 0
 
 def test_ioprio():
+    if is_rootless():
+        return 77
     IOPRIO_CLASS_NONE = 0
     IOPRIO_CLASS_RT = 1
     IOPRIO_CLASS_BE = 2

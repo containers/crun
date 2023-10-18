@@ -383,6 +383,8 @@ int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, siz
 int has_suffix (const char *source, const char *suffix);
 char *str_join_array (int offset, size_t size, char *const array[], const char *joint);
 
+ssize_t safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err);
+
 static inline bool
 is_empty_string (const char *s)
 {

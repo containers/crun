@@ -109,6 +109,7 @@ def test_crun_features():
                 "private",
                 "tmpcopyup",
                 "rexec",
+                "copy-symlink",
                 "exec",
                 "slave"
             ],
@@ -211,7 +212,7 @@ def test_crun_features():
                         sys.stderr.write("wrong value for run.oci.crun.checkpoint.enabled\n")
                         return -1
             else:
-                if key not in features or features[key] != value:
+                if key not in features or sorted(features[key]) != sorted(value):
                     sys.stderr.write(f"Mismatch in feature: {key}\n")
                     sys.stderr.write(f"Expected: {value}\n")
                     sys.stderr.write(f"Actual: {features.get(key)}\n")

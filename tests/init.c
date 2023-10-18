@@ -421,6 +421,23 @@ main (int argc, char **argv)
       return cat (argv[2]);
     }
 
+  if (strcmp (argv[1], "readlink") == 0)
+    {
+      ssize_t ret;
+      char *buf = malloc (PATH_MAX);
+      if (buf == NULL)
+        error (EXIT_FAILURE, errno, "malloc");
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'readlink' requires an argument");
+
+      ret = readlink (argv[2], buf, PATH_MAX);
+      if (ret < 0)
+        error (EXIT_FAILURE, errno, "readlink");
+      printf ("%.*s", (int) ret, buf);
+      free (buf);
+      return 0;
+    }
+
   if (strcmp (argv[1], "open") == 0)
     {
       if (argc < 3)
