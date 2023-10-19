@@ -1,3 +1,14 @@
+* crun-1.10
+
+- support for Intel Resource Director Technology (RDT).
+- new mount option "copy-symlink".  When provided for a mount, if the
+  source is a symlink, then it is copied in the container instead of
+  attempting a mount.
+- linux: open mounts before setgroups if in a userns.  This solves a
+  problem where a directory that was previously accessible to the
+  user, become inaccessible after setgroups causing the bind mount to
+  fail.
+
 * crun-1.9.2
 
 - cgroup: reset the inherited cpu affinity after moving to cgroup.
