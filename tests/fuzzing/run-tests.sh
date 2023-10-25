@@ -6,7 +6,7 @@ TIMEOUT=${TIMEOUT:=10}
 RUN_TIME=${RUN_TIME:=600}
 VERBOSITY=${VERBOSITY:=}
 
-N_TESTS=8
+N_TESTS=9
 
 SINGLE_RUN_TIME=$(( RUN_TIME / N_TESTS ))
 
@@ -39,3 +39,4 @@ run_test 5 random-data
 run_test 6 $CORPUS/annotations
 run_test 7 $CORPUS/idmapped-mounts-option
 run_test 8 $CORPUS/intelrdt
+run_test 9 $CORPUS/cpuset-ranges

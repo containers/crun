@@ -39,6 +39,75 @@
 
 #  define SYSTEMD_PROPERTY_PREFIX "org.systemd.property."
 
+int
+cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err)
+{
+  cleanup_free char *mask = NULL;
+  size_t mask_size = 0;
+  const char *p = str;
+  char *endptr;
+
+  while (*p)
+    {
+      long long start_range, end_range;
+
+      if (*p < '0' || *p > '9')
+        goto invalid_input;
+
+      start_range = strtoll (p, &endptr, 10);
+      if (start_range < 0)
+        goto invalid_input;
+
+      p = endptr;
+
+      if (*p != '-')
+        end_range = start_range;
+      else
+        {
+          p++;
+
+          if (*p < '0' || *p > '9')
+            goto invalid_input;
+
+          end_range = strtoll (p, &endptr, 10);
+
+          if (end_range < start_range)
+            goto invalid_input;
+
+          p = endptr;
+        }
+
+      /* Just set some limit.  */
+      if (end_range > (1 << 20))
+        goto invalid_input;
+
+      if (end_range >= (long long) (mask_size * CHAR_BIT))
+        {
+          size_t new_mask_size = (end_range / CHAR_BIT) + 1;
+          mask = xrealloc (mask, new_mask_size);
+          memset (mask + mask_size, 0, new_mask_size - mask_size);
+          mask_size = new_mask_size;
+        }
+
+      for (long long i = start_range; i <= end_range; i++)
+        mask[i / CHAR_BIT] |= (1 << (i % CHAR_BIT));
+
+      if (*p == ',')
+        p++;
+      else if (*p)
+        goto invalid_input;
+    }
+
+  *out = mask;
+  mask = NULL;
+  *out_size = mask_size;
+
+  return 0;
+
+invalid_input:
+  return crun_make_error (err, 0, "cannot parse input `%s`", str);
+}
+
 static void
 get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
 {
@@ -663,6 +732,39 @@ get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *wei
   return get_value_from_unified_map (resources, "cpu.weight", weight, err);
 }
 
+/* Adapted from systemd.  */
+static int
+bus_append_byte_array (sd_bus_message *m, const char *field, const void *buf, size_t n, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = sd_bus_message_open_container (m, SD_BUS_TYPE_STRUCT, "sv");
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd-bus open container");
+
+  ret = sd_bus_message_append_basic (m, SD_BUS_TYPE_STRING, field);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_append_basic");
+
+  ret = sd_bus_message_open_container (m, 'v', "ay");
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_open_container");
+
+  ret = sd_bus_message_append_array (m, 'y', buf, n);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_append_array");
+
+  ret = sd_bus_message_close_container (m);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_close_container");
+
+  ret = sd_bus_message_close_container (m);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_close_container");
+
+  return 1;
+}
+
 static int
 append_resources (sd_bus_message *m,
                   runtime_spec_schema_config_linux_resources *resources,
@@ -701,6 +803,33 @@ append_resources (sd_bus_message *m,
             sd_err = sd_bus_message_append (m, "(sv)", "CPUWeight", "t", weight);
             if (UNLIKELY (sd_err < 0))
               return crun_make_error (err, -sd_err, "sd-bus message append CPUWeight");
+          }
+        if (resources->cpu && resources->cpu->cpus)
+          {
+            size_t allowed_cpus_len = 0;
+            cleanup_free char *allowed_cpus = NULL;
+
+            ret = cpuset_string_to_bitmask (resources->cpu->cpus, &allowed_cpus, &allowed_cpus_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+
+            ret = bus_append_byte_array (m, "AllowedCPUs", allowed_cpus, allowed_cpus_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+          }
+
+        if (resources->cpu && resources->cpu->mems)
+          {
+            size_t allowed_mems_len = 0;
+            cleanup_free char *allowed_mems = NULL;
+
+            ret = cpuset_string_to_bitmask (resources->cpu->mems, &allowed_mems, &allowed_mems_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+
+            ret = bus_append_byte_array (m, "AllowedMemoryNodes", allowed_mems, allowed_mems_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
           }
       }
       break;
