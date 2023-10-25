@@ -828,6 +828,28 @@ append_resources (sd_bus_message *m,
         return crun_make_error (err, -sd_err, "sd-bus message append MemoryLimit");
     }
 
+  if (resources->cpu)
+    {
+      /* do not bother with systemd internal representation if both values are not specified */
+      if (resources->cpu->quota && resources->cpu->period)
+        {
+          uint64_t quota = resources->cpu->quota;
+
+          /* this conversion was copied from runc.  */
+          quota = (quota * 1000000) / resources->cpu->period;
+          if (quota % 10000)
+            quota = ((quota / 10000) + 1) * 10000;
+
+          sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPerSecUSec", "t", quota);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPeriodUSec", "t", resources->cpu->period);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
