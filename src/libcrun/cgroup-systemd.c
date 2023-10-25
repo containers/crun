@@ -597,15 +597,20 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
 static int
 open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
 {
+  int rootless;
   int sd_err;
 
-  sd_err = sd_bus_default_user (bus);
+  rootless = is_rootless (err);
+  if (UNLIKELY (rootless < 0))
+    return rootless;
+
+  if (rootless)
+    sd_err = sd_bus_default_user (bus);
+  else
+    sd_err = sd_bus_default_system (bus);
   if (sd_err < 0)
-    {
-      sd_err = sd_bus_default_system (bus);
-      if (sd_err < 0)
-        return crun_make_error (err, -sd_err, "cannot open sd-bus");
-    }
+    return crun_make_error (err, -sd_err, "cannot open sd-bus");
+
   return 0;
 }
 
