@@ -199,6 +199,42 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 }
 
 static int
+setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  int parent;
+  int ret;
+
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, "/cpuset", path ? path : "", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = initialize_cpuset_subsystem (cgroup_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (parent = 0; parent < 2; parent++)
+    {
+      cleanup_close int dirfd_cpuset = -1;
+      cleanup_free char *path_to_cpuset = NULL;
+
+      ret = append_paths (&path_to_cpuset, err, CGROUP_ROOT "/cpuset", path, (parent ? ".." : NULL), NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      if (UNLIKELY (dirfd_cpuset < 0))
+        return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
+
+      ret = write_cpuset_resources (dirfd_cpuset, false, resources->cpu, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
+static int
 systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
@@ -281,6 +317,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         }
 
       ret = setup_rt_runtime (resources, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = setup_cpuset_for_systemd_v1 (resources, path, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1311,6 +1351,10 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   if (cgroup_mode != CGROUP_MODE_UNIFIED)
     {
       ret = setup_rt_runtime (resources, cgroup_status->path, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+
+      ret = setup_cpuset_for_systemd_v1 (resources, cgroup_status->path, err);
       if (UNLIKELY (ret < 0))
         goto exit;
     }
