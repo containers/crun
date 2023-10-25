@@ -463,8 +463,6 @@ def test_listen_pid_env():
     return 0
 
 def test_ioprio():
-    if is_rootless():
-        return 77
     IOPRIO_CLASS_NONE = 0
     IOPRIO_CLASS_RT = 1
     IOPRIO_CLASS_BE = 2
@@ -484,7 +482,7 @@ def test_ioprio():
     conf['process']['args'] = ['/init', 'ioprio']
     conf['process']['ioPriority'] = {
         "class": "IOPRIO_CLASS_IDLE",
-        "priority": 11
+        "priority": 0
     }
 
     cid = None
@@ -494,7 +492,7 @@ def test_ioprio():
         if ((value >> IOPRIO_CLASS_SHIFT) & IOPRIO_CLASS_MASK) != IOPRIO_CLASS_IDLE:
             print("invalid ioprio class returned")
             return 1
-        if value & IOPRIO_PRIO_MASK != 11:
+        if value & IOPRIO_PRIO_MASK != 0:
             print("invalid ioprio priority returned")
             return 1
         return 0
