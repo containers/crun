@@ -468,6 +468,19 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "mode") == 0)
+    {
+      struct stat st;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'mode' requires two arguments");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+
+      printf ("%o", st.st_mode & 07777);
+      return 0;
+    }
+
   if (strcmp (argv[1], "id") == 0)
     {
       int ret;
