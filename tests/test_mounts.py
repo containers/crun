@@ -55,6 +55,21 @@ def test_mount_symlink():
         return 0
     return -1
 
+def test_mount_tmpfs_permissions():
+    def prepare_rootfs(rootfs):
+        path = os.path.join(rootfs, "tmp")
+        os.mkdir(path)
+        os.chmod(path, 0o712)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'mode', '/tmp']
+    add_all_namespaces(conf)
+    mount_opt = {"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["bind", "ro"]}
+    out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+    if "712" in out:
+        return 0
+    return -1
+
 def test_ro_cgroup():
     for cgroupns in [True, False]:
         for netns in [True, False]:
@@ -508,6 +523,7 @@ all_tests = {
     "mount-ro-cgroup": test_ro_cgroup,
     "mount-cgroup-without-netns": test_cgroup_mount_without_netns,
     "mount-copy-symlink": test_copy_symlink,
+    "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
 }
 
 if __name__ == "__main__":

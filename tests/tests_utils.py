@@ -208,7 +208,7 @@ def get_crun_path():
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
                        all_dev_null=False, id_container=None, relative_config_path="config.json",
-                       chown_rootfs_to=None):
+                       chown_rootfs_to=None, callback_prepare_rootfs=None):
 
     # Some tests require that the container user, which might not be the
     # same user as the person running the tests, is able to resolve the full path
@@ -259,6 +259,9 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         for root, dirs, files in os.walk(temp_dir):
             for f in dirs + files:
                 os.chown(os.path.join(root, f), chown_rootfs_to, chown_rootfs_to, follow_symlinks=False)
+
+    if callback_prepare_rootfs is not None:
+        callback_prepare_rootfs(rootfs)
 
     detach_arg = ['--detach'] if detach else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []

@@ -1907,6 +1907,37 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
 }
 
 static int
+append_tmpfs_mode_if_missing (libcrun_container_t *container, runtime_spec_schema_defs_mount *mount, char **data, libcrun_error_t *err)
+{
+  size_t rootfs_len = get_private_data (container)->rootfs_len;
+  const char *rootfs = get_private_data (container)->rootfs;
+  int rootfsfd = get_private_data (container)->rootfsfd;
+  bool empty_data = is_empty_string (*data);
+  cleanup_close int fd = -1;
+  struct stat st;
+  int ret;
+
+  if (*data != NULL && strstr (*data, "mode="))
+    return 0;
+
+  fd = safe_openat (rootfsfd, rootfs, rootfs_len, mount->destination, O_CLOEXEC | O_RDONLY, 0, err);
+  if (fd < 0)
+    {
+      if (crun_error_get_errno (err) != ENOENT)
+        return fd;
+
+      crun_error_release (err);
+      return 0;
+    }
+  ret = fstat (fd, &st);
+  if (ret < 0)
+    return crun_make_error (err, errno, "fstat `%s`", mount->destination);
+
+  xasprintf (data, "%s%smode=%o", empty_data ? "" : *data, empty_data ? "" : ",", st.st_mode & 07777);
+  return 0;
+}
+
+static int
 get_default_flags (libcrun_container_t *container, const char *destination, char **data)
 {
   if (strcmp (destination, "/proc") == 0)
@@ -2068,6 +2099,13 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           type = "bind";
         }
       is_sysfs_or_proc = strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0;
+
+      if (strcmp (type, "tmpfs") == 0)
+        {
+          ret = append_tmpfs_mode_if_missing (container, def->mounts[i], &data, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       if (def->mounts[i]->source && (flags & MS_BIND))
         {
