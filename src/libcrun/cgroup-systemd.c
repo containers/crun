@@ -199,6 +199,41 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 }
 
 static int
+setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resources *resources, bool cgroup2, const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_close int dirfd = -1;
+  int parent;
+  int ret;
+
+  if (resources->cpu == NULL)
+    return 0;
+
+  if (! resources->cpu->burst_present)
+    return 0;
+
+  for (parent = 0; parent < 2; parent++)
+    {
+      if (cgroup2)
+        ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path ? path : "", (parent ? ".." : NULL), NULL);
+      else
+        ret = append_paths (&cgroup_path, err, CGROUP_ROOT, "/cpu", path ? path : "", (parent ? ".." : NULL), NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+      if (UNLIKELY (dirfd < 0))
+        return crun_make_error (err, errno, "open `%s`", cgroup_path);
+
+      ret = write_cpu_burst (dirfd, cgroup2, resources->cpu, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
+static int
 setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
@@ -380,6 +415,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
     default:
       return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
+
+  ret = setup_missing_cpu_options_for_systemd (resources, cgroup_mode == CGROUP_MODE_UNIFIED, path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   *path_out = path;
   path = NULL;
@@ -1380,6 +1419,10 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       if (UNLIKELY (ret < 0))
         goto exit;
     }
+
+  ret = setup_missing_cpu_options_for_systemd (resources, cgroup_mode == CGROUP_MODE_UNIFIED, cgroup_status->path, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   ret = 0;
 

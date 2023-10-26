@@ -84,4 +84,6 @@ int initialize_cpuset_subsystem (const char *path, libcrun_error_t *err);
 
 int write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err);
 
+int write_cpu_burst (int cpu_dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err);
+
 #endif
