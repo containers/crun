@@ -121,7 +121,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   return 0;
 }
 
-static int
+int
 initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
 {
   cleanup_free char *tmp_path = xstrdup (path);

@@ -888,6 +888,20 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   return 0;
 }
 
+int
+write_cpu_burst (int cpu_dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
+                 libcrun_error_t *err)
+{
+  char fmt_buf[32];
+  size_t len;
+
+  if (! cpu->burst_present)
+    return 0;
+
+  len = sprintf (fmt_buf, "%" PRIi64, cpu->burst);
+  return write_cgroup_file (cpu_dirfd, cgroup2 ? "cpu.max.burst" : "cpu.cfs_burst_us", fmt_buf, len, err);
+}
+
 static int
 write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_pids *pids,
                       libcrun_error_t *err)
@@ -1013,10 +1027,11 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  return 0;
+
+  return write_cpu_burst (dirfd_cpu, cgroup2, cpu, err);
 }
 
-static int
+int
 write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
                         libcrun_error_t *err)
 {

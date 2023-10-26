@@ -39,6 +39,75 @@
 
 #  define SYSTEMD_PROPERTY_PREFIX "org.systemd.property."
 
+int
+cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err)
+{
+  cleanup_free char *mask = NULL;
+  size_t mask_size = 0;
+  const char *p = str;
+  char *endptr;
+
+  while (*p)
+    {
+      long long start_range, end_range;
+
+      if (*p < '0' || *p > '9')
+        goto invalid_input;
+
+      start_range = strtoll (p, &endptr, 10);
+      if (start_range < 0)
+        goto invalid_input;
+
+      p = endptr;
+
+      if (*p != '-')
+        end_range = start_range;
+      else
+        {
+          p++;
+
+          if (*p < '0' || *p > '9')
+            goto invalid_input;
+
+          end_range = strtoll (p, &endptr, 10);
+
+          if (end_range < start_range)
+            goto invalid_input;
+
+          p = endptr;
+        }
+
+      /* Just set some limit.  */
+      if (end_range > (1 << 20))
+        goto invalid_input;
+
+      if (end_range >= (long long) (mask_size * CHAR_BIT))
+        {
+          size_t new_mask_size = (end_range / CHAR_BIT) + 1;
+          mask = xrealloc (mask, new_mask_size);
+          memset (mask + mask_size, 0, new_mask_size - mask_size);
+          mask_size = new_mask_size;
+        }
+
+      for (long long i = start_range; i <= end_range; i++)
+        mask[i / CHAR_BIT] |= (1 << (i % CHAR_BIT));
+
+      if (*p == ',')
+        p++;
+      else if (*p)
+        goto invalid_input;
+    }
+
+  *out = mask;
+  mask = NULL;
+  *out_size = mask_size;
+
+  return 0;
+
+invalid_input:
+  return crun_make_error (err, 0, "cannot parse input `%s`", str);
+}
+
 static void
 get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
 {
@@ -130,6 +199,77 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 }
 
 static int
+setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resources *resources, bool cgroup2, const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_close int dirfd = -1;
+  int parent;
+  int ret;
+
+  if (resources->cpu == NULL)
+    return 0;
+
+  if (! resources->cpu->burst_present)
+    return 0;
+
+  for (parent = 0; parent < 2; parent++)
+    {
+      if (cgroup2)
+        ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path ? path : "", (parent ? ".." : NULL), NULL);
+      else
+        ret = append_paths (&cgroup_path, err, CGROUP_ROOT, "/cpu", path ? path : "", (parent ? ".." : NULL), NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+      if (UNLIKELY (dirfd < 0))
+        return crun_make_error (err, errno, "open `%s`", cgroup_path);
+
+      ret = write_cpu_burst (dirfd, cgroup2, resources->cpu, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
+static int
+setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  int parent;
+  int ret;
+
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, "/cpuset", path ? path : "", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = initialize_cpuset_subsystem (cgroup_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (parent = 0; parent < 2; parent++)
+    {
+      cleanup_close int dirfd_cpuset = -1;
+      cleanup_free char *path_to_cpuset = NULL;
+
+      ret = append_paths (&path_to_cpuset, err, CGROUP_ROOT "/cpuset", path, (parent ? ".." : NULL), NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      if (UNLIKELY (dirfd_cpuset < 0))
+        return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
+
+      ret = write_cpuset_resources (dirfd_cpuset, false, resources->cpu, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
+}
+
+static int
 systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
@@ -215,6 +355,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
       if (UNLIKELY (ret < 0))
         return ret;
 
+      ret = setup_cpuset_for_systemd_v1 (resources, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       break;
 
     case CGROUP_MODE_UNIFIED:
@@ -271,6 +415,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
     default:
       return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
+
+  ret = setup_missing_cpu_options_for_systemd (resources, cgroup_mode == CGROUP_MODE_UNIFIED, path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   *path_out = path;
   path = NULL;
@@ -663,6 +811,39 @@ get_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *wei
   return get_value_from_unified_map (resources, "cpu.weight", weight, err);
 }
 
+/* Adapted from systemd.  */
+static int
+bus_append_byte_array (sd_bus_message *m, const char *field, const void *buf, size_t n, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = sd_bus_message_open_container (m, SD_BUS_TYPE_STRUCT, "sv");
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd-bus open container");
+
+  ret = sd_bus_message_append_basic (m, SD_BUS_TYPE_STRING, field);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_append_basic");
+
+  ret = sd_bus_message_open_container (m, 'v', "ay");
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_open_container");
+
+  ret = sd_bus_message_append_array (m, 'y', buf, n);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_append_array");
+
+  ret = sd_bus_message_close_container (m);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_close_container");
+
+  ret = sd_bus_message_close_container (m);
+  if (ret < 0)
+    return crun_make_error (err, -ret, "sd_bus_message_close_container");
+
+  return 1;
+}
+
 static int
 append_resources (sd_bus_message *m,
                   runtime_spec_schema_config_linux_resources *resources,
@@ -686,6 +867,28 @@ append_resources (sd_bus_message *m,
         return crun_make_error (err, -sd_err, "sd-bus message append MemoryLimit");
     }
 
+  if (resources->cpu)
+    {
+      /* do not bother with systemd internal representation if both values are not specified */
+      if (resources->cpu->quota && resources->cpu->period)
+        {
+          uint64_t quota = resources->cpu->quota;
+
+          /* this conversion was copied from runc.  */
+          quota = (quota * 1000000) / resources->cpu->period;
+          if (quota % 10000)
+            quota = ((quota / 10000) + 1) * 10000;
+
+          sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPerSecUSec", "t", quota);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPeriodUSec", "t", resources->cpu->period);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
@@ -701,6 +904,33 @@ append_resources (sd_bus_message *m,
             sd_err = sd_bus_message_append (m, "(sv)", "CPUWeight", "t", weight);
             if (UNLIKELY (sd_err < 0))
               return crun_make_error (err, -sd_err, "sd-bus message append CPUWeight");
+          }
+        if (resources->cpu && resources->cpu->cpus)
+          {
+            size_t allowed_cpus_len = 0;
+            cleanup_free char *allowed_cpus = NULL;
+
+            ret = cpuset_string_to_bitmask (resources->cpu->cpus, &allowed_cpus, &allowed_cpus_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+
+            ret = bus_append_byte_array (m, "AllowedCPUs", allowed_cpus, allowed_cpus_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+          }
+
+        if (resources->cpu && resources->cpu->mems)
+          {
+            size_t allowed_mems_len = 0;
+            cleanup_free char *allowed_mems = NULL;
+
+            ret = cpuset_string_to_bitmask (resources->cpu->mems, &allowed_mems, &allowed_mems_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
+
+            ret = bus_append_byte_array (m, "AllowedMemoryNodes", allowed_mems, allowed_mems_len, err);
+            if (UNLIKELY (ret < 0))
+              return ret;
           }
       }
       break;
@@ -1184,7 +1414,15 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       ret = setup_rt_runtime (resources, cgroup_status->path, err);
       if (UNLIKELY (ret < 0))
         goto exit;
+
+      ret = setup_cpuset_for_systemd_v1 (resources, cgroup_status->path, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
     }
+
+  ret = setup_missing_cpu_options_for_systemd (resources, cgroup_mode == CGROUP_MODE_UNIFIED, cgroup_status->path, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
 
   ret = 0;
 

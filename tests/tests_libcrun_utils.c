@@ -26,6 +26,8 @@
 
 typedef int (*test) ();
 
+extern int cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err);
+
 static int
 test_socket_pair ()
 {
@@ -422,6 +424,72 @@ test_get_scope_path ()
   return 0;
 }
 
+static int
+test_cpuset_string_to_bitmask ()
+{
+  libcrun_error_t err = NULL;
+  cleanup_free char *mask = NULL;
+  size_t mask_size;
+
+  if (cpuset_string_to_bitmask ("0", &mask, &mask_size, &err) < 0)
+    return -1;
+  if (mask_size != 1 || mask[0] != 0x01)
+    return -1;
+
+  free (mask);
+  mask = NULL;
+
+  if (cpuset_string_to_bitmask ("0-1", &mask, &mask_size, &err) < 0)
+    return -1;
+  if (mask_size != 1 || mask[0] != 0x03)
+    return -1;
+
+  free (mask);
+  mask = NULL;
+
+  if (cpuset_string_to_bitmask ("0,2", &mask, &mask_size, &err) < 0)
+    return -1;
+  if (mask_size != 1 || mask[0] != 0x05)
+    return -1;
+
+  free (mask);
+  mask = NULL;
+
+  if (cpuset_string_to_bitmask ("0-2", &mask, &mask_size, &err) < 0)
+    return -1;
+  if (mask_size != 1 || mask[0] != 0x07)
+    return -1;
+
+  free (mask);
+  mask = NULL;
+
+  if (cpuset_string_to_bitmask ("0,8", &mask, &mask_size, &err) < 0)
+    return -1;
+  if (mask_size != 2 || mask[0] != 0x01 || mask[1] != 0x01)
+    return -1;
+
+  free (mask);
+  mask = NULL;
+
+  if (cpuset_string_to_bitmask ("a", &mask, &mask_size, &err) == 0)
+    return -1;
+
+  if (cpuset_string_to_bitmask ("-1", &mask, &mask_size, &err) == 0)
+    return -1;
+
+  if (cpuset_string_to_bitmask ("0-", &mask, &mask_size, &err) == 0)
+    return -1;
+
+  if (cpuset_string_to_bitmask ("0-2,4-6", &mask, &mask_size, &err) < 0)
+    return -1;
+  if (mask_size != 1 || mask[0] != 0x77)
+    return -1;
+
+  free (mask);
+  mask = NULL;
+
+  return 0;
+}
 #endif
 
 static void
@@ -447,7 +515,7 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..10\n");
+  printf ("1..11\n");
 #else
   printf ("1..8\n");
 #endif
@@ -462,6 +530,7 @@ main ()
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
   RUN_TEST (test_get_scope_path);
+  RUN_TEST (test_cpuset_string_to_bitmask);
 #endif
   return 0;
 }
