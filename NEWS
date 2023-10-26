@@ -1,3 +1,11 @@
+* crun-1.11
+
+- cgroup: honor cpu burst.
+- systemd: set CPUQuota and CPUPeriod on the scope cgroup.
+- linux: append tmpfs mode if missing for mounts.  This is the same
+  behavior of runc.
+- cgroup: always use the user session for rootless.
+
 * crun-1.10
 
 - support for Intel Resource Director Technology (RDT).
