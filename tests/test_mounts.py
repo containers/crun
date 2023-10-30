@@ -26,10 +26,10 @@ except Exception:
     print("1..0")
     sys.exit(0)
 
-def helper_mount(options, tmpfs=True):
+def helper_mount(options, tmpfs=True, userns=False):
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
-    add_all_namespaces(conf)
+    add_all_namespaces(conf, userns=userns)
     if tmpfs:
         mount_opt = {"destination": "/var/dir", "type": "tmpfs", "source": "tmpfs", "options": [options]}
     else:
@@ -196,105 +196,117 @@ def test_mount_path_with_multiple_slashes():
     return -1
 
 def test_mount_ro():
-    a = helper_mount("ro")[0]
-    if "ro" not in a:
-        return -1
-    a = helper_mount("ro", tmpfs=False)[0]
-    if "ro" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("ro", userns=userns)[0]
+        if "ro" not in a:
+            return -1
+        a = helper_mount("ro", userns=userns, tmpfs=False)[0]
+        if "ro" not in a:
+            return -1
     return 0
 
 def test_mount_rw():
-    a = helper_mount("rw", tmpfs=False)[0]
-    if "rw" not in a:
-        return -1
-    a = helper_mount("rw")[0]
-    if "rw" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("rw", tmpfs=False, userns=userns)[0]
+        if "rw" not in a:
+            return -1
+        a = helper_mount("rw", userns=userns)[0]
+        if "rw" not in a:
+            return -1
     return 0
 
 def test_mount_relatime():
-    a = helper_mount("relatime", tmpfs=False)[0]
-    if "relatime" not in a:
-        return -1
-    a = helper_mount("relatime")[0]
-    if "relatime" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("relatime", tmpfs=False, userns=userns)[0]
+        if "relatime" not in a:
+            return -1
+        a = helper_mount("relatime", userns=userns)[0]
+        if "relatime" not in a:
+            return -1
     return 0
 
 def test_mount_strictatime():
-    a = helper_mount("strictatime", tmpfs=False)[0]
-    if "relatime" not in a:
-        return 0
-    a = helper_mount("strictatime")[0]
-    if "relatime" not in a:
-        return 0
+    for userns in [True, False]:
+        a = helper_mount("strictatime", tmpfs=False, userns=userns)[0]
+        if "relatime" not in a:
+            return 0
+        a = helper_mount("strictatime", userns=userns)[0]
+        if "relatime" not in a:
+            return 0
     return -1
 
 def test_mount_exec():
-    a = helper_mount("exec", tmpfs=False)[0]
-    if "noexec" in a:
-        return -1
-    a = helper_mount("exec")[0]
-    if "noexec" in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("exec", tmpfs=False, userns=userns)[0]
+        if "noexec" in a:
+            return -1
+        a = helper_mount("exec", userns=userns)[0]
+        if "noexec" in a:
+            return -1
     return 0
 
 def test_mount_noexec():
-    a = helper_mount("noexec", tmpfs=False)[0]
-    if "noexec" not in a:
-        return -1
-    a = helper_mount("noexec")[0]
-    if "noexec" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("noexec", tmpfs=False, userns=userns)[0]
+        if "noexec" not in a:
+            return -1
+        a = helper_mount("noexec", userns=userns)[0]
+        if "noexec" not in a:
+            return -1
     return 0
 
 def test_mount_suid():
-    a = helper_mount("suid", tmpfs=False)[0]
-    if "nosuid" in a:
-        return -1
-    a = helper_mount("suid")[0]
-    if "nosuid" in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("suid", tmpfs=False, userns=userns)[0]
+        if "nosuid" in a:
+            return -1
+        a = helper_mount("suid", userns=userns)[0]
+        if "nosuid" in a:
+            return -1
     return 0
 
 def test_mount_nosuid():
-    a = helper_mount("nosuid", tmpfs=False)[0]
-    if "nosuid" not in a:
-        return -1
-    a = helper_mount("nosuid")[0]
-    if "nosuid" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("nosuid", tmpfs=False, userns=userns)[0]
+        if "nosuid" not in a:
+            return -1
+        a = helper_mount("nosuid", userns=userns)[0]
+        if "nosuid" not in a:
+            return -1
     return 0
 
 def test_mount_sync():
-    a = helper_mount("sync")[1]
-    if "sync" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("sync", userns=userns)[1]
+        if "sync" not in a:
+            return -1
     return 0
 
 def test_mount_dirsync():
-    a = helper_mount("dirsync")[1]
-    if "dirsync" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("dirsync", userns=userns)[1]
+        if "dirsync" not in a:
+            return -1
     return 0
 
 def test_mount_nodev():
-    a = helper_mount("nodev", tmpfs=False)[0]
-    if "nodev" not in a:
-        return -1
-    a = helper_mount("nodev")[0]
-    if "nodev" not in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("nodev", tmpfs=False)[0]
+        if "nodev" not in a:
+            return -1
+        a = helper_mount("nodev", userns=userns)[0]
+        if "nodev" not in a:
+            return -1
     return 0
 
 def test_mount_dev():
-    a = helper_mount("dev", tmpfs=False)[0]
-    if "nodev" in a:
-        return -1
-    a = helper_mount("dev")[0]
-    if "nodev" in a:
-        return -1
+    for userns in [True, False]:
+        a = helper_mount("dev", userns=userns, tmpfs=False)[0]
+        if "nodev" in a:
+            return -1
+        a = helper_mount("dev", userns=userns)[0]
+        if "nodev" in a:
+            return -1
     return 0
 
 def test_userns_bind_mount():

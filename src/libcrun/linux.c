@@ -1119,6 +1119,8 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       get_proc_self_fd_path (target_buffer, targetfd);
 
       real_target = target_buffer;
+
+      needs_remount = true;
     }
 
   if (label_how == LABEL_MOUNT)
@@ -1246,7 +1248,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
       if ((remount_flags & MS_RDONLY) == 0)
         {
-          ret = do_remount (fd, target, remount_flags, data, err);
+          ret = do_remount (fd, real_target, remount_flags, data, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
