@@ -1,3 +1,8 @@
+* crun-1.11.1
+
+- force a remount operation with bind mounts from the host to correctly
+  set all the mount flags.
+
 * crun-1.11
 
 - cgroup: honor cpu burst.
