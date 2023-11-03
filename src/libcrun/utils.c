@@ -40,7 +40,6 @@
 #include <sys/vfs.h>
 #include <linux/magic.h>
 #include <limits.h>
-#include <stdarg.h>
 #include <sys/mman.h>
 #ifdef HAVE_LINUX_OPENAT2_H
 #  include <linux/openat2.h>
