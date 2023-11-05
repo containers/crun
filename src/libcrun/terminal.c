@@ -46,7 +46,7 @@ libcrun_new_terminal (char **pty, libcrun_error_t *err)
     return crun_make_error (err, errno, "open `/dev/ptmx`");
 
   ret = ptsname_r (fd, buf, sizeof (buf));
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret != 0))
     return crun_make_error (err, errno, "ptsname");
 
   ret = unlockpt (fd);
