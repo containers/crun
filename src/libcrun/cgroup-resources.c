@@ -1037,6 +1037,9 @@ write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_confi
 {
   int ret;
 
+  if (cpu == NULL)
+    return 0;
+
   if (cpu->cpus)
     {
       ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpuset, "cpuset.cpus", "cpus",
