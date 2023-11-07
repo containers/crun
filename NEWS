@@ -1,3 +1,9 @@
+* crun-1.11.2
+
+- fix a regression caused by 1.11.1 where the process crashes if there
+  are no CPU limits configured on cgroup v1.
+- fix error code check for the ptsname_r function.
+
 * crun-1.11.1
 
 - force a remount operation with bind mounts from the host to correctly

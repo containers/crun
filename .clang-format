@@ -23,12 +23,6 @@ AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: MultiLine
 BinPackArguments: true
 BinPackParameters: true
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: false
-AllowShortBlocksOnASingleLine: false
-BreakBeforeBraces: Allman
 BraceWrapping:
   AfterCaseLabel:  true
   AfterClass:      true
