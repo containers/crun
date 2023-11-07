@@ -3086,7 +3086,7 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
   return 0;
 }
 
-#define CAP_TO_MASK_0(x) (1L << ((x) &31))
+#define CAP_TO_MASK_0(x) (1L << ((x) & 31))
 #define CAP_TO_MASK_1(x) CAP_TO_MASK_0 (x - 32)
 
 struct all_caps_s
