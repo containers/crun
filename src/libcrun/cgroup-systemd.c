@@ -160,6 +160,10 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = crun_ensure_directory (cgroup_path, 0755, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
@@ -244,6 +248,10 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = crun_ensure_directory (cgroup_path, 0755, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = initialize_cpuset_subsystem (cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -320,6 +328,14 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
       if (geteuid ())
         return 0;
 
+      ret = setup_rt_runtime (resources, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = setup_cpuset_for_systemd_v1 (resources, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
         {
           char *subpath, *subsystem;
@@ -350,14 +366,6 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                 }
             }
         }
-
-      ret = setup_rt_runtime (resources, path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = setup_cpuset_for_systemd_v1 (resources, path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
 
       break;
 
