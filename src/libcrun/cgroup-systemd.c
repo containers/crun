@@ -754,7 +754,7 @@ static int
 open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
 {
   int rootless;
-  int sd_err;
+  int sd_err = 0;
 
   rootless = is_rootless (err);
   if (UNLIKELY (rootless < 0))
@@ -762,7 +762,7 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
 
   if (rootless)
     sd_err = sd_bus_default_user (bus);
-  else
+  if (! rootless || sd_err < 0)
     sd_err = sd_bus_default_system (bus);
   if (sd_err < 0)
     return crun_make_error (err, -sd_err, "cannot open sd-bus");
