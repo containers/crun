@@ -3925,8 +3925,10 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   // Populate namespaces
   populate_array_field (&((*info)->linux.namespaces), namespaces, num_namspaces);
 
+#ifdef HAVE_CAP
   // Populate capabilities
   populate_capabilities (*info, &capabilities, &num_capabilities);
+#endif
 
   // Hardcode the values for cgroup
   (*info)->linux.cgroup.v1 = true;
