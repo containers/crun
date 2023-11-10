@@ -300,9 +300,11 @@ static inline void
 cleanup_struct_features_free (struct features_info_s **info)
 {
   size_t i;
-  struct features_info_s *ptr = *info;
+  struct features_info_s *ptr;
   if (info == NULL || *info == NULL)
     return;
+
+  ptr = *info;
 
   // Free oci_version_min if it is not NULL
   if (ptr->oci_version_min != NULL)
