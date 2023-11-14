@@ -40,7 +40,7 @@
 #include <libgen.h>
 
 static int
-initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *mems, libcrun_error_t *err)
+initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *mems, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
 {
   cleanup_close int dirfd = -1;
   cleanup_close int mems_fd = -1;
@@ -95,13 +95,22 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
         return 0;
 
       path[parent_path_len] = '\0';
-      ret = initialize_cpuset_subsystem_rec (path, parent_path_len, cpus, mems, err);
+      ret = initialize_cpuset_subsystem_rec (path, parent_path_len, cpus, mems, resources, err);
       path[parent_path_len] = '/';
       if (UNLIKELY (ret < 0))
         {
           /* Ignore errors here and try to write the configuration we want later on.  */
           crun_error_release (err);
         }
+    }
+
+  /* If we know the resources, use them, instead of initializing with the full set, only to revert it later. */
+  if (resources && resources->cpu)
+    {
+      if (resources->cpu->cpus)
+        cpus = xstrdup (resources->cpu->cpus);
+      if (resources->cpu->mems)
+        mems = xstrdup (resources->cpu->mems);
     }
 
   if (cpus_fd >= 0)
@@ -129,7 +138,18 @@ initialize_cpuset_subsystem (const char *path, libcrun_error_t *err)
   char mems_buf[257];
 
   cpus_buf[0] = mems_buf[0] = '\0';
-  return initialize_cpuset_subsystem_rec (tmp_path, strlen (tmp_path), cpus_buf, mems_buf, err);
+  return initialize_cpuset_subsystem_rec (tmp_path, strlen (tmp_path), cpus_buf, mems_buf, NULL, err);
+}
+
+int
+initialize_cpuset_subsystem_resources (const char *path, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+{
+  cleanup_free char *tmp_path = xstrdup (path);
+  char cpus_buf[257];
+  char mems_buf[257];
+
+  cpus_buf[0] = mems_buf[0] = '\0';
+  return initialize_cpuset_subsystem_rec (tmp_path, strlen (tmp_path), cpus_buf, mems_buf, resources, err);
 }
 
 static int
