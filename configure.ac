@@ -132,6 +132,10 @@ AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE(
 
 AM_CONDITIONAL([ENABLE_KRUN], [test "x$with_libkrun" = xyes])
 
+dnl include support for spin (EXPERIMENTAL)
+AC_ARG_WITH([spin], AS_HELP_STRING([--with-spin], [build with spin support]))
+AS_IF([test "x$with_spin" = "xyes"], AC_DEFINE([HAVE_SPIN], 1, [Define if spin is available]))
+
 
 dnl libseccomp
 AC_ARG_ENABLE([seccomp],

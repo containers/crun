@@ -51,6 +51,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/handlers/handler-utils.c \
 		src/libcrun/handlers/krun.c \
 		src/libcrun/handlers/mono.c \
+		src/libcrun/handlers/spin.c \
 		src/libcrun/handlers/wasmedge.c \
 		src/libcrun/handlers/wasmer.c \
 		src/libcrun/handlers/wasmtime.c \
