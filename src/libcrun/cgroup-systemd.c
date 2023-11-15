@@ -252,7 +252,7 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = initialize_cpuset_subsystem (cgroup_path, err);
+  ret = initialize_cpuset_subsystem_resources (cgroup_path, resources, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

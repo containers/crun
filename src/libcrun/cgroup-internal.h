@@ -81,6 +81,7 @@ convert_shares_to_weight (uint64_t shares)
 }
 
 int initialize_cpuset_subsystem (const char *path, libcrun_error_t *err);
+int initialize_cpuset_subsystem_resources (const char *path, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
 
 int write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err);
 
