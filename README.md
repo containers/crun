@@ -144,7 +144,7 @@ The previous build instructions do not enable shared libraries, therefore you wi
 
 It is possible to build a statically linked binary of crun by using the
 officially provided
-[nix](https://nixos.org/nixos/packages.html?attr=crun&channel=nixpkgs-unstable&query=crun)
+[nix](https://nixos.org/nixos/packages.html?attr=crun&channel=unstable&query=crun)
 package and the derivation of it [within this repository](nix/). The
 builds are completely reproducible and will create a x86\_64/amd64
 stripped ELF binary for [glibc](https://www.gnu.org/software/libc).
