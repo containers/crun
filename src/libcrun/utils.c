@@ -820,27 +820,53 @@ add_selinux_mount_label (char **retlabel, const char *data, const char *label, c
 }
 
 static int
-write_file_and_check_fs_type (const char *file, const char *data, size_t len, unsigned int type, const char *type_name,
-                              libcrun_error_t *err)
+set_security_attr (const char *lsm, const char *fname, const char *data, libcrun_error_t *err)
 {
   int ret;
   struct statfs sfs;
+
+  cleanup_close int attr_dirfd = -1;
+  cleanup_close int lsm_dirfd = -1;
   cleanup_close int fd = -1;
 
-  fd = open (file, O_WRONLY | O_CLOEXEC);
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open file `%s`", file);
+  attr_dirfd = open ("/proc/thread-self/attr", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  if (UNLIKELY (attr_dirfd < 0))
+    return crun_make_error (err, errno, "open `/proc/thread-self/attr`");
 
+  // Check for newer scoped interface in /proc/thread-self/attr/<lsm>
+  if (lsm != NULL)
+    {
+      lsm_dirfd = openat (attr_dirfd, lsm, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+
+      if (UNLIKELY (lsm_dirfd < 0 && errno != ENOENT))
+        return crun_make_error (err, errno, "open `/proc/thread-self/attr/%s`", lsm);
+    }
+
+  // Use scoped interface if available, fall back to unscoped
+  if (lsm_dirfd >= 0)
+    fd = openat (lsm_dirfd, fname, O_WRONLY | O_CLOEXEC);
+  else
+    fd = openat (attr_dirfd, fname, O_WRONLY | O_CLOEXEC);
+
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `/proc/thread-self/attr/%s%s%s`",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
+
+  // Check that the file system type is indeed procfs
   ret = fstatfs (fd, &sfs);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "statfs `%s`", file);
+    return crun_make_error (err, errno, "statfs `/proc/thread-self/attr/%s%s%s`",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
-  if (sfs.f_type != type)
-    return crun_make_error (err, 0, "the file `%s` is not on file system type `%s`", file, type_name);
+  if (sfs.f_type != PROC_SUPER_MAGIC)
+    return crun_make_error (err, 0, "the file `/proc/thread-self/attr/%s%s%s` is not on a `procfs` file system",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
-  ret = TEMP_FAILURE_RETRY (write (fd, data, len));
+  // Write out data
+  ret = TEMP_FAILURE_RETRY (write (fd, data, strlen (data)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write file `%s`", file);
+    return crun_make_error (err, errno, "write file `/proc/thread-self/attr/%s%s%s`",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
   return 0;
 }
@@ -855,14 +881,7 @@ set_selinux_label (const char *label, bool now, libcrun_error_t *err)
     return ret;
 
   if (ret)
-    {
-      const char *fname = now ? "/proc/thread-self/attr/current" : "/proc/thread-self/attr/exec";
-      ret = write_file_and_check_fs_type (fname, label,
-                                          strlen (label), PROC_SUPER_MAGIC,
-                                          "procfs", err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+    return set_security_attr (NULL, now ? "current" : "exec", label, err);
   return 0;
 }
 
@@ -882,17 +901,14 @@ set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err)
   ret = libcrun_is_apparmor_enabled (err);
   if (UNLIKELY (ret < 0))
     return ret;
+
   if (ret)
     {
-      const char *fname = now ? "/proc/thread-self/attr/current" : "/proc/thread-self/attr/exec";
       cleanup_free char *buf = NULL;
 
       xasprintf (&buf, "%s %s", now ? "changeprofile" : "exec", profile);
 
-      ret = write_file_and_check_fs_type (fname, buf, strlen (buf), PROC_SUPER_MAGIC, "procfs",
-                                          err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      return set_security_attr ("apparmor", now ? "current" : "exec", buf, err);
     }
   return 0;
 }
