@@ -1,3 +1,16 @@
+* crun-1.12
+
+- add new WebAssembly handler: spin.
+- systemd: fallback to system bus if session bus is not available.
+- configure the cpu rt and cpuset controllers before joining them to
+  avoid running temporarily the workload on the wrong cpus.
+- preconfigure the cpuset with required resources instead of using the
+  parent's set.  This prevents needless churn in the kernel as it
+  tracks which CPUs have load balancing disabled.
+- try attr/<lsm>/* before the attr/* files.  Writes to the attr/*
+  files may fail if apparmor is not the first "major" LSM in the list
+  of loaded LSMs (e.g. lsm=apparmor,bpf vs lsm=bpf,apparmor).
+
 * crun-1.11.2
 
 - fix a regression caused by 1.11.1 where the process crashes if there
