@@ -5301,7 +5301,7 @@ libcrun_join_process (libcrun_context_t *context,
     {
       int saved_errno = errno;
       TEMP_FAILURE_RETRY (write (sync_fd, "1", 1));
-      libcrun_fail_with_error (saved_errno, "setsid");
+      libcrun_fail_with_error (saved_errno, "fork");
     }
 
   if (pid)
