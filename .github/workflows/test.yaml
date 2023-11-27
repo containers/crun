@@ -26,7 +26,7 @@ jobs:
           submodules: true
           set-safe-directory: true
 
-      - uses: uraimo/run-on-arch-action@v2.5.1
+      - uses: uraimo/run-on-arch-action@v2.6.0
         name: Build
         id: build
         with:
