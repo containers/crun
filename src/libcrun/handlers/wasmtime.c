@@ -158,7 +158,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
 
   wasm_byte_vec_t wasm;
   // Load and parse container entrypoint
-  FILE *file = fopen (pathname, "rb");
+  FILE *file = fopen (pathname, "rbe");
   if (! file)
     error (EXIT_FAILURE, 0, "error loading entrypoint");
   fseek (file, 0L, SEEK_END);

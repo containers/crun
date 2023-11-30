@@ -221,7 +221,7 @@ check_idmapped_mounts (const char *path)
 static int
 cat (char *file)
 {
-  FILE *f = fopen (file, "rb");
+  FILE *f = fopen (file, "rbe");
   char buf[512];
   if (f == NULL)
     error (EXIT_FAILURE, errno, "fopen");

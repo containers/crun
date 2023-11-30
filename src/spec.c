@@ -123,7 +123,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
         return libcrun_make_error (err, 0, "`%s` already exists", where);
     }
 
-  f = fopen (where, "w+");
+  f = fopen (where, "w+e");
   if (f == NULL)
     return libcrun_make_error (err, errno, "cannot open `%s`", where);
 

@@ -1365,7 +1365,7 @@ set_home_env (uid_t id)
 
   buf = xmalloc (buf_size);
 
-  stream = fopen ("/etc/passwd", "r");
+  stream = fopen ("/etc/passwd", "re");
   if (stream == NULL)
     {
       if (errno == ENOENT)
@@ -1448,7 +1448,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 
   len_name = strlen (name);
 
-  input = fopen (is_uid ? "/etc/subuid" : "/etc/subgid", "r");
+  input = fopen (is_uid ? "/etc/subuid" : "/etc/subgid", "re");
   if (input == NULL)
     return -1;
 
