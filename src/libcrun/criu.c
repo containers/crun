@@ -435,7 +435,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
     return crun_make_error (err, errno, "error creating checkpoint directory `%s`", cr_options->image_path);
 
-  image_fd = open (cr_options->image_path, O_DIRECTORY);
+  image_fd = open (cr_options->image_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (image_fd == -1))
     return crun_make_error (err, errno, "error opening checkpoint directory `%s`", cr_options->image_path);
 
@@ -455,7 +455,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
    * crun to set it if the user has not selected a specific directory. */
   if (cr_options->work_path != NULL)
     {
-      work_fd = open (cr_options->work_path, O_DIRECTORY);
+      work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (work_fd == -1))
         return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
 
@@ -758,7 +758,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   if (UNLIKELY (cr_options->image_path == NULL))
     return crun_make_error (err, 0, "image path not set");
 
-  image_fd = open (cr_options->image_path, O_DIRECTORY);
+  image_fd = open (cr_options->image_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (image_fd == -1))
     return crun_make_error (err, errno, "error opening checkpoint directory `%s`", cr_options->image_path);
 
@@ -814,7 +814,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
    * crun to set it if the user has not selected a specific directory. */
   if (cr_options->work_path != NULL)
     {
-      work_fd = open (cr_options->work_path, O_DIRECTORY);
+      work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (work_fd == -1))
         return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
 
@@ -902,7 +902,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
-          inherit_new_net_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          inherit_new_net_fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
           if (UNLIKELY (inherit_new_net_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
@@ -911,7 +911,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
       if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
         {
-          inherit_new_pid_fd = open (def->linux->namespaces[i]->path, O_RDONLY);
+          inherit_new_pid_fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
           if (UNLIKELY (inherit_new_pid_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 

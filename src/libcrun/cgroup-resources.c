@@ -41,7 +41,7 @@
 static inline int
 write_cgroup_file (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  return write_file_at_with_flags (dirfd, O_WRONLY, 0, name, data, len, err);
+  return write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, name, data, len, err);
 }
 
 static int
@@ -49,11 +49,11 @@ write_cgroup_file_or_alias (int dirfd, const char *name, const char *alias, cons
 {
   int ret;
 
-  ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, name, data, len, err);
+  ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, name, data, len, err);
   if (UNLIKELY (alias != NULL && ret < 0 && crun_error_get_errno (err) == ENOENT))
     {
       crun_error_release (err);
-      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, alias, data, len, err);
+      ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, alias, data, len, err);
     }
   return ret;
 }
@@ -189,7 +189,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
   if (throttling == NULL)
     return 0;
 
-  fd = openat (dirfd, name, O_WRONLY);
+  fd = openat (dirfd, name, O_WRONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", name);
 
@@ -288,7 +288,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
           cleanup_close int wfd = -1;
           size_t i;
 
-          wfd = openat (dirfd, "io.bfq.weight", O_WRONLY);
+          wfd = openat (dirfd, "io.bfq.weight", O_WRONLY | O_CLOEXEC);
           if (UNLIKELY (wfd < 0))
             return crun_make_error (err, errno, "open io.weight");
           for (i = 0; i < blkio->weight_device_len; i++)
@@ -313,12 +313,12 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
           size_t i;
 
           w_device_fd = openat_with_alias (dirfd, "blkio.weight_device", "blkio.bfq.weight_device",
-                                           &weight_device_file_name, O_WRONLY, err);
+                                           &weight_device_file_name, O_WRONLY | O_CLOEXEC, err);
           if (UNLIKELY (w_device_fd < 0))
             return w_device_fd;
 
           w_leafdevice_fd = openat_with_alias (dirfd, "blkio.leaf_weight_device", "blkio.bfq.leaf_weight_device",
-                                               &leaf_weight_device_file_name, O_WRONLY, err);
+                                               &leaf_weight_device_file_name, O_WRONLY | O_CLOEXEC, err);
           if (UNLIKELY (w_leafdevice_fd < 0))
             {
               /* If the .leaf_weight_device file is missing, just ignore it.  */
@@ -349,7 +349,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       cleanup_close int wfd = -1;
       const char *name = "io.max";
 
-      wfd = openat (dirfd, name, O_WRONLY);
+      wfd = openat (dirfd, name, O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (wfd < 0))
         {
           ret = crun_make_error (err, errno, "open `%s`", name);
@@ -423,7 +423,7 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
     {
       size_t i;
       cleanup_close int fd = -1;
-      fd = openat (dirfd_netprio, "net_prio.ifpriomap", O_WRONLY);
+      fd = openat (dirfd_netprio, "net_prio.ifpriomap", O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "open `net_prio.ifpriomap`");
 
@@ -1072,7 +1072,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY);
+      dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_blkio < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_blkio);
 
@@ -1097,11 +1097,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_RDONLY);
+      dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_netclass < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_netclass);
 
-      dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_RDONLY);
+      dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_netprio < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_netprio);
 
@@ -1118,7 +1118,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       ret = append_paths (&path_to_htlb, err, CGROUP_ROOT "/hugetlb", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
-      dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY);
+      dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_htlb < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_htlb);
 
@@ -1137,7 +1137,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY);
+      dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_devs < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_devs);
 
@@ -1155,7 +1155,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY);
+      dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_mem < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_mem);
 
@@ -1173,7 +1173,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY);
+      dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_pid < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_pid);
 
@@ -1193,7 +1193,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY);
+      dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpu < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_cpu);
       ret = write_cpu_resources (dirfd_cpu, false, resources->cpu, err);
@@ -1207,7 +1207,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY);
+      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpuset < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
 
@@ -1259,7 +1259,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
   if (UNLIKELY (ret < 0))
     return ret;
 
-  cgroup_dirfd = open (cgroup_path, O_DIRECTORY);
+  cgroup_dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (cgroup_dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 

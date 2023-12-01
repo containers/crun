@@ -1308,7 +1308,7 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
   annotation = find_annotation (container, "run.oci.hooks.stdout");
   if (annotation)
     {
-      *out_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND, 0700));
+      *out_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC, 0700));
       if (UNLIKELY (*out_fd < 0))
         return crun_make_error (err, errno, "open `%s`", annotation);
     }
@@ -1316,7 +1316,7 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
   annotation = find_annotation (container, "run.oci.hooks.stderr");
   if (annotation)
     {
-      *err_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND, 0700));
+      *err_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC, 0700));
       if (UNLIKELY (*err_fd < 0))
         return crun_make_error (err, errno, "open `%s`", annotation);
     }

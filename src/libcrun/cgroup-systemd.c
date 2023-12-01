@@ -174,12 +174,12 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 
       if (need_set_parent)
         {
-          ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "../cpu.rt_period_us", fmt_buf, len, err);
+          ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, "../cpu.rt_period_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "cpu.rt_period_us", fmt_buf, len, err);
+      ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, "cpu.rt_period_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -190,12 +190,12 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 
       if (need_set_parent)
         {
-          ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "../cpu.rt_runtime_us", fmt_buf, len, err);
+          ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, "../cpu.rt_runtime_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
 
-      ret = write_file_at_with_flags (dirfd, O_WRONLY, 0, "cpu.rt_runtime_us", fmt_buf, len, err);
+      ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, "cpu.rt_runtime_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }

@@ -115,7 +115,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
 
   sprintf (pid_stat_file, "/proc/%d/stat", pid);
 
-  fd = open (pid_stat_file, O_RDONLY);
+  fd = open (pid_stat_file, O_RDONLY | O_CLOEXEC);
   if (fd < 0)
     {
       /* The process already exited.  */
@@ -188,7 +188,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   status->process_start_time = st.starttime;
 
   xasprintf (&file_tmp, "%s.tmp", file);
-  fd_write = open (file_tmp, O_CREAT | O_WRONLY, 0700);
+  fd_write = open (file_tmp, O_CREAT | O_WRONLY | O_CLOEXEC, 0700);
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, errno, "cannot open status file");
 
@@ -522,7 +522,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (rundir_dfd < 0))
     return crun_make_error (err, errno, "cannot open run directory `%s`", dir);
 
-  dfd = openat (rundir_dfd, id, O_DIRECTORY | O_RDONLY);
+  dfd = openat (rundir_dfd, id, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dfd < 0))
     return crun_make_error (err, errno, "cannot open directory `%s/%s`", dir, id);
 
@@ -675,7 +675,7 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mkfifo");
 
-  fd = open (fifo_path, O_NONBLOCK);
+  fd = open (fifo_path, O_NONBLOCK | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "cannot open pipe `%s`", fifo_path);
 
@@ -697,7 +697,7 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  fd = open (fifo_path, O_WRONLY);
+  fd = open (fifo_path, O_WRONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "cannot open `%s`", fifo_path);
 

@@ -95,7 +95,7 @@ int
 libcrun_set_stdio (char *pty, libcrun_error_t *err)
 {
   int ret, i;
-  cleanup_close int fd = open (pty, O_RDWR);
+  cleanup_close int fd = open (pty, O_RDWR | O_CLOEXEC);
 
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", pty);
