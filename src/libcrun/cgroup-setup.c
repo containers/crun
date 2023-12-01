@@ -47,15 +47,15 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   cleanup_close int cpus_fd = -1;
   int b_len;
 
-  dirfd = open (path, O_DIRECTORY | O_RDONLY);
+  dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", path);
 
   if (cpus[0] == '\0')
     {
-      cpus_fd = openat (dirfd, "cpuset.cpus", O_RDWR);
+      cpus_fd = openat (dirfd, "cpuset.cpus", O_RDWR | O_CLOEXEC);
       if (UNLIKELY (cpus_fd < 0 && errno == ENOENT))
-        cpus_fd = openat (dirfd, "cpus", O_RDWR);
+        cpus_fd = openat (dirfd, "cpus", O_RDWR | O_CLOEXEC);
       if (UNLIKELY (cpus_fd < 0))
         return crun_make_error (err, errno, "open `%s/%s`", path, "cpuset.cpus");
 
@@ -69,9 +69,9 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 
   if (mems[0] == '\0')
     {
-      mems_fd = openat (dirfd, "cpuset.mems", O_RDWR);
+      mems_fd = openat (dirfd, "cpuset.mems", O_RDWR | O_CLOEXEC);
       if (UNLIKELY (mems_fd < 0 && errno == ENOENT))
-        mems_fd = openat (dirfd, "mems", O_RDWR);
+        mems_fd = openat (dirfd, "mems", O_RDWR | O_CLOEXEC);
       if (UNLIKELY (mems_fd < 0))
         return crun_make_error (err, errno, "open `%s/%s`", path, "cpuset.mems");
 
@@ -160,7 +160,7 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
   cleanup_close int dirfd = -1;
   int i;
 
-  dirfd = open (path, O_DIRECTORY | O_RDONLY);
+  dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", path);
 

@@ -221,7 +221,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
         {
         case LOG_TYPE_FILE:
           *new_output_handler = log_write_to_stream;
-          *new_output_handler_arg = fopen (arg, "a+");
+          *new_output_handler_arg = fopen (arg, "a+e");
           if (*new_output_handler_arg == NULL)
             return crun_make_error (err, errno, "open log file `%s`", log);
           if (output_verbosity >= LIBCRUN_VERBOSITY_WARNING)

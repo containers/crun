@@ -1308,7 +1308,7 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
   annotation = find_annotation (container, "run.oci.hooks.stdout");
   if (annotation)
     {
-      *out_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND, 0700));
+      *out_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC, 0700));
       if (UNLIKELY (*out_fd < 0))
         return crun_make_error (err, errno, "open `%s`", annotation);
     }
@@ -1316,7 +1316,7 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
   annotation = find_annotation (container, "run.oci.hooks.stderr");
   if (annotation)
     {
-      *err_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND, 0700));
+      *err_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC, 0700));
       if (UNLIKELY (*err_fd < 0))
         return crun_make_error (err, errno, "open `%s`", annotation);
     }
@@ -2719,7 +2719,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
       return ret;
     }
 
-  ret = pipe (container_ret_status);
+  ret = pipe2 (container_ret_status, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
   pipefd0 = container_ret_status[0];
@@ -2834,7 +2834,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       return ret;
     }
 
-  ret = pipe (container_ready_pipe);
+  ret = pipe2 (container_ready_pipe, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
   pipefd0 = container_ready_pipe[0];
@@ -3543,7 +3543,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = pipe (container_ret_status);
+  ret = pipe2 (container_ret_status, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
   pipefd0 = container_ret_status[0];

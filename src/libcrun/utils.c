@@ -116,7 +116,7 @@ xasprintf (char **str, const char *fmt, ...)
 int
 write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  cleanup_close int fd = openat (dirfd, name, O_WRONLY | flags, mode);
+  cleanup_close int fd = openat (dirfd, name, O_CLOEXEC | O_WRONLY | flags, mode);
   int ret = 0;
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "opening file `%s` for writing", name);
@@ -134,13 +134,13 @@ write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, c
 int
 write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  return write_file_at_with_flags (dirfd, O_CREAT | O_TRUNC, 0700, name, data, len, err);
+  return write_file_at_with_flags (dirfd, O_CLOEXEC | O_CREAT | O_TRUNC, 0700, name, data, len, err);
 }
 
 int
 write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err)
 {
-  cleanup_close int fd = open (name, O_WRONLY | flags, 0700);
+  cleanup_close int fd = open (name, O_CLOEXEC | O_WRONLY | flags, 0700);
   int ret;
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "opening file `%s` for writing", name);
@@ -981,7 +981,7 @@ read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_
 {
   cleanup_close int fd;
 
-  fd = TEMP_FAILURE_RETRY (openat (dirfd, path, O_RDONLY));
+  fd = TEMP_FAILURE_RETRY (openat (dirfd, path, O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error opening file `%s`", path);
 
@@ -1012,7 +1012,7 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
 
   if (strlen (path) >= sizeof (addr.sun_path))
     {
-      destfd = open (path, O_PATH);
+      destfd = open (path, O_PATH | O_CLOEXEC);
       if (UNLIKELY (destfd < 0))
         return crun_make_error (err, errno, "error opening `%s`", path);
 
@@ -1365,7 +1365,7 @@ set_home_env (uid_t id)
 
   buf = xmalloc (buf_size);
 
-  stream = fopen ("/etc/passwd", "r");
+  stream = fopen ("/etc/passwd", "re");
   if (stream == NULL)
     {
       if (errno == ENOENT)
@@ -1448,7 +1448,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 
   len_name = strlen (name);
 
-  input = fopen (is_uid ? "/etc/subuid" : "/etc/subgid", "r");
+  input = fopen (is_uid ? "/etc/subuid" : "/etc/subgid", "re");
   if (input == NULL)
     return -1;
 
@@ -1513,6 +1513,18 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t
   return written;
 }
 
+static int
+unset_cloexec_flag (int fd)
+{
+  int flags = fcntl (fd, F_GETFD);
+  if (flags == -1)
+    return -1;
+
+  flags &= ~FD_CLOEXEC;
+
+  return fcntl (fd, F_SETFD, flags);
+}
+
 static void __attribute__ ((__noreturn__))
 run_process_child (char *path, char **args, const char *cwd, char **envp, int pipe_r,
                    int pipe_w, int out_fd, int err_fd)
@@ -1528,7 +1540,7 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
 
   if (out_fd < 0 || err_fd < 0)
     {
-      dev_null_fd = open ("/dev/null", O_WRONLY);
+      dev_null_fd = open ("/dev/null", O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (dev_null_fd < 0))
         _exit (EXIT_FAILURE);
     }
@@ -1539,6 +1551,11 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
 
   dup2 (out_fd >= 0 ? out_fd : dev_null_fd, 1);
   dup2 (err_fd >= 0 ? err_fd : dev_null_fd, 2);
+
+  if (out_fd >= 0)
+    unset_cloexec_flag (1);
+  if (err_fd >= 0)
+    unset_cloexec_flag (2);
 
   if (dev_null_fd >= 0)
     TEMP_FAILURE_RETRY (close (dev_null_fd));
@@ -1573,7 +1590,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
 
   sigemptyset (&mask);
 
-  ret = pipe (stdin_pipe);
+  ret = pipe2 (stdin_pipe, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
   pipe_r = stdin_pipe[0];
@@ -2033,11 +2050,11 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
       switch (mode & S_IFMT)
         {
         case S_IFREG:
-          srcfd = openat (dirfd (dsrcfd), de->d_name, O_NONBLOCK | O_RDONLY);
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_NONBLOCK | O_RDONLY | O_CLOEXEC);
           if (UNLIKELY (srcfd < 0))
             return crun_make_error (err, errno, "open `%s/%s`", srcname, de->d_name);
 
-          destfd = openat (destdirfd, de->d_name, O_RDWR | O_CREAT, 0777);
+          destfd = openat (destdirfd, de->d_name, O_RDWR | O_CREAT | O_CLOEXEC, 0777);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open `%s/%s`", destname, de->d_name);
 
@@ -2060,11 +2077,11 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mkdir `%s/%s`", destname, de->d_name);
 
-          srcfd = openat (dirfd (dsrcfd), de->d_name, O_DIRECTORY);
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_DIRECTORY | O_CLOEXEC);
           if (UNLIKELY (srcfd < 0))
             return crun_make_error (err, errno, "open directory `%s/%s`", srcname, de->d_name);
 
-          destfd = openat (destdirfd, de->d_name, O_DIRECTORY);
+          destfd = openat (destdirfd, de->d_name, O_DIRECTORY | O_CLOEXEC);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open directory `%s/%s`", srcname, de->d_name);
 

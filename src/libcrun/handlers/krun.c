@@ -183,7 +183,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
     rootfsfd = AT_FDCWD;
   else
     {
-      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH);
+      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH | O_CLOEXEC);
       if (UNLIKELY (rootfsfd < 0))
         return crun_make_error (err, errno, "open `%s`", rootfs);
     }
@@ -232,7 +232,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         }
     }
 
-  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
+  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
 

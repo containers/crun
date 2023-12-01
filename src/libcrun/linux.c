@@ -1760,7 +1760,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   dev_fds = get_private_data (container)->dev_fds;
   get_private_data (container)->dev_fds = NULL;
 
-  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY);
+  devfd = openat (rootfsfd, "dev", O_CLOEXEC | O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
 
@@ -1864,8 +1864,8 @@ static int
 do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
-  cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_PATH);
-  cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY);
+  cleanup_close int oldrootfd = open ("/", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  cleanup_close int newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
 
   if (UNLIKELY (oldrootfd < 0))
     return crun_make_error (err, errno, "open `/`");
@@ -2148,7 +2148,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
       else if (is_sysfs_or_proc)
         {
           /* Enforce sysfs and proc to be mounted on a regular directory.  */
-          ret = openat (rootfsfd, target, O_NOFOLLOW | O_DIRECTORY);
+          ret = openat (rootfsfd, target, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
           if (UNLIKELY (ret < 0))
             {
               if (errno == ENOENT)
@@ -2161,7 +2161,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
                     return crun_make_error (err, errno, "cannot mkdir `%s`", target);
 
                   /* Try opening it again.  */
-                  ret = openat (rootfsfd, target, O_NOFOLLOW | O_DIRECTORY);
+                  ret = openat (rootfsfd, target, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
                 }
               else if (errno == ENOTDIR)
                 return crun_make_error (err, errno, "the target `/%s` is invalid", target);
@@ -2191,7 +2191,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
             return crun_make_error (err, 0, "tmpcopyup can be used only with tmpfs");
 
           /* targetfd is opened with O_PATH, reopen the fd so it can read.  */
-          copy_from_fd = openat (targetfd, ".", O_RDONLY | O_DIRECTORY);
+          copy_from_fd = openat (targetfd, ".", O_CLOEXEC | O_RDONLY | O_DIRECTORY);
           if (UNLIKELY (copy_from_fd < 0))
             {
               if (errno != ENOTDIR)
@@ -2253,7 +2253,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
         {
           int destfd, tmpfd;
 
-          destfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY, 0, err);
+          destfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_CLOEXEC | O_DIRECTORY, 0, err);
           if (UNLIKELY (destfd < 0))
             return crun_error_wrap (err, "open target to write for tmpcopyup");
 
@@ -2269,7 +2269,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
         {
           cleanup_close int dfd = -1;
 
-          dfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_DIRECTORY, 0, err);
+          dfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_CLOEXEC | O_DIRECTORY, 0, err);
           if (UNLIKELY (dfd < 0))
             return crun_make_error (err, errno, "open mount target `/%s`", target);
 
@@ -2452,7 +2452,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
         }
     }
 
-  notify_socket_tree_fd = syscall_open_tree (AT_FDCWD, host_notify_socket_path, OPEN_TREE_CLONE | AT_RECURSIVE);
+  notify_socket_tree_fd = syscall_open_tree (AT_FDCWD, host_notify_socket_path, OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
   if (notify_socket_tree_fd >= 0)
     /* open_tree worked */
     get_private_data (container)->notify_socket_tree_fd = notify_socket_tree_fd;
@@ -2824,7 +2824,7 @@ libcrun_reopen_dev_null (libcrun_error_t *err)
   int i;
 
   /* Open /dev/null inside of the container. */
-  fd = open ("/dev/null", O_RDWR);
+  fd = open ("/dev/null", O_RDWR | O_CLOEXEC);
   if (UNLIKELY (fd == -1))
     return crun_make_error (err, errno, "failed open()ing `/dev/null`");
 
@@ -3115,7 +3115,7 @@ libcrun_init_caps (libcrun_error_t *err)
   cleanup_close int fd = -1;
   int ret;
   char buffer[16];
-  fd = open (cap_last_cap_file, O_RDONLY);
+  fd = open (cap_last_cap_file, O_RDONLY | O_CLOEXEC);
   if (fd < 0)
     return crun_make_error (err, errno, "open `%s`", cap_last_cap_file);
   ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
@@ -3349,7 +3349,7 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   if (def->process == NULL || ! def->process->oom_score_adj_present)
     return 0;
   sprintf (oom_buffer, "%i", def->process->oom_score_adj);
-  fd = open ("/proc/self/oom_score_adj", O_RDWR);
+  fd = open ("/proc/self/oom_score_adj", O_RDWR | O_CLOEXEC);
   if (fd < 0)
     return crun_make_error (err, errno, "open `/proc/self/oom_score_adj`");
   ret = TEMP_FAILURE_RETRY (write (fd, oom_buffer, strlen (oom_buffer)));
@@ -3457,7 +3457,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
     }
 
   get_private_data (container);
-  dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY);
+  dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `/proc/sys`");
 
@@ -3477,7 +3477,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-      fd = openat (dirfd, name, O_WRONLY);
+      fd = openat (dirfd, name, O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "open `/proc/sys/%s`", name);
 
@@ -4050,7 +4050,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
     pid = created_pid;
 
   sprintf (proc_path, "/proc/%d/ns/user", pid);
-  fd = open (proc_path, O_RDONLY);
+  fd = open (proc_path, O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
@@ -4254,7 +4254,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   if (UNLIKELY (ret < 0) && errno != EEXIST)
     return crun_make_error (err, errno, "mkdir `%s`", devs_path);
 
-  current_mountns = open ("/proc/self/ns/mnt", O_RDONLY);
+  current_mountns = open ("/proc/self/ns/mnt", O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (current_mountns < 0))
     return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
 
@@ -5118,7 +5118,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
       cleanup_free char *ns_join = NULL;
 
       xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
-      fds[i] = open (ns_join, O_RDONLY);
+      fds[i] = open (ns_join, O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (fds[i] < 0))
         {
           /* If the namespace doesn't exist, just ignore it.  */

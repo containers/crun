@@ -144,7 +144,7 @@ libwasmer_exec (void *cookie, libcrun_container_t *container arg_unused,
       || wasi_get_imports == NULL || wasi_get_start_function == NULL || wasi_config_inherit_stdout == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmer.so`");
 
-  wat_wasm_file = fopen (pathname, "rb");
+  wat_wasm_file = fopen (pathname, "rbe");
 
   if (! wat_wasm_file)
     error (EXIT_FAILURE, errno, "error opening wat/wasm module");

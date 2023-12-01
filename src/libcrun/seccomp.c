@@ -263,7 +263,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 #  endif
 
 #  ifdef HAVE_MEMFD_CREATE
-      memfd = memfd_create ("seccomp-helper-memfd", O_RDWR);
+      memfd = memfd_create ("seccomp-helper-memfd", O_RDWR | MFD_CLOEXEC);
       if (UNLIKELY (memfd < 0))
         return crun_make_error (err, errno, "memfd_create");
 #  else
@@ -926,7 +926,7 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
           goto open_existing_file;
         }
 
-      ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_RDWR | O_CREAT, 0700));
+      ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_CLOEXEC | O_RDWR | O_CREAT, 0700));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "open `seccomp.bpf`");
       ctx->fd = *fd = ret;
@@ -934,7 +934,7 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
   else
     {
     open_existing_file:
-      ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_RDONLY));
+      ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_CLOEXEC | O_RDONLY));
       if (UNLIKELY (ret < 0))
         {
           if (errno == ENOENT)
