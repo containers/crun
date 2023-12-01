@@ -52,7 +52,7 @@ spin_exec (void *cookie arg_unused, libcrun_container_t *container arg_unused,
 }
 
 static int
-spin_load (void **cookie, libcrun_error_t *err)
+spin_load (void **cookie arg_unused, libcrun_error_t *err)
 {
   struct stat st = { 0 };
   if (stat ("/usr/local/bin/spin", &st) == -1)
@@ -90,7 +90,7 @@ spin_configure_container (void *cookie arg_unused, enum handler_configure_phase 
 }
 
 static int
-spin_unload (void *cookie, libcrun_error_t *err)
+spin_unload (void *cookie arg_unused, libcrun_error_t *err arg_unused)
 {
   return 0;
 }
