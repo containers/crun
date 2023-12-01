@@ -1513,6 +1513,18 @@ format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t
   return written;
 }
 
+static int
+unset_cloexec_flag (int fd)
+{
+  int flags = fcntl (fd, F_GETFD);
+  if (flags == -1)
+    return -1;
+
+  flags &= ~FD_CLOEXEC;
+
+  return fcntl (fd, F_SETFD, flags);
+}
+
 static void __attribute__ ((__noreturn__))
 run_process_child (char *path, char **args, const char *cwd, char **envp, int pipe_r,
                    int pipe_w, int out_fd, int err_fd)
@@ -1539,6 +1551,11 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
 
   dup2 (out_fd >= 0 ? out_fd : dev_null_fd, 1);
   dup2 (err_fd >= 0 ? err_fd : dev_null_fd, 2);
+
+  if (out_fd >= 0)
+    unset_cloexec_flag (1);
+  if (err_fd >= 0)
+    unset_cloexec_flag (2);
 
   if (dev_null_fd >= 0)
     TEMP_FAILURE_RETRY (close (dev_null_fd));
@@ -1573,7 +1590,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
 
   sigemptyset (&mask);
 
-  ret = pipe (stdin_pipe);
+  ret = pipe2 (stdin_pipe, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
   pipe_r = stdin_pipe[0];
