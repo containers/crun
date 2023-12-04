@@ -896,13 +896,14 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
    * The <key> needs to be the same as during checkpointing (extRootNetNS). */
   for (i = 0; i < def->linux->namespaces_len; i++)
     {
+      const int open_flags_for_inherit = O_RDONLY; /* Cannot be O_CLOEXEC as it is passed to the child process. */
       int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
-          inherit_new_net_fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
+          inherit_new_net_fd = open (def->linux->namespaces[i]->path, open_flags_for_inherit);
           if (UNLIKELY (inherit_new_net_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
@@ -911,7 +912,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
       if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
         {
-          inherit_new_pid_fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
+          inherit_new_pid_fd = open (def->linux->namespaces[i]->path, open_flags_for_inherit);
           if (UNLIKELY (inherit_new_pid_fd < 0))
             return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
 
