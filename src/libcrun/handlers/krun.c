@@ -99,7 +99,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
 
   ctx_id = krun_create_ctx ();
   if (UNLIKELY (ctx_id < 0))
-    error (EXIT_FAILURE, -ret, "could not create krun context");
+    error (EXIT_FAILURE, -ctx_id, "could not create krun context");
 
   if (kconf->sev)
     {
