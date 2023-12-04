@@ -624,8 +624,8 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     }
 
   ret = libcriu_wrapper->criu_set_freeze_cgroup (freezer_path);
-  if (UNLIKELY (ret != 0))
-    return crun_make_error (err, ret, "CRIU: failed setting freezer %d", ret);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "CRIU: failed setting freezer %d", ret);
 
   /* Set boolean options . */
   libcriu_wrapper->criu_set_leave_running (cr_options->leave_running);
