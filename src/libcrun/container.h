@@ -53,7 +53,6 @@ struct libcrun_context_s
 
   bool systemd_cgroup;
   bool detach;
-  bool no_subreaper;
   bool no_new_keyring;
   bool force_no_cgroup;
   bool no_pivot;
