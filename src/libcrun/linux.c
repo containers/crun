@@ -512,7 +512,7 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
           mappings = is_uids ? def->linux->uid_mappings : def->linux->gid_mappings;
 
           for (i = 0; i < mappings_len; i++)
-            if (value[0] >= mappings[i]->container_id && value[0] < mappings[i]->container_id + mappings[i]->size)
+            if (value[1] >= mappings[i]->container_id && value[1] < mappings[i]->container_id + mappings[i]->size)
               break;
 
           if (i == mappings_len)
