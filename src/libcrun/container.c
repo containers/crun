@@ -23,7 +23,9 @@
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
-#include <seccomp.h>
+#ifdef HAVE_SECCOMP
+#  include <seccomp.h>
+#endif
 #include "scheduler.h"
 #include "seccomp_notify.h"
 #include "custom-handler.h"
@@ -47,7 +49,9 @@
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <sys/capability.h>
+#ifdef HAVE_CAP
+#  include <sys/capability.h>
+#endif
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <grp.h>
@@ -3829,6 +3833,7 @@ populate_array_field (char ***field, char *array[], size_t num_elements)
   (*field)[i] = NULL;
 }
 
+#ifdef HAVE_CAP
 static void
 populate_capabilities (struct features_info_s *info, char ***capabilities, size_t *num_capabilities)
 {
@@ -3876,6 +3881,7 @@ populate_capabilities (struct features_info_s *info, char ***capabilities, size_
   (*capabilities)[index] = NULL; // Terminate the array with NULL
   populate_array_field (&(info->linux.capabilities), *capabilities, *num_capabilities);
 }
+#endif
 
 static void
 retrieve_mount_options (struct features_info_s **info)
