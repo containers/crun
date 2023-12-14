@@ -97,7 +97,7 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
   libcrun_context_t crun_context = {
     0,
   };
-  libcrun_container_list_t *list, *it;
+  libcrun_container_list_t *list = NULL, *it;
 
   list_options.format = LIST_TABLE;
 

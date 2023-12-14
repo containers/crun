@@ -89,11 +89,15 @@ syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uin
 }
 
 int
-crun_path_exists (const char *path, libcrun_error_t *err arg_unused)
+crun_path_exists (const char *path, libcrun_error_t *err)
 {
   int ret = access (path, F_OK);
   if (ret < 0)
-    return errno == ENOENT ? 0 : ret;
+    {
+      if (errno == ENOENT)
+        return 0;
+      return crun_make_error (err, errno, "access `%s`", path);
+    }
   return 1;
 }
 
