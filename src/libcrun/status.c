@@ -586,7 +586,6 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       exists = crun_path_exists (status_file, err);
       if (exists < 0)
         {
-          libcrun_free_containers_list (tmp);
           return exists;
         }
 
