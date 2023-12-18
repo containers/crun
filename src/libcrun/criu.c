@@ -982,8 +982,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
    * be necessary later when moving the process into its cgroup. */
   status->pid = ret;
 
-  if (LIKELY (ret > 0))
-    ret = libcrun_save_external_descriptors (container, ret, err);
+  ret = libcrun_save_external_descriptors (container, ret, err);
 
 out_umount:
   ret_out = umount (root);
