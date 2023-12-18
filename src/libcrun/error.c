@@ -81,6 +81,7 @@ crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
   if (vasprintf (&msg, fmt, args_list) < 0)
     {
       va_end (args_list);
+      msg = NULL;
       return ret;
     }
   va_end (args_list);
