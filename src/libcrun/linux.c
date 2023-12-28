@@ -4018,6 +4018,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   char proc_path[64];
   bool has_mappings;
   int ret;
+  char *extra_msg = "";
 
   *out_fd = -1;
 
@@ -4082,7 +4083,13 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
 
   ret = syscall_mount_setattr (newfs_fd, "", AT_EMPTY_PATH | (recursive ? AT_RECURSIVE : 0), &attr);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount_setattr `%s`", mnt->destination);
+    {
+      if (errno == EINVAL)
+        {
+          extra_msg = " (maybe the file system used doesn't support idmap mounts on this kernel?)";
+        }
+      return crun_make_error (err, errno, "mount_setattr `%s`%s", mnt->destination, extra_msg);
+    }
 
   *out_fd = get_and_reset (&newfs_fd);
   return 0;
