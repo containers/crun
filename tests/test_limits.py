@@ -17,6 +17,18 @@
 
 from tests_utils import *
 
+def test_limit_pid_minus_1():
+    conf = base_config()
+    add_all_namespaces(conf)
+    if is_rootless():
+        return 77
+    conf['process']['args'] = ['/init', 'cat', '/dev/null']
+    conf['linux']['resources'] = {"pids" : {"limit" : -1}}
+    out, _ = run_and_get_output(conf)
+    if len(out) == 0:
+        return 0
+    return -1
+
 def test_limit_pid_0():
     conf = base_config()
     add_all_namespaces(conf)
@@ -44,6 +56,7 @@ def test_limit_pid_n():
     return -1
 
 all_tests = {
+    "limit-pid-minus-1" : test_limit_pid_minus_1,
     "limit-pid-0" : test_limit_pid_0,
     "limit-pid-n" : test_limit_pid_n,
 }

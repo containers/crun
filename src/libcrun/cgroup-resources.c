@@ -683,13 +683,14 @@ write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux
 
 /* use for cgroupv2 files with .min, .max, .low, or .high suffix */
 static int
-cg_itoa (char *buf, int64_t value, bool cgroup2)
+cg_itoa (char *buf, int64_t value, bool use_max)
 {
-  if (! (cgroup2 && value == -1))
-    return sprintf (buf, "%" PRIi64, value);
-
-  memcpy (buf, "max", 4);
-  return 3;
+  if (use_max && value < 0)
+    {
+      memcpy (buf, "max", 4);
+      return 3;
+    }
+  return sprintf (buf, "%" PRIi64, value);
 }
 
 static int
@@ -912,7 +913,7 @@ write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_
       size_t len;
       int ret;
 
-      len = cg_itoa (fmt_buf, pids->limit, cgroup2);
+      len = cg_itoa (fmt_buf, pids->limit, true);
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, "pids.max", NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
