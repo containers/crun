@@ -36,57 +36,57 @@ jobs:
           sudo mv /tmp/artifact/*.tar.xz /tmp/artifact/crun.tar.xz
           (cd /tmp/artifact; sha256sum * | sudo tee CHECKSUMS)
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-amd64
           path: /tmp/artifact/crun-linux-amd64
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-amd64-disable-systemd
           path: /tmp/artifact/crun-linux-amd64-disable-systemd
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-arm64
           path: /tmp/artifact/crun-linux-arm64
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-arm64-disable-systemd
           path: /tmp/artifact/crun-linux-arm64-disable-systemd
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-ppc64le
           path: /tmp/artifact/crun-linux-ppc64le
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-ppc64le-disable-systemd
           path: /tmp/artifact/crun-linux-ppc64le-disable-systemd
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-riscv64
           path: /tmp/artifact/crun-linux-riscv64
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun-linux-riscv64-disable-systemd
           path: /tmp/artifact/crun-linux-riscv64-disable-systemd
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun.tar.gz
           path: /tmp/artifact/crun.tar.gz
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: crun.tar.xz
           path: /tmp/artifact/crun.tar.xz
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: CHECKSUMS
           path: /tmp/artifact/CHECKSUMS
