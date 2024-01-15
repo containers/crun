@@ -1,3 +1,12 @@
+* crun-1.13
+
+- src: use O_CLOEXEC for all open/openat calls
+- cgroup v1: use "max" when pids limit < 0.
+- improve error message when idmap mount fails because the underlying
+  file system has no support for it.
+- libcrun: fix compilation when building without libseccomp and libcap.
+- fix relative idmapped mount when using the custom annotation.
+
 * crun-1.12
 
 - add new WebAssembly handler: spin.
