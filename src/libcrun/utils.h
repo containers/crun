@@ -293,7 +293,7 @@ int set_selinux_label (const char *label, bool now, libcrun_error_t *err);
 
 int add_selinux_mount_label (char **ret, const char *data, const char *label, const char *context_type, libcrun_error_t *err);
 
-int set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err);
+int set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err);
 
 int read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t *len, size_t hint, libcrun_error_t *err);
 
