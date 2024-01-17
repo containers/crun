@@ -3232,7 +3232,7 @@ int
 libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
 {
   if (proc->apparmor_profile)
-    return set_apparmor_profile (proc->apparmor_profile, now, err);
+    return set_apparmor_profile (proc->apparmor_profile, proc->no_new_privileges, now, err);
   return 0;
 }
 
