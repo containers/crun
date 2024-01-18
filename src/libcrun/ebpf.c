@@ -447,6 +447,17 @@ ebpf_attach_program (int fd, int dirfd, libcrun_error_t *err)
 #endif
 }
 
+static void
+bump_memlock ()
+{
+  struct rlimit limit;
+
+  limit.rlim_cur = RLIM_INFINITY;
+  limit.rlim_max = RLIM_INFINITY;
+  /* Best effort, ignore errors.  */
+  (void) setrlimit (RLIMIT_MEMLOCK, &limit);
+}
+
 int
 libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err)
 {
@@ -460,14 +471,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 #else
   cleanup_close int fd = -1;
   union bpf_attr attr;
-  struct rlimit limit;
   int ret;
-
-  limit.rlim_cur = RLIM_INFINITY;
-  limit.rlim_max = RLIM_INFINITY;
-  ret = setrlimit (RLIMIT_MEMLOCK, &limit);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "setrlimit (RLIM_MEMLOCK)");
 
   memset (&attr, 0, sizeof (attr));
   attr.prog_type = BPF_PROG_TYPE_CGROUP_DEVICE;
@@ -481,6 +485,10 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
     {
       const size_t log_size = 8192;
       cleanup_free char *log = xmalloc (log_size);
+
+      /* Prior to Linux 5.11, eBPF programs were accounted to the memlock
+         prlimit.  Attempt to bump the limit, if possible.  */
+      bump_memlock ();
 
       log[0] = '\0';
       attr.log_level = 1;
