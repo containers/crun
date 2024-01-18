@@ -2187,8 +2187,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           if (errno == ENOTSUP)
             continue;
 
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chmod `%s/%s`", destname, de->d_name);
+          return crun_make_error (err, errno, "chmod `%s/%s`", destname, de->d_name);
         }
     }
 
