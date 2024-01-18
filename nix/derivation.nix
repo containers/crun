@@ -18,7 +18,7 @@ with pkgs; stdenv.mkDerivation {
     which
   ];
   buildInputs = [
-    gcrypt
+    gnutls
     glibc
     glibc.static
     libcap
@@ -32,7 +32,7 @@ with pkgs; stdenv.mkDerivation {
     export LDFLAGS='-s -w -static-libgcc -static'
     export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
     export CRUN_LDFLAGS='-all-static'
-    export LIBS='${lib.optionalString enableCriu "${criu}/lib/libcriu.a"} ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.optionalString enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"} ${yajl}/lib/libyajl.a ${gcrypt}/lib/libgcrypt.a'
+    export LIBS='${lib.optionalString enableCriu "${criu}/lib/libcriu.a"} ${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.optionalString enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"} ${yajl}/lib/libyajl.a ${gnutls}/lib/libgnutls.a'
   '';
   buildPhase = ''
     patchShebangs .

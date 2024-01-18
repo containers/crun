@@ -60,7 +60,7 @@ These dependencies are required for the build:
 
 ```console
 $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel pkg-config libgcrypt-devel \
+    systemd-devel yajl-devel libseccomp-devel pkg-config gnutls-devel \
     go-md2man glibc-static python3-libmount libtool
 ```
 
@@ -69,7 +69,7 @@ $ sudo dnf install -y make python git gcc automake autoconf libcap-devel \
 ```console
 $ sudo yum --enablerepo='*' --disablerepo='media-*' install -y make automake \
     autoconf gettext \
-    libtool gcc libcap-devel systemd-devel yajl-devel libgcrypt-devel \
+    libtool gcc libcap-devel systemd-devel yajl-devel gnutls-devel \
     glibc-static libseccomp-devel python36 git
 ```
 
@@ -89,22 +89,22 @@ $ export PATH=$PATH:$GOPATH/bin
 ```console
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
-   libgcrypt20-dev go-md2man autoconf python3 automake
+   libgnutls28-dev go-md2man autoconf python3 automake
 ```
 
 ### Alpine
 
 ```console
 # apk add gcc automake autoconf libtool gettext pkgconf git make musl-dev \
-    python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man
+    gnutls-dev python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man
 ```
 
 ### Tumbleweed
 
 ```console
 # zypper install make automake autoconf gettext libtool gcc libcap-devel \
-systemd-devel libyajl-devel libseccomp-devel python3 go-md2man \
-glibc-static;
+  libgnutls-devel systemd-devel libyajl-devel libseccomp-devel python3 go-md2man \
+  glibc-static;
 ```
 
 Note that Tumbleweed requires you to specify libseccomp's header file location
