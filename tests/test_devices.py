@@ -18,6 +18,41 @@
 import os
 from tests_utils import *
 
+def test_mode_device():
+    if is_rootless():
+        return 77
+
+    # verify the umask doesn't affect the result
+    os.umask(0o22)
+
+    for have_userns in [True, False]:
+        conf = base_config()
+        add_all_namespaces(conf, userns=have_userns)
+        if have_userns:
+            fullMapping = [
+                {
+                    "containerID": 0,
+                    "hostID": 0,
+                    "size": 4294967295
+                }
+            ]
+            conf['linux']['uidMappings'] = fullMapping
+            conf['linux']['gidMappings'] = fullMapping
+
+        conf['process']['args'] = ['/init', 'mode', '/dev/foo']
+        conf['linux']['devices'] = [{"path": "/dev/foo", "type": "b", "major": 1, "minor": 5, "uid": 10, "gid": 11, "fileMode": 0o157},]
+        try:
+            expected = "157"
+            out = run_and_get_output(conf)
+            if expected not in out[0]:
+                sys.stderr.write("wrong file mode, found %s instead of %s with userns=%s" % (out[0], expected, have_userns))
+                return True
+            return False
+        except Exception as e:
+            print(e)
+            return -1
+    return 0
+
 def test_owner_device():
     if is_rootless():
         return 77
@@ -186,6 +221,7 @@ all_tests = {
     "allow-device" : test_allow_device,
     "allow-access" : test_allow_access,
     "mknod-device" : test_mknod_device,
+    "mode-device"  : test_mode_device,
     "create-or-bind-mount-device" : test_create_or_bind_mount_device,
 }
 
