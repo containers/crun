@@ -22,6 +22,8 @@ import os
 import tempfile
 import subprocess
 
+default_umask = 0o22
+
 base_conf = """
 {
     "ociVersion": "1.0.0",
@@ -285,11 +287,13 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     if use_popen:
         if not stdout:
             stdout=subprocess.PIPE
-        return subprocess.Popen(args, cwd=temp_dir, stdout=stdout,
+        return subprocess.Popen(args, cwd=temp_dir,
+                                umask=default_umask,
+                                stdout=stdout,
                                 stderr=stderr, stdin=stdin, env=env,
                                 close_fds=False), id_container
     else:
-        return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False).decode(), id_container
+        return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
 
 def run_crun_command(args):
     root = get_tests_root_status()

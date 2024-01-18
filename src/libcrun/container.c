@@ -2351,6 +2351,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
+  umask (0);
+
   if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
     {
       unsigned int seccomp_gen_options = 0;
