@@ -45,12 +45,16 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   cleanup_close int dirfd = -1;
   cleanup_close int mems_fd = -1;
   cleanup_close int cpus_fd = -1;
+  bool has_cpus = false, has_mems = false;
   int b_len;
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", path);
 
+  /* If we don't yet have a cpu/mem value to base the child off of, we attempt to read it.
+   * Either, it's the newly created cgroup (and thus is still empty), or it's a parent that's been
+   * prepopulated. */
   if (cpus[0] == '\0')
     {
       cpus_fd = openat (dirfd, "cpuset.cpus", O_RDWR | O_CLOEXEC);
@@ -65,6 +69,8 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
       cpus[b_len] = '\0';
       if (cpus[0] == '\n')
         cpus[0] = '\0';
+      if (cpus[0] != '\0')
+        has_cpus = true;
     }
 
   if (mems[0] == '\0')
@@ -81,9 +87,11 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
       mems[b_len] = '\0';
       if (mems[0] == '\n')
         mems[0] = '\0';
+      if (mems[0] != '\0')
+        has_mems = true;
     }
 
-  /* look up in the parent directory.  */
+  /* If we fail to find one, we should continue searching up until we find one */
   if (cpus[0] == '\0' || mems[0] == '\0')
     {
       size_t parent_path_len;
@@ -104,15 +112,19 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
         }
     }
 
-  /* If we know the resources, use them, instead of initializing with the full set, only to revert it later. */
+  /* If we know the resources, use them, instead of initializing with the full set, only to revert it later.
+   * Only do so if we didn't read the cpus and mems we have from this cgroup.
+   * Otherwise, we'll clobber existing values, which is problematic when there are multiple containers in a cgroup. */
   if (resources && resources->cpu)
     {
-      if (resources->cpu->cpus)
+      if (resources->cpu->cpus && ! has_cpus)
         cpus = xstrdup (resources->cpu->cpus);
-      if (resources->cpu->mems)
+      if (resources->cpu->mems && ! has_mems)
         mems = xstrdup (resources->cpu->mems);
     }
 
+  /* Finally, if we have a fd to populate, write the value chosen. If we have a value from the resources struct to base it off of,
+   * use that, otherwise use the parent's. */
   if (cpus_fd >= 0)
     {
       b_len = TEMP_FAILURE_RETRY (write (cpus_fd, cpus, strlen (cpus)));
