@@ -4,7 +4,6 @@ in
 self: super:
 {
   criu = (static super.criu);
-  gcrypt = (static super.libgcrypt);
   gpgme = (static super.gpgme);
   libassuan = (static super.libassuan);
   libgpgerror = (static super.libgpgerror);

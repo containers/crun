@@ -6,7 +6,7 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/b
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install -y bash golang-1.19 libbtrfs-dev libnl-3-dev libnet1-dev \
-            protobuf-c-compiler libgcrypt20-dev libcap-dev libaio-dev \
+            protobuf-c-compiler libcap-dev libaio-dev \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
             pigz lsof make git gcc build-essential pkgconf libtool \
             libsystemd-dev libcap-dev libyajl-dev \
