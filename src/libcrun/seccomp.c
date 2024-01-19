@@ -441,6 +441,7 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
   PROCESS_DATA (seccomp_gen_options);
 
+  PROCESS_DATA (seccomp->default_errno_ret);
   PROCESS_STRING (seccomp->default_action);
   for (i = 0; i < seccomp->flags_len; i++)
     PROCESS_STRING (seccomp->flags[i]);
