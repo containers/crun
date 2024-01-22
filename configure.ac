@@ -27,7 +27,6 @@ AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 AC_CHECK_HEADERS([error.h linux/openat2.h stdatomic.h linux/ioprio.h])
 
 AC_CHECK_TYPES([atomic_int], [], [], [[#include <stdatomic.h>]])
-AC_CHECK_TYPES([atomic_bool], [], [], [[#include <stdatomic.h>]])
 
 AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid memfd_create)
 
@@ -89,9 +88,6 @@ AS_IF([test "x$enable_caps" != "xno"], [
 		AC_SEARCH_LIBS(cap_from_name, [cap], [AC_DEFINE([HAVE_CAP], 1, [Define if libcap is available])], [AC_MSG_ERROR([*** libcap headers not found])])
 	])
 ])
-
-dnl libgcrypt
-AC_SEARCH_LIBS([gcry_check_version], [gcrypt], [AC_DEFINE([HAVE_GCRYPT], 1, [Define if gcrypt is available])], [])
 
 dnl dl
 AC_ARG_ENABLE([dl], AS_HELP_STRING([--disable-dl], [Disable dynamic libraries support]))

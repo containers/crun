@@ -35,6 +35,8 @@ endif
 check_LIBRARIES = libcrun_testing.a
 
 libcrun_SOURCES = src/libcrun/utils.c \
+		src/libcrun/blake3/blake3.c \
+		src/libcrun/blake3/blake3_portable.c \
 		src/libcrun/cgroup-cgroupfs.c \
 		src/libcrun/cgroup-resources.c \
 		src/libcrun/cgroup-setup.c \
@@ -138,6 +140,7 @@ crun_LDFLAGS = $(CRUN_LDFLAGS)
 endif
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec autogen.sh \
+	src/libcrun/blake3/blake3_impl.h src/libcrun/blake3/blake3.h \
 	src/crun.h src/list.h src/run.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/oci_features.h src/spec.h src/update.h src/ps.h \
 	src/checkpoint.h src/restore.h src/libcrun/seccomp_notify.h src/libcrun/seccomp_notify_plugin.h \
@@ -290,7 +293,7 @@ generate-mount_flags.c: src/libcrun/mount_flags.perf
 
 clang-format:
 # do not format files that were copied into the source directory.
-	git ls-files src tests | grep -E "\\.[hc]" | grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
+	git ls-files src tests | grep -E "\\.[hc]" | grep -v "blake3\|chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
 shellcheck:
 	shellcheck tests/*/*.sh contrib/*.sh
