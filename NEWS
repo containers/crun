@@ -1,3 +1,15 @@
+* crun-1.14
+
+- build: drop dependency on libgcrypt.  Use blake3 to compute the cache
+  key.
+- cpuset: don't clobber parent cgroup value when writing the cpuset
+  value.
+- linux: force umask(0).  Iit ensures that the `mknodat` syscall is
+  not affected by the umask of the calling process, allowing file
+  permissions to be set as specified in the OCI configuration.
+- ebpf: do not require MEMLOCK for eBPF programs.  This requirement
+  was relaxed in Linux 5.11.
+
 * crun-1.13
 
 - src: use O_CLOEXEC for all open/openat calls
