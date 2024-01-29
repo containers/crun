@@ -210,7 +210,7 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
   int parent;
   int ret;
 
-  if (resources->cpu == NULL)
+  if (resources == NULL || resources->cpu == NULL)
     return 0;
 
   if (! resources->cpu->burst_present)
