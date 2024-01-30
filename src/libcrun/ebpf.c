@@ -451,9 +451,22 @@ static void
 bump_memlock ()
 {
   struct rlimit limit;
+  int ret;
 
   limit.rlim_cur = RLIM_INFINITY;
   limit.rlim_max = RLIM_INFINITY;
+
+  ret = setrlimit (RLIMIT_MEMLOCK, &limit);
+  if (ret == 0)
+    return;
+
+  /* If the above failed, try to set the current limit
+     to the max configured.  */
+  ret = getrlimit (RLIMIT_MEMLOCK, &limit);
+  if (ret < 0)
+    return;
+
+  limit.rlim_cur = limit.rlim_max;
   /* Best effort, ignore errors.  */
   (void) setrlimit (RLIMIT_MEMLOCK, &limit);
 }
