@@ -496,12 +496,15 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
   fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
   if (fd < 0)
     {
-      const size_t log_size = 8192;
-      cleanup_free char *log = xmalloc (log_size);
-
       /* Prior to Linux 5.11, eBPF programs were accounted to the memlock
          prlimit.  Attempt to bump the limit, if possible.  */
       bump_memlock ();
+      fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
+    }
+  if (fd < 0)
+    {
+      const size_t log_size = 8192;
+      cleanup_free char *log = xmalloc (log_size);
 
       log[0] = '\0';
       attr.log_level = 1;
