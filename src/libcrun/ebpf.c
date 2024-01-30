@@ -503,9 +503,12 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
     }
   if (fd < 0)
     {
-      const size_t log_size = 8192;
-      cleanup_free char *log = xmalloc (log_size);
+      const size_t max_log_size = 1 << 20;
+      cleanup_free char *log = NULL;
+      size_t log_size = 8192;
 
+    retry:
+      log = xrealloc (log, log_size);
       log[0] = '\0';
       attr.log_level = 1;
       attr.log_buf = ptr_to_u64 (log);
@@ -513,7 +516,15 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
       fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
       if (fd < 0)
-        return crun_make_error (err, errno, "bpf create `%s`", log);
+        {
+          if (errno == ENOSPC && log_size < max_log_size)
+            {
+              /* The provided buffer was not big enough.  */
+              log_size *= 2;
+              goto retry;
+            }
+          return crun_make_error (err, errno, "bpf create `%s`", log);
+        }
     }
 
   ret = ebpf_attach_program (fd, dirfd, err);
