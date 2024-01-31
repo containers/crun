@@ -823,19 +823,19 @@ add_selinux_mount_label (char **retlabel, const char *data, const char *label, c
   return 0;
 }
 
-static const char *
-lsm_attr_path (const char *lsm, const char *fname, libcrun_error_t *err)
+static int
+set_security_attr (const char *lsm, const char *fname, const char *data, libcrun_error_t *err)
 {
+  int ret;
+  struct statfs sfs;
+
   cleanup_close int attr_dirfd = -1;
   cleanup_close int lsm_dirfd = -1;
-  char *attr_path = NULL;
+  cleanup_close int fd = -1;
 
   attr_dirfd = open ("/proc/thread-self/attr", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (attr_dirfd < 0))
-    {
-      crun_make_error (err, errno, "open `/proc/thread-self/attr`");
-      return NULL;
-    }
+    return crun_make_error (err, errno, "open `/proc/thread-self/attr`");
 
   // Check for newer scoped interface in /proc/thread-self/attr/<lsm>
   if (lsm != NULL)
@@ -843,56 +843,34 @@ lsm_attr_path (const char *lsm, const char *fname, libcrun_error_t *err)
       lsm_dirfd = openat (attr_dirfd, lsm, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
 
       if (UNLIKELY (lsm_dirfd < 0 && errno != ENOENT))
-        {
-          crun_make_error (err, errno, "open `/proc/thread-self/attr/%s`", lsm);
-          return NULL;
-        }
+        return crun_make_error (err, errno, "open `/proc/thread-self/attr/%s`", lsm);
     }
+
   // Use scoped interface if available, fall back to unscoped
-  xasprintf (&attr_path, "/proc/thread-self/attr/%s%s%s", lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
-
-  return attr_path;
-}
-
-static int
-check_proc_super_magic (int fd, const char *path, libcrun_error_t *err)
-{
-  struct statfs sfs;
-
-  int ret = fstatfs (fd, &sfs);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "statfs `%s`", path);
-
-  if (sfs.f_type != PROC_SUPER_MAGIC)
-    return crun_make_error (err, 0, "the file `%s` is not on a `procfs` file system", path);
-
-  return 0;
-}
-
-static int
-set_security_attr (const char *lsm, const char *fname, const char *data, libcrun_error_t *err)
-{
-  int ret;
-
-  cleanup_free const char *attr_path = lsm_attr_path (lsm, fname, err);
-  cleanup_close int fd = -1;
-
-  if (UNLIKELY (attr_path == NULL))
-    return -1;
-
-  fd = open (attr_path, O_WRONLY | O_CLOEXEC);
+  if (lsm_dirfd >= 0)
+    fd = openat (lsm_dirfd, fname, O_WRONLY | O_CLOEXEC);
+  else
+    fd = openat (attr_dirfd, fname, O_WRONLY | O_CLOEXEC);
 
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
+    return crun_make_error (err, errno, "open `/proc/thread-self/attr/%s%s%s`",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
-  ret = check_proc_super_magic (fd, attr_path, err);
+  // Check that the file system type is indeed procfs
+  ret = fstatfs (fd, &sfs);
   if (UNLIKELY (ret < 0))
-    return ret;
+    return crun_make_error (err, errno, "statfs `/proc/thread-self/attr/%s%s%s`",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
+
+  if (sfs.f_type != PROC_SUPER_MAGIC)
+    return crun_make_error (err, 0, "the file `/proc/thread-self/attr/%s%s%s` is not on a `procfs` file system",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
   // Write out data
   ret = TEMP_FAILURE_RETRY (write (fd, data, strlen (data)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write file `%s`", attr_path);
+    return crun_make_error (err, errno, "write file `/proc/thread-self/attr/%s%s%s`",
+                            lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
   return 0;
 }
@@ -919,33 +897,8 @@ libcrun_is_apparmor_enabled (libcrun_error_t *err)
   return apparmor_enabled;
 }
 
-static int
-is_current_process_confined (libcrun_error_t *err)
-{
-  cleanup_free const char *attr_path = lsm_attr_path ("apparmor", "current", err);
-  cleanup_close int fd = -1;
-  char buf[256];
-
-  if (UNLIKELY (attr_path == NULL))
-    return -1;
-
-  fd = open (attr_path, O_RDONLY | O_CLOEXEC);
-
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
-
-  if (UNLIKELY (check_proc_super_magic (fd, attr_path, err)))
-    return -1;
-
-  ssize_t bytes_read = read (fd, buf, sizeof (buf) - 1);
-  if (UNLIKELY (bytes_read < 0))
-    return crun_make_error (err, errno, "error reading file `%s`", attr_path);
-
-  return (strncmp (buf, "unconfined", bytes_read) != 0 && buf[0] != '\0');
-}
-
 int
-set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err)
+set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err)
 {
   int ret;
 
@@ -956,13 +909,8 @@ set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, lib
   if (ret)
     {
       cleanup_free char *buf = NULL;
-      ret = is_current_process_confined (err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      // if confined only way for apparmor to allow change of profile with NNP is with stacking
-      xasprintf (&buf, "%s %s", no_new_privileges && ret ? "stack" : now ? "changeprofile"
-                                                                         : "exec",
-                 profile);
+
+      xasprintf (&buf, "%s %s", now ? "changeprofile" : "exec", profile);
 
       return set_security_attr ("apparmor", now ? "current" : "exec", buf, err);
     }
@@ -1747,6 +1695,7 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
   cleanup_dir DIR *dir = NULL;
   int ret;
   int fd;
+  struct statfs sfs;
   struct dirent *next;
 
   ret = syscall_close_range (n, UINT_MAX, close_now ? 0 : CLOSE_RANGE_CLOEXEC);
@@ -1759,9 +1708,12 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
   if (UNLIKELY (cfd < 0))
     return crun_make_error (err, errno, "open `/proc/self/fd`");
 
-  ret = check_proc_super_magic (cfd, "/proc/self/fd", err);
+  ret = fstatfs (cfd, &sfs);
   if (UNLIKELY (ret < 0))
-    return ret;
+    return crun_make_error (err, errno, "statfs `/proc/self/fd`");
+
+  if (sfs.f_type != PROC_SUPER_MAGIC)
+    return crun_make_error (err, 0, "the path `/proc/self/fd` is not on file system type `procfs`");
 
   dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))
