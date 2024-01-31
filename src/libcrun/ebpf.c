@@ -451,9 +451,22 @@ static void
 bump_memlock ()
 {
   struct rlimit limit;
+  int ret;
 
   limit.rlim_cur = RLIM_INFINITY;
   limit.rlim_max = RLIM_INFINITY;
+
+  ret = setrlimit (RLIMIT_MEMLOCK, &limit);
+  if (ret == 0)
+    return;
+
+  /* If the above failed, try to set the current limit
+     to the max configured.  */
+  ret = getrlimit (RLIMIT_MEMLOCK, &limit);
+  if (ret < 0)
+    return;
+
+  limit.rlim_cur = limit.rlim_max;
   /* Best effort, ignore errors.  */
   (void) setrlimit (RLIMIT_MEMLOCK, &limit);
 }
@@ -483,13 +496,19 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
   fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
   if (fd < 0)
     {
-      const size_t log_size = 8192;
-      cleanup_free char *log = xmalloc (log_size);
-
       /* Prior to Linux 5.11, eBPF programs were accounted to the memlock
          prlimit.  Attempt to bump the limit, if possible.  */
       bump_memlock ();
+      fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
+    }
+  if (fd < 0)
+    {
+      const size_t max_log_size = 1 << 20;
+      cleanup_free char *log = NULL;
+      size_t log_size = 8192;
 
+    retry:
+      log = xrealloc (log, log_size);
       log[0] = '\0';
       attr.log_level = 1;
       attr.log_buf = ptr_to_u64 (log);
@@ -497,7 +516,15 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
       fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
       if (fd < 0)
-        return crun_make_error (err, errno, "bpf create `%s`", log);
+        {
+          if (errno == ENOSPC && log_size < max_log_size)
+            {
+              /* The provided buffer was not big enough.  */
+              log_size *= 2;
+              goto retry;
+            }
+          return crun_make_error (err, errno, "bpf create `%s`", log);
+        }
     }
 
   ret = ebpf_attach_program (fd, dirfd, err);
