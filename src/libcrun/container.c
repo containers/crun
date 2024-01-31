@@ -1484,10 +1484,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
   if (entrypoint_args->custom_handler)
     {
-      /* Files marked with O_CLOEXEC are closed at execv time, so make sure they are closed now.  */
+      /* Files marked with O_CLOEXEC are closed at execv time, so make sure they are closed now.
+         This is a best effort operation, because the seccomp filter is already in place and it could
+         stop some syscalls used by mark_or_close_fds_ge_than.
+      */
       ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        crun_error_release (err);
 
       prctl (PR_SET_NAME, entrypoint_args->custom_handler->vtable->name);
 
@@ -1520,6 +1523,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
       return ret;
     }
+
+  /* Attempt to close all the files that are not needed to prevent execv to have access to them.
+     This is a best effort operation since the seccomp profile is already in place now and might block
+     some of the syscalls needed by mark_or_close_fds_ge_than.  */
+  ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
 
   TEMP_FAILURE_RETRY (execv (exec_path, def->process->args));
 
@@ -3399,6 +3409,14 @@ exec_process_entrypoint (libcrun_context_t *context,
       _exit (EXIT_FAILURE);
       return 0;
     }
+
+  /* Attempt to close all the files that are not needed to prevent execv to have access to them.
+     This is a best effort operation, because the seccomp filter is already in place and it could
+     stop some syscalls used by mark_or_close_fds_ge_than.
+  */
+  ret = mark_or_close_fds_ge_than (context->preserve_fds + 3, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
 
   TEMP_FAILURE_RETRY (execv (exec_path, process->args));
   libcrun_fail_with_error (errno, "exec");
