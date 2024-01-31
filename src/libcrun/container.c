@@ -1172,8 +1172,13 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   /* Attempt to chdir immediately here, before doing the setresuid.  If we fail here, let's
      try again later once the process switched to the user that runs in the container.  */
   if (def->process && def->process->cwd)
-    if (LIKELY (chdir (def->process->cwd) == 0))
-      chdir_done = true;
+    {
+      ret = libcrun_safe_chdir (def->process->cwd, err);
+      if (LIKELY (ret == 0))
+        chdir_done = true;
+      else
+        crun_error_release (err);
+    }
 
   if (def->process && def->process->args)
     {
@@ -1290,8 +1295,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   /* The chdir was not already performed, so try again now after switching to the UID/GID in the container.  */
   if (! chdir_done && def->process && def->process->cwd)
-    if (UNLIKELY (chdir (def->process->cwd) < 0))
-      return crun_make_error (err, errno, "chdir `%s`", def->process->cwd);
+    {
+      ret = libcrun_safe_chdir (def->process->cwd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (notify_socket && putenv (notify_socket) < 0)
     return crun_make_error (err, errno, "putenv `%s`", notify_socket);
@@ -3239,8 +3247,10 @@ exec_process_entrypoint (libcrun_context_t *context,
   TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
 
   cwd = process->cwd ? process->cwd : "/";
-  if (LIKELY (chdir (cwd) == 0))
+  if (LIKELY (libcrun_safe_chdir (cwd, err) == 0))
     chdir_done = true;
+  else
+    crun_error_release (err);
 
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
@@ -3364,8 +3374,8 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  if (! chdir_done && UNLIKELY (chdir (cwd) < 0))
-    libcrun_fail_with_error (errno, "chdir `%s`", cwd);
+  if (UNLIKELY ((! chdir_done) && libcrun_safe_chdir (cwd, err) < 0))
+    libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
   if (process->no_new_privileges)
     {
