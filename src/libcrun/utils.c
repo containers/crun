@@ -941,7 +941,9 @@ is_current_process_confined (libcrun_error_t *err)
   if (UNLIKELY (bytes_read < 0))
     return crun_make_error (err, errno, "error reading file `%s`", attr_path);
 
-  return (strncmp (buf, "unconfined", bytes_read) != 0 && buf[0] != '\0');
+#define UNCONFINED "unconfined"
+#define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
+  return bytes_read >= UNCONFINED_LEN && memcmp (buf, UNCONFINED, UNCONFINED_LEN);
 }
 
 int
