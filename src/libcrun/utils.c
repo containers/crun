@@ -919,33 +919,8 @@ libcrun_is_apparmor_enabled (libcrun_error_t *err)
   return apparmor_enabled;
 }
 
-static int
-is_current_process_confined (libcrun_error_t *err)
-{
-  cleanup_free const char *attr_path = lsm_attr_path ("apparmor", "current", err);
-  cleanup_close int fd = -1;
-  char buf[256];
-
-  if (UNLIKELY (attr_path == NULL))
-    return -1;
-
-  fd = open (attr_path, O_RDONLY | O_CLOEXEC);
-
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
-
-  if (UNLIKELY (check_proc_super_magic (fd, attr_path, err)))
-    return -1;
-
-  ssize_t bytes_read = read (fd, buf, sizeof (buf) - 1);
-  if (UNLIKELY (bytes_read < 0))
-    return crun_make_error (err, errno, "error reading file `%s`", attr_path);
-
-  return (strncmp (buf, "unconfined", bytes_read) != 0 && buf[0] != '\0');
-}
-
 int
-set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err)
+set_apparmor_profile (const char *profile, bool now, libcrun_error_t *err)
 {
   int ret;
 
@@ -955,16 +930,22 @@ set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, lib
 
   if (ret)
     {
-      cleanup_free char *buf = NULL;
-      ret = is_current_process_confined (err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      // if confined only way for apparmor to allow change of profile with NNP is with stacking
-      xasprintf (&buf, "%s %s", no_new_privileges && ret ? "stack" : now ? "changeprofile"
-                                                                         : "exec",
-                 profile);
+      const char *attr = now ? "changeprofile" : "exec";
+      cleanup_free char *cmd_stack = NULL;
+      cleanup_free char *cmd = NULL;
 
-      return set_security_attr ("apparmor", now ? "current" : "exec", buf, err);
+      xasprintf (&cmd, "%s %s", attr, profile);
+
+      ret = set_security_attr ("apparmor", now ? "current" : "exec", cmd, err);
+      if (LIKELY (ret == 0))
+        return ret;
+
+      crun_error_release (err);
+
+      /* if confined only way for apparmor to allow change of profile with NNP is with stacking.  */
+      xasprintf (&cmd, "stack %s", profile);
+
+      return set_security_attr ("apparmor", attr, cmd_stack, err);
     }
   return 0;
 }
