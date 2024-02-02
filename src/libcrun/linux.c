@@ -251,6 +251,12 @@ struct _clone3_args
 };
 
 static int
+syscall_getcwd (char *path, size_t len)
+{
+  return (int) syscall (__NR_getcwd, path, len);
+}
+
+static int
 syscall_clone3 (struct _clone3_args *args)
 {
 #ifdef __NR_clone3
@@ -5712,4 +5718,47 @@ libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *container, 
   name = libcrun_get_intelrdt_name (ctr_name, container, NULL);
 
   return resctl_update (name, l3_cache_schema, mem_bw_schema, err);
+}
+
+/* Change the current directory and make sure the current working
+   directory, once set, is accessible from the current mount
+   namespace.  This check prevents container-escape issues like
+   CVE-2024-21626.
+   The current working directory cannot be longer than PATH_MAX.
+*/
+int
+libcrun_safe_chdir (const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *buffer = NULL;
+  int ret;
+
+  ret = chdir (path);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chdir to `%s`", path);
+
+  buffer = xmalloc (PATH_MAX);
+  ret = syscall_getcwd (buffer, PATH_MAX);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "getcwd");
+
+  /* Enforce that the returned path is an absolute path.  */
+  if (ret == 0 || buffer[0] != '/')
+    {
+      (void) chdir ("/");
+      errno = ENOENT;
+
+      /*
+        The kernel prepends the string "(unreachable)" to the path
+        when it is not reachable from the current mount namespace.
+        Use it to give a better error message.
+      */
+#define UNREACHABLE "unreachable"
+#define UNREACHABLE_LEN ((int) sizeof (UNREACHABLE) - 1)
+
+      if ((ret >= UNREACHABLE_LEN) && (memcmp (buffer, UNREACHABLE, UNREACHABLE_LEN) == 0))
+        return crun_make_error (err, errno, "the working directory is not accessible from the current namespace");
+
+      return crun_make_error (err, errno, "the current working directory is not an absolute path");
+    }
+  return 0;
 }

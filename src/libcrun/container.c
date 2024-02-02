@@ -1172,8 +1172,13 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   /* Attempt to chdir immediately here, before doing the setresuid.  If we fail here, let's
      try again later once the process switched to the user that runs in the container.  */
   if (def->process && def->process->cwd)
-    if (LIKELY (chdir (def->process->cwd) == 0))
-      chdir_done = true;
+    {
+      ret = libcrun_safe_chdir (def->process->cwd, err);
+      if (LIKELY (ret == 0))
+        chdir_done = true;
+      else
+        crun_error_release (err);
+    }
 
   if (def->process && def->process->args)
     {
@@ -1290,14 +1295,14 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   /* The chdir was not already performed, so try again now after switching to the UID/GID in the container.  */
   if (! chdir_done && def->process && def->process->cwd)
-    if (UNLIKELY (chdir (def->process->cwd) < 0))
-      return crun_make_error (err, errno, "chdir `%s`", def->process->cwd);
-
-  if (notify_socket)
     {
-      if (putenv (notify_socket) < 0)
-        return crun_make_error (err, errno, "putenv `%s`", notify_socket);
+      ret = libcrun_safe_chdir (def->process->cwd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
+
+  if (notify_socket && putenv (notify_socket) < 0)
+    return crun_make_error (err, errno, "putenv `%s`", notify_socket);
 
   return 0;
 }
@@ -1487,10 +1492,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
   if (entrypoint_args->custom_handler)
     {
-      /* Files marked with O_CLOEXEC are closed at execv time, so make sure they are closed now.  */
+      /* Files marked with O_CLOEXEC are closed at execv time, so make sure they are closed now.
+         This is a best effort operation, because the seccomp filter is already in place and it could
+         stop some syscalls used by mark_or_close_fds_ge_than.
+      */
       ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        crun_error_release (err);
 
       prctl (PR_SET_NAME, entrypoint_args->custom_handler->vtable->name);
 
@@ -1523,6 +1531,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
       return ret;
     }
+
+  /* Attempt to close all the files that are not needed to prevent execv to have access to them.
+     This is a best effort operation since the seccomp profile is already in place now and might block
+     some of the syscalls needed by mark_or_close_fds_ge_than.  */
+  ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
 
   TEMP_FAILURE_RETRY (execv (exec_path, def->process->args));
 
@@ -3232,8 +3247,10 @@ exec_process_entrypoint (libcrun_context_t *context,
   TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
 
   cwd = process->cwd ? process->cwd : "/";
-  if (LIKELY (chdir (cwd) == 0))
+  if (LIKELY (libcrun_safe_chdir (cwd, err) == 0))
     chdir_done = true;
+  else
+    crun_error_release (err);
 
   ret = unblock_signals (err);
   if (UNLIKELY (ret < 0))
@@ -3357,8 +3374,8 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  if (! chdir_done && UNLIKELY (chdir (cwd) < 0))
-    libcrun_fail_with_error (errno, "chdir `%s`", cwd);
+  if (UNLIKELY ((! chdir_done) && libcrun_safe_chdir (cwd, err) < 0))
+    libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
   if (process->no_new_privileges)
     {
@@ -3402,6 +3419,14 @@ exec_process_entrypoint (libcrun_context_t *context,
       _exit (EXIT_FAILURE);
       return 0;
     }
+
+  /* Attempt to close all the files that are not needed to prevent execv to have access to them.
+     This is a best effort operation, because the seccomp filter is already in place and it could
+     stop some syscalls used by mark_or_close_fds_ge_than.
+  */
+  ret = mark_or_close_fds_ge_than (context->preserve_fds + 3, true, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
 
   TEMP_FAILURE_RETRY (execv (exec_path, process->args));
   libcrun_fail_with_error (errno, "exec");
