@@ -1293,11 +1293,8 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
     if (UNLIKELY (chdir (def->process->cwd) < 0))
       return crun_make_error (err, errno, "chdir `%s`", def->process->cwd);
 
-  if (notify_socket)
-    {
-      if (putenv (notify_socket) < 0)
-        return crun_make_error (err, errno, "putenv `%s`", notify_socket);
-    }
+  if (notify_socket && putenv (notify_socket) < 0)
+    return crun_make_error (err, errno, "putenv `%s`", notify_socket);
 
   return 0;
 }
