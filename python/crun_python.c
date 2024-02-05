@@ -121,7 +121,7 @@ make_context (PyObject *self arg_unused, PyObject *args, PyObject *kwargs)
   char *state_root = NULL;
   char *notify_socket = NULL;
   static char *kwlist[] =
-    { "id", "bundle", "state-root", "systemd-cgroup", "notify-socket", "detach", "no_new_keyring", NULL };
+    { "id", "bundle", "state_root", "systemd_cgroup", "notify_socket", "detach", "no_new_keyring", NULL };
   libcrun_context_t *ctx = malloc (sizeof (*ctx));
   if (ctx == NULL)
     return NULL;
