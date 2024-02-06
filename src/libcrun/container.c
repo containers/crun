@@ -3940,8 +3940,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   size_t num_actions = sizeof (actions) / sizeof (actions[0]);
   size_t num_hooks = sizeof (hooks) / sizeof (hooks[0]);
   size_t num_archs = sizeof (archs) / sizeof (archs[0]);
+  cleanup_free char **capabilities = NULL;
   size_t num_capabilities = 0;
-  char **capabilities = NULL;
 
   *info = xmalloc0 (sizeof (struct features_info_s));
 
