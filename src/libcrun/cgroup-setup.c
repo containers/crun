@@ -42,6 +42,8 @@
 static int
 initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *mems, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
 {
+  cleanup_free char *allocated_cpus = NULL;
+  cleanup_free char *allocated_mems = NULL;
   cleanup_close int dirfd = -1;
   cleanup_close int mems_fd = -1;
   cleanup_close int cpus_fd = -1;
@@ -118,9 +120,9 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   if (resources && resources->cpu)
     {
       if (resources->cpu->cpus && ! has_cpus)
-        cpus = xstrdup (resources->cpu->cpus);
+        cpus = allocated_cpus = xstrdup (resources->cpu->cpus);
       if (resources->cpu->mems && ! has_mems)
-        mems = xstrdup (resources->cpu->mems);
+        mems = allocated_mems = xstrdup (resources->cpu->mems);
     }
 
   /* Finally, if we have a fd to populate, write the value chosen. If we have a value from the resources struct to base it off of,
