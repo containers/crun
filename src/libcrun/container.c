@@ -3913,7 +3913,7 @@ populate_capabilities (struct features_info_s *info, char ***capabilities, size_
 static void
 retrieve_mount_options (struct features_info_s **info)
 {
-  const struct propagation_flags_s *mount_options_list;
+  cleanup_free const struct propagation_flags_s *mount_options_list = NULL;
   size_t num_mount_options = 0;
 
   // Retrieve mount options from wordlist
