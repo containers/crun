@@ -4020,7 +4020,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   cleanup_close int fd = -1;
   const char *idmap_option;
   bool recursive = false;
-  const char *options;
+  const char *options = NULL;
   char proc_path[64];
   bool has_mappings;
   int ret;

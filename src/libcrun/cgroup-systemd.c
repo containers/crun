@@ -206,7 +206,6 @@ static int
 setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resources *resources, bool cgroup2, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
-  cleanup_close int dirfd = -1;
   int parent;
   int ret;
 
@@ -218,6 +217,8 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
 
   for (parent = 0; parent < 2; parent++)
     {
+      cleanup_close int dirfd = -1;
+
       if (cgroup2)
         ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path ? path : "", (parent ? ".." : NULL), NULL);
       else
