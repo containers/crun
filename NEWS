@@ -1,3 +1,17 @@
+* crun-1.14.1
+
+- there was recently a security vulnerability (CVE-2024-21626) in runc
+  that allowed a malicious user to chdir(2) to a /proc/*/fd entry that is
+  outside the container rootfs.  While crun is not affected directly,
+  harden chdir by validating that we are still inside the container
+  rootfs.
+- container: attempt to close all the files before execv(2).
+  if we leak any fd, it prevents execv to gain access to files outside
+  the container rootfs through /proc/self/fd/$fd.
+- fix a regression caused by 1.14 when installing the ebpf filter on a
+  kernel older than 5.11.
+- cgroup, systemd: fix segfault if the resources block is not specified.
+
 * crun-1.14
 
 - build: drop dependency on libgcrypt.  Use blake3 to compute the cache
