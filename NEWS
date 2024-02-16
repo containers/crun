@@ -1,3 +1,9 @@
+* crun-1.14.2
+
+- crun: drop check for OCI version.  A recent bump in the OCI runtime
+  specs caused crun to fail with every config file.  Just drop the
+  check since it doesn't add any value.
+
 * crun-1.14.1
 
 - there was recently a security vulnerability (CVE-2024-21626) in runc
