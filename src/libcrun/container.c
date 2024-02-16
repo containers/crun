@@ -2719,9 +2719,6 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
-    return crun_make_error (err, 0, "unknown version specified");
-
   if (def->process && def->process->terminal && detach && context->console_socket == NULL)
     return crun_make_error (err, 0, "use --console-socket with --detach when a terminal is used");
 
