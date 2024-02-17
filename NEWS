@@ -1,3 +1,7 @@
+* crun-1.14.3
+
+- follow up for 1.14.2.  Drop the version check for each command.
+
 * crun-1.14.2
 
 - crun: drop check for OCI version.  A recent bump in the OCI runtime
