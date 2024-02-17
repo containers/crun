@@ -2820,9 +2820,6 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   container->context = context;
 
-  if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
-    return crun_make_error (err, 0, "unknown version specified");
-
   ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -4119,9 +4116,6 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
 
   container->context = context;
   def = container->container_def;
-
-  if (def->oci_version && strstr (def->oci_version, "1.0") == NULL)
-    return crun_make_error (err, 0, "unknown version specified");
 
   ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
