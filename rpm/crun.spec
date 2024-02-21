@@ -116,11 +116,11 @@ Recommends: wasmedge
 rm -rf %{buildroot}%{_prefix}/lib*
 
 %if %{defined krun_support}
-ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/krun
+ln -s %{name} %{buildroot}%{_bindir}/krun
 %endif
 
 %if %{defined wasm_support}
-ln -s %{_bindir}/%{name} %{buildroot}%{_bindir}/%{name}-wasm
+ln -s %{name} %{buildroot}%{_bindir}/%{name}-wasm
 %endif
 
 %files
