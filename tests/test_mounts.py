@@ -216,6 +216,19 @@ def test_mount_ro():
             return -1
     return 0
 
+def test_mount_rro():
+    for userns in [True, False]:
+        a = helper_mount("rro", userns=userns, is_file=True)[0]
+        if "ro" not in a:
+            return -1
+        a = helper_mount("rro", userns=userns)[0]
+        if "ro" not in a:
+            return -1
+        a = helper_mount("rro", userns=userns, tmpfs=False)[0]
+        if "ro" not in a:
+            return -1
+    return 0
+
 def test_mount_rw():
     for userns in [True, False]:
         a = helper_mount("rw", tmpfs=False, userns=userns)[0]
@@ -551,6 +564,7 @@ def test_cgroup_mount_without_netns():
 
 all_tests = {
     "mount-ro" : test_mount_ro,
+    "mount-rro" : test_mount_rro,
     "mount-rw" : test_mount_rw,
     "mount-relatime" : test_mount_relatime,
     "mount-strictatime" : test_mount_strictatime,
