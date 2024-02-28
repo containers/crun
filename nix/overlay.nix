@@ -24,6 +24,11 @@ self: super:
       "-Dglib=false"
       "-Dstatic-libsystemd=true"
     ];
+    # TODO: remove when https://github.com/systemd/systemd/issues/30448
+    # got resolved or fixed in nixpkgs.
+    preConfigure = ''
+      export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -Wno-error=format-overflow"
+    '';
   });
   yajl = super.yajl.overrideAttrs (x: {
     cmakeFlags = (x.cmakeFlags or [ ]) ++ [
