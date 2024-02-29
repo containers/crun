@@ -1,3 +1,8 @@
+* crun-1.14.4
+
+- linux: fix mount of file with recursive flags.  Do not assume it is
+  a directory, but check the source type.
+
 * crun-1.14.3
 
 - follow up for 1.14.2.  Drop the version check for each command.
