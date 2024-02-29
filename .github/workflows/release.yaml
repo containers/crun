@@ -28,7 +28,7 @@ jobs:
 
       - run: |
           sudo mv release-* /tmp/artifact
-          for ARCH in amd64 arm64 ppc64le riscv64; do
+          for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
             sudo mv /tmp/artifact/crun-*-linux-${ARCH} /tmp/artifact/crun-linux-${ARCH}
             sudo mv /tmp/artifact/crun-*-linux-${ARCH}-disable-systemd /tmp/artifact/crun-linux-${ARCH}-disable-systemd
           done
@@ -75,6 +75,16 @@ jobs:
         with:
           name: crun-linux-riscv64-disable-systemd
           path: /tmp/artifact/crun-linux-riscv64-disable-systemd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crun-linux-s390x
+          path: /tmp/artifact/crun-linux-s390x
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crun-linux-s390x-disable-systemd
+          path: /tmp/artifact/crun-linux-s390x-disable-systemd
 
       - uses: actions/upload-artifact@v4
         with:

@@ -35,7 +35,8 @@ with pkgs; stdenv.mkDerivation {
   '';
   buildPhase = ''
     patchShebangs .
-    make
+    make -C libocispec libocispec.la
+    make git-version.h crun
   '';
   installPhase = ''
     install -Dm755 crun $out/bin/crun
