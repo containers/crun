@@ -2715,6 +2715,10 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 
   container->context = context;
 
+  ret = validate_options (options, LIBCRUN_RUN_OPTIONS_PREFORK | LIBCRUN_RUN_OPTIONS_KEEP, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2821,6 +2825,10 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   context->detach = 1;
 
   container->context = context;
+
+  ret = validate_options (options, LIBCRUN_CREATE_OPTIONS_PREFORK, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = check_config_file (def, context, err);
   if (UNLIKELY (ret < 0))
