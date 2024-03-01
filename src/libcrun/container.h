@@ -69,6 +69,11 @@ enum
   LIBCRUN_RUN_OPTIONS_KEEP = 1 << 1,
 };
 
+enum
+{
+  LIBCRUN_CREATE_OPTIONS_PREFORK = 1 << 0,
+};
+
 struct libcrun_container_s
 {
   /* Container parsed from the runtime json file.  */
