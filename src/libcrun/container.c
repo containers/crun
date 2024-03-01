@@ -2733,7 +2733,8 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
         return ret;
 
       ret = libcrun_container_run_internal (container, context, NULL, err);
-      force_delete_container_status (context, def);
+      if (! (options & LIBCRUN_RUN_OPTIONS_KEEP))
+        force_delete_container_status (context, def);
       return ret;
     }
 
@@ -2795,7 +2796,8 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   exit (EXIT_SUCCESS);
 fail:
 
-  force_delete_container_status (context, def);
+  if (! (options & LIBCRUN_RUN_OPTIONS_KEEP))
+    force_delete_container_status (context, def);
   if (tmp_err)
     {
       TEMP_FAILURE_RETRY (write (pipefd1, &(tmp_err->status), sizeof (tmp_err->status)));
