@@ -66,6 +66,12 @@ struct libcrun_context_s
 enum
 {
   LIBCRUN_RUN_OPTIONS_PREFORK = 1 << 0,
+  LIBCRUN_RUN_OPTIONS_KEEP = 1 << 1,
+};
+
+enum
+{
+  LIBCRUN_CREATE_OPTIONS_PREFORK = 1 << 0,
 };
 
 struct libcrun_container_s

@@ -208,6 +208,7 @@ def get_crun_path():
     return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
+                       keep=False,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
                        all_dev_null=False, id_container=None, relative_config_path="config.json",
                        chown_rootfs_to=None, callback_prepare_rootfs=None):
@@ -266,12 +267,13 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         callback_prepare_rootfs(rootfs)
 
     detach_arg = ['--detach'] if detach else []
+    keep_arg = ['--keep'] if keep else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
     relative_config_path = ['--config', relative_config_path] if relative_config_path else []
 
     root = get_tests_root_status()
-    args = [crun, "--cgroup-manager", cgroup_manager, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + pid_file_arg + [id_container]
+    args = [crun, "--cgroup-manager", cgroup_manager, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:

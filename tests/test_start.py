@@ -503,6 +503,43 @@ def test_ioprio():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_run_keep():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/dev/null']
+    add_all_namespaces(conf)
+    try:
+        out, cid = run_and_get_output(conf, command='run')
+    except:
+        sys.stderr.write("failed to create container\n")
+        return -1
+
+    # without --keep, we must be able to recreate the container with the same id
+    try:
+        out, cid = run_and_get_output(conf, command='run', keep=True, id_container=cid)
+    except:
+        sys.stderr.write("failed to create container\n")
+        return -1
+
+    # now it must fail
+    try:
+        try:
+            out, cid = run_and_get_output(conf, command='run', keep=True, id_container=cid)
+            sys.stderr.write("run --keep succeeded twice\n")
+            return -1
+        except:
+            # expected
+            pass
+
+        try:
+            s = run_crun_command(["state", cid])
+        except:
+            sys.stderr.write("crun state failed on --keep container\n")
+            return -1
+    finally:
+        run_crun_command(["delete", "-f", cid])
+
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -524,6 +561,7 @@ all_tests = {
     "uts-sysctl": test_uts_sysctl,
     "unknown-sysctl": test_unknown_sysctl,
     "ioprio": test_ioprio,
+    "run-keep": test_run_keep,
 }
 
 if __name__ == "__main__":

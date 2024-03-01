@@ -461,4 +461,12 @@ get_proc_self_fd_path (proc_fd_path_t path, int fd)
   get_proc_fd_path (path, 0, fd);
 }
 
+static inline int
+validate_options (unsigned int specified_options, unsigned int supported_options, libcrun_error_t *err)
+{
+  if (! ! (~supported_options & specified_options))
+    return crun_make_error (err, 0, "internal error: unknown options %d", specified_options);
+  return 0;
+}
+
 #endif
