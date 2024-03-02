@@ -778,7 +778,7 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
 
       e = crun_error_get_errno (err);
       if (e != EPERM && e != EACCES && e != EBUSY && e != ENOENT && e != EOPNOTSUPP)
-        return ret;
+        return crun_error_wrap (err, "enable controllers `%s`", controllers);
 
       /* ENOENT can mean both that the file doesn't exist or the controller is not present.  */
       if (e == ENOENT)
@@ -803,7 +803,7 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
         {
           ret = maybe_make_cgroup_threaded (path, err);
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_error_wrap (err, "make cgroup threaded");
         }
 
       /* It seems the kernel can return EBUSY when a process was moved to a sub-cgroup
