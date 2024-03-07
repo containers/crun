@@ -25,6 +25,9 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include "utils.h"
+#ifdef HAVE_REGISTER_PRINTF_SPECIFIER
+#  include <printf.h>
+#endif
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -201,10 +204,46 @@ get_log_type (const char *log, const char **data)
   return -1;
 }
 
+#ifdef HAVE_REGISTER_PRINTF_SPECIFIER
+
+static bool registered_fmt;
+
+static int
+printf_path (FILE *stream, const struct printf_info *info, const void *const args[])
+{
+  const char *const *p = args[0];
+
+  if ((*p)[0] == '/')
+    return fprintf (stream, "`%s`", *p);
+
+  return fprintf (stream, "`/%s`", *p);
+}
+
+static int
+printf_path_sz (const struct printf_info *info, size_t n, int *argtypes, int *size)
+{
+  if (n > 0)
+    argtypes[0] = PA_STRING;
+  return 1;
+}
+
+#endif
+
 int
 libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg, const char *id,
                       const char *log, libcrun_error_t *err)
 {
+#ifdef HAVE_REGISTER_PRINTF_SPECIFIER
+  if (! registered_fmt)
+    {
+      int ret;
+
+      ret = register_printf_specifier ('P', printf_path, printf_path_sz);
+      if (ret < 0)
+        return crun_make_error (err, errno, "could not register custom printf specifier");
+      registered_fmt = true;
+    }
+#endif
   if (log == NULL)
     {
       *new_output_handler = log_write_to_stderr;

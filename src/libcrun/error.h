@@ -55,7 +55,11 @@ typedef struct libcrun_error_s *libcrun_error_t;
       _exit (EXIT_FAILURE);              \
   } while (0)
 
-#define FMT_PATH "`%s`"
+#ifdef HAVE_REGISTER_PRINTF_SPECIFIER
+#  define FMT_PATH "%P"
+#else
+#  define FMT_PATH "`%s`"
+#endif
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
 
