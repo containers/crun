@@ -132,7 +132,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
         {
           config_file_cleanup = realpath (config_file, NULL);
           if (config_file_cleanup == NULL)
-            libcrun_fail_with_error (errno, "realpath `%s` failed", config_file);
+            libcrun_fail_with_error (errno, "realpath " FMT_PATH, config_file);
           config_file = config_file_cleanup;
         }
     }
@@ -146,12 +146,12 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
         {
           bundle_cleanup = realpath (bundle, NULL);
           if (bundle_cleanup == NULL)
-            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
+            libcrun_fail_with_error (errno, "realpath " FMT_PATH, bundle);
           bundle = bundle_cleanup;
         }
 
       if (chdir (bundle) < 0)
-        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
+        libcrun_fail_with_error (errno, "chdir " FMT_PATH, bundle);
     }
 
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);

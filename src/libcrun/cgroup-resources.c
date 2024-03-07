@@ -72,7 +72,7 @@ openat_with_alias (int dirfd, const char *name, const char *alias, const char **
       ret = openat (dirfd, alias, flags);
     }
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "open `%s`", name);
+    return crun_make_error (err, errno, "open " FMT_PATH, name);
   return ret;
 }
 
@@ -191,7 +191,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
 
   fd = openat (dirfd, name, O_WRONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", name);
+    return crun_make_error (err, errno, "open " FMT_PATH, name);
 
   for (i = 0; i < throttling_len; i++)
     {
@@ -202,7 +202,7 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write `%s`", name);
+        return crun_make_error (err, errno, "write " FMT_PATH, name);
     }
   return 0;
 }
@@ -226,7 +226,7 @@ write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **th
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write `%s`", name);
+        return crun_make_error (err, errno, "write " FMT_PATH, name);
     }
   return 0;
 }
@@ -339,7 +339,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
                                  blkio->weight_device[i]->minor, blkio->weight_device[i]->leaf_weight);
                   ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
                   if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "write `%s`", leaf_weight_device_file_name);
+                    return crun_make_error (err, errno, "write " FMT_PATH, leaf_weight_device_file_name);
                 }
             }
         }
@@ -352,7 +352,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
       wfd = openat (dirfd, name, O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (wfd < 0))
         {
-          ret = crun_make_error (err, errno, "open `%s`", name);
+          ret = crun_make_error (err, errno, "open " FMT_PATH, name);
           return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
         }
 
@@ -1075,7 +1075,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_blkio < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_blkio);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_blkio);
 
       ret = write_blkio_resources (dirfd_blkio, false, blkio, err);
       if (UNLIKELY (ret < 0))
@@ -1100,11 +1100,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_netclass < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_netclass);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_netclass);
 
       dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_netprio < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_netprio);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_netprio);
 
       ret = write_network_resources (dirfd_netclass, dirfd_netprio, network, err);
       if (UNLIKELY (ret < 0))
@@ -1121,7 +1121,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
         return ret;
       dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_htlb < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_htlb);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_htlb);
 
       ret = write_hugetlb_resources (dirfd_htlb, false, resources->hugepage_limits, resources->hugepage_limits_len,
                                      err);
@@ -1140,7 +1140,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_devs < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_devs);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_devs);
 
       ret = write_devices_resources (dirfd_devs, false, resources->devices, resources->devices_len, err);
       if (UNLIKELY (ret < 0))
@@ -1158,7 +1158,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_mem < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_mem);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_mem);
 
       ret = write_memory_resources (dirfd_mem, false, resources->memory, err);
       if (UNLIKELY (ret < 0))
@@ -1176,7 +1176,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_pid < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_pid);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_pid);
 
       ret = write_pids_resources (dirfd_pid, false, resources->pids, err);
       if (UNLIKELY (ret < 0))
@@ -1196,7 +1196,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpu < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_cpu);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_cpu);
       ret = write_cpu_resources (dirfd_cpu, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1210,7 +1210,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpuset < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_cpuset);
 
       ret = write_cpuset_resources (dirfd_cpuset, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
@@ -1262,7 +1262,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
 
   cgroup_dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (cgroup_dirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", cgroup_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, cgroup_path);
 
   if (resources->devices_len)
     {

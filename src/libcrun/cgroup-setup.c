@@ -52,7 +52,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", path);
+    return crun_make_error (err, errno, "open " FMT_PATH, path);
 
   /* If we don't yet have a cpu/mem value to base the child off of, we attempt to read it.
    * Either, it's the newly created cgroup (and thus is still empty), or it's a parent that's been
@@ -176,7 +176,7 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 
   dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", path);
+    return crun_make_error (err, errno, "open " FMT_PATH, path);
 
   for (i = 0; files[i]; i++)
     {
@@ -210,7 +210,7 @@ enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool
       if (UNLIKELY (ret < 0))
         {
           if (errno != EROFS)
-            return crun_make_error (err, errno, "creating cgroup directory `%s`", cgroup_path);
+            return crun_make_error (err, errno, "creating cgroup directory " FMT_PATH, cgroup_path);
 
           crun_error_release (err);
           return 0;
@@ -282,7 +282,7 @@ copy_owner (const char *from, const char *to, libcrun_error_t *err)
 
   ret = get_file_owner (from, &uid, &gid);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot get file owner for `%s`", from);
+    return crun_make_error (err, errno, "cannot get file owner for " FMT_PATH, from);
 
   if (uid == 0 && gid == 0)
     return 0;
@@ -312,7 +312,7 @@ read_unified_cgroup_pid (pid_t pid, char **path, libcrun_error_t *err)
 
   to = strchr (from, '\n');
   if (UNLIKELY (to == NULL))
-    return crun_make_error (err, 0, "cannot parse `%s`", cgroup_path);
+    return crun_make_error (err, 0, "cannot parse " FMT_PATH, cgroup_path);
   *to = '\0';
 
   *path = xstrdup (from);

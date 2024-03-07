@@ -65,7 +65,7 @@ libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err)
         {
           if (errno == ENOENT || errno == EEXIST)
             continue;
-          return crun_make_error (err, errno, "symlinkat `%s`", cgroup_symlinks[i].name);
+          return crun_make_error (err, errno, "symlinkat " FMT_PATH, cgroup_symlinks[i].name);
         }
     }
   return 0;
@@ -180,7 +180,7 @@ libcrun_get_current_unified_cgroup (char **path, bool absolute, libcrun_error_t 
   from += 3;
   to = strchr (from, '\n');
   if (UNLIKELY (to == NULL))
-    return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
+    return crun_make_error (err, 0, "cannot parse " FMT_PATH, PROC_SELF_CGROUP);
   *to = '\0';
 
   if (absolute)
@@ -301,7 +301,7 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
 
           nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY | O_CLOEXEC);
           if (UNLIKELY (nfd < 0))
-            return crun_make_error (err, errno, "open cgroup directory `%s`", de->d_name);
+            return crun_make_error (err, errno, "open cgroup directory " FMT_PATH, de->d_name);
           ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -427,7 +427,7 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
 
   dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
   if (dirfd < 0)
-    return crun_make_error (err, errno, "open `%s`", cgroup_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, cgroup_path);
 
   n_pids = 0;
   allocated = 0;
@@ -493,7 +493,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
               if (ret < 0)
                 {
                   if (retry_count >= max_attempts)
-                    return crun_make_error (err, errno, "cannot delete path `%s`", cgroup_path);
+                    return crun_make_error (err, errno, "cannot delete path " FMT_PATH, cgroup_path);
 
                   retry_count++;
                   repeat = true;
@@ -543,7 +543,7 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
                   if (ret < 0)
                     {
                       if (retry_count >= max_attempts)
-                        return crun_make_error (err, errno, "cannot destroy subsystem `%s` at path `%s`", subsystem, cgroup_path);
+                        return crun_make_error (err, errno, "cannot destroy subsystem `%s` at path " FMT_PATH, subsystem, cgroup_path);
                       retry_count++;
                       repeat = true;
                     }
@@ -599,7 +599,7 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
 
   ret = fchownat (dfd, "", uid, gid, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot chown `%s`", cgroup_path);
+    return crun_make_error (err, errno, "cannot chown " FMT_PATH, cgroup_path);
 
   for (name = strtok_r (delegate, "\n", &saveptr); name; name = strtok_r (NULL, "\n", &saveptr))
     {
@@ -730,7 +730,7 @@ read_available_controllers (const char *path, libcrun_error_t *err)
 
   ret = read_all_file (controllers, &buf, NULL, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error reading from file `%s`", controllers);
+    return crun_make_error (err, errno, "error reading from file " FMT_PATH, controllers);
 
   for (token = strtok_r (buf, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
     {
@@ -907,7 +907,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
 
       ret = mkdir (cgroup_path, 0755);
       if (UNLIKELY (ret < 0 && errno != EEXIST))
-        return crun_make_error (err, errno, "create `%s`", cgroup_path);
+        return crun_make_error (err, errno, "create " FMT_PATH, cgroup_path);
 
       if (next_slash)
         {
@@ -962,7 +962,7 @@ libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_
 
   cgroupdirfd = open (path_to_cgroup, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_RDONLY);
   if (UNLIKELY (cgroupdirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", path_to_cgroup);
+    return crun_make_error (err, errno, "open " FMT_PATH, path_to_cgroup);
 
   return cgroupdirfd;
 }

@@ -523,7 +523,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
               log_size *= 2;
               goto retry;
             }
-          return crun_make_error (err, errno, "bpf create `%s`", log);
+          return crun_make_error (err, errno, "bpf create " FMT_PATH, log);
         }
     }
 
@@ -541,7 +541,7 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
       attr.bpf_fd = fd;
       ret = bpf (BPF_OBJ_PIN, &attr, sizeof (attr));
       if (ret < 0)
-        return crun_make_error (err, errno, "bpf pin to `%s`", pin);
+        return crun_make_error (err, errno, "bpf pin to " FMT_PATH, pin);
     }
 
   return 0;

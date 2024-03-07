@@ -448,11 +448,11 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC
                                         | OPEN_TREE_CLONE | recursive_flag);
   if (UNLIKELY (open_tree_fd < 0))
-    return crun_make_error (err, errno, "open_tree `%s`", src);
+    return crun_make_error (err, errno, "open_tree " FMT_PATH, src);
 
   ret = syscall_mount_setattr (open_tree_fd, "", AT_EMPTY_PATH | recursive_flag, &attr);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount_setattr `%s`", src);
+    return crun_make_error (err, errno, "mount_setattr " FMT_PATH, src);
 
   return get_and_reset (&open_tree_fd);
 }
@@ -722,13 +722,13 @@ libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *er
       if (UNLIKELY (labelfd < 0))
         {
           if (errno != ENOENT)
-            return crun_make_error (err, errno, "open `%s`", keycreate);
+            return crun_make_error (err, errno, "open " FMT_PATH, keycreate);
         }
       else
         {
           ret = write (labelfd, label, strlen (label));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to `%s`", keycreate);
+            return crun_make_error (err, errno, "write to " FMT_PATH, keycreate);
 
           label_set = true;
         }
@@ -874,7 +874,7 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
 
       ret = statfs (real_target, &sfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "statfs `%s`", real_target);
+        return crun_make_error (err, errno, "statfs " FMT_PATH, real_target);
 
       remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
 
@@ -892,7 +892,7 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
             }
         }
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "remount `%s`", target);
+        return crun_make_error (err, errno, "remount " FMT_PATH, target);
     }
   return 0;
 }
@@ -1039,7 +1039,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   if (UNLIKELY (pathfd < 0))
     {
       if (errno != ENOENT && errno != EACCES)
-        return crun_make_error (err, errno, "open `%s`", rel_path);
+        return crun_make_error (err, errno, "open " FMT_PATH, rel_path);
 
       crun_error_release (err);
       return 0;
@@ -1055,7 +1055,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
         {
           ret = statfs (source_buffer, &sfs);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "statfs `%s`", source_buffer);
+            return crun_make_error (err, errno, "statfs " FMT_PATH, source_buffer);
           mount_flags = mount_flags | sfs.f_flags;
 
           // Parent might contain `MS_REMOUNT` but the new readonly path is not
@@ -1146,7 +1146,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
       ret = mount (source, real_target, NULL, MS_MOVE, NULL);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "move mount `%s` to `%s`", source, target);
+        return crun_make_error (err, errno, "move mount " FMT_PATH " to " FMT_PATH, source, target);
       mountflags &= ~MS_MOVE;
 
       /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
@@ -1192,13 +1192,13 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
                   ret = fs_move_mount_to (mountfd, targetfd, NULL);
                   if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "move mount to `%s`", real_target);
+                    return crun_make_error (err, errno, "move mount to " FMT_PATH, real_target);
 
                   return 0;
                 }
             }
 
-          return crun_make_error (err, saved_errno, "mount `%s` to `%s`", source, target);
+          return crun_make_error (err, saved_errno, "mount " FMT_PATH " to " FMT_PATH, source, target);
         }
 
       if (targetfd >= 0)
@@ -1235,7 +1235,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
         {
           ret = mount (NULL, real_target, NULL, rec | propagation, NULL);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for `%s`", target);
+            return crun_make_error (err, errno, "set propagation for " FMT_PATH, target);
         }
     }
 
@@ -1409,11 +1409,11 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container, const char *source, 
 
   ret = mkdirat (targetfd, subsystem, 0755);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mkdir `%s`", subsystem);
+    return crun_make_error (err, errno, "mkdir " FMT_PATH, subsystem);
 
   fd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", subsystem_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, subsystem_path);
 
   ret = append_paths (&subsystem_path, err, target, subsystem, NULL);
   if (UNLIKELY (ret < 0))
@@ -1448,7 +1448,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from `%s`", PROC_SELF_CGROUP);
+    return crun_make_error (err, 0, "invalid content from " FMT_PATH, PROC_SELF_CGROUP);
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -1494,11 +1494,11 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
 
       ret = mkdirat (targetfd, subsystem, 0755);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "mkdir `%s`", subsystem_path);
+        return crun_make_error (err, errno, "mkdir " FMT_PATH, subsystem_path);
 
       subsystemfd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
       if (UNLIKELY (subsystemfd < 0))
-        return crun_make_error (err, errno, "open `%s`", subsystem_path);
+        return crun_make_error (err, errno, "open " FMT_PATH, subsystem_path);
 
       if (container_has_cgroupns (container))
         {
@@ -1623,7 +1623,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
                 fd = openat (devfd, rel_dev, O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0700);
 
               if (UNLIKELY (fd < 0))
-                return crun_make_error (err, errno, "create device `%s`", device->path);
+                return crun_make_error (err, errno, "create device " FMT_PATH, device->path);
             }
         }
       else
@@ -1663,7 +1663,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknod `%s`", device->path);
+            return crun_make_error (err, errno, "mknod " FMT_PATH, device->path);
 
           fd = safe_openat (devfd, rootfs, rootfs_len, rel_dev, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
@@ -1673,11 +1673,11 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
+            return crun_make_error (err, errno, "fchmodat " FMT_PATH, device->path);
 
           ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%s`", device->path);
+            return crun_make_error (err, errno, "chown " FMT_PATH, device->path);
         }
       else
         {
@@ -1716,21 +1716,21 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (ret < 0 && errno == EEXIST))
             return 0;
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknod `%s`", device->path);
+            return crun_make_error (err, errno, "mknod " FMT_PATH, device->path);
 
           fd = safe_openat (dirfd, rootfs, rootfs_len, basename, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
-            return crun_make_error (err, errno, "open `%s`", device->path);
+            return crun_make_error (err, errno, "open " FMT_PATH, device->path);
 
           get_proc_self_fd_path (fd_buffer, fd);
 
           ret = chmod (fd_buffer, device->mode);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chmod `%s`", device->path);
+            return crun_make_error (err, errno, "chmod " FMT_PATH, device->path);
 
           ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%s`", device->path);
+            return crun_make_error (err, errno, "chown " FMT_PATH, device->path);
         }
     }
   return 0;
@@ -1768,7 +1768,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
 
   devfd = openat (rootfsfd, "dev", O_CLOEXEC | O_RDONLY | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
-    return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
+    return crun_make_error (err, errno, "open /dev directory in " FMT_PATH, rootfs);
 
   for (i = 0; i < def->linux->devices_len; i++)
     {
@@ -1803,6 +1803,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
       ret = symlinkat (symlinks[i].path, devfd, symlinks[i].target);
       if (UNLIKELY (ret < 0))
         {
+          cleanup_free char *symlink_full_path = NULL;
           int saved_errno = errno;
 
           if (errno == EEXIST && ! symlinks[i].force)
@@ -1830,7 +1831,8 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
               if (ret == 0)
                 goto retry_symlink;
             }
-          return crun_make_error (err, saved_errno, "creating symlink for `/dev/%s`", symlinks[i].target);
+          xasprintf (&symlink_full_path, "/dev/%s", symlinks[i].target);
+          return crun_make_error (err, saved_errno, "creating symlink for " FMT_PATH, symlink_full_path);
         }
     }
 
@@ -1876,11 +1878,11 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   if (UNLIKELY (oldrootfd < 0))
     return crun_make_error (err, errno, "open `/`");
   if (UNLIKELY (newrootfd < 0))
-    return crun_make_error (err, errno, "open `%s`", rootfs);
+    return crun_make_error (err, errno, "open " FMT_PATH, rootfs);
 
   ret = fchdir (newrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fchdir `%s`", rootfs);
+    return crun_make_error (err, errno, "fchdir " FMT_PATH, rootfs);
 
   ret = pivot_root (".", ".");
   if (UNLIKELY (ret < 0))
@@ -1888,7 +1890,7 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
 
   ret = fchdir (oldrootfd);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fchdir `%s`", rootfs);
+    return crun_make_error (err, errno, "fchdir " FMT_PATH, rootfs);
 
   ret = do_mount (container, NULL, -1, ".", NULL, MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
@@ -1939,7 +1941,7 @@ append_tmpfs_mode_if_missing (libcrun_container_t *container, runtime_spec_schem
     }
   ret = fstat (fd, &st);
   if (ret < 0)
-    return crun_make_error (err, errno, "fstat `%s`", mount->destination);
+    return crun_make_error (err, errno, "fstat " FMT_PATH, mount->destination);
 
   xasprintf (data, "%s%smode=%o", empty_data ? "" : *data, empty_data ? "" : ",", st.st_mode & 07777);
   return 0;
@@ -2011,7 +2013,7 @@ safe_create_symlink (int rootfsfd, const char *rootfs, size_t rootfs_len, const 
   int ret;
 
   if (is_empty_string (destination))
-    return crun_make_error (err, 0, "empty destination for symlink `%s`", target);
+    return crun_make_error (err, 0, "empty destination for symlink " FMT_PATH, target);
 
   buffer = xstrdup (destination);
   part = dirname (buffer);
@@ -2041,9 +2043,9 @@ safe_create_symlink (int rootfsfd, const char *rootfs, size_t rootfs_len, const 
           if ((((size_t) len) == strlen (target)) && strncmp (link, target, len) == 0)
             return 0;
 
-          return crun_make_error (err, 0, "symlink `%s` already exists with a different content", destination);
+          return crun_make_error (err, 0, "symlink " FMT_PATH " already exists with a different content", destination);
         }
-      return crun_make_error (err, errno, "symlink creation `%s`", target);
+      return crun_make_error (err, errno, "symlink creation " FMT_PATH, target);
     }
 
   return 0;
@@ -2097,7 +2099,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
         }
 
       if (type == NULL && (flags & MS_BIND) == 0)
-        return crun_make_error (err, 0, "invalid mount type for `%s`", def->mounts[i]->destination);
+        return crun_make_error (err, 0, "invalid mount type for " FMT_PATH, def->mounts[i]->destination);
 
       if (flags & MS_BIND)
         {
@@ -2129,7 +2131,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 
           ret = get_file_type (&src_mode, (extra_flags & OPTION_COPY_SYMLINK) ? true : false, path);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "cannot stat `%s`", path);
+            return crun_make_error (err, errno, "cannot stat " FMT_PATH, path);
 
           data = append_mode_if_missing (data, "mode=1755");
         }
@@ -2160,20 +2162,20 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
               if (errno == ENOENT)
                 {
                   if (strchr (target, '/'))
-                    return crun_make_error (err, 0, "invalid target `%s`: it must be mounted at the root", target);
+                    return crun_make_error (err, 0, "invalid target " FMT_PATH ": it must be mounted at the root", target);
 
                   ret = mkdirat (rootfsfd, target, 0755);
                   if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "cannot mkdir `%s`", target);
+                    return crun_make_error (err, errno, "cannot mkdir" FMT_PATH, target);
 
                   /* Try opening it again.  */
                   ret = openat (rootfsfd, target, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
                 }
               else if (errno == ENOTDIR)
-                return crun_make_error (err, errno, "the target `/%s` is invalid", target);
+                return crun_make_error (err, errno, "the target " FMT_PATH " is invalid", target);
 
               if (ret < 0)
-                return crun_make_error (err, errno, "cannot open `%s`", target);
+                return crun_make_error (err, errno, "cannot open " FMT_PATH, target);
             }
 
           targetfd = ret;
@@ -2201,7 +2203,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           if (UNLIKELY (copy_from_fd < 0))
             {
               if (errno != ENOTDIR)
-                return crun_make_error (err, errno, "cannot reopen `%s`", target);
+                return crun_make_error (err, errno, "cannot reopen " FMT_PATH, target);
 
               crun_error_release (err);
             }
@@ -2278,7 +2280,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
 
           dfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_CLOEXEC | (is_dir ? O_DIRECTORY : 0), 0, err);
           if (UNLIKELY (dfd < 0))
-            return crun_make_error (err, errno, "open mount target `/%s`", target);
+            return crun_make_error (err, errno, "open mount target " FMT_PATH, target);
 
           ret = do_mount_setattr (target, dfd, rec_clear, rec_set, err);
           if (UNLIKELY (ret < 0))
@@ -2397,7 +2399,7 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
     return notify_fd;
 
   if (UNLIKELY (chmod (host_path, 0777) < 0))
-    return crun_make_error (err, errno, "chmod `%s`", host_path);
+    return crun_make_error (err, errno, "chmod " FMT_PATH, host_path);
 
 #  ifdef HAVE_FGETXATTR
   if (container && container->container_def->linux && container->container_def->linux->mount_label)
@@ -2445,7 +2447,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
 
   ret = mkdir (host_notify_socket_path, 0700);
   if (ret < 0)
-    return crun_make_error (err, errno, "mkdir `%s`", host_notify_socket_path);
+    return crun_make_error (err, errno, "mkdir " FMT_PATH, host_notify_socket_path);
 
   if (get_private_data (container)->unshare_flags & CLONE_NEWUSER)
     {
@@ -2454,7 +2456,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
         {
           ret = chown (host_notify_socket_path, container_root_uid, container_root_gid);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%d:%d` `%s`", container_root_uid, container_root_gid,
+            return crun_make_error (err, errno, "chown `%d:%d` " FMT_PATH, container_root_uid, container_root_gid,
                                     host_notify_socket_path);
         }
     }
@@ -2474,7 +2476,7 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
     ;
   else
     /* some other error */
-    return crun_make_error (err, errno, "open_tree `%s`", host_notify_socket_path);
+    return crun_make_error (err, errno, "open_tree " FMT_PATH, host_notify_socket_path);
 
   get_private_data (container)->host_notify_socket_path = host_notify_socket_path;
   get_private_data (container)->container_notify_socket_path = container_notify_socket_path;
@@ -2525,7 +2527,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
         /* do nothing; we will try mount(2) next */
         ;
       else
-        return crun_make_error (err, errno, "move_mount `%d` -> `%s`", notify_socket_tree_fd,
+        return crun_make_error (err, errno, "move_mount `%d` -> " FMT_PATH, notify_socket_tree_fd,
                                 container_notify_socket_path_dir);
     }
 
@@ -2571,7 +2573,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
                 return 0;
             }
         }
-      return crun_make_error (err, errno, "make `%s` private", tmp);
+      return crun_make_error (err, errno, "make " FMT_PATH " private", tmp);
     }
   return 0;
 }
@@ -2620,7 +2622,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
     {
       rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH | O_CLOEXEC);
       if (UNLIKELY (rootfsfd < 0))
-        return crun_make_error (err, errno, "open `%s`", rootfs);
+        return crun_make_error (err, errno, "open " FMT_PATH, rootfs);
     }
 
   get_private_data (container)->rootfs = rootfs;
@@ -2640,7 +2642,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
 
       fd = dup (rootfsfd);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "dup fd for `%s`", rootfs);
+        return crun_make_error (err, errno, "dup fd for ", FMT_PATH);
 
       r = make_remount (fd, rootfs, remount_flags, NULL, get_private_data (container)->remounts);
       get_private_data (container)->remounts = r;
@@ -2743,7 +2745,7 @@ umount_or_hide (const char *target, libcrun_error_t *err)
             return 0;
         }
 
-      return crun_make_error (err, saved_errno, "umount `%s`", target);
+      return crun_make_error (err, saved_errno, "umount " FMT_PATH, target);
     }
 
   return ret;
@@ -2756,7 +2758,7 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = chdir (rootfs);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to `%s`", rootfs);
+    return crun_make_error (err, errno, "chdir to " FMT_PATH, rootfs);
 
   ret = umount_or_hide ("/sys", err);
   if (UNLIKELY (ret < 0))
@@ -2768,15 +2770,15 @@ move_root (const char *rootfs, libcrun_error_t *err)
 
   ret = mount (rootfs, "/", "", MS_MOVE, "");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mount MS_MOVE to `/`");
+    return crun_make_error (err, errno, "mount MS_MOVE to " FMT_PATH, "/");
 
   ret = chroot (".");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chroot to `%s`", rootfs);
+    return crun_make_error (err, errno, "chroot to " FMT_PATH, rootfs);
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to `%s`", rootfs);
+    return crun_make_error (err, errno, "chdir to " FMT_PATH, rootfs);
 
   return 0;
 }
@@ -2809,12 +2811,12 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
     {
       ret = chroot (rootfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chroot to `%s`", rootfs);
+        return crun_make_error (err, errno, "chroot to " FMT_PATH, rootfs);
     }
 
   ret = chdir ("/");
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to `/`");
+    return crun_make_error (err, errno, "chdir to " FMT_PATH, "/");
 
   return 0;
 }
@@ -2833,10 +2835,10 @@ libcrun_reopen_dev_null (libcrun_error_t *err)
   /* Open /dev/null inside of the container. */
   fd = open ("/dev/null", O_RDWR | O_CLOEXEC);
   if (UNLIKELY (fd == -1))
-    return crun_make_error (err, errno, "failed open()ing `/dev/null`");
+    return crun_make_error (err, errno, "failed open()ing " FMT_PATH, "/dev/null");
 
   if (UNLIKELY (fstat (fd, &dev_null) == -1))
-    return crun_make_error (err, errno, "failed stat()ing `/dev/null`");
+    return crun_make_error (err, errno, "failed stat()ing " FMT_PATH, "/dev/null");
 
   for (i = 0; i <= 2; i++)
     {
@@ -3124,15 +3126,15 @@ libcrun_init_caps (libcrun_error_t *err)
   char buffer[16];
   fd = open (cap_last_cap_file, O_RDONLY | O_CLOEXEC);
   if (fd < 0)
-    return crun_make_error (err, errno, "open `%s`", cap_last_cap_file);
+    return crun_make_error (err, errno, "open " FMT_PATH, cap_last_cap_file);
   ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from `%s`", cap_last_cap_file);
+    return crun_make_error (err, errno, "read from " FMT_PATH, cap_last_cap_file);
 
   errno = 0;
   cap_last_cap = strtoul (buffer, NULL, 10);
   if (errno != 0)
-    return crun_make_error (err, errno, "strtoul() from `%s`", cap_last_cap_file);
+    return crun_make_error (err, errno, "strtoul() from " FMT_PATH, cap_last_cap_file);
   return 0;
 }
 
@@ -3471,6 +3473,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
   for (i = 0; i < def->linux->sysctl->len; i++)
     {
       cleanup_free char *name = NULL;
+      cleanup_free char *path = NULL;
       cleanup_close int fd = -1;
       int ret;
       char *it;
@@ -3486,11 +3489,17 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
 
       fd = openat (dirfd, name, O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open `/proc/sys/%s`", name);
+        {
+          xasprintf (&path, "/proc/sys/%s", name);
+          return crun_make_error (err, errno, "open " FMT_PATH, path);
+        }
 
       ret = TEMP_FAILURE_RETRY (write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i])));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "write to `/proc/sys/%s`", name);
+        {
+          xasprintf (&path, "/proc/sys/%s", name);
+          return crun_make_error (err, errno, "write to " FMT_PATH, path);
+        }
     }
   return 0;
 }
@@ -3517,7 +3526,7 @@ open_terminal (char **pty, runtime_spec_schema_config_schema_process *process, l
     {
       ret = chown (*pty, uid, -1);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chown `%s`", *pty);
+        return crun_make_error (err, errno, "chown " FMT_PATH, *pty);
     }
 
   ret = get_and_reset (&fd);
@@ -3567,7 +3576,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
           else
             {
               yajl_gen_free (gen);
-              return crun_make_error (err, errno, "readlink `%s`", fd_path);
+              return crun_make_error (err, errno, "readlink " FMT_PATH, fd_path);
             }
         }
       link_path[ret] = 0;
@@ -3791,7 +3800,7 @@ join_namespaces (runtime_spec_schema_config_schema *def, int *namespaces_to_join
         {
           if (ignore_join_errors)
             continue;
-          return crun_make_error (err, errno, "cannot setns `%s`", def->linux->namespaces[orig_index]->path);
+          return crun_make_error (err, errno, "cannot setns " FMT_PATH, def->linux->namespaces[orig_index]->path);
         }
 
       close_and_reset (&namespaces_to_join[i]);
@@ -3898,7 +3907,7 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
 
           fd = open (def->linux->namespaces[i]->path, O_RDONLY | O_CLOEXEC);
           if (UNLIKELY (fd < 0))
-            return crun_make_error (err, errno, "open `%s`", def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "open " FMT_PATH, def->linux->namespaces[i]->path);
 
           if (value == CLONE_NEWUSER)
             {
@@ -4036,7 +4045,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
     return 0;
 
   if ((mnt->uid_mappings == NULL) != (mnt->gid_mappings == NULL))
-    return crun_make_error (err, 0, "invalid mappings specified for the mount on `%s`", mnt->destination);
+    return crun_make_error (err, 0, "invalid mappings specified for the mount on " FMT_PATH, mnt->destination);
 
   /* If there are options specified, create a new user namespace with the configured mappings.  */
   if (idmap_option)
@@ -4060,13 +4069,13 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   sprintf (proc_path, "/proc/%d/ns/user", pid);
   fd = open (proc_path, O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", proc_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, proc_path);
 
   if (is_bind_mount (mnt, &recursive_bind_mount))
     {
       newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
       if (UNLIKELY (newfs_fd < 0))
-        return crun_make_error (err, errno, "open `%s`", mnt->source);
+        return crun_make_error (err, errno, "open " FMT_PATH, mnt->source);
     }
   else
     {
@@ -4074,15 +4083,15 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
 
       fsopen_fd = syscall_fsopen (mnt->type, FSOPEN_CLOEXEC);
       if (UNLIKELY (fsopen_fd < 0))
-        return crun_make_error (err, errno, "fsopen `%s`", mnt->type);
+        return crun_make_error (err, errno, "fsopen " FMT_PATH, mnt->type);
 
       ret = syscall_fsconfig (fsopen_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "fsconfig create `%s`", mnt->type);
+        return crun_make_error (err, errno, "fsconfig create " FMT_PATH, mnt->type);
 
       newfs_fd = syscall_fsmount (fsopen_fd, FSMOUNT_CLOEXEC, 0);
       if (UNLIKELY (newfs_fd < 0))
-        return crun_make_error (err, errno, "fsmount `%s`", mnt->type);
+        return crun_make_error (err, errno, "fsmount " FMT_PATH, mnt->type);
     }
 
   attr.attr_set = MOUNT_ATTR_IDMAP;
@@ -4095,7 +4104,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
         {
           extra_msg = " (maybe the file system used doesn't support idmap mounts on this kernel?)";
         }
-      return crun_make_error (err, errno, "mount_setattr `%s`%s", mnt->destination, extra_msg);
+      return crun_make_error (err, errno, "mount_setattr " FMT_PATH "%s", mnt->destination, extra_msg);
     }
 
   *out_fd = get_and_reset (&newfs_fd);
@@ -4143,7 +4152,7 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
 
   ret = mknodat (devs_dirfd, name, device->file_mode | type, dev);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mknod `%s`", device->path);
+    return crun_make_error (err, errno, "mknod " FMT_PATH, device->path);
 
   if (def->linux)
     {
@@ -4153,7 +4162,7 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
 
   ret = fchownat (devs_dirfd, name, uid, gid, 0); /* lgtm [cpp/toctou-race-condition] */
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chown `%s`", device->path);
+    return crun_make_error (err, errno, "chown " FMT_PATH, device->path);
 
   return get_bind_mount (devs_dirfd, name, false, false, err);
 }
@@ -4266,11 +4275,11 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
 
   ret = mkdir (devs_path, 0700);
   if (UNLIKELY (ret < 0) && errno != EEXIST)
-    return crun_make_error (err, errno, "mkdir `%s`", devs_path);
+    return crun_make_error (err, errno, "mkdir " FMT_PATH, devs_path);
 
   current_mountns = open ("/proc/self/ns/mnt", O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (current_mountns < 0))
-    return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
+    return crun_make_error (err, errno, "open " FMT_PATH, "/proc/self/ns/mnt");
 
   ret = unshare (CLONE_NEWNS);
   if (UNLIKELY (ret < 0))
@@ -4299,14 +4308,14 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   targetfd = open (devs_path, O_DIRECTORY | O_CLOEXEC);
   if (targetfd < 0)
     {
-      ret = crun_make_error (err, errno, "open `%s`", devs_path);
+      ret = crun_make_error (err, errno, "open " FMT_PATH, devs_path);
       goto restore_mountns;
     }
 
   ret = fs_move_mount_to (devs_mountfd, targetfd, NULL);
   if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, errno, "fs_move_mount_to `%s`", devs_path);
+      ret = crun_make_error (err, errno, "fs_move_mount_to " FMT_PATH, devs_path);
       goto restore_mountns;
     }
 
@@ -4315,7 +4324,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   targetfd = openat (devs_mountfd, ".", O_DIRECTORY | O_CLOEXEC);
   if (targetfd < 0)
     {
-      ret = crun_make_error (err, errno, "open `%s`", devs_path);
+      ret = crun_make_error (err, errno, "open " FMT_PATH, devs_path);
       goto restore_mountns;
     }
 
@@ -4562,7 +4571,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           /* If we need to join another user namespace, do it immediately before creating any other namespace. */
           ret = setns (init_status->fd[init_status->userns_index], CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "cannot setns `%s`",
+            return crun_make_error (err, errno, "cannot setns " FMT_PATH,
                                     def->linux->namespaces[init_status->userns_index_origin]->path);
         }
 
@@ -4591,20 +4600,20 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
       fd = open (timens_offsets_file, O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open `%s`", timens_offsets_file);
+        return crun_make_error (err, errno, "open " FMT_PATH, timens_offsets_file);
       if (def->linux->time_offsets->boottime)
         {
           sprintf (fmt_buffer, "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
+            return crun_make_error (err, errno, "write " FMT_PATH, timens_offsets_file);
         }
       if (def->linux->time_offsets->monotonic)
         {
           sprintf (fmt_buffer, "monotonic %" PRIi64 " %" PRIu32, def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
+            return crun_make_error (err, errno, "write " FMT_PATH, timens_offsets_file);
         }
     }
 
@@ -5139,7 +5148,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
           if (errno == ENOENT)
             continue;
 
-          ret = crun_make_error (err, errno, "open `%s`", ns_join);
+          ret = crun_make_error (err, errno, "open " FMT_PATH, ns_join);
           goto exit;
         }
     }
@@ -5186,7 +5195,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
               continue;
             }
 
-          ret = crun_make_error (err, errno, "setns `%s`", namespaces[i].ns_file);
+          ret = crun_make_error (err, errno, "setns " FMT_PATH, namespaces[i].ns_file);
           goto exit;
         }
       fds_joined[i] = 1;
@@ -5735,7 +5744,7 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
 
   ret = chdir (path);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to `%s`", path);
+    return crun_make_error (err, errno, "chdir to " FMT_PATH, path);
 
   buffer = xmalloc (PATH_MAX);
   ret = syscall_getcwd (buffer, PATH_MAX);

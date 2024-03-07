@@ -124,7 +124,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
           memset (st, 0, sizeof (*st));
           return 0;
         }
-      return crun_make_error (err, errno, "open state file `%s`", pid_stat_file);
+      return crun_make_error (err, errno, "open state file " FMT_PATH, pid_stat_file);
     }
 
   ret = read_all_fd (fd, pid_stat_file, &buffer, NULL, err);
@@ -356,13 +356,13 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 
   tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
   if (UNLIKELY (tree == NULL))
-    return crun_make_error (err, 0, "cannot parse status file: `%s`", err_buffer);
+    return crun_make_error (err, 0, "cannot parse status file: " FMT_PATH, err_buffer);
 
   {
     const char *pid_path[] = { "pid", NULL };
     tmp = yajl_tree_get (tree, pid_path, yajl_t_number);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "`pid` missing in `%s`", file);
+      return crun_make_error (err, 0, "`pid` missing in " FMT_PATH, file);
     status->pid = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
   }
   {
@@ -377,7 +377,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *cgroup_path[] = { "cgroup-path", NULL };
     tmp = yajl_tree_get (tree, cgroup_path, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "`cgroup-path` missing in `%s`", file);
+      return crun_make_error (err, 0, "`cgroup-path` missing in " FMT_PATH, file);
     status->cgroup_path = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
@@ -394,7 +394,7 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *rootfs[] = { "rootfs", NULL };
     tmp = yajl_tree_get (tree, rootfs, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "`rootfs` missing in `%s`", file);
+      return crun_make_error (err, 0, "`rootfs` missing in " FMT_PATH, file);
     status->rootfs = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
@@ -405,14 +405,14 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     const char *bundle[] = { "bundle", NULL };
     tmp = yajl_tree_get (tree, bundle, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "`bundle` missing in `%s`", file);
+      return crun_make_error (err, 0, "`bundle` missing in " FMT_PATH, file);
     status->bundle = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
     const char *created[] = { "created", NULL };
     tmp = yajl_tree_get (tree, created, yajl_t_string);
     if (UNLIKELY (tmp == NULL))
-      return crun_make_error (err, 0, "`created` missing in `%s`", file);
+      return crun_make_error (err, 0, "`created` missing in " FMT_PATH, file);
     status->created = xstrdup (YAJL_GET_STRING (tmp));
   }
   {
@@ -471,7 +471,7 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
 
   d = fdopendir (fd);
   if (d == NULL)
-    return crun_make_error (err, errno, "cannot open directory `%s`", namedir);
+    return crun_make_error (err, errno, "cannot open directory " FMT_PATH, namedir);
 
   /* Now D owns FD. */
   fd_cleanup = -1;
@@ -492,7 +492,7 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
 
               cfd = openat (dirfd (d), de->d_name, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
               if (UNLIKELY (cfd < 0))
-                return crun_make_error (err, errno, "cannot open directory `%s`", de->d_name);
+                return crun_make_error (err, errno, "cannot open directory " FMT_PATH, de->d_name);
 
               ret = rmdirfd (de->d_name, cfd, err);
               if (UNLIKELY (ret < 0))
@@ -520,11 +520,15 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   rundir_dfd = TEMP_FAILURE_RETRY (open (dir, O_DIRECTORY | O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (rundir_dfd < 0))
-    return crun_make_error (err, errno, "cannot open run directory `%s`", dir);
+    return crun_make_error (err, errno, "cannot open run directory " FMT_PATH, dir);
 
   dfd = openat (rundir_dfd, id, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (dfd < 0))
-    return crun_make_error (err, errno, "cannot open directory `%s/%s`", dir, id);
+    {
+      cleanup_free char *path = NULL;
+      xasprintf (&path, "%/%s", dir, id);
+      return crun_make_error (err, errno, "cannot open directory " FMT_PATH, path);
+    }
 
   ret = rmdirfd (dir, dfd, err);
 
@@ -536,7 +540,11 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
 
   ret = unlinkat (rundir_dfd, id, AT_REMOVEDIR);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "cannot rm state directory `%s/%s`", dir, id);
+    {
+      cleanup_free char *path = NULL;
+      xasprintf (&path, "%/%s", dir, id);
+      return crun_make_error (err, errno, "cannot rm state directory " FMT_PATH, path);
+    }
 
   return 0;
 }
@@ -567,7 +575,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
   *ret = NULL;
   dir = opendir (path);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot opendir `%s`", path);
+    return crun_make_error (err, errno, "cannot opendir " FMT_PATH, path);
 
   for (next = readdir (dir); next; next = readdir (dir))
     {
@@ -591,7 +599,7 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
 
       if (! exists)
         {
-          libcrun_error (errno, "error opening file `%s`", status_file);
+          libcrun_error (errno, "error opening file " FMT_PATH, status_file);
           continue;
         }
 
@@ -676,7 +684,7 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
 
   fd = open (fifo_path, O_NONBLOCK | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "cannot open pipe `%s`", fifo_path);
+    return crun_make_error (err, errno, "cannot open pipe " FMT_PATH, fifo_path);
 
   return fd;
 }
@@ -698,11 +706,11 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 
   fd = open (fifo_path, O_WRONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "cannot open `%s`", fifo_path);
+    return crun_make_error (err, errno, "cannot open " FMT_PATH, fifo_path);
 
   ret = unlink (fifo_path);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "unlink `%s`", fifo_path);
+    return crun_make_error (err, errno, "unlink " FMT_PATH, fifo_path);
 
   ret = TEMP_FAILURE_RETRY (write (fd, buffer, 1));
   if (UNLIKELY (ret < 0))

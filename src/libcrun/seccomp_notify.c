@@ -110,11 +110,11 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
 
       /* do not accept relative paths.  It is fine to accept only filenames as dlopen() semantics apply.  */
       if (strchr (it, '/') && it[0] != '/')
-        return crun_make_error (err, 0, "invalid relative plugin path: `%s`", it);
+        return crun_make_error (err, 0, "invalid relative plugin path: " FMT_PATH, it);
 
       ctx->plugins[s].handle = dlopen (it, RTLD_NOW);
       if (ctx->plugins[s].handle == NULL)
-        return crun_make_error (err, 0, "cannot load `%s`: %s", it, dlerror ());
+        return crun_make_error (err, 0, "cannot load " FMT_PATH ": %s", it, dlerror ());
 
       version_cb
           = (run_oci_seccomp_notify_plugin_version_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_version");
@@ -124,13 +124,13 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
 
           version = version_cb ();
           if (version != 1)
-            return crun_make_error (err, ENOTSUP, "invalid version supported by the plugin `%s`", it);
+            return crun_make_error (err, ENOTSUP, "invalid version supported by the plugin " FMT_PATH, it);
         }
 
       ctx->plugins[s].handle_request_cb = (run_oci_seccomp_notify_handle_request_cb) dlsym (
           ctx->plugins[s].handle, "run_oci_seccomp_notify_handle_request");
       if (ctx->plugins[s].handle_request_cb == NULL)
-        return crun_make_error (err, ENOTSUP, "plugin `%s` doesn't export `run_oci_seccomp_notify_handle_request`", it);
+        return crun_make_error (err, ENOTSUP, "plugin " FMT_PATH " doesn't export `run_oci_seccomp_notify_handle_request`", it);
 
       start_cb = (run_oci_seccomp_notify_start_cb) dlsym (ctx->plugins[s].handle, "run_oci_seccomp_notify_start");
       if (start_cb)
@@ -139,7 +139,7 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
 
           ret = start_cb (&opq, conf, sizeof (*conf));
           if (UNLIKELY (ret != 0))
-            return crun_make_error (err, -ret, "error loading `%s`", it);
+            return crun_make_error (err, -ret, "error loading " FMT_PATH, it);
         }
       ctx->plugins[s].opaque = opq;
     }

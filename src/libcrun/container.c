@@ -553,7 +553,7 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   container_def = runtime_spec_schema_config_schema_parse_file (path, NULL, &oci_error);
   if (container_def == NULL)
     {
-      crun_make_error (err, 0, "load `%s`: %s", path, oci_error);
+      crun_make_error (err, 0, "load " FMT_PATH ": %s", path, oci_error);
       return NULL;
     }
   return make_container (container_def, path, NULL);
@@ -763,10 +763,10 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
       if (UNLIKELY (ret != 0))
         {
           if (keep_going)
-            libcrun_warning ("error executing hook `%s` (exit code: %d)", hooks[i]->path, ret);
+            libcrun_warning ("error executing hook " FMT_PATH " (exit code: %d)", hooks[i]->path, ret);
           else
             {
-              libcrun_error (0, "error executing hook `%s` (exit code: %d)", hooks[i]->path, ret);
+              libcrun_error (0, "error executing hook " FMT_PATH " (exit code: %d)", hooks[i]->path, ret);
               break;
             }
         }
@@ -1186,7 +1186,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       if (UNLIKELY (*exec_path == NULL))
         {
           if (entrypoint_args->custom_handler == NULL && errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
+            return crun_make_error (err, errno, "executable file " FMT_PATH " not found in $PATH", def->process->args[0]);
         }
       /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
          once the process switched to the use that runs in the container.  This might be necessary
@@ -1287,7 +1287,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
           if (entrypoint_args->custom_handler && ! is_empty_string (def->process->args[0]))
             *exec_path = xstrdup (def->process->args[0]);
           else if (errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
+            return crun_make_error (err, errno, "executable file " FMT_PATH " not found in $PATH", def->process->args[0]);
           else
             return crun_make_error (err, errno, "open executable");
         }
@@ -1319,7 +1319,7 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
     {
       *out_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC, 0700));
       if (UNLIKELY (*out_fd < 0))
-        return crun_make_error (err, errno, "open `%s`", annotation);
+        return crun_make_error (err, errno, "open " FMT_PATH, annotation);
     }
 
   annotation = find_annotation (container, "run.oci.hooks.stderr");
@@ -1327,7 +1327,7 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
     {
       *err_fd = TEMP_FAILURE_RETRY (open (annotation, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC, 0700));
       if (UNLIKELY (*err_fd < 0))
-        return crun_make_error (err, errno, "open `%s`", annotation);
+        return crun_make_error (err, errno, "open " FMT_PATH, annotation);
     }
 
   return 0;
@@ -1542,9 +1542,9 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   TEMP_FAILURE_RETRY (execv (exec_path, def->process->args));
 
   if (errno == ENOENT)
-    return crun_make_error (err, errno, "exec container process (missing dynamic library?) `%s`", exec_path);
+    return crun_make_error (err, errno, "exec container process (missing dynamic library?) " FMT_PATH, exec_path);
 
-  return crun_make_error (err, errno, "exec container process `%s`", exec_path);
+  return crun_make_error (err, errno, "exec container process " FMT_PATH, exec_path);
 }
 
 static int
@@ -1559,7 +1559,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 
   dir = libcrun_get_state_directory (state_root, id);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory from `%s`", state_root);
+    return crun_make_error (err, 0, "cannot get state directory from " FMT_PATH, state_root);
 
   ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
@@ -1567,7 +1567,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 
   *container = libcrun_container_load_from_file (config_file, err);
   if (*container == NULL)
-    return crun_make_error (err, 0, "error loading `%s`", config_file);
+    return crun_make_error (err, 0, "error loading " FMT_PATH, config_file);
 
   return 0;
 }
@@ -2268,7 +2268,7 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
   if (tmp)
     {
       if (tmp[0] != '/')
-        return crun_make_error (err, 0, "the seccomp receiver `%s` is not an absolute path", tmp);
+        return crun_make_error (err, 0, "the seccomp receiver " FMT_PATH " is not an absolute path", tmp);
 
       *fd = open_unix_domain_client_socket (tmp, 0, err);
       if (UNLIKELY (*fd < 0))
@@ -3310,7 +3310,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (UNLIKELY (exec_path == NULL))
     {
       if (errno == ENOENT)
-        return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
+        return crun_make_error (err, errno, "executable file " FMT_PATH " not found in $PATH", process->args[0]);
       /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
          once the process switched to the use that runs in the container.  This might be necessary
          when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
@@ -3372,7 +3372,7 @@ exec_process_entrypoint (libcrun_context_t *context,
       if (UNLIKELY (exec_path == NULL))
         {
           if (errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
+            return crun_make_error (err, errno, "executable file " FMT_PATH " not found in $PATH", process->args[0]);
 
           return crun_make_error (err, errno, "open executable");
         }

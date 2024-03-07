@@ -41,6 +41,7 @@
 #include <linux/magic.h>
 #include <limits.h>
 #include <sys/mman.h>
+
 #ifdef HAVE_LINUX_OPENAT2_H
 #  include <linux/openat2.h>
 #endif
@@ -96,7 +97,7 @@ crun_path_exists (const char *path, libcrun_error_t *err)
     {
       if (errno == ENOENT)
         return 0;
-      return crun_make_error (err, errno, "access `%s`", path);
+      return crun_make_error (err, errno, "access " FMT_PATH, path);
     }
   return 1;
 }
@@ -123,13 +124,13 @@ write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, c
   cleanup_close int fd = openat (dirfd, name, O_CLOEXEC | O_WRONLY | flags, mode);
   int ret = 0;
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "opening file `%s` for writing", name);
+    return crun_make_error (err, errno, "opening file " FMT_PATH " for writing", name);
 
   if (len)
     {
       ret = TEMP_FAILURE_RETRY (write (fd, data, len));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "writing file `%s`", name);
+        return crun_make_error (err, errno, "writing file " FMT_PATH, name);
     }
 
   return ret;
@@ -147,11 +148,11 @@ write_file_with_flags (const char *name, int flags, const void *data, size_t len
   cleanup_close int fd = open (name, O_CLOEXEC | O_WRONLY | flags, 0700);
   int ret;
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "opening file `%s` for writing", name);
+    return crun_make_error (err, errno, "opening file " FMT_PATH " for writing", name);
 
   ret = TEMP_FAILURE_RETRY (write (fd, data, len));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "writing file `%s`", name);
+    return crun_make_error (err, errno, "writing file " FMT_PATH, name);
 
   return ret;
 }
@@ -255,7 +256,7 @@ create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
       if (ret == 0 && S_ISREG (mode))
         return 0;
 
-      return crun_make_error (err, errno, "creating file `%s`", file);
+      return crun_make_error (err, errno, "creating file " FMT_PATH, file);
     }
   return 0;
 }
@@ -284,7 +285,7 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
           if (ret < 0)
             crun_error_release (&tmp_err);
 
-          return crun_make_error (err, errno, "create directory `%s`", path);
+          return crun_make_error (err, errno, "create directory " FMT_PATH, path);
         }
 
       while (it > path && *it != '/')
@@ -335,10 +336,10 @@ check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *f
   get_proc_self_fd_path (fdpath, fd);
   ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "readlink `%s`", fdname);
+    return crun_make_error (err, errno, "readlink " FMT_PATH, fdname);
 
   if (((size_t) ret) <= rootfslen || memcmp (link, rootfs, rootfslen) != 0 || link[rootfslen] != '/')
-    return crun_make_error (err, 0, "target `%s` not under the directory `%s`", fdname, rootfs);
+    return crun_make_error (err, 0, "target " FMT_PATH " not under the directory " FMT_PATH, fdname, rootfs);
 
   return 0;
 }
@@ -367,7 +368,7 @@ safe_openat_fallback (int dirfd, const char *rootfs, size_t rootfs_len, const ch
 
   path_in_chroot = chroot_realpath (rootfs, path, buffer);
   if (path_in_chroot == NULL)
-    return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
+    return crun_make_error (err, errno, "cannot resolve " FMT_PATH " under rootfs", path);
 
   path_in_chroot += rootfs_len;
   path_in_chroot = consume_slashes (path_in_chroot);
@@ -377,13 +378,13 @@ safe_openat_fallback (int dirfd, const char *rootfs, size_t rootfs_len, const ch
     {
       ret = dup (dirfd);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "dup `%s`", rootfs);
+        return crun_make_error (err, errno, "dup " FMT_PATH, rootfs);
       return ret;
     }
 
   ret = openat (dirfd, path_in_chroot, flags, mode);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "open `%s`", path);
+    return crun_make_error (err, errno, "open " FMT_PATH, path);
 
   fd = ret;
 
@@ -416,7 +417,7 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
           if (errno == ENOSYS || errno == EINVAL || errno == EPERM)
             return safe_openat_fallback (dirfd, rootfs, rootfs_len, path, flags, mode, err);
 
-          return crun_make_error (err, errno, "openat2 `%s`", path);
+          return crun_make_error (err, errno, "openat2 " FMT_PATH, path);
         }
 
       return ret;
@@ -442,7 +443,7 @@ safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun
 
       size = readlinkat (dfd, name, tmp_buf, buf_size);
       if (UNLIKELY (size < 0))
-        return crun_make_error (err, errno, "readlink `%s`", name);
+        return crun_make_error (err, errno, "readlink " FMT_PATH, name);
   } while (size == buf_size);
 
   /* Always NUL terminate the buffer.  */
@@ -470,7 +471,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
   int ret;
 
   if (max_readlinks <= 0)
-    return crun_make_error (err, ELOOP, "resolve path `%s`", path);
+    return crun_make_error (err, ELOOP, "resolve path " FMT_PATH, path);
 
   path = consume_slashes (path);
 
@@ -564,12 +565,12 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
               int saved_errno = errno;
 
               close (cwd);
-              return crun_make_error (err, saved_errno, "error stat'ing file `%s`", npath);
+              return crun_make_error (err, saved_errno, "error stat'ing file " FMT_PATH, npath);
             }
           if ((st_mode & S_IFMT) != S_IFDIR)
             {
               close (cwd);
-              return crun_make_error (err, ENOTDIR, "error creating directory `%s` since `%s` exists and it is not a directory", path, npath);
+              return crun_make_error (err, ENOTDIR, "error creating directory " FMT_PATH " since " FMT_PATH " exists and it is not a directory", path, npath);
             }
         }
 
@@ -590,7 +591,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
         {
           ret = dup (dirfd);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "dup `%s`", dirpath);
+            return crun_make_error (err, errno, "dup " FMT_PATH, dirpath);
           return ret;
         }
 
@@ -698,7 +699,7 @@ crun_dir_p_at (int dirfd, const char *path, bool nofollow, libcrun_error_t *err)
 
   ret = get_file_type_at (dirfd, &mode, nofollow, path);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error stat'ing file `%s`", path);
+    return crun_make_error (err, errno, "error stat'ing file " FMT_PATH, path);
 
   return S_ISDIR (mode);
 }
@@ -861,10 +862,10 @@ check_proc_super_magic (int fd, const char *path, libcrun_error_t *err)
 
   int ret = fstatfs (fd, &sfs);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "statfs `%s`", path);
+    return crun_make_error (err, errno, "statfs " FMT_PATH, path);
 
   if (sfs.f_type != PROC_SUPER_MAGIC)
-    return crun_make_error (err, 0, "the file `%s` is not on a `procfs` file system", path);
+    return crun_make_error (err, 0, "the file " FMT_PATH " is not on a `procfs` file system", path);
 
   return 0;
 }
@@ -883,7 +884,7 @@ set_security_attr (const char *lsm, const char *fname, const char *data, libcrun
   fd = open (attr_path, O_WRONLY | O_CLOEXEC);
 
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, attr_path);
 
   ret = check_proc_super_magic (fd, attr_path, err);
   if (UNLIKELY (ret < 0))
@@ -892,7 +893,7 @@ set_security_attr (const char *lsm, const char *fname, const char *data, libcrun
   // Write out data
   ret = TEMP_FAILURE_RETRY (write (fd, data, strlen (data)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write file `%s`", attr_path);
+    return crun_make_error (err, errno, "write file " FMT_PATH, attr_path);
 
   return 0;
 }
@@ -932,14 +933,14 @@ is_current_process_confined (libcrun_error_t *err)
   fd = open (attr_path, O_RDONLY | O_CLOEXEC);
 
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, attr_path);
 
   if (UNLIKELY (check_proc_super_magic (fd, attr_path, err)))
     return -1;
 
   ssize_t bytes_read = read (fd, buf, sizeof (buf) - 1);
   if (UNLIKELY (bytes_read < 0))
-    return crun_make_error (err, errno, "error reading file `%s`", attr_path);
+    return crun_make_error (err, errno, "error reading file " FMT_PATH, attr_path);
 
 #define UNCONFINED "unconfined"
 #define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
@@ -986,7 +987,7 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
     {
       ret = get_file_size (fd, &size);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "error stat'ing file `%s`", description);
+        return crun_make_error (err, errno, "error stat'ing file " FMT_PATH, description);
 
       allocated = size == 0 ? 1023 : size;
     }
@@ -998,7 +999,7 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "error reading from file `%s`", description);
+        return crun_make_error (err, errno, "error reading from file " FMT_PATH, description);
 
       if (ret == 0)
         break;
@@ -1041,7 +1042,7 @@ read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_
 
   fd = TEMP_FAILURE_RETRY (openat (dirfd, path, O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "error opening file `%s`", path);
+    return crun_make_error (err, errno, "error opening file " FMT_PATH, path);
 
   return read_all_fd (fd, path, out, len, err);
 }
@@ -1072,7 +1073,7 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
     {
       destfd = open (path, O_PATH | O_CLOEXEC);
       if (UNLIKELY (destfd < 0))
-        return crun_make_error (err, errno, "error opening `%s`", path);
+        return crun_make_error (err, errno, "error opening " FMT_PATH, path);
 
       get_proc_self_fd_path (name_buf, destfd);
 
@@ -1083,7 +1084,7 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
   addr.sun_family = AF_UNIX;
   ret = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "connect socket to `%s`", path);
+    return crun_make_error (err, errno, "connect socket to " FMT_PATH, path);
 
   ret = fd;
   fd = -1;
@@ -1110,7 +1111,7 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "bind socket to `%s`", path);
+    return crun_make_error (err, errno, "bind socket to " FMT_PATH, path);
 
   if (! dgram)
     {
@@ -1712,7 +1713,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
     timeout:
       kill (pid, SIGKILL);
 
-      ret = crun_make_error (err, 0, "timeout expired for `%s`", path);
+      ret = crun_make_error (err, 0, "timeout expired for " FMT_PATH, path);
       goto restore_sig_mask_and_exit;
     }
 
@@ -1956,7 +1957,7 @@ safe_read_xattr (char **ret, int sfd, const char *srcname, const char *name, siz
     {
       s = fgetxattr (sfd, name, buffer, current_size);
       if (UNLIKELY (s < 0))
-        return crun_make_error (err, errno, "get xattr `%s` from `%s`", name, srcname);
+        return crun_make_error (err, errno, "get xattr `%s` from " FMT_PATH, name, srcname);
 
       if (s < current_size)
         break;
@@ -1990,7 +1991,7 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
       if (errno == ENOTSUP)
         return 0;
 
-      return crun_make_error (err, errno, "get xattr list for `%s`", srcname);
+      return crun_make_error (err, errno, "get xattr list for " FMT_PATH, srcname);
     }
 
   if (xattr_len == 0)
@@ -2000,7 +2001,7 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
 
   xattr_len = flistxattr (sfd, buf, xattr_len + 1);
   if (UNLIKELY (xattr_len < 0))
-    return crun_make_error (err, errno, "get xattr list for `%s`", srcname);
+    return crun_make_error (err, errno, "get xattr list for " FMT_PATH, srcname);
 
   for (it = buf; it - buf < xattr_len; it += strlen (it) + 1)
     {
@@ -2017,7 +2018,7 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
           if (errno == EINVAL || errno == EOPNOTSUPP)
             continue;
 
-          return crun_make_error (err, errno, "set xattr for `%s`", destname);
+          return crun_make_error (err, errno, "set xattr for " FMT_PATH, destname);
         }
     }
 
@@ -2079,7 +2080,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
   if (UNLIKELY (dsrcfd == NULL))
     {
       TEMP_FAILURE_RETRY (close (srcdirfd));
-      return crun_make_error (err, errno, "cannot open directory `%s`", destname);
+      return crun_make_error (err, errno, "cannot open directory " FMT_PATH, destname);
     }
 
   for (de = readdir (dsrcfd); de; de = readdir (dsrcfd))

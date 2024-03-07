@@ -106,12 +106,12 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
         {
           bundle_cleanup = realpath (bundle, NULL);
           if (bundle_cleanup == NULL)
-            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
+            libcrun_fail_with_error (errno, "realpath " FMT_PATH, bundle);
           bundle = bundle_cleanup;
         }
 
       if (chdir (bundle) < 0)
-        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
+        libcrun_fail_with_error (errno, "chdir " FMT_PATH, bundle);
     }
 
   where = fname ? fname : "config.json";
@@ -125,7 +125,7 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
 
   f = fopen (where, "w+e");
   if (f == NULL)
-    return libcrun_make_error (err, errno, "cannot open `%s`", where);
+    return libcrun_make_error (err, errno, "cannot open " FMT_PATH, where);
 
   ret = libcrun_container_spec (! spec_options.rootless, f, err);
 

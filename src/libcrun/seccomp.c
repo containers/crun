@@ -463,7 +463,7 @@ open_rundir_dirfd (const char *state_root, libcrun_error_t *err)
 
   dirfd = TEMP_FAILURE_RETRY (open (dir, O_PATH | O_DIRECTORY | O_CLOEXEC));
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", dir);
+    return crun_make_error (err, errno, "open " FMT_PATH, dir);
 
   return dirfd;
 }
@@ -507,7 +507,7 @@ evict_cache (int root_dfd, libcrun_error_t *err)
     {
       if (errno == ENOENT)
         return 0;
-      return crun_make_error (err, errno, "open `%s`", SECCOMP_CACHE_DIR);
+      return crun_make_error (err, errno, "open " FMT_PATH, SECCOMP_CACHE_DIR);
     }
 
   ret = TEMP_FAILURE_RETRY (fstat (cache_dir_fd, &st));
@@ -606,7 +606,7 @@ store_seccomp_cache (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_error_t *err
 
   ret = linkat (dirfd, src_path, dirfd, dest_path, 0);
   if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "link `%s` to `%s`", src_path, dest_path);
+    return crun_make_error (err, errno, "link " FMT_PATH " to " FMT_PATH, src_path, dest_path);
   return 0;
 }
 
@@ -645,7 +645,7 @@ find_in_cache (struct libcrun_seccomp_gen_ctx_s *ctx, int dirfd, const char *des
 
   ret = TEMP_FAILURE_RETRY (linkat (dirfd, cache_file_path, dirfd, dest_path, 0));
   if (UNLIKELY (ret < 0 && errno != ENOENT))
-    return crun_make_error (err, errno, "linkat `%s` to `%s`", cache_file_path, dest_path);
+    return crun_make_error (err, errno, "linkat " FMT_PATH " to " FMT_PATH, cache_file_path, dest_path);
 
   *created = ret == 0;
 

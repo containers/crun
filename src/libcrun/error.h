@@ -55,6 +55,8 @@ typedef struct libcrun_error_s *libcrun_error_t;
       _exit (EXIT_FAILURE);              \
   } while (0)
 
+#define FMT_PATH "`%s`"
+
 typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
 
 void crun_set_output_handler (crun_output_handler handler, void *arg, bool log_to_stderr);

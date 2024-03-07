@@ -98,7 +98,7 @@ libcrun_set_stdio (char *pty, libcrun_error_t *err)
   cleanup_close int fd = open (pty, O_RDWR | O_CLOEXEC);
 
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", pty);
+    return crun_make_error (err, errno, "open " FMT_PATH, pty);
 
   for (i = 0; i < 3; i++)
     {

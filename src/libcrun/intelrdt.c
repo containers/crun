@@ -40,7 +40,7 @@ is_rdt_mounted (libcrun_error_t *err)
 
   ret = statfs (INTEL_RDT_MOUNT_POINT, &sfs);
   if (ret < 0)
-    return crun_make_error (err, errno, "statfs `%s`", INTEL_RDT_MOUNT_POINT);
+    return crun_make_error (err, errno, "statfs " FMT_PATH, INTEL_RDT_MOUNT_POINT);
 
   return sfs.f_type == RDTGROUP_SUPER_MAGIC;
 }
@@ -200,7 +200,7 @@ write_intelrdt_string (int fd, const char *file, const char *l3_cache_schema, co
 
   ret = write (fd, formatted, len);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write `%s`", file);
+    return crun_make_error (err, errno, "write " FMT_PATH, file);
 
   return 0;
 }
@@ -312,7 +312,7 @@ resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw
 
   fd = open (path, O_WRONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", path);
+    return crun_make_error (err, errno, "open " FMT_PATH, path);
 
   ret = write_intelrdt_string (fd, path, l3_cache_schema, mem_bw_schema, err);
   if (UNLIKELY (ret < 0))
@@ -333,7 +333,7 @@ resctl_destroy (const char *name, libcrun_error_t *err)
 
   ret = rmdir (path);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "rmdir `%s`", path);
+    return crun_make_error (err, errno, "rmdir " FMT_PATH, path);
 
   return 0;
 }

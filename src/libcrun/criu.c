@@ -217,6 +217,7 @@ static int
 criu_check_mem_track (char *work_path, libcrun_error_t *err)
 {
   struct criu_feature_check features = { 0 };
+  cleanup_free char *path = NULL;
   int ret;
 
   /* Right now we are only interested in checking memory tracking.
@@ -229,16 +230,19 @@ criu_check_mem_track (char *work_path, libcrun_error_t *err)
 
   ret = libcriu_wrapper->criu_feature_check (&features, sizeof (features));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0,
-                            "CRIU feature checking failed %d.  Please check CRIU logfile %s/%s",
-                            ret, work_path, CRIU_CHECKPOINT_LOG_FILE);
+    {
+      xasprintf (&path, "%s/%s", work_path, CRIU_CHECKPOINT_LOG_FILE);
+      return crun_make_error (err, 0,
+                              "CRIU feature checking failed %d.  Please check CRIU logfile " FMT_PATH,
+                              ret, path);
+    }
 
   if (features.mem_track == true)
     return 1;
 
+  xasprintf (&path, "%s/%s", work_path, CRIU_CHECKPOINT_LOG_FILE);
   return crun_make_error (err, 0,
-                          "memory tracking not supported. Please check CRIU logfile %s/%s",
-                          work_path, CRIU_CHECKPOINT_LOG_FILE);
+                          "memory tracking not supported. Please check CRIU logfile " FMT_PATH, path);
 }
 
 #  endif
@@ -279,7 +283,7 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from `%s`", PROC_SELF_CGROUP);
+    return crun_make_error (err, 0, "invalid content from " FMT_PATH, PROC_SELF_CGROUP);
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -347,7 +351,7 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
     return ret;
 
   if (UNLIKELY (content == NULL || content[0] == '\0'))
-    return crun_make_error (err, 0, "invalid content from `%s`", PROC_SELF_CGROUP);
+    return crun_make_error (err, 0, "invalid content from " FMT_PATH, PROC_SELF_CGROUP);
 
   for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
     {
@@ -433,11 +437,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = mkdir (cr_options->image_path, 0700);
   if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-    return crun_make_error (err, errno, "error creating checkpoint directory `%s`", cr_options->image_path);
+    return crun_make_error (err, errno, "error creating checkpoint directory " FMT_PATH, cr_options->image_path);
 
   image_fd = open (cr_options->image_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory `%s`", cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory " FMT_PATH, cr_options->image_path);
 
   libcriu_wrapper->criu_set_images_dir_fd (image_fd);
 
@@ -457,7 +461,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory " FMT_PATH, cr_options->work_path);
 
       libcriu_wrapper->criu_set_work_dir_fd (work_fd);
     }
@@ -498,9 +502,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         libcriu_wrapper->criu_set_track_mem (true);
         ret = libcriu_wrapper->criu_pre_dump ();
         if (UNLIKELY (ret != 0))
-          return crun_make_error (err, 0,
-                                  "CRIU pre-dump failed %d.  Please check CRIU logfile %s/%s",
-                                  ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+          {
+            cleanup_free char *path = NULL;
+            xasprintf (&path, "%s/%s", cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+            return crun_make_error (err, 0,
+                                    "CRIU pre-dump failed %d.  Please check CRIU logfile " FMT_PATH,
+                                    ret, path);
+          }
         return 0;
       }
   }
@@ -522,7 +530,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = libcriu_wrapper->criu_set_root (path);
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, 0, "error setting CRIU root to `%s`", path);
+    return crun_make_error (err, 0, "error setting CRIU root to " FMT_PATH, path);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -588,7 +596,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
           ret = stat (def->linux->namespaces[i]->path, &statbuf);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "unable to stat(): " FMT_PATH, def->linux->namespaces[i]->path);
 
           xasprintf (&external, "net[%ld]:" CRIU_EXT_NETNS, statbuf.st_ino);
           libcriu_wrapper->criu_add_external (external);
@@ -601,7 +609,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
           ret = stat (def->linux->namespaces[i]->path, &statbuf);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "unable to stat(): `%s`", def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "unable to stat(): " FMT_PATH, def->linux->namespaces[i]->path);
 
           xasprintf (&external, "pid[%ld]:" CRIU_EXT_PIDNS, statbuf.st_ino);
           libcriu_wrapper->criu_add_external (external);
@@ -643,9 +651,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = libcriu_wrapper->criu_dump ();
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, 0,
-                            "CRIU checkpointing failed %d.  Please check CRIU logfile %s/%s",
-                            ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+    {
+      cleanup_free char *path = NULL;
+      xasprintf (&path, "%s/%s", cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+      return crun_make_error (err, 0,
+                              "CRIU checkpointing failed %d.  Please check CRIU logfile " FMT_PATH,
+                              ret, path);
+    }
 
   return 0;
 }
@@ -760,7 +772,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   image_fd = open (cr_options->image_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (image_fd == -1))
-    return crun_make_error (err, errno, "error opening checkpoint directory `%s`", cr_options->image_path);
+    return crun_make_error (err, errno, "error opening checkpoint directory " FMT_PATH, cr_options->image_path);
 
   libcriu_wrapper->criu_set_images_dir_fd (image_fd);
 
@@ -787,7 +799,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
      * and stderr being correctly redirected. */
     tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
     if (UNLIKELY (tree == NULL))
-      return crun_make_error (err, 0, "cannot parse descriptors file `%s`", DESCRIPTORS_FILENAME);
+      return crun_make_error (err, 0, "cannot parse descriptors file " FMT_PATH, DESCRIPTORS_FILENAME);
 
     if (tree && YAJL_IS_ARRAY (tree))
       {
@@ -816,7 +828,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     {
       work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
+        return crun_make_error (err, errno, "error opening CRIU work directory " FMT_PATH, cr_options->work_path);
 
       libcriu_wrapper->criu_set_work_dir_fd (work_fd);
     }
@@ -861,12 +873,12 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   ret = mkdir (root, 0755);
   if (UNLIKELY (ret == -1))
-    return crun_make_error (err, errno, "error creating restore directory `%s`", root);
+    return crun_make_error (err, errno, "error creating restore directory " FMT_PATH, root);
 
   ret = mount (status->rootfs, root, NULL, MS_BIND | MS_REC, NULL);
   if (UNLIKELY (ret == -1))
     {
-      ret = crun_make_error (err, errno, "error mounting restore directory `%s`", root);
+      ret = crun_make_error (err, errno, "error mounting restore directory " FMT_PATH, root);
       goto out;
     }
 
@@ -884,7 +896,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = libcriu_wrapper->criu_set_root (root);
   if (UNLIKELY (ret != 0))
     {
-      ret = crun_make_error (err, 0, "error setting CRIU root to `%s`", root);
+      ret = crun_make_error (err, 0, "error setting CRIU root to " FMT_PATH, root);
       goto out_umount;
     }
 
@@ -905,7 +917,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         {
           inherit_new_net_fd = open (def->linux->namespaces[i]->path, open_flags_for_inherit);
           if (UNLIKELY (inherit_new_net_fd < 0))
-            return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "unable to open(): " FMT_PATH, def->linux->namespaces[i]->path);
 
           libcriu_wrapper->criu_add_inherit_fd (inherit_new_net_fd, CRIU_EXT_NETNS);
         }
@@ -914,7 +926,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         {
           inherit_new_pid_fd = open (def->linux->namespaces[i]->path, open_flags_for_inherit);
           if (UNLIKELY (inherit_new_pid_fd < 0))
-            return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+            return crun_make_error (err, errno, "unable to open(): " FMT_PATH, def->linux->namespaces[i]->path);
 
           libcriu_wrapper->criu_add_inherit_fd (inherit_new_pid_fd, CRIU_EXT_PIDNS);
         }
@@ -972,9 +984,11 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   if (UNLIKELY (ret <= 0))
     {
+      cleanup_free char *path = NULL;
+      xasprintf (&path, "%s/%s", cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
       ret = crun_make_error (err, 0,
-                             "CRIU restoring failed %d.  Please check CRIU logfile `%s/%s`",
-                             ret, cr_options->work_path, CRIU_RESTORE_LOG_FILE);
+                             "CRIU restoring failed %d.  Please check CRIU logfile " FMT_PATH,
+                             ret, path);
       goto out_umount;
     }
 
@@ -989,14 +1003,14 @@ out_umount:
   if (UNLIKELY (ret_out == -1))
     {
       rmdir (root);
-      return crun_make_error (err, errno, "error unmounting restore directory `%s`", root);
+      return crun_make_error (err, errno, "error unmounting restore directory " FMT_PATH, root);
     }
 out:
   ret_out = rmdir (root);
   if (UNLIKELY (ret == -1))
     return ret;
   if (UNLIKELY (ret_out == -1))
-    return crun_make_error (err, errno, "error removing restore directory `%s`", root);
+    return crun_make_error (err, errno, "error removing restore directory " FMT_PATH, root);
   return ret;
 }
 #endif

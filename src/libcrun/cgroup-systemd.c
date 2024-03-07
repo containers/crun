@@ -166,7 +166,7 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 
   dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open `%s`", cgroup_path);
+    return crun_make_error (err, errno, "open " FMT_PATH, cgroup_path);
 
   if (resources->cpu->realtime_period)
     {
@@ -228,7 +228,7 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
 
       dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (dirfd < 0))
-        return crun_make_error (err, errno, "open `%s`", cgroup_path);
+        return crun_make_error (err, errno, "open " FMT_PATH, cgroup_path);
 
       ret = write_cpu_burst (dirfd, cgroup2, resources->cpu, err);
       if (UNLIKELY (ret < 0))
@@ -268,7 +268,7 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
 
       dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpuset < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
+        return crun_make_error (err, errno, "open " FMT_PATH, path_to_cpuset);
 
       ret = write_cpuset_resources (dirfd_cpuset, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
@@ -314,7 +314,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
 
       to = strchr (from, '\n');
       if (UNLIKELY (to == NULL))
-        return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
+        return crun_make_error (err, 0, "cannot parse " FMT_PATH, PROC_SELF_CGROUP);
       *to = '\0';
       if (suffix == NULL)
         path = xstrdup (from);
@@ -381,7 +381,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         from += 3;
         to = strchr (from, '\n');
         if (UNLIKELY (to == NULL))
-          return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
+          return crun_make_error (err, 0, "cannot parse " FMT_PATH, PROC_SELF_CGROUP);
         *to = '\0';
         if (suffix == NULL)
           path = xstrdup (from);
