@@ -1,0 +1,21 @@
+adjust:
+    - environment:
+        PODMAN_IGNORE_CGROUPSV1_WARNING: "true"
+      when: distro == rhel-8 or distro == centos-stream-8
+      because: el8 uses cgroups-v1
+
+prepare:
+    - how: shell
+      script: bash ./plans/prepare.sh
+    - how: install
+      package:
+        - bats
+        - catatonit
+        - podman
+        - podman-tests
+
+/podman_system_test:
+    summary: Run SELinux specific Podman system tests
+    execute:
+        how: tmt
+        script: bash ./plans/podman_system_test.sh

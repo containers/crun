@@ -23,10 +23,10 @@ jobs:
       - fedora-all-aarch64
       - fedora-eln-x86_64
       - fedora-eln-aarch64
-      - centos-stream+epel-next-8-x86_64
-      - centos-stream+epel-next-8-aarch64
-      - centos-stream+epel-next-9-x86_64
-      - centos-stream+epel-next-9-aarch64
+      - epel-8-x86_64
+      - epel-8-aarch64
+      - epel-9-x86_64
+      - epel-9-aarch64
     additional_repos:
       - "copr://rhcontainerbot/podman-next"
 
@@ -39,6 +39,35 @@ jobs:
     branch: main
     owner: rhcontainerbot
     project: podman-next
+
+  # Podman system tests for Fedora and CentOS Stream
+  - job: tests
+    trigger: pull_request
+    notifications:
+      failure_comment:
+        message: "podman system tests failed. @containers/packit-build please check."
+    targets:
+      - fedora-all-x86_64
+      - fedora-all-aarch64
+      - epel-9-x86_64
+      - epel-9-aarch64
+    identifier: podman_system_test
+    tmt_plan: "/plans/podman_system_test"
+
+  # Podman system tests for RHEL
+  - job: tests
+    trigger: pull_request
+    use_internal_tf: true
+    notifications:
+      failure_comment:
+        message: "podman system tests failed on RHEL. @containers/packit-build please check."
+    targets:
+      epel-9-x86_64:
+        distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
+      epel-9-aarch64:
+        distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
+    identifier: podman_system_test_internal
+    tmt_plan: "/plans/podman_system_test"
 
   - job: propose_downstream
     trigger: release
