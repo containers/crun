@@ -43,7 +43,7 @@ jobs:
   # Podman system tests for Fedora and CentOS Stream
   - job: tests
     trigger: pull_request
-    notifications:
+    notifications: &podman_system_test_fail_notification
       failure_comment:
         message: "podman system tests failed. @containers/packit-build please check."
     targets:
@@ -58,9 +58,7 @@ jobs:
   - job: tests
     trigger: pull_request
     use_internal_tf: true
-    notifications:
-      failure_comment:
-        message: "podman system tests failed on RHEL. @containers/packit-build please check."
+    notifications: *podman_system_test_fail_notification
     targets:
       epel-9-x86_64:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
