@@ -6,8 +6,7 @@
 %ifarch aarch64 || x86_64
 %global wasm_support 1
 
-# wasmedge not present on Fedora ELN environments
-%if !0%{?eln}
+%if %{defined fedora} || %{defined copr_project}
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif
