@@ -5753,7 +5753,7 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
         when it is not reachable from the current mount namespace.
         Use it to give a better error message.
       */
-#define UNREACHABLE "unreachable"
+#define UNREACHABLE "(unreachable)"
 #define UNREACHABLE_LEN ((int) sizeof (UNREACHABLE) - 1)
 
       if ((ret >= UNREACHABLE_LEN) && (memcmp (buffer, UNREACHABLE, UNREACHABLE_LEN) == 0))
