@@ -359,6 +359,12 @@ static const char *spec_cgroupns = "\
 				\"type\": \"cgroup\"\n\
 			},\n";
 
+static char *potentially_unsafe_annotations[] = {
+  "module.wasm.image/variant",
+  "io.kubernetes.cri.container-type",
+  "run.oci.",
+};
+
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
 
 static int
@@ -3944,6 +3950,7 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   size_t num_actions = sizeof (actions) / sizeof (actions[0]);
   size_t num_hooks = sizeof (hooks) / sizeof (hooks[0]);
   size_t num_archs = sizeof (archs) / sizeof (archs[0]);
+  size_t num_unsafe_annotations = sizeof (potentially_unsafe_annotations) / sizeof (potentially_unsafe_annotations[0]);
   cleanup_free char **capabilities = NULL;
   size_t num_capabilities = 0;
 
@@ -4016,6 +4023,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 #endif
   (*info)->annotations.run_oci_crun_commit = GIT_VERSION;
   (*info)->annotations.run_oci_crun_version = PACKAGE_VERSION;
+
+  populate_array_field (&((*info)->potentially_unsafe_annotations), potentially_unsafe_annotations, num_unsafe_annotations);
 
   return 0;
 }
