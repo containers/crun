@@ -39,7 +39,7 @@ Epoch: 102
 Version: 0
 Release: %autorelease
 URL: https://github.com/containers/%{name}
-Source0: %{url}/releases/download/%{version}/%{name}-%{version}.tar.xz
+Source0: %{url}/releases/download/%{version}/%{name}-%{version}.tar.zst
 License: GPL-2.0-only
 %if %{defined golang_arches_future}
 ExclusiveArch: %{golang_arches_future}
