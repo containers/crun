@@ -31,10 +31,10 @@ mkdir -p $OUTDIR
 rm -f crun-*.tar*
 
 make dist-gzip
-make dist-xz
+make ZSTD_OPT="--ultra -c22" dist-zstd
 
 mv crun-*.tar.gz $OUTDIR
-mv crun-*.tar.xz $OUTDIR
+mv crun-*.tar.zst $OUTDIR
 
 make distclean
 
