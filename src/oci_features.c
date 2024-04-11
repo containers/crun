@@ -230,6 +230,12 @@ crun_features_add_annotations_info (yajl_gen json_gen, const struct annotations_
   yajl_gen_map_close (json_gen);
 }
 
+void
+crun_features_add_potentially_unsafe_config_annotations_info (yajl_gen json_gen, char **annotations)
+{
+  add_array_to_json (json_gen, "potentiallyUnsafeConfigAnnotations", annotations);
+}
+
 int
 crun_command_features (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
@@ -278,6 +284,9 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
 
   // Add annotations struct info
   crun_features_add_annotations_info (json_gen, &info->annotations);
+
+  // Add potentially unsafe config annotatinos info
+  crun_features_add_potentially_unsafe_config_annotations_info (json_gen, info->potentially_unsafe_annotations);
 
   // End building the JSON
   yajl_gen_map_close (json_gen);

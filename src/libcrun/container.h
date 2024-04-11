@@ -170,6 +170,7 @@ struct features_info_s
   char **mount_options;
   struct linux_info_s linux;
   struct annotations_info_s annotations;
+  char **potentially_unsafe_annotations;
 };
 
 struct libcrun_checkpoint_restore_s

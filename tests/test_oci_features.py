@@ -167,7 +167,12 @@ def test_crun_features():
                 "org.opencontainers.runc.checkpoint.enabled": "true",
                 "run.oci.checkpoint.enabled": "true",
                 "run.oci.commit": get_crun_commit(),
-            }
+            },
+            "potentiallyUnsafeConfigAnnotations": [
+                "module.wasm.image/variant",
+                "io.kubernetes.cri.container-type",
+                "run.oci.",
+            ]
         }
 
         systemd_enabled = is_systemd_enabled()
