@@ -17,16 +17,15 @@ git clean -fdx
 make -j "$(nproc)"
 )
 
-export GO111MODULE=off
-
 # Install and run runtime-tools' validation tests
-go get -d -u github.com/opencontainers/runtime-tools || true
+git clone --depth=1 https://github.com/opencontainers/runtime-tools
+cd runtime-tools
+make -j "$(nproc)" tool
+make -j "$(nproc)" install
 
 export GOCACHE=/var/tmp/gocache
 export TMPDIR=/var/tmp
 export XDG_RUNTIME_DIR=/run
-
-cd "$GOPATH/src/github.com/opencontainers/runtime-tools"
 
 # Skip:
 # cgroup tests as they require special configurations on the host
