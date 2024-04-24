@@ -423,7 +423,8 @@ libcrun_error (int errno_, const char *msg, ...)
   va_end (args_list);
 }
 
-void __attribute__ ((noreturn)) libcrun_fail_with_error (int errno_, const char *msg, ...)
+void __attribute__ ((noreturn))
+libcrun_fail_with_error (int errno_, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
