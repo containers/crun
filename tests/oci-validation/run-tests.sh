@@ -37,6 +37,7 @@ export XDG_RUNTIME_DIR=/run
 VALIDATION_TESTS=$(make print-validation-tests | tr ' ' '\n' | grep -Ev "(hooks_stdin|misc_props|start|cgroup|readonly_paths|kill|masked_paths|seccomp|process|pidfile|hostname|delete)" | tr '\n' ' ')
 export VALIDATION_TESTS
 export RUNTIME="/crun/crun"
+export TAPTOOL=yath
 
 # Build test binaries
 make -j "$(nproc)" runtimetest validation-executables
