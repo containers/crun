@@ -23,10 +23,10 @@ jobs:
       - fedora-all-aarch64
       - fedora-eln-x86_64
       - fedora-eln-aarch64
-      - epel-8-x86_64
-      - epel-8-aarch64
       - epel-9-x86_64
       - epel-9-aarch64
+      - centos-stream-10-x86_64
+      - centos-stream-10-aarch64
     additional_repos:
       - "copr://rhcontainerbot/podman-next"
 
@@ -51,6 +51,10 @@ jobs:
       - fedora-all-aarch64
       - epel-9-x86_64
       - epel-9-aarch64
+      # TODO: Enable cs10 tests after netavark has finished defaulting to
+      # nftables
+      #- centos-stream-10-x86_64
+      #- centos-stream-10-aarch64
     identifier: podman_system_test
     tmt_plan: "/plans/podman_system_test"
 
@@ -64,6 +68,12 @@ jobs:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
       epel-9-aarch64:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
+      # TODO: Enable cs10 tests after netavark has finished defaulting to
+      # nftables
+      #centos-stream-10-x86_64:
+      #  distros: [RHEL-10-Beta-Nightly]
+      #centos-stream-10-aarch64:
+      #  distros: [RHEL-10-Beta-Nightly]
     identifier: podman_system_test_internal
     tmt_plan: "/plans/podman_system_test"
 
