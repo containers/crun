@@ -6,7 +6,11 @@
 %ifarch aarch64 || x86_64
 %global wasm_support 1
 
-%if %{defined fedora} || %{defined copr_project}
+%if %{defined copr_project}
+%define copr_build 1
+%endif
+
+%if %{defined fedora} || %{defined copr_build}
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif
@@ -27,7 +31,7 @@
 
 Summary: OCI runtime written in C
 Name: crun
-%if %{defined copr_username}
+%if %{defined copr_build}
 Epoch: 102
 %endif
 # DO NOT TOUCH the Version string!
@@ -70,11 +74,7 @@ BuildRequires: wasmedge-devel
 %if %{defined wasmtime_support}
 BuildRequires: wasmtime-c-api-devel
 %endif
-%if %{defined rhel} && 0%{?rhel} == 8
-BuildRequires: python3
-%else
 BuildRequires: python
-%endif
 Provides: oci-runtime
 
 %description
@@ -95,7 +95,13 @@ krun is a symlink to the %{name} binary, with libkrun as an additional dependenc
 %package wasm
 Summary: %{name} with wasm support
 Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
+# The hard dep on wasm-library is causing trouble in internal testing farm
+# with RHEL.
+%if %{defined fedora}
 Requires: wasm-library
+%else
+Recommends: wasm-library
+%endif
 Recommends: wasmedge
 
 %description wasm

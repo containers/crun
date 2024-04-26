@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eox pipefail
+set -exo pipefail
 
 cat /etc/redhat-release
 rpm -q crun podman podman-tests

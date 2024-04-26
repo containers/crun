@@ -1,12 +1,40 @@
+## Note: "order" is set to 50 by default. Orders with lower values are
+## prioritized.
+## Ref: https://tmt.readthedocs.io/en/stable/spec/core.html#order
+
 adjust:
-    - environment:
-        PODMAN_IGNORE_CGROUPSV1_WARNING: "true"
-      when: distro == rhel-8 or distro == centos-stream-8
-      because: el8 uses cgroups-v1
+    - when: distro != fedora
+      prepare+:
+        - how: shell
+          order: 20
+          script: rpm -q epel-release || dnf -y install https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/e/epel-release-9-7.el9.noarch.rpm
+      because: Need `bats` to run podman system tests, present by default on Fedora but RHEL and CentOS Stream need to use EPEL repos.
+    - when: distro == fedora
+      prepare+:
+        - how: shell
+          order: 20
+          script:  dnf config-manager --set-disabled testing-farm-tag-repository
+      because: We don't want to use this repository for Fedora tests.
+    - when: distro != centos-stream-10 and distro != rhel-10
+      prepare+:
+        - how: shell
+          order: 30
+          script: dnf -y copr enable rhcontainerbot/podman-next
+      because: We can't use the idiomatic `copr` key globally because of non-default instructions for centos-stream-10.
+    - when: distro == centos-stream-10 or distro == rhel-10
+      prepare+:
+        - how: shell
+          order: 30
+          script: |
+            sed -i "s/\$releasever/9/g" /etc/yum.repos.d/epel.repo
+            dnf -y copr enable rhcontainerbot/podman-next centos-stream-10
+      because: The default epel-10 target doesn't exist yet.
 
 prepare:
+    # Ensure podman-next has higher priority than default repos
     - how: shell
-      script: bash ./plans/prepare.sh
+      script: dnf config-manager --save --setopt="*:rhcontainerbot:podman-next.priority=5"
+    # Install packages to run podman revdep tests
     - how: install
       package:
         - bats
