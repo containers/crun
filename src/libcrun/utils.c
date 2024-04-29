@@ -1811,7 +1811,7 @@ get_current_timestamp (char *out, size_t len)
   gmtime_r (&tv.tv_sec, &now);
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
-  snprintf (out, len, "%s.%06ldZ", timestamp, tv.tv_usec);
+  snprintf (out, len, "%s.%06lldZ", timestamp, (long long int) tv.tv_usec);
   out[len - 1] = '\0';
 }
 
