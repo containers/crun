@@ -1353,9 +1353,12 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
                           if (LIKELY (ret == 0))
                             return 0;
 
+                          /* Best-effort cleanup of now-unused temporary mount */
+                          umount2 (tmp_mount_dir, MNT_DETACH);
                           crun_error_release (err);
                         }
                     }
+                  rmdir (tmp_mount_dir);
                 }
 
               ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", MS_PRIVATE, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);

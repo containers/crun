@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <yajl/yajl_tree.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -485,7 +486,20 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
       ret = unlinkat (dirfd (d), de->d_name, 0);
       if (ret < 0)
         {
+        retry_unlink:
           ret = unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
+          if (ret < 0 && errno == EBUSY)
+            {
+              cleanup_close int tfd = openat (dirfd (d), de->d_name, O_CLOEXEC | O_PATH | O_NOFOLLOW);
+              if (tfd >= 0)
+                {
+                  proc_fd_path_t procpath;
+
+                  get_proc_self_fd_path (procpath, tfd);
+                  if (umount2 (procpath, MNT_DETACH) == 0)
+                    goto retry_unlink;
+                }
+            }
           if (ret < 0 && errno == ENOTEMPTY)
             {
               cleanup_close int cfd = -1;
