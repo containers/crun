@@ -2,12 +2,22 @@
 # See the documentation for more information:
 # https://packit.dev/docs/configuration/
 
-specfile_path: rpm/crun.spec
+downstream_package_name: crun
+
+packages:
+  crun-fedora:
+    pkg_tool: fedpkg
+    specfile_path: rpm/crun.spec
+  crun-centos:
+    pkg_tool: centpkg
+    specfile_path: rpm/crun.spec
 
 srpm_build_deps:
   - git-archive-all
   - make
+
 actions:
+  # This action runs only on copr build jobs
   create-archive:
     - "git-archive-all -v --force-submodules rpm/crun-HEAD.tar.xz"
     - bash -c "ls -1 rpm/crun-HEAD.tar.xz"
@@ -15,7 +25,8 @@ actions:
 jobs:
   - job: copr_build
     trigger: pull_request
-    notifications:
+    packages: [crun-fedora]
+    notifications: &copr_build_failure_notification
       failure_comment:
         message: "Ephemeral COPR build failed. @containers/packit-build please check."
     targets:
@@ -23,12 +34,18 @@ jobs:
       - fedora-all-aarch64
       - fedora-eln-x86_64
       - fedora-eln-aarch64
+
+  - job: copr_build
+    trigger: pull_request
+    packages: [crun-centos]
+    notifications: *copr_build_failure_notification
+    targets:
       - epel-9-x86_64
       - epel-9-aarch64
+      - centos-stream-9-x86_64
+      - centos-stream-9-aarch64
       - centos-stream-10-x86_64
       - centos-stream-10-aarch64
-    additional_repos:
-      - "copr://rhcontainerbot/podman-next"
 
   # Run on commit to main branch
   - job: copr_build
@@ -43,24 +60,35 @@ jobs:
   # Podman system tests for Fedora and CentOS Stream
   - job: tests
     trigger: pull_request
+    packages: [crun-fedora]
     notifications: &podman_system_test_fail_notification
       failure_comment:
         message: "podman system tests failed. @containers/packit-build please check."
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64
-      - epel-9-x86_64
-      - epel-9-aarch64
+    identifier: podman_system_test_fedora
+    tmt_plan: "/plans/podman_system_test"
+
+  # Podman system tests for Fedora and CentOS Stream
+  - job: tests
+    trigger: pull_request
+    packages: [crun-centos]
+    notifications: *podman_system_test_fail_notification
+    targets:
+      - centos-stream-9-x86_64
+      - centos-stream-9-aarch64
       # TODO: Enable cs10 tests after netavark has finished defaulting to
       # nftables
       #- centos-stream-10-x86_64
       #- centos-stream-10-aarch64
-    identifier: podman_system_test
+    identifier: podman_system_test_centos
     tmt_plan: "/plans/podman_system_test"
 
   # Podman system tests for RHEL
   - job: tests
     trigger: pull_request
+    packages: [crun-centos]
     use_internal_tf: true
     notifications: *podman_system_test_fail_notification
     targets:
@@ -79,9 +107,17 @@ jobs:
 
   - job: propose_downstream
     trigger: release
+    packages: [crun-fedora]
     update_release: false
     dist_git_branches:
       - fedora-all
+
+  - job: propose_downstream
+    trigger: release
+    packages: [crun-centos]
+    update_release: false
+    dist_git_branches:
+      - c10s
 
   - job: koji_build
     trigger: commit
