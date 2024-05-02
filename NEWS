@@ -1,3 +1,17 @@
+* crun-1.15
+
+- fix a mount point leak under /run/crun, add a retry mechanism to
+  unmount the directory if the removal failed with EBUSY.
+- linux: cgroups: fix potential mount leak when /sys/fs/cgroup is
+  already mounted, causing the posthooks to not run.
+- release: build s390x binaries using musl libc.
+- features: add support for potentiallyUnsafeConfigAnnotations.
+- handlers: add option to load wasi-nn plugin for wasmedge.
+- linux: fix "harden chdir()" security measure.  The previous check
+  was not correct.
+- crun: add option --keep to the run command.  When specified the
+  container is not automatically deleted when it exits.
+
 * crun-1.14.4
 
 - linux: fix mount of file with recursive flags.  Do not assume it is
