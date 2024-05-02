@@ -19,8 +19,8 @@ srpm_build_deps:
 actions:
   # This action runs only on copr build jobs
   create-archive:
-    - "git-archive-all -v --force-submodules rpm/crun-HEAD.tar.xz"
-    - bash -c "ls -1 rpm/crun-HEAD.tar.xz"
+    - "git-archive-all -v --force-submodules rpm/crun-HEAD.tar.zst"
+    - bash -c "ls -1 rpm/crun-HEAD.tar.zst"
 
 jobs:
   - job: copr_build
