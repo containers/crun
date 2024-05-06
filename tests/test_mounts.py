@@ -17,6 +17,7 @@
 
 import sys
 import copy
+import socket
 from tests_utils import *
 import tempfile
 
@@ -62,6 +63,41 @@ def test_mount_symlink():
     if "Rome" in out:
         return 0
     return -1
+
+def test_mount_fifo():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'type', '/fifo']
+    add_all_namespaces(conf)
+
+    source_file = os.path.join(get_tests_root(), "a-fifo")
+
+    os.mkfifo(source_file)
+
+    for options in ([], ["ro"], ["rro"]):
+        mount_opt = {"destination": "/fifo", "type": "bind", "source": source_file, "options": options + ["bind"]}
+        conf['mounts'].append(mount_opt)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        if "FIFO" not in out:
+            return 1
+    return 0
+
+def test_mount_unix_socket():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'type', '/unix-socket']
+    add_all_namespaces(conf)
+
+    source_file = os.path.join(get_tests_root(), "unix-socket")
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    server.bind(source_file)
+
+    for options in ([], ["ro"], ["rro"]):
+        mount_opt = {"destination": "/unix-socket", "type": "bind", "source": source_file, "options": options + ["bind"]}
+        conf['mounts'].append(mount_opt)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        if "socket" not in out:
+            return 1
+    return 0
 
 def test_mount_tmpfs_permissions():
     def prepare_rootfs(rootfs):
@@ -575,6 +611,8 @@ all_tests = {
     "mount-sync" : test_mount_sync,
     "mount-dirsync" : test_mount_dirsync,
     "mount-symlink" : test_mount_symlink,
+    "mount-fifo" : test_mount_fifo,
+    "mount-unix-socket" : test_mount_unix_socket,
     "mount-symlink-not-existing" : test_mount_symlink_not_existing,
     "mount-dev" : test_mount_dev,
     "mount-nodev" : test_mount_nodev,

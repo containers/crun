@@ -455,6 +455,51 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "type") == 0)
+    {
+      struct stat st;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'type' requires two arguments");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+
+      switch (st.st_mode & S_IFMT)
+        {
+        case S_IFBLK:
+          printf ("block device\n");
+          break;
+        case S_IFCHR:
+          printf ("character device\n");
+          break;
+
+        case S_IFDIR:
+          printf ("directory\n");
+          break;
+
+        case S_IFIFO:
+          printf ("FIFO/pipe\n");
+          break;
+
+        case S_IFLNK:
+          printf ("symlink\n");
+          break;
+
+        case S_IFREG:
+          printf ("regular file\n");
+          break;
+
+        case S_IFSOCK:
+          printf ("socket\n");
+          break;
+
+        default:
+          printf ("unknown?\n");
+          break;
+        }
+      return 0;
+    }
+
   if (strcmp (argv[1], "owner") == 0)
     {
       struct stat st;
