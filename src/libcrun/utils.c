@@ -1037,7 +1037,7 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
 int
 read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_error_t *err)
 {
-  cleanup_close int fd;
+  cleanup_close int fd = -1;
 
   fd = TEMP_FAILURE_RETRY (openat (dirfd, path, O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (fd < 0))
