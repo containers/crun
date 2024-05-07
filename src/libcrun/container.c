@@ -2733,7 +2733,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
                        libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  char *json = runtime_spec_schema_config_schema_to_json (container_def);
+  char *json = runtime_spec_schema_config_schema_to_json (def);
   log_message("[CONTINUUM] 0813 libcrun_container_run:start container_def:%s\n", json);
   int ret;
   int detach = context->detach;
@@ -2826,7 +2826,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  log_message("[CONTINUUM] 0813 libcrun_container_run:done container_def:%s\n", json);
+  log_message("[CONTINUUM] 0814 libcrun_container_run:done container_def:%s\n", json);
 
   exit (EXIT_SUCCESS);
 fail:
@@ -2848,7 +2848,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
                           libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  char *json = runtime_spec_schema_config_schema_to_json (container_def);
+  char *json = runtime_spec_schema_config_schema_to_json (def);
   log_message("[CONTINUUM] 0811 libcrun_container_create:start container_def:%s\n", json);
 
   int ret;
