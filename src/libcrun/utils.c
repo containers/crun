@@ -96,7 +96,7 @@ void log_message(const char *message) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   long long current_time_in_nanos = ts.tv_sec * 1e9 + ts.tv_nsec;
-  syslog(LOG_ERR, "%lld [CONTINUUM2] %s", current_time_in_nanos, message);
+  syslog(LOG_ERR, "%%!s(int64=%lld) %s", current_time_in_nanos, message);
 }
 
 void close_syslog() {
