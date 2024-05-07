@@ -2828,7 +2828,6 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  char log_msg[1024];
   snprintf(log_msg, sizeof(log_msg), "[CONTINUUM] 0814 libcrun_container_run:done container_def:%s\n", json);
   log_message(log_msg);
 
@@ -2951,7 +2950,6 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (pipefd1 >= 0)
     TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
 
-  char log_msg[1024];
   snprintf(log_msg, sizeof(log_msg), "[CONTINUUM] 0812 libcrun_container_create:done container_def:%s\n", json);
   log_message(log_msg);
   exit (ret ? EXIT_FAILURE : 0);
