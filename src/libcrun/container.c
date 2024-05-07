@@ -2826,9 +2826,8 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
                           libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  char *json = runtime_spec_schema_config_schema_to_json (def);
   log_message("[CONTINUUM] 0811 libcrun_container_create:start context:", (char*)context->id);
-
+  
   int ret;
   int container_ready_pipe[2];
   cleanup_close int pipefd0 = -1;
@@ -2922,7 +2921,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   if (pipefd1 >= 0)
     TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-    
+
   log_message("[CONTINUUM] 0812 libcrun_container_create:done context:", (char*)context->id);
   exit (ret ? EXIT_FAILURE : 0);
 }
