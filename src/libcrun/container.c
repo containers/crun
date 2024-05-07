@@ -2712,7 +2712,6 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
                        libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  log_message("[CONTINUUM] 0813 libcrun_container_run:start context:", (char*)context->id);
   int ret;
   int detach = context->detach;
   int container_ret_status[2];
@@ -2803,9 +2802,6 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
     goto fail;
-
-  log_message("[CONTINUUM] 0814 libcrun_container_run:done context:", (char*)context->id);
-
   exit (EXIT_SUCCESS);
 fail:
 
@@ -2827,7 +2823,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   log_message("[CONTINUUM] 0811 libcrun_container_create:start context:", (char*)context->id);
-  
+
   int ret;
   int container_ready_pipe[2];
   cleanup_close int pipefd0 = -1;
@@ -2867,6 +2863,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       ret = libcrun_container_run_internal (container, context, NULL, err);
       if (UNLIKELY (ret < 0))
         force_delete_container_status (context, def);
+      log_message("[CONTINUUM] 0812 libcrun_container_create:done context:", (char*)context->id);
       return ret;
     }
 
@@ -2921,7 +2918,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   if (pipefd1 >= 0)
     TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-
+    
   log_message("[CONTINUUM] 0812 libcrun_container_create:done context:", (char*)context->id);
   exit (ret ? EXIT_FAILURE : 0);
 }
@@ -2929,6 +2926,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 int
 libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
+  log_message("[CONTINUUM] 0813 libcrun_container_start:start container:", id);
   cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
   runtime_spec_schema_config_schema *def;
@@ -3019,6 +3017,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
         crun_error_release (err);
     }
 
+  log_message("[CONTINUUM] 0814 libcrun_container_start:done id:", id);
   return 0;
 }
 
