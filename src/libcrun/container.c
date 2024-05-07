@@ -2822,7 +2822,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
                           libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  log_message("[CONTINUUM] 0811 libcrun_container_create:start context:", (char*)context->id);
+  log_message("[CONTINUUM] 0811 libcrun_container_create:start id=", (char*)context->id);
 
   int ret;
   int container_ready_pipe[2];
@@ -2863,7 +2863,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       ret = libcrun_container_run_internal (container, context, NULL, err);
       if (UNLIKELY (ret < 0))
         force_delete_container_status (context, def);
-      log_message("[CONTINUUM] 0812 libcrun_container_create:done context:", (char*)context->id);
+      log_message("[CONTINUUM] 0812 libcrun_container_create:done id=", (char*)context->id);
       return ret;
     }
 
@@ -2918,15 +2918,15 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   if (pipefd1 >= 0)
     TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-    
-  log_message("[CONTINUUM] 0812 libcrun_container_create:done context:", (char*)context->id);
+
+  log_message("[CONTINUUM] 0812 libcrun_container_create:done id=", (char*)context->id);
   exit (ret ? EXIT_FAILURE : 0);
 }
 
 int
 libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
-  log_message("[CONTINUUM] 0813 libcrun_container_start:start container:", id);
+  log_message("[CONTINUUM] 0813 libcrun_container_start:start id=", id);
   cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
   runtime_spec_schema_config_schema *def;
@@ -3017,7 +3017,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
         crun_error_release (err);
     }
 
-  log_message("[CONTINUUM] 0814 libcrun_container_start:done id:", id);
+  log_message("[CONTINUUM] 0814 libcrun_container_start:done id=", id);
   return 0;
 }
 
