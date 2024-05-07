@@ -387,6 +387,7 @@ main (int argc, char **argv)
     error (EXIT_FAILURE, 0, "dlopen: %s", dlerror ());
 #endif
 
+  initialize_syslog ();
   fill_handler_from_argv0 (argv[0], &arguments);
 
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);
@@ -401,5 +402,6 @@ main (int argc, char **argv)
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
   if (ret && err)
     libcrun_fail_with_error (err->status, "%s", err->msg);
+  close_syslog ();
   return ret;
 }

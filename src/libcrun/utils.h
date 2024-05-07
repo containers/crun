@@ -251,6 +251,12 @@ path_is_slash_dev (const char *path)
   return true;
 }
 
+void initialize_syslog();
+
+void log_message(const char *message);
+
+void close_syslog();
+
 int xasprintf (char **str, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 
 int crun_path_exists (const char *path, libcrun_error_t *err);

@@ -41,6 +41,7 @@
 #include <linux/magic.h>
 #include <limits.h>
 #include <sys/mman.h>
+#include <syslog.h>
 #ifdef HAVE_LINUX_OPENAT2_H
 #  include <linux/openat2.h>
 #endif
@@ -86,6 +87,20 @@ syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uin
   };
 
   return (int) syscall (__NR_openat2, dirfd, path, &how, sizeof (how), 0);
+}
+
+void initialize_syslog() {
+  openlog("crun", LOG_PID | LOG_CONS, LOG_USER);
+}
+void log_message(const char *message) {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  long long current_time_in_nanos = ts.tv_sec * 1e9 + ts.tv_nsec;
+  syslog(LOG_ERR, "%lld [CONTINUUM2] %s", current_time_in_nanos, message);
+}
+
+void close_syslog() {
+  closelog();
 }
 
 int
