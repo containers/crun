@@ -272,6 +272,7 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
                            struct custom_handler_instance_s **out,
                            libcrun_error_t *err)
 {
+  log_message("[CONTINUUM] 0828 libcrun_configure_handler:start id=", (char*)context->id);
   const char *explicit_handler;
   const char *annotation;
 
@@ -310,6 +311,8 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
           return 0;
         }
     }
+
+  log_message("[CONTINUUM] 0829 libcrun_configure_handler:done id=", (char*)context->id);
 
   if (manager == NULL)
     return 0;
