@@ -92,11 +92,11 @@ syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uin
 void initialize_syslog() {
   openlog("crun", LOG_PID | LOG_CONS, LOG_USER);
 }
-void log_message(const char *message) {
+void log_message(const char *message, char *id) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   long long current_time_in_nanos = ts.tv_sec * 1e9 + ts.tv_nsec;
-  syslog(LOG_ERR, "%%!s(int64=%lld) %s", current_time_in_nanos, message);
+  syslog(LOG_ERR, "%%!s(int64=%lld) %s %s", current_time_in_nanos, message, id);
 }
 
 void close_syslog() {

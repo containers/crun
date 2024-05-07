@@ -520,27 +520,6 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   return 0;
 }
 
-char *runtime_spec_schema_config_schema_to_json(runtime_spec_schema_config_schema *container_def)
-{
-  yajl_gen gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return NULL;
-
-  yajl_gen_config (gen, yajl_gen_beautify, 1);
-  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
-
-  runtime_spec_schema_config_schema_to_json_internal (container_def, gen);
-
-  const unsigned char *buf;
-  size_t len;
-  yajl_gen_get_buf (gen, &buf, &len);
-  char *json = xstrndup ((const char *) buf, len);
-
-  yajl_gen_free (gen);
-
-  return json;
-}
-
 static libcrun_container_t *
 make_container (runtime_spec_schema_config_schema *container_def, const char *path, const char *config)
 {
@@ -2733,10 +2712,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
                        libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  char *json = runtime_spec_schema_config_schema_to_json (def);
-  char log_msg[1024];
-  snprintf(log_msg, sizeof(log_msg), "[CONTINUUM] 0813 libcrun_container_run:start container_def:%s\n", json);
-  log_message(log_msg);
+  log_message("[CONTINUUM] 0813 libcrun_container_run:start context:", (char*)context->id);
   int ret;
   int detach = context->detach;
   int container_ret_status[2];
@@ -2828,8 +2804,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  snprintf(log_msg, sizeof(log_msg), "[CONTINUUM] 0814 libcrun_container_run:done container_def:%s\n", json);
-  log_message(log_msg);
+  log_message("[CONTINUUM] 0814 libcrun_container_run:done context:", (char*)context->id);
 
   exit (EXIT_SUCCESS);
 fail:
@@ -2852,9 +2827,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   char *json = runtime_spec_schema_config_schema_to_json (def);
-  char log_msg[1024];
-  snprintf(log_msg, sizeof(log_msg), "[CONTINUUM] 0811 libcrun_container_create:start container_def:%s\n", json);
-  log_message(log_msg);
+  log_message("[CONTINUUM] 0811 libcrun_container_create:start context:", (char*)context->id);
 
   int ret;
   int container_ready_pipe[2];
@@ -2949,9 +2922,8 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   if (pipefd1 >= 0)
     TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-
-  snprintf(log_msg, sizeof(log_msg), "[CONTINUUM] 0812 libcrun_container_create:done container_def:%s\n", json);
-  log_message(log_msg);
+    
+  log_message("[CONTINUUM] 0812 libcrun_container_create:done context:", (char*)context->id);
   exit (ret ? EXIT_FAILURE : 0);
 }
 
