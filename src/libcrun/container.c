@@ -17,6 +17,7 @@
  */
 #define _GNU_SOURCE
 
+#include <syslog.h>
 #include <config.h>
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include <stdbool.h>
@@ -520,6 +521,16 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   return 0;
 }
 
+void initialize_syslog() {
+  openlog("crun", LOG_PID | LOG_CONS, LOG_USER);
+}
+void log_message(const char *message) {
+  syslog(LOG_ERR, "%s", message);
+}
+void close_syslog() {
+  closelog();
+}
+
 static libcrun_container_t *
 make_container (runtime_spec_schema_config_schema *container_def, const char *path, const char *config)
 {
@@ -533,6 +544,10 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
     container->config_file = xstrdup (path);
   if (config)
     container->config_file_content = xstrdup (config);
+
+  initialize_syslog();
+  log_message("[CONTINUUM2] test message from make_container\n");
+  close_syslog();
 
   return container;
 }
