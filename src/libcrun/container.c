@@ -2291,7 +2291,7 @@ static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context,
                                 int *container_ready_fd, libcrun_error_t *err)
 {
-  log_message("[CONTINUUM] 0824 libcrun_container_run_internal:start id=", (char*)>container->context->id);
+  log_message("[CONTINUUM] 0824 libcrun_container_run_internal:start id=", (char*)container->context->id);
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
   pid_t pid;
@@ -2634,7 +2634,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       crun_error_release (&tmp_err);
     }
 
-  log_message("[CONTINUUM] 0825 libcrun_container_run_internal:done id=", (char*)>container->context->id);
+  log_message("[CONTINUUM] 0825 libcrun_container_run_internal:done id=", (char*)container->context->id);
   return ret;
 
 fail:
