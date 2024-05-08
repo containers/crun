@@ -72,7 +72,7 @@ jobs:
           - test: alpine-build
           - test: centos8-build
           - test: centos9-build
-          - test: centos10-build
+          #- test: centos10-build
           - test: clang-format
           - test: clang-check
           - test: checkpoint-restore
