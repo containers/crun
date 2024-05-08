@@ -153,7 +153,7 @@ jobs:
               ;;
               centos10-build)
                   sudo docker build -t crun-centos10-build tests/centos10-build
-                  sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos10-build
+                  sudo docker run --cgroupns=host --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-centos10-build
               ;;
               clang-format)
                   sudo docker build -t crun-clang-format tests/clang-format
