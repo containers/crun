@@ -174,7 +174,7 @@ INLINE size_t compress_chunks_parallel(const uint8_t *input, size_t input_len,
   assert(input_len <= MAX_SIMD_DEGREE * BLAKE3_CHUNK_LEN);
 #endif
 
-  const uint8_t *chunks_array[MAX_SIMD_DEGREE];
+  const uint8_t *chunks_array[MAX_SIMD_DEGREE] = {0, };
   size_t input_position = 0;
   size_t chunks_array_len = 0;
   while (input_len - input_position >= BLAKE3_CHUNK_LEN) {
