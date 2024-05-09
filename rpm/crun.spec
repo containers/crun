@@ -6,7 +6,7 @@
 %ifarch aarch64 || x86_64
 %global wasm_support 1
 
-%if %{defined copr_project}
+%if %{defined copr_username}
 %define copr_build 1
 %endif
 
@@ -22,7 +22,7 @@
 %endif
 
 # wasmtime exists only on podman-next copr for now
-%if %{defined copr_project} && "%{?copr_project}" == "podman-next"
+%if %{defined copr_build} && "%{?copr_projectname}" == "podman-next"
 %global wasmtime_support 1
 %global wasmtime_opts --with-wasmtime
 %endif
