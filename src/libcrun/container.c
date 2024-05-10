@@ -63,6 +63,7 @@
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
+#include <time.h>
 
 #define YAJL_STR(x) ((const unsigned char *) (x))
 
@@ -1049,8 +1050,10 @@ static int
 container_init_setup (void *args, pid_t own_pid, char *notify_socket,
                       int sync_socket, char **exec_path, libcrun_error_t *err)
 {
+  struct timespec ts;
   struct container_entrypoint_s *entrypoint_args = args;
   libcrun_container_t *container = entrypoint_args->container;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0821 container_init_setup:start id=", (char*)container->context->id);
   bool chdir_done = false;
   int ret;
@@ -1311,6 +1314,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (notify_socket && putenv (notify_socket) < 0)
     return crun_make_error (err, errno, "putenv `%s`", notify_socket);
 
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0822 container_init_setup:done id=", (char*)container->context->id);
   return 0;
 }
@@ -1377,7 +1381,9 @@ rewrite_argv (char **argv, int argc, const char *name, char **args, size_t args_
 static int
 container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_t *err)
 {
+  struct timespec ts;
   struct container_entrypoint_s *entrypoint_args = args;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0823 container_init:start id=", (char*)entrypoint_args->container->context->id);
   int ret;
   runtime_spec_schema_config_schema *def = entrypoint_args->container->container_def;
@@ -2291,6 +2297,8 @@ static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context,
                                 int *container_ready_fd, libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0824 libcrun_container_run_internal:start id=", (char*)container->context->id);
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
@@ -2634,6 +2642,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
       crun_error_release (&tmp_err);
     }
 
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0825 libcrun_container_run_internal:done id=", (char*)container->context->id);
   return ret;
 
@@ -2716,6 +2725,8 @@ int
 libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options,
                        libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0826 libcrun_container_run:start id=", (char*)context->id);
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
@@ -2809,6 +2820,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0827 libcrun_container_run:done id=", (char*)context->id);
   exit (EXIT_SUCCESS);
 fail:
@@ -2829,6 +2841,8 @@ int
 libcrun_container_create (libcrun_context_t *context, libcrun_container_t *container, unsigned int options,
                           libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0811 libcrun_container_create:start id=", (char*)context->id);
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
@@ -2870,6 +2884,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       ret = libcrun_container_run_internal (container, context, NULL, err);
       if (UNLIKELY (ret < 0))
         force_delete_container_status (context, def);
+      clock_gettime(CLOCK_REALTIME, &ts);
       log_message("[CONTINUUM] 0812 libcrun_container_create:done id=", (char*)context->id);
       return ret;
     }
@@ -2926,6 +2941,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   if (pipefd1 >= 0)
     TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
 
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0812 libcrun_container_create:done id=", (char*)context->id);
   exit (ret ? EXIT_FAILURE : 0);
 }
@@ -2933,6 +2949,8 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 int
 libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0813 libcrun_container_start:start id=", id);
   cleanup_container libcrun_container_t *container = NULL;
   const char *state_root = context->state_root;
@@ -3023,7 +3041,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
       if (UNLIKELY (ret < 0))
         crun_error_release (err);
     }
-
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0814 libcrun_container_start:done id=", id);
   return 0;
 }
@@ -3091,6 +3109,8 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0819 libcrun_container_state:start id=", (char*)context->id);
   const char *const OCI_CONFIG_VERSION = "1.0.0";
   libcrun_container_status_t status = {};
@@ -3205,6 +3225,7 @@ exit:
   if (gen)
     yajl_gen_free (gen);
   libcrun_free_container_status (&status);
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0820 libcrun_container_state:done id=", (char*)context->id);
   return ret;
 }
@@ -3254,6 +3275,8 @@ exec_process_entrypoint (libcrun_context_t *context,
                          struct custom_handler_instance_s *custom_handler,
                          libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0817 exec_process_entrypoint:start id=", (char*)context->id);
   runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
   cleanup_free char *exec_path = NULL;
@@ -3458,6 +3481,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   libcrun_fail_with_error (errno, "exec");
   _exit (EXIT_FAILURE);
 
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0818 exec_process_entrypoint:done id=", (char*)context->id);
   return 0;
 }
@@ -3467,6 +3491,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                      struct libcrun_container_exec_options_s *opts,
                                      libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0815 libcrun_container_exec_with_options:start id=", id);
   cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
   int container_status, ret;
@@ -3725,6 +3751,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     }
 
   flush_fd_to_err (context, terminal_fd);
+  clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM] 0816 libcrun_container_exec_with_options:done id=", id);
   return ret;
 }

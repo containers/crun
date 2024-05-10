@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <time.h>
 
 #ifdef HAVE_DLOPEN
 #  include <dlfcn.h>
@@ -272,7 +273,9 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
                            struct custom_handler_instance_s **out,
                            libcrun_error_t *err)
 {
-  log_message("[CONTINUUM] 0828 libcrun_configure_handler:start id=", (char*)context->id);
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM] 0828 libcrun_configure_handler:start id=", (char*)context->id, ts);
   const char *explicit_handler;
   const char *annotation;
 
@@ -312,7 +315,9 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
         }
     }
 
-  log_message("[CONTINUUM] 0829 libcrun_configure_handler:done id=", (char*)context->id);
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM] 0829 libcrun_configure_handler:done id=", (char*)context->id, ts);
 
   if (manager == NULL)
     return 0;
