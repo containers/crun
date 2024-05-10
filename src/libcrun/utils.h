@@ -253,7 +253,7 @@ path_is_slash_dev (const char *path)
 
 void initialize_syslog();
 
-void log_message(const char *message, char* id, timespec ts);
+void log_message(const char *message, char* id, struct timespec ts);
 
 void close_syslog();
 
