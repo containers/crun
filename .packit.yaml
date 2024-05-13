@@ -40,12 +40,22 @@ jobs:
     packages: [crun-centos]
     notifications: *copr_build_failure_notification
     targets:
-      - epel-9-x86_64
-      - epel-9-aarch64
-      - centos-stream-9-x86_64
-      - centos-stream-9-aarch64
-      - centos-stream-10-x86_64
-      - centos-stream-10-aarch64
+      epel-9-x86_64: {}
+      epel-9-aarch64: {}
+      # Need epel9 repos to fetch wasmedge build dependency
+      centos-stream-9-x86_64:
+        additional_repos:
+          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/x86_64
+      centos-stream-9-aarch64:
+        additional_repos:
+          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/aarch64
+      # Use epel9 repos until epel10 is available
+      centos-stream-10-x86_64:
+        additional_repos:
+          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/x86_64
+      centos-stream-10-aarch64:
+        additional_repos:
+          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/aarch64
 
   # Run on commit to main branch
   - job: copr_build
