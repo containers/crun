@@ -1,39 +1,33 @@
-## Note: "order" is set to 50 by default. Orders with lower values are
-## prioritized.
-## Ref: https://tmt.readthedocs.io/en/stable/spec/core.html#order
+prepare+:
+    - name: Install bats
+      how: shell
+      script: |
+        BATS_VERSION=1.11.0
+        curl -s -L -O https://github.com/bats-core/bats-core/archive/refs/tags/v$BATS_VERSION.tar.gz
+        tar zxf v$BATS_VERSION.tar.gz
+        cd bats-core-$BATS_VERSION
+        ./install.sh /usr
 
-adjust:
-    - when: distro != fedora
-      prepare+:
-        - how: shell
-          order: 20
-          script: rpm -q epel-release || dnf -y install https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/e/epel-release-9-7.el9.noarch.rpm
-      because: Need `bats` to run podman system tests, present by default on Fedora but RHEL and CentOS Stream need to use EPEL repos.
-    - when: distro == fedora
-      prepare+:
-        - how: shell
-          order: 20
-          script:  dnf config-manager --set-disabled testing-farm-tag-repository
-      because: We don't want to use this repository for Fedora tests.
-    - when: distro != centos-stream-10 and distro != rhel-10
-      prepare+:
-        - how: shell
-          order: 30
-          script: dnf -y copr enable rhcontainerbot/podman-next
-      because: We can't use the idiomatic `copr` key globally because of non-default instructions for centos-stream-10.
-    - when: distro == centos-stream-10 or distro == rhel-10
-      prepare+:
-        - how: shell
-          order: 30
-          script: |
-            sed -i "s/\$releasever/9/g" /etc/yum.repos.d/epel.repo
-            dnf -y copr enable rhcontainerbot/podman-next centos-stream-10
-      because: The default epel-10 target doesn't exist yet.
+    - name: Remove testing-farm dnf repo
+      how: shell
+      script: rm -f /etc/yum.repos.d/testing-farm-tag-repository.repo
 
-prepare:
-    # Ensure podman-next has higher priority than default repos
-    - how: shell
-      script: dnf config-manager --save --setopt="*:rhcontainerbot:podman-next.priority=5"
+    - name: Enable podman-next repo and set it at higher priority than default
+      how: shell
+      script: |
+        CENTOS_VERSION=$(rpm --eval '%{?centos}')
+        RHEL_VERSION=$(rpm --eval '%{?rhel}')
+        if [[ -n $CENTOS_VERSION ]]; then
+            dnf -y copr enable rhcontainerbot/podman-next centos-stream-$CENTOS_VERSION
+        # Need to handle RHEL-10 specially until EPEL-10 is available
+        elif [[ $RHEL_VERSION -ge 10 ]]; then
+            dnf -y copr enable rhcontainerbot/podman-next centos-stream-$RHEL_VERSION
+        else
+            dnf -y copr enable rhcontainerbot/podman-next
+        fi
+        # Bump podman-next copr priority
+        echo "priority=5" >> /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:rhcontainerbot:podman-next.repo
+
     # Install packages to run podman revdep tests
     - how: install
       package:
