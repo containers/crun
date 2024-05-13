@@ -11,6 +11,8 @@ packages:
   crun-centos:
     pkg_tool: centpkg
     specfile_path: rpm/crun.spec
+  crun-rhel:
+    specfile_path: rpm/crun.spec
 
 srpm_build_deps:
   - git-archive-all
@@ -40,8 +42,6 @@ jobs:
     packages: [crun-centos]
     notifications: *copr_build_failure_notification
     targets:
-      epel-9-x86_64: {}
-      epel-9-aarch64: {}
       # Need epel9 repos to fetch wasmedge build dependency
       centos-stream-9-x86_64:
         additional_repos:
@@ -56,6 +56,14 @@ jobs:
       centos-stream-10-aarch64:
         additional_repos:
           - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/aarch64
+
+  - job: copr_build
+    trigger: pull_request
+    packages: [crun-rhel]
+    notifications: *copr_build_failure_notification
+    targets:
+      - epel-9-x86_64
+      - epel-9-aarch64
 
   # Run on commit to main branch
   - job: copr_build
@@ -99,7 +107,7 @@ jobs:
   # Podman system tests for RHEL
   - job: tests
     trigger: pull_request
-    packages: [crun-centos]
+    packages: [crun-rhel]
     use_internal_tf: true
     notifications: *podman_system_test_fail_notification
     targets:
