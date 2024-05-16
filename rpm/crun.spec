@@ -10,7 +10,9 @@
 %define copr_build 1
 %endif
 
-%if %{defined fedora} || %{defined copr_build}
+# Disable wasmedge on rhel 10 until EPEL10 is in place, otherwise it causes
+# build issues on copr
+%if %{defined fedora} || (%{defined %copr_build} && %{defined rhel} && 0%{?rhel} < 10)
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif

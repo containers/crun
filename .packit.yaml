@@ -49,13 +49,9 @@ jobs:
       centos-stream-9-aarch64:
         additional_repos:
           - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/aarch64
-      # Use epel9 repos until epel10 is available
-      centos-stream-10-x86_64:
-        additional_repos:
-          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/x86_64
-      centos-stream-10-aarch64:
-        additional_repos:
-          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/aarch64
+      # TODO: build on CS10 with wasmedge once epel-10 is available
+      centos-stream-10-x86_64: {}
+      centos-stream-10-aarch64: {}
 
   - job: copr_build
     trigger: pull_request
