@@ -57,6 +57,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/handlers/wasmedge.c \
 		src/libcrun/handlers/wasmer.c \
 		src/libcrun/handlers/wasmtime.c \
+		src/libcrun/handlers/wamr.c \
 		src/libcrun/intelrdt.c \
 		src/libcrun/io_priority.c \
 		src/libcrun/linux.c \
