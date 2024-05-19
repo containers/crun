@@ -1525,8 +1525,11 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
          stop some syscalls used by mark_or_close_fds_ge_than.
       */
       ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret < 0)){
+      clock_gettime(CLOCK_REALTIME, &ts);
+      log_message("[CONTINUUM]2 0111 container_init:mark_or_close_fds_ge_than:error id=", (char*)entrypoint_args->container->context->id, ts);
         crun_error_release (err);
+      }
       clock_gettime(CLOCK_REALTIME, &ts);
       log_message("[CONTINUUM]2 0110 container_init:mark_or_close_fds_ge_than:done id=", (char*)entrypoint_args->container->context->id, ts);
 
