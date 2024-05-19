@@ -1537,12 +1537,22 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (UNLIKELY (ret < 0))
         return ret;
 
+      clock_gettime(CLOCK_REALTIME, &ts);
+      log_message("[CONTINUUM]2 0101 container_init:run_func:start id=", (char*)entrypoint_args->container->context->id, ts);
+
       ret = entrypoint_args->custom_handler->vtable->run_func (entrypoint_args->custom_handler->cookie,
                                                                entrypoint_args->container,
                                                                exec_path,
                                                                def->process->args);
-      if (ret != 0)
+
+      clock_gettime(CLOCK_REALTIME, &ts);
+      log_message("[CONTINUUM]2 0102 container_init:run_func:done id=", (char*)entrypoint_args->container->context->id, ts);
+
+      if (ret != 0){
+        clock_gettime(CLOCK_REALTIME, &ts);
+        log_message("[CONTINUUM]2 0103 container_init:run_func:error id=", (char*)entrypoint_args->container->context->id, ts);
         return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->vtable->name);
+      }
 
       return ret;
     }
