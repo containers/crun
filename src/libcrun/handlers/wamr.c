@@ -135,9 +135,8 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
     }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  //get size of buffer
-  sprintf(str, "%ld", sizeof(buffer));
-  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done size2=", str, ts);
+  //get size of the full buffer
+  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", "a", ts);
 
     // Close the file
     fclose(file);
@@ -158,42 +157,28 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0011 libwamr_exec:start id=", "a", ts);
+
   // load symbols from the shared library libiwasm.so
   bool (*wasm_runtime_init) ();
-
-  // uint8_t (*read_wasm_binary_to_buffer) (const char *pathname, uint32_t *size);
-
+  RuntimeInitArgs init_args;
+  bool (*wasm_runtime_full_init)(RuntimeInitArgs *init_args);
   wasm_module_t module;
   wasm_module_t (*wasm_runtime_load) (uint8_t *buf, uint32_t size, char *error_buf, uint32_t error_buf_size);
-
   wasm_module_inst_t module_inst;
-  wasm_module_inst_t (*wasm_runtime_instantiate) (const wasm_module_t module,
-                         uint32_t default_stack_size,
-                         uint32_t host_managed_heap_size, 
-                         char *error_buf,
-                         uint32_t error_buf_size);
-
+  wasm_module_inst_t (*wasm_runtime_instantiate) (const wasm_module_t module, uint32_t default_stack_size, uint32_t host_managed_heap_size, char *error_buf, uint32_t error_buf_size);
   wasm_function_inst_t func;
   wasm_function_inst_t (*wasm_runtime_lookup_function) (wasm_module_inst_t const module_inst, const char *name);
-
   wasm_exec_env_t exec_env;
   wasm_exec_env_t (*wasm_runtime_create_exec_env) (wasm_module_inst_t module_inst, uint32_t stack_size);
-
   bool (*wasm_runtime_call_wasm) (wasm_exec_env_t exec_env, wasm_function_inst_t function, uint32_t argc, uint32_t argv[]);
-
   const char *(*wasm_runtime_get_exception)(wasm_module_inst_t module_inst);
-
   void (*wasm_runtime_destroy_exec_env) (wasm_exec_env_t exec_env);
-
   void (*wasm_runtime_deinstantiate) (wasm_module_inst_t module_inst);
-
   void (*wasm_runtime_unload) (wasm_module_t module);
-
   void (*wasm_runtime_destroy) ();
 
-
   wasm_runtime_init = dlsym (cookie, "wasm_runtime_init");
-  // read_wasm_binary_to_buffer = dlsym (cookie, "read_wasm_binary_to_buffer");
+  wasm_runtime_full_init = dlsym (cookie, "wasm_runtime_full_init");
   wasm_runtime_load = dlsym (cookie, "wasm_runtime_load");
   wasm_runtime_instantiate = dlsym (cookie, "wasm_runtime_instantiate");
   wasm_runtime_lookup_function = dlsym (cookie, "wasm_runtime_lookup_function");
@@ -207,8 +192,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
 
   if (wasm_runtime_init == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_init symbol in `libiwasm.so`");
-  // if(read_wasm_binary_to_buffer == NULL)
-  //   error (EXIT_FAILURE, 0, "could not find read_wasm_binary_to_buffer symbol in `libiwasm.so`");
+  if(wasm_runtime_full_init == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_full_init symbol in `libiwasm.so`");
   if (wasm_runtime_load == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_load symbol in `libiwasm.so`");
   if (wasm_runtime_instantiate == NULL) 
@@ -233,12 +218,23 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0012 libwamr_exec:so:load:done id=", "a", ts);
 
+  // static char global_heap_buf[256 * 1024];
   int ret;
   char *buffer, error_buf[128];
   uint32_t size, stack_size = 8096, heap_size = 8096;
 
+  // memset(&init_args, 0, sizeof(RuntimeInitArgs));
   /* initialize the wasm runtime by default configurations */
   wasm_runtime_init();
+  // init_args.mem_alloc_type = Alloc_With_Pool;
+  // init_args.mem_alloc_option.pool.heap_buf = global_heap_buf;
+  // init_args.mem_alloc_option.pool.heap_size = sizeof(global_heap_buf);
+
+  // /* initialize runtime environment */
+  // if (!wasm_runtime_full_init(&init_args)) {
+  //   clock_gettime(CLOCK_REALTIME, &ts);
+  //   log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:error id=", "error", ts);
+  // }
 
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:done id=", "none", ts);
@@ -247,7 +243,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   buffer = read_wasm_binary_to_buffer(pathname, &size);
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0014 libwamr_exec:read_wasm_binary_to_buffer:done id=", buffer, ts);
+  log_message("[CONTINUUM]2 0014 libwamr_exec:read_wasm_binary_to_buffer:done id=", "none", ts);
 
   /* add line below if we want to export native functions to WASM app */
   // wasm_runtime_register_natives(...);
@@ -336,51 +332,6 @@ wamr_can_handle_container (libcrun_container_t *container, libcrun_error_t *err)
   return wasm_can_handle_container (container, err);
 }
 
-// This works only when the plugin folder is present in /usr/lib/wasmedge
-// static int
-// libwamr_configure_container (void *cookie arg_unused, enum handler_configure_phase phase,
-//                                  libcrun_context_t *context arg_unused, libcrun_container_t *container,
-//                                  const char *rootfs arg_unused, libcrun_error_t *err)
-// {
-//   int ret;
-//   runtime_spec_schema_config_schema *def = container->container_def;
-
-//   if (getenv ("WASMEDGE_PLUGIN_PATH") == NULL && getenv ("WASMEDGE_WASINN_PRELOAD") == NULL)
-//     return 0;
-
-//   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
-//     return 0;
-
-//   // Check if /usr/lib/wasmedge is already present in spec
-//   if (def->linux && def->mounts)
-//     {
-//       for (size_t i = 0; i < def->mounts_len; i++)
-//         {
-//           if (strcmp (def->mounts[i]->destination, "/usr/lib/wasmedge") == 0)
-//             return 0;
-//         }
-//     }
-
-//   // Mount the plugin folder to /usr/lib/wasmedge with specific options
-//   char *options[] = {
-//     "ro",
-//     "rprivate",
-//     "nosuid",
-//     "nodev",
-//     "rbind"
-//   };
-
-//   ret = libcrun_container_do_bind_mount (container, "/usr/lib/wasmedge ", "/usr/lib/wasmedge", options, 5, err);
-//   if (ret < 0)
-//     {
-//       if (crun_error_get_errno (err) != ENOENT)
-//         return ret;
-//       crun_error_release (err);
-//     }
-
-//   return 0;
-// }
-
 struct custom_handler_s handler_wamr = {
   .name = "wamr",
   .alias = "wasm",
@@ -389,7 +340,6 @@ struct custom_handler_s handler_wamr = {
   .unload = libwamr_unload,
   .run_func = libwamr_exec,
   .can_handle_container = wamr_can_handle_container,
-  // .configure_container = libwamr_configure_container,
 };
 
 #endif

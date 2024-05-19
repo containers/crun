@@ -79,3 +79,4 @@ compile_commands.json
 /lua_modules
 /.luarocks
 *.rock
+.vscode/settings.json
