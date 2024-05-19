@@ -166,11 +166,30 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   wasm_runtime_unload = dlsym (cookie, "wasm_runtime_unload");
   wasm_runtime_destroy = dlsym (cookie, "wasm_runtime_destroy");
 
-  if (wasm_runtime_init == NULL || read_wasm_binary_to_buffer == NULL || wasm_runtime_load == NULL
-      || wasm_runtime_instantiate == NULL || wasm_runtime_lookup_function == NULL || wasm_runtime_create_exec_env == NULL
-      || wasm_runtime_call_wasm == NULL || wasm_runtime_get_exception == NULL || wasm_runtime_destroy_exec_env == NULL
-      || wasm_runtime_deinstantiate == NULL || wasm_runtime_unload == NULL || wasm_runtime_destroy == NULL)
-    error (EXIT_FAILURE, 0, "could not find symbol in `libiwasm.so`");
+  if (wasm_runtime_init == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_init symbol in `libiwasm.so`");
+  if(read_wasm_binary_to_buffer == NULL)
+    error (EXIT_FAILURE, 0, "could not find read_wasm_binary_to_buffer symbol in `libiwasm.so`");
+  if (wasm_runtime_load == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_load symbol in `libiwasm.so`");
+  if (wasm_runtime_instantiate == NULL) 
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_instantiate symbol in `libiwasm.so`");
+  if (wasm_runtime_lookup_function == NULL)
+    error (EXIT_FAILURE, 0, "could not find  wasm_runtime_lookup_functionsymbol in `libiwasm.so`");
+  if (wasm_runtime_create_exec_env == NULL)
+    error (EXIT_FAILURE, 0, "could not find  wasm_runtime_create_exec_env symbol in `libiwasm.so`");
+  if (wasm_runtime_call_wasm == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_call_wasm symbol in `libiwasm.so`");
+  if (wasm_runtime_get_exception == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_get_exception symbol in `libiwasm.so`");
+  if (wasm_runtime_destroy_exec_env == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_destroy_exec_env symbol in `libiwasm.so`");
+  if (wasm_runtime_deinstantiate == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_deinstantiate symbol in `libiwasm.so`");
+  if (wasm_runtime_unload == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_unload symbol in `libiwasm.so`");
+  if (wasm_runtime_destroy == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_destroy symbol in `libiwasm.so`");
 
 
   int ret;
