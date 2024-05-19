@@ -1415,6 +1415,8 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       crun_error_release (err);
       return ret;
     }
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM] 0104 container_init:container_init_setup:done id=", (char*)entrypoint_args->container->context->id, ts);
 
   entrypoint_args->sync_socket = -1;
 
@@ -1452,7 +1454,12 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       close_and_reset (&entrypoint_args->context->fifo_exec_wait_fd);
     }
 
+      clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM] 0105 container_init:crun_set_output_handler:start id=", (char*)entrypoint_args->container->context->id, ts);
   crun_set_output_handler (log_write_to_stderr, NULL, false);
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM] 0106 container_init:crun_set_output_handler:done id=", (char*)entrypoint_args->container->context->id, ts);
 
   if (def->process && def->process->no_new_privileges)
     {
