@@ -56,7 +56,7 @@ static struct argp_option options[]
         { "preserve-fds", OPTION_PRESERVE_FDS, "N", 0, "pass additional FDs to the container", 0 },
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
         { "keep", OPTION_KEEP, 0, 0, "do not delete the container after it exits", 0 },
-        { "no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process", 0 },
+        { "no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process (ignored)", 0 },
         { "no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key", 0 },
         { "no-pivot", OPTION_NO_PIVOT, 0, 0, "do not use pivot_root", 0 },
         {
