@@ -266,7 +266,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0015 libwamr_exec:wasm_runtime_load:done id=", error_buf, ts);
+  log_message("[CONTINUUM]2 0015 libwamr_exec:wasm_runtime_load:done id=", "none", ts);
 
   /* create an instance of the WASM module (WASM linear memory is ready) */
   module_inst = wasm_runtime_instantiate(module, stack_size, heap_size,
@@ -278,7 +278,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0016 libwamr_exec:wasm_runtime_instantiate:done id=", error_buf, ts);
+  log_message("[CONTINUUM]2 0016 libwamr_exec:wasm_runtime_instantiate:done id=", "none", ts);
 
   /* lookup a WASM function by its name The function signature can NULL here */
   func = wasm_runtime_lookup_function(module_inst, "main");
