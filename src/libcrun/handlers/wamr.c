@@ -176,6 +176,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   void (*wasm_runtime_deinstantiate) (wasm_module_inst_t module_inst);
   void (*wasm_runtime_unload) (wasm_module_t module);
   void (*wasm_runtime_destroy) ();
+  uint32_t (*wasm_runtime_get_wasi_exit_code)(wasm_module_inst_t module_inst);
 
   wasm_runtime_init = dlsym (cookie, "wasm_runtime_init");
   wasm_runtime_full_init = dlsym (cookie, "wasm_runtime_full_init");
@@ -189,6 +190,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   wasm_runtime_deinstantiate = dlsym (cookie, "wasm_runtime_deinstantiate");
   wasm_runtime_unload = dlsym (cookie, "wasm_runtime_unload");
   wasm_runtime_destroy = dlsym (cookie, "wasm_runtime_destroy");
+  wasm_runtime_get_wasi_exit_code = dlsym (cookie, "wasm_runtime_get_wasi_exit_code");
 
   if (wasm_runtime_init == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_init symbol in `libiwasm.so`");
@@ -214,6 +216,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_unload symbol in `libiwasm.so`");
   if (wasm_runtime_destroy == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_destroy symbol in `libiwasm.so`");
+  if (wasm_runtime_get_wasi_exit_code == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_get_wasi_exit_code symbol in `libiwasm.so`");
 
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0012 libwamr_exec:so:load:done id=", "a", ts);
@@ -281,15 +285,15 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   log_message("[CONTINUUM]2 0016 libwamr_exec:wasm_runtime_instantiate:done id=", "none", ts);
 
   /* lookup a WASM function by its name The function signature can NULL here */
-  func = wasm_runtime_lookup_function(module_inst, "add");
+  // func = wasm_runtime_lookup_function(module_inst, "add");
 
-  if (!func || func == NULL) {
-    clock_gettime(CLOCK_REALTIME, &ts);
-    log_message("[CONTINUUM]2 0027 libwamr_exec:wasm_runtime_lookup_function:error id=", "error", ts);
-  }
+  // if (!func || func == NULL) {
+  //   clock_gettime(CLOCK_REALTIME, &ts);
+  //   log_message("[CONTINUUM]2 0027 libwamr_exec:wasm_runtime_lookup_function:error id=", "error", ts);
+  // }
 
-  clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", func, ts);
+  // clock_gettime(CLOCK_REALTIME, &ts);
+  // log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", func, ts);
 
   /* creat an execution environment to execute the WASM functions */
   exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
@@ -300,17 +304,19 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   uint32_t num_args = 1, num_results = 1;
   wasm_val_t results[1];
 
-  uint32_t argv2[2];
+  // uint32_t argv2[2];
+  uint32_t result;
 
   /* arguments are always transferred in 32-bit element */
-  argv2[0] = 8;
+  // argv2[0] = 8;
 
   /* call the WASM function */
-  if (wasm_runtime_call_wasm(exec_env, func, 1, argv2) ) {
+  if (wasm_application_execute_main(module_inst, 0, NULL) ) {
       /* the return value is stored in argv[0] */
-      printf("fib function return: %d\n", argv2[0]);
+      result = wasm_runtime_get_wasi_exit_code(module_inst);
+      printf("fib function return: %d\n", result);
       clock_gettime(CLOCK_REALTIME, &ts);
-      log_message("[CONTINUUM]2 0019 libwamr_exec:wasm_runtime_call_wasm:done id=", argv2[0], ts);
+      log_message("[CONTINUUM]2 0019 libwamr_exec:wasm_runtime_call_wasm:done id=", result, ts);
   }
   else {
       /* exception is thrown if call fails */
