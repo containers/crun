@@ -314,7 +314,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   }
   else {
       /* exception is thrown if call fails */
-      printf("%s\n", wasm_runtime_get_exception(module_inst));
+      clock_gettime(CLOCK_REALTIME, &ts);
+      log_message("[CONTINUUM]2 0019 libwamr_exec:wasm_runtime_call_wasm:error id=", wasm_runtime_get_exception(module_inst), ts);
   }
 
   wasm_runtime_destroy_exec_env(exec_env);
