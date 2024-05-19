@@ -136,14 +136,13 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
     }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", buffer, ts);
-  long long current_time_in_nanos = ts.tv_sec * 1e9 + ts.tv_nsec;
-  char *hex_buffer = malloc(file_size * 2 + 1);
+
+    char *hex_buffer = malloc(file_size * 2 + 1);
   for (size_t i = 0; i < file_size; i++) {
     sprintf(hex_buffer + i * 2, "%02x", (unsigned char)buffer[i]);
   }
 
-  syslog(LOG_ERR, "[CONTINUUM]2 0098 buffer %s", hex_buffer);
+  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", hex_buffer, ts);
 
     // Close the file
     fclose(file);
