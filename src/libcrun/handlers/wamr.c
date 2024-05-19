@@ -225,7 +225,10 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
 
   // memset(&init_args, 0, sizeof(RuntimeInitArgs));
   /* initialize the wasm runtime by default configurations */
-  wasm_runtime_init();
+  if(!wasm_runtime_init()) {
+    clock_gettime(CLOCK_REALTIME, &ts);
+    log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:error id=", "error", ts);
+  }
   // init_args.mem_alloc_type = Alloc_With_Pool;
   // init_args.mem_alloc_option.pool.heap_buf = global_heap_buf;
   // init_args.mem_alloc_option.pool.heap_size = sizeof(global_heap_buf);
