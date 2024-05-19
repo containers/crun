@@ -86,13 +86,13 @@ libwamr_unload (void *cookie, libcrun_error_t *err)
 }
 
 // Function to read a WebAssembly binary file into a buffer
-uint8_t *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
+char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0005 read_wasm_binary_to_buffer:start id=", "a", ts);
 
     FILE *file;
-    uint8_t *buffer;
+    char *buffer;
     size_t file_size;
 
     // Open the file in binary mode
@@ -114,7 +114,7 @@ uint8_t *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
   log_message("[CONTINUUM]2 0007 read_wasm_binary_to_buffer:fseek:done id=", "a", ts);
 
     // Allocate memory for the buffer
-    buffer = (uint8_t *)malloc(file_size);
+    buffer = (char *)malloc(file_size);
     if (!buffer) {
         error (EXIT_FAILURE, 0, "Failed to allocate memory");
         fclose(file);
@@ -231,7 +231,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
 
   int ret;
   char *buffer, error_buf[128];
-  uint32_t size, stack_size = 8092, heap_size = 8092;
+  uint32_t size, stack_size = 64 * 1024, heap_size = 64 * 1024;
 
   /* initialize the wasm runtime by default configurations */
   wasm_runtime_init();
