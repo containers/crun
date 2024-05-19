@@ -51,7 +51,7 @@ libwamr_load (void **cookie, libcrun_error_t *err)
 {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0001 libwamr_load:start id=", "a", ts);
+  log_message("[CONTINUUM]2 1001 libwamr_load:start id=", "a", ts);
   void *handle;
 
   handle = dlopen ("libiwasm.so", RTLD_NOW);
