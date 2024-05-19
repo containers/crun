@@ -128,21 +128,16 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
 
     // Read the file into the buffer
     if (fread(buffer, 1, file_size, file) != file_size) {
-        log_message("[CONTINUUM]2 0099 hmmmmm id=", buffer, ts);
         error (EXIT_FAILURE, 0, "Failed to read file");
-        // free(buffer);
+        free(buffer);
         fclose(file);
         return NULL;
     }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-
-    char *hex_buffer = malloc(file_size * 2 + 1);
-  for (size_t i = 0; i < file_size; i++) {
-    sprintf(hex_buffer + i * 2, "%02x", (unsigned char)buffer[i]);
-  }
-
-  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", hex_buffer, ts);
+  //get size of buffer
+  sprintf(str, "%ld", sizeof(buffer));
+  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done size2=", str, ts);
 
     // Close the file
     fclose(file);
