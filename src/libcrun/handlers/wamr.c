@@ -281,7 +281,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   log_message("[CONTINUUM]2 0016 libwamr_exec:wasm_runtime_instantiate:done id=", "none", ts);
 
   /* lookup a WASM function by its name The function signature can NULL here */
-  func = wasm_runtime_lookup_function(module_inst, "main");
+  func = wasm_runtime_lookup_function(module_inst, "add");
 
   if (!func || func == NULL) {
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -289,7 +289,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", "a", ts);
+  log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", func, ts);
 
   /* creat an execution environment to execute the WASM functions */
   exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
