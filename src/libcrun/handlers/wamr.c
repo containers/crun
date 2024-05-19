@@ -283,6 +283,11 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   /* lookup a WASM function by its name The function signature can NULL here */
   func = wasm_runtime_lookup_function(module_inst, "main");
 
+  if (!func || func == NULL) {
+    clock_gettime(CLOCK_REALTIME, &ts);
+    log_message("[CONTINUUM]2 0027 libwamr_exec:wasm_runtime_lookup_function:error id=", "error", ts);
+  }
+
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", "a", ts);
 
