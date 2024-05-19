@@ -218,26 +218,32 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0012 libwamr_exec:so:load:done id=", "a", ts);
 
-  // static char global_heap_buf[256 * 1024];
+  static char global_heap_buf[256 * 1024];
   int ret;
   char *buffer, error_buf[128];
   uint32_t size, stack_size = 8096, heap_size = 8096;
 
-  // memset(&init_args, 0, sizeof(RuntimeInitArgs));
+  memset(&init_args, 0, sizeof(RuntimeInitArgs));
   /* initialize the wasm runtime by default configurations */
-  if(!wasm_runtime_init()) {
-    clock_gettime(CLOCK_REALTIME, &ts);
-    log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:error id=", "error", ts);
-  }
+  // if(!wasm_runtime_init()) {
+  //   clock_gettime(CLOCK_REALTIME, &ts);
+  //   log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:error id=", "error", ts);
+  // }
+
+  init_args.mem_alloc_type = Alloc_With_Allocator;
+  init_args.mem_alloc_option.allocator.malloc_func = malloc;
+  init_args.mem_alloc_option.allocator.realloc_func = realloc;
+  init_args.mem_alloc_option.allocator.free_func = free;
+
   // init_args.mem_alloc_type = Alloc_With_Pool;
   // init_args.mem_alloc_option.pool.heap_buf = global_heap_buf;
   // init_args.mem_alloc_option.pool.heap_size = sizeof(global_heap_buf);
 
   // /* initialize runtime environment */
-  // if (!wasm_runtime_full_init(&init_args)) {
-  //   clock_gettime(CLOCK_REALTIME, &ts);
-  //   log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:error id=", "error", ts);
-  // }
+  if (!wasm_runtime_full_init(&init_args)) {
+    clock_gettime(CLOCK_REALTIME, &ts);
+    log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:error id=", "error", ts);
+  }
 
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:done id=", "none", ts);
