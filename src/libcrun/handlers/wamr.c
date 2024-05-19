@@ -177,6 +177,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   void (*wasm_runtime_unload) (wasm_module_t module);
   void (*wasm_runtime_destroy) ();
   uint32_t (*wasm_runtime_get_wasi_exit_code)(wasm_module_inst_t module_inst);
+  bool (*wasm_application_execute_main)(wasm_module_inst_t module_inst, int32_t argc, char *argv[]);
 
   wasm_runtime_init = dlsym (cookie, "wasm_runtime_init");
   wasm_runtime_full_init = dlsym (cookie, "wasm_runtime_full_init");
@@ -191,6 +192,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   wasm_runtime_unload = dlsym (cookie, "wasm_runtime_unload");
   wasm_runtime_destroy = dlsym (cookie, "wasm_runtime_destroy");
   wasm_runtime_get_wasi_exit_code = dlsym (cookie, "wasm_runtime_get_wasi_exit_code");
+  wasm_application_execute_main = dlsym (cookie, "wasm_application_execute_main");
 
   if (wasm_runtime_init == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_init symbol in `libiwasm.so`");
@@ -218,6 +220,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_destroy symbol in `libiwasm.so`");
   if (wasm_runtime_get_wasi_exit_code == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_get_wasi_exit_code symbol in `libiwasm.so`");
+  if (wasm_application_execute_main == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_application_execute_main symbol in `libiwasm.so`");
 
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0012 libwamr_exec:so:load:done id=", "a", ts);
