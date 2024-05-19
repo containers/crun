@@ -38,8 +38,8 @@
 #endif
 
 #ifdef HAVE_WAMR
-#  include <wasm.h>
-#  include <wasi.h>
+// #  include <wasm.h>
+// #  include <wasi.h>
 #  include <wasm_export.h>
 #endif
 
@@ -59,7 +59,7 @@ libwamr_load (void **cookie, libcrun_error_t *err)
 }
 
 static int
-libwasmedge_unload (void *cookie, libcrun_error_t *err)
+libwamr_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 
@@ -72,113 +72,110 @@ libwasmedge_unload (void *cookie, libcrun_error_t *err)
   return 0;
 }
 
+// Function to read a WebAssembly binary file into a buffer
+uint8_t *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
+    FILE *file;
+    uint8_t *buffer;
+    size_t file_size;
+
+    // Open the file in binary mode
+    file = fopen(pathname, "rb");
+    if (!file) {
+        perror("Failed to open file");
+        return NULL;
+    }
+
+    // Seek to the end of the file to determine the size
+    fseek(file, 0, SEEK_END);
+    file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    // Allocate memory for the buffer
+    buffer = (uint8_t *)malloc(file_size);
+    if (!buffer) {
+        perror("Failed to allocate memory");
+        fclose(file);
+        return NULL;
+    }
+
+    // Read the file into the buffer
+    if (fread(buffer, 1, file_size, file) != file_size) {
+        perror("Failed to read file");
+        free(buffer);
+        fclose(file);
+        return NULL;
+    }
+
+    // Close the file
+    fclose(file);
+
+    // Set the size output parameter
+    *size = file_size;
+
+    // Return the buffer
+    return buffer;
+}
+
 static int
-libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *container, const char *pathname, char *const argv[])
+libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *container, const char *pathname, char *const argv[])
 {
-//   WasmEdge_ConfigureContext *(*WasmEdge_ConfigureCreate) (void);
-//   void (*WasmEdge_ConfigureDelete) (WasmEdge_ConfigureContext *Cxt);
-//   void (*WasmEdge_ConfigureAddProposal) (WasmEdge_ConfigureContext *Cxt, const enum WasmEdge_Proposal Prop);
-//   void (*WasmEdge_ConfigureAddHostRegistration) (WasmEdge_ConfigureContext *Cxt, enum WasmEdge_HostRegistration Host);
-//   WasmEdge_VMContext *(*WasmEdge_VMCreate) (const WasmEdge_ConfigureContext *ConfCxt, WasmEdge_StoreContext *StoreCxt);
-//   void (*WasmEdge_VMDelete) (WasmEdge_VMContext *Cxt);
-//   WasmEdge_Result (*WasmEdge_VMRegisterModuleFromFile) (WasmEdge_VMContext *Cxt, WasmEdge_String ModuleName, const char *Path);
-//   WasmEdge_Result (*WasmEdge_VMRunWasmFromFile) (WasmEdge_VMContext *Cxt, const char *Path, const WasmEdge_String FuncName, const WasmEdge_Value *Params, const uint32_t ParamLen, WasmEdge_Value *Returns, const uint32_t ReturnLen);
-//   void (*WasmEdge_PluginLoadFromPath) (const char *Path);
-//   void (*WasmEdge_PluginInitWASINN) (const char *const *NNPreloads, const uint32_t PreloadsLen);
-//   bool (*WasmEdge_ResultOK) (const WasmEdge_Result Res);
-//   WasmEdge_String (*WasmEdge_StringCreateByCString) (const char *Str);
-//   uint32_t argn = 0;
-//   uint32_t envn = 0;
-//   const char *dirs[2] = { "/:/", ".:." };
-//   WasmEdge_ConfigureContext *configure;
-//   WasmEdge_VMContext *vm;
-//   WasmEdge_Result result;
+  // load symbols from the shared library libiwasm.so
+  bool (*wasm_runtime_init) ();
 
-//   WasmEdge_ModuleInstanceContext *wasi_module;
-//   WasmEdge_ModuleInstanceContext *(*WasmEdge_VMGetImportModuleContext) (WasmEdge_VMContext *Cxt, const enum WasmEdge_HostRegistration Reg);
-//   void (*WasmEdge_ModuleInstanceInitWASI) (WasmEdge_ModuleInstanceContext *Cxt, const char *const *Args, const uint32_t ArgLen, const char *const *Envs, const uint32_t EnvLen, const char *const *Dirs, const uint32_t DirLen, const char *const *Preopens, const uint32_t PreopenLen);
-//   WasmEdge_ModuleInstanceInitWASI = dlsym (cookie, "WasmEdge_ModuleInstanceInitWASI");
+  uint8_t (*read_wasm_binary_to_buffer) (const char *pathname, uint32_t *size);
 
-//   WasmEdge_ConfigureCreate = dlsym (cookie, "WasmEdge_ConfigureCreate");
-//   WasmEdge_ConfigureDelete = dlsym (cookie, "WasmEdge_ConfigureDelete");
-//   WasmEdge_ConfigureAddProposal = dlsym (cookie, "WasmEdge_ConfigureAddProposal");
-//   WasmEdge_ConfigureAddHostRegistration = dlsym (cookie, "WasmEdge_ConfigureAddHostRegistration");
-//   WasmEdge_VMCreate = dlsym (cookie, "WasmEdge_VMCreate");
-//   WasmEdge_VMDelete = dlsym (cookie, "WasmEdge_VMDelete");
-//   WasmEdge_VMRegisterModuleFromFile = dlsym (cookie, "WasmEdge_VMRegisterModuleFromFile");
-//   WasmEdge_VMGetImportModuleContext = dlsym (cookie, "WasmEdge_VMGetImportModuleContext");
-//   WasmEdge_VMRunWasmFromFile = dlsym (cookie, "WasmEdge_VMRunWasmFromFile");
-//   WasmEdge_PluginLoadFromPath = dlsym (cookie, "WasmEdge_PluginLoadFromPath");
-//   WasmEdge_PluginInitWASINN = dlsym (cookie, "WasmEdge_PluginInitWASINN");
-//   WasmEdge_ResultOK = dlsym (cookie, "WasmEdge_ResultOK");
-//   WasmEdge_StringCreateByCString = dlsym (cookie, "WasmEdge_StringCreateByCString");
+  wasm_module_t module;
+  wasm_module_t (*wasm_runtime_load) (uint8_t *buf, uint32_t size, char *error_buf, uint32_t error_buf_size);
 
-//   if (WasmEdge_ConfigureCreate == NULL || WasmEdge_ConfigureDelete == NULL || WasmEdge_ConfigureAddProposal == NULL
-//       || WasmEdge_ConfigureAddHostRegistration == NULL || WasmEdge_VMCreate == NULL || WasmEdge_VMDelete == NULL
-//       || WasmEdge_VMRegisterModuleFromFile == NULL || WasmEdge_VMGetImportModuleContext == NULL
-//       || WasmEdge_ModuleInstanceInitWASI == NULL || WasmEdge_VMRunWasmFromFile == NULL
-//       || WasmEdge_ResultOK == NULL || WasmEdge_StringCreateByCString == NULL)
-//     error (EXIT_FAILURE, 0, "could not find symbol in `libwasmedge.so.0`");
+  wasm_module_inst_t module_inst;
+  wasm_module_inst_t (*wasm_runtime_instantiate) (const wasm_module_t module,
+                         uint32_t default_stack_size,
+                         uint32_t host_managed_heap_size, 
+                         char *error_buf,
+                         uint32_t error_buf_size);
 
-//   configure = WasmEdge_ConfigureCreate ();
-//   if (UNLIKELY (configure == NULL))
-//     error (EXIT_FAILURE, 0, "could not create wasmedge configure");
+  wasm_function_inst_t func;
+  wasm_function_inst_t (*wasm_runtime_lookup_function) (wasm_module_inst_t const module_inst, const char *name);
 
-//   WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_BulkMemoryOperations);
-//   WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_ReferenceTypes);
-//   WasmEdge_ConfigureAddProposal (configure, WasmEdge_Proposal_SIMD);
-//   WasmEdge_ConfigureAddHostRegistration (configure, WasmEdge_HostRegistration_Wasi);
-//   // Check if the necessary environment variables are set
-//   const char *plugin_path_env = getenv ("WASMEDGE_PLUGIN_PATH");
-//   if (plugin_path_env != NULL)
-//     WasmEdge_PluginLoadFromPath (plugin_path_env);
+  wasm_exec_env_t exec_env;
+  wasm_exec_env_t (*wasm_runtime_create_exec_env) (wasm_module_inst_t module_inst, uint32_t stack_size);
 
-//   const char *nnpreload_env = getenv ("WASMEDGE_WASINN_PRELOAD");
-//   if (nnpreload_env != NULL)
-//     WasmEdge_PluginInitWASINN (&nnpreload_env, 1);
+  bool (*wasm_runtime_call_wasm) (wasm_exec_env_t exec_env, wasm_function_inst_t function, uint32_t argc, uint32_t argv[]);
 
-//   vm = WasmEdge_VMCreate (configure, NULL);
-//   if (UNLIKELY (vm == NULL))
-//     {
-//       WasmEdge_ConfigureDelete (configure);
-//       error (EXIT_FAILURE, 0, "could not create wasmedge vm");
-//     }
+  const char *(*wasm_runtime_get_exception)(wasm_module_inst_t module_inst);
 
-//   wasi_module = WasmEdge_VMGetImportModuleContext (vm, WasmEdge_HostRegistration_Wasi);
-//   if (UNLIKELY (wasi_module == NULL))
-//     {
-//       WasmEdge_VMDelete (vm);
-//       WasmEdge_ConfigureDelete (configure);
-//       error (EXIT_FAILURE, 0, "could not get wasmedge wasi module context");
-//     }
+  void (*wasm_runtime_destroy_exec_env) (wasm_exec_env_t exec_env);
 
-//   for (char *const *arg = argv; *arg != NULL; ++arg, ++argn)
-//     ;
-//   extern char **environ;
-//   for (char *const *env = environ; *env != NULL; ++env, ++envn)
-//     ;
+  void (*wasm_runtime_deinstantiate) (wasm_module_inst_t module_inst);
 
-//   WasmEdge_ModuleInstanceInitWASI (wasi_module, (const char *const *) &argv[0], argn, (const char *const *) &environ[0], envn, dirs, 1, NULL, 0);
+  void (*wasm_runtime_unload) (wasm_module_t module);
 
-//   result = WasmEdge_VMRunWasmFromFile (vm, pathname, WasmEdge_StringCreateByCString ("_start"), NULL, 0, NULL, 0);
+  void (*wasm_runtime_destroy) ();
 
-//   if (UNLIKELY (! WasmEdge_ResultOK (result)))
-//     {
-//       WasmEdge_VMDelete (vm);
-//       WasmEdge_ConfigureDelete (configure);
-//       error (EXIT_FAILURE, 0, "could not get wasmedge result from VM");
-//     }
 
-//   WasmEdge_VMDelete (vm);
-//   WasmEdge_ConfigureDelete (configure);
+  wasm_runtime_init = dlsym (cookie, "wasm_runtime_init");
+  read_wasm_binary_to_buffer = dlsym (cookie, "read_wasm_binary_to_buffer");
+  wasm_runtime_load = dlsym (cookie, "wasm_runtime_load");
+  wasm_runtime_instantiate = dlsym (cookie, "wasm_runtime_instantiate");
+  wasm_runtime_lookup_function = dlsym (cookie, "wasm_runtime_lookup_function");
+  wasm_runtime_create_exec_env = dlsym (cookie, "wasm_runtime_create_exec_env");
+  wasm_runtime_call_wasm = dlsym (cookie, "wasm_runtime_call_wasm");
+  wasm_runtime_get_exception = dlsym (cookie, "wasm_runtime_get_exception");
+  wasm_runtime_destroy_exec_env = dlsym (cookie, "wasm_runtime_destroy_exec_env");
+  wasm_runtime_deinstantiate = dlsym (cookie, "wasm_runtime_deinstantiate");
+  wasm_runtime_unload = dlsym (cookie, "wasm_runtime_unload");
+  wasm_runtime_destroy = dlsym (cookie, "wasm_runtime_destroy");
+
+  if (wasm_runtime_init == NULL || read_wasm_binary_to_buffer == NULL || wasm_runtime_load == NULL
+      || wasm_runtime_instantiate == NULL || wasm_runtime_lookup_function == NULL || wasm_runtime_create_exec_env == NULL
+      || wasm_runtime_call_wasm == NULL || wasm_runtime_get_exception == NULL || wasm_runtime_destroy_exec_env == NULL
+      || wasm_runtime_deinstantiate == NULL || wasm_runtime_unload == NULL || wasm_runtime_destroy == NULL)
+    error (EXIT_FAILURE, 0, "could not find symbol in `libiwasm.so`");
+
 
   int ret;
   char *buffer, error_buf[128];
-  wasm_module_t module;
-  wasm_module_inst_t module_inst;
-  wasm_function_inst_t func;
-  wasm_exec_env_t exec_env;
-  uint32 size, stack_size = 8092, heap_size = 8092;
+  uint32_t size, stack_size = 8092, heap_size = 8092;
 
   /* initialize the wasm runtime by default configurations */
   wasm_runtime_init();
@@ -202,18 +199,18 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
   /* creat an execution environment to execute the WASM functions */
   exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
 
-  uint32 num_args = 1, num_results = 1;
+  uint32_t num_args = 1, num_results = 1;
   wasm_val_t results[1];
 
-  uint32 argv[2];
+  uint32_t argv2[2];
 
   /* arguments are always transferred in 32-bit element */
-  argv[0] = 8;
+  argv2[0] = 8;
 
   /* call the WASM function */
-  if (wasm_runtime_call_wasm(exec_env, func, 1, argv) ) {
+  if (wasm_runtime_call_wasm(exec_env, func, 1, argv2) ) {
       /* the return value is stored in argv[0] */
-      printf("fib function return: %d\n", argv[0]);
+      printf("fib function return: %d\n", argv2[0]);
   }
   else {
       /* exception is thrown if call fails */
@@ -230,7 +227,7 @@ libwasmedge_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *co
 }
 
 static int
-wasmedge_can_handle_container (libcrun_container_t *container, libcrun_error_t *err)
+wamr_can_handle_container (libcrun_container_t *container, libcrun_error_t *err)
 {
   return wasm_can_handle_container (container, err);
 }
@@ -285,7 +282,7 @@ struct custom_handler_s handler_wamr = {
   .alias = "wasm",
   .feature_string = "WASM:wamr",
   .load = libwamr_load,
-  .unload = libwasmr_unload,
+  .unload = libwamr_unload,
   .run_func = libwamr_exec,
   .can_handle_container = wamr_can_handle_container,
   // .configure_container = libwamr_configure_container,
