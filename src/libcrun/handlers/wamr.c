@@ -113,7 +113,7 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
   clock_gettime(CLOCK_REALTIME, &ts);
   char str[500];
   sprintf(str, "%ld", file_size);
-  log_message("[CONTINUUM]2 0007 read_wasm_binary_to_buffer:fseek:done id=", str, ts);
+  log_message("[CONTINUUM]2 0007 read_wasm_binary_to_buffer:fseek:done size=", str, ts);
 
     // Allocate memory for the buffer
     buffer = (char *)malloc(file_size);
@@ -128,14 +128,22 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
 
     // Read the file into the buffer
     if (fread(buffer, 1, file_size, file) != file_size) {
+        log_message("[CONTINUUM]2 0099 hmmmmm id=", buffer, ts);
         error (EXIT_FAILURE, 0, "Failed to read file");
-        free(buffer);
+        // free(buffer);
         fclose(file);
         return NULL;
     }
 
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", buffer, ts);
+  long long current_time_in_nanos = ts.tv_sec * 1e9 + ts.tv_nsec;
+  char *hex_buffer = malloc(file_size * 2 + 1);
+  for (size_t i = 0; i < file_size; i++) {
+    sprintf(hex_buffer + i * 2, "%02x", (unsigned char)buffer[i]);
+  }
+
+  syslog(LOG_ERR, "(int64=%lld) %s", current_time_in_nanos, hex_buffer);
 
     // Close the file
     fclose(file);
