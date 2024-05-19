@@ -122,7 +122,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   // load symbols from the shared library libiwasm.so
   bool (*wasm_runtime_init) ();
 
-  uint8_t (*read_wasm_binary_to_buffer) (const char *pathname, uint32_t *size);
+  // uint8_t (*read_wasm_binary_to_buffer) (const char *pathname, uint32_t *size);
 
   wasm_module_t module;
   wasm_module_t (*wasm_runtime_load) (uint8_t *buf, uint32_t size, char *error_buf, uint32_t error_buf_size);
@@ -154,7 +154,7 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
 
 
   wasm_runtime_init = dlsym (cookie, "wasm_runtime_init");
-  read_wasm_binary_to_buffer = dlsym (cookie, "read_wasm_binary_to_buffer");
+  // read_wasm_binary_to_buffer = dlsym (cookie, "read_wasm_binary_to_buffer");
   wasm_runtime_load = dlsym (cookie, "wasm_runtime_load");
   wasm_runtime_instantiate = dlsym (cookie, "wasm_runtime_instantiate");
   wasm_runtime_lookup_function = dlsym (cookie, "wasm_runtime_lookup_function");
@@ -168,8 +168,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
 
   if (wasm_runtime_init == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_init symbol in `libiwasm.so`");
-  if(read_wasm_binary_to_buffer == NULL)
-    error (EXIT_FAILURE, 0, "could not find read_wasm_binary_to_buffer symbol in `libiwasm.so`");
+  // if(read_wasm_binary_to_buffer == NULL)
+  //   error (EXIT_FAILURE, 0, "could not find read_wasm_binary_to_buffer symbol in `libiwasm.so`");
   if (wasm_runtime_load == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_load symbol in `libiwasm.so`");
   if (wasm_runtime_instantiate == NULL) 
