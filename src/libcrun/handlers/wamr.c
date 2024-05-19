@@ -32,6 +32,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef HAVE_DLOPEN
 #  include <dlfcn.h>
@@ -48,6 +49,9 @@
 static int
 libwamr_load (void **cookie, libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0001 libwamr_load:start id=", "a", ts);
   void *handle;
 
   handle = dlopen ("libiwasm.so", RTLD_NOW);
@@ -55,12 +59,18 @@ libwamr_load (void **cookie, libcrun_error_t *err)
     return crun_make_error (err, 0, "could not load `libiwasm.so`: `%s`", dlerror ());
   *cookie = handle;
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0002 libwamr_load:done id=", "a", ts);
+
   return 0;
 }
 
 static int
 libwamr_unload (void *cookie, libcrun_error_t *err)
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0003 libwamr_unload:start id=", "a", ts);
   int r;
 
   if (cookie)
@@ -69,11 +79,18 @@ libwamr_unload (void *cookie, libcrun_error_t *err)
       if (UNLIKELY (r < 0))
         return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
     }
+  
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0004 libwamr_unload:done id=", "a", ts);
   return 0;
 }
 
 // Function to read a WebAssembly binary file into a buffer
 uint8_t *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0005 read_wasm_binary_to_buffer:start id=", "a", ts);
+
     FILE *file;
     uint8_t *buffer;
     size_t file_size;
@@ -81,36 +98,51 @@ uint8_t *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
     // Open the file in binary mode
     file = fopen(pathname, "rb");
     if (!file) {
-        perror("Failed to open file");
+        error (EXIT_FAILURE, 0, "Failed to open file");
         return NULL;
     }
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0006 read_wasm_binary_to_buffer:fopen:done id=", "a", ts);
 
     // Seek to the end of the file to determine the size
     fseek(file, 0, SEEK_END);
     file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0007 read_wasm_binary_to_buffer:fseek:done id=", "a", ts);
+
     // Allocate memory for the buffer
     buffer = (uint8_t *)malloc(file_size);
     if (!buffer) {
-        perror("Failed to allocate memory");
+        error (EXIT_FAILURE, 0, "Failed to allocate memory");
         fclose(file);
         return NULL;
     }
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0008 read_wasm_binary_to_buffer:malloc:done id=", "a", ts);
+
     // Read the file into the buffer
     if (fread(buffer, 1, file_size, file) != file_size) {
-        perror("Failed to read file");
+        error (EXIT_FAILURE, 0, "Failed to read file");
         free(buffer);
         fclose(file);
         return NULL;
     }
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", "a", ts);
 
     // Close the file
     fclose(file);
 
     // Set the size output parameter
     *size = file_size;
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0010 read_wasm_binary_to_buffer:done id=", "a", ts);
 
     // Return the buffer
     return buffer;
@@ -119,6 +151,9 @@ uint8_t *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
 static int
 libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *container, const char *pathname, char *const argv[])
 {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0011 libwamr_exec:start id=", "a", ts);
   // load symbols from the shared library libiwasm.so
   bool (*wasm_runtime_init) ();
 
@@ -191,6 +226,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   if (wasm_runtime_destroy == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_destroy symbol in `libiwasm.so`");
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0012 libwamr_exec:so:load:done id=", "a", ts);
 
   int ret;
   char *buffer, error_buf[128];
@@ -199,8 +236,14 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   /* initialize the wasm runtime by default configurations */
   wasm_runtime_init();
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0013 libwamr_exec:wasm_runtime_init:done id=", "a", ts);
+
   /* read WASM file into a memory buffer */
   buffer = read_wasm_binary_to_buffer(pathname, &size);
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0014 libwamr_exec:read_wasm_binary_to_buffer:done id=", "a", ts);
 
   /* add line below if we want to export native functions to WASM app */
   // wasm_runtime_register_natives(...);
@@ -208,15 +251,27 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   /* parse the WASM file from buffer and create a WASM module */
   module = wasm_runtime_load(buffer, size, error_buf, sizeof(error_buf));
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0015 libwamr_exec:wasm_runtime_load:done id=", "a", ts);
+
   /* create an instance of the WASM module (WASM linear memory is ready) */
   module_inst = wasm_runtime_instantiate(module, stack_size, heap_size,
                                          error_buf, sizeof(error_buf));
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0016 libwamr_exec:wasm_runtime_instantiate:done id=", "a", ts);
+
   /* lookup a WASM function by its name The function signature can NULL here */
   func = wasm_runtime_lookup_function(module_inst, "main");
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", "a", ts);
+
   /* creat an execution environment to execute the WASM functions */
   exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0018 libwamr_exec:wasm_runtime_create_exec_env:done id=", "a", ts);
 
   uint32_t num_args = 1, num_results = 1;
   wasm_val_t results[1];
@@ -230,6 +285,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   if (wasm_runtime_call_wasm(exec_env, func, 1, argv2) ) {
       /* the return value is stored in argv[0] */
       printf("fib function return: %d\n", argv2[0]);
+      clock_gettime(CLOCK_REALTIME, &ts);
+      log_message("[CONTINUUM]2 0019 libwamr_exec:wasm_runtime_call_wasm:done id=", argv2[0], ts);
   }
   else {
       /* exception is thrown if call fails */
@@ -237,10 +294,24 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   }
 
   wasm_runtime_destroy_exec_env(exec_env);
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0020 libwamr_exec:wasm_runtime_destroy_exec_env:done id=", "a", ts);
+
   wasm_runtime_deinstantiate(module_inst);
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0021 libwamr_exec:wasm_runtime_deinstantiate:done id=", "a", ts);
+
   wasm_runtime_unload(module);
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0022 libwamr_exec:wasm_runtime_unload:done id=", "a", ts);
+
   wasm_runtime_destroy();
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0023 libwamr_exec:done id=", "a", ts);
 
   exit (EXIT_SUCCESS);
 }
