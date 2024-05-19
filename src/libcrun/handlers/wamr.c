@@ -251,8 +251,15 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   /* parse the WASM file from buffer and create a WASM module */
   module = wasm_runtime_load(buffer, size, error_buf, sizeof(error_buf));
 
+      if (!module) {
+          clock_gettime(CLOCK_REALTIME, &ts);
+    log_message("[CONTINUUM]2 0025 libwamr_exec:wasm_runtime_load:error id=", "a", ts);
+    log_message("[CONTINUUM]2 0025 libwamr_exec:wasm_runtime_load:error id=", error_buf, ts);
+    }
+
   clock_gettime(CLOCK_REALTIME, &ts);
   log_message("[CONTINUUM]2 0015 libwamr_exec:wasm_runtime_load:done id=", "a", ts);
+  log_message("[CONTINUUM]2 0015 libwamr_exec:wasm_runtime_load:done id=", error_buf, ts);
 
   /* create an instance of the WASM module (WASM linear memory is ready) */
   module_inst = wasm_runtime_instantiate(module, stack_size, heap_size,
