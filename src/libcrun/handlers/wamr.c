@@ -89,7 +89,7 @@ libwamr_unload (void *cookie, libcrun_error_t *err)
 char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0005 read_wasm_binary_to_buffer:start id=", "a", ts);
+  log_message("[CONTINUUM]2 0005 read_wasm_binary_to_buffer:start pathname=", pathname, ts);
 
     FILE *file;
     char *buffer;
@@ -111,7 +111,9 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
     fseek(file, 0, SEEK_SET);
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0007 read_wasm_binary_to_buffer:fseek:done id=", "a", ts);
+  char str[500];
+  sprintf(str, "%ld", file_size);
+  log_message("[CONTINUUM]2 0007 read_wasm_binary_to_buffer:fseek:done id=", str, ts);
 
     // Allocate memory for the buffer
     buffer = (char *)malloc(file_size);
@@ -133,7 +135,7 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
     }
 
   clock_gettime(CLOCK_REALTIME, &ts);
-  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", "a", ts);
+  log_message("[CONTINUUM]2 0009 read_wasm_binary_to_buffer:fread:done id=", buffer, ts);
 
     // Close the file
     fclose(file);
