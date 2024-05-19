@@ -143,7 +143,7 @@ char *read_wasm_binary_to_buffer(const char *pathname, uint32_t *size) {
     sprintf(hex_buffer + i * 2, "%02x", (unsigned char)buffer[i]);
   }
 
-  syslog(LOG_ERR, "(int64=%lld) %s", current_time_in_nanos, hex_buffer);
+  syslog(LOG_ERR, "[CONTINUUM]2 0098 buffer %s", hex_buffer);
 
     // Close the file
     fclose(file);
