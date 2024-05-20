@@ -65,6 +65,15 @@ libwamr_load (void **cookie, libcrun_error_t *err)
   return 0;
 }
 
+int
+my_vprintf(const char *format, va_list ap)
+{
+    /* Print in blue */
+    char buf[200];
+    snprintf(buf, 200, format);
+    return vprintf(buf, ap);
+}
+
 static int
 libwamr_unload (void *cookie, libcrun_error_t *err)
 {
@@ -289,15 +298,15 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   log_message("[CONTINUUM]2 0016 libwamr_exec:wasm_runtime_instantiate:done id=", "none", ts);
 
   /* lookup a WASM function by its name The function signature can NULL here */
-  // func = wasm_runtime_lookup_function(module_inst, "add");
+  func = wasm_runtime_lookup_function(module_inst, "add");
 
-  // if (!func || func == NULL) {
-  //   clock_gettime(CLOCK_REALTIME, &ts);
-  //   log_message("[CONTINUUM]2 0027 libwamr_exec:wasm_runtime_lookup_function:error id=", "error", ts);
-  // }
+  if (!func || func == NULL) {
+    clock_gettime(CLOCK_REALTIME, &ts);
+    log_message("[CONTINUUM]2 0027 libwamr_exec:wasm_runtime_lookup_function:error id=", "error", ts);
+  }
 
-  // clock_gettime(CLOCK_REALTIME, &ts);
-  // log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", func, ts);
+  clock_gettime(CLOCK_REALTIME, &ts);
+  log_message("[CONTINUUM]2 0017 libwamr_exec:wasm_runtime_lookup_function:done id=", func, ts);
 
   /* creat an execution environment to execute the WASM functions */
   exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
@@ -315,7 +324,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   // argv2[0] = 8;
 
   /* call the WASM function */
-  if (wasm_application_execute_main(module_inst, 0, NULL) ) {
+  // if (wasm_application_execute_main(module_inst, 0, NULL) ) {
+  if (wasm_runtime_call_wasm(exec_env, func, 0, NULL) ) {
       /* the return value is stored in argv[0] */
       result = wasm_runtime_get_wasi_exit_code(module_inst);
       printf("fib function return: %d\n", result);
