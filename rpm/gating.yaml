@@ -1,0 +1,12 @@
+--- !Policy
+product_versions:
+  - fedora-*
+decision_context: bodhi_update_push_stable
+rules:
+  - !PassingTestCaseRule {test_case_name: fedora-ci.koji-build.tier0.functional}
+
+--- !Policy
+product_versions:
+  - rhel-*
+decision_context: osci_compose_gate
+rules: []
