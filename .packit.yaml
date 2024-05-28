@@ -4,12 +4,29 @@
 
 downstream_package_name: crun
 
+# Ref: https://packit.dev/docs/configuration#files_to_sync
+files_to_sync:
+  - src: rpm/gating.yaml
+    dest: gating.yaml
+  - src: plans/
+    dest: plans/
+    delete: true
+  - src: tests/tmt/
+    dest: tests/tmt/
+    delete: true
+  - src: .fmf/
+    dest: .fmf/
+    delete: true
+  - .packit.yaml
+
 packages:
   crun-fedora:
     pkg_tool: fedpkg
     specfile_path: rpm/crun.spec
   crun-centos:
     pkg_tool: centpkg
+    specfile_path: rpm/crun.spec
+  crun-rhel:
     specfile_path: rpm/crun.spec
 
 srpm_build_deps:
@@ -40,16 +57,29 @@ jobs:
     packages: [crun-centos]
     notifications: *copr_build_failure_notification
     targets:
+      # Need epel9 repos to fetch wasmedge build dependency
+      centos-stream-9-x86_64:
+        additional_repos:
+          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/x86_64
+      centos-stream-9-aarch64:
+        additional_repos:
+          - https://kojipkgs.fedoraproject.org/repos/epel9-build/latest/aarch64
+      # TODO: build on CS10 with wasmedge once epel-10 is available
+      centos-stream-10-x86_64: {}
+      centos-stream-10-aarch64: {}
+
+  - job: copr_build
+    trigger: pull_request
+    packages: [crun-rhel]
+    notifications: *copr_build_failure_notification
+    targets:
       - epel-9-x86_64
       - epel-9-aarch64
-      - centos-stream-9-x86_64
-      - centos-stream-9-aarch64
-      - centos-stream-10-x86_64
-      - centos-stream-10-aarch64
 
   # Run on commit to main branch
   - job: copr_build
     trigger: commit
+    packages: [crun-fedora]
     notifications:
       failure_comment:
         message: "podman-next COPR build failed. @containers/packit-build please check."
@@ -67,10 +97,8 @@ jobs:
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64
-    identifier: podman_system_test_fedora
-    tmt_plan: "/plans/podman_system_test"
 
-  # Podman system tests for Fedora and CentOS Stream
+  # Podman system tests for CentOS Stream
   - job: tests
     trigger: pull_request
     packages: [crun-centos]
@@ -78,17 +106,13 @@ jobs:
     targets:
       - centos-stream-9-x86_64
       - centos-stream-9-aarch64
-      # TODO: Enable cs10 tests after netavark has finished defaulting to
-      # nftables
-      #- centos-stream-10-x86_64
-      #- centos-stream-10-aarch64
-    identifier: podman_system_test_centos
-    tmt_plan: "/plans/podman_system_test"
+      - centos-stream-10-x86_64
+      - centos-stream-10-aarch64
 
   # Podman system tests for RHEL
   - job: tests
     trigger: pull_request
-    packages: [crun-centos]
+    packages: [crun-rhel]
     use_internal_tf: true
     notifications: *podman_system_test_fail_notification
     targets:
@@ -96,26 +120,17 @@ jobs:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
       epel-9-aarch64:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
-      # TODO: Enable cs10 tests after netavark has finished defaulting to
-      # nftables
-      #centos-stream-10-x86_64:
-      #  distros: [RHEL-10-Beta-Nightly]
-      #centos-stream-10-aarch64:
-      #  distros: [RHEL-10-Beta-Nightly]
-    identifier: podman_system_test_internal
-    tmt_plan: "/plans/podman_system_test"
+      #TODO: Enable RHEL10 targets once epel-10 copr target is available
 
   - job: propose_downstream
     trigger: release
     packages: [crun-fedora]
-    update_release: false
     dist_git_branches:
       - fedora-all
 
   - job: propose_downstream
     trigger: release
     packages: [crun-centos]
-    update_release: false
     dist_git_branches:
       - c10s
 
