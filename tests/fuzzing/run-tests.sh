@@ -25,18 +25,19 @@ function run_test {
     export FUZZING_MODE=$1
     TEST_CASE=$2
 
-    result=$(honggfuzz --exit_upon_crash $VERBOSITY --run_time "$SINGLE_RUN_TIME" --timeout $TIMEOUT -T -i "$TEST_CASE" -- tests/tests_libcrun_fuzzer 2>&1 | tail -n 2)
+    # shellcheck disable=SC2086
+    result=$(honggfuzz --exit_upon_crash $VERBOSITY --run_time "$SINGLE_RUN_TIME" --timeout "$TIMEOUT" -T -i "$TEST_CASE" -- tests/tests_libcrun_fuzzer 2>&1 | tail -n 2)
     echo "$result"
     echo "$result" | grep -q crashes_count:0
 }
 
-run_test 0 $CORPUS/config-json
-run_test 1 $CORPUS/config-json
-run_test 2 $CORPUS/seccomp
-run_test 3 $CORPUS/signals
-run_test 4 $CORPUS/paths
+run_test 0 "$CORPUS"/config-json
+run_test 1 "$CORPUS"/config-json
+run_test 2 "$CORPUS"/seccomp
+run_test 3 "$CORPUS"/signals
+run_test 4 "$CORPUS"/paths
 run_test 5 random-data
-run_test 6 $CORPUS/annotations
-run_test 7 $CORPUS/idmapped-mounts-option
-run_test 8 $CORPUS/intelrdt
-run_test 9 $CORPUS/cpuset-ranges
+run_test 6 "$CORPUS"/annotations
+run_test 7 "$CORPUS"/idmapped-mounts-option
+run_test 8 "$CORPUS"/intelrdt
+run_test 9 "$CORPUS"/cpuset-ranges
