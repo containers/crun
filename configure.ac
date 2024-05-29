@@ -8,6 +8,8 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_CONFIG_SRCDIR([src/crun.c])
 
+AC_PROG_LN_S
+
 LT_INIT([disable-shared])
 
 AM_INIT_AUTOMAKE([1.11.2 -Wno-portability foreign tar-ustar no-dist-gzip dist-xz subdir-objects])
@@ -127,6 +129,8 @@ AC_ARG_WITH([libkrun], AS_HELP_STRING([--with-libkrun], [build with libkrun supp
 AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE([HAVE_LIBKRUN], 1, [Define if libkrun is available]), [AC_MSG_ERROR([*** Missing libkrun headers])]))
 
 AM_CONDITIONAL([ENABLE_KRUN], [test "x$with_libkrun" = xyes])
+
+AM_CONDITIONAL([ENABLE_WASM], [test "x$with_wasmer" = xyes && test "x$with_wasmedge" = xyes && test "x$with_wasmtime" = xyes])
 
 dnl include support for spin (EXPERIMENTAL)
 AC_ARG_WITH([spin], AS_HELP_STRING([--with-spin], [build with spin support]))

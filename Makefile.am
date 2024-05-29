@@ -271,6 +271,22 @@ if HAVE_MD2MAN
 	$(MD2MAN) -in $(abs_srcdir)/krun.1.md -out krun.1
 endif HAVE_MD2MAN
 
+install-exec-hook:
+if ENABLE_KRUN
+	$(LN_S) crun$(EXEEXT) $(DESTDIR)$(bindir)/krun$(EXEEXT)
+endif
+if ENABLE_WASM
+	$(LN_S) crun$(EXEEXT) $(DESTDIR)$(bindir)/crun-wasm$(EXEEXT)
+endif
+
+uninstall-hook:
+if ENABLE_KRUN
+	rm -f $(DESTDIR)$(bindir)/krun$(EXEEXT)
+endif
+if ENABLE_WASM
+	rm -f $(DESTDIR)$(bindir)/crun-wasm$(EXEEXT)
+endif
+
 generate-man: crun.1 krun.1
 
 sync:
