@@ -122,10 +122,6 @@ Recommends: wasmedge
 %make_install prefix=%{_prefix}
 rm -rf %{buildroot}%{_prefix}/lib*
 
-%if %{defined krun_support}
-ln -s %{name} %{buildroot}%{_bindir}/krun
-%endif
-
 %if %{defined wasm_support}
 ln -s %{name} %{buildroot}%{_bindir}/%{name}-wasm
 %endif
