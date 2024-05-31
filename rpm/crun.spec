@@ -1,6 +1,5 @@
 %global krun_opts %{nil}
 %global wasmedge_opts %{nil}
-%global wasmtime_opts %{nil}
 
 # krun and wasm[edge,time] support only on aarch64 and x86_64
 %ifarch aarch64 || x86_64
@@ -21,12 +20,6 @@
 %if %{defined fedora}
 %global krun_support 1
 %global krun_opts --with-libkrun
-%endif
-
-# wasmtime exists only on podman-next copr for now
-%if %{defined copr_build} && "%{?copr_projectname}" == "podman-next"
-%global wasmtime_support 1
-%global wasmtime_opts --with-wasmtime
 %endif
 
 %endif
@@ -73,9 +66,6 @@ Recommends: criu-libs
 %if %{defined wasmedge_support}
 BuildRequires: wasmedge-devel
 %endif
-%if %{defined wasmtime_support}
-BuildRequires: wasmtime-c-api-devel
-%endif
 BuildRequires: python
 Provides: oci-runtime
 
@@ -115,7 +105,7 @@ Recommends: wasmedge
 
 %build
 ./autogen.sh
-./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts} %{wasmtime_opts}
+./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts}
 %make_build
 
 %install
