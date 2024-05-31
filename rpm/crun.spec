@@ -6,11 +6,13 @@
 %ifarch aarch64 || x86_64
 %global wasm_support 1
 
-%if %{defined copr_project}
+%if %{defined copr_username}
 %define copr_build 1
 %endif
 
-%if %{defined fedora} || %{defined copr_build}
+# Disable wasmedge on rhel 10 until EPEL10 is in place, otherwise it causes
+# build issues on copr
+%if %{defined fedora} || (%{defined %copr_build} && %{defined rhel} && 0%{?rhel} < 10)
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif
@@ -22,7 +24,7 @@
 %endif
 
 # wasmtime exists only on podman-next copr for now
-%if %{defined copr_project} && "%{?copr_project}" == "podman-next"
+%if %{defined copr_build} && "%{?copr_projectname}" == "podman-next"
 %global wasmtime_support 1
 %global wasmtime_opts --with-wasmtime
 %endif
@@ -119,10 +121,6 @@ Recommends: wasmedge
 %install
 %make_install prefix=%{_prefix}
 rm -rf %{buildroot}%{_prefix}/lib*
-
-%if %{defined krun_support}
-ln -s %{name} %{buildroot}%{_bindir}/krun
-%endif
 
 %if %{defined wasm_support}
 ln -s %{name} %{buildroot}%{_bindir}/%{name}-wasm

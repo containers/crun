@@ -1,0 +1,22 @@
+# Only common dependencies that are NOT required to run podman-tests.sh are
+# specified here. Everything else is in podman-tests.sh.
+require:
+    - make
+
+adjust:
+    duration: 10m
+    when: arch == aarch64
+
+/upstream:
+    tag: upstream
+    summary: Run crun specific Podman tests on upstream PRs
+    
+    /podman_system_test:
+        test: make podman_system_test_upstream
+
+/downstream:
+    tag: downstream
+    summary: Run crun specific Podman tests on downstream bodhi / errata and dist-git PRs
+    
+    /podman_system_test:
+        test: make podman_system_test_downstream
