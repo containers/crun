@@ -232,7 +232,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         }
     }
 
-  devfd = openat (rootfsfd, "dev", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  devfd = openat (rootfsfd, "dev", O_PATH | O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
 

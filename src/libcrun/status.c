@@ -532,7 +532,7 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   if (UNLIKELY (dir == NULL))
     return crun_make_error (err, 0, "cannot get state directory");
 
-  rundir_dfd = TEMP_FAILURE_RETRY (open (dir, O_DIRECTORY | O_RDONLY | O_CLOEXEC));
+  rundir_dfd = TEMP_FAILURE_RETRY (open (dir, O_DIRECTORY | O_PATH | O_CLOEXEC));
   if (UNLIKELY (rundir_dfd < 0))
     return crun_make_error (err, errno, "cannot open run directory `%s`", dir);
 

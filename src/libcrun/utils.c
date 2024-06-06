@@ -830,7 +830,7 @@ lsm_attr_path (const char *lsm, const char *fname, libcrun_error_t *err)
   cleanup_close int lsm_dirfd = -1;
   char *attr_path = NULL;
 
-  attr_dirfd = open ("/proc/thread-self/attr", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  attr_dirfd = open ("/proc/thread-self/attr", O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (attr_dirfd < 0))
     {
       crun_make_error (err, errno, "open `/proc/thread-self/attr`");
@@ -840,7 +840,7 @@ lsm_attr_path (const char *lsm, const char *fname, libcrun_error_t *err)
   // Check for newer scoped interface in /proc/thread-self/attr/<lsm>
   if (lsm != NULL)
     {
-      lsm_dirfd = openat (attr_dirfd, lsm, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      lsm_dirfd = openat (attr_dirfd, lsm, O_DIRECTORY | O_PATH | O_CLOEXEC);
 
       if (UNLIKELY (lsm_dirfd < 0 && errno != ENOENT))
         {

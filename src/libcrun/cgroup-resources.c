@@ -1073,7 +1073,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_blkio < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_blkio);
 
@@ -1098,11 +1098,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_netclass < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_netclass);
 
-      dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_netprio < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_netprio);
 
@@ -1119,7 +1119,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       ret = append_paths (&path_to_htlb, err, CGROUP_ROOT "/hugetlb", path, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
-      dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_htlb < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_htlb);
 
@@ -1156,7 +1156,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_mem = open (path_to_mem, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_mem = open (path_to_mem, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_mem < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_mem);
 
@@ -1174,7 +1174,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_pid = open (path_to_pid, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_pid = open (path_to_pid, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_pid < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_pid);
 
@@ -1194,7 +1194,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpu < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_cpu);
       ret = write_cpu_resources (dirfd_cpu, false, resources->cpu, err);
@@ -1208,7 +1208,7 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpuset < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
 
