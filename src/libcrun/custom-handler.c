@@ -299,7 +299,7 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
       struct custom_handler_s *h;
 
       if (manager == NULL)
-        return crun_make_error (err, 0, "handler requested but no manager configured: `%s`", context->handler);
+        return crun_make_error (err, 0, "handler requested but no manager configured: `%s`", explicit_handler);
 
       h = handler_by_name (manager, explicit_handler);
       if (h)
