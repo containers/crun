@@ -178,7 +178,7 @@ jobs:
               ;;
               wasmedge-build)
                   sudo docker build -t wasmedge tests/wasmedge-build
-                  sudo docker run --privileged --cgroupns=host --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave  -w /crun -v ${PWD}:/crun wasmedge
+                  sudo docker run --privileged --cgroupns=host --rm -v containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave  -w /crun -v ${PWD}:/crun wasmedge
               ;;
           esac
 
