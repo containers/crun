@@ -2574,6 +2574,25 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
                 return 0;
             }
         }
+      if (errno == EACCES)
+        {
+          cleanup_free char *tmp2 = xstrdup (rootfs);
+
+          for (it = strchr (tmp2 + 1, '/'); it;)
+            {
+              char *next_slash = strchr (it + 1, '/');
+
+              *it = '\0';
+
+              ret = faccessat (AT_FDCWD, tmp2, X_OK, AT_EACCESS);
+              if (ret != 0)
+                return crun_make_error (err, EACCES, "make `%s`private: path `%s` is not accessible", tmp, tmp2);
+
+              *it = '/';
+              it = next_slash;
+            }
+        }
+
       return crun_make_error (err, errno, "make `%s` private", tmp);
     }
   return 0;
