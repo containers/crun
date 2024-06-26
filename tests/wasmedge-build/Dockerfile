@@ -1,5 +1,5 @@
 FROM fedora:latest
-ARG WASM_EDGE_VERSION="0.11.0"
+ARG WASM_EDGE_VERSION="0.14.0"
 
 # Install the deps for building crun
 RUN dnf update -y && dnf install -y make python git gcc automake autoconf libcap-devel \
