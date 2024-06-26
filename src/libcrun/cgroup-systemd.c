@@ -871,9 +871,9 @@ append_resources (sd_bus_message *m,
     return ret;
   if (ret)
     {
-      sd_err = sd_bus_message_append (m, "(sv)", "MemoryLimit", "t", memory_limit);
+      sd_err = sd_bus_message_append (m, "(sv)", "MemoryMax", "t", memory_limit);
       if (UNLIKELY (sd_err < 0))
-        return crun_make_error (err, -sd_err, "sd-bus message append MemoryLimit");
+        return crun_make_error (err, -sd_err, "sd-bus message append MemoryMax");
     }
 
   if (resources->cpu)
