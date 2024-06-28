@@ -89,6 +89,7 @@ struct libcriu_wrapper_s
   void (*criu_set_tcp_established) (bool tcp_established);
   void (*criu_set_track_mem) (bool track_mem);
   void (*criu_set_work_dir_fd) (int fd);
+  int (*criu_set_lsm_profile) (const char *name);
 };
 
 static struct libcriu_wrapper_s *libcriu_wrapper;
@@ -824,6 +825,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     {
       /* This is only for the error message later. */
       cr_options->work_path = cr_options->image_path;
+    }
+
+  if (cr_options->lsm_profile != NULL)
+    {
+      ret = libcriu_wrapper->criu_set_lsm_profile (cr_options->lsm_profile);
+      if (UNLIKELY (ret != 0))
+        return crun_make_error (err, 0, "error setting LSM profile to `%s`", cr_options->lsm_profile);
     }
 
   /* Tell CRIU about external bind mounts. */

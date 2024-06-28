@@ -44,6 +44,7 @@ enum
   OPTION_CONSOLE_SOCKET,
   OPTION_FILE_LOCKS,
   OPTION_MANAGE_CGROUPS_MODE,
+  OPTION_LSM_PROFILE,
 };
 
 static char doc[] = "OCI runtime";
@@ -67,6 +68,7 @@ static struct argp_option options[]
           "path to a socket that will receive the ptmx end of the tty", 0 },
         { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
         { "manage-cgroups-mode", OPTION_MANAGE_CGROUPS_MODE, "MODE", 0, "cgroups mode: 'soft' (default), 'ignore', 'full' and 'strict'", 0 },
+        { "lsm-profile", OPTION_LSM_PROFILE, "VALUE", 0, "Specify an LSM profile to be used during restore in the form of TYPE:NAME", 0 },
         {
             0,
         } };
@@ -123,6 +125,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_MANAGE_CGROUPS_MODE:
       cr_options.manage_cgroups_mode = crun_parse_manage_cgroups_mode (argp_mandatory_argument (arg, state));
+      break;
+
+    case OPTION_LSM_PROFILE:
+      cr_options.lsm_profile = argp_mandatory_argument (arg, state);
       break;
 
     default:

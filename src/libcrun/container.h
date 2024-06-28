@@ -187,6 +187,7 @@ struct libcrun_checkpoint_restore_s
   char *parent_path;
   bool pre_dump;
   int manage_cgroups_mode;
+  char *lsm_profile;
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 
