@@ -64,7 +64,7 @@ static struct argp_option options[]
         { "detach", 'd', 0, 0, "detach from the container's process", 0 },
         { "pid-file", OPTION_PID_FILE, "FILE", 0, "where to write the PID of the container", 0 },
         { "console-socket", OPTION_CONSOLE_SOCKET, "SOCKET", 0,
-          "path to a socket that will receive the master end of the tty", 0 },
+          "path to a socket that will receive the ptmx end of the tty", 0 },
         { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
         { "manage-cgroups-mode", OPTION_MANAGE_CGROUPS_MODE, "MODE", 0, "cgroups mode: 'soft' (default), 'ignore', 'full' and 'strict'", 0 },
         {
