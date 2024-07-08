@@ -174,7 +174,7 @@ wasmedge_can_handle_container (libcrun_container_t *container, libcrun_error_t *
   return wasm_can_handle_container (container, err);
 }
 
-// This works only when the plugin folder is present in /usr/lib/wasmedge
+// This works only when the plugin is present in /usr/lib/wasmedge
 static int
 libwasmedge_configure_container (void *cookie arg_unused, enum handler_configure_phase phase,
                                  libcrun_context_t *context arg_unused, libcrun_container_t *container,
@@ -183,7 +183,18 @@ libwasmedge_configure_container (void *cookie arg_unused, enum handler_configure
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
 
-  if (getenv ("WASMEDGE_PLUGIN_PATH") == NULL && getenv ("WASMEDGE_WASINN_PRELOAD") == NULL)
+  char **container_env = def->process->env;
+  bool has_plugin_path = false, has_preload = false;
+
+  for (char **env = container_env; env && *env; env++)
+    {
+      if (strncmp (*env, "WASMEDGE_PLUGIN_PATH=", 21) == 0)
+        has_plugin_path = true;
+      else if (strncmp (*env, "WASMEDGE_WASINN_PRELOAD=", 24) == 0)
+        has_preload = true;
+    }
+
+  if (! has_plugin_path && ! has_preload)
     return 0;
 
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
