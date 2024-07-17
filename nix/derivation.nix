@@ -5,7 +5,8 @@
 }:
 with pkgs; stdenv.mkDerivation {
   name = "crun";
-  src = ./..;
+  # Use Pure to avoid exuding the .git directory
+  src = nix-gitignore.gitignoreSourcePure [ ../.gitignore ] ./..;
   vendorSha256 = null;
   doCheck = false;
   enableParallelBuilding = true;
