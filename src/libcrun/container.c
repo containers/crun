@@ -1075,7 +1075,27 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       if (UNLIKELY (rootfs == NULL))
         {
           /* If realpath failed for any reason, try the relative directory.  */
-          rootfs = xstrdup (def->root->path);
+          if (def->root->path[0] == '/')
+            {
+              cleanup_free char *cwd = NULL;
+              ssize_t len;
+
+              len = safe_readlinkat (AT_FDCWD, "/proc/self/cwd", &cwd, 0, err);
+              if (UNLIKELY (len < 0))
+                return len;
+
+              /* If the rootfs is under the current working directory, just use its relative path.  */
+              if (has_prefix (def->root->path, cwd) && def->root->path[len] == '/')
+                {
+                  const char *it = consume_slashes (def->root->path + len);
+                  if (*it)
+                    rootfs = xstrdup (it);
+                }
+            }
+
+          /* If nothing else worked, just use the path as is.  */
+          if (rootfs == NULL)
+            rootfs = xstrdup (def->root->path);
         }
     }
 

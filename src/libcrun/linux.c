@@ -2546,56 +2546,45 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 static int
 make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 {
-  cleanup_free char *tmp = xstrdup (rootfs);
-  char *it;
+  cleanup_close int rootfsfd = -1;
+  proc_fd_path_t proc_path;
+  size_t n_slashes = 1;
+  const char *it;
 
-  for (;;)
+  for (it = rootfs; *it; it++)
+    if (*it == '/')
+      n_slashes++;
+
+  /* rootfs could be a relative path.  */
+  rootfsfd = open (rootfs, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (rootfsfd < 0))
+    return crun_make_error (err, errno, "open `%s`", rootfs);
+
+  /* prevent a potential infinite loop.  */
+  while (n_slashes-- > 0)
     {
       int ret;
+      errno = 0;
+      cleanup_close int parentfd = openat (rootfsfd, "..", O_PATH | O_CLOEXEC);
 
-      ret = mount (NULL, tmp, NULL, MS_PRIVATE, NULL);
+      if (parentfd < 0)
+        {
+          ret = faccessat (rootfsfd, "..", X_OK, AT_EACCESS);
+          if (ret != 0)
+            return crun_make_error (err, EACCES, "make `%s`private: a component is not accessible", rootfs);
+        }
+
+      get_proc_self_fd_path (proc_path, parentfd);
+      ret = mount (NULL, proc_path, NULL, MS_PRIVATE, NULL);
       if (ret == 0)
         return 0;
 
-      if (errno == EINVAL)
-        {
-          it = strrchr (tmp, '/');
-          if (it == NULL)
-            return 0;
-          else if (it != tmp)
-            {
-              *it = '\0';
-              continue;
-            }
-          else
-            {
-              ret = mount (NULL, "/", NULL, MS_PRIVATE, NULL);
-              if (ret == 0)
-                return 0;
-            }
-        }
-      if (errno == EACCES)
-        {
-          cleanup_free char *tmp2 = xstrdup (rootfs);
-
-          for (it = strchr (tmp2 + 1, '/'); it;)
-            {
-              char *next_slash = strchr (it + 1, '/');
-
-              *it = '\0';
-
-              ret = faccessat (AT_FDCWD, tmp2, X_OK, AT_EACCESS);
-              if (ret != 0)
-                return crun_make_error (err, EACCES, "make `%s`private: path `%s` is not accessible", tmp, tmp2);
-
-              *it = '/';
-              it = next_slash;
-            }
-        }
-
-      return crun_make_error (err, errno, "make `%s` private", tmp);
+      close_and_reset (&rootfsfd);
+      rootfsfd = get_and_reset (&parentfd);
     }
-  return 0;
+
+  /* should never get this far.  */
+  return crun_make_error (err, 0, "make `%s` private", rootfs);
 }
 
 int
