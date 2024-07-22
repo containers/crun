@@ -45,12 +45,9 @@ limits on the memory allowed in the container:
 # podman --runtime /usr/bin/runc run --rm --memory 4M fedora echo it works
 Error: container_linux.go:346: starting container process caused "process_linux.go:327: getting pipe fds for pid 13859 caused \"readlink /proc/13859/fd/0: no such file or directory\"": OCI runtime command not found error
 
-# podman --runtime /usr/bin/crun run --rm --memory 4M fedora echo it works
+# podman --runtime /usr/bin/crun run --rm --memory 512k fedora echo it works
 it works
 ```
-
-crun could go much lower than that, and require \< 1M. The used 4MB is a
-hard limit set directly in Podman before calling the OCI runtime.
 
 ## Dependencies
 
