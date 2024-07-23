@@ -38,34 +38,38 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
   if (annotation)
     {
 
-      /* wasm-smart: annotation is a smart switch which only toggles wasm if it's necessary,
-         following annotation is very useful for cases where users intend to run wasm workload on
-         kubernetes cluster but workload also contains side-cars which could execute non-wasm workload.
-         Example: Kubernetes clusters with service-mesh such as istio, linkerd etc
+      /* wasm: annotation forces wasm, not allowing for the execution of non-wasm workloads.
+         disable: disables wasm, not allowing the execution of wasm workloads.
       */
-      if (strcmp (annotation, "wasm-smart") == 0)
-        {
-          return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
-        }
-      return strcmp (annotation, "wasm") == 0 ? 1 : 0;
+
+      if (strcmp (annotation, "wasm") == 0)
+        return 1;
+      
+      if (strcmp (annotation, "disable") == 0)
+        return 0;
     }
 
   annotation = find_annotation (container, "module.wasm.image/variant");
   if (annotation)
     {
 
-      /* compat-smart: annotation is a smart switch which only toggles wasm if it's necessary,
-         following annotation is very useful for cases where users intend to run wasm workload on
-         kubernetes cluster but workload also contains side-cars which could execute non-wasm workload.
-         Example: Kubernetes clusters with service-mesh such as istio, linkerd etc
+      /* compat: annotation forces wasm, not allowing for the execution of non-wasm workloads.
+         disable: disables wasm, not allowing the execution of wasm workloads.
       */
-      if (strcmp (annotation, "compat-smart") == 0)
-        {
-          return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
-        }
 
-      return strcmp (annotation, "compat") == 0 ? 1 : 0;
+      if (strcmp (annotation, "compat") == 0)
+        return 1;
+      
+      if (strcmp (annotation, "disable") == 0)
+        return 0;
     }
 
-  return 0;
+  /* The default behaviour (previously enabled by the compat-smart/wasm-smart annotation)
+     is a smart switch which only toggles wasm if it's necessary, it's very useful for 
+     cases where users intend to run wasm workload on kubernetes cluster but workload 
+     also contains side-cars which could execute non-wasm workload.
+     Example: Kubernetes clusters with service-mesh such as istio, linkerd etc
+  */
+
+  return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
 }
