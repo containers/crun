@@ -889,12 +889,12 @@ append_resources (sd_bus_message *m,
             quota = ((quota / 10000) + 1) * 10000;
 
           sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPerSecUSec", "t", quota);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (UNLIKELY (sd_err < 0))
+            return crun_make_error (err, -sd_err, "sd-bus message append CPUQuotaPerSecUSec");
 
           sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPeriodUSec", "t", resources->cpu->period);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (UNLIKELY (sd_err < 0))
+            return crun_make_error (err, -sd_err, "sd-bus message append CPUQuotaPeriodUSec");
         }
     }
 
