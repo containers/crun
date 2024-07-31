@@ -124,6 +124,10 @@ dnl include support for wasmedge (EXPERIMENTAL)
 AC_ARG_WITH([wasmedge], AS_HELP_STRING([--with-wasmedge], [build with WasmEdge support]))
 AS_IF([test "x$with_wasmedge" = "xyes"], AC_CHECK_HEADERS([wasmedge/wasmedge.h], AC_DEFINE([HAVE_WASMEDGE], 1, [Define if WasmEdge is available]), [AC_MSG_ERROR([*** Missing wasmedge headers])]))
 
+dnl include support for wamr (EXPERIMENTAL)
+AC_ARG_WITH([wamr], AS_HELP_STRING([--with-wamr], [build with WAMR support]))
+AS_IF([test "x$with_wamr" = "xyes"], AC_CHECK_HEADERS([wasm_export.h], AC_DEFINE([HAVE_WAMR], 1, [Define if WAMR is available]), [AC_MSG_ERROR([*** Missing WAMR headers])]))
+
 dnl include support for libkrun (EXPERIMENTAL)
 AC_ARG_WITH([libkrun], AS_HELP_STRING([--with-libkrun], [build with libkrun support]))
 AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE([HAVE_LIBKRUN], 1, [Define if libkrun is available]), [AC_MSG_ERROR([*** Missing libkrun headers])]))
