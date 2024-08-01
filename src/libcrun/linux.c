@@ -2830,6 +2830,34 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char
   return 0;
 }
 
+int
+libcrun_do_parent_rootfs (const char *workdir, libcrun_error_t *err)
+{
+  int ret;
+  ret = unshare (CLONE_NEWNS);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "unshare");
+
+  ret = mount ("/", workdir, NULL, MS_BIND | MS_REC, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mount MS_MOVE | MS_REC / `%s`", workdir);
+
+  // note: this can't be an fchdir with a dirfd opened previous to the mount
+  ret = chdir (workdir);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chdir to %s", workdir);
+
+  ret = mount (workdir, "/", NULL, MS_MOVE, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mount MS_MOVE `%s` /", workdir);
+
+  ret = chroot (".");
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chroot to `%s`", workdir);
+
+  return 0;
+}
+
 /* If one of stdin, stdout, stderr are pointing to /dev/null on
  * the outside of the container, this moves it to /dev/null inside
  * of the container. This needs to run after pivot/chroot-ing. */

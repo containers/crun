@@ -67,6 +67,7 @@ int libcrun_set_mounts (struct container_entrypoint_s *args, libcrun_container_t
                         set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err);
 int libcrun_init_caps (libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char *rootfs, libcrun_error_t *err);
+int libcrun_do_parent_rootfs (const char *rootfs, libcrun_error_t *err);
 int libcrun_reopen_dev_null (libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
 int libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid,

@@ -1153,6 +1153,13 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (rootfs)
     {
+      if (entrypoint_args->context->parent_rootfs)
+        {
+          ret = libcrun_do_parent_rootfs (entrypoint_args->context->parent_rootfs, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
       ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
       if (UNLIKELY (ret < 0))
         return ret;

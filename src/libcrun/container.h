@@ -56,6 +56,7 @@ struct libcrun_context_s
   bool no_new_keyring;
   bool force_no_cgroup;
   bool no_pivot;
+  const char *parent_rootfs;
 
   char **argv;
   int argc;
