@@ -1,3 +1,19 @@
+* crun-1.16
+
+- build: fix build for s390x.
+- linux: fix mount of special files with rro.  Open the mount target
+  with O_PATH to prevent open(2) failures with special files like
+  FIFOs or UNIX sockets.
+- Fix sd-bus error handling for cpu quota and period props update.
+- container: use relative path for rootfs if possible.  If the rootfs
+  cannot be resolved and it is below the current working directory,
+  only use its relative path.
+- wasmedge: access container environment variables for the WasmEdge
+  configuration.
+- cgroup, systemd: use MemoryMax instead of MemoryLimit.  Fixes a
+  warning for using an old configuration name.
+- cgroup, systemd: improve checks for sd_bus_message_append errors
+
 * crun-1.15
 
 - fix a mount point leak under /run/crun, add a retry mechanism to
