@@ -144,16 +144,7 @@ write_file_at (int dirfd, const char *name, const void *data, size_t len, libcru
 int
 write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err)
 {
-  cleanup_close int fd = open (name, O_CLOEXEC | O_WRONLY | flags, 0700);
-  int ret;
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "opening file `%s` for writing", name);
-
-  ret = TEMP_FAILURE_RETRY (write (fd, data, len));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "writing file `%s`", name);
-
-  return ret;
+  return write_file_at_with_flags (AT_FDCWD, flags, 0700, name, data, len, err);
 }
 
 int
