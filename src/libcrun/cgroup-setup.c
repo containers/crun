@@ -50,7 +50,7 @@ initialize_cpuset_subsystem_rec (char *path, size_t path_len, char *cpus, char *
   bool has_cpus = false, has_mems = false;
   int b_len;
 
-  dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  dirfd = open (path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", path);
 
@@ -174,7 +174,7 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
   cleanup_close int dirfd = -1;
   int i;
 
-  dirfd = open (path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  dirfd = open (path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", path);
 

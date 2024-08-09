@@ -164,7 +164,7 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+  dirfd = open (cgroup_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 
@@ -226,7 +226,7 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+      dirfd = open (cgroup_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd < 0))
         return crun_make_error (err, errno, "open `%s`", cgroup_path);
 
@@ -266,7 +266,7 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
       if (UNLIKELY (ret < 0))
         return ret;
 
-      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_PATH | O_CLOEXEC);
       if (UNLIKELY (dirfd_cpuset < 0))
         return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
 
