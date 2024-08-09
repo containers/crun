@@ -2571,7 +2571,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
         {
           ret = faccessat (rootfsfd, "..", X_OK, AT_EACCESS);
           if (ret != 0)
-            return crun_make_error (err, EACCES, "make `%s`private: a component is not accessible", rootfs);
+            return crun_make_error (err, EACCES, "make `%s` private: a component is not accessible", rootfs);
         }
 
       get_proc_self_fd_path (proc_path, parentfd);
