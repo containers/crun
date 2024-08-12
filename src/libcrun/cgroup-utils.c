@@ -585,6 +585,8 @@ chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err)
     return ret;
 
   dfd = open (cgroup_path, O_CLOEXEC | O_PATH);
+  if (UNLIKELY (dfd < 0))
+    return crun_make_error (err, errno, "open `%s`", cgroup_path);
 
   ret = read_all_file ("/sys/kernel/cgroup/delegate", &delegate, &delegate_size, err);
   if (UNLIKELY (ret < 0))
