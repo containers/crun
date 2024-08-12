@@ -470,22 +470,18 @@ int
 libcrun_cgroup_has_oom (struct libcrun_cgroup_status *status, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
-  const char *path = NULL;
+  const char *path = status->path;
   const char *prefix = NULL;
   size_t content_size = 0;
   int cgroup_mode;
   char *it;
 
-  path = status->path;
   if (UNLIKELY (path == NULL || path[0] == '\0'))
     return 0;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
-
-  if (path == NULL || path[0] == '\0')
-    return 0;
 
   switch (cgroup_mode)
     {
