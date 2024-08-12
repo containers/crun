@@ -2565,19 +2565,20 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
     {
       int ret;
       errno = 0;
-      cleanup_close int parentfd = openat (rootfsfd, "..", O_PATH | O_CLOEXEC);
+      cleanup_close int parentfd = -1;
 
+      get_proc_self_fd_path (proc_path, rootfsfd);
+      ret = mount (NULL, proc_path, NULL, MS_PRIVATE, NULL);
+      if (ret == 0)
+        return 0;
+
+      parentfd = openat (rootfsfd, "..", O_PATH | O_CLOEXEC);
       if (parentfd < 0)
         {
           ret = faccessat (rootfsfd, "..", X_OK, AT_EACCESS);
           if (ret != 0)
             return crun_make_error (err, EACCES, "make `%s` private: a component is not accessible", rootfs);
         }
-
-      get_proc_self_fd_path (proc_path, parentfd);
-      ret = mount (NULL, proc_path, NULL, MS_PRIVATE, NULL);
-      if (ret == 0)
-        return 0;
 
       close_and_reset (&rootfsfd);
       rootfsfd = get_and_reset (&parentfd);
