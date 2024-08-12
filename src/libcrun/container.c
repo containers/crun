@@ -1093,7 +1093,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
                 }
             }
 
-          /* If nothing else worked, just use the path as is.  */
+          /* If nothing else worked, just use the path as it is.  */
           if (rootfs == NULL)
             rootfs = xstrdup (def->root->path);
         }
