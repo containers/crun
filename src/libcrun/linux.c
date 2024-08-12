@@ -1611,7 +1611,14 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
   int rootfsfd = get_private_data (container)->rootfsfd;
   const char *rootfs = get_private_data (container)->rootfs;
   size_t rootfs_len = get_private_data (container)->rootfs_len;
-  const char *rel_dev = relative_path_under_dev (device->path);
+  if (is_empty_string (fullname))
+    return crun_make_error (err, EINVAL, "device path is empty");
+  // Normalize the path by removing trailing slashes.
+  cleanup_free char *normalized_path = xstrdup (fullname);
+  consume_trailing_slashes (normalized_path);
+  if (normalized_path[0] == '\0')
+    strcpy (normalized_path, "/");
+  const char *rel_dev = relative_path_under_dev (normalized_path);
 
   if (binds)
     {
@@ -1631,7 +1638,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
         }
       else
         {
-          const char *rel_path = consume_slashes (device->path);
+          const char *rel_path = consume_slashes (normalized_path);
 
           fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0755, err);
           if (UNLIKELY (fd < 0))
@@ -1645,7 +1652,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
             return 0;
         }
 
-      ret = do_mount (container, fullname, fd, device->path, NULL, MS_BIND | MS_PRIVATE | MS_NOEXEC | MS_NOSUID, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, fullname, fd, normalized_path, NULL, MS_BIND | MS_PRIVATE | MS_NOEXEC | MS_NOSUID, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1684,17 +1691,17 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
         }
       else
         {
-          char *dirname;
-          cleanup_free char *buffer = NULL;
           cleanup_close int dirfd = -1;
-          char *basename, *tmp;
+          cleanup_free char *dirname = NULL;
+          char *basename, *found;
 
-          buffer = xstrdup (device->path);
-          dirname = buffer;
+          dirname = xstrdup (normalized_path);
 
-          tmp = strrchr (buffer, '/');
-          *tmp = '\0';
-          basename = tmp + 1;
+          found = strrchr (dirname, '/');
+          if (found)
+            *found = '\0';
+
+          basename = found ? found + 1 : dirname;
 
           if (dirname[0] == '\0')
             dirfd = dup (rootfsfd);

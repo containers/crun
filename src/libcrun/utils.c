@@ -2507,3 +2507,17 @@ get_overflow_gid (void)
     }
   return gid;
 }
+
+void
+consume_trailing_slashes (char *path)
+{
+  if (! path || path[0] == '\0')
+    return;
+
+  char *last = path + strlen (path);
+
+  while (last > path && *(last - 1) == '/')
+    last--;
+
+  *last = '\0';
+}
