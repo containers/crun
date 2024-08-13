@@ -1,3 +1,9 @@
+* crun-1.16.1
+
+- fix a regression introduced by 1.16 where using 'rshared' rootfs
+  mount propagation and the rootfs itself is a mountpoint.
+- inherit user from original process on exec, if not overridden.
+
 * crun-1.16
 
 - build: fix build for s390x.
