@@ -130,7 +130,7 @@ AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE(
 
 AM_CONDITIONAL([ENABLE_KRUN], [test "x$with_libkrun" = xyes])
 
-AM_CONDITIONAL([ENABLE_WASM], [test "x$with_wasmer" = xyes && test "x$with_wasmedge" = xyes && test "x$with_wasmtime" = xyes])
+AM_CONDITIONAL([ENABLE_WASM], [test "x$with_wasmer" = xyes || test "x$with_wasmedge" = xyes || test "x$with_wasmtime" = xyes])
 
 dnl include support for spin (EXPERIMENTAL)
 AC_ARG_WITH([spin], AS_HELP_STRING([--with-spin], [build with spin support]))
