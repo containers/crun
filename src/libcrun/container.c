@@ -3609,7 +3609,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   pipefd0 = container_ret_status[0];
   pipefd1 = container_ret_status[1];
 
-  /* If the new process block doesn't specify a SELinux label or AppArmor profile, then
+  /* If the new process block doesn't specify a SELinux label, AppArmor profile or user, then
      use the configuration from the original config file.  */
   if (container->container_def->process)
     {
@@ -3618,6 +3618,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
       if (process->apparmor_profile == NULL && container->container_def->process->apparmor_profile)
         process->apparmor_profile = xstrdup (container->container_def->process->apparmor_profile);
+
+      if (process->user == NULL && container->container_def->process->user)
+        process->user = container->container_def->process->user;
     }
 
   ret = initialize_security (process, err);
