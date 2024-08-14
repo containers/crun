@@ -1065,6 +1065,13 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         }
     }
 
+  sd_err = sd_bus_message_append (m, "(sv)", "DefaultDependencies", "b", 0);
+  if (UNLIKELY (sd_err < 0))
+    {
+      ret = crun_make_error (err, -sd_err, "sd-bus message append DefaultDependencies");
+      goto exit;
+    }
+
   if (annotations)
     {
       size_t prefix_len = sizeof (SYSTEMD_PROPERTY_PREFIX) - 1;
@@ -1102,13 +1109,6 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   if (UNLIKELY (sd_err < 0))
     {
       ret = crun_make_error (err, -sd_err, "sd-bus message append PIDs");
-      goto exit;
-    }
-
-  sd_err = sd_bus_message_append (m, "(sv)", "DefaultDependencies", "b", 0);
-  if (UNLIKELY (sd_err < 0))
-    {
-      ret = crun_make_error (err, -sd_err, "sd-bus message append DefaultDependencies");
       goto exit;
     }
 
