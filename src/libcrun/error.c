@@ -245,7 +245,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
 }
 
 void
-log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
+log_write_to_stream (int errno_, const char *msg, int verbosity, void *arg)
 {
   timestamp_t timestamp = {
     0,
@@ -257,8 +257,19 @@ log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
 
   if (tty)
     {
-      color_begin = warning ? "\x1b[1;33m" : "\x1b[1;31m";
-      color_end = "\x1b[0m";
+      switch (verbosity)
+        {
+        case LIBCRUN_VERBOSITY_DEBUG:
+          break;
+        case LIBCRUN_VERBOSITY_WARNING:
+          color_begin = "\x1b[1;33m";
+          color_end = "\x1b[0m";
+          break;
+        case LIBCRUN_VERBOSITY_ERROR:
+          color_begin = "\x1b[1;31m";
+          color_end = "\x1b[0m";
+          break;
+        }
 
       if (log_format == LOG_FORMAT_TEXT)
         get_timestamp (&timestamp, ": ");
@@ -271,31 +282,57 @@ log_write_to_stream (int errno_, const char *msg, bool warning, void *arg)
 }
 
 void
-log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg arg_unused)
+log_write_to_stderr (int errno_, const char *msg, int verbosity, void *arg arg_unused)
 {
-  log_write_to_stream (errno_, msg, warning, stderr);
+  log_write_to_stream (errno_, msg, verbosity, stderr);
 }
 
 void
-log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg arg_unused)
+log_write_to_syslog (int errno_, const char *msg, int verbosity, void *arg arg_unused)
 {
+  int priority;
+  switch (verbosity)
+    {
+    case LIBCRUN_VERBOSITY_DEBUG:
+      priority = LOG_DEBUG;
+      break;
+    case LIBCRUN_VERBOSITY_WARNING:
+      priority = LOG_WARNING;
+      break;
+    case LIBCRUN_VERBOSITY_ERROR:
+      priority = LOG_ERR;
+      break;
+    }
   if (errno_ == 0)
-    syslog (warning ? LOG_WARNING : LOG_ERR, "%s", msg);
+    syslog (priority, "%s", msg);
   else
-    syslog (warning ? LOG_WARNING : LOG_ERR, "%s: %s", msg, strerror (errno_));
+    syslog (priority, "%s: %s", msg, strerror (errno_));
 }
 
 void
-log_write_to_journald (int errno_, const char *msg, bool warning, void *arg arg_unused)
+log_write_to_journald (int errno_, const char *msg, int verbosity, void *arg arg_unused)
 {
   (void) errno_;
   (void) msg;
-  (void) warning;
+  (void) verbosity;
 #ifdef HAVE_SYSTEMD
+  int priority;
+  switch (verbosity)
+    {
+    case LIBCRUN_VERBOSITY_DEBUG:
+      priority = LOG_DEBUG;
+      break;
+    case LIBCRUN_VERBOSITY_WARNING:
+      priority = LOG_WARNING;
+      break;
+    case LIBCRUN_VERBOSITY_ERROR:
+      priority = LOG_ERR;
+      break;
+    }
   if (errno_ == 0)
-    sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s", msg, "ID=%s", arg, NULL);
+    sd_journal_send ("PRIORITY=%d", priority, "MESSAGE=%s", msg, "ID=%s", arg, NULL);
   else
-    sd_journal_send ("PRIORITY=%d", warning ? LOG_WARNING : LOG_ERR, "MESSAGE=%s: %s", msg, strerror (errno_), "ID=%s",
+    sd_journal_send ("PRIORITY=%d", priority, "MESSAGE=%s: %s", msg, strerror (errno_), "ID=%s",
                      arg, NULL);
 #endif
 }
@@ -324,9 +361,21 @@ crun_set_output_handler (crun_output_handler handler, void *arg, bool log_to_std
 }
 
 static char *
-make_json_error (const char *msg, int errno_, bool warning)
+make_json_error (const char *msg, int errno_, int verbosity)
 {
-  const char *level = warning ? "warning" : "error";
+  const char *level;
+  switch (verbosity)
+    {
+    case LIBCRUN_VERBOSITY_DEBUG:
+      level = "debug";
+      break;
+    case LIBCRUN_VERBOSITY_WARNING:
+      level = "warning";
+      break;
+    case LIBCRUN_VERBOSITY_ERROR:
+      level = "error";
+      break;
+    }
   const unsigned char *buf = NULL;
   yajl_gen gen = NULL;
   char *ret = NULL;
@@ -372,13 +421,13 @@ make_json_error (const char *msg, int errno_, bool warning)
 }
 
 static void
-write_log (int errno_, bool warning, const char *msg, va_list args_list)
+write_log (int errno_, int verbosity, const char *msg, va_list args_list)
 {
   int ret;
   cleanup_free char *output = NULL;
   cleanup_free char *json = NULL;
 
-  if (warning && output_verbosity < LIBCRUN_VERBOSITY_WARNING)
+  if (verbosity > output_verbosity)
     return;
 
   ret = vasprintf (&output, msg, args_list);
@@ -386,22 +435,31 @@ write_log (int errno_, bool warning, const char *msg, va_list args_list)
     OOM ();
 
   if (log_also_to_stderr)
-    log_write_to_stderr (errno_, output, warning, NULL);
+    log_write_to_stderr (errno_, output, verbosity, NULL);
 
   switch (log_format)
     {
     case LOG_FORMAT_TEXT:
-      output_handler (errno_, output, warning, output_handler_arg);
+      output_handler (errno_, output, verbosity, output_handler_arg);
       break;
 
     case LOG_FORMAT_JSON:
-      json = make_json_error (output, errno_, warning);
+      json = make_json_error (output, errno_, verbosity);
       if (json)
-        output_handler (0, json, warning, output_handler_arg);
+        output_handler (0, json, verbosity, output_handler_arg);
       else
-        output_handler (errno_, output, warning, output_handler_arg);
+        output_handler (errno_, output, verbosity, output_handler_arg);
       break;
     }
+}
+
+void
+libcrun_debug (const char *msg, ...)
+{
+  va_list args_list;
+  va_start (args_list, msg);
+  write_log (0, LIBCRUN_VERBOSITY_DEBUG, msg, args_list);
+  va_end (args_list);
 }
 
 void
@@ -409,7 +467,7 @@ libcrun_warning (const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
-  write_log (0, true, msg, args_list);
+  write_log (0, LIBCRUN_VERBOSITY_WARNING, msg, args_list);
   va_end (args_list);
 }
 
@@ -419,7 +477,7 @@ libcrun_error (int errno_, const char *msg, ...)
   va_list args_list;
   va_start (args_list, msg);
 
-  write_log (errno_, false, msg, args_list);
+  write_log (errno_, LIBCRUN_VERBOSITY_ERROR, msg, args_list);
   va_end (args_list);
 }
 
@@ -428,7 +486,7 @@ libcrun_fail_with_error (int errno_, const char *msg, ...)
 {
   va_list args_list;
   va_start (args_list, msg);
-  write_log (errno_, false, msg, args_list);
+  write_log (errno_, LIBCRUN_VERBOSITY_ERROR, msg, args_list);
   va_end (args_list);
   exit (EXIT_FAILURE);
 }

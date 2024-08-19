@@ -209,17 +209,19 @@ enum
   OPTION_CGROUP_MANAGER,
   OPTION_LOG,
   OPTION_LOG_FORMAT,
+  OPTION_LOG_LEVEL,
   OPTION_ROOT,
   OPTION_ROOTLESS
 };
 
 const char *argp_program_bug_address = "https://github.com/containers/crun/issues";
 
-static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce verbose output", 0 },
+static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce verbose output, similar to --log-level=debug", 0 },
                                         { "cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager", 0 },
                                         { "systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups", 0 },
                                         { "log", OPTION_LOG, "FILE", 0, NULL, 0 },
                                         { "log-format", OPTION_LOG_FORMAT, "FORMAT", 0, NULL, 0 },
+                                        { "log-level", OPTION_LOG_LEVEL, "LEVEL", 0, "log level to use: 'error', 'warning' or 'debug'", 0 },
                                         { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },
                                         { "rootless", OPTION_ROOT, "VALUE", 0, NULL, 0 },
                                         { "version", OPTION_VERSION, 0, 0, NULL, 0 },
@@ -268,7 +270,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case OPTION_DEBUG:
-      arguments.debug = true;
+      arguments.verbosity = LIBCRUN_VERBOSITY_DEBUG;
       break;
 
     case OPTION_CGROUP_MANAGER:
@@ -305,6 +307,26 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_LOG_FORMAT:
       arguments.log_format = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_LOG_LEVEL:
+      tmp = argp_mandatory_argument (arg, state);
+      if (strcmp (tmp, "error") == 0)
+        {
+          arguments.verbosity = LIBCRUN_VERBOSITY_ERROR;
+        }
+      else if (strcmp (tmp, "warning") == 0)
+        {
+          arguments.verbosity = LIBCRUN_VERBOSITY_WARNING;
+        }
+      else if (strcmp (tmp, "debug") == 0)
+        {
+          arguments.verbosity = LIBCRUN_VERBOSITY_DEBUG;
+        }
+      else
+        {
+          libcrun_fail_with_error (0, "unknown verbosity `%s` specified", arg);
+        }
       break;
 
     case OPTION_ROOT:
@@ -395,8 +417,8 @@ main (int argc, char **argv)
   if (command == NULL)
     libcrun_fail_with_error (0, "unknown command %s", argv[first_argument]);
 
-  if (arguments.debug)
-    libcrun_set_verbosity (LIBCRUN_VERBOSITY_WARNING);
+  libcrun_set_verbosity (arguments.verbosity);
+  libcrun_debug ("Using debug verbosity");
 
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
   if (ret && err)

@@ -519,5 +519,6 @@ PyInit_python_crun (void)
     return ret;
   (void) PyModule_AddIntConstant (ret, "VERBOSITY_ERROR", LIBCRUN_VERBOSITY_ERROR);
   (void) PyModule_AddIntConstant (ret, "VERBOSITY_WARNING", LIBCRUN_VERBOSITY_WARNING);
+  (void) PyModule_AddIntConstant (ret, "VERBOSITY_DEBUG", LIBCRUN_VERBOSITY_DEBUG);
   return ret;
 }
