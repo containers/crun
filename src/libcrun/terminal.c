@@ -61,8 +61,8 @@ libcrun_new_terminal (char **pty, libcrun_error_t *err)
   return ret;
 }
 
-static int
-set_raw (int fd, void **current_status, libcrun_error_t *err)
+int
+libcrun_set_raw (int fd, void **current_status, libcrun_error_t *err)
 {
   int ret;
   struct termios termios;
@@ -112,23 +112,6 @@ libcrun_set_stdio (char *pty, libcrun_error_t *err)
     return crun_make_error (err, errno, "ioctl TIOCSCTTY");
 
   return 0;
-}
-
-int
-libcrun_setup_terminal_ptmx (int fd, void **current_status, libcrun_error_t *err)
-{
-  int ret;
-  struct termios termios;
-
-  ret = tcgetattr (fd, &termios);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "tcgetattr");
-
-  ret = tcsetattr (fd, TCSANOW, &termios);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "tcsetattr");
-
-  return set_raw (0, current_status, err);
 }
 
 void
