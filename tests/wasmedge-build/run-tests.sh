@@ -5,18 +5,15 @@ set -e
 # Build crun with wasmedge support
 cd /crun
 
+# Remove the installed crun to make sure the built crun is used
+rm -rf /usr/bin/crun /usr/local/bin/crun-wasm /usr/bin/crun-wasm
+
 git config --global --add safe.directory /crun
 git clean -fdx
 ./autogen.sh
-./configure CFLAGS='-Wall -Wextra -Werror' --with-wasmedge
+./configure CFLAGS='-Wall -Wextra -Werror' --with-wasmedge --prefix=/usr
 make -j "$(nproc)"
 make install
-
-# Remove the installed crun to make sure the built crun is used
-rm -rf /usr/bin/crun
-ln -s /usr/local/bin/crun /usr/bin/crun
-ln -s /usr/local/bin/crun /usr/local/bin/crun-wasm
-ln -s /usr/local/bin/crun /usr/bin/crun-wasm
 
 # Test crun is used in podman
 if [[ $(podman info | grep SYSTEMD) != *WASM:wasmedge* ]]; then
