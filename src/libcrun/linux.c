@@ -1769,7 +1769,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   dev_fds = get_private_data (container)->dev_fds;
   get_private_data (container)->dev_fds = NULL;
 
-  devfd = openat (rootfsfd, "dev", O_CLOEXEC | O_RDONLY | O_DIRECTORY);
+  devfd = openat (rootfsfd, "dev", O_CLOEXEC | O_PATH | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
 
@@ -3476,7 +3476,7 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
     }
 
   get_private_data (container);
-  dirfd = open ("/proc/sys", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  dirfd = open ("/proc/sys", O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (dirfd < 0))
     return crun_make_error (err, errno, "open `/proc/sys`");
 

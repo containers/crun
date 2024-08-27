@@ -962,7 +962,7 @@ libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  cgroupdirfd = open (path_to_cgroup, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_RDONLY);
+  cgroupdirfd = open (path_to_cgroup, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_PATH);
   if (UNLIKELY (cgroupdirfd < 0))
     return crun_make_error (err, errno, "open `%s`", path_to_cgroup);
 
