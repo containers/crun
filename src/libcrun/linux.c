@@ -4259,6 +4259,8 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   size_t how_many = 0;
   size_t i;
   int ret;
+  // To track whether the namespace has been changed.
+  bool ns_changed = false;
 
   if (def->linux == NULL || def->linux->devices_len == 0)
     return 0;
@@ -4287,6 +4289,9 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   ret = unshare (CLONE_NEWNS);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "unshare `CLONE_NEWNS`");
+
+  // This indicates that the mount namespace has been altered.
+  ns_changed = true;
 
   ret = mount (NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL);
   if (UNLIKELY (ret < 0))
@@ -4348,13 +4353,16 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
 
   ret = send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
 restore_mountns:
-  {
-    int setns_ret;
+  if (ns_changed && current_mountns >= 0)
+    {
+      int setns_ret;
+      setns_ret = setns (current_mountns, CLONE_NEWNS);
+      if (UNLIKELY (setns_ret < 0 && ret >= 0))
+        {
+          return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
+        }
+    }
 
-    setns_ret = setns (current_mountns, CLONE_NEWNS);
-    if (UNLIKELY (setns_ret < 0 && ret >= 0))
-      return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
-  }
   return ret;
 }
 
