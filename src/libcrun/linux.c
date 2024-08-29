@@ -5618,7 +5618,7 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
       if (errno == ENOSYS)
         return libcrun_kill_linux_no_pidfd (status, true, signal, err);
       if (errno == ESRCH)
-        return crun_make_error (err, 0, "container not running");
+        return crun_make_error (err, errno, "container not running");
 
       return crun_make_error (err, errno, "open pidfd");
     }
