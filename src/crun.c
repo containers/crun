@@ -116,6 +116,9 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
         return ret;
     }
 
+  libcrun_set_verbosity (arguments.verbosity);
+  libcrun_debug ("Using debug verbosity");
+
   if (con->bundle == NULL)
     con->bundle = ".";
 
@@ -416,9 +419,6 @@ main (int argc, char **argv)
   command = get_command (argv[first_argument]);
   if (command == NULL)
     libcrun_fail_with_error (0, "unknown command %s", argv[first_argument]);
-
-  libcrun_set_verbosity (arguments.verbosity);
-  libcrun_debug ("Using debug verbosity");
 
   ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
   if (ret && err)
