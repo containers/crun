@@ -12,6 +12,7 @@ with pkgs; stdenv.mkDerivation {
   outputs = [ "out" ];
   nativeBuildInputs = with buildPackages; [
     autoreconfHook
+    autoPatchelfHook
     bash
     gitMinimal
     pkg-config
