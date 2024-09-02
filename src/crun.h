@@ -28,10 +28,10 @@ struct crun_global_arguments
   const char *handler;
 
   int argc;
+  int verbosity;
   char **argv;
 
   bool command;
-  bool debug;
   bool option_systemd_cgroup;
   bool option_force_no_cgroup;
 };

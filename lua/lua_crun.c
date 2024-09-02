@@ -836,6 +836,8 @@ luaopen_luacrun (lua_State *S)
   lua_setfield (S, libtab_idx, "VERBOSITY_ERROR");
   lua_pushinteger (S, LIBCRUN_VERBOSITY_WARNING);
   lua_setfield (S, libtab_idx, "VERBOSITY_WARNING");
+  lua_pushinteger (S, LIBCRUN_VERBOSITY_DEBUG);
+  lua_setfield (S, libtab_idx, "VERBOSITY_DEBUG");
 
   luacrun_setup_ctx_metatable (S);
   luacrun_setup_cont_metatable (S);

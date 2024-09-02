@@ -71,6 +71,7 @@ enum
   SYNC_SOCKET_SYNC_MESSAGE,
   SYNC_SOCKET_ERROR_MESSAGE,
   SYNC_SOCKET_WARNING_MESSAGE,
+  SYNC_SOCKET_DEBUG_MESSAGE,
 };
 
 struct container_entrypoint_s
@@ -368,12 +369,23 @@ static char *potentially_unsafe_annotations[] = {
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
 
 static int
-sync_socket_write_msg (int fd, bool warning, int err_value, const char *log_msg)
+sync_socket_write_msg (int fd, int verbosity, int err_value, const char *log_msg)
 {
   int ret;
   size_t err_len;
   struct sync_socket_message_s msg;
-  msg.type = warning ? SYNC_SOCKET_WARNING_MESSAGE : SYNC_SOCKET_ERROR_MESSAGE;
+  switch (verbosity)
+    {
+    case LIBCRUN_VERBOSITY_DEBUG:
+      msg.type = SYNC_SOCKET_DEBUG_MESSAGE;
+      break;
+    case LIBCRUN_VERBOSITY_WARNING:
+      msg.type = SYNC_SOCKET_WARNING_MESSAGE;
+      break;
+    case LIBCRUN_VERBOSITY_ERROR:
+      msg.type = SYNC_SOCKET_ERROR_MESSAGE;
+      break;
+    }
   msg.error_value = err_value;
 
   if (fd < 0)
@@ -402,7 +414,7 @@ sync_socket_write_error (int fd, libcrun_error_t *out_err)
 }
 
 static void
-log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
+log_write_to_sync_socket (int errno_, const char *msg, int verbosity, void *arg)
 {
   struct container_entrypoint_s *entrypoint_args = arg;
   int fd = entrypoint_args->sync_socket;
@@ -410,8 +422,8 @@ log_write_to_sync_socket (int errno_, const char *msg, bool warning, void *arg)
   if (fd < 0)
     return;
 
-  if (sync_socket_write_msg (fd, warning, errno_, msg) < 0)
-    log_write_to_stderr (errno_, msg, warning, arg);
+  if (sync_socket_write_msg (fd, verbosity, errno_, msg) < 0)
+    log_write_to_stderr (errno_, msg, verbosity, arg);
 }
 
 static bool
@@ -479,14 +491,19 @@ sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_e
 
       if (! flush && msg.type == SYNC_SOCKET_SYNC_MESSAGE)
         return 0;
-
-      if (msg.type == SYNC_SOCKET_WARNING_MESSAGE)
+      else if (msg.type == SYNC_SOCKET_DEBUG_MESSAGE)
         {
           if (context)
-            context->output_handler (msg.error_value, msg.message, 1, context->output_handler_arg);
+            context->output_handler (msg.error_value, msg.message, LIBCRUN_VERBOSITY_DEBUG, context->output_handler_arg);
           continue;
         }
-      if (msg.type == SYNC_SOCKET_ERROR_MESSAGE)
+      else if (msg.type == SYNC_SOCKET_WARNING_MESSAGE)
+        {
+          if (context)
+            context->output_handler (msg.error_value, msg.message, LIBCRUN_VERBOSITY_WARNING, context->output_handler_arg);
+          continue;
+        }
+      else if (msg.type == SYNC_SOCKET_ERROR_MESSAGE)
         return crun_make_error (err, msg.error_value, "%s", msg.message);
     }
 }
@@ -2161,7 +2178,7 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
         break;
       buf[ret] = '\0';
       if (context->output_handler)
-        context->output_handler (0, buf, false, context->output_handler_arg);
+        context->output_handler (0, buf, LIBCRUN_VERBOSITY_ERROR, context->output_handler_arg);
     }
   (void) fcntl (terminal_fd, F_SETFL, flags);
   fflush (stderr);

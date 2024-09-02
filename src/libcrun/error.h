@@ -55,17 +55,17 @@ typedef struct libcrun_error_s *libcrun_error_t;
       _exit (EXIT_FAILURE);              \
   } while (0)
 
-typedef void (*crun_output_handler) (int errno_, const char *msg, bool warning, void *arg);
+typedef void (*crun_output_handler) (int errno_, const char *msg, int verbosity, void *arg);
 
 void crun_set_output_handler (crun_output_handler handler, void *arg, bool log_to_stderr);
 
-void log_write_to_journald (int errno_, const char *msg, bool warning, void *arg);
+void log_write_to_journald (int errno_, const char *msg, int verbosity, void *arg);
 
-void log_write_to_syslog (int errno_, const char *msg, bool warning, void *arg);
+void log_write_to_syslog (int errno_, const char *msg, int verbosity, void *arg);
 
-void log_write_to_stream (int errno_, const char *msg, bool warning, void *arg);
+void log_write_to_stream (int errno_, const char *msg, int verbosity, void *arg);
 
-void log_write_to_stderr (int errno_, const char *msg, bool warning, void *arg);
+void log_write_to_stderr (int errno_, const char *msg, int verbosity, void *arg);
 
 int crun_error_wrap (libcrun_error_t *err, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 
@@ -74,6 +74,8 @@ int crun_error_get_errno (libcrun_error_t *err);
 int crun_error_release (libcrun_error_t *err);
 
 void crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err);
+
+LIBCRUN_PUBLIC void libcrun_debug (const char *msg, ...) __attribute__ ((format (printf, 1, 2)));
 
 LIBCRUN_PUBLIC void libcrun_warning (const char *msg, ...) __attribute__ ((format (printf, 1, 2)));
 
@@ -98,8 +100,9 @@ int yajl_error_to_crun_error (int yajl_status, libcrun_error_t *err);
 
 enum
 {
-  LIBCRUN_VERBOSITY_ERROR,
+  LIBCRUN_VERBOSITY_ERROR = 0,
   LIBCRUN_VERBOSITY_WARNING,
+  LIBCRUN_VERBOSITY_DEBUG,
 };
 
 LIBCRUN_PUBLIC void libcrun_set_verbosity (int verbosity);
