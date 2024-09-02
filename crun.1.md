@@ -98,6 +98,10 @@ If no backend is specified, then *file:* is used by default.
 Define the format of the log messages.  It can either be **text**, or
 **json**.  The default is **text**.
 
+**--log-level**=_LEVEL_
+Define the log level.  It can either be **debug**, **warning** or **error**.
+The default is **error**.
+
 **--no-pivot**
 Use `chroot(2)` instead of `pivot_root(2)` when creating the container.
 This option is not safe, and should be avoided.

@@ -1,3 +1,4 @@
+'\" t
 .nh
 .TH crun 1 "User Commands"
 
@@ -22,7 +23,7 @@ follow the Open Container Initiative (OCI) format.
 \fBcreate\fP
 Create a container.  The runtime detaches from the container process
 once the container environment is created.  It is necessary to
-successively use \fB\fCstart\fR for starting the container.
+successively use \fBstart\fR for starting the container.
 
 .PP
 \fBdelete\fP
@@ -130,8 +131,13 @@ Define the format of the log messages.  It can either be \fBtext\fP, or
 \fBjson\fP\&.  The default is \fBtext\fP\&.
 
 .PP
+\fB--log-level\fP=\fILEVEL\fP
+Define the log level.  It can either be \fBdebug\fP, \fBwarning\fP or \fBerror\fP\&.
+The default is \fBerror\fP\&.
+
+.PP
 \fB--no-pivot\fP
-Use \fB\fCchroot(2)\fR instead of \fB\fCpivot_root(2)\fR when creating the container.
+Use \fBchroot(2)\fR instead of \fBpivot_root(2)\fR when creating the container.
 This option is not safe, and should be avoided.
 
 .PP
@@ -322,8 +328,8 @@ crun [global options] ps [options]
 
 .PP
 \fB--format\fP=\fIFORMAT\fP
-Specify the output format.  It must be either \fB\fCtable\fR or \fB\fCjson\fR\&.
-By default \fB\fCtable\fR is used.
+Specify the output format.  It must be either \fBtable\fR or \fBjson\fR\&.
+By default \fBtable\fR is used.
 
 .SH SPEC OPTIONS
 .PP
@@ -494,7 +500,7 @@ Specify which CRIU manage cgroup mode should be used. Permitted values are
 
 
 .SH Extensions to OCI
-.SH \fB\fCrun.oci.mount_context_type=context\fR
+.SH \fBrun.oci.mount_context_type=context\fR
 .PP
 Set the mount context type on volumes mounted with SELinux labels.
 
@@ -506,48 +512,48 @@ Valid context types are:
   rootcontext
 
 .PP
-More information on how the context mount flags works see the \fB\fCmount(8)\fR man page.
+More information on how the context mount flags works see the \fBmount(8)\fR man page.
 
-.SH \fB\fCrun.oci.seccomp.receiver=PATH\fR
+.SH \fBrun.oci.seccomp.receiver=PATH\fR
 .PP
-If the annotation \fB\fCrun.oci.seccomp.receiver=PATH\fR is specified, the
+If the annotation \fBrun.oci.seccomp.receiver=PATH\fR is specified, the
 seccomp listener is sent to the UNIX socket listening on the specified
-path.  It can also set with the \fB\fCRUN_OCI_SECCOMP_RECEIVER\fR environment variable.
+path.  It can also set with the \fBRUN_OCI_SECCOMP_RECEIVER\fR environment variable.
 It is an experimental feature, and the annotation will be removed once
 it is supported in the OCI runtime specs.  It must be an absolute path.
 
-.SH \fB\fCrun.oci.seccomp.plugins=PATH\fR
+.SH \fBrun.oci.seccomp.plugins=PATH\fR
 .PP
-If the annotation \fB\fCrun.oci.seccomp.plugins=PLUGIN1[:PLUGIN2]...\fR is specified, the
+If the annotation \fBrun.oci.seccomp.plugins=PLUGIN1[:PLUGIN2]...\fR is specified, the
 seccomp listener fd is handled through the specified plugins.  The
 plugin must either be an absolute path or a file name that is looked
-up by \fB\fCdlopen(3)\fR\&.  More information on how the lookup is performed
-are available on the \fB\fCld.so(8)\fR man page.
+up by \fBdlopen(3)\fR\&.  More information on how the lookup is performed
+are available on the \fBld.so(8)\fR man page.
 
-.SH \fB\fCrun.oci.seccomp_fail_unknown_syscall=1\fR
+.SH \fBrun.oci.seccomp_fail_unknown_syscall=1\fR
 .PP
-If the annotation \fB\fCrun.oci.seccomp_fail_unknown_syscall\fR is present, then crun
+If the annotation \fBrun.oci.seccomp_fail_unknown_syscall\fR is present, then crun
 will fail when an unknown syscall is encountered in the seccomp configuration.
 
-.SH \fB\fCrun.oci.seccomp_bpf_data=PATH\fR
+.SH \fBrun.oci.seccomp_bpf_data=PATH\fR
 .PP
-If the annotation \fB\fCrun.oci.seccomp_bpf_data\fR is present, then crun
+If the annotation \fBrun.oci.seccomp_bpf_data\fR is present, then crun
 ignores the seccomp section in the OCI configuration file and use the specified data
-as the raw data to the \fB\fCseccomp(SECCOMP_SET_MODE_FILTER)\fR syscall.
+as the raw data to the \fBseccomp(SECCOMP_SET_MODE_FILTER)\fR syscall.
 The data must be encoded in base64.
 
 .PP
 It is an experimental feature, and the annotation will be removed once
 it is supported in the OCI runtime specs.
 
-.SH \fB\fCrun.oci.keep_original_groups=1\fR
+.SH \fBrun.oci.keep_original_groups=1\fR
 .PP
-If the annotation \fB\fCrun.oci.keep_original_groups\fR is present, then crun
-will skip the \fB\fCsetgroups\fR syscall that is used to either set the
+If the annotation \fBrun.oci.keep_original_groups\fR is present, then crun
+will skip the \fBsetgroups\fR syscall that is used to either set the
 additional groups specified in the OCI configuration, or to reset the
 list of additional groups if none is specified.
 
-.SH \fB\fCrun.oci.pidfd_receiver=PATH\fR
+.SH \fBrun.oci.pidfd_receiver=PATH\fR
 .PP
 It is an experimental feature and will be removed once the feature is in the
 OCI runtime specs.
@@ -556,11 +562,11 @@ OCI runtime specs.
 If present, specify the path to the UNIX socket that will receive the
 pidfd for the container process.
 
-.SH \fB\fCrun.oci.systemd.force_cgroup_v1=/PATH\fR
+.SH \fBrun.oci.systemd.force_cgroup_v1=/PATH\fR
 .PP
-If the annotation \fB\fCrun.oci.systemd.force_cgroup_v1=/PATH\fR is present, then crun
-will override the specified mount point \fB\fC/PATH\fR with a cgroup v1 mount
-made of a single hierarchy \fB\fCnone,name=systemd\fR\&.
+If the annotation \fBrun.oci.systemd.force_cgroup_v1=/PATH\fR is present, then crun
+will override the specified mount point \fB/PATH\fR with a cgroup v1 mount
+made of a single hierarchy \fBnone,name=systemd\fR\&.
 It is useful to run on a cgroup v2 system containers using older
 versions of systemd that lack support for cgroup v2.
 
@@ -572,109 +578,89 @@ has to have permissions to this mountpoint.
 .PP
 For example, as root:
 
-.PP
-.RS
-
-.nf
+.EX
 mkdir /sys/fs/cgroup/systemd
 mount cgroup -t cgroup /sys/fs/cgroup/systemd -o none,name=systemd,xattr
 chown -R the_user.the_user /sys/fs/cgroup/systemd
+.EE
 
-.fi
-.RE
-
-.SH \fB\fCrun.oci.systemd.subgroup=SUBGROUP\fR
+.SH \fBrun.oci.systemd.subgroup=SUBGROUP\fR
 .PP
 Override the name for the systemd sub cgroup created under the systemd
 scope, so the final cgroup will be like:
 
-.PP
-.RS
-
-.nf
+.EX
 /sys/fs/cgroup/$PATH/$SUBGROUP
-
-.fi
-.RE
+.EE
 
 .PP
 When it is set to the empty string, a sub cgroup is not created.
 
 .PP
-If not specified, it defaults to \fB\fCcontainer\fR on cgroup v2, and to \fB\fC""\fR
+If not specified, it defaults to \fBcontainer\fR on cgroup v2, and to \fB""\fR
 on cgroup v1.
 
 .PP
 e.g.
 
-.PP
-.RS
-
-.nf
+.EX
 /sys/fs/cgroup//system.slice/foo-352700.scope/container
+.EE
 
-.fi
-.RE
-
-.SH \fB\fCrun.oci.delegate-cgroup=DELEGATED-CGROUP\fR
+.SH \fBrun.oci.delegate-cgroup=DELEGATED-CGROUP\fR
 .PP
-If the \fB\fCrun.oci.systemd.subgroup\fR annotation is specified, yet another
+If the \fBrun.oci.systemd.subgroup\fR annotation is specified, yet another
 sub-cgroup is created and the container process is moved here.
 
 .PP
 If a cgroup namespace is used, the cgroup namespace is created before
 moving the container to the delegated cgroup.
 
-.PP
-.RS
-
-.nf
+.EX
 /sys/fs/cgroup/$PATH/$SUBGROUP/$DELEGATED-CGROUP
-
-.fi
-.RE
+.EE
 
 .PP
-The runtime doesn't apply any limit to the \fB\fC$DELEGATED-CGROUP\fR
-sub-cgroup, the runtime uses only \fB\fC$PATH/$SUBGROUP\fR\&.
+The runtime doesn't apply any limit to the \fB$DELEGATED-CGROUP\fR
+sub-cgroup, the runtime uses only \fB$PATH/$SUBGROUP\fR\&.
 
 .PP
-The container payload fully manages \fB\fC$DELEGATE-CGROUP\fR, the limits
-applied to \fB\fC$PATH/$SUBGROUP\fR still applies to \fB\fC$DELEGATE-CGROUP\fR\&.
+The container payload fully manages \fB$DELEGATE-CGROUP\fR, the limits
+applied to \fB$PATH/$SUBGROUP\fR still applies to \fB$DELEGATE-CGROUP\fR\&.
 
 .PP
 Since cgroup delegation is not safe on cgroup v1, this option is
 supported only on cgroup v2.
 
-.SH \fB\fCrun.oci.hooks.stdout=FILE\fR
+.SH \fBrun.oci.hooks.stdout=FILE\fR
 .PP
-If the annotation \fB\fCrun.oci.hooks.stdout\fR is present, then crun
+If the annotation \fBrun.oci.hooks.stdout\fR is present, then crun
 will open the specified file and use it as the stdout for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
 
-.SH \fB\fCrun.oci.hooks.stderr=FILE\fR
+.SH \fBrun.oci.hooks.stderr=FILE\fR
 .PP
-If the annotation \fB\fCrun.oci.hooks.stderr\fR is present, then crun
+If the annotation \fBrun.oci.hooks.stderr\fR is present, then crun
 will open the specified file and use it as the stderr for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
 
-.SH \fB\fCrun.oci.handler=HANDLER\fR
+.SH \fBrun.oci.handler=HANDLER\fR
 .PP
 It is an experimental feature.
 
 .PP
 If specified, run the specified handler for execing the container.
-The only supported values are \fB\fCkrun\fR and \fB\fCwasm\fR\&.
+The only supported values are \fBkrun\fR and \fBwasm\fR\&.
 
 .RS
 .IP \(bu 2
-\fB\fCkrun\fR: When \fB\fCkrun\fR is specified, the \fB\fClibkrun.so\fR shared object is loaded
+\fBkrun\fR: When \fBkrun\fR is specified, the \fBlibkrun.so\fR shared object is loaded
 and it is used to launch the container using libkrun.
 .IP \(bu 2
-\fB\fCwasm\fR: If specified, run the wasm handler for container. Allows running wasm
-workload natively. Accepts a \fB\fC\&.wasm\fR binary as input and if \fB\fC\&.wat\fR is
+\fBwasm\fR: If specified, run the wasm handler for container. Allows running wasm
+workload natively. Accepts a \fB\&.wasm\fR binary as input and if \fB\&.wat\fR is
 provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
@@ -682,13 +668,13 @@ wasm module is relayed back via crun.
 
 .SH tmpcopyup mount options
 .PP
-If the \fB\fCtmpcopyup\fR option is specified for a tmpfs, then the path that
+If the \fBtmpcopyup\fR option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
 
 .SH copy-symlink mount options
 .PP
-If the \fB\fCcopy-symlink\fR option is specified, if the source of a bind
+If the \fBcopy-symlink\fR option is specified, if the source of a bind
 mount is a symlink, the symlink is recreated at the specified
 destination instead of attempting a mount that would resolve the
 symlink itself.  If the destination already exists and it is not a
@@ -696,7 +682,7 @@ symlink with the expected content, crun will return an error.
 
 .SH r$FLAG mount options
 .PP
-If a \fB\fCr$FLAG\fR mount option is specified then the flag \fB\fC$FLAG\fR is set
+If a \fBr$FLAG\fR mount option is specified then the flag \fB$FLAG\fR is set
 recursively for each children mount.
 
 .PP
@@ -750,17 +736,17 @@ These flags are supported:
 
 .SH idmap mount options
 .PP
-If the \fB\fCidmap\fR option is specified then the mount is ID mapped using
+If the \fBidmap\fR option is specified then the mount is ID mapped using
 the container target user namespace.  This is an experimental feature
 and can change at any time without notice.
 
 .PP
-The \fB\fCidmap\fR option supports a custom mapping that can be different
+The \fBidmap\fR option supports a custom mapping that can be different
 than the user namespace used by the container.
 
 .PP
-The mapping can be specified after the \fB\fCidmap\fR option like:
-\fB\fCidmap=uids=0-1-10#10-11-10;gids=0-100-10\fR\&.
+The mapping can be specified after the \fBidmap\fR option like:
+\fBidmap=uids=0-1-10#10-11-10;gids=0-100-10\fR\&.
 
 .PP
 For each triplet, the first value is the start of the backing
@@ -768,16 +754,16 @@ file system IDs that are mapped to the second value on the host.  The
 length of this mapping is given in the third value.
 
 .PP
-Multiple ranges are separated with \fB\fC#\fR\&.
+Multiple ranges are separated with \fB#\fR\&.
 
 .PP
-These values are written to the \fB\fC/proc/$PID/uid_map\fR and
-\fB\fC/proc/$PID/gid_map\fR files to create the user namespace for the
+These values are written to the \fB/proc/$PID/uid_map\fR and
+\fB/proc/$PID/gid_map\fR files to create the user namespace for the
 idmapped mount.
 
 .PP
-The only two options that are currently supported after \fB\fCidmap\fR are
-\fB\fCuids\fR and \fB\fCgids\fR\&.
+The only two options that are currently supported after \fBidmap\fR are
+\fBuids\fR and \fBgids\fR\&.
 
 .PP
 When a custom mapping is specified, a new user namespace is created
@@ -793,12 +779,9 @@ the mapping is changed to account for the relative position of the
 container user in the container user namespace.
 
 .PP
-For example, the mapping: \fB\fCuids=@1-3-10\fR, given a configuration like
+For example, the mapping: \fBuids=@1-3-10\fR, given a configuration like
 
-.PP
-.RS
-
-.nf
+.EX
 "uidMappings": [
       {
         "containerID": 0,
@@ -811,15 +794,13 @@ For example, the mapping: \fB\fCuids=@1-3-10\fR, given a configuration like
         "size": 1000
       }
     ]
-
-.fi
-.RE
+.EE
 
 .PP
-will be converted to the absolute value \fB\fCuids=1-4-10\fR, where 4 is
-calculated by adding 3 (container ID in the \fB\fCuids=\fR mapping) and 1
-(\fB\fChostID - containerID\fR for the user namespace mapping where
-\fB\fCcontainerID = 1\fR is found).
+will be converted to the absolute value \fBuids=1-4-10\fR, where 4 is
+calculated by adding 3 (container ID in the \fBuids=\fR mapping) and 1
+(\fBhostID - containerID\fR for the user namespace mapping where
+\fBcontainerID = 1\fR is found).
 
 .PP
 The current implementation doesn't take into account multiple
@@ -832,7 +813,7 @@ a case, there won't be any error reported.
 When running as user different than root, an user namespace is
 automatically created even if it is not specified in the config file.
 The current user is mapped to the ID 0 in the container, and any
-additional id specified in the files \fB\fC/etc/subuid\fR and \fB\fC/etc/subgid\fR
+additional id specified in the files \fB/etc/subuid\fR and \fB/etc/subgid\fR
 is automatically added starting with ID 1.
 
 
@@ -855,7 +836,7 @@ they are converted when needed from the cgroup v1 configuration.
 allbox;
 l l l l 
 l l l l .
-\fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
+\fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 limit	memory.max	y = x	
 swap	memory.swap.max	y = x - memory_limit	T{
 the swap limit on cgroup v1 includes the memory usage too
@@ -868,7 +849,7 @@ reservation	memory.low	y = x
 allbox;
 l l l l 
 l l l l .
-\fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
+\fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 limit	pids.max	y = x	
 .TE
 
@@ -877,7 +858,7 @@ limit	pids.max	y = x
 allbox;
 l l l l 
 l l l l .
-\fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
+\fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 shares	cpu.weight	T{
 y = (1 + ((x - 2) * 9999) / 262142)
 T}
@@ -897,7 +878,7 @@ T}
 allbox;
 l l l l 
 l l l l .
-\fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
+\fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 weight	io.bfq.weight	y = x	
 weight_device	io.bfq.weight	y = x	
 weight	io.weight (fallback)	y = 1 + (x-10)*9999/990	T{
@@ -917,7 +898,7 @@ wiops	io.max	y=x
 allbox;
 l l l l 
 l l l l .
-\fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
+\fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 cpus	cpuset.cpus	y = x	
 mems	cpuset.mems	y = x	
 .TE
@@ -927,6 +908,6 @@ mems	cpuset.mems	y = x
 allbox;
 l l l l 
 l l l l .
-\fB\fCOCI (x)\fR	\fB\fCcgroup 2 value (y)\fR	\fB\fCconversion\fR	\fB\fCcomment\fR
+\fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 \&.limit_in_bytes	hugetlb.\&.max	y = x	
 .TE
