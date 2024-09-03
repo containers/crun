@@ -34,6 +34,7 @@ struct crun_global_arguments
   bool command;
   bool option_systemd_cgroup;
   bool option_force_no_cgroup;
+  bool log_to_stderr;
 };
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
