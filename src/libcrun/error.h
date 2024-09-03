@@ -92,7 +92,7 @@ LIBCRUN_PUBLIC void libcrun_fail_with_error (int errno_, const char *msg, ...) _
 LIBCRUN_PUBLIC int libcrun_set_log_format (const char *format, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, void **output_handler_arg, const char *id,
-                                         const char *log, libcrun_error_t *err);
+                                         const char *log, libcrun_error_t *err, bool log_to_stderr);
 
 LIBCRUN_PUBLIC int libcrun_error_release (libcrun_error_t *err);
 
