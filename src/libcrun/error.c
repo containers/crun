@@ -203,13 +203,12 @@ get_log_type (const char *log, const char **data)
 
 int
 libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg, const char *id,
-                      const char *log, libcrun_error_t *err, bool log_to_stderr)
+                      const char *log, libcrun_error_t *err)
 {
   if (log == NULL)
     {
       *new_output_handler = log_write_to_stderr;
       *new_output_handler_arg = NULL;
-      log_to_stderr = false; // Don't log twice to stderr
     }
   else
     {
@@ -241,7 +240,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
           break;
         }
     }
-  crun_set_output_handler (*new_output_handler, *new_output_handler_arg, log_to_stderr);
+  crun_set_output_handler (*new_output_handler, *new_output_handler_arg, log != NULL);
   return 0;
 }
 
