@@ -568,6 +568,7 @@ process_user_dup (const runtime_spec_schema_config_schema_process_user *const sr
 
   if (src->additional_gids)
     {
+      dst->additional_gids_len = src->additional_gids_len;
       const size_t additional_gids_size = src->additional_gids_len * sizeof (gid_t);
       dst->additional_gids = xmalloc (additional_gids_size);
       memcpy (dst->additional_gids, src->additional_gids, additional_gids_size);
