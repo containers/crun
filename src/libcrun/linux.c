@@ -5545,8 +5545,7 @@ libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
           /* The first 4 bytes in the data are the negative error code
              in native endianness.  */
           errno = -(*(int32_t *) (buf + sizeof (struct nlmsghdr)));
-          if (UNLIKELY (errno < 0))
-            return crun_make_error (err, errno, "recvfrom(PF_NETLINK)");
+          return crun_make_error (err, errno, "recvfrom(PF_NETLINK)");
         }
     }
 
