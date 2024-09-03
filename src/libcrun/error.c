@@ -237,7 +237,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
 
         case LOG_TYPE_JOURNALD:
           *new_output_handler = log_write_to_journald;
-          *new_output_handler_arg = NULL;
+          *new_output_handler_arg = (void *) id;
           break;
         }
     }
