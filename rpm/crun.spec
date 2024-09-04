@@ -112,10 +112,6 @@ Recommends: wasmedge
 %make_install prefix=%{_prefix}
 rm -rf %{buildroot}%{_prefix}/lib*
 
-%if %{defined wasm_support}
-ln -s %{name} %{buildroot}%{_bindir}/%{name}-wasm
-%endif
-
 %files
 %license COPYING
 %{_bindir}/%{name}
