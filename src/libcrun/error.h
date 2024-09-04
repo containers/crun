@@ -57,7 +57,7 @@ typedef struct libcrun_error_s *libcrun_error_t;
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, int verbosity, void *arg);
 
-void crun_set_output_handler (crun_output_handler handler, void *arg, bool log_to_stderr);
+void crun_set_output_handler (crun_output_handler handler, void *arg);
 
 void log_write_to_journald (int errno_, const char *msg, int verbosity, void *arg);
 
