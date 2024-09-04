@@ -1488,7 +1488,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
           return -1;
         }
 
-      if (ret < 0 && errno != ERANGE)
+      if (ret != ERANGE)
         return ret;
 
       buf_size *= 2;
