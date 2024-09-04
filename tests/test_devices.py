@@ -214,6 +214,19 @@ def test_mknod_device():
         return -1
     return 0
 
+def test_trailing_slash_mknod_device():
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+    conf['linux']['devices'] = [{"path": "/mnt/", "type": "b", "major": 10, "minor": 229}]
+    try:
+        run_and_get_output(conf)
+    except Exception as e:
+        return -1
+    return 0
 
 all_tests = {
     "owner-device" : test_owner_device,
@@ -223,6 +236,7 @@ all_tests = {
     "mknod-device" : test_mknod_device,
     "mode-device"  : test_mode_device,
     "create-or-bind-mount-device" : test_create_or_bind_mount_device,
+    "handle-device-trailing-slash" : test_trailing_slash_mknod_device,
 }
 
 if __name__ == "__main__":

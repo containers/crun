@@ -225,6 +225,8 @@ xstrdup (const char *str)
   return ret;
 }
 
+void consume_trailing_slashes (char *path);
+
 static inline const char *
 consume_slashes (const char *t)
 {
