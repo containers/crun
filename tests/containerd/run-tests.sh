@@ -18,4 +18,4 @@ ulimit -u unlimited
 
 export PATH=$PATH:${PWD}/bin
 
-make RUNC_FLAVOR=crun TEST_RUNTIME=io.containerd.runc.v2 TESTFLAGS="-timeout 120m" integration
+make RUNC_FLAVOR=crun TEST_RUNTIME=io.containerd.runc.v2 TESTFLAGS="-timeout 120m -no-criu -test.v" integration

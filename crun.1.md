@@ -102,10 +102,6 @@ Define the format of the log messages.  It can either be **text**, or
 Define the log level.  It can either be **debug**, **warning** or **error**.
 The default is **error**.
 
-**--log-stderr**
-Additionally log to stderr.  Especially helpful when `--log` is set to a certain
-destination.
-
 **--no-pivot**
 Use `chroot(2)` instead of `pivot_root(2)` when creating the container.
 This option is not safe, and should be avoided.

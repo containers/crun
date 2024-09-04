@@ -105,7 +105,7 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   /* Check if global handler is configured and pass it down to crun context */
   con->handler = glob->handler;
 
-  ret = libcrun_init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err, glob->log_to_stderr);
+  ret = libcrun_init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -116,7 +116,7 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
         return ret;
     }
 
-  libcrun_set_verbosity (glob->verbosity);
+  libcrun_set_verbosity (arguments.verbosity);
   libcrun_debug ("Using debug verbosity");
 
   if (con->bundle == NULL)
@@ -213,7 +213,6 @@ enum
   OPTION_LOG,
   OPTION_LOG_FORMAT,
   OPTION_LOG_LEVEL,
-  OPTION_LOG_STDERR,
   OPTION_ROOT,
   OPTION_ROOTLESS
 };
@@ -226,7 +225,6 @@ static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce 
                                         { "log", OPTION_LOG, "FILE", 0, "log destination: 'file:PATH' (default), 'journald:ID' or 'syslog:ID'", 0 },
                                         { "log-format", OPTION_LOG_FORMAT, "FORMAT", 0, "log format: 'text' (default) or 'json'", 0 },
                                         { "log-level", OPTION_LOG_LEVEL, "LEVEL", 0, "log level to use: 'error' (default), 'warning' or 'debug'", 0 },
-                                        { "log-stderr", OPTION_LOG_STDERR, 0, 0, "additionally log to stderr", 0 },
                                         { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },
                                         { "rootless", OPTION_ROOT, "VALUE", 0, NULL, 0 },
                                         { "version", OPTION_VERSION, 0, 0, NULL, 0 },
@@ -332,10 +330,6 @@ parse_opt (int key, char *arg, struct argp_state *state)
         {
           libcrun_fail_with_error (0, "unknown verbosity `%s` specified", arg);
         }
-      break;
-
-    case OPTION_LOG_STDERR:
-      arguments.log_to_stderr = true;
       break;
 
     case OPTION_ROOT:
