@@ -5766,7 +5766,10 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
   /* Enforce that the returned path is an absolute path.  */
   if (ret == 0 || buffer[0] != '/')
     {
-      (void) chdir ("/");
+      if (chdir ("/") < 0)
+        {
+          /* Braces around empty body, to fix warning for [-Wunused-result] and error for [-Werror=empty-body]. */
+        }
       errno = ENOENT;
 
       /*
