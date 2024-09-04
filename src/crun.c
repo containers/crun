@@ -116,7 +116,7 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
         return ret;
     }
 
-  libcrun_set_verbosity (arguments.verbosity);
+  libcrun_set_verbosity (glob->verbosity);
   libcrun_debug ("Using debug verbosity");
 
   if (con->bundle == NULL)
@@ -222,7 +222,7 @@ const char *argp_program_bug_address = "https://github.com/containers/crun/issue
 static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce verbose output, similar to --log-level=debug", 0 },
                                         { "cgroup-manager", OPTION_CGROUP_MANAGER, "MANAGER", 0, "cgroup manager", 0 },
                                         { "systemd-cgroup", OPTION_SYSTEMD_CGROUP, 0, 0, "use systemd cgroups", 0 },
-                                        { "log", OPTION_LOG, "FILE", 0, "log destination: 'file:PATH' (default), 'journald:ID' or 'syslog:ID'", 0 },
+                                        { "log", OPTION_LOG, "FILE", 0, "log destination: '[file:]PATH', 'journald:ID' or 'syslog:ID' (defaults to stderr)", 0 },
                                         { "log-format", OPTION_LOG_FORMAT, "FORMAT", 0, "log format: 'text' (default) or 'json'", 0 },
                                         { "log-level", OPTION_LOG_LEVEL, "LEVEL", 0, "log level to use: 'error' (default), 'warning' or 'debug'", 0 },
                                         { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },

@@ -1446,7 +1446,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
   entrypoint_args->sync_socket = sync_socket;
 
-  crun_set_output_handler (log_write_to_sync_socket, args, false);
+  crun_set_output_handler (log_write_to_sync_socket, args);
 
   /* sync receive own pid.  */
   ret = TEMP_FAILURE_RETRY (read (sync_socket, &own_pid, sizeof (own_pid)));
@@ -1505,7 +1505,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       close_and_reset (&entrypoint_args->context->fifo_exec_wait_fd);
     }
 
-  crun_set_output_handler (log_write_to_stderr, NULL, false);
+  crun_set_output_handler (log_write_to_stderr, NULL);
 
   if (def->process && def->process->no_new_privileges)
     {
@@ -2972,7 +2972,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
     {
       force_delete_container_status (context, def);
       libcrun_error ((*err)->status, "%s", (*err)->msg);
-      crun_set_output_handler (log_write_to_stderr, NULL, false);
+      crun_set_output_handler (log_write_to_stderr, NULL);
     }
 
   if (pipefd1 >= 0)
