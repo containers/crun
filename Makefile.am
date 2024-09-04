@@ -273,10 +273,10 @@ endif HAVE_MD2MAN
 
 install-exec-hook:
 if ENABLE_KRUN
-	$(LN_S) crun$(EXEEXT) $(DESTDIR)$(bindir)/krun$(EXEEXT)
+	$(LN_S) -f crun$(EXEEXT) $(DESTDIR)$(bindir)/krun$(EXEEXT)
 endif
 if ENABLE_WASM
-	$(LN_S) crun$(EXEEXT) $(DESTDIR)$(bindir)/crun-wasm$(EXEEXT)
+	$(LN_S) -f crun$(EXEEXT) $(DESTDIR)$(bindir)/crun-wasm$(EXEEXT)
 endif
 
 uninstall-hook:
