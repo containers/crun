@@ -3,7 +3,6 @@
 
 # krun and wasm[edge,time] support only on aarch64 and x86_64
 %ifarch aarch64 || x86_64
-%global wasm_support 1
 
 %if %{defined copr_username}
 %define copr_build 1
@@ -14,6 +13,7 @@
 %if %{defined fedora} || (%{defined %copr_build} && %{defined rhel} && 0%{?rhel} < 10)
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
+%global wasm_support 1
 %endif
 
 # krun only exists on fedora
