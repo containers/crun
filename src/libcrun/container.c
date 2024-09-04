@@ -1248,20 +1248,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
         crun_error_release (err);
     }
 
-  if (def->process && def->process->args)
-    {
-      *exec_path = find_executable (def->process->args[0], def->process->cwd);
-      if (UNLIKELY (*exec_path == NULL))
-        {
-          if (entrypoint_args->custom_handler == NULL && errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
-        }
-      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
-         once the process switched to the use that runs in the container.  This might be necessary
-         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
-         is not honored.  */
-    }
-
   ret = setsid ();
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "setsid");
@@ -1291,6 +1277,20 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
           close_and_reset (&console_socketpair);
         }
+    }
+
+  if (def->process && def->process->args)
+    {
+      *exec_path = find_executable (def->process->args[0], def->process->cwd);
+      if (UNLIKELY (*exec_path == NULL))
+        {
+          if (entrypoint_args->custom_handler == NULL && errno == ENOENT)
+            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
+        }
+      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
+         once the process switched to the use that runs in the container.  This might be necessary
+         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
+         is not honored.  */
     }
 
   ret = libcrun_set_hostname (container, err);
