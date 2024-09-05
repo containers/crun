@@ -162,6 +162,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   if (container == NULL)
     libcrun_fail_with_error (0, "error loading config.json");
 
+  libcrun_debug ("Using bundle: %s", bundle);
   crun_context.bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     {
