@@ -434,7 +434,7 @@ write_log (int errno_, int verbosity, const char *msg, va_list args_list)
   if (UNLIKELY (ret < 0))
     OOM ();
 
-  if (verbosity == LIBCRUN_VERBOSITY_ERROR)
+  if (verbosity == LIBCRUN_VERBOSITY_ERROR && output_handler != log_write_to_stderr)
     log_write_to_stderr (errno_, output, LIBCRUN_VERBOSITY_ERROR, NULL);
 
   switch (log_format)
