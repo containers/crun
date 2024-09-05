@@ -1671,8 +1671,13 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
   ret = TEMP_FAILURE_RETRY (write (pipe_w, stdin, stdin_len));
   if (UNLIKELY (ret < 0))
     {
-      ret = crun_make_error (err, errno, "writing to pipe");
-      goto restore_sig_mask_and_exit;
+      /* Ignore EPIPE as the container process could have already
+         been terminated.  */
+      if (errno != EPIPE)
+        {
+          ret = crun_make_error (err, errno, "writing to pipe");
+          goto restore_sig_mask_and_exit;
+        }
     }
 
   close_and_reset (&pipe_w);
