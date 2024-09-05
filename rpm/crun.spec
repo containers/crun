@@ -1,17 +1,17 @@
 %global krun_opts %{nil}
 %global wasmedge_opts %{nil}
 
-# krun and wasm[edge,time] support only on aarch64 and x86_64
-%ifarch aarch64 || x86_64
-%global wasm_support 1
-
 %if %{defined copr_username}
 %define copr_build 1
 %endif
 
+# krun and wasm support only on aarch64 and x86_64
+%ifarch aarch64 || x86_64
+
 # Disable wasmedge on rhel 10 until EPEL10 is in place, otherwise it causes
 # build issues on copr
-%if %{defined fedora} || (%{defined %copr_build} && %{defined rhel} && 0%{?rhel} < 10)
+%if %{defined fedora} || (%{defined copr_build} && %{defined rhel} && 0%{?rhel} < 10)
+%global wasm_support 1
 %global wasmedge_support 1
 %global wasmedge_opts --with-wasmedge
 %endif
@@ -87,12 +87,10 @@ krun is a symlink to the %{name} binary, with libkrun as an additional dependenc
 %package wasm
 Summary: %{name} with wasm support
 Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
-# The hard dep on wasm-library is causing trouble in internal testing farm
-# with RHEL.
+# wasm packages are not present on RHEL yet and are currently a PITA to test
+# Best to only include wasmedge as weak dep on rhel
 %if %{defined fedora}
 Requires: wasm-library
-%else
-Recommends: wasm-library
 %endif
 Recommends: wasmedge
 
@@ -111,10 +109,6 @@ Recommends: wasmedge
 %install
 %make_install prefix=%{_prefix}
 rm -rf %{buildroot}%{_prefix}/lib*
-
-%if %{defined wasm_support}
-ln -s %{name} %{buildroot}%{_bindir}/%{name}-wasm
-%endif
 
 %files
 %license COPYING
@@ -135,12 +129,4 @@ ln -s %{name} %{buildroot}%{_bindir}/%{name}-wasm
 %endif
 
 %changelog
-%if %{defined autochangelog}
 %autochangelog
-%else
-# NOTE: This changelog will be visible on CentOS 8 Stream builds
-# Other envs are capable of handling autochangelog
-* Tue Jun 13 2023 RH Container Bot <rhcontainerbot@fedoraproject.org>
-- Placeholder changelog for envs that are not autochangelog-ready.
-- Contact upstream if you need to report an issue with the build.
-%endif

@@ -56,7 +56,7 @@ jobs:
     trigger: pull_request
     packages: [crun-centos]
     notifications: *copr_build_failure_notification
-    targets:
+    targets: &centos_targets
       # Need epel9 repos to fetch wasmedge build dependency
       centos-stream-9-x86_64:
         additional_repos:
@@ -97,17 +97,23 @@ jobs:
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64
+    tf_extra_params:
+      environments:
+        - artifacts:
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
 
   # Podman system tests for CentOS Stream
   - job: tests
     trigger: pull_request
     packages: [crun-centos]
     notifications: *podman_system_test_fail_notification
-    targets:
-      - centos-stream-9-x86_64
-      - centos-stream-9-aarch64
-      - centos-stream-10-x86_64
-      - centos-stream-10-aarch64
+    targets: *centos_targets
+    tf_extra_params:
+      environments:
+        - artifacts:
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/centos-stream-$releasever/rhcontainerbot-podman-next-centos-stream-$releasever.repo
 
   # Podman system tests for RHEL
   - job: tests
@@ -120,7 +126,14 @@ jobs:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
       epel-9-aarch64:
         distros: [RHEL-9.4.0-Nightly,RHEL-9-Nightly]
-      #TODO: Enable RHEL10 targets once epel-10 copr target is available
+    #TODO: Enable RHEL10 targets once epel-10 copr target is available
+    tf_extra_params:
+      environments:
+        - artifacts:
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/epel-$releasever/rhcontainerbot-podman-next-epel-$releasever.repo
+          - type: repository-file
+            id: https://src.fedoraproject.org/rpms/epel-release/raw/epel9/f/epel.repo
 
   - job: propose_downstream
     trigger: release
