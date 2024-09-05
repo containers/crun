@@ -554,31 +554,6 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
   return container;
 }
 
-runtime_spec_schema_config_schema_process_user *
-process_user_dup (const runtime_spec_schema_config_schema_process_user *const src)
-{
-  runtime_spec_schema_config_schema_process_user *const dst = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_user));
-
-  dst->uid = src->uid;
-  dst->uid_present = src->uid_present;
-  dst->gid = src->gid;
-  dst->gid_present = src->gid_present;
-  dst->umask = src->umask;
-  dst->umask_present = src->umask_present;
-
-  if (src->additional_gids)
-    {
-      dst->additional_gids_len = src->additional_gids_len;
-      const size_t additional_gids_size = src->additional_gids_len * sizeof (gid_t);
-      dst->additional_gids = xmalloc (additional_gids_size);
-      memcpy (dst->additional_gids, src->additional_gids, additional_gids_size);
-    }
-
-  dst->username = xstrdup (src->username);
-
-  return dst;
-}
-
 libcrun_container_t *
 libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 {
@@ -3662,7 +3637,11 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         process->apparmor_profile = xstrdup (container->container_def->process->apparmor_profile);
 
       if (process->user == NULL && container->container_def->process->user)
-        process->user = process_user_dup (container->container_def->process->user);
+        {
+          process->user = clone_runtime_spec_schema_config_schema_process_user (container->container_def->process->user);
+          if (process->user == NULL)
+            OOM ();
+        }
     }
 
   ret = initialize_security (process, err);
