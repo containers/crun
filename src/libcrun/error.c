@@ -259,6 +259,8 @@ log_write_to_stream (int errno_, const char *msg, int verbosity, void *arg)
       switch (verbosity)
         {
         case LIBCRUN_VERBOSITY_DEBUG:
+          color_begin = "\x1b[1;34m";
+          color_end = "\x1b[0m";
           break;
         case LIBCRUN_VERBOSITY_WARNING:
           color_begin = "\x1b[1;33m";
@@ -432,7 +434,7 @@ write_log (int errno_, int verbosity, const char *msg, va_list args_list)
   if (UNLIKELY (ret < 0))
     OOM ();
 
-  if (verbosity == LIBCRUN_VERBOSITY_ERROR)
+  if (verbosity == LIBCRUN_VERBOSITY_ERROR && output_handler != log_write_to_stderr)
     log_write_to_stderr (errno_, output, LIBCRUN_VERBOSITY_ERROR, NULL);
 
   switch (log_format)
