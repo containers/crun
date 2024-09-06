@@ -28,6 +28,8 @@ packages:
     specfile_path: rpm/crun.spec
   crun-rhel:
     specfile_path: rpm/crun.spec
+  crun-eln:
+    specfile_path: rpm/crun.spec
 
 srpm_build_deps:
   - git-archive-all
@@ -49,6 +51,12 @@ jobs:
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64
+
+  - job: copr_build
+    trigger: pull_request
+    packages: [crun-eln]
+    notifications: *copr_build_failure_notification
+    targets:
       - fedora-eln-x86_64
       - fedora-eln-aarch64
 
