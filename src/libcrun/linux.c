@@ -3327,6 +3327,9 @@ libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element *
         return crun_make_error (err, 0, "invalid rlimit `%s`", type);
       limit.rlim_cur = new_rlimits[i]->soft;
       limit.rlim_max = new_rlimits[i]->hard;
+      libcrun_debug ("Set rlimit: soft = %llu, hard = %llu",
+                     (unsigned long long) limit.rlim_cur,
+                     (unsigned long long) limit.rlim_max);
       if (UNLIKELY (setrlimit (resource, &limit) < 0))
         return crun_make_error (err, errno, "setrlimit `%s`", type);
     }
@@ -3374,6 +3377,7 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   char oom_buffer[16];
   if (def->process == NULL || ! def->process->oom_score_adj_present)
     return 0;
+  libcrun_debug ("Write OOM score adj: %d", def->process->oom_score_adj);
   sprintf (oom_buffer, "%i", def->process->oom_score_adj);
   fd = open ("/proc/self/oom_score_adj", O_RDWR | O_CLOEXEC);
   if (fd < 0)
@@ -3805,6 +3809,7 @@ join_namespaces (runtime_spec_schema_config_schema *def, int *namespaces_to_join
             return crun_make_error (err, errno, "cannot get current working directory");
         }
 
+      libcrun_debug ("Joining %s namespace: %s", def->linux->namespaces[orig_index]->type, def->linux->namespaces[orig_index]->path);
       ret = setns (namespaces_to_join[i], value);
       if (UNLIKELY (ret < 0))
         {
@@ -3907,10 +3912,15 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
       ns->all_namespaces |= value;
 
       if (def->linux->namespaces[i]->path == NULL)
-        ns->namespaces_to_unshare |= value;
+        {
+          libcrun_debug ("Unsharing namespace: %s", def->linux->namespaces[i]->type);
+          ns->namespaces_to_unshare |= value;
+        }
       else
         {
           int fd;
+
+          libcrun_debug ("Joining %s namespace: %s", def->linux->namespaces[i]->type, def->linux->namespaces[i]->path);
 
           if (ns->fd_len >= MAX_NAMESPACES)
             return crun_make_error (err, 0, "too many namespaces to join");
@@ -4446,6 +4456,8 @@ set_id_init (libcrun_container_t *container, libcrun_error_t *err)
           root_mapped = root_mapped_in_container_p (def->linux->uid_mappings, def->linux->uid_mappings_len);
           if (! root_mapped)
             uid = def->process->user->uid;
+
+          libcrun_debug ("Using mapped UID in container: %d", uid);
         }
 
       if (def->linux->gid_mappings_len != 0)
@@ -4453,6 +4465,8 @@ set_id_init (libcrun_container_t *container, libcrun_error_t *err)
           root_mapped = root_mapped_in_container_p (def->linux->gid_mappings, def->linux->gid_mappings_len);
           if (! root_mapped)
             gid = def->process->user->gid;
+
+          libcrun_debug ("Using mapped GID in container: %d", gid);
         }
     }
 
@@ -4567,6 +4581,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
     {
       if (init_status->delayed_userns_create)
         {
+          libcrun_debug ("Unsharing user namespace");
           ret = unshare (CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "unshare (CLONE_NEWUSER)");
@@ -4587,6 +4602,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       else
         {
           /* If we need to join another user namespace, do it immediately before creating any other namespace. */
+          libcrun_debug ("Joining existing user namespace");
           ret = setns (init_status->fd[init_status->userns_index], CLONE_NEWUSER);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "cannot setns `%s`",
@@ -4622,12 +4638,14 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       if (def->linux->time_offsets->boottime)
         {
           sprintf (fmt_buffer, "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
+          libcrun_debug ("Using boot time offset: secs = %lld, nanosecs = %d", (long long int) def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
         }
       if (def->linux->time_offsets->monotonic)
         {
+          libcrun_debug ("Using monotonic time offset: secs = %lld, nanosecs = %d", (long long int) def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
           sprintf (fmt_buffer, "monotonic %" PRIi64 " %" PRIu32, def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
@@ -4649,6 +4667,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       /* Report back the new PID.  */
       if (pid_container)
         {
+          libcrun_debug ("Running container PID after fork: %d", pid_container);
           ret = send_success_to_sync_socket (sync_socket_container, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -4723,6 +4742,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   size_t i;
   int ret;
 
+  libcrun_debug ("Running linux container");
   ret = configure_init_status (&init_status, container, err);
   if (UNLIKELY (ret < 0))
     return ret;

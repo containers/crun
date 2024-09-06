@@ -1055,6 +1055,8 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
   cleanup_close int destfd = -1;
   cleanup_close int fd = -1;
 
+  libcrun_debug ("Opening UNIX domain socket: %s", path);
+
   fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "error creating UNIX socket");

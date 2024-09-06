@@ -441,6 +441,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
   cleanup_free char *run_directory = get_run_directory (state_root);
   int ret;
 
+  libcrun_debug ("Checking run directory: %s", run_directory);
   ret = crun_ensure_directory (run_directory, 0700, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -684,6 +685,7 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
   if (UNLIKELY (ret < 0))
     return ret;
 
+  libcrun_debug ("Creating exec fifo: %s", fifo_path);
   ret = mkfifo (fifo_path, 0600);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mkfifo");
