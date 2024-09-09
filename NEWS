@@ -1,3 +1,17 @@
+* crun-1.17
+
+- Add `--log-level` option.  It accepts `error`, `warning` and `error`.
+- Add debug logs for container creation.
+- Fix double-free in crun exec code that could lead to a crash.
+- Allow passing an ID to the journald log driver.
+- Report "executable not found" errors after tty has been setup.
+- Do not treat EPIPE from hooks as an error.
+- Make sure `DefaultDependencies` is correctly set in the systemd scope.
+- Improve the error message when the container process is not found.
+- Improve error handling for the mnt namespace restoration.
+- Fix error handling for `getpwuid_r`, `recvfrom` and `libcrun_kill_linux`.
+- Fix handling of device paths with trailing slashes.
+
 * crun-1.16.1
 
 - fix a regression introduced by 1.16 where using 'rshared' rootfs
