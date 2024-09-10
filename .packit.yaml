@@ -11,12 +11,15 @@ files_to_sync:
   - src: plans/
     dest: plans/
     delete: true
+    mkpath: true
   - src: tests/tmt/
     dest: tests/tmt/
     delete: true
+    mkpath: true
   - src: .fmf/
     dest: .fmf/
     delete: true
+    mkpath: true
   - .packit.yaml
 
 packages:
