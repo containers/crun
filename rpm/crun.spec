@@ -60,9 +60,11 @@ BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
 BuildRequires: protobuf-c-devel
+%ifnarch riscv64
 BuildRequires: criu-devel >= 3.17.1-2
 Recommends: criu >= 3.17.1
 Recommends: criu-libs
+%endif
 %if %{defined wasmedge_support}
 BuildRequires: wasmedge-devel
 %endif
