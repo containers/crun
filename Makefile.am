@@ -239,7 +239,7 @@ git-version.h:
 	fi
 
 nixpkgs:
-	@nix run -f channel:nixpkgs-unstable nix-prefetch-git -- \
+	@nix --extra-experimental-features nix-command run -f channel:nixpkgs-unstable nix-prefetch-git -- \
 		--no-deepClone https://github.com/nixos/nixpkgs > nix/nixpkgs.json
 
 dist-hook:
