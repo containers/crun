@@ -2942,7 +2942,15 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
 
   ret = read_all_file ("/proc/self/setgroups", &content, NULL, err);
   if (ret < 0)
-    return ret;
+    {
+      /* If the file does not exist, then the kernel does not support /proc/self/setgroups and setgroups can always be used.  */
+      if (crun_error_get_errno (err) == ENOENT)
+        {
+          crun_error_release (err);
+          return 1;
+        }
+      return ret;
+    }
 
   return strncmp (content, "deny", 4) == 0 ? 0 : 1;
 }

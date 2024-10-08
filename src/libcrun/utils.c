@@ -714,7 +714,16 @@ check_running_in_user_namespace (libcrun_error_t *err)
 
   ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      /* If the file does not exist, then the kernel does not support user namespaces and we for sure aren't in one.  */
+      if (crun_error_get_errno (err) == ENOENT)
+        {
+          crun_error_release (err);
+          run_in_userns = 0;
+          return run_in_userns;
+        }
+      return ret;
+    }
 
   ret = strstr (buffer, "4294967295") ? 0 : 1;
   run_in_userns = ret;
