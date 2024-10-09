@@ -15,7 +15,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache
-          key: nix-v1-2.12.0-${{ hashFiles('nix/nixpkgs.json') }}
+          key: nix-v1-2.24.9-${{ hashFiles('nix/nixpkgs.json') }}
 
       - run: sudo apt-get update
 
@@ -25,7 +25,7 @@ jobs:
           set -ex
           sudo mkdir -p .cache
           sudo mv .cache /nix
-          if [[ -z $(ls -A /nix) ]]; then sudo docker run --rm --privileged -v /:/mnt nixos/nix:2.12.0 cp -rfT /nix /mnt/nix; fi
+          if [[ -z $(ls -A /nix) ]]; then sudo docker run --rm --privileged -v /:/mnt nixos/nix:2.24.9 cp -rfT /nix /mnt/nix; fi
           sudo RUNTIME=docker SKIP_CHECKS=1 SKIP_GPG=1 build-aux/release.sh
           sudo mv /nix .cache
           sudo chown -Rf $(whoami) .cache

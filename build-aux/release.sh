@@ -5,7 +5,7 @@ set -xeuo pipefail
 SKIP_GPG=${SKIP_GPG:-}
 SKIP_CHECKS=${SKIP_CHECKS:-}
 
-NIX_IMAGE=${NIX_IMAGE:-nixos/nix:2.12.0}
+NIX_IMAGE=${NIX_IMAGE:-nixos/nix:2.24.9}
 
 test -e Makefile && make distclean
 

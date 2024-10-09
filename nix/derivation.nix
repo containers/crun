@@ -14,7 +14,7 @@ with pkgs; stdenv.mkDerivation {
     autoreconfHook
     autoPatchelfHook
     bash
-    gitMinimal
+    git
     pkg-config
     python3
     which
