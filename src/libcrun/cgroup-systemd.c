@@ -820,6 +820,18 @@ get_memory_low (runtime_spec_schema_config_linux_resources *resources, uint64_t 
 }
 
 static inline int
+get_pids_max (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
+{
+  if (resources->pids && resources->pids->limit)
+    {
+      *limit = resources->pids->limit;
+      return 1;
+    }
+
+  return get_value_from_unified_map (resources, "pids.max", limit, err);
+}
+
+static inline int
 get_memory_max (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
 {
   if (resources->memory && resources->memory->limit_present)
@@ -975,6 +987,7 @@ append_resources (sd_bus_message *m,
   APPEND_UINT64 ("MemoryLow", get_memory_low);
   APPEND_UINT64 ("MemoryMax", get_memory_max);
   APPEND_UINT64 ("MemorySwapMax", get_memory_swap_max);
+  APPEND_UINT64 ("TasksMax", get_pids_max);
 
   if (resources->cpu)
     {
