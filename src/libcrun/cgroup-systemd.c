@@ -832,6 +832,18 @@ get_memory_max (runtime_spec_schema_config_linux_resources *resources, uint64_t 
 }
 
 static inline int
+get_memory_swap_max (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
+{
+  if (resources->memory && resources->memory->swap_present)
+    {
+      *limit = resources->memory->swap;
+      return 1;
+    }
+
+  return get_value_from_unified_map (resources, "memory.swap.max", limit, err);
+}
+
+static inline int
 get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
 {
   if (resources->cpu && resources->cpu->shares_present)
@@ -962,6 +974,7 @@ append_resources (sd_bus_message *m,
 
   APPEND_UINT64 ("MemoryLow", get_memory_low);
   APPEND_UINT64 ("MemoryMax", get_memory_max);
+  APPEND_UINT64 ("MemorySwapMax", get_memory_swap_max);
 
   if (resources->cpu)
     {
