@@ -808,7 +808,7 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
 }
 
 static inline int
-get_memory_limit (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
+get_memory_max (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
 {
   if (resources->memory && resources->memory->limit_present)
     {
@@ -911,7 +911,7 @@ append_resources (sd_bus_message *m,
   if (resources == NULL)
     return 0;
 
-  ret = get_memory_limit (resources, &memory_limit, err);
+  ret = get_memory_max (resources, &memory_limit, err);
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret)
