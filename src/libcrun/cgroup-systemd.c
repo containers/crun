@@ -791,6 +791,12 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
   for (i = 0; i < resources->unified->len; i++)
     if (strcmp (resources->unified->keys[i], name) == 0)
       {
+        if (strcmp (resources->unified->values[i], "max") == 0)
+          {
+            *value = UINT64_MAX;
+            return 1;
+          }
+
         errno = 0;
         *value = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
         if (UNLIKELY (errno))
