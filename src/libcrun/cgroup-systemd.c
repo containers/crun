@@ -808,6 +808,18 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
 }
 
 static inline int
+get_memory_low (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
+{
+  if (resources->memory && resources->memory->reservation_present)
+    {
+      *limit = resources->memory->reservation;
+      return 1;
+    }
+
+  return get_value_from_unified_map (resources, "memory.low", limit, err);
+}
+
+static inline int
 get_memory_max (runtime_spec_schema_config_linux_resources *resources, uint64_t *limit, libcrun_error_t *err)
 {
   if (resources->memory && resources->memory->limit_present)
@@ -899,6 +911,29 @@ bus_append_byte_array (sd_bus_message *m, const char *field, const void *buf, si
 }
 
 static int
+append_uint64_from_unified_map (sd_bus_message *m,
+                                const char *attr,
+                                const char *key,
+                                runtime_spec_schema_config_linux_resources *resources,
+                                libcrun_error_t *err)
+{
+  uint64_t value;
+  int ret;
+
+  ret = get_value_from_unified_map (resources, key, &value, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret)
+    {
+      int sd_err = sd_bus_message_append (m, "(sv)", attr, "t", value);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", attr);
+    }
+
+  return 0;
+}
+
+static int
 append_resources (sd_bus_message *m,
                   runtime_spec_schema_config_linux_resources *resources,
                   int cgroup_mode,
@@ -925,6 +960,7 @@ append_resources (sd_bus_message *m,
   if (resources == NULL)
     return 0;
 
+  APPEND_UINT64 ("MemoryLow", get_memory_low);
   APPEND_UINT64 ("MemoryMax", get_memory_max);
 
   if (resources->cpu)
@@ -955,6 +991,13 @@ append_resources (sd_bus_message *m,
       {
         APPEND_UINT64 ("IOWeight", get_io_weight);
         APPEND_UINT64 ("CPUWeight", get_cpu_weight);
+
+        ret = append_uint64_from_unified_map (m, "MemoryMin", "memory.min", resources, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+        ret = append_uint64_from_unified_map (m, "MemoryHigh", "memory.high", resources, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
 
         if (resources->cpu && resources->cpu->cpus)
           {
