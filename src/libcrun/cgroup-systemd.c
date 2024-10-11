@@ -904,22 +904,28 @@ append_resources (sd_bus_message *m,
                   int cgroup_mode,
                   libcrun_error_t *err)
 {
-  uint64_t memory_limit;
+  uint64_t value;
   int sd_err;
   int ret;
+
+#  define APPEND_UINT64(name, fn)                                                      \
+    do                                                                                 \
+      {                                                                                \
+        ret = fn (resources, &value, err);                                             \
+        if (UNLIKELY (ret < 0))                                                        \
+          return ret;                                                                  \
+        if (ret)                                                                       \
+          {                                                                            \
+            sd_err = sd_bus_message_append (m, "(sv)", name, "t", value);              \
+            if (UNLIKELY (sd_err < 0))                                                 \
+              return crun_make_error (err, -sd_err, "sd-bus message append %s", name); \
+          }                                                                            \
+    } while (0)
 
   if (resources == NULL)
     return 0;
 
-  ret = get_memory_max (resources, &memory_limit, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret)
-    {
-      sd_err = sd_bus_message_append (m, "(sv)", "MemoryMax", "t", memory_limit);
-      if (UNLIKELY (sd_err < 0))
-        return crun_make_error (err, -sd_err, "sd-bus message append MemoryMax");
-    }
+  APPEND_UINT64 ("MemoryMax", get_memory_max);
 
   if (resources->cpu)
     {
@@ -947,27 +953,9 @@ append_resources (sd_bus_message *m,
     {
     case CGROUP_MODE_UNIFIED:
       {
-        uint64_t weight;
+        APPEND_UINT64 ("IOWeight", get_io_weight);
+        APPEND_UINT64 ("CPUWeight", get_cpu_weight);
 
-        ret = get_io_weight (resources, &weight, err);
-        if (UNLIKELY (ret < 0))
-          return ret;
-        if (ret)
-          {
-            sd_err = sd_bus_message_append (m, "(sv)", "IOWeight", "t", weight);
-            if (UNLIKELY (sd_err < 0))
-              return crun_make_error (err, -sd_err, "sd-bus message append IOWeight");
-          }
-
-        ret = get_cpu_weight (resources, &weight, err);
-        if (UNLIKELY (ret < 0))
-          return ret;
-        if (ret)
-          {
-            sd_err = sd_bus_message_append (m, "(sv)", "CPUWeight", "t", weight);
-            if (UNLIKELY (sd_err < 0))
-              return crun_make_error (err, -sd_err, "sd-bus message append CPUWeight");
-          }
         if (resources->cpu && resources->cpu->cpus)
           {
             size_t allowed_cpus_len = 0;
@@ -1011,6 +999,8 @@ append_resources (sd_bus_message *m,
     default:
       return crun_make_error (err, 0, "invalid cgroup mode `%d`", cgroup_mode);
     }
+
+#  undef APPEND_UINT64
 
   return 0;
 }
