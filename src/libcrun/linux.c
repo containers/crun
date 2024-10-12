@@ -3917,6 +3917,9 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
       if (UNLIKELY (value < 0))
         return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
 
+      if (ns->all_namespaces & value)
+        return crun_make_error (err, 0, "duplicate namespace type: `%s`", def->linux->namespaces[i]->type);
+
       ns->all_namespaces |= value;
 
       if (def->linux->namespaces[i]->path == NULL)
