@@ -1133,6 +1133,9 @@ append_resources (sd_bus_message *m,
         ret = append_uint64_from_unified_map (m, "MemoryHigh", "memory.high", resources, err);
         if (UNLIKELY (ret < 0))
           return ret;
+        ret = append_uint64_from_unified_map (m, "MemoryZSwapMax", "memory.zswap.max", resources, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
 
         if (resources->cpu && resources->cpu->cpus)
           {
