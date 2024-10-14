@@ -38,6 +38,27 @@
 #include <fcntl.h>
 #include <libgen.h>
 
+struct default_dev_s default_devices[] = {
+  { 'c', -1, -1, "m" },
+  { 'b', -1, -1, "m" },
+  { 'c', 1, 3, "rwm" },
+  { 'c', 1, 8, "rwm" },
+  { 'c', 1, 7, "rwm" },
+  { 'c', 5, 0, "rwm" },
+  { 'c', 1, 5, "rwm" },
+  { 'c', 1, 9, "rwm" },
+  { 'c', 5, 1, "rwm" },
+  { 'c', 136, -1, "rwm" },
+  { 'c', 5, 2, "rwm" },
+  { 0, 0, 0, NULL }
+};
+
+struct default_dev_s *
+get_default_devices ()
+{
+  return default_devices;
+}
+
 static inline int
 write_cgroup_file (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
@@ -471,20 +492,6 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
 {
   size_t i, len;
   int ret;
-  char *default_devices[] = {
-    "c *:* m",
-    "b *:* m",
-    "c 1:3 rwm",
-    "c 1:8 rwm",
-    "c 1:7 rwm",
-    "c 5:0 rwm",
-    "c 1:5 rwm",
-    "c 1:9 rwm",
-    "c 5:1 rwm",
-    "c 136:* rwm",
-    "c 5:2 rwm",
-    NULL
-  };
 
   for (i = 0; i < devs_len; i++)
     {
@@ -514,6 +521,7 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
 
           FMT_DEV (devs[i]->major, fmt_buf_major);
           FMT_DEV (devs[i]->minor, fmt_buf_minor);
+#undef FMT_DEV
 
           len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor,
                           devs[i]->access);
@@ -525,9 +533,30 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
         return ret;
     }
 
-  for (i = 0; default_devices[i]; i++)
+  for (i = 0; default_devices[i].type; i++)
     {
-      ret = write_cgroup_file (dirfd, "devices.allow", default_devices[i], strlen (default_devices[i]), err);
+      char fmt_buf_major[16];
+      char fmt_buf_minor[16];
+      char device[64];
+
+#define FMT_DEV(x, b)         \
+  do                          \
+    {                         \
+      if (x != -1)            \
+        sprintf (b, "%d", x); \
+      else                    \
+        strcpy (b, "*");      \
+  } while (0)
+
+      FMT_DEV (default_devices[i].major, fmt_buf_major);
+      FMT_DEV (default_devices[i].minor, fmt_buf_minor);
+
+#undef FMT_DEV
+
+      snprintf (device, sizeof (device) - 1, "%c %s:%s %s", default_devices[i].type, fmt_buf_major, fmt_buf_minor,
+                default_devices[i].access);
+
+      ret = write_cgroup_file (dirfd, "devices.allow", device, strlen (device), err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -541,26 +570,6 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
 {
   int i, ret;
   cleanup_free struct bpf_program *program = NULL;
-  struct default_dev_s
-  {
-    char type;
-    int major;
-    int minor;
-    const char *access;
-  };
-  struct default_dev_s default_devices[] = {
-    { 'c', -1, -1, "m" },
-    { 'b', -1, -1, "m" },
-    { 'c', 1, 3, "rwm" },
-    { 'c', 1, 8, "rwm" },
-    { 'c', 1, 7, "rwm" },
-    { 'c', 5, 0, "rwm" },
-    { 'c', 1, 5, "rwm" },
-    { 'c', 1, 9, "rwm" },
-    { 'c', 5, 1, "rwm" },
-    { 'c', 136, -1, "rwm" },
-    { 'c', 5, 2, "rwm" },
-  };
 
   program = bpf_program_new (2048);
 
