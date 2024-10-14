@@ -22,6 +22,7 @@
 #include "cgroup.h"
 #include "cgroup-internal.h"
 #include "cgroup-systemd.h"
+#include "cgroup-resources.h"
 #include "cgroup-utils.h"
 #include "ebpf.h"
 #include "utils.h"
@@ -957,6 +958,114 @@ append_uint64_from_unified_map (sd_bus_message *m,
   return 0;
 }
 
+/* append a single "DeviceAllow" attribute to the message.  type can either be 'c' or 'b'.  */
+static int
+append_device_allow (sd_bus_message *m,
+                     const char type,
+                     int major,
+                     int minor,
+                     const char *access,
+                     libcrun_error_t *err)
+{
+  char device[64];
+  int sd_err;
+
+#  define IS_WILDCARD(x) (x <= 0)
+
+  if (IS_WILDCARD (major) && ! IS_WILDCARD (minor))
+    {
+      libcrun_warning ("devices rule with wildcard for major is not supported and it is ignored with systemd");
+      return 0;
+    }
+
+  if (IS_WILDCARD (major) && IS_WILDCARD (minor))
+    snprintf (device, sizeof (device) - 1, "%s-*", type == 'c' ? "char" : "block");
+  else if (IS_WILDCARD (minor))
+    snprintf (device, sizeof (device) - 1, type == 'c' ? "char-%d" : "block-%d", major);
+  else
+    snprintf (device, sizeof (device) - 1, "/dev/%s/%d:%d", type == 'c' ? "char" : "block", major, minor);
+
+  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 1, device, access);
+  if (UNLIKELY (sd_err < 0))
+    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow `%s` with access `%s`", device, access);
+
+#  undef IS_WILDCARD
+  return 0;
+}
+
+static int
+append_devices (sd_bus_message *m,
+                runtime_spec_schema_config_linux_resources *resources,
+                libcrun_error_t *err)
+{
+  struct default_dev_s *default_devices = get_default_devices ();
+  int ret, sd_err;
+  size_t i;
+
+  sd_err = sd_bus_message_append (m, "(sv)", "DevicePolicy", "s", "strict");
+  if (UNLIKELY (sd_err < 0))
+    return crun_make_error (err, -sd_err, "sd-bus message append DevicePolicy");
+
+  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
+  if (UNLIKELY (sd_err < 0))
+    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow");
+
+  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
+  if (UNLIKELY (sd_err < 0))
+    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow");
+
+  for (i = 0; default_devices[i].type; i++)
+    {
+      ret = append_device_allow (m, default_devices[i].type, default_devices[i].major, default_devices[i].minor, default_devices[i].access, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (resources == NULL)
+    return 0;
+
+  for (i = 0; i < resources->devices_len; i++)
+    {
+      runtime_spec_schema_defs_linux_device_cgroup *d = resources->devices[i];
+      char type;
+
+      if (! d->allow)
+        {
+          /* Ignore the default rule.  */
+          if (d->major == 0 && d->major == 0)
+            continue;
+          return crun_make_error (err, 0, "systemd does not support deny rules for devices");
+        }
+
+      if (d->type == NULL || strcmp (d->type, "a") == 0)
+        type = 'a';
+      else if (strcmp (d->type, "c") == 0)
+        type = 'c';
+      else if (strcmp (d->type, "b") == 0)
+        type = 'b';
+      else
+        return crun_make_error (err, 0, "unknown device type `%s`", d->type);
+
+      if (type != 'a')
+        {
+          ret = append_device_allow (m, type, d->major, d->minor, d->access, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = append_device_allow (m, 'c', d->major, d->minor, d->access, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          ret = append_device_allow (m, 'b', d->major, d->minor, d->access, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
+  return 0;
+}
+
 static int
 append_resources (sd_bus_message *m,
                   runtime_spec_schema_config_linux_resources *resources,
@@ -1071,7 +1180,7 @@ append_resources (sd_bus_message *m,
 
 #  undef APPEND_UINT64
 
-  return 0;
+  return append_devices (m, resources, err);
 }
 
 static int
