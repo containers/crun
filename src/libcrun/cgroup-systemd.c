@@ -859,8 +859,21 @@ get_memory_swap_max (runtime_spec_schema_config_linux_resources *resources, uint
 static inline int
 get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
 {
+  bool has_idle = false;
+  uint64_t value;
+  int ret;
+
+  ret = get_value_from_unified_map (resources, "cpu.idle", &value, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret > 0 && value == 1)
+    has_idle = true;
+
   if (resources->cpu && resources->cpu->shares_present)
     {
+      if (has_idle)
+        return crun_make_error (err, 0, "cannot set both `cpu.idle` and `cpu.shares`");
+
       /* Docker uses shares == 0 to specify no limit.  */
       if (resources->cpu->shares == 0)
         return 0;
@@ -868,7 +881,23 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
       return 1;
     }
 
-  return get_value_from_unified_map (resources, "cpu.weight", weight, err);
+  ret = get_value_from_unified_map (resources, "cpu.weight", weight, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret > 0)
+    {
+      if (has_idle)
+        return crun_make_error (err, 0, "cannot set both `cpu.idle` and `cpu.weight`");
+
+      return 1;
+    }
+  if (has_idle)
+    {
+      /* setting CPUWeight to 0 will tell systemd to set cpu.idle.  */
+      *weight = 0;
+      return 1;
+    }
+  return 0;
 }
 
 /* Convert io.bfq.weight to io.weight doing the inverse conversion performed by systemd with BFQ_WEIGHT.  */
