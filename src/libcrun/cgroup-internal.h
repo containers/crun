@@ -47,7 +47,7 @@ struct libcrun_cgroup_manager
   /* Destroy the cgroup and kill any process if needed.  */
   int (*destroy_cgroup) (struct libcrun_cgroup_status *cgroup_status, libcrun_error_t *err);
   /* Additional resources configuration specific to this manager.  */
-  int (*update_resources) (struct libcrun_cgroup_status *cgroup_status, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
+  int (*update_resources) (struct libcrun_cgroup_status *cgroup_status, const char *state_root, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
 };
 
 int move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libcrun_error_t *err);

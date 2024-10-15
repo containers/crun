@@ -84,7 +84,9 @@ int libcrun_join_process (libcrun_context_t *context, libcrun_container_t *conta
                           libcrun_container_status_t *status, const char *cgroup, int detach,
                           runtime_spec_schema_config_schema_process *process, int *terminal_fd, libcrun_error_t *err);
 int libcrun_linux_container_update (libcrun_container_status_t *status,
-                                    runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err);
+                                    const char *state_root,
+                                    runtime_spec_schema_config_linux_resources *resources,
+                                    libcrun_error_t *err);
 int libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err);
 int libcrun_container_pause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err);

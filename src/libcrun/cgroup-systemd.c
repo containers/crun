@@ -1583,6 +1583,7 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
 
 static int
 libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
+                                  const char *state_root,
                                   runtime_spec_schema_config_linux_resources *resources,
                                   libcrun_error_t *err)
 {
@@ -1699,10 +1700,12 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
 
 static int
 libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
+                                  const char *state_root,
                                   runtime_spec_schema_config_linux_resources *resources,
                                   libcrun_error_t *err)
 {
   (void) cgroup_status;
+  (void) state_root;
   (void) resources;
 
   return crun_make_error (err, ENOTSUP, "systemd not supported");

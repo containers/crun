@@ -1330,10 +1330,13 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
 
 int
 update_cgroup_resources (const char *path,
+                         const char *state_root,
                          runtime_spec_schema_config_linux_resources *resources,
                          libcrun_error_t *err)
 {
   int cgroup_mode;
+
+  (void) state_root;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))

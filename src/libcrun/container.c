@@ -2488,6 +2488,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cg.annotations = def->annotations;
   cg.root_uid = root_uid;
   cg.root_gid = root_gid;
+  cg.state_root = context->state_root;
 
   ret = libcrun_cgroup_preenter (&cg, &cgroup_dirfd, err);
   if (UNLIKELY (ret < 0))
@@ -3848,7 +3849,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
         return ret;
     }
 
-  ret = libcrun_linux_container_update (&status, resources, err);
+  ret = libcrun_linux_container_update (&status, state_root, resources, err);
 
 cleanup:
   if (tree)
@@ -4270,6 +4271,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
+      .state_root = context->state_root,
     };
 
     ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
