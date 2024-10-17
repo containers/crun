@@ -1017,6 +1017,17 @@ append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_sch
       APPEND_IO_WEIGHT (weight);
     }
 
+  for (i = 0; resources->block_io && i < resources->block_io->weight_device_len; i++)
+    {
+      char name[64];
+
+      snprintf (name, sizeof (name), "%" PRIu64 ":%" PRIu64,
+                resources->block_io->weight_device[i]->major,
+                resources->block_io->weight_device[i]->minor);
+      weight = IO_WEIGHT (resources->block_io->weight_device[i]->weight);
+      APPEND_IO_DEVICE_WEIGHT (name, weight);
+    }
+
   for (i = 0; resources->unified && i < resources->unified->len; i++)
     {
       cleanup_free char *value = NULL;
