@@ -387,6 +387,8 @@ char *str_join_array (int offset, size_t size, char *const array[], const char *
 
 ssize_t safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err);
 
+char **read_dir_entries (const char *path, libcrun_error_t *err);
+
 static inline bool
 is_empty_string (const char *s)
 {

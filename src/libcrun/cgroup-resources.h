@@ -22,7 +22,17 @@
 #include "cgroup.h"
 #include <unistd.h>
 
+struct default_dev_s
+{
+  char type;
+  int major;
+  int minor;
+  const char *access;
+};
+struct default_dev_s *get_default_devices ();
+
 int update_cgroup_resources (const char *path,
+                             const char *state_root,
                              runtime_spec_schema_config_linux_resources *resources,
                              libcrun_error_t *err);
 

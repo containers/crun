@@ -2537,3 +2537,37 @@ consume_trailing_slashes (char *path)
 
   *last = '\0';
 }
+
+char **
+read_dir_entries (const char *path, libcrun_error_t *err)
+{
+  cleanup_dir DIR *dir = NULL;
+  size_t n_entries = 0;
+  size_t entries_size = 16;
+  char **entries = NULL;
+  struct dirent *de;
+
+  dir = opendir (path);
+  if (UNLIKELY (dir == NULL))
+    {
+      crun_make_error (err, errno, "opendir `%s`", path);
+      return NULL;
+    }
+
+  entries = xmalloc (entries_size * sizeof (char *));
+  while ((de = readdir (dir)))
+    {
+      if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
+        continue;
+      if (n_entries == entries_size)
+        {
+          entries_size *= 2;
+          entries = xrealloc (entries, entries_size * sizeof (char *));
+        }
+      entries[n_entries++] = xstrdup (de->d_name);
+    }
+  entries = xrealloc (entries, (n_entries + 1) * sizeof (char *));
+  entries[n_entries] = NULL;
+
+  return entries;
+}

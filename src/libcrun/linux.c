@@ -5445,13 +5445,13 @@ exit:
 }
 
 int
-libcrun_linux_container_update (libcrun_container_status_t *status, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+libcrun_linux_container_update (libcrun_container_status_t *status, const char *state_root, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
 {
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
 
   cgroup_status = libcrun_cgroup_make_status (status);
 
-  return libcrun_update_cgroup_resources (cgroup_status, resources, err);
+  return libcrun_update_cgroup_resources (cgroup_status, state_root, resources, err);
 }
 
 static int
