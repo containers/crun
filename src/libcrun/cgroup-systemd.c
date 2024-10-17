@@ -1000,6 +1000,17 @@ append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_sch
           }                                                                            \
     } while (0)
 
+#  define APPEND_IO_DEVICE_WEIGHT(device, value)                                                      \
+    do                                                                                                \
+      {                                                                                               \
+        if (! property_missing_p (missing_properties, "IODeviceWeight"))                              \
+          {                                                                                           \
+            sd_err = sd_bus_message_append (m, "(sv)", "IODeviceWeight", "a(st)", 1, device, weight); \
+            if (UNLIKELY (sd_err < 0))                                                                \
+              return crun_make_error (err, -sd_err, "sd-bus message append IODeviceWeight");          \
+          }                                                                                           \
+    } while (0)
+
   if (resources->block_io && resources->block_io->weight_present)
     {
       weight = IO_WEIGHT (resources->block_io->weight);
@@ -1008,6 +1019,8 @@ append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_sch
 
   for (i = 0; i < resources->unified->len; i++)
     {
+      cleanup_free char *value = NULL;
+      char *sep;
       bool need_conversion = false;
 
       if (strcmp (resources->unified->keys[i], "io.bfq.weight") == 0)
@@ -1027,12 +1040,22 @@ append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_sch
           continue;
         }
 
-      ret = read_uint64_value (resources->unified->values[i], &weight, err);
+      value = xstrdup (resources->unified->values[i]);
+
+      sep = strchr (value, ' ');
+      while (sep && *sep == ' ')
+        *sep++ = '\0';
+
+      ret = read_uint64_value (sep ? sep : value, &weight, err);
       if (UNLIKELY (ret < 0))
         return ret;
       if (need_conversion)
         weight = IO_WEIGHT (weight);
-      APPEND_IO_WEIGHT (weight);
+
+      if (sep == NULL || strcmp (value, "default") == 0)
+        APPEND_IO_WEIGHT (weight);
+      else
+        APPEND_IO_DEVICE_WEIGHT (value, weight);
     }
 
   return 0;
