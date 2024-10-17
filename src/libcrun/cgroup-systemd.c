@@ -840,6 +840,7 @@ static int
 get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name,
                             uint64_t *value, libcrun_error_t *err)
 {
+  char *endptr = NULL;
   size_t i;
 
   if (resources == NULL || resources->unified == NULL)
@@ -855,9 +856,12 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
           }
 
         errno = 0;
-        *value = (uint64_t) strtoll (resources->unified->values[i], NULL, 10);
+        *value = (uint64_t) strtoll (resources->unified->values[i], &endptr, 10);
         if (UNLIKELY (errno))
           return crun_make_error (err, errno, "invalid value for `%s`: %s", name,
+                                  resources->unified->values[i]);
+        if (*endptr)
+          return crun_make_error (err, 0, "invalid value for `%s`: %s", name,
                                   resources->unified->values[i]);
         return 1;
       }
