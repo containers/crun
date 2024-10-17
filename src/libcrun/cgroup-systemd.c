@@ -860,7 +860,7 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
         if (UNLIKELY (errno))
           return crun_make_error (err, errno, "invalid value for `%s`: %s", name,
                                   resources->unified->values[i]);
-        if (*endptr)
+        if (endptr && *endptr)
           return crun_make_error (err, 0, "invalid value for `%s`: %s", name,
                                   resources->unified->values[i]);
         return 1;
@@ -960,6 +960,20 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
   return 0;
 }
 
+static int
+read_uint64_value (const char *str, uint64_t *value, libcrun_error_t *err)
+{
+  char *endptr = NULL;
+
+  errno = 0;
+  *value = (uint64_t) strtoll (str, &endptr, 10);
+  if (UNLIKELY (errno))
+    return crun_make_error (err, errno, "invalid value: %s", str);
+  if (endptr && *endptr)
+    return crun_make_error (err, 0, "invalid value: %s", str);
+  return 0;
+}
+
 /* Convert io.bfq.weight to io.weight doing the inverse conversion performed by systemd with BFQ_WEIGHT.  */
 static inline uint64_t
 IO_WEIGHT (uint64_t bfq_weight)
@@ -967,28 +981,61 @@ IO_WEIGHT (uint64_t bfq_weight)
   return bfq_weight <= CGROUP_BFQ_WEIGHT_DEFAULT ? CGROUP_WEIGHT_DEFAULT - (CGROUP_BFQ_WEIGHT_DEFAULT - bfq_weight) * (CGROUP_WEIGHT_DEFAULT - CGROUP_WEIGHT_MIN) / (CGROUP_BFQ_WEIGHT_DEFAULT - CGROUP_BFQ_WEIGHT_MIN) : CGROUP_WEIGHT_DEFAULT + (bfq_weight - CGROUP_BFQ_WEIGHT_DEFAULT) * (CGROUP_WEIGHT_MAX - CGROUP_WEIGHT_DEFAULT) / (CGROUP_BFQ_WEIGHT_MAX - CGROUP_BFQ_WEIGHT_DEFAULT);
 }
 
-static inline int
-get_io_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t *weight, libcrun_error_t *err)
+static int
+append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
 {
-  int found;
+  uint64_t weight;
+  int sd_err;
+  size_t i;
+  int ret;
+
+#  define APPEND_IO_WEIGHT(value)                                                      \
+    do                                                                                 \
+      {                                                                                \
+        if (! property_missing_p (missing_properties, "IOWeight"))                     \
+          {                                                                            \
+            sd_err = sd_bus_message_append (m, "(sv)", "IOWeight", "t", weight);       \
+            if (UNLIKELY (sd_err < 0))                                                 \
+              return crun_make_error (err, -sd_err, "sd-bus message append IOWeight"); \
+          }                                                                            \
+    } while (0)
 
   if (resources->block_io && resources->block_io->weight_present)
     {
-      *weight = IO_WEIGHT (resources->block_io->weight);
-      return 1;
+      weight = IO_WEIGHT (resources->block_io->weight);
+      APPEND_IO_WEIGHT (weight);
     }
 
-  found = get_value_from_unified_map (resources, "io.bfq.weight", weight, err);
-  if (found)
+  for (i = 0; resources->unified && i < resources->unified->len; i++)
     {
-      if (found > 0)
-        *weight = IO_WEIGHT (*weight);
-      return found;
+      bool need_conversion = false;
+
+      if (strcmp (resources->unified->keys[i], "io.bfq.weight") == 0)
+        {
+          /* If io.bfq.weight was provided, it must be converted to io.weight.  */
+          need_conversion = true;
+        }
+      else if (strcmp (resources->unified->keys[i], "io.weight") == 0)
+        {
+          /* If io.weight was provided, then it is expected to already be
+             in the range [1, 10000] so IO_WEIGHT() is not needed.  */
+          need_conversion = false;
+        }
+      else
+        {
+          /* Skip other keys.  */
+          continue;
+        }
+
+      ret = read_uint64_value (resources->unified->values[i], &weight, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (need_conversion)
+        weight = IO_WEIGHT (weight);
+      APPEND_IO_WEIGHT (weight);
     }
 
-  /* If io.weight was provided, then it is expected to already be
-     in the range [1, 10000] so IO_WEIGHT() is not needed.  */
-  return get_value_from_unified_map (resources, "io.weight", weight, err);
+  return 0;
 }
 
 /* Adapted from systemd.  */
@@ -1238,7 +1285,10 @@ append_resources (sd_bus_message *m,
     {
     case CGROUP_MODE_UNIFIED:
       {
-        APPEND_UINT64 ("IOWeight", get_io_weight);
+        ret = append_io_weight (m, missing_properties, resources, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
         APPEND_UINT64 ("CPUWeight", get_cpu_weight);
 
         ret = append_uint64_from_unified_map (m, missing_properties, "MemoryMin", "memory.min", resources, err);
