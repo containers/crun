@@ -196,6 +196,21 @@ write_file_and_check_controllers_at (bool cgroup2, int dirfd, const char *name, 
   return ret;
 }
 
+static int
+open_file_and_check_controllers_at (bool cgroup2, int dirfd, const char *name, int flags, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = openat (dirfd, name, flags);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, errno, "open `%s`", name);
+      if (cgroup2)
+        return check_cgroup_v2_controller_available_wrapper (ret, dirfd, name, err);
+    }
+  return ret;
+}
+
 /* The parser generates different structs but they are really all the same.  */
 typedef runtime_spec_schema_defs_linux_block_io_device_throttle throttling_s;
 
@@ -1240,16 +1255,29 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
 
   for (i = 0; i < resources->unified->len; i++)
     {
-      size_t len;
+      cleanup_close int fd = -1;
+      cleanup_free char *value = NULL;
+      char *saveptr = NULL;
+      char *line;
 
       if (strchr (resources->unified->keys[i], '/'))
         return crun_make_error (err, 0, "key `%s` must be a file name without any slash", resources->unified->keys[i]);
 
-      len = strlen (resources->unified->values[i]);
-      ret = write_file_and_check_controllers_at (true, cgroup_dirfd, resources->unified->keys[i],
-                                                 NULL, resources->unified->values[i], len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (is_empty_string (resources->unified->values[i]))
+        continue;
+
+      value = xstrdup (resources->unified->values[i]);
+
+      fd = open_file_and_check_controllers_at (true, cgroup_dirfd, resources->unified->keys[i], O_WRONLY, err);
+      if (UNLIKELY (fd < 0))
+        return fd;
+
+      for (line = strtok_r (value, "\n", &saveptr); line; line = strtok_r (NULL, "\n", &saveptr))
+        {
+          ret = TEMP_FAILURE_RETRY (write (fd, line, strlen (line)));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to `%s`", resources->unified->keys[i]);
+        }
     }
 
   return 0;
