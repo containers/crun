@@ -70,11 +70,11 @@ write_cgroup_file_or_alias (int dirfd, const char *name, const char *alias, cons
 {
   int ret;
 
-  ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, name, data, len, err);
+  ret = write_cgroup_file (dirfd, name, data, len, err);
   if (UNLIKELY (alias != NULL && ret < 0 && crun_error_get_errno (err) == ENOENT))
     {
       crun_error_release (err);
-      ret = write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, alias, data, len, err);
+      ret = write_cgroup_file (dirfd, alias, data, len, err);
     }
   return ret;
 }
