@@ -748,6 +748,8 @@ read_available_controllers (const char *path, libcrun_error_t *err)
         available |= CGROUP_PIDS;
       else if (strcmp (token, "io") == 0)
         available |= CGROUP_IO;
+      else if (strcmp (token, "misc") == 0)
+        available |= CGROUP_MISC;
     }
   return available;
 }
@@ -761,10 +763,11 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
   int ret;
 
   controllers_len = xasprintf (
-      &controllers, "%s %s %s %s %s %s", (controllers_to_enable & CGROUP_CPU) ? "+cpu" : "",
+      &controllers, "%s %s %s %s %s %s %s", (controllers_to_enable & CGROUP_CPU) ? "+cpu" : "",
       (controllers_to_enable & CGROUP_IO) ? "+io" : "", (controllers_to_enable & CGROUP_MEMORY) ? "+memory" : "",
       (controllers_to_enable & CGROUP_PIDS) ? "+pids" : "", (controllers_to_enable & CGROUP_CPUSET) ? "+cpuset" : "",
-      (controllers_to_enable & CGROUP_HUGETLB) ? "+hugetlb" : "");
+      (controllers_to_enable & CGROUP_HUGETLB) ? "+hugetlb" : "",
+      (controllers_to_enable & CGROUP_MISC) ? "+misc" : "");
 
   ret = append_paths (&subtree_control, err, CGROUP_ROOT, path, "cgroup.subtree_control", NULL);
   if (UNLIKELY (ret < 0))

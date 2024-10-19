@@ -29,6 +29,7 @@ enum
   CGROUP_CPUSET = 1 << 3,
   CGROUP_PIDS = 1 << 4,
   CGROUP_IO = 1 << 5,
+  CGROUP_MISC = 1 << 6,
 };
 
 struct libcrun_cgroup_status
