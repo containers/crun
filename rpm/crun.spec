@@ -1,5 +1,6 @@
 %global krun_opts %{nil}
 %global wasmedge_opts %{nil}
+%global yajl_opts %{nil}
 
 %if %{defined copr_username}
 %define copr_build 1
@@ -22,6 +23,12 @@
 %global krun_opts --with-libkrun
 %endif
 
+%endif
+
+%if %{defined fedora} || (%{defined rhel} && 0%{?rhel} < 10)
+%global system_yajl 1
+%else
+%global yajl_opts --enable-embedded-yajl
 %endif
 
 Summary: OCI runtime written in C
@@ -55,7 +62,9 @@ BuildRequires: libcap-devel
 BuildRequires: libkrun-devel
 %endif
 BuildRequires: systemd-devel
+%if %{defined system_yajl}
 BuildRequires: yajl-devel
+%endif
 BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
@@ -105,7 +114,7 @@ Recommends: wasmedge
 
 %build
 ./autogen.sh
-./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts}
+./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts} %{yajl_opts}
 %make_build
 
 %install
