@@ -172,6 +172,8 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_set_tcp_established, false);
   LOAD_CRIU_FUNCTION (criu_set_track_mem, false);
   LOAD_CRIU_FUNCTION (criu_set_work_dir_fd, false);
+  LOAD_CRIU_FUNCTION (criu_set_lsm_profile, false);
+  LOAD_CRIU_FUNCTION (criu_set_lsm_mount_context, false);
 
   libcriu_wrapper = *wrapper_out = wrapper;
   wrapper = NULL;
