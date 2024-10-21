@@ -1,4 +1,3 @@
-'\" t
 .nh
 .TH crun 1 "User Commands"
 
@@ -498,6 +497,19 @@ Where to write the PID of the container
 Specify which CRIU manage cgroup mode should be used. Permitted values are
 \fBsoft\fP, \fBignore\fP, \fBfull\fP or \fBstrict\fP\&. Default is \fBsoft\fP\&.
 
+.PP
+\fB--lsm-profile\fP=\fITYPE\fP:\fINAME\fP
+Specify an LSM profile to be used during restore.
+\fITYPE\fP can be either \fBapparmor\fP or \fBselinux\fP\&.
+
+.PP
+\fB--lsm-mount-context\fP=\fIVALUE\fP
+Specify a new LSM mount context to be used during restore.
+This option replaces an existing mount context information
+with the specified value. This is useful when restoring
+a container into an existing Pod and selinux labels
+need to be changed during restore.
+
 
 .SH Extensions to OCI
 .SH \fBrun.oci.mount_context_type=context\fR
@@ -582,6 +594,7 @@ For example, as root:
 mkdir /sys/fs/cgroup/systemd
 mount cgroup -t cgroup /sys/fs/cgroup/systemd -o none,name=systemd,xattr
 chown -R the_user.the_user /sys/fs/cgroup/systemd
+
 .EE
 
 .SH \fBrun.oci.systemd.subgroup=SUBGROUP\fR
@@ -591,6 +604,7 @@ scope, so the final cgroup will be like:
 
 .EX
 /sys/fs/cgroup/$PATH/$SUBGROUP
+
 .EE
 
 .PP
@@ -605,6 +619,7 @@ e.g.
 
 .EX
 /sys/fs/cgroup//system.slice/foo-352700.scope/container
+
 .EE
 
 .SH \fBrun.oci.delegate-cgroup=DELEGATED-CGROUP\fR
@@ -618,6 +633,7 @@ moving the container to the delegated cgroup.
 
 .EX
 /sys/fs/cgroup/$PATH/$SUBGROUP/$DELEGATED-CGROUP
+
 .EE
 
 .PP
@@ -794,6 +810,7 @@ For example, the mapping: \fBuids=@1-3-10\fR, given a configuration like
         "size": 1000
       }
     ]
+
 .EE
 
 .PP
