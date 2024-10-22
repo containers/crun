@@ -1,3 +1,16 @@
+* crun-1.18
+
+- cgroup: support running without a sub-cgroup with systemd.  Use the
+  d-bus API to set the container limits on the systemd scope itself.
+  It allows running without a sub-cgroup when the systemd driver is
+  used, the run.oci.systemd.subgroup annotation controls it.  For now,
+  a sub-cgroup is still created, but it might be changed in future.
+- cgroup: add support for the misc controller.
+- linux: fix running on kernel without user namespaces.
+- criu, restore: add lsm-profile option.
+- criu, restore: add lsm-mount-context option.
+- linux: add duplicate namespace detection.
+
 * crun-1.17
 
 - Add `--log-level` option.  It accepts `error`, `warning` and `error`.
