@@ -390,6 +390,17 @@ Where to write the PID of the container
 Specify which CRIU manage cgroup mode should be used. Permitted values are
 **soft**, **ignore**, **full** or **strict**. Default is **soft**.
 
+**--lsm-profile**=_TYPE_:_NAME_
+Specify an LSM profile to be used during restore.
+_TYPE_ can be either **apparmor** or **selinux**.
+
+**--lsm-mount-context**=_VALUE_
+Specify a new LSM mount context to be used during restore.
+This option replaces an existing mount context information
+with the specified value. This is useful when restoring
+a container into an existing Pod and selinux labels
+need to be changed during restore.
+
 # Extensions to OCI
 
 ## `run.oci.mount_context_type=context`
