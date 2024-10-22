@@ -45,9 +45,15 @@
 #include "io_priority.h"
 #include "cgroup.h"
 #include "cgroup-utils.h"
-#include <sys/prctl.h>
-#include <sys/signalfd.h>
-#include <sys/epoll.h>
+#ifdef HAVE_SYS_PRCTL_H
+#  include <sys/prctl.h>
+#endif
+#ifdef HAVE_SYS_SIGNALFD_H
+#  include <sys/signalfd.h>
+#endif
+#ifdef HAVE_SYS_EPOLL_H
+#  include <sys/epoll.h>
+#endif
 #include <sys/socket.h>
 #ifdef HAVE_CAP
 #  include <sys/capability.h>

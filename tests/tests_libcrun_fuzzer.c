@@ -32,7 +32,9 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/prctl.h>
+#ifdef HAVE_SYS_PRCTL_H
+#  include <sys/prctl.h>
+#endif
 
 static int test_mode = -1;
 
@@ -497,7 +499,7 @@ main (int argc, char **argv)
       return LLVMFuzzerTestOneInput (content, len);
     }
 #ifdef FUZZER
-  extern void HF_ITER (uint8_t * *buf, size_t * len);
+  extern void HF_ITER (uint8_t **buf, size_t *len);
   for (;;)
     {
       size_t len;

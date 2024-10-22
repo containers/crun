@@ -18,7 +18,9 @@
 #define _GNU_SOURCE
 
 #include <config.h>
-#include <linux/limits.h>
+#ifdef HAVE_LINUX_LIMITS_H
+#  include <linux/limits.h>
+#endif
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -33,7 +35,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/syscall.h>
-#include <sys/prctl.h>
+#ifdef HAVE_SYS_PRCTL_H
+#  include <sys/prctl.h>
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sched.h>
@@ -364,7 +368,7 @@ memhog (int megabytes)
   while (1)
     {
       /* change one page each 0.1 seconds */
-      nanosleep ((const struct timespec[]){ { 0, 100000000L } }, NULL);
+      nanosleep ((const struct timespec[]) { { 0, 100000000L } }, NULL);
       buf[pos] = 'c';
       pos += sysconf (_SC_PAGESIZE);
       if (pos > megabytes * 1024 * 1024)

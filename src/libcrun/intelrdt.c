@@ -25,7 +25,13 @@
 #include <string.h>
 #include <sched.h>
 #include <fcntl.h>
-#include <sys/vfs.h>
+#ifdef HAVE_SYS_STATFS_H
+#  include <sys/statfs.h>
+#endif
+#include <sys/mount.h>
+#ifdef HAVE_SYS_VFS_H
+#  include <sys/vfs.h>
+#endif
 
 #define INTEL_RDT_MOUNT_POINT "/sys/fs/resctrl"
 #define SCHEMATA_FILE "schemata"

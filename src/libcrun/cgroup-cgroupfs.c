@@ -28,7 +28,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <signal.h>
-#include <sys/vfs.h>
+#ifdef HAVE_SYS_VFS_H
+#  include <sys/vfs.h>
+#endif
 #include <inttypes.h>
 #include <time.h>
 

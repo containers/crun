@@ -22,8 +22,12 @@
 #include "linux.h"
 #include "utils.h"
 #include <sched.h>
-#include <linux/sched.h>
-#include <sys/sysmacros.h>
+#ifdef HAVE_LINUX_SCHED_H
+#  include <linux/sched.h>
+#endif
+#ifdef HAVE_SYS_SYSMACROS_H
+#  include <sys/sysmacros.h>
+#endif
 #include <limits.h>
 #include <inttypes.h>
 #include <ocispec/runtime_spec_schema_config_schema.h>

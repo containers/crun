@@ -27,7 +27,9 @@
 #include <errno.h>
 #include <sys/param.h>
 #include <sys/types.h>
-#include <sys/sysmacros.h>
+#ifdef HAVE_SYS_SYSMACROS_H
+#  include <sys/sysmacros.h>
+#endif
 #include <fcntl.h>
 #include <sched.h>
 #include <ocispec/runtime_spec_schema_config_schema.h>
