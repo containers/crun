@@ -27,7 +27,10 @@
 #include "linux.h"
 #include "utils.h"
 #include "io_priority.h"
-#include <sys/sysmacros.h>
+#include <sys/types.h>
+#ifdef HAVE_SYS_SYSMAROS_H
+#  include <sys/sysmacros.h>
+#endif
 
 #ifdef HAVE_LINUX_IOPRIO_H
 static int

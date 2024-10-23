@@ -29,10 +29,14 @@
 #include <unistd.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
-#include <sys/prctl.h>
+#if HAVE_SYS_PRCTL_H
+#  include <sys/prctl.h>
+#endif
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <sys/sysmacros.h>
+#ifdef HAVE_SYS_SYSMACROS_H
+#  include <sys/sysmacros.h>
+#endif
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/stat.h>
@@ -47,10 +51,11 @@
 
 #ifdef HAVE_SECCOMP
 #  include <seccomp.h>
+#  include <linux/seccomp.h>
 #endif
-#include <linux/seccomp.h>
-#include <linux/filter.h>
-#include <sys/prctl.h>
+#ifdef HAVE_LINUX_FILTER_H
+#  include <linux/filter.h>
+#endif
 #include <sys/syscall.h>
 
 #ifndef __NR_seccomp
