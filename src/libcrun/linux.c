@@ -2873,17 +2873,18 @@ libcrun_reopen_dev_null (libcrun_error_t *err)
 }
 
 static int
-uidgidmap_helper (char *helper, pid_t pid, char *map_file, libcrun_error_t *err)
+uidgidmap_helper (char *helper, pid_t pid, const char *map_file, libcrun_error_t *err)
 {
 #define MAX_ARGS 20
   char pid_fmt[16];
   char *args[MAX_ARGS + 1];
   char *next;
+  cleanup_free char *map_file_copy = xstrdup (map_file);
   size_t nargs = 0;
   args[nargs++] = helper;
   sprintf (pid_fmt, "%d", pid);
   args[nargs++] = pid_fmt;
-  next = map_file;
+  next = map_file_copy;
   while (nargs < MAX_ARGS)
     {
       char *p = strsep (&next, " \n");
@@ -2897,13 +2898,13 @@ uidgidmap_helper (char *helper, pid_t pid, char *map_file, libcrun_error_t *err)
 }
 
 static int
-newgidmap (pid_t pid, char *map_file, libcrun_error_t *err)
+newgidmap (pid_t pid, const char *map_file, libcrun_error_t *err)
 {
   return uidgidmap_helper ("newgidmap", pid, map_file, err);
 }
 
 static int
-newuidmap (pid_t pid, char *map_file, libcrun_error_t *err)
+newuidmap (pid_t pid, const char *map_file, libcrun_error_t *err)
 {
   return uidgidmap_helper ("newuidmap", pid, map_file, err);
 }
