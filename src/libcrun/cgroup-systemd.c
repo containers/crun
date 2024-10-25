@@ -1263,6 +1263,26 @@ is_deny_rule_redundant (runtime_spec_schema_defs_linux_device_cgroup **devices, 
 #  undef CMP_DEV_NUM
 }
 
+static size_t
+find_first_rule_no_default (runtime_spec_schema_defs_linux_device_cgroup **devices, size_t n)
+{
+  size_t i;
+
+  if (n == 0)
+    return 1;
+
+  for (i = n - 1; i > 0; i--)
+    {
+      if ((is_empty_string (devices[i]->type) || strcmp (devices[i]->type, "a") == 0)
+          && IS_WILDCARD (devices[i]->major)
+          && IS_WILDCARD (devices[i]->minor)
+          && (! devices[i]->allow))
+        return i + 1;
+    }
+
+  return n + 1;
+}
+
 static int
 append_devices (sd_bus_message *m,
                 runtime_spec_schema_config_linux_resources *resources,
@@ -1294,7 +1314,7 @@ append_devices (sd_bus_message *m,
   if (resources == NULL)
     return 0;
 
-  for (i = 0; i < resources->devices_len; i++)
+  for (i = find_first_rule_no_default (resources->devices, resources->devices_len); i < resources->devices_len; i++)
     {
       runtime_spec_schema_defs_linux_device_cgroup *d = resources->devices[i];
       char type;
@@ -1302,10 +1322,6 @@ append_devices (sd_bus_message *m,
       if (! d->allow)
         {
           int redundant;
-
-          /* Ignore the default rule.  */
-          if (d->major == 0 && d->major == 0)
-            continue;
 
           redundant = is_deny_rule_redundant (resources->devices, i, err);
           if (UNLIKELY (redundant < 0))
