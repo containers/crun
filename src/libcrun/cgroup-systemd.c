@@ -50,6 +50,8 @@
 
 #  define SYSTEMD_MISSING_PROPERTIES_DIR ".cache/systemd-missing-properties"
 
+#  define IS_WILDCARD(x) (x <= 0)
+
 static int
 register_missing_property_from_message (const char *state_dir, const char *message, libcrun_error_t *err)
 {
@@ -1150,8 +1152,6 @@ append_device_allow (sd_bus_message *m,
   char device[64];
   int sd_err;
 
-#  define IS_WILDCARD(x) (x <= 0)
-
   if (IS_WILDCARD (major) && ! IS_WILDCARD (minor))
     {
       libcrun_warning ("devices rule with wildcard for major is not supported and it is ignored with systemd");
@@ -1169,8 +1169,98 @@ append_device_allow (sd_bus_message *m,
   if (UNLIKELY (sd_err < 0))
     return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow `%s` with access `%s`", device, access);
 
-#  undef IS_WILDCARD
   return 0;
+}
+
+#  define MODE_R 1
+#  define MODE_W 2
+#  define MODE_M 4
+
+static int
+access_to_mode (const char *access, libcrun_error_t *err)
+{
+  int mode = 0;
+
+  while (access && *access)
+    {
+      int c = *access++;
+
+      switch (c)
+        {
+        case 'r':
+          mode |= MODE_R;
+          break;
+
+        case 'w':
+          mode |= MODE_W;
+          break;
+
+        case 'm':
+          mode |= MODE_M;
+          break;
+
+        default:
+          return crun_make_error (err, 0, "unknown access string specified: `%c`", c);
+        }
+    }
+  return mode;
+}
+
+/* check if the type b is included in type a.  */
+static bool
+has_same_type (const char *a, const char *b)
+{
+  bool a_all = a == NULL || strcmp (a, "a") == 0;
+  if (b == NULL || strcmp (b, "a") == 0)
+    return a_all;
+
+  return a_all || strcmp (a, b) == 0;
+}
+
+/* check if there is already another "deny rule" specified before that already blocks the
+ * device DEVICES[n].  */
+static int
+is_deny_rule_redundant (runtime_spec_schema_defs_linux_device_cgroup **devices, size_t n, libcrun_error_t *err)
+{
+  size_t i;
+  int req_mode;
+
+#  define CMP_DEV_NUM(a, b) ((a) == (b) || IS_WILDCARD (a) || IS_WILDCARD (b))
+
+  req_mode = access_to_mode (devices[n]->access, err);
+  if (UNLIKELY (req_mode < 0))
+    return req_mode;
+
+  for (i = n; i > 0; i--)
+    {
+      size_t current_rule = i - 1;
+      int mode;
+
+      if (! CMP_DEV_NUM (devices[n]->minor, devices[current_rule]->minor))
+        continue;
+      if (! CMP_DEV_NUM (devices[n]->major, devices[current_rule]->major))
+        continue;
+
+      if (! has_same_type (devices[n]->type, devices[current_rule]->type)
+          && has_same_type ("a", devices[current_rule]->type))
+        continue;
+
+      mode = access_to_mode (devices[i]->access, err);
+      if (UNLIKELY (mode < 0))
+        return mode;
+
+      if (devices[current_rule]->allow && (mode & req_mode))
+        return 0;
+
+      req_mode &= ! mode;
+
+      /* no more access bits to validate.  */
+      if (req_mode == 0)
+        return 1;
+    }
+
+  return 0;
+#  undef CMP_DEV_NUM
 }
 
 static int
@@ -1211,9 +1301,19 @@ append_devices (sd_bus_message *m,
 
       if (! d->allow)
         {
+          int redundant;
+
           /* Ignore the default rule.  */
           if (d->major == 0 && d->major == 0)
             continue;
+
+          redundant = is_deny_rule_redundant (resources->devices, i, err);
+          if (UNLIKELY (redundant < 0))
+            return redundant;
+
+          if (redundant)
+            continue;
+
           return crun_make_error (err, 0, "systemd does not support deny rules for devices");
         }
 
