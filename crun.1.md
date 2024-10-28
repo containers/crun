@@ -664,6 +664,10 @@ The current user is mapped to the ID 0 in the container, and any
 additional id specified in the files `/etc/subuid` and `/etc/subgid`
 is automatically added starting with ID 1.
 
+# CGROUP v1
+
+Support for cgroup v1 is deprecated and will be removed in a future release.
+
 # CGROUP v2
 
 **Note**: cgroup v2 does not yet support control of realtime processes and
