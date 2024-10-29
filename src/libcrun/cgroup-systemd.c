@@ -1283,6 +1283,40 @@ find_first_rule_no_default (runtime_spec_schema_defs_linux_device_cgroup **devic
   return n + 1;
 }
 
+static bool
+has_allow_all (runtime_spec_schema_defs_linux_device_cgroup **devices, size_t n)
+{
+#  define DEV_TYPE_BLOCK 1
+#  define DEV_TYPE_CHAR 2
+  int remaining = DEV_TYPE_BLOCK | DEV_TYPE_CHAR;
+  size_t i;
+
+  for (i = 0; i < n; i++)
+    {
+      size_t current_rule = n - i - 1;
+      if (! devices[current_rule]->allow)
+        return false;
+
+      if (IS_WILDCARD (devices[current_rule]->major) && IS_WILDCARD (devices[current_rule]->minor))
+        {
+          if (is_empty_string (devices[current_rule]->type) || strcmp (devices[current_rule]->type, "a") == 0)
+            return true;
+
+          if (strcmp (devices[current_rule]->type, "c") == 0)
+            remaining &= ~DEV_TYPE_CHAR;
+          else if (strcmp (devices[current_rule]->type, "b") == 0)
+            remaining &= ~DEV_TYPE_BLOCK;
+
+          if (remaining == 0)
+            return true;
+        }
+    }
+#  undef DEV_TYPE_BLOCK
+#  undef DEV_TYPE_CHAR
+
+  return false;
+}
+
 static int
 append_devices (sd_bus_message *m,
                 runtime_spec_schema_config_linux_resources *resources,
@@ -1292,17 +1326,12 @@ append_devices (sd_bus_message *m,
   int ret, sd_err;
   size_t i;
 
+  if (has_allow_all (resources->devices, resources->devices_len))
+    return 0;
+
   sd_err = sd_bus_message_append (m, "(sv)", "DevicePolicy", "s", "strict");
   if (UNLIKELY (sd_err < 0))
     return crun_make_error (err, -sd_err, "sd-bus message append DevicePolicy");
-
-  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
-  if (UNLIKELY (sd_err < 0))
-    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow");
-
-  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
-  if (UNLIKELY (sd_err < 0))
-    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow");
 
   for (i = 0; default_devices[i].type; i++)
     {
