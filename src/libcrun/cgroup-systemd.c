@@ -50,6 +50,8 @@
 
 #  define SYSTEMD_MISSING_PROPERTIES_DIR ".cache/systemd-missing-properties"
 
+#  define IS_WILDCARD(x) (x <= 0)
+
 static int
 register_missing_property_from_message (const char *state_dir, const char *message, libcrun_error_t *err)
 {
@@ -1150,8 +1152,6 @@ append_device_allow (sd_bus_message *m,
   char device[64];
   int sd_err;
 
-#  define IS_WILDCARD(x) (x <= 0)
-
   if (IS_WILDCARD (major) && ! IS_WILDCARD (minor))
     {
       libcrun_warning ("devices rule with wildcard for major is not supported and it is ignored with systemd");
@@ -1169,8 +1169,152 @@ append_device_allow (sd_bus_message *m,
   if (UNLIKELY (sd_err < 0))
     return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow `%s` with access `%s`", device, access);
 
-#  undef IS_WILDCARD
   return 0;
+}
+
+#  define MODE_R 1
+#  define MODE_W 2
+#  define MODE_M 4
+
+static int
+access_to_mode (const char *access, libcrun_error_t *err)
+{
+  int mode = 0;
+
+  while (access && *access)
+    {
+      int c = *access++;
+
+      switch (c)
+        {
+        case 'r':
+          mode |= MODE_R;
+          break;
+
+        case 'w':
+          mode |= MODE_W;
+          break;
+
+        case 'm':
+          mode |= MODE_M;
+          break;
+
+        default:
+          return crun_make_error (err, 0, "unknown access string specified: `%c`", c);
+        }
+    }
+  return mode;
+}
+
+/* check if the type b is included in type a.  */
+static bool
+has_same_type (const char *a, const char *b)
+{
+  bool a_all = a == NULL || strcmp (a, "a") == 0;
+  if (b == NULL || strcmp (b, "a") == 0)
+    return a_all;
+
+  return a_all || strcmp (a, b) == 0;
+}
+
+/* check if there is already another "deny rule" specified before that already blocks the
+ * device DEVICES[n].  */
+static int
+is_deny_rule_redundant (runtime_spec_schema_defs_linux_device_cgroup **devices, size_t n, libcrun_error_t *err)
+{
+  size_t i;
+  int req_mode;
+
+#  define CMP_DEV_NUM(a, b) ((a) == (b) || IS_WILDCARD (a) || IS_WILDCARD (b))
+
+  req_mode = access_to_mode (devices[n]->access, err);
+  if (UNLIKELY (req_mode < 0))
+    return req_mode;
+
+  for (i = n; i > 0; i--)
+    {
+      size_t current_rule = i - 1;
+      int mode;
+
+      if (! CMP_DEV_NUM (devices[n]->minor, devices[current_rule]->minor))
+        continue;
+      if (! CMP_DEV_NUM (devices[n]->major, devices[current_rule]->major))
+        continue;
+
+      if (! has_same_type (devices[n]->type, devices[current_rule]->type)
+          && has_same_type ("a", devices[current_rule]->type))
+        continue;
+
+      mode = access_to_mode (devices[i]->access, err);
+      if (UNLIKELY (mode < 0))
+        return mode;
+
+      if (devices[current_rule]->allow && (mode & req_mode))
+        return 0;
+
+      req_mode &= ! mode;
+
+      /* no more access bits to validate.  */
+      if (req_mode == 0)
+        return 1;
+    }
+
+  return 0;
+#  undef CMP_DEV_NUM
+}
+
+static size_t
+find_first_rule_no_default (runtime_spec_schema_defs_linux_device_cgroup **devices, size_t n)
+{
+  size_t i;
+
+  if (n == 0)
+    return 1;
+
+  for (i = n - 1; i > 0; i--)
+    {
+      if ((is_empty_string (devices[i]->type) || strcmp (devices[i]->type, "a") == 0)
+          && IS_WILDCARD (devices[i]->major)
+          && IS_WILDCARD (devices[i]->minor)
+          && (! devices[i]->allow))
+        return i + 1;
+    }
+
+  return n + 1;
+}
+
+static bool
+has_allow_all (runtime_spec_schema_defs_linux_device_cgroup **devices, size_t n)
+{
+#  define DEV_TYPE_BLOCK 1
+#  define DEV_TYPE_CHAR 2
+  int remaining = DEV_TYPE_BLOCK | DEV_TYPE_CHAR;
+  size_t i;
+
+  for (i = 0; i < n; i++)
+    {
+      size_t current_rule = n - i - 1;
+      if (! devices[current_rule]->allow)
+        return false;
+
+      if (IS_WILDCARD (devices[current_rule]->major) && IS_WILDCARD (devices[current_rule]->minor))
+        {
+          if (is_empty_string (devices[current_rule]->type) || strcmp (devices[current_rule]->type, "a") == 0)
+            return true;
+
+          if (strcmp (devices[current_rule]->type, "c") == 0)
+            remaining &= ~DEV_TYPE_CHAR;
+          else if (strcmp (devices[current_rule]->type, "b") == 0)
+            remaining &= ~DEV_TYPE_BLOCK;
+
+          if (remaining == 0)
+            return true;
+        }
+    }
+#  undef DEV_TYPE_BLOCK
+#  undef DEV_TYPE_CHAR
+
+  return false;
 }
 
 static int
@@ -1182,17 +1326,12 @@ append_devices (sd_bus_message *m,
   int ret, sd_err;
   size_t i;
 
+  if (has_allow_all (resources->devices, resources->devices_len))
+    return 0;
+
   sd_err = sd_bus_message_append (m, "(sv)", "DevicePolicy", "s", "strict");
   if (UNLIKELY (sd_err < 0))
     return crun_make_error (err, -sd_err, "sd-bus message append DevicePolicy");
-
-  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
-  if (UNLIKELY (sd_err < 0))
-    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow");
-
-  sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
-  if (UNLIKELY (sd_err < 0))
-    return crun_make_error (err, -sd_err, "sd-bus message append DeviceAllow");
 
   for (i = 0; default_devices[i].type; i++)
     {
@@ -1204,16 +1343,22 @@ append_devices (sd_bus_message *m,
   if (resources == NULL)
     return 0;
 
-  for (i = 0; i < resources->devices_len; i++)
+  for (i = find_first_rule_no_default (resources->devices, resources->devices_len); i < resources->devices_len; i++)
     {
       runtime_spec_schema_defs_linux_device_cgroup *d = resources->devices[i];
       char type;
 
       if (! d->allow)
         {
-          /* Ignore the default rule.  */
-          if (d->major == 0 && d->major == 0)
+          int redundant;
+
+          redundant = is_deny_rule_redundant (resources->devices, i, err);
+          if (UNLIKELY (redundant < 0))
+            return redundant;
+
+          if (redundant)
             continue;
+
           return crun_make_error (err, 0, "systemd does not support deny rules for devices");
         }
 
