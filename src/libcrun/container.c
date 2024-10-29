@@ -2365,6 +2365,14 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   struct libcrun_dirfd_s cgroup_dirfd_s;
   struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
+  int cgroup_mode;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    libcrun_warning ("cgroup v1 is deprecated and will be removed in a future release.  Use cgroup v2");
 
   if (def->hooks
       && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
