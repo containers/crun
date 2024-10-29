@@ -1930,7 +1930,7 @@ find_executable (const char *executable_path, const char *cwd)
         it = ".";
 
       len = snprintf (path, PATH_MAX, "%s/%s", it, executable_path);
-      if (len == PATH_MAX)
+      if (len >= PATH_MAX)
         continue;
 
       ret = check_access (path);
