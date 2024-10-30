@@ -1,3 +1,11 @@
+* crun-1.18.1
+
+- cgroup: deprecate cgroup v1.
+- cgroup: fix regression setting up the devices cgroup on cgroup v1.
+- cgroup: fix regression and work again with the default Docker devices
+  configuration on systemd.
+- linux: fix setting up user namespace when newuidmap/newgidmap are not available.
+
 * crun-1.18
 
 - cgroup: support running without a sub-cgroup with systemd.  Use the
