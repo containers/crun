@@ -1271,7 +1271,8 @@ find_first_rule_no_default (runtime_spec_schema_defs_linux_device_cgroup **devic
   if (n == 0)
     return 1;
 
-  for (i = n - 1; i > 0; i--)
+  /* Find the first rule that is after the last "block all".  */
+  for (i = n - 1; i-- > 0;)
     {
       if ((is_empty_string (devices[i]->type) || strcmp (devices[i]->type, "a") == 0)
           && IS_WILDCARD (devices[i]->major)
@@ -1280,6 +1281,12 @@ find_first_rule_no_default (runtime_spec_schema_defs_linux_device_cgroup **devic
         return i + 1;
     }
 
+  /* If there is not a default rule, the skip to the first rule that is not a deny rule.  */
+  for (i = 0; i < n; i++)
+    if (devices[i]->allow)
+      return i;
+
+  /* All blocked.  Move at the end of the array and rely on the default block all devices rule.  */
   return n + 1;
 }
 
