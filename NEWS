@@ -1,3 +1,8 @@
+* crun-1.18.2
+
+- cgroup, systemd: fix a regression when a configuration file includes only one
+  default rule.
+
 * crun-1.18.1
 
 - cgroup: deprecate cgroup v1.
