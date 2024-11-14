@@ -364,7 +364,7 @@ memhog (int megabytes)
   while (1)
     {
       /* change one page each 0.1 seconds */
-      nanosleep ((const struct timespec[]){ { 0, 100000000L } }, NULL);
+      nanosleep ((const struct timespec[]) { { 0, 100000000L } }, NULL);
       buf[pos] = 'c';
       pos += sysconf (_SC_PAGESIZE);
       if (pos > megabytes * 1024 * 1024)
