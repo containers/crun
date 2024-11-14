@@ -22,6 +22,8 @@
 #include <argp.h>
 #include <string.h>
 #include <libgen.h>
+#include <errno.h>
+#include <limits.h>
 
 #ifdef HAVE_DLOPEN
 #  include <dlfcn.h>
@@ -371,6 +373,24 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
   if (arg)
     return arg;
   return state->argv[state->next++];
+}
+
+int
+parse_int_or_fail (const char *str, const char *kind)
+{
+  char *endptr = NULL;
+  long long l;
+
+  errno = 0;
+  l = strtoll (str, &endptr, 10);
+  if (errno != 0)
+    libcrun_fail_with_error (errno, "invalid value for `%s`", kind);
+  if (endptr != NULL && *endptr != '\0')
+    libcrun_fail_with_error (EINVAL, "invalid value for `%s`", kind);
+  if (l < INT_MIN || l > INT_MAX)
+    libcrun_fail_with_error (ERANGE, "invalid value for `%s`", kind);
+
+  return (int) l;
 }
 
 static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };

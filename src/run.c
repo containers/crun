@@ -93,7 +93,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_PRESERVE_FDS:
-      crun_context.preserve_fds = strtoll (argp_mandatory_argument (arg, state), NULL, 10);
+      crun_context.preserve_fds = parse_int_or_fail (argp_mandatory_argument (arg, state), "preserve-fds");
       break;
 
     case OPTION_NO_SUBREAPER:
@@ -177,7 +177,7 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
   crun_context.bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     {
-      crun_context.listen_fds = strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+      crun_context.listen_fds = parse_int_or_fail (getenv ("LISTEN_FDS"), "LISTEN_FDS");
       crun_context.preserve_fds += crun_context.listen_fds;
     }
 
