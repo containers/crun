@@ -23,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 
 #include "crun.h"
 #include "libcrun/container.h"
@@ -151,7 +152,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_PRESERVE_FDS:
-      exec_options.preserve_fds = strtoul (argp_mandatory_argument (arg, state), NULL, 10);
+      exec_options.preserve_fds = parse_int_or_fail (argp_mandatory_argument (arg, state), "preserve-fds");
       break;
 
     case OPTION_CGROUP:
@@ -203,27 +204,34 @@ make_oci_process_user (const char *userspec)
 {
   runtime_spec_schema_config_schema_process_user *u;
   char *endptr = NULL;
+  long long l;
 
   if (userspec == NULL)
     return NULL;
 
   u = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_user));
   errno = 0;
-  u->uid = strtol (userspec, &endptr, 10);
+  l = strtoll (userspec, &endptr, 10);
   if (errno == ERANGE)
     libcrun_fail_with_error (0, "invalid UID specified");
   if (*endptr == '\0')
     return u;
   if (*endptr != ':')
     libcrun_fail_with_error (0, "invalid USERSPEC specified");
+  if (l < INT_MIN || l > INT_MAX)
+    libcrun_fail_with_error (0, "invalid UID specified");
+
+  u->uid = (int) l;
 
   errno = 0;
-  u->gid = strtol (endptr + 1, &endptr, 10);
+  l = strtoll (endptr + 1, &endptr, 10);
   if (errno == ERANGE)
+    libcrun_fail_with_error (0, "invalid GID specified");
+  if (l < INT_MIN || l > INT_MAX)
     libcrun_fail_with_error (0, "invalid GID specified");
   if (*endptr != '\0')
     libcrun_fail_with_error (0, "invalid USERSPEC specified");
-
+  u->gid = (int) l;
   return u;
 }
 

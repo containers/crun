@@ -497,7 +497,7 @@ main (int argc, char **argv)
       return LLVMFuzzerTestOneInput (content, len);
     }
 #ifdef FUZZER
-  extern void HF_ITER (uint8_t * *buf, size_t * len);
+  extern void HF_ITER (uint8_t **buf, size_t *len);
   for (;;)
     {
       size_t len;

@@ -2131,7 +2131,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           const char *path = def->mounts[i]->source;
 
           /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
-          if (mount_fds->fds[i] >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
+          if (mount_fds && mount_fds->fds[i] >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
             {
               get_proc_self_fd_path (proc_buf, mount_fds->fds[i]);
               path = proc_buf;
