@@ -59,6 +59,7 @@
 #include <sys/syscall.h>
 
 #include "utils.h"
+#include "linux.h"
 
 /* Use our own wrapper for memfd_create. */
 #if !defined(SYS_memfd_create) && defined(__NR_memfd_create)
@@ -366,6 +367,17 @@ static int seal_execfd(int *fd, int fdtype)
 	return -1;
 }
 
+static int try_bindfd_mount_api(void)
+{
+	libcrun_error_t err;
+	int mountfd = get_bind_mount (-1, "/proc/self/exe", false, true, &err);
+	if (mountfd < 0) {
+		crun_error_release (&err);
+		return -1;
+	}
+	return mountfd;
+}
+
 static int try_bindfd(void)
 {
 	mode_t mask;
@@ -464,6 +476,13 @@ static int clone_binary(void)
 	 * Before we resort to copying, let's try creating an ro-binfd in one shot
 	 * by getting a handle for a read-only bind-mount of the execfd.
 	 */
+	execfd = try_bindfd_mount_api();
+	if (execfd >= 0) {
+		/* Transfer ownership to caller */
+		int ret_execfd = execfd;
+		execfd = -1;
+		return ret_execfd;
+	}
 	execfd = try_bindfd();
 	if (execfd >= 0) {
 		/* Transfer ownership to caller */
