@@ -430,7 +430,7 @@ do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set
   return 0;
 }
 
-static int
+int
 get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
