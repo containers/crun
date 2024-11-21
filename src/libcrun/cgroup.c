@@ -37,6 +37,7 @@
 #include <inttypes.h>
 #include <time.h>
 
+#include <linux/magic.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -142,7 +143,41 @@ libcrun_cgroup_is_container_paused (struct libcrun_cgroup_status *status, bool *
 
   ret = read_all_file (path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      errno = crun_error_get_errno (err);
+      /* If the file is missing and we were checking for freezer.state
+         (so either cgroup v1 or hybrid), it may be the freezer is
+         simply disabled. In such case the container cannot be paused.
+         On cgroup v2 freezer is always there.
+      */
+      if (errno != ENOENT || cgroup_mode == CGROUP_MODE_UNIFIED)
+        return ret;
+
+      /* Even with freezer disabled, its directory is still there. But
+         when it's disabled it has type tmpfs, while on systems with
+         freezer enabled, its type is cgroupfs. Use that to determine
+         whether freezer is enabled or not.
+      */
+      struct statfs freezer_stat;
+      if (statfs (CGROUP_ROOT "/freezer", &freezer_stat))
+        {
+          crun_error_release (err);
+          return crun_make_error (err, errno, "error when using statfs on `%s`", CGROUP_ROOT "/freezer");
+        }
+
+      /* If the freezer is mounted as cgroupfs type, then missing
+         freezer.state file is an error and should be handled like before.
+      */
+      if (freezer_stat.f_type == CGROUP_SUPER_MAGIC)
+        return ret;
+
+      /* When freezer dir is not mounted as cgroupfs, then it's
+         disabled, therefore container cannot be in paused state.
+      */
+      crun_error_release (err);
+      *paused = false;
+      return 0;
+    }
 
   *paused = strstr (content, state) != NULL;
   return 0;
