@@ -473,4 +473,6 @@ validate_options (unsigned int specified_options, unsigned int supported_options
   return 0;
 }
 
+extern int cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err);
+
 #endif
