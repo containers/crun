@@ -162,3 +162,42 @@ libcrun_set_scheduler (pid_t pid, runtime_spec_schema_config_schema_process *pro
 
   return 0;
 }
+
+int
+libcrun_set_cpu_affinity_from_string (pid_t pid, const char *str, libcrun_error_t *err)
+{
+  cleanup_free char *bitmask = NULL;
+  int ret, saved_errno;
+  size_t bitmask_size;
+  cpu_set_t *cpuset;
+  size_t alloc_size;
+  size_t i;
+
+  if (is_empty_string (str))
+    return 0;
+
+  ret = cpuset_string_to_bitmask (str, &bitmask, &bitmask_size, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  alloc_size = CPU_ALLOC_SIZE (bitmask_size * CHAR_BIT);
+
+  cpuset = CPU_ALLOC (alloc_size);
+  if (UNLIKELY (cpuset == NULL))
+    OOM ();
+
+  CPU_ZERO_S (alloc_size, cpuset);
+
+  for (i = 0; i < bitmask_size * CHAR_BIT; i++)
+    {
+      if (bitmask[i / CHAR_BIT] & (1 << (i % CHAR_BIT)))
+        CPU_SET_S (i, alloc_size, cpuset);
+    }
+
+  ret = sched_setaffinity (pid, alloc_size, cpuset);
+  saved_errno = errno;
+  CPU_FREE (cpuset);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, saved_errno, "sched_setaffinity");
+  return 0;
+}

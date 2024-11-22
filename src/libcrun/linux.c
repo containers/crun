@@ -5053,6 +5053,13 @@ join_process_parent_helper (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
+  if (process && process->exec_cpu_affinity)
+    {
+      ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->initial, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (need_move_to_cgroup)
     {
       if (sub_cgroup)
@@ -5076,6 +5083,13 @@ join_process_parent_helper (libcrun_context_t *context,
 
       /* Join the scheduler immediately after joining the cgroup.  */
       ret = libcrun_set_scheduler (pid, process, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (process && process->exec_cpu_affinity)
+    {
+      ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->final, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -5307,7 +5321,10 @@ libcrun_join_process (libcrun_context_t *context,
 
   memset (&clone3_args, 0, sizeof (clone3_args));
   clone3_args.exit_signal = SIGCHLD;
-  if (cgroup_dirfd < 0)
+
+  /* Do not join the cgroup immediately if an initial CPU affinity mask is specified, so that
+     the process can set the cpu affinity before joining the target cgroup.  */
+  if (cgroup_dirfd < 0 || (process->exec_cpu_affinity && process->exec_cpu_affinity->initial))
     need_move_to_cgroup = true;
   else
     {

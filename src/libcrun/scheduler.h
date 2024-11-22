@@ -24,4 +24,6 @@
 
 int libcrun_set_scheduler (pid_t pid, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
 
+int libcrun_set_cpu_affinity_from_string (pid_t pid, const char *str, libcrun_error_t *err);
+
 #endif
