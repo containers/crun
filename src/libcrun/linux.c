@@ -4738,6 +4738,15 @@ handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcrun_error_
   return send_fd_to_socket (client_fd, pidfd, err);
 }
 
+static bool
+has_exec_cpu_affinity (runtime_spec_schema_config_schema_process *process)
+{
+  if (process == NULL || process->exec_cpu_affinity == NULL)
+    return false;
+  return (! is_empty_string (process->exec_cpu_affinity->initial))
+         || (! is_empty_string (process->exec_cpu_affinity->final));
+}
+
 pid_t
 libcrun_run_linux_container (libcrun_container_t *container, container_entrypoint_t entrypoint, void *args,
                              int *sync_socket_out, struct libcrun_dirfd_s *cgroup_dirfd, libcrun_error_t *err)
@@ -5056,6 +5065,13 @@ join_process_parent_helper (libcrun_context_t *context,
   if (process && process->exec_cpu_affinity)
     {
       ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->initial, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (! has_exec_cpu_affinity (process))
+    {
+      ret = libcrun_reset_cpu_affinity_mask (pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }

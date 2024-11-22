@@ -2590,6 +2590,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  ret = libcrun_reset_cpu_affinity_mask (pid, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
   ret = libcrun_set_io_priority (pid, def->process, err);
   if (UNLIKELY (ret < 0))
     goto fail;
