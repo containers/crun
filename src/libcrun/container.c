@@ -642,6 +642,10 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
 {
   int ret;
 
+  ret = libcrun_init_caps (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (UNLIKELY (proc == NULL))
     return 0;
 
@@ -653,10 +657,6 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
     }
 
   ret = libcrun_initialize_selinux (err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = libcrun_init_caps (err);
   if (UNLIKELY (ret < 0))
     return ret;
 
