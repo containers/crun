@@ -372,6 +372,77 @@ def test_exec_write_pid_file():
         shutil.rmtree(tempdir)
     return 0
 
+def test_exec_cpu_affinity():
+    if len(os.sched_getaffinity(0)) < 4:
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+
+    def cpu_mask_from_proc_status(status):
+        for l in status.split("\n"):
+            parts = l.split(":")
+            if parts[0] == "Cpus_allowed_list":
+                return parts[1].strip()
+        return ""
+
+    def exec_and_get_affinity_mask(cid, exec_cpu_affinity=None):
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            process = {
+	        "user": {
+	            "uid": 0,
+	            "gid": 0
+	        },
+                "terminal": False,
+                "cwd" : "/",
+	        "args": [
+                    "/init",
+                    "cat",
+                    "/proc/self/status"
+	        ]
+            }
+            if exec_cpu_affinity is not None:
+                process["execCPUAffinity"] = exec_cpu_affinity
+            json.dump(process, f)
+
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        return cpu_mask_from_proc_status(out)
+
+    try:
+        with open("/proc/self/status") as f:
+            current_cpu_mask = cpu_mask_from_proc_status(f.read())
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+
+        mask = exec_and_get_affinity_mask(cid)
+        if mask != current_cpu_mask:
+            sys.stderr.write("current cpu mask %s != %s\n" % (current_cpu_mask, mask))
+            return -1
+
+        mask = exec_and_get_affinity_mask(cid, {"initial" : "0-1"})
+        if mask != "0-1":
+            sys.stderr.write("cpu mask %s != 0-1\n" % mask)
+            return -1
+
+        mask = exec_and_get_affinity_mask(cid, {"final" : "0-2"})
+        if mask != "0-2":
+            sys.stderr.write("cpu mask %s != 0-2\n" % mask)
+            return -1
+
+        mask = exec_and_get_affinity_mask(cid, {"initial" : "1", "final" : "0-3"})
+        if mask != "0-3":
+            sys.stderr.write("cpu mask %s != 0-2\n" % mask)
+            return -1
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -385,6 +456,7 @@ all_tests = {
     "exec_write_pid_file" : test_exec_write_pid_file,
     "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
     "exec-test-uid-tty": test_uid_tty,
+    "exec-cpu-affinity": test_exec_cpu_affinity,
 }
 
 if __name__ == "__main__":
