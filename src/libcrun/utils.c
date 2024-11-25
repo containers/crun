@@ -1541,7 +1541,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 size_t
 format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid)
 {
-  uint32_t from, available;
+  uint32_t from = 0, available = 0;
   cleanup_free char *buffer = NULL;
   size_t written = 0;
 
