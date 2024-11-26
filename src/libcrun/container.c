@@ -642,6 +642,10 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
 {
   int ret;
 
+  ret = libcrun_init_caps (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (UNLIKELY (proc == NULL))
     return 0;
 
@@ -653,10 +657,6 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
     }
 
   ret = libcrun_initialize_selinux (err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = libcrun_init_caps (err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2587,6 +2587,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     goto fail;
 
   ret = libcrun_set_scheduler (pid, def->process, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
+  ret = libcrun_reset_cpu_affinity_mask (pid, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 

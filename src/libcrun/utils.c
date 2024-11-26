@@ -1541,7 +1541,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 size_t
 format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid)
 {
-  uint32_t from, available;
+  uint32_t from = 0, available = 0;
   cleanup_free char *buffer = NULL;
   size_t written = 0;
 
@@ -2570,4 +2570,73 @@ read_dir_entries (const char *path, libcrun_error_t *err)
   entries[n_entries] = NULL;
 
   return entries;
+}
+
+int
+cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err)
+{
+  cleanup_free char *mask = NULL;
+  size_t mask_size = 0;
+  const char *p = str;
+  char *endptr;
+
+  while (*p)
+    {
+      long long start_range, end_range;
+
+      if (*p < '0' || *p > '9')
+        goto invalid_input;
+
+      start_range = strtoll (p, &endptr, 10);
+      if (start_range < 0)
+        goto invalid_input;
+
+      p = endptr;
+
+      if (*p != '-')
+        end_range = start_range;
+      else
+        {
+          p++;
+
+          if (*p < '0' || *p > '9')
+            goto invalid_input;
+
+          end_range = strtoll (p, &endptr, 10);
+
+          if (end_range < start_range)
+            goto invalid_input;
+
+          p = endptr;
+        }
+
+      /* Just set some limit.  */
+      if (end_range > (1 << 20))
+        goto invalid_input;
+
+      if (end_range >= (long long) (mask_size * CHAR_BIT))
+        {
+          size_t new_mask_size = (end_range / CHAR_BIT) + 1;
+          mask = xrealloc (mask, new_mask_size);
+          memset (mask + mask_size, 0, new_mask_size - mask_size);
+          mask_size = new_mask_size;
+        }
+
+      for (long long i = start_range; i <= end_range; i++)
+        mask[i / CHAR_BIT] |= (1 << (i % CHAR_BIT));
+
+      if (*p == ',')
+        p++;
+      else if (*p)
+        goto invalid_input;
+    }
+
+  *out = mask;
+  mask = NULL;
+  *out_size = mask_size;
+
+  return 0;
+
+invalid_input:
+  return crun_make_error (err, 0, "cannot parse input `%s`", str);
 }

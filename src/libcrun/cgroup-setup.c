@@ -506,20 +506,5 @@ enter_cgroup (int cgroup_mode, pid_t pid, pid_t init_pid, const char *path,
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  /* Reset the inherited cpu affinity. Old kernels do that automatically, but
-     new kernels remember the affinity that was set before the cgroup move.
-     This is undesirable, because it inherits the systemd affinity when the container
-     should really move to the container space cpus.
-
-     The sched_setaffinity call will always return an error (EINVAL or ENODEV)
-     when used like this. This is expected and part of the backward compatibility.
-
-     See: https://issues.redhat.com/browse/OCPBUGS-15102   */
-  ret = sched_setaffinity (pid, 0, NULL);
-  if (LIKELY (ret < 0))
-    {
-      if (UNLIKELY (! ((errno == EINVAL) || (errno == ENODEV))))
-        return crun_make_error (err, errno, "failed to reset affinity");
-    }
   return 0;
 }
