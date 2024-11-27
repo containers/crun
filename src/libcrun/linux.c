@@ -66,12 +66,7 @@
 #include <linux/rtnetlink.h>
 #include <sched.h>
 
-#include <yajl/yajl_tree.h>
-#include <yajl/yajl_gen.h>
-
 #include "mount_flags.h"
-
-#define YAJL_STR(x) ((const unsigned char *) (x))
 
 #ifndef RLIMIT_RTTIME
 #  define RLIMIT_RTTIME 15
@@ -3534,19 +3529,15 @@ libcrun_get_external_descriptors (libcrun_container_t *container)
 int
 libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
-  const unsigned char *buf = NULL;
-  yajl_gen gen = NULL;
+  char *buf = NULL;
+  json_t *root;
   size_t buf_len;
   int ret;
   int i;
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return crun_make_error (err, errno, "yajl_gen_alloc");
-
-  ret = yajl_gen_array_open (gen);
-  if (UNLIKELY (ret != yajl_gen_status_ok))
-    goto yajl_error;
+  root = json_array ();
+  if (UNLIKELY (root == NULL))
+    return JSON_GEN_FAILED;
 
   /* Remember original stdin, stdout, stderr for container restore.  */
   for (i = 0; i < 3; i++)
@@ -3567,41 +3558,38 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
             }
           else
             {
-              yajl_gen_free (gen);
+              json_decref (root);
               return crun_make_error (err, errno, "readlink `%s`", fd_path);
             }
         }
       link_path[ret] = 0;
 
-      ret = yajl_gen_string (gen, YAJL_STR (link_path), ret);
-      if (UNLIKELY (ret != yajl_gen_status_ok))
-        goto yajl_error;
+      ret = json_array_append (root, json_string ((const char *) link_path));
+      if (UNLIKELY (ret != JSON_GEN_SUCCESS))
+        goto json_error;
     }
 
-  ret = yajl_gen_array_close (gen);
-  if (UNLIKELY (ret != yajl_gen_status_ok))
-    goto yajl_error;
-
-  ret = yajl_gen_get_buf (gen, &buf, &buf_len);
-  if (UNLIKELY (ret != yajl_gen_status_ok))
-    goto yajl_error;
+  buf = json_dumps (root, JSON_INDENT (2));
+  if (UNLIKELY (buf == NULL))
+    goto json_error;
 
   if (buf)
     {
+      buf_len = strlen (buf);
       char *b = xmalloc (buf_len + 1);
       memcpy (b, buf, buf_len);
       b[buf_len] = '\0';
       get_private_data (container)->external_descriptors = b;
     }
 
-  yajl_gen_free (gen);
+  json_decref (root);
 
   return 0;
 
-yajl_error:
-  if (gen)
-    yajl_gen_free (gen);
-  return yajl_error_to_crun_error (ret, err);
+json_error:
+  if (root)
+    json_decref (root);
+  return json_error_to_crun_error (ret, err);
 }
 
 int
