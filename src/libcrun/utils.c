@@ -1865,20 +1865,6 @@ set_blocking_fd (int fd, bool blocking, libcrun_error_t *err)
   return 0;
 }
 
-int
-parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
-{
-  char errbuf[1024];
-
-  *err = NULL;
-
-  *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
-  if (*out == NULL)
-    return crun_make_error (err, 0, "cannot parse the data: `%s`", errbuf);
-
-  return 0;
-}
-
 static int
 check_access (const char *path)
 {

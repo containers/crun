@@ -18,6 +18,8 @@ with pkgs; stdenv.mkDerivation {
     pkg-config
     python3
     which
+    gcc
+    boost
   ];
   buildInputs =
     (if stdenv.hostPlatform.isMusl then [
@@ -29,7 +31,7 @@ with pkgs; stdenv.mkDerivation {
       libcap
       libseccomp
       libsystemd
-      yajl
+      jansson
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
   prePatch = ''
@@ -37,7 +39,7 @@ with pkgs; stdenv.mkDerivation {
     export LDFLAGS='-s -w -static-libgcc -static'
     export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
     export CRUN_LDFLAGS='-all-static'
-    export LIBS='${lib.optionalString enableCriu "${criu}/lib/libcriu.a"} ${if stdenv.hostPlatform.isMusl then "${musl}/lib/libc.a ${musl}/lib/libpthread.a ${musl}/lib/librt.a" else "${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a"} ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.optionalString enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"} ${yajl}/lib/libyajl.a'
+    export LIBS='${lib.optionalString enableCriu "${criu}/lib/libcriu.a"} ${if stdenv.hostPlatform.isMusl then "${musl}/lib/libc.a ${musl}/lib/libpthread.a ${musl}/lib/librt.a" else "${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a"} ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.optionalString enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"} ${jansson}/lib/libjansson.a'
   '';
   buildPhase = ''
     patchShebangs .

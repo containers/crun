@@ -62,9 +62,7 @@ BuildRequires: libcap-devel
 BuildRequires: libkrun-devel
 %endif
 BuildRequires: systemd-devel
-%if %{defined system_yajl}
-BuildRequires: yajl-devel
-%endif
+BuildRequires: jansson-devel
 BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool

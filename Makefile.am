@@ -70,12 +70,6 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/status.c \
 		src/libcrun/terminal.c
 
-if HAVE_EMBEDDED_YAJL
-maybe_libyajl.la = libocispec/yajl/libyajl.la
-else
-maybe_libyajl.la =
-endif
-
 libocispec/libocispec.la:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec libocispec.la
 

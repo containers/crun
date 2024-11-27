@@ -658,12 +658,12 @@ luacrun_ctx_update_container (lua_State *S)
   const char *content = luaL_checkstring (S, 3);
   luaL_checkstack (S, 2, NULL);
 
-  char errbuf[1024] = {};
-  yajl_val parsed_json = yajl_tree_parse (content, errbuf, sizeof (errbuf));
+  json_error_t *error;
+  json_t *parsed_json = json_loads (content, 0, error);
   if (parsed_json == NULL)
     {
       lua_pushboolean (S, false);
-      lua_pushfstring (S, "cannot parse the data: \"%s\"", errbuf);
+      lua_pushfstring (S, "cannot parse the data: \"%s\"", error->text);
       return 2;
     }
 
@@ -671,7 +671,7 @@ luacrun_ctx_update_container (lua_State *S)
   runtime_spec_schema_config_schema_process *rt_spec_process;
   parser_error p_err = NULL;
   rt_spec_process = make_runtime_spec_schema_config_schema_process (parsed_json, &parser_ctx, &p_err);
-  yajl_tree_free (parsed_json);
+  json_decref (parsed_json);
   if (rt_spec_process == NULL)
     {
       lua_pushboolean (S, false);

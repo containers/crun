@@ -359,15 +359,15 @@ container_status (PyObject *self arg_unused, PyObject *args)
 }
 
 static int
-load_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
+load_json_file (json_t *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
 {
-    char errbuf[1024];
+    json_error_t *error;
 
     *err = NULL;
 
-    *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
+    *out = json_loads (jsondata, 0, error);
     if (*out == NULL)
-      return libcrun_make_error (err, 0, "cannot parse the data: `%s`", errbuf);
+      return libcrun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
 
     return 0;
 }
@@ -380,7 +380,7 @@ container_update (PyObject *self arg_unused, PyObject *args)
   libcrun_context_t *ctx;
   char *id = NULL;
   char *content = NULL;
-  yajl_val tree = NULL;
+  json_t *tree = NULL;
   int ret;
   parser_error parser_err = NULL;
   struct parser_context parser_ctx = { 0, stderr };
@@ -393,12 +393,12 @@ container_update (PyObject *self arg_unused, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  ret = load_json_file (&tree, content, &parser_ctx, &err);
+  ret = load_json_file (tree, content, &parser_ctx, &err);
   if (UNLIKELY (ret < 0))
     return set_error (&err);
 
   process = make_runtime_spec_schema_config_schema_process (tree, &parser_ctx, &parser_err);
-  yajl_tree_free (tree);
+  json_decref (tree);
   if (process == NULL)
     {
       cleanup_free char *msg = NULL;

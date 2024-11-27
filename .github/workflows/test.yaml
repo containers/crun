@@ -37,7 +37,7 @@ jobs:
 
           install: |
             apt-get update -q -y
-            apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
+            apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjansson-dev libprotobuf-c-dev
 
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
@@ -91,7 +91,7 @@ jobs:
 
           sudo add-apt-repository -y ppa:criu/ppa
           # add-apt-repository runs apt-get update so we don't have to.
-          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev containerd runc libasan6 libprotobuf-c-dev
+          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjansson-dev containerd runc libasan6 libprotobuf-c-dev
 
       - name: run autogen.sh
         run: |
@@ -204,7 +204,7 @@ jobs:
       - name: install dependencies
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
+          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjansson-dev libprotobuf-c-dev
       - uses: lumaxis/shellcheck-problem-matchers@v2
       - name: shellcheck
         run: |
