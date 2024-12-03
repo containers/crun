@@ -338,7 +338,7 @@ yajl_error:
   if (gen)
     yajl_gen_free (gen);
 
-  return yajl_error_to_crun_error (r, err);
+  return json_error_to_crun_error (r, err);
 }
 
 int

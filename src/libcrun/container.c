@@ -61,9 +61,6 @@
 #  include <systemd/sd-daemon.h>
 #endif
 
-#include <yajl/yajl_tree.h>
-#include <yajl/yajl_gen.h>
-
 #define YAJL_STR(x) ((const unsigned char *) (x))
 
 enum
@@ -672,7 +669,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   char *stdin = NULL;
   cleanup_free char *cwd_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
-  yajl_gen gen = NULL;
+  json_t *root;
 
   if (cwd == NULL)
     {
@@ -681,97 +678,68 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
         OOM ();
     }
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+  root =  json_object();
+  if (root == NULL)
+    return crun_make_error (err, 0, "json_object failed");
 
-  r = yajl_gen_map_open (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *)"ociVersion", json_string("1.0"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *)"id", json_string(id));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("1.0"), strlen ("1.0"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *)"pid", json_integer(pid));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *)"root", json_string(rootfs));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR (id), strlen (id));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *)"bundle", json_string(cwd));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *)"status", json_string(status));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
+    goto json_error;
 
-  r = yajl_gen_integer (gen, pid);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("root"), strlen ("root"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR (rootfs), strlen (rootfs));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR (cwd), strlen (cwd));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR (status), strlen (status));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
 
   if (def && def->annotations && def->annotations->len)
     {
-      r = yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
-      if (UNLIKELY (r != yajl_gen_status_ok))
-        goto yajl_error;
-
-      r = yajl_gen_map_open (gen);
-      if (UNLIKELY (r != yajl_gen_status_ok))
-        goto yajl_error;
+      json_t *obj = json_object();
+      if (obj == NULL)
+        {
+          r = JSON_GEN_FAILED;
+          goto json_error;
+        }
 
       for (i = 0; i < def->annotations->len; i++)
         {
           const char *key = def->annotations->keys[i];
           const char *val = def->annotations->values[i];
 
-          r = yajl_gen_string (gen, YAJL_STR (key), strlen (key));
-          if (UNLIKELY (r != yajl_gen_status_ok))
-            goto yajl_error;
-
-          r = yajl_gen_string (gen, YAJL_STR (val), strlen (val));
-          if (UNLIKELY (r != yajl_gen_status_ok))
-            goto yajl_error;
+          r = json_object_set(obj, key, json_string(val));
+          if (UNLIKELY (r != JSON_GEN_SUCCESS))
+            goto json_error;
         }
-      r = yajl_gen_map_close (gen);
-      if (UNLIKELY (r != yajl_gen_status_ok))
-        goto yajl_error;
+
+      r = json_object_set(root, (const char *)"annotations", obj);
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
+        goto json_error;
+
     }
 
-  r = yajl_gen_map_close (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_get_buf (gen, (const unsigned char **) &stdin, &stdin_len);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  stdin = json_dumps (root, JSON_INDENT(2));
+  if (UNLIKELY (stdin == NULL))
+    {
+      r = JSON_GEN_FAILED;
+      goto json_error;
+    }
+  
+  stdin_len = strlen(stdin);
 
   ret = 0;
 
@@ -796,28 +764,30 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
         }
     }
 
-  if (gen)
-    yajl_gen_free (gen);
-
+  if (root)
+    json_decref (root);
+  
   return ret;
 
-yajl_error:
-  if (gen)
-    yajl_gen_free (gen);
-  return yajl_error_to_crun_error (r, err);
+json_error:
+  if (root)
+    json_decref (root);
+  return json_error_to_crun_error (r, err);
 }
 
 static int
-get_yajl_result (yajl_gen gen, char **out, size_t *out_len)
+get_yajl_result (json_t *root, char **out, size_t *out_len)
 {
-  const unsigned char *buf = NULL;
+  char *buf = NULL;
   size_t buf_len = 0;
-  int r;
 
-  r = yajl_gen_get_buf (gen, &buf, &buf_len);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    return r;
+  buf = json_dumps(root, JSON_INDENT(2));
+  if (buf == NULL)
+  {
+    return JSON_GEN_FAILED;
+  }
 
+  buf_len = strlen(buf);
   *out_len = buf_len;
 
   *out = malloc (buf_len + 1);
@@ -826,7 +796,7 @@ get_yajl_result (yajl_gen gen, char **out, size_t *out_len)
   memcpy (*out, buf, buf_len);
   (*out)[buf_len] = '\0';
 
-  return yajl_gen_status_ok;
+  return JSON_GEN_SUCCESS;
 }
 
 static int
@@ -834,51 +804,43 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
                                  char **seccomp_fd_payload, size_t *seccomp_fd_payload_len, libcrun_error_t *err)
 {
   int r;
-  yajl_gen gen = NULL;
+  json_t *root;
   runtime_spec_schema_config_schema *def = container->container_def;
   const char *const OCI_VERSION = "0.2.0";
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+  root = json_object();
+  if (root == NULL)
+    return crun_make_error (err, 0, "json_object failed");
 
-  yajl_gen_config (gen, yajl_gen_beautify, 1);
-  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+  yajl_gen_config (root, yajl_gen_beautify, 1);
+  yajl_gen_config (root, yajl_gen_validate_utf8, 1);
 
-  r = yajl_gen_map_open (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = json_object_set (root, (const char *)"ociVersion", json_string(OCI_VERSION));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("fds"), strlen ("fds"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR (OCI_VERSION), strlen (OCI_VERSION));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_array_open (root);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR ("fds"), strlen ("fds"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("seccompFd"), strlen ("seccompFd"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_array_open (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_array_close (root);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR ("seccompFd"), strlen ("seccompFd"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("pid"), strlen ("pid"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_array_close (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto exit;
-
-  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto exit;
-
-  r = yajl_gen_integer (gen, own_pid);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_integer (root, own_pid);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
   if (def && def->linux && def->linux->seccomp)
@@ -887,68 +849,68 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
 
       if (metadata)
         {
-          r = yajl_gen_string (gen, YAJL_STR ("metadata"), strlen ("metadata"));
-          if (UNLIKELY (r != yajl_gen_status_ok))
+          r = yajl_gen_string (root, YAJL_STR ("metadata"), strlen ("metadata"));
+          if (UNLIKELY (r != JSON_GEN_SUCCESS))
             goto exit;
 
-          r = yajl_gen_string (gen, YAJL_STR (metadata), strlen (metadata));
-          if (UNLIKELY (r != yajl_gen_status_ok))
+          r = yajl_gen_string (root, YAJL_STR (metadata), strlen (metadata));
+          if (UNLIKELY (r != JSON_GEN_SUCCESS))
             goto exit;
         }
     }
 
   /* State.  */
-  r = yajl_gen_string (gen, YAJL_STR ("state"), strlen ("state"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("state"), strlen ("state"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_map_open (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_map_open (root);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR (OCI_VERSION), strlen (OCI_VERSION));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR (OCI_VERSION), strlen (OCI_VERSION));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
   if (container->context && container->context->id)
     {
-      r = yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_string (root, YAJL_STR ("id"), strlen ("id"));
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
 
-      r = yajl_gen_string (gen, YAJL_STR (container->context->id), strlen (container->context->id));
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_string (root, YAJL_STR (container->context->id), strlen (container->context->id));
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
     }
 
-  r = yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("status"), strlen ("status"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR (status), strlen (status));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR (status), strlen (status));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_string (root, YAJL_STR ("pid"), strlen ("pid"));
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = yajl_gen_integer (gen, own_pid);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_integer (root, own_pid);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
   if (container->context && container->context->bundle)
     {
-      r = yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_string (root, YAJL_STR ("bundle"), strlen ("bundle"));
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
 
-      r = yajl_gen_string (gen, YAJL_STR (container->context->bundle), strlen (container->context->bundle));
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_string (root, YAJL_STR (container->context->bundle), strlen (container->context->bundle));
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
     }
 
@@ -956,12 +918,12 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
     {
       size_t i;
 
-      r = yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_string (root, YAJL_STR ("annotations"), strlen ("annotations"));
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
 
-      r = yajl_gen_map_open (gen);
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_map_open (root);
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
 
       for (i = 0; i < def->annotations->len; i++)
@@ -969,34 +931,34 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
           const char *key = def->annotations->keys[i];
           const char *val = def->annotations->values[i];
 
-          r = yajl_gen_string (gen, YAJL_STR (key), strlen (key));
-          if (UNLIKELY (r != yajl_gen_status_ok))
+          r = yajl_gen_string (root, YAJL_STR (key), strlen (key));
+          if (UNLIKELY (r != JSON_GEN_SUCCESS))
             goto exit;
 
-          r = yajl_gen_string (gen, YAJL_STR (val), strlen (val));
-          if (UNLIKELY (r != yajl_gen_status_ok))
+          r = yajl_gen_string (root, YAJL_STR (val), strlen (val));
+          if (UNLIKELY (r != JSON_GEN_SUCCESS))
             goto exit;
         }
-      r = yajl_gen_map_close (gen);
-      if (UNLIKELY (r != yajl_gen_status_ok))
+      r = yajl_gen_map_close (root);
+      if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
     }
 
-  r = yajl_gen_map_close (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_map_close (root);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
   /* End state.  */
 
-  r = yajl_gen_map_close (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
+  r = yajl_gen_map_close (root);
+  if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = get_yajl_result (gen, seccomp_fd_payload, seccomp_fd_payload_len);
+  r = get_yajl_result (root, seccomp_fd_payload, seccomp_fd_payload_len);
 
 exit:
-  yajl_gen_free (gen);
+  yajl_gen_free (root);
 
-  return yajl_error_to_crun_error (r, err);
+  return json_error_to_crun_error (r, err);
 }
 
 static int
@@ -3197,7 +3159,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
   const char *container_status = NULL;
-  yajl_gen gen = NULL;
+  json_t *root;
   const unsigned char *buf;
   int ret = 0;
   int running;
@@ -3212,45 +3174,45 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
     goto exit;
 
   ret = 0;
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+  root = json_object();
+  if (root == NULL)
+    return crun_make_error (err, 0, "json_objectfailed");
 
-  yajl_gen_config (gen, yajl_gen_beautify, 1);
-  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+  yajl_gen_config (root, yajl_gen_beautify, 1);
+  yajl_gen_config (root, yajl_gen_validate_utf8, 1);
 
-  yajl_gen_map_open (gen);
-  yajl_gen_string (gen, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
-  yajl_gen_string (gen, YAJL_STR (OCI_CONFIG_VERSION), strlen (OCI_CONFIG_VERSION));
+  yajl_gen_map_open (root);
+  yajl_gen_string (root, YAJL_STR ("ociVersion"), strlen ("ociVersion"));
+  yajl_gen_string (root, YAJL_STR (OCI_CONFIG_VERSION), strlen (OCI_CONFIG_VERSION));
 
-  yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
-  yajl_gen_string (gen, YAJL_STR (id), strlen (id));
+  yajl_gen_string (root, YAJL_STR ("id"), strlen ("id"));
+  yajl_gen_string (root, YAJL_STR (id), strlen (id));
 
-  yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  yajl_gen_integer (gen, running ? status.pid : 0);
+  yajl_gen_string (root, YAJL_STR ("pid"), strlen ("pid"));
+  yajl_gen_integer (root, running ? status.pid : 0);
 
-  yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
-  yajl_gen_string (gen, YAJL_STR (container_status), strlen (container_status));
+  yajl_gen_string (root, YAJL_STR ("status"), strlen ("status"));
+  yajl_gen_string (root, YAJL_STR (container_status), strlen (container_status));
 
-  yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-  yajl_gen_string (gen, YAJL_STR (status.bundle), strlen (status.bundle));
+  yajl_gen_string (root, YAJL_STR ("bundle"), strlen ("bundle"));
+  yajl_gen_string (root, YAJL_STR (status.bundle), strlen (status.bundle));
 
-  yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
-  yajl_gen_string (gen, YAJL_STR (status.rootfs), strlen (status.rootfs));
+  yajl_gen_string (root, YAJL_STR ("rootfs"), strlen ("rootfs"));
+  yajl_gen_string (root, YAJL_STR (status.rootfs), strlen (status.rootfs));
 
-  yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
-  yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
+  yajl_gen_string (root, YAJL_STR ("created"), strlen ("created"));
+  yajl_gen_string (root, YAJL_STR (status.created), strlen (status.created));
 
   if (status.scope)
     {
-      yajl_gen_string (gen, YAJL_STR ("systemd-scope"), strlen ("systemd-scope"));
-      yajl_gen_string (gen, YAJL_STR (status.scope), strlen (status.scope));
+      yajl_gen_string (root, YAJL_STR ("systemd-scope"), strlen ("systemd-scope"));
+      yajl_gen_string (root, YAJL_STR (status.scope), strlen (status.scope));
     }
 
   if (status.owner)
     {
-      yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-      yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
+      yajl_gen_string (root, YAJL_STR ("owner"), strlen ("owner"));
+      yajl_gen_string (root, YAJL_STR (status.owner), strlen (status.owner));
     }
 
   {
@@ -3279,22 +3241,22 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
     if (container->container_def->annotations && container->container_def->annotations->len)
       {
-        yajl_gen_string (gen, YAJL_STR ("annotations"), strlen ("annotations"));
-        yajl_gen_map_open (gen);
+        yajl_gen_string (root, YAJL_STR ("annotations"), strlen ("annotations"));
+        yajl_gen_map_open (root);
         for (i = 0; i < container->container_def->annotations->len; i++)
           {
             const char *key = container->container_def->annotations->keys[i];
             const char *val = container->container_def->annotations->values[i];
-            yajl_gen_string (gen, YAJL_STR (key), strlen (key));
-            yajl_gen_string (gen, YAJL_STR (val), strlen (val));
+            yajl_gen_string (root, YAJL_STR (key), strlen (key));
+            yajl_gen_string (root, YAJL_STR (val), strlen (val));
           }
-        yajl_gen_map_close (gen);
+        yajl_gen_map_close (root);
       }
   }
 
-  yajl_gen_map_close (gen);
+  yajl_gen_map_close (root);
 
-  if (yajl_gen_get_buf (gen, &buf, &len) != yajl_gen_status_ok)
+  if (yajl_gen_get_buf (root, &buf, &len) != JSON_GEN_SUCCESS)
     {
       ret = crun_make_error (err, 0, "error generating JSON");
       goto exit;
@@ -3303,8 +3265,8 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   fprintf (out, "%s\n", buf);
 
 exit:
-  if (gen)
-    yajl_gen_free (gen);
+  if (root)
+    yajl_gen_free (root);
   libcrun_free_container_status (&status);
   return ret;
 }
@@ -3663,7 +3625,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       struct parser_context ctx = { 0, stderr };
       cleanup_free char *content = NULL;
       parser_error parser_err = NULL;
-      yajl_val tree = NULL;
+      json_t *tree;
       size_t len;
 
       if (process)
@@ -3673,7 +3635,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = parse_json_file (&tree, content, &ctx, err);
+      ret = parse_json_file (tree, content, &ctx, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -3843,7 +3805,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   struct parser_context ctx = { 0, stderr };
   libcrun_container_status_t status = {};
   parser_error parser_err = NULL;
-  yajl_val tree = NULL;
+  json_t *tree;
   int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -3862,7 +3824,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = parse_json_file (&tree, content, &ctx, err);
+  ret = parse_json_file (tree, content, &ctx, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3936,14 +3898,14 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
 {
   const char *current_section = NULL;
   const unsigned char *buf;
-  yajl_gen gen = NULL;
+  json_t *root;
   size_t i, buf_len;
   int ret;
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
+  root = json_object();
+  if (root == NULL)
     return crun_make_error (err, errno, "yajl_gen_create failed");
-  yajl_gen_map_open (gen);
+  yajl_gen_map_open (root);
 
   qsort (values, len, sizeof (struct libcrun_update_value_s), compare_update_values);
 
@@ -3952,30 +3914,30 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
       if (current_section == NULL || strcmp (values[i].section, current_section))
         {
           if (i > 0)
-            yajl_gen_map_close (gen);
+            yajl_gen_map_close (root);
 
           current_section = values[i].section;
-          yajl_gen_string (gen, YAJL_STR (current_section), strlen (current_section));
-          yajl_gen_map_open (gen);
+          yajl_gen_string (root, YAJL_STR (current_section), strlen (current_section));
+          yajl_gen_map_open (root);
         }
 
-      yajl_gen_string (gen, (const unsigned char *) values[i].name, strlen (values[i].name));
+      yajl_gen_string (root, (const unsigned char *) values[i].name, strlen (values[i].name));
 
       if (values[i].numeric)
-        yajl_gen_number (gen, (const char *) values[i].value, strlen (values[i].value));
+        yajl_gen_number (root, (const char *) values[i].value, strlen (values[i].value));
       else
-        yajl_gen_string (gen, (const unsigned char *) values[i].value, strlen (values[i].value));
+        yajl_gen_string (root, (const unsigned char *) values[i].value, strlen (values[i].value));
     }
   if (len)
-    yajl_gen_map_close (gen);
+    yajl_gen_map_close (root);
 
-  yajl_gen_map_close (gen);
+  yajl_gen_map_close (root);
 
-  yajl_gen_get_buf (gen, &buf, &buf_len);
+  yajl_gen_get_buf (root, &buf, &buf_len);
 
   ret = libcrun_container_update (context, id, (const char *) buf, buf_len, err);
 
-  yajl_gen_free (gen);
+  yajl_gen_free (root);
 
   return ret;
 }
@@ -4375,7 +4337,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
 {
   libcrun_container_list_t *list = NULL, *it;
   const unsigned char *content = NULL;
-  yajl_gen gen = NULL;
+  json_t *root;
   size_t len;
   int ret;
 
@@ -4383,16 +4345,16 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
   if (UNLIKELY (ret < 0))
     return ret;
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
+  root = json_object();
+  if (root == NULL)
     {
       ret = crun_make_error (err, 0, "cannot allocate json generator");
       goto exit;
     }
 
-  yajl_gen_config (gen, yajl_gen_beautify, 1);
-  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
-  yajl_gen_array_open (gen);
+  yajl_gen_config (root, yajl_gen_beautify, 1);
+  yajl_gen_config (root, yajl_gen_validate_utf8, 1);
+  yajl_gen_array_open (root);
 
   for (it = list; it; it = it->next)
     {
@@ -4418,26 +4380,26 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       if (! running)
         pid = 0;
 
-      yajl_gen_map_open (gen);
-      yajl_gen_string (gen, YAJL_STR ("id"), strlen ("id"));
-      yajl_gen_string (gen, YAJL_STR (it->name), strlen (it->name));
-      yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-      yajl_gen_integer (gen, pid);
-      yajl_gen_string (gen, YAJL_STR ("status"), strlen ("status"));
-      yajl_gen_string (gen, YAJL_STR (container_status), strlen (container_status));
-      yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-      yajl_gen_string (gen, YAJL_STR (status.bundle), strlen (status.bundle));
-      yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
-      yajl_gen_string (gen, YAJL_STR (status.created), strlen (status.created));
-      yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-      yajl_gen_string (gen, YAJL_STR (status.owner), strlen (status.owner));
-      yajl_gen_map_close (gen);
+      yajl_gen_map_open (root);
+      yajl_gen_string (root, YAJL_STR ("id"), strlen ("id"));
+      yajl_gen_string (root, YAJL_STR (it->name), strlen (it->name));
+      yajl_gen_string (root, YAJL_STR ("pid"), strlen ("pid"));
+      yajl_gen_integer (root, pid);
+      yajl_gen_string (root, YAJL_STR ("status"), strlen ("status"));
+      yajl_gen_string (root, YAJL_STR (container_status), strlen (container_status));
+      yajl_gen_string (root, YAJL_STR ("bundle"), strlen ("bundle"));
+      yajl_gen_string (root, YAJL_STR (status.bundle), strlen (status.bundle));
+      yajl_gen_string (root, YAJL_STR ("created"), strlen ("created"));
+      yajl_gen_string (root, YAJL_STR (status.created), strlen (status.created));
+      yajl_gen_string (root, YAJL_STR ("owner"), strlen ("owner"));
+      yajl_gen_string (root, YAJL_STR (status.owner), strlen (status.owner));
+      yajl_gen_map_close (root);
 
       libcrun_free_container_status (&status);
     }
 
-  yajl_gen_array_close (gen);
-  if (yajl_gen_get_buf (gen, &content, &len) != yajl_gen_status_ok)
+  yajl_gen_array_close (root);
+  if (yajl_gen_get_buf (root, &content, &len) != JSON_GEN_SUCCESS)
     {
       ret = libcrun_make_error (err, 0, "cannot generate json list");
       goto exit;
@@ -4460,8 +4422,8 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
 exit:
   if (list)
     libcrun_free_containers_list (list);
-  if (gen)
-    yajl_gen_free (gen);
+  if (root)
+    yajl_gen_free (root);
 
   return ret;
 }

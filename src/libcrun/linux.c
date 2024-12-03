@@ -3601,7 +3601,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
 yajl_error:
   if (gen)
     yajl_gen_free (gen);
-  return yajl_error_to_crun_error (ret, err);
+  return json_error_to_crun_error (ret, err);
 }
 
 int
