@@ -252,6 +252,8 @@ AS_IF([test "x$enable_criu" != "xno"], [
 	        AC_MSG_NOTICE([CRIU version doesn't support join-ns API])])
 	PKG_CHECK_MODULES([CRIU_PRE_DUMP], [criu > 3.16.1], [have_criu_pre_dump="yes"], [have_criu_pre_dump="no"
 	        AC_MSG_NOTICE([CRIU version doesn't support for pre-dumping])])
+	PKG_CHECK_MODULES([CRIU_NETWORK_LOCK_SKIP], [criu >= 3.19], [have_criu_network_lock_skip="yes"], [have_criu_network_lock_skip="no"
+	        AC_MSG_NOTICE([CRIU version doesn't support CRIU_NETWORK_LOCK_SKIP])])
 	AS_IF([test "$have_criu" = "yes"], [
 		AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
 	])
@@ -261,6 +263,10 @@ AS_IF([test "x$enable_criu" != "xno"], [
 	AS_IF([test "$have_criu_pre_dump" = "yes"], [
 		AC_DEFINE([CRIU_PRE_DUMP_SUPPORT], 1, [Define if CRIU pre-dump support is available])
 	])
+	AS_IF([test "$have_criu_network_lock_skip" = "yes"], [
+		AC_DEFINE([CRIU_NETWORK_LOCK_SKIP_SUPPORT], 1, [Define if CRIU_NETWORK_LOCK_SKIP is available])
+	])
+
 ], [AC_MSG_NOTICE([CRIU support disabled per user request])])
 
 FOUND_LIBS=$LIBS
