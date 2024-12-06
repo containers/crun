@@ -37,6 +37,7 @@
 
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-bus.h>
+#  include <limits.h>
 
 #  define SYSTEMD_PROPERTY_PREFIX "org.systemd.property."
 
