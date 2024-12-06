@@ -1,3 +1,18 @@
+* crun-1.19
+
+- wasm: add new handler wamr.
+- criu: allow passing network lock method to libcriu
+- linux: honor exec cpu affinity mask.
+- build: fix build with musl libc.
+- crun: use mount API to self-clone.
+- cgroup, systemd: do not override devices on update.  If the "update" request has no
+  device block configured, do not reset the previously configuration.
+- cgroup: handle case where cgroup v1 freezer is disabled.  On systems without the
+  freezer controller, containers were mistakenly reported as paused.
+- cgroup: do not stop process on exec.  The cpu mask is configured on the systemd
+  scope, the previous workaround to stop the container until the cgroup is fully
+  configured is no longer needed.
+
 * crun-1.18.2
 
 - cgroup, systemd: fix a regression when a configuration file includes only one
