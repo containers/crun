@@ -1265,7 +1265,17 @@ append_devices (sd_bus_message *m,
   size_t i;
 
   if (has_allow_all (resources->devices, resources->devices_len))
-    return 0;
+    {
+      sd_err = sd_bus_message_append (m, "(sv)", "DevicePolicy", "s", "auto");
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append DevicePolicy");
+
+      sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 0);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append empty DeviceAllow");
+
+      return 0;
+    }
 
   sd_err = sd_bus_message_append (m, "(sv)", "DevicePolicy", "s", "strict");
   if (UNLIKELY (sd_err < 0))
@@ -1331,6 +1341,7 @@ append_devices (sd_bus_message *m,
 
 static int
 append_resources (sd_bus_message *m,
+                  bool is_update,
                   const char *state_dir,
                   runtime_spec_schema_config_linux_resources *resources,
                   int cgroup_mode,
@@ -1475,7 +1486,13 @@ append_resources (sd_bus_message *m,
 #  undef APPEND_UINT64
 #  undef APPEND_UINT64_VALUE
 
-  return append_devices (m, resources, err);
+  if (! is_update || resources->devices)
+    {
+      ret = append_devices (m, resources, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
 }
 
 static int
@@ -1647,7 +1664,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         }
     }
 
-  ret = append_resources (m, state_dir, resources, cgroup_mode, err);
+  ret = append_resources (m, false, state_dir, resources, cgroup_mode, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
@@ -1957,7 +1974,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       goto exit;
     }
 
-  ret = append_resources (m, state_dir, resources, cgroup_mode, err);
+  ret = append_resources (m, true, state_dir, resources, cgroup_mode, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
