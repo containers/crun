@@ -32,7 +32,7 @@ else
 noinst_LTLIBRARIES = libcrun.la
 endif
 
-check_LIBRARIES = libcrun_testing.a
+check_LTLIBRARIES = libcrun_testing.la
 
 libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/blake3/blake3.c \
@@ -84,9 +84,9 @@ libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
 libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
 
 # build a version with all the symbols visible for testing
-libcrun_testing_a_SOURCES = $(libcrun_SOURCES)
-libcrun_testing_a_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=default
-libcrun_testing_a_LIBADD = libocispec/libocispec.la $(maybe_libyajl.la)
+libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
+libcrun_testing_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=default
+libcrun_testing_la_LIBADD = libocispec/libocispec.la $(maybe_libyajl.la)
 
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
@@ -170,7 +170,7 @@ endif
 
 noinst_PROGRAMS += tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
 
-TESTS_LDADD = libcrun_testing.a $(FOUND_LIBS) $(maybe_libyajl.la)
+TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(maybe_libyajl.la)
 
 tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
