@@ -30,6 +30,7 @@
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include <sys/wait.h>
 #include "container.h"
+#include <jansson.h>
 
 #ifndef TEMP_FAILURE_RETRY
 #  define TEMP_FAILURE_RETRY(expression)      \
