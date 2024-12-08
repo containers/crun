@@ -1836,15 +1836,15 @@ set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
 }
 
 int
-parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
+parse_json_file (json_t *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
 {
-  char errbuf[1024];
+  json_error_t *error;
 
   *err = NULL;
 
-  *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
-  if (*out == NULL)
-    return crun_make_error (err, 0, "cannot parse the data: `%s`", errbuf);
+  out = json_loads (jsondata, 0, error);
+  if (out == NULL)
+    return crun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
 
   return 0;
 }
