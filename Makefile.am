@@ -168,7 +168,7 @@ else
 noinst_PROGRAMS = crun
 endif
 
-noinst_PROGRAMS += tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
+check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
 
 TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(maybe_libyajl.la)
 
