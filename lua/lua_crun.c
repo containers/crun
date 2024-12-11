@@ -658,12 +658,12 @@ luacrun_ctx_update_container (lua_State *S)
   const char *content = luaL_checkstring (S, 3);
   luaL_checkstack (S, 2, NULL);
 
-  char errbuf[1024] = {};
-  yajl_val parsed_json = yajl_tree_parse (content, errbuf, sizeof (errbuf));
+  json_error_t *error;
+  json_t *parsed_json = yajl_tree_parse (content, 0, error);
   if (parsed_json == NULL)
     {
       lua_pushboolean (S, false);
-      lua_pushfstring (S, "cannot parse the data: \"%s\"", errbuf);
+      lua_pushfstring (S, "cannot parse the data: \"%s\"", error->text);
       return 2;
     }
 

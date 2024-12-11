@@ -26,8 +26,6 @@
 #include <stdio.h>
 #include "utils.h"
 
-#include <yajl/yajl_tree.h>
-#include <yajl/yajl_gen.h>
 
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-journal.h>
@@ -364,6 +362,7 @@ static char *
 make_json_error (const char *msg, int errno_, int verbosity)
 {
   const char *level;
+  char err[100];
   switch (verbosity)
     {
     case LIBCRUN_VERBOSITY_DEBUG:
@@ -377,46 +376,48 @@ make_json_error (const char *msg, int errno_, int verbosity)
       break;
     }
   const unsigned char *buf = NULL;
-  yajl_gen gen = NULL;
+  json_t *root;
   char *ret = NULL;
   size_t buf_len;
   timestamp_t timestamp = {
     0,
   };
+  int stat = JSON_GEN_SUCCESS;
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
+  root = json_object();
+  if (root == NULL)
     return NULL;
 
   get_timestamp (&timestamp, "");
 
-  yajl_gen_map_open (gen);
+  stat = json_object_set (root, (const char *)"msg", json_string(msg));
+  if (stat != JSON_GEN_FAILED)
+  {
+    sprintf(err, "Error code %d", stat);
+    return err;
+  }
 
-  yajl_gen_string (gen, YAJL_STR ("msg"), strlen ("msg"));
-  if (errno_ == 0)
-    yajl_gen_string (gen, YAJL_STR (msg), strlen (msg));
-  else
-    {
-      cleanup_free char *tmp = NULL;
+  stat = json_object_set (root, (const char *)"level", json_string(level));
+  if (stat != JSON_GEN_FAILED)
+  {
+    sprintf(err, "Error code %d", stat);
+    return err;
+  }
 
-      xasprintf (&tmp, "%s: %s", msg, strerror (errno_));
-      yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
-    }
+  stat = json_object_set (root, (const char *)"time", json_string(timestamp));
+  if (stat != JSON_GEN_FAILED)
+  {
+    sprintf(err, "Error code %d", stat);
+    return err;
+  }
 
-  yajl_gen_string (gen, YAJL_STR ("level"), strlen ("level"));
-  yajl_gen_string (gen, YAJL_STR (level), strlen (level));
-
-  yajl_gen_string (gen, YAJL_STR ("time"), strlen ("time"));
-  yajl_gen_string (gen, YAJL_STR (timestamp), strlen (timestamp));
-
-  yajl_gen_map_close (gen);
-
-  yajl_gen_get_buf (gen, &buf, &buf_len);
-  if (buf)
-    ret = strdup ((const char *) buf);
-
-  yajl_gen_free (gen);
-
+  ret = json_dumps(root, JSON_INDENT(2));
+  if (ret == NULL)
+  {
+    sprintf(err, "JSON Generation failed %d", JSON_GEN_FAILED);
+    return err;
+  }
+  
   return ret;
 }
 
@@ -505,35 +506,11 @@ libcrun_set_log_format (const char *format, libcrun_error_t *err)
 }
 
 int
-yajl_error_to_crun_error (int yajl_status, libcrun_error_t *err)
+json_error_to_crun_error (int json_status, libcrun_error_t *err)
 {
-  switch (yajl_status)
-    {
-    case yajl_gen_status_ok:
-      return 0;
+  if (json_status == 0) {
+    return 0;
+  }
 
-    case yajl_gen_keys_must_be_strings:
-      return crun_make_error (err, 0, "generate JSON document: gen keys must be strings");
-
-    case yajl_max_depth_exceeded:
-      return crun_make_error (err, 0, "generate JSON document: max depth exceeded");
-
-    case yajl_gen_in_error_state:
-      return crun_make_error (err, 0, "generate JSON document: complete JSON document generated");
-
-    case yajl_gen_generation_complete:
-      return crun_make_error (err, 0, "generate JSON document: called while in error state");
-
-    case yajl_gen_invalid_number:
-      return crun_make_error (err, 0, "generate JSON document: invalid number");
-
-    case yajl_gen_no_buf:
-      return crun_make_error (err, 0, "generate JSON document: no buffer provided");
-
-    case yajl_gen_invalid_string:
-      return crun_make_error (err, 0, "generate JSON document: invalid string");
-
-    default:
-      return crun_make_error (err, 0, "generate JSON document");
-    }
+  return crun_make_error (err, 0, "generate JSON document");
 }
