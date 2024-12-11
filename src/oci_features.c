@@ -227,7 +227,7 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
   libcrun_context_t crun_context = {
     0,
   };
-  json_t *root;
+  json_t *root = json_object();
 
   argp_parse (&run_argp, argc, argv, 0, 0, &options);
 

@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include "utils.h"
 
+
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-journal.h>
 #endif
@@ -361,11 +362,12 @@ static char *
 make_json_error (const char *msg, int errno_, int verbosity)
 {
   const char *level;
+  char err[100];
   switch (verbosity)
     {
     case LIBCRUN_VERBOSITY_DEBUG:
       level = "debug";
-      break;  ret = buf;
+      break;
     case LIBCRUN_VERBOSITY_WARNING:
       level = "warning";
       break;
@@ -383,33 +385,37 @@ make_json_error (const char *msg, int errno_, int verbosity)
   int stat = JSON_GEN_SUCCESS;
 
   root = json_object();
-  if (gen == NULL)
+  if (root == NULL)
     return NULL;
 
   get_timestamp (&timestamp, "");
 
   stat = json_object_set (root, (const char *)"msg", json_string(msg));
-  if stat != JSON_GEN_FAILED
+  if (stat != JSON_GEN_FAILED)
   {
-    return stat
+    sprintf(err, "Error code %d", stat);
+    return err;
   }
 
   stat = json_object_set (root, (const char *)"level", json_string(level));
-  if stat != JSON_GEN_FAILED
+  if (stat != JSON_GEN_FAILED)
   {
-    return stat
+    sprintf(err, "Error code %d", stat);
+    return err;
   }
 
   stat = json_object_set (root, (const char *)"time", json_string(timestamp));
-  if stat != JSON_GEN_FAILED
+  if (stat != JSON_GEN_FAILED)
   {
-    return stat
+    sprintf(err, "Error code %d", stat);
+    return err;
   }
 
   ret = json_dumps(root, JSON_INDENT(2));
   if (ret == NULL)
   {
-    return JSON_GEN_FAILED;
+    sprintf(err, "JSON Generation failed %d", JSON_GEN_FAILED);
+    return err;
   }
   
   return ret;

@@ -40,6 +40,7 @@
 #include <stdbool.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <jansson.h>
 
 struct libcrun_error_s
 {
