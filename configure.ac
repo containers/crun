@@ -65,6 +65,8 @@ case "${enableval}" in
 	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-yajl) ;;
 esac],[embedded_yajl=false])
 
+AC_SEARCH_LIBS(json_object, [jansson], [AC_DEFINE([HAVE_JANSSON], 1, [Define if libjansson is available])], [AC_MSG_ERROR([*** libjansson headers not found])])
+
 AC_ARG_ENABLE(dynload-libcrun,
 AS_HELP_STRING([--enable-dynload-libcrun], [Dynamically load libcrun]),
 [

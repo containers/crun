@@ -23,7 +23,6 @@
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include "error.h"
 #include "container.h"
-#include <jansson.h>
 
 struct libcrun_container_list_s
 {
