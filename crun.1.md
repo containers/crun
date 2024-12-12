@@ -60,10 +60,10 @@ Resume the processes in the container.
 Update container resource constraints.
 
 **checkpoint**
-Checkpoint a running container using CRIU
+Checkpoint a running container using CRIU.
 
 **restore**
-Restore a container from a checkpoint
+Restore a container from a checkpoint.
 # STATE
 
 By default, when running as root user, crun saves its state under the
