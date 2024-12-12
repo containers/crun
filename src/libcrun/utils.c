@@ -1281,23 +1281,31 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
   int ret;
   ssize_t nread;
   size_t pagesize = get_page_size ();
+#ifdef HAVE_COPY_FILE_RANGE
+  bool can_copy_file_range = true;
+#endif
   do
     {
       cleanup_free char *buffer = NULL;
       ssize_t remaining;
 
 #ifdef HAVE_COPY_FILE_RANGE
-      nread = copy_file_range (src, NULL, dst, NULL, pagesize, 0);
-      if (nread < 0 && (errno == EINVAL || errno == EXDEV))
-        goto fallback;
-      if (consume && nread < 0 && errno == EAGAIN)
-        return 0;
-      if (nread < 0 && errno == EIO)
-        return 0;
-      if (UNLIKELY (nread < 0))
-        return crun_make_error (err, errno, "copy_file_range");
-      continue;
-
+      if (can_copy_file_range)
+        {
+          nread = copy_file_range (src, NULL, dst, NULL, pagesize, 0);
+          if (nread < 0 && (errno == EINVAL || errno == EXDEV))
+            {
+              can_copy_file_range = false;
+              goto fallback;
+            }
+          if (consume && nread < 0 && errno == EAGAIN)
+            return 0;
+          if (nread < 0 && errno == EIO)
+            return 0;
+          if (UNLIKELY (nread < 0))
+            return crun_make_error (err, errno, "copy_file_range");
+          continue;
+        }
     fallback:
 #endif
 
