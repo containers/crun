@@ -29,8 +29,6 @@
 #include <dirent.h>
 #include <signal.h>
 
-#define YAJL_STR(x) ((const unsigned char *) (x))
-
 struct pid_stat
 {
   char state;

@@ -31,8 +31,6 @@
 #  include <systemd/sd-journal.h>
 #endif
 
-#define YAJL_STR(x) ((const unsigned char *) (x))
-
 enum
 {
   LOG_FORMAT_TEXT = 0,

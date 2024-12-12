@@ -380,7 +380,7 @@ container_update (PyObject *self arg_unused, PyObject *args)
   libcrun_context_t *ctx;
   char *id = NULL;
   char *content = NULL;
-  json_T *tree = NULL;
+  json_t *tree = NULL;
   int ret;
   parser_error parser_err = NULL;
   struct parser_context parser_ctx = { 0, stderr };
@@ -398,7 +398,7 @@ container_update (PyObject *self arg_unused, PyObject *args)
     return set_error (&err);
 
   process = make_runtime_spec_schema_config_schema_process (tree, &parser_ctx, &parser_err);
-  yajl_tree_free (tree);
+  json_decref (tree);
   if (process == NULL)
     {
       cleanup_free char *msg = NULL;

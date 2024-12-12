@@ -807,11 +807,11 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
          * recording the destination of FD 0, 1 and 2. */
          json_array_foreach(tree ,index, value)
           {
-            if (value && YAJL_IS_STRING (value))
+            if (value && json_is_string (value))
               {
                 char *str = json_string_Value (value);
                 if (has_prefix (str, "pipe:"))
-                  libcriu_wrapper->criu_add_inherit_fd (i, str);
+                  libcriu_wrapper->criu_add_inherit_fd (index, str);
               }
           }
       }

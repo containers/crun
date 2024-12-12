@@ -61,8 +61,6 @@
 #  include <systemd/sd-daemon.h>
 #endif
 
-#define YAJL_STR(x) ((const unsigned char *) (x))
-
 enum
 {
   SYNC_SOCKET_SYNC_MESSAGE,
@@ -776,7 +774,7 @@ json_error:
 }
 
 static int
-get_yajl_result (json_t *root, char **out, size_t *out_len)
+get_json_result (json_t *root, char **out, size_t *out_len)
 {
   char *buf = NULL;
   size_t buf_len = 0;
@@ -904,7 +902,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
     goto exit;
   /* End state.  */
 
-  r = get_yajl_result (root, seccomp_fd_payload, seccomp_fd_payload_len);
+  r = get_json_result (root, seccomp_fd_payload, seccomp_fd_payload_len);
 
 exit:
   json_decref(root);
