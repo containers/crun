@@ -301,6 +301,7 @@ def run_crun_command(args):
     root = get_tests_root_status()
     crun = get_crun_path()
     args = [crun, "--root", root] + args
+    print("Hello 2", args)
     return subprocess.check_output(args, close_fds=False).decode()
 
 # Similar as run_crun_command but does not performs decode of output and relays error message for further matching

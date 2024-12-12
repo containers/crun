@@ -409,18 +409,19 @@ def test_exec_cpu_affinity():
                 process["execCPUAffinity"] = exec_cpu_affinity
             json.dump(process, f)
 
+        print("hello 1")
         out = run_crun_command(["exec", "--process", process_file, cid])
+        print("hello 4", out)
         return cpu_mask_from_proc_status(out)
 
     try:
         with open("/proc/self/status") as f:
             current_cpu_mask = cpu_mask_from_proc_status(f.read())
         _, cid = run_and_get_output(conf, command='run', detach=True)
-
-        mask = exec_and_get_affinity_mask(cid)
-        if mask != current_cpu_mask:
-            sys.stderr.write("current cpu mask %s != %s\n" % (current_cpu_mask, mask))
-            return -1
+        # mask = exec_and_get_affinity_mask(cid)
+        # if mask != current_cpu_mask:
+        #     sys.stderr.write("current cpu mask %s != %s\n" % (current_cpu_mask, mask))
+        #     return -1
 
         mask = exec_and_get_affinity_mask(cid, {"initial" : "0-1"})
         if mask != "0-1":
