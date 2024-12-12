@@ -1968,20 +1968,33 @@ struct wait_for_process_args
 static int
 wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
+  cleanup_channel_fd_pair struct channel_fd_pair *from_terminal = NULL;
+  cleanup_channel_fd_pair struct channel_fd_pair *to_terminal = NULL;
+  int ret, container_exit_code = 0, last_process;
+  cleanup_close int terminal_fd_from = -1;
+  cleanup_close int terminal_fd_to = -1;
+  const size_t max_events = 10;
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
-  int ret, container_exit_code = 0, last_process;
   sigset_t mask;
-  int in_fds[10];
-  int in_levelfds[10];
-  int in_levelfds_len = 0;
+  int in_fds[max_events];
   int in_fds_len = 0;
+  int out_fds[max_events];
+  int out_fds_len = 0;
+  size_t i;
+
   cleanup_seccomp_notify_context struct seccomp_notify_context_s *seccomp_notify_ctx = NULL;
 
   container_exit_code = 0;
 
   if (args == NULL || args->context == NULL)
     return crun_make_error (err, 0, "internal error: context is empty");
+
+  for (i = 0; i < max_events; i++)
+    {
+      in_fds[i] = -1;
+      out_fds[i] = -1;
+    }
 
   if (args->context->pid_file)
     {
@@ -2054,40 +2067,70 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
       in_fds[in_fds_len++] = args->seccomp_notify_fd;
     }
 
+  if (args->terminal_fd >= 0)
+    {
+      /* The terminal_fd is dup()ed so that it can be registered with
+         epoll multiple times using different masks.  */
+      terminal_fd_from = dup (args->terminal_fd);
+      if (UNLIKELY (terminal_fd_from < 0))
+        return crun_make_error (err, errno, "dup terminal fd");
+      terminal_fd_to = dup (args->terminal_fd);
+      if (UNLIKELY (terminal_fd_to < 0))
+        return crun_make_error (err, errno, "dup terminal fd");
+
+      int i, non_blocking_fds[] = { terminal_fd_from, terminal_fd_to, 0, 1, -1 };
+      for (i = 0; non_blocking_fds[i] >= 0; i++)
+        {
+          ret = set_blocking_fd (non_blocking_fds[i], false, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      from_terminal = channel_fd_pair_new (terminal_fd_from, 1, BUFSIZ);
+      to_terminal = channel_fd_pair_new (0, terminal_fd_to, BUFSIZ);
+    }
+
   in_fds[in_fds_len++] = signalfd;
   if (args->notify_socket >= 0)
     in_fds[in_fds_len++] = args->notify_socket;
   if (args->terminal_fd >= 0)
     {
       in_fds[in_fds_len++] = 0;
-      in_levelfds[in_levelfds_len++] = args->terminal_fd;
-    }
-  in_fds[in_fds_len++] = -1;
-  in_levelfds[in_levelfds_len++] = -1;
+      out_fds[out_fds_len++] = terminal_fd_to;
 
-  epollfd = epoll_helper (in_fds, in_levelfds, NULL, NULL, err);
+      in_fds[in_fds_len++] = terminal_fd_from;
+      out_fds[out_fds_len++] = 1;
+    }
+
+  epollfd = epoll_helper (in_fds, NULL, out_fds, NULL, err);
   if (UNLIKELY (epollfd < 0))
     return epollfd;
 
   while (1)
     {
+      struct epoll_event events[max_events];
       struct signalfd_siginfo si;
       struct winsize ws;
-      ssize_t res;
-      struct epoll_event events[10];
       int i, nr_events;
+      ssize_t res;
 
-      nr_events = TEMP_FAILURE_RETRY (epoll_wait (epollfd, events, 10, -1));
+      nr_events = TEMP_FAILURE_RETRY (epoll_wait (epollfd, events, max_events, -1));
       if (UNLIKELY (nr_events < 0))
         return crun_make_error (err, errno, "epoll_wait");
 
       for (i = 0; i < nr_events; i++)
         {
-          if (events[i].data.fd == 0)
+          if (events[i].data.fd == 0 || events[i].data.fd == terminal_fd_to)
             {
-              ret = copy_from_fd_to_fd (0, args->terminal_fd, 0, err);
+              ret = channel_fd_pair_process (to_terminal, epollfd, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy to terminal fd");
+            }
+          else if (events[i].data.fd == 1 || events[i].data.fd == terminal_fd_from)
+            {
+              ret = channel_fd_pair_process (from_terminal, epollfd, err);
+              if (UNLIKELY (ret < 0))
+                return crun_error_wrap (err, "copy from terminal fd");
             }
           else if (events[i].data.fd == args->seccomp_notify_fd)
             {
@@ -2095,20 +2138,6 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
                                                     args->seccomp_notify_fd, err);
               if (UNLIKELY (ret < 0))
                 return ret;
-            }
-          else if (events[i].data.fd == args->terminal_fd)
-            {
-              ret = set_blocking_fd (args->terminal_fd, false, err);
-              if (UNLIKELY (ret < 0))
-                return crun_error_wrap (err, "set terminal fd not blocking");
-
-              ret = copy_from_fd_to_fd (args->terminal_fd, 1, 1, err);
-              if (UNLIKELY (ret < 0))
-                return crun_error_wrap (err, "copy from terminal fd");
-
-              ret = set_blocking_fd (args->terminal_fd, true, err);
-              if (UNLIKELY (ret < 0))
-                return crun_error_wrap (err, "set terminal fd blocking");
             }
           else if (events[i].data.fd == args->notify_socket)
             {
