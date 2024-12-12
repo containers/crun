@@ -1972,10 +1972,10 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   cleanup_close int signalfd = -1;
   int ret, container_exit_code = 0, last_process;
   sigset_t mask;
-  int fds[10];
-  int levelfds[10];
-  int levelfds_len = 0;
-  int fds_len = 0;
+  int in_fds[10];
+  int in_levelfds[10];
+  int in_levelfds_len = 0;
+  int in_fds_len = 0;
   cleanup_seccomp_notify_context struct seccomp_notify_context_s *seccomp_notify_ctx = NULL;
 
   container_exit_code = 0;
@@ -2051,21 +2051,21 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-      fds[fds_len++] = args->seccomp_notify_fd;
+      in_fds[in_fds_len++] = args->seccomp_notify_fd;
     }
 
-  fds[fds_len++] = signalfd;
+  in_fds[in_fds_len++] = signalfd;
   if (args->notify_socket >= 0)
-    fds[fds_len++] = args->notify_socket;
+    in_fds[in_fds_len++] = args->notify_socket;
   if (args->terminal_fd >= 0)
     {
-      fds[fds_len++] = 0;
-      levelfds[levelfds_len++] = args->terminal_fd;
+      in_fds[in_fds_len++] = 0;
+      in_levelfds[in_levelfds_len++] = args->terminal_fd;
     }
-  fds[fds_len++] = -1;
-  levelfds[levelfds_len++] = -1;
+  in_fds[in_fds_len++] = -1;
+  in_levelfds[in_levelfds_len++] = -1;
 
-  epollfd = epoll_helper (fds, levelfds, err);
+  epollfd = epoll_helper (in_fds, in_levelfds, NULL, NULL, err);
   if (UNLIKELY (epollfd < 0))
     return epollfd;
 

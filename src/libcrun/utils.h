@@ -325,7 +325,7 @@ int receive_fd_from_socket_with_payload (int from, char *payload, size_t payload
 
 int create_signalfd (sigset_t *mask, libcrun_error_t *err);
 
-int epoll_helper (int *fds, int *levelfds, libcrun_error_t *err);
+int epoll_helper (int *in_fds, int *in_levelfds, int *out_fds, int *out_levelfds, libcrun_error_t *err);
 
 int copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err);
 

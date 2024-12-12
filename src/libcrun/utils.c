@@ -1242,7 +1242,7 @@ create_signalfd (sigset_t *mask, libcrun_error_t *err)
 }
 
 int
-epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
+epoll_helper (int *in_fds, int *in_levelfds, int *out_fds, int *out_levelfds, libcrun_error_t *err)
 {
   struct epoll_event ev;
   cleanup_close int epollfd = -1;
@@ -1253,22 +1253,24 @@ epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
   if (UNLIKELY (epollfd < 0))
     return crun_make_error (err, errno, "epoll_create1");
 
-  for (it = fds; *it >= 0; it++)
-    {
-      ev.events = EPOLLIN;
-      ev.data.fd = *it;
-      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it);
+#define ADD_FDS(FDS, EVENTS)                                            \
+  for (it = FDS; *it >= 0; it++)                                        \
+    {                                                                   \
+      ev.events = EVENTS;                                               \
+      ev.data.fd = *it;                                                 \
+      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);               \
+      if (UNLIKELY (ret < 0))                                           \
+        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it); \
     }
-  for (it = levelfds; *it >= 0; it++)
-    {
-      ev.events = EPOLLIN | EPOLLET;
-      ev.data.fd = *it;
-      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it);
-    }
+
+  if (in_fds)
+    ADD_FDS (in_fds, EPOLLIN);
+  if (in_levelfds)
+    ADD_FDS (in_levelfds, EPOLLIN | EPOLLET);
+  if (out_fds)
+    ADD_FDS (out_fds, EPOLLOUT);
+  if (out_levelfds)
+    ADD_FDS (out_levelfds, EPOLLOUT | EPOLLET);
 
   ret = epollfd;
   epollfd = -1;
