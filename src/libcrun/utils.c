@@ -1831,7 +1831,7 @@ get_current_timestamp (char *out, size_t len)
 }
 
 int
-set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
+set_blocking_fd (int fd, bool blocking, libcrun_error_t *err)
 {
   int ret, flags = fcntl (fd, F_GETFL, 0);
   if (UNLIKELY (flags < 0))

@@ -2041,7 +2041,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
       conf.bundle_path = args->context->bundle;
       conf.oci_config_path = oci_config_path;
 
-      ret = set_blocking_fd (args->seccomp_notify_fd, 0, err);
+      ret = set_blocking_fd (args->seccomp_notify_fd, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2098,7 +2098,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
             }
           else if (events[i].data.fd == args->terminal_fd)
             {
-              ret = set_blocking_fd (args->terminal_fd, 0, err);
+              ret = set_blocking_fd (args->terminal_fd, false, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "set terminal fd not blocking");
 
@@ -2106,7 +2106,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy from terminal fd");
 
-              ret = set_blocking_fd (args->terminal_fd, 1, err);
+              ret = set_blocking_fd (args->terminal_fd, true, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "set terminal fd blocking");
             }
