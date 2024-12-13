@@ -46,13 +46,13 @@ mkdir -p /nix
 NIX_ARGS="--extra-experimental-features nix-command --print-build-logs --option cores $(nproc) --option max-jobs $(nproc)"
 
 for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
-    $RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    $RUNTIME run --init --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
         nix $NIX_ARGS build --max-jobs auto --file nix/default-${ARCH}.nix
     cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-${ARCH}
 
     rm -rf result
 
-    $RUNTIME run --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
+    $RUNTIME run --init --rm $RUNTIME_EXTRA_ARGS --privileged -v /nix:/nix -v ${PWD}:${PWD} -w ${PWD} ${NIX_IMAGE} \
         nix $NIX_ARGS build --max-jobs auto --file nix/default-${ARCH}.nix --arg enableSystemd false
     cp ./result/bin/crun $OUTDIR/crun-$VERSION-linux-${ARCH}-disable-systemd
 
