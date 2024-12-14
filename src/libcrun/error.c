@@ -415,7 +415,7 @@ make_json_error (const char *msg, int errno_, int verbosity)
     err = strdup("json gen failed");
     return err;
   }
-  
+
   return ret;
 }
 

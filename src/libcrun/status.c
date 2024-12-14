@@ -252,7 +252,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   buf = json_dumps(root, JSON_INDENT(2));
   if (buf == NULL)
     goto json_error;
-  
+
   len = strlen(buf);
 
   if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))

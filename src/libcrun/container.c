@@ -736,7 +736,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
       r = JSON_GEN_FAILED;
       goto json_error;
     }
-  
+
   stdin_len = strlen(stdin);
 
   ret = 0;
@@ -764,7 +764,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   if (root)
     json_decref (root);
-  
+
   return ret;
 
 json_error:
@@ -826,7 +826,6 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  
   r = json_object_set (root, (const char *)"own_pid", json_integer(own_pid));
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
@@ -859,7 +858,6 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
         goto exit;
     }
 
-  
   r = json_object_set (stateobj, (const char *)"status", json_string(status));
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
@@ -3127,7 +3125,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   if (root == NULL)
     return crun_make_error (err, 0, "json_objectfailed");
 
-  
+
   r = json_object_set (root, (const char *)"ociVersion", json_string(OCI_CONFIG_VERSION));
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
@@ -3168,7 +3166,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
       r = json_object_set (root, (const char *)"owner", json_string(status.owner));
       if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
-      
+
     }
 
   {
@@ -3201,7 +3199,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
         json_t *annotationsobj = json_object();
         if (root == NULL)
           return crun_make_error (err, 0, "json_object failed");
-        
+
         for (i = 0; i < container->container_def->annotations->len; i++)
           {
             const char *key = container->container_def->annotations->keys[i];
@@ -3210,7 +3208,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
             if (UNLIKELY (r != JSON_GEN_SUCCESS))
               goto exit;
           }
-        
+
         r = json_object_set (root, (const char *)"annotations", annotationsobj);
         if (UNLIKELY (r != JSON_GEN_SUCCESS))
           goto exit;
@@ -4346,7 +4344,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       json_object_set(obj, (const char *)"created", json_string(status.created));
       json_object_set(obj, (const char *)"owner", json_string(status.owner));
 
-      
+
       json_array_append(root, obj);
 
       libcrun_free_container_status (&status);

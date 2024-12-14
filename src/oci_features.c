@@ -141,7 +141,7 @@ crun_features_add_seccomp_info (json_t *root, const struct linux_info_s *linux)
 
 void
 crun_features_add_apparmor_info (json_t *root, const struct linux_info_s *linux)
-{  
+{
   json_t *obj = json_object();
 
   add_bool_to_json (obj, "enabled", linux->apparmor.enabled);
@@ -191,12 +191,12 @@ crun_features_add_linux_info (json_t *root, const struct linux_info_s *linux)
   crun_features_add_mount_ext_info (obj, linux);
   crun_features_add_intel_rdt (obj, linux);
 
-  json_object_set(root, (const char *) "linux", obj); 
+  json_object_set(root, (const char *) "linux", obj);
 }
 
 void
 crun_features_add_annotations_info (json_t *root, const struct annotations_info_s *annotation)
-{ 
+{
   json_t *obj = json_object();
 
   if (! is_empty_string (annotation->io_github_seccomp_libseccomp_version))
@@ -267,7 +267,7 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
 
   // decrement reference
   json_decref (root);
-  
+
   //free content_string;
   free(content_string);
 
