@@ -360,7 +360,7 @@ static char *
 make_json_error (const char *msg, int errno_, int verbosity)
 {
   const char *level;
-  char err[100];
+  char *err = NULL;
   switch (verbosity)
     {
     case LIBCRUN_VERBOSITY_DEBUG:
