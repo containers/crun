@@ -777,7 +777,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   {
     cleanup_free char *descriptors_path = NULL;
     cleanup_free char *buffer = NULL;
-    json_error_t *error
+    json_error_t *error;
     json_t *tree;
 
     ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
