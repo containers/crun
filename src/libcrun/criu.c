@@ -809,7 +809,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           {
             if (value && json_is_string (value))
               {
-                char *str = json_string_Value (value);
+                char *str = json_string_value (value);
                 if (has_prefix (str, "pipe:"))
                   libcriu_wrapper->criu_add_inherit_fd (index, str);
               }
