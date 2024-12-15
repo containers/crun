@@ -408,10 +408,7 @@ def test_exec_cpu_affinity():
             if exec_cpu_affinity is not None:
                 process["execCPUAffinity"] = exec_cpu_affinity
             json.dump(process, f)
-
-        print("hello 1")
         out = run_crun_command(["exec", "--process", process_file, cid])
-        print("hello 4", out)
         return cpu_mask_from_proc_status(out)
 
     try:
