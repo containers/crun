@@ -3588,6 +3588,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       parser_error parser_err = NULL;
       json_t *tree;
       size_t len;
+      json_error_t *error;
+
 
       if (process)
         return crun_make_error (err, EINVAL, "cannot specify both exec file and options");
@@ -3596,14 +3598,13 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = parse_json_file (tree, content, &ctx, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
+      tree = json_loads(content, 0, error);
+      if (tree == NULL)
+        return crun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
       process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
       if (UNLIKELY (process == NULL))
         {
-          ret = crun_make_error (err, errno, "cannot parse process file: `%s`", parser_err);
+          ret = crun_make_error (err, errno, "cannot parse process file: `%s`, %d", parser_err, json_object_size(tree));
           free (parser_err);
           if (tree)
             json_decref (tree);
@@ -3767,6 +3768,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   libcrun_container_status_t status = {};
   parser_error parser_err = NULL;
   json_t *tree;
+  json_error_t *error;
   int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -3785,9 +3787,9 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = parse_json_file (tree, content, &ctx, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  tree = json_loads(content, 0, error);
+  if (tree == NULL)
+    return crun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
 
   resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
   if (UNLIKELY (resources == NULL))

@@ -1865,20 +1865,6 @@ set_blocking_fd (int fd, bool blocking, libcrun_error_t *err)
   return 0;
 }
 
-int
-parse_json_file (json_t *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
-{
-  json_error_t *error;
-
-  *err = NULL;
-
-  out = json_loads (jsondata, 0, error);
-  if (out == NULL)
-    return crun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
-
-  return 0;
-}
-
 static int
 check_access (const char *path)
 {
