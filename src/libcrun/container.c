@@ -826,7 +826,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
-  r = json_object_set (root, (const char *)"own_pid", json_integer(own_pid));
+  r = json_object_set (root, (const char *)"pid", json_integer(own_pid));
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
 
