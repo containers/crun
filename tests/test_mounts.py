@@ -591,11 +591,14 @@ def test_cgroup_mount_without_netns():
 
         out, _ = run_and_get_output(conf)
         print(out)
+        # validate there are two mounts
+        count = 0
         for i in out.split("\n"):
             if i.find("/sys/fs/cgroup") >= 0:
-                if i.find("tmpfs") >= 0:
-                    print("tmpfs temporary mount still present with cgroupns=%s %s" % (cgroupns, i))
-                    return -1
+                count = count + 1
+        if count < 2:
+            print("fail with cgroupns=%s, got %s" % (cgroupns, out))
+            return -1
     return 0
 
 all_tests = {
