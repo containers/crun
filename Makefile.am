@@ -35,6 +35,7 @@ endif
 check_LTLIBRARIES = libcrun_testing.la
 
 libcrun_SOURCES = src/libcrun/utils.c \
+		src/libcrun/ring_buffer.c \
 		src/libcrun/blake3/blake3.c \
 		src/libcrun/blake3/blake3_portable.c \
 		src/libcrun/cgroup-cgroupfs.c \
@@ -154,12 +155,12 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h \
-	src/libcrun/mount_flags.h src/libcrun/intelrdt.h \
+	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h \
 	crun.1.md crun.1 libcrun.lds \
 	krun.1.md krun.1 \
 	lua/luacrun.rockspec
 
-UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_errors tests/tests_libcrun_intelrdt
+UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt
 
 if ENABLE_CRUN
 bin_PROGRAMS = crun
@@ -180,6 +181,11 @@ tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(ab
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
 tests_tests_libcrun_utils_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_utils_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_ring_buffer_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_ring_buffer_SOURCES = tests/tests_libcrun_ring_buffer.c
+tests_tests_libcrun_ring_buffer_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_ring_buffer_LDFLAGS = $(crun_LDFLAGS)
 
 tests_tests_libcrun_intelrdt_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_intelrdt_SOURCES = tests/tests_libcrun_intelrdt.c
