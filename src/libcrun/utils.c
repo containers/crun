@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 #include <config.h>
 #include "utils.h"
+#include "ring_buffer.h"
 #include <stdarg.h>
 #include <unistd.h>
 #include <string.h>
@@ -1241,8 +1242,27 @@ create_signalfd (sigset_t *mask, libcrun_error_t *err)
   return ret;
 }
 
+static int
+epoll_helper_toggle (int epollfd, int fd, int events, libcrun_error_t *err)
+{
+  struct epoll_event ev = {};
+  bool add = events != 0;
+  int ret;
+
+  ev.events = events;
+  ev.data.fd = fd;
+  ret = epoll_ctl (epollfd, add ? EPOLL_CTL_ADD : EPOLL_CTL_DEL, fd, &ev);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno == EEXIST || errno == ENOENT)
+        return 0;
+      return crun_make_error (err, errno, "epoll_ctl `%s` `%d`", add ? "add" : "del", fd);
+    }
+  return 0;
+}
+
 int
-epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
+epoll_helper (int *in_fds, int *in_levelfds, int *out_fds, int *out_levelfds, libcrun_error_t *err)
 {
   struct epoll_event ev;
   cleanup_close int epollfd = -1;
@@ -1253,22 +1273,24 @@ epoll_helper (int *fds, int *levelfds, libcrun_error_t *err)
   if (UNLIKELY (epollfd < 0))
     return crun_make_error (err, errno, "epoll_create1");
 
-  for (it = fds; *it >= 0; it++)
-    {
-      ev.events = EPOLLIN;
-      ev.data.fd = *it;
-      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it);
+#define ADD_FDS(FDS, EVENTS)                                            \
+  for (it = FDS; *it >= 0; it++)                                        \
+    {                                                                   \
+      ev.events = EVENTS;                                               \
+      ev.data.fd = *it;                                                 \
+      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);               \
+      if (UNLIKELY (ret < 0))                                           \
+        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it); \
     }
-  for (it = levelfds; *it >= 0; it++)
-    {
-      ev.events = EPOLLIN | EPOLLET;
-      ev.data.fd = *it;
-      ret = epoll_ctl (epollfd, EPOLL_CTL_ADD, *it, &ev);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "epoll_ctl add `%d`", *it);
-    }
+
+  if (in_fds)
+    ADD_FDS (in_fds, EPOLLIN);
+  if (in_levelfds)
+    ADD_FDS (in_levelfds, EPOLLIN | EPOLLET);
+  if (out_fds)
+    ADD_FDS (out_fds, EPOLLOUT);
+  if (out_levelfds)
+    ADD_FDS (out_levelfds, EPOLLOUT | EPOLLET);
 
   ret = epollfd;
   epollfd = -1;
@@ -1281,23 +1303,31 @@ copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err)
   int ret;
   ssize_t nread;
   size_t pagesize = get_page_size ();
+#ifdef HAVE_COPY_FILE_RANGE
+  bool can_copy_file_range = true;
+#endif
   do
     {
       cleanup_free char *buffer = NULL;
       ssize_t remaining;
 
 #ifdef HAVE_COPY_FILE_RANGE
-      nread = copy_file_range (src, NULL, dst, NULL, pagesize, 0);
-      if (nread < 0 && (errno == EINVAL || errno == EXDEV))
-        goto fallback;
-      if (consume && nread < 0 && errno == EAGAIN)
-        return 0;
-      if (nread < 0 && errno == EIO)
-        return 0;
-      if (UNLIKELY (nread < 0))
-        return crun_make_error (err, errno, "copy_file_range");
-      continue;
-
+      if (can_copy_file_range)
+        {
+          nread = copy_file_range (src, NULL, dst, NULL, pagesize, 0);
+          if (nread < 0 && (errno == EINVAL || errno == EXDEV))
+            {
+              can_copy_file_range = false;
+              goto fallback;
+            }
+          if (consume && nread < 0 && errno == EAGAIN)
+            return 0;
+          if (nread < 0 && errno == EIO)
+            return 0;
+          if (UNLIKELY (nread < 0))
+            return crun_make_error (err, errno, "copy_file_range");
+          continue;
+        }
     fallback:
 #endif
 
@@ -1823,7 +1853,7 @@ get_current_timestamp (char *out, size_t len)
 }
 
 int
-set_blocking_fd (int fd, int blocking, libcrun_error_t *err)
+set_blocking_fd (int fd, bool blocking, libcrun_error_t *err)
 {
   int ret, flags = fcntl (fd, F_GETFL, 0);
   if (UNLIKELY (flags < 0))
@@ -2639,4 +2669,96 @@ cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun
 
 invalid_input:
   return crun_make_error (err, 0, "cannot parse input `%s`", str);
+}
+
+struct channel_fd_pair
+{
+  struct ring_buffer *rb;
+
+  int in_fd;
+  int out_fd;
+
+  int infd_epoll_events;
+  int outfd_epoll_events;
+};
+
+struct channel_fd_pair *
+channel_fd_pair_new (int in_fd, int out_fd, size_t size)
+{
+  struct channel_fd_pair *channel = xmalloc (sizeof (struct channel_fd_pair));
+  channel->in_fd = in_fd;
+  channel->out_fd = out_fd;
+  channel->infd_epoll_events = -1;
+  channel->outfd_epoll_events = -1;
+  channel->rb = ring_buffer_make (size);
+  return channel;
+}
+
+void
+channel_fd_pair_free (struct channel_fd_pair *channel)
+{
+  if (channel == NULL)
+    return;
+
+  ring_buffer_free (channel->rb);
+  free (channel);
+}
+
+int
+channel_fd_pair_process (struct channel_fd_pair *channel, int epollfd, libcrun_error_t *err)
+{
+  bool is_input_eagain = false, is_output_eagain = false, repeat;
+  int ret, i;
+
+  /* This function is called from an epoll loop.  Use a hard limit to avoid infinite loops
+     and prevent other events from being processed.  */
+  for (i = 0, repeat = true; i < 1000 && repeat; i++)
+    {
+      repeat = false;
+      if (ring_buffer_get_space_available (channel->rb) >= ring_buffer_get_size (channel->rb))
+        {
+          ret = ring_buffer_read (channel->rb, channel->in_fd, &is_input_eagain, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          if (ret > 0)
+            repeat = true;
+        }
+      if (ring_buffer_get_data_available (channel->rb) > 0)
+        {
+          ret = ring_buffer_write (channel->rb, channel->out_fd, &is_output_eagain, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          if (ret > 0)
+            repeat = true;
+        }
+    }
+
+  if (epollfd >= 0)
+    {
+      size_t available = ring_buffer_get_space_available (channel->rb);
+      size_t used = ring_buffer_get_data_available (channel->rb);
+      int events;
+
+      /* If there is space available in the buffer, we want to read more.  */
+      events = (available > 0) ? (EPOLLIN | (is_input_eagain ? EPOLLET : 0)) : 0;
+      if (events != channel->infd_epoll_events)
+        {
+          ret = epoll_helper_toggle (epollfd, channel->in_fd, events, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          channel->infd_epoll_events = events;
+        }
+
+      /* If there is data available in the buffer, we want to write as soon as
+         it is possible.  */
+      events = (used > 0) ? (EPOLLOUT | (is_output_eagain ? EPOLLET : 0)) : 0;
+      if (events != channel->outfd_epoll_events)
+        {
+          ret = epoll_helper_toggle (epollfd, channel->out_fd, events, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          channel->outfd_epoll_events = events;
+        }
+    }
+  return 0;
 }
