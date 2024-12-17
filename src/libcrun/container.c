@@ -3604,7 +3604,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
       if (UNLIKELY (process == NULL))
         {
-          ret = crun_make_error (err, errno, "cannot parse process file: `%s`, %d", parser_err, json_object_size(tree));
+          ret = crun_make_error (err, errno, "cannot parse process file: `%s`", parser_err);
           free (parser_err);
           if (tree)
             json_decref (tree);
