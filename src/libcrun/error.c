@@ -357,7 +357,7 @@ crun_set_output_handler (crun_output_handler handler, void *arg)
 }
 
 static char *
-make_json_error (const char *msg, int errno_, int verbosity)
+make_json_error (const char *msg, int verbosity)
 {
   const char *level;
   char *err = NULL;
@@ -373,10 +373,8 @@ make_json_error (const char *msg, int errno_, int verbosity)
       level = "error";
       break;
     }
-  const unsigned char *buf = NULL;
   json_t *root;
   char *ret = NULL;
-  size_t buf_len;
   timestamp_t timestamp = {
     0,
   };
@@ -443,7 +441,7 @@ write_log (int errno_, int verbosity, const char *msg, va_list args_list)
       break;
 
     case LOG_FORMAT_JSON:
-      json = make_json_error (output, errno_, verbosity);
+      json = make_json_error (output, verbosity);
       if (json)
         output_handler (0, json, verbosity, output_handler_arg);
       else

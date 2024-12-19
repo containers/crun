@@ -3107,10 +3107,9 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   const char *state_root = context->state_root;
   const char *container_status = NULL;
   json_t *root;
-  const unsigned char *buf;
+  char *buf;
   int r = 0;
   int running;
-  size_t len;
 
   r = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (r < 0))
@@ -3588,7 +3587,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       parser_error parser_err = NULL;
       json_t *tree;
       size_t len;
-      json_error_t *error;
+      json_error_t error;
 
 
       if (process)
@@ -3598,9 +3597,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      tree = json_loads(content, 0, error);
+      tree = json_loads(content, 0, &error);
       if (tree == NULL)
-        return crun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
+        return crun_make_error (err, 0, "cannot parse the data: `%s`", error.text);
       process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
       if (UNLIKELY (process == NULL))
         {
@@ -3768,7 +3767,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   libcrun_container_status_t status = {};
   parser_error parser_err = NULL;
   json_t *tree;
-  json_error_t *error;
+  json_error_t error;
   int ret;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
@@ -3787,9 +3786,9 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   if (UNLIKELY (ret < 0))
     return ret;
 
-  tree = json_loads(content, 0, error);
+  tree = json_loads(content, 0, &error);
   if (tree == NULL)
-    return crun_make_error (err, 0, "cannot parse the data: `%s`", error->text);
+    return crun_make_error (err, 0, "cannot parse the data: `%s`", error.text);
 
   resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
   if (UNLIKELY (resources == NULL))
@@ -3859,8 +3858,8 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
                                       struct libcrun_update_value_s *values, size_t len,
                                       libcrun_error_t *err)
 {
-  const char *current_section = NULL;
-  const unsigned char *buf;
+  // const char *current_section = NULL;
+  char *buf;
   json_t *root;
   size_t i, buf_len;
   int ret;
@@ -4298,7 +4297,7 @@ int
 libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err)
 {
   libcrun_container_list_t *list = NULL, *it;
-  const unsigned char *content = NULL;
+  char *content = NULL;
   json_t *root;
   size_t len;
   int ret;

@@ -174,7 +174,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   cleanup_free char *file_tmp = NULL;
   size_t len;
   cleanup_close int fd_write = -1;
-  const unsigned char *buf = NULL;
+  char *buf = NULL;
   struct pid_stat st;
   const char *tmp;
   json_t *root;
@@ -287,19 +287,18 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
                                libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
-  char err_buffer[256];
   int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
-  json_error_t *error;
+  json_error_t error;
   json_t *tree, *tmp;
 
   ret = read_all_file (file, &buffer, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  tree = json_loads (buffer, 0, error);
+  tree = json_loads (buffer, 0, &error);
   if (tree == NULL)
-    return crun_make_error (err, 0, "cannot parse status file: `%s`", error->text);
+    return crun_make_error (err, 0, "cannot parse status file: `%s`", error.text);
 
   {
     tmp = json_object_get (tree, (const char *)"pid");

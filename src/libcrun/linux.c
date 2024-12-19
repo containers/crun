@@ -3529,7 +3529,7 @@ libcrun_get_external_descriptors (libcrun_container_t *container)
 int
 libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
-  const unsigned char *buf = NULL;
+  char *buf = NULL;
   json_t *root;
   size_t buf_len;
   int ret;
