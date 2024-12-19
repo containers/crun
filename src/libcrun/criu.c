@@ -777,7 +777,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   {
     cleanup_free char *descriptors_path = NULL;
     cleanup_free char *buffer = NULL;
-    json_error_t *error;
+    json_error_t error;
     json_t *tree;
 
     ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
@@ -794,7 +794,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
      * a pipe 'pipe:' we tell CRIU to reconnect that pipe
      * to the corresponding FD to have (especially) stdout
      * and stderr being correctly redirected. */
-    tree = json_loads (buffer, 0, error);
+    tree = json_loads (buffer, 0, &error);
     if (UNLIKELY (tree == NULL))
       return crun_make_error (err, 0, "cannot parse descriptors file `%s`", DESCRIPTORS_FILENAME);
 
@@ -809,7 +809,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           {
             if (value && json_is_string (value))
               {
-                char *str = json_string_value (value);
+                const char *str = json_string_value (value);
                 if (has_prefix (str, "pipe:"))
                   libcriu_wrapper->criu_add_inherit_fd (index, str);
               }
