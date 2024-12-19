@@ -55,15 +55,7 @@ esac
 [enable_libcrun=true])
 AM_CONDITIONAL([ENABLE_LIBCRUN], [test "x${enable_libcrun}" = xtrue])
 
-dnl embedded yajl
-AC_ARG_ENABLE(embedded-yajl,
-AS_HELP_STRING([--enable-embedded-yajl], [Statically link a modified yajl version]),
-[
-case "${enableval}" in
-	yes) embedded_yajl=true ;;
-	no)  embedded_yajl=false ;;
-	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-yajl) ;;
-esac],[embedded_yajl=false])
+AC_SEARCH_LIBS(json_object, [jansson], [AC_DEFINE([HAVE_JANSSON], 1, [Define if libjansson is available])], [AC_MSG_ERROR([*** libjansson headers not found])])
 
 AC_ARG_ENABLE(dynload-libcrun,
 AS_HELP_STRING([--enable-dynload-libcrun], [Dynamically load libcrun]),
@@ -74,12 +66,6 @@ case "${enableval}" in
 	*) AC_MSG_ERROR(bad value ${enableval} for --enable-dynload-libcrun) ;;
 esac],[dynload_libcrun=false])
 AM_CONDITIONAL([DYNLOAD_LIBCRUN], [test x"$dynload_libcrun" = xtrue])
-
-AM_CONDITIONAL([HAVE_EMBEDDED_YAJL], [test x"$embedded_yajl" = xtrue])
-AM_COND_IF([HAVE_EMBEDDED_YAJL], [], [
-AC_SEARCH_LIBS(yajl_tree_get, [yajl], [AC_DEFINE([HAVE_YAJL], 1, [Define if libyajl is available])], [AC_MSG_ERROR([*** libyajl headers not found])])
-PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
-])
 
 dnl libcap
 AC_ARG_ENABLE([caps],
