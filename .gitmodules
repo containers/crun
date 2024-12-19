@@ -1,4 +1,4 @@
 [submodule "libocispec"]
 	path = libocispec
 	url = https://github.com/xw19/libocispec.git
-	branch = main
+	branch = switch-to-jansson
