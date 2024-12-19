@@ -647,7 +647,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     libcriu_wrapper->criu_set_manage_cgroups_mode (cr_options->manage_cgroups_mode);
   libcriu_wrapper->criu_set_manage_cgroups (true);
 
-  if (libcriu_wrapper->criu_set_network_lock)
+  if (libcriu_wrapper->criu_set_network_lock && cr_options->network_lock_method > 0)
     libcriu_wrapper->criu_set_network_lock (cr_options->network_lock_method);
 
   ret = libcriu_wrapper->criu_dump ();
@@ -984,7 +984,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   libcriu_wrapper->criu_set_file_locks (cr_options->file_locks);
   libcriu_wrapper->criu_set_orphan_pts_master (true);
   libcriu_wrapper->criu_set_manage_cgroups (true);
-  libcriu_wrapper->criu_set_network_lock (cr_options->network_lock_method);
+
+  if (libcriu_wrapper->criu_set_network_lock && cr_options->network_lock_method > 0)
+    libcriu_wrapper->criu_set_network_lock (cr_options->network_lock_method);
 
   libcriu_wrapper->criu_set_log_level (4);
   libcriu_wrapper->criu_set_log_file (CRIU_RESTORE_LOG_FILE);
