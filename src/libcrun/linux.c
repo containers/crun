@@ -3537,7 +3537,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
 
   root = json_array ();
   if (UNLIKELY (root == NULL))
-    goto json_error;
+    return JSON_GEN_FAILED;
 
   /* Remember original stdin, stdout, stderr for container restore.  */
   for (i = 0; i < 3; i++)
