@@ -3106,7 +3106,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   libcrun_container_status_t status = {};
   const char *state_root = context->state_root;
   const char *container_status = NULL;
-  json_t *root;
   char *buf;
   int r = 0;
   int running;
@@ -3120,7 +3119,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
     goto exit;
 
   r = 0;
-  root = json_object();
+  json_t *root = json_object();
   if (root == NULL)
     return crun_make_error (err, 0, "json_objectfailed");
 
