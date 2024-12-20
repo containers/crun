@@ -25,7 +25,11 @@ jobs:
           set -ex
           sudo mkdir -p .cache
           sudo mv .cache /nix
+          echo "*************************************************************************************"
+          echo "*************************************************************************************"
           if [[ -z $(ls -A /nix) ]]; then sudo docker run --rm --privileged -v /:/mnt nixos/nix:2.24.9 cp -rfT /nix /mnt/nix; fi
+          echo "*************************************************************************************"
+          echo "*************************************************************************************"
           sudo RUNTIME=docker SKIP_CHECKS=1 SKIP_GPG=1 build-aux/release.sh
           sudo mv /nix .cache
           sudo chown -Rf $(whoami) .cache
