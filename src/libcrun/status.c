@@ -190,70 +190,70 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, errno, "cannot open status file");
 
-  root = json_object();
+  root = json_object ();
   if (root == NULL)
     return crun_make_error (err, 0, "json_object failed");
 
-  r = json_object_set (root, (const char *)"pid", json_integer(status->pid));
+  r = json_object_set (root, (const char *) "pid", json_integer (status->pid));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-  r = json_object_set (root, (const char *)"process-start-time", json_integer(status->process_start_time));
+  r = json_object_set (root, (const char *) "process-start-time", json_integer (status->process_start_time));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
   tmp = status->cgroup_path ? status->cgroup_path : "";
-  r = json_object_set (root, (const char *)"cgroup-path", json_string(tmp));
+  r = json_object_set (root, (const char *) "cgroup-path", json_string (tmp));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
   tmp = status->scope ? status->scope : "";
-  r = json_object_set (root, (const char *)"scope", json_string(tmp));
+  r = json_object_set (root, (const char *) "scope", json_string (tmp));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
   tmp = status->intelrdt ? status->intelrdt : "";
-  r = json_object_set (root, (const char *)"intelrdt", json_string(tmp));
+  r = json_object_set (root, (const char *) "intelrdt", json_string (tmp));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
 
-  r = json_object_set (root, (const char *)"rootfs", json_string(status->rootfs));
+  r = json_object_set (root, (const char *) "rootfs", json_string (status->rootfs));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-  r = json_object_set (root, (const char *)"systemd-cgroup", json_boolean(status->systemd_cgroup));
+  r = json_object_set (root, (const char *) "systemd-cgroup", json_boolean (status->systemd_cgroup));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-  r = json_object_set (root, (const char *)"bundle", json_string(status->bundle));
+  r = json_object_set (root, (const char *) "bundle", json_string (status->bundle));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-  r = json_object_set (root, (const char *)"created", json_string(status->created));
+  r = json_object_set (root, (const char *) "created", json_string (status->created));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
   if (status->owner)
     {
-      r = json_object_set (root, (const char *)"owner", json_string(status->owner));
+      r = json_object_set (root, (const char *) "owner", json_string (status->owner));
       if (r != JSON_GEN_SUCCESS)
         goto json_error;
     }
 
-  r = json_object_set (root, (const char *)"detached", json_boolean(status->detached));
+  r = json_object_set (root, (const char *) "detached", json_boolean (status->detached));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-  r = json_object_set (root, (const char *)"external_descriptors", json_string(status->external_descriptors));
+  r = json_object_set (root, (const char *) "external_descriptors", json_string (status->external_descriptors));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-  buf = json_dumps(root, JSON_INDENT(2));
+  buf = json_dumps (root, JSON_INDENT (2));
   if (buf == NULL)
     goto json_error;
 
-  len = strlen(buf);
+  len = strlen (buf);
 
   if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
     {
@@ -301,18 +301,18 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     return crun_make_error (err, 0, "cannot parse status file: `%s`", error.text);
 
   {
-    tmp = json_object_get (tree, (const char *)"pid");
+    tmp = json_object_get (tree, (const char *) "pid");
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`pid` missing in `%s`", file);
-    status->pid = (int)json_integer_value(tmp);
+    status->pid = (int) json_integer_value (tmp);
   }
   {
-    const char *process_start_time_path= "process-start-time";
+    const char *process_start_time_path = "process-start-time";
     tmp = json_object_get (tree, process_start_time_path);
     if (UNLIKELY (tmp == NULL))
       status->process_start_time = 0; /* backwards compatibility */
     else
-      status->process_start_time = (int)json_integer_value(tmp);
+      status->process_start_time = (int) json_integer_value (tmp);
   }
   {
     const char *cgroup_path = "cgroup-path";
@@ -322,51 +322,51 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     status->cgroup_path = xstrdup (json_string_value (tmp));
   }
   {
-    const char *scope =  "scope";
+    const char *scope = "scope";
     tmp = json_object_get (tree, scope);
     status->scope = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
   {
-    const char *intelrdt =  "intelrdt";
+    const char *intelrdt = "intelrdt";
     tmp = json_object_get (tree, intelrdt);
     status->intelrdt = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
   {
-    const char *rootfs =  "rootfs";
+    const char *rootfs = "rootfs";
     tmp = json_object_get (tree, rootfs);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`rootfs` missing in `%s`", file);
     status->rootfs = xstrdup (json_string_value (tmp));
   }
   {
-    const char *systemd_cgroup =  "systemd-cgroup";
+    const char *systemd_cgroup = "systemd-cgroup";
     status->systemd_cgroup = json_is_true (json_object_get (tree, systemd_cgroup));
   }
   {
-    const char *bundle =  "bundle";
+    const char *bundle = "bundle";
     tmp = json_object_get (tree, bundle);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`bundle` missing in `%s`", file);
     status->bundle = xstrdup (json_string_value (tmp));
   }
   {
-    const char *created =  "created";
+    const char *created = "created";
     tmp = json_object_get (tree, created);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`created` missing in `%s`", file);
     status->created = xstrdup (json_string_value (tmp));
   }
   {
-    const char *owner =  "owner";
+    const char *owner = "owner";
     tmp = json_object_get (tree, owner);
     status->owner = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
   {
-    const char *detached =  "detached";
+    const char *detached = "detached";
     status->detached = json_is_true (json_object_get (tree, detached));
   }
   {
-    const char *external_descriptors =  "external_descriptors";
+    const char *external_descriptors = "external_descriptors";
     tmp = json_object_get (tree, external_descriptors);
     status->external_descriptors = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }

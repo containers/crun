@@ -3558,24 +3558,24 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
             }
           else
             {
-              json_decref(root);
+              json_decref (root);
               return crun_make_error (err, errno, "readlink `%s`", fd_path);
             }
         }
       link_path[ret] = 0;
 
-      ret = json_array_append(root, json_string((const char *)link_path));
+      ret = json_array_append (root, json_string ((const char *) link_path));
       if (UNLIKELY (ret != JSON_GEN_SUCCESS))
         goto json_error;
     }
 
-  buf = json_dumps (root, JSON_INDENT(2));
+  buf = json_dumps (root, JSON_INDENT (2));
   if (UNLIKELY (buf == NULL))
     goto json_error;
 
   if (buf)
     {
-      buf_len = strlen(buf);
+      buf_len = strlen (buf);
       char *b = xmalloc (buf_len + 1);
       memcpy (b, buf, buf_len);
       b[buf_len] = '\0';

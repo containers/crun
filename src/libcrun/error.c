@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include "utils.h"
 
-
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-journal.h>
 #endif
@@ -380,39 +379,39 @@ make_json_error (const char *msg, int verbosity)
   };
   int stat = JSON_GEN_SUCCESS;
 
-  root = json_object();
+  root = json_object ();
   if (root == NULL)
     return NULL;
 
   get_timestamp (&timestamp, "");
 
-  stat = json_object_set (root, (const char *)"msg", json_string(msg));
+  stat = json_object_set (root, (const char *) "msg", json_string (msg));
   if (stat != JSON_GEN_FAILED)
-  {
-    err = strdup("json gen failed");
-    return err;
-  }
+    {
+      err = strdup("json gen failed");
+      return err;
+    }
 
-  stat = json_object_set (root, (const char *)"level", json_string(level));
+  stat = json_object_set (root, (const char *) "level", json_string (level));
   if (stat != JSON_GEN_FAILED)
-  {
-    err = strdup("json gen failed");
-    return err;
-  }
+    {
+      err = strdup ("json gen failed");
+      return err;
+    }
 
-  stat = json_object_set (root, (const char *)"time", json_string(timestamp));
+  stat = json_object_set (root, (const char *) "time", json_string (timestamp));
   if (stat != JSON_GEN_FAILED)
-  {
-    err = strdup("json gen failed");
-    return err;
-  }
+    {
+      err = strdup("json gen failed");
+      return err;
+    }
 
-  ret = json_dumps(root, JSON_INDENT(2));
+  ret = json_dumps (root, JSON_INDENT (2));
   if (ret == NULL)
-  {
-    err = strdup("json gen failed");
-    return err;
-  }
+    {
+      err = strdup("json gen failed");
+      return err;
+    }
 
   return ret;
 }
@@ -504,9 +503,8 @@ libcrun_set_log_format (const char *format, libcrun_error_t *err)
 int
 json_error_to_crun_error (int json_status, libcrun_error_t *err)
 {
-  if (json_status == 0) {
+  if (json_status == 0)
     return 0;
-  }
 
   return crun_make_error (err, 0, "generate JSON document");
 }

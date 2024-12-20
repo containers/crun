@@ -53,13 +53,13 @@ static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, N
 void
 add_string_to_json (json_t *root, const char *key, char *value)
 {
-  json_object_set (root, key, json_string(value));
+  json_object_set (root, key, json_string (value));
 }
 
 void
 add_bool_to_json (json_t *root, const char *key, int value)
 {
-  json_object_set (root, key, json_boolean(value));
+  json_object_set (root, key, json_boolean (value));
 }
 
 void
@@ -74,19 +74,19 @@ add_bool_str_to_json (json_t *root, const char *key, int value)
     {
       val = "false";
     }
-  json_object_set(root, key, json_string(val));
+  json_object_set (root, key, json_string (val));
 }
 
 void
 add_array_to_json (json_t *root, const char *key, char **array)
 {
   size_t i;
-  json_t *obj = json_array();
+  json_t *obj = json_array ();
 
   for (i = 0; array[i] != NULL; i++)
-    json_array_append (obj, json_string(array[i]));
+    json_array_append (obj, json_string (array[i]));
 
-  json_object_set(root, key, obj);
+  json_object_set (root, key, obj);
 }
 
 void
@@ -116,19 +116,19 @@ crun_features_add_capabilities (json_t *root, const struct linux_info_s *linux)
 void
 crun_features_add_cgroup_info (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
   add_bool_to_json (obj, "v1", linux->cgroup.v1);
   add_bool_to_json (obj, "v2", linux->cgroup.v2);
   add_bool_to_json (obj, "systemd", linux->cgroup.systemd);
   add_bool_to_json (obj, "systemdUser", linux->cgroup.systemd_user);
 
-  json_object_set(root, (const char *) "cgroup", obj);
+  json_object_set (root, (const char *) "cgroup", obj);
 }
 
 void
 crun_features_add_seccomp_info (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
 
   add_bool_to_json (obj, "enabled", linux->seccomp.enabled);
   if (linux->seccomp.actions)
@@ -142,37 +142,37 @@ crun_features_add_seccomp_info (json_t *root, const struct linux_info_s *linux)
 void
 crun_features_add_apparmor_info (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
 
   add_bool_to_json (obj, "enabled", linux->apparmor.enabled);
 
-  json_object_set(root, (const char *)"apparmor", obj );
+  json_object_set(root, (const char *) "apparmor", obj);
 }
 
 void
 crun_features_add_selinux_info (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
 
   add_bool_to_json (obj, "enabled", linux->selinux.enabled);
 
-  json_object_set(root, (const char *) "selinux" , obj);
+  json_object_set(root, (const char *) "selinux", obj);
 }
 
 void
 crun_features_add_mount_ext_info (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
-  json_t *subobj = json_object();
+  json_t *obj = json_object ();
+  json_t *subobj = json_object ();
   add_bool_to_json (subobj, "enabled", linux->mount_ext.idmap.enabled);
-  json_object_set(obj, (const char *)"idmap", subobj);
-  json_object_set(root, (const char *) "mountExtensions",obj);
+  json_object_set(obj, (const char *) "idmap", subobj);
+  json_object_set(root, (const char *) "mountExtensions", obj);
 }
 
 void
 crun_features_add_intel_rdt (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
   add_bool_to_json (obj, "enabled", linux->intel_rdt.enabled);
   json_object_set (root, (const char *) "intelRdt", obj);
 }
@@ -180,7 +180,7 @@ crun_features_add_intel_rdt (json_t *root, const struct linux_info_s *linux)
 void
 crun_features_add_linux_info (json_t *root, const struct linux_info_s *linux)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
 
   crun_features_add_namespaces (obj, linux);
   crun_features_add_capabilities (obj, linux);
@@ -191,13 +191,13 @@ crun_features_add_linux_info (json_t *root, const struct linux_info_s *linux)
   crun_features_add_mount_ext_info (obj, linux);
   crun_features_add_intel_rdt (obj, linux);
 
-  json_object_set(root, (const char *) "linux", obj);
+  json_object_set (root, (const char *) "linux", obj);
 }
 
 void
 crun_features_add_annotations_info (json_t *root, const struct annotations_info_s *annotation)
 {
-  json_t *obj = json_object();
+  json_t *obj = json_object ();
 
   if (! is_empty_string (annotation->io_github_seccomp_libseccomp_version))
     add_string_to_json (obj, "io.github.seccomp.libseccomp.version", annotation->io_github_seccomp_libseccomp_version);
@@ -210,7 +210,7 @@ crun_features_add_annotations_info (json_t *root, const struct annotations_info_
 
   add_bool_str_to_json (obj, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
 
-  json_object_set(root, (const char *) "annotations", obj);
+  json_object_set (root, (const char *) "annotations", obj);
 }
 
 void
@@ -227,7 +227,7 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
   libcrun_context_t crun_context = {
     0,
   };
-  json_t *root = json_object();
+  json_t *root = json_object ();
 
   argp_parse (&run_argp, argc, argv, 0, 0, &options);
 
@@ -261,15 +261,15 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
   // Add potentially unsafe config annotatinos info
   crun_features_add_potentially_unsafe_config_annotations_info (root, info->potentially_unsafe_annotations);
 
-  content_string = json_dumps (root, JSON_INDENT(2));
+  content_string = json_dumps (root, JSON_INDENT (2));
 
   printf ("%s", content_string);
 
   // decrement reference
   json_decref (root);
 
-  //free content_string;
-  free(content_string);
+  // free content_string;
+  free (content_string);
 
   return 0;
 }
