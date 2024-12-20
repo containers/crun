@@ -3116,7 +3116,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   r = libcrun_get_container_state_string (id, &status, state_root, &container_status, &running, err);
   if (UNLIKELY (r < 0))
-    goto exit;
+    return r;
 
   r = 0;
   json_t *root = json_object();
