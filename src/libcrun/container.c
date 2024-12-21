@@ -3880,11 +3880,10 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
       // if (values[i].numeric)
       //   json_object_set(root, (const char *)values[i].name, json_integer(values[i].value));
       // else
-        json_object_set (root, (const char *) values[i].name, json_string (values[i].value));
+      json_object_set (root, (const char *) values[i].name, json_string (values[i].value));
     }
   // if (len)
   //   yajl_gen_map_close (root);
-
 
   buf = json_dumps (root, JSON_INDENT (2));
   buf_len = strlen (buf);
