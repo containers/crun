@@ -1521,7 +1521,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 
   *container = libcrun_container_load_from_file (config_file, err);
   if (*container == NULL)
-    return crun_make_error (err, 0, "error loading `%s`", config_file);
+    return crun_make_error (err, 0, "error loading `%s` 1", config_file);
 
   return 0;
 }
@@ -3183,7 +3183,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
     container = libcrun_container_load_from_file (config_file, err);
     if (UNLIKELY (container == NULL))
       {
-        r = crun_make_error (err, 0, "error loading config.json");
+        r = crun_make_error (err, 0, "error loading config.json 2");
         goto exit;
       }
 
@@ -3525,7 +3525,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   container = libcrun_container_load_from_file (config_file, err);
   if (container == NULL)
-    return crun_make_error (err, 0, "error loading config.json");
+    return crun_make_error (err, 0, "error loading config.json 3");
 
   container->context = context;
 
@@ -4392,7 +4392,7 @@ libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, 
 
   container = libcrun_container_load_from_file (config_file, err);
   if (UNLIKELY (container == NULL))
-    return crun_make_error (err, 0, "error loading config.json");
+    return crun_make_error (err, 0, "error loading config.json 4");
 
   return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, err);
 }
