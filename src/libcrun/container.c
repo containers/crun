@@ -726,7 +726,6 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
       r = json_object_set (root, (const char *) "annotations", obj);
       if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto json_error;
-
     }
 
   stdin = json_dumps (root, JSON_INDENT (2));
@@ -778,7 +777,7 @@ get_json_result (json_t *root, char **out, size_t *out_len)
   char *buf = NULL;
   size_t buf_len = 0;
 
-  buf = json_dumps(root, JSON_INDENT(2));
+  buf = json_dumps (root, JSON_INDENT (2));
   if (buf == NULL)
     {
       return JSON_GEN_FAILED;
@@ -842,7 +841,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
     }
 
   /* State.  */
-  json_t *stateobj = json_object();
+  json_t *stateobj = json_object ();
   if (root == NULL)
     return crun_make_error (err, 0, "json_object failed");
 
@@ -878,7 +877,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
 
       json_t *annotationsobj = json_object ();
       if (root == NULL)
-          return crun_make_error (err, 0, "json_object failed");
+        return crun_make_error (err, 0, "json_object failed");
 
       for (i = 0; i < def->annotations->len; i++)
         {
@@ -889,7 +888,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
           if (UNLIKELY (r != JSON_GEN_SUCCESS))
             goto exit;
         }
-      r = json_object_set(stateobj, (const char *) "annotations", annotationsobj);
+      r = json_object_set (stateobj, (const char *) "annotations", annotationsobj);
       if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
     }
@@ -3122,7 +3121,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   if (root == NULL)
     return crun_make_error (err, 0, "json_objectfailed");
 
-
   r = json_object_set (root, (const char *) "ociVersion", json_string (OCI_CONFIG_VERSION));
   if (UNLIKELY (r != JSON_GEN_SUCCESS))
     goto exit;
@@ -3163,7 +3161,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
       r = json_object_set (root, (const char *) "owner", json_string (status.owner));
       if (UNLIKELY (r != JSON_GEN_SUCCESS))
         goto exit;
-
     }
 
   {
@@ -3212,7 +3209,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
       }
   }
 
-  buf = json_dumps(root, JSON_INDENT (2));
+  buf = json_dumps (root, JSON_INDENT (2));
   if (buf == NULL)
     {
       r = crun_make_error (err, 0, "error generating JSON");
@@ -3865,7 +3862,6 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
   if (root == NULL)
     return crun_make_error (err, errno, "json_object failed");
 
-
   qsort (values, len, sizeof (struct libcrun_update_value_s), compare_update_values);
 
   for (i = 0; i < len; i++)
@@ -3884,7 +3880,7 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
       // if (values[i].numeric)
       //   json_object_set(root, (const char *)values[i].name, json_integer(values[i].value));
       // else
-        json_object_set(root, (const char *) values[i].name, json_string (values[i].value));
+        json_object_set (root, (const char *) values[i].name, json_string (values[i].value));
     }
   // if (len)
   //   yajl_gen_map_close (root);
@@ -4334,7 +4330,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       if (! running)
         pid = 0;
 
-      json_t *obj = json_object();
+      json_t *obj = json_object ();
       json_object_set (obj, (const char *) "id", json_string (it->name));
       json_object_set (obj, (const char *) "pid", json_integer (pid));
       json_object_set (obj, (const char *) "status", json_string (container_status));
@@ -4342,14 +4338,13 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       json_object_set (obj, (const char *) "created", json_string (status.created));
       json_object_set (obj, (const char *) "owner", json_string (status.owner));
 
-
       json_array_append (root, obj);
 
       libcrun_free_container_status (&status);
     }
 
   content = json_dumps (root, JSON_INDENT (2));
-  len = strlen(content);
+  len = strlen (content);
   if (content == NULL)
     {
       ret = libcrun_make_error (err, 0, "cannot generate json list");

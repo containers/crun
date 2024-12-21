@@ -805,7 +805,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
         /* len will probably always be 3 as crun is currently only
          * recording the destination of FD 0, 1 and 2. */
-        json_array_foreach (tree ,index, value)
+        json_array_foreach (tree, index, value)
         {
           if (value && json_is_string (value))
             {

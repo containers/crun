@@ -388,7 +388,7 @@ make_json_error (const char *msg, int verbosity)
   stat = json_object_set (root, (const char *) "msg", json_string (msg));
   if (stat != JSON_GEN_FAILED)
     {
-      err = strdup("json gen failed");
+      err = strdup ("json gen failed");
       return err;
     }
 
@@ -402,14 +402,14 @@ make_json_error (const char *msg, int verbosity)
   stat = json_object_set (root, (const char *) "time", json_string (timestamp));
   if (stat != JSON_GEN_FAILED)
     {
-      err = strdup("json gen failed");
+      err = strdup ("json gen failed");
       return err;
     }
 
   ret = json_dumps (root, JSON_INDENT (2));
   if (ret == NULL)
     {
-      err = strdup("json gen failed");
+      err = strdup ("json gen failed");
       return err;
     }
 

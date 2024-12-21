@@ -136,7 +136,7 @@ crun_features_add_seccomp_info (json_t *root, const struct linux_info_s *linux)
   if (linux->seccomp.operators)
     add_array_to_json (obj, "operators", linux->seccomp.operators);
 
-  json_object_set(root, (const char *) "seccomp", obj);
+  json_object_set (root, (const char *) "seccomp", obj);
 }
 
 void
@@ -146,7 +146,7 @@ crun_features_add_apparmor_info (json_t *root, const struct linux_info_s *linux)
 
   add_bool_to_json (obj, "enabled", linux->apparmor.enabled);
 
-  json_object_set(root, (const char *) "apparmor", obj);
+  json_object_set (root, (const char *) "apparmor", obj);
 }
 
 void
@@ -156,7 +156,7 @@ crun_features_add_selinux_info (json_t *root, const struct linux_info_s *linux)
 
   add_bool_to_json (obj, "enabled", linux->selinux.enabled);
 
-  json_object_set(root, (const char *) "selinux", obj);
+  json_object_set (root, (const char *) "selinux", obj);
 }
 
 void
@@ -165,8 +165,8 @@ crun_features_add_mount_ext_info (json_t *root, const struct linux_info_s *linux
   json_t *obj = json_object ();
   json_t *subobj = json_object ();
   add_bool_to_json (subobj, "enabled", linux->mount_ext.idmap.enabled);
-  json_object_set(obj, (const char *) "idmap", subobj);
-  json_object_set(root, (const char *) "mountExtensions", obj);
+  json_object_set (obj, (const char *) "idmap", subobj);
+  json_object_set (root, (const char *) "mountExtensions", obj);
 }
 
 void

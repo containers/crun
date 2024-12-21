@@ -217,7 +217,6 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
 
-
   r = json_object_set (root, (const char *) "rootfs", json_string (status->rootfs));
   if (r != JSON_GEN_SUCCESS)
     goto json_error;
