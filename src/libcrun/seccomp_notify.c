@@ -139,7 +139,7 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
 
           ret = start_cb (&opq, conf, sizeof (*conf));
           if (UNLIKELY (ret != 0))
-            return crun_make_error (err, -ret, "error loading `%s`", it);
+            return crun_make_error (err, -ret, "error loading `%s` 7", it);
         }
       ctx->plugins[s].opaque = opq;
     }

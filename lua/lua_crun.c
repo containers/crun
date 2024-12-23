@@ -527,7 +527,7 @@ luacrun_ctx_status_container (lua_State *S)
     if (container == NULL)
       {
         lua_pushnil (S);
-        lua_pushstring (S, "error loading config.json");
+        lua_pushstring (S, "error loading config.json 5");
         return 2;
       }
 
