@@ -29,7 +29,7 @@ with pkgs; stdenv.mkDerivation {
       libcap
       libseccomp
       libsystemd
-      yajl
+      libjansson
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
   prePatch = ''
