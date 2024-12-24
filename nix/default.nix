@@ -6,3 +6,7 @@
   enableCriu = true;
   enableSystemd = enableSystemd;
 }
+{ pkgs ? import <nixpkgs> {} }: pkgs.mkShell { 
+    packages = with pkgs; [ jansson ]; 
+}
+
