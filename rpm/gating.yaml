@@ -1,7 +1,9 @@
 --- !Policy
 product_versions:
   - fedora-*
-decision_context: bodhi_update_push_stable
+decision_context:
+  - bodhi_update_push_stable
+  - bodhi_update_push_testing
 rules:
   - !PassingTestCaseRule {test_case_name: fedora-ci.koji-build.tier0.functional}
 
@@ -9,4 +11,5 @@ rules:
 product_versions:
   - rhel-*
 decision_context: osci_compose_gate
-rules: []
+rules:
+  - !PassingTestCaseRule {test_case_name: osci.brew-build.tier0.functional}

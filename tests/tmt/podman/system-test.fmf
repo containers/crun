@@ -1,0 +1,15 @@
+require:
+    - bats
+    - conmon
+    - crun
+    - make
+    - podman-tests
+
+adjust:
+    duration: 10m
+    when: arch == aarch64
+
+/system_test:
+    tag: [ upstream, downstream ]
+    summary: Run crun specific Podman tests
+    test: bash ./system-test.sh
