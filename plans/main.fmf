@@ -11,19 +11,18 @@ prepare:
       script: |
         sed -i -n '/^priority=/!p;$apriority=1' /etc/yum.repos.d/*podman-next*.repo
         dnf -y upgrade --allowerasing
-        if [[ $(rpm --eval '%{?rhel}') == 10 ]]; then
-            dnf -y copr enable rhcontainerbot/bats-el10
-            dnf -y install bats
-        fi
+#if [[ $(rpm --eval '%{?rhel}') == 10 ]]; then
+#           dnf -y copr enable rhcontainerbot/bats-el10
+#           dnf -y install bats
+#       fi
     # FIXME: Use epel10 once bats is available there
-    #- when:
-    #    - distro == centos-stream-10
-    #    - distro == rhel-10
-    #  because: "bats isn't yet available on epel10"
-    #  how: install
-    # copr: rhcontainerbot/bats-el10
-    #  package: bats
-    # missing: skip
+    - when:
+        - distro == centos-stream-10
+        - distro == rhel-10
+      because: "bats isn't yet available on epel10"
+      how: install
+      copr: rhcontainerbot/bats-el10
+      package: bats
 
 /upstream:
     summary: Run crun specific Podman system tests on upstream PRs
