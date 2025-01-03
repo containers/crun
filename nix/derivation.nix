@@ -19,8 +19,6 @@ with pkgs; stdenv.mkDerivation {
     python3
     which
     gcc
-    boost
-    curl
   ];
   buildInputs =
     (if stdenv.hostPlatform.isMusl then [
