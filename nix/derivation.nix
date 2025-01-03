@@ -20,6 +20,7 @@ with pkgs; stdenv.mkDerivation {
     which
     gcc
     boost
+    cmake
   ];
   buildInputs =
     (if stdenv.hostPlatform.isMusl then [
