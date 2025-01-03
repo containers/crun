@@ -18,6 +18,7 @@ with pkgs; stdenv.mkDerivation {
     pkg-config
     python3
     which
+    gcc
   ];
   buildInputs =
     (if stdenv.hostPlatform.isMusl then [
