@@ -2,19 +2,39 @@ discover:
     how: fmf
 execute:
     how: tmt
+adjust:
+    - when: initiator == packit
+      because: "We need to test with updated packages from rhcontainerbot/podman-next copr"
+      prepare+:
+        how: shell
+        script: |
+            sed -i -n '/^priority=/!p;$apriority=1' /etc/yum.repos.d/*podman-next*.repo
+            dnf -y upgrade --allowerasing
+    # FIXME: Use epel10 once bats is available there
+    - when: distro == centos-stream-10 or distro == rhel-10
+      because: "bats isn't yet available on epel10"
+      prepare+:
+        how: install
+        copr: rhcontainerbot/bats-el10
+        package: bats
+    - when: distro == centos-stream-9 or distro == rhel-9
+      because: "bats is present on EPEL on rhel9 / c9s"
+      prepare+:
+        how: feature
+        epel: enabled
 
 /upstream:
     summary: Run crun specific Podman system tests on upstream PRs
     discover+:
         filter: tag:upstream
     adjust+:
-        enabled: false
-        when: initiator is not defined or initiator != packit
+        - enabled: false
+          when: initiator is not defined or initiator != packit
 
 /downstream:
     summary: Run crun specific Podman system tests on bodhi / errata and dist-git PRs
     discover+:
         filter: tag:downstream
     adjust+:
-        enabled: false
-        when: initiator == packit
+        - enabled: false
+          when: initiator == packit

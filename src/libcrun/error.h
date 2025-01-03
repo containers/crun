@@ -40,6 +40,7 @@
 #include <stdbool.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <jansson.h>
 
 struct libcrun_error_s
 {
@@ -96,7 +97,7 @@ LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, vo
 
 LIBCRUN_PUBLIC int libcrun_error_release (libcrun_error_t *err);
 
-int yajl_error_to_crun_error (int yajl_status, libcrun_error_t *err);
+int json_error_to_crun_error (int json_status, libcrun_error_t *err);
 
 enum
 {

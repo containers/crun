@@ -777,8 +777,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   {
     cleanup_free char *descriptors_path = NULL;
     cleanup_free char *buffer = NULL;
-    char err_buffer[256];
-    yajl_val tree;
+    json_error_t error;
+    json_t *tree;
 
     ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
     if (UNLIKELY (ret < 0))
@@ -794,28 +794,28 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
      * a pipe 'pipe:' we tell CRIU to reconnect that pipe
      * to the corresponding FD to have (especially) stdout
      * and stderr being correctly redirected. */
-    tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
+    tree = json_loads (buffer, 0, &error);
     if (UNLIKELY (tree == NULL))
       return crun_make_error (err, 0, "cannot parse descriptors file `%s`", DESCRIPTORS_FILENAME);
 
-    if (tree && YAJL_IS_ARRAY (tree))
+    if (tree && json_is_array (tree))
       {
-        size_t i, len = tree->u.array.len;
+        size_t index;
+        json_t *value;
 
         /* len will probably always be 3 as crun is currently only
          * recording the destination of FD 0, 1 and 2. */
-        for (i = 0; i < len; ++i)
-          {
-            yajl_val s = tree->u.array.values[i];
-            if (s && YAJL_IS_STRING (s))
-              {
-                char *str = YAJL_GET_STRING (s);
-                if (has_prefix (str, "pipe:"))
-                  libcriu_wrapper->criu_add_inherit_fd (i, str);
-              }
-          }
+        json_array_foreach (tree, index, value)
+        {
+          if (value && json_is_string (value))
+            {
+              const char *str = json_string_value (value);
+              if (has_prefix (str, "pipe:"))
+                libcriu_wrapper->criu_add_inherit_fd (index, str);
+            }
+        }
       }
-    yajl_tree_free (tree);
+    json_decref (tree);
   }
 
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,

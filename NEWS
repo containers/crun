@@ -1,7 +1,19 @@
+* crun-1.19.1
+
+- linux: fix a hang if there are no reads from the tty.  Use non
+  blocking sockets to read and write from the tty so that the "crun
+  exec" process doesn't hang when the terminal is not consuming any
+  data.
+- linux: remove the workaround needed to mount a cgroup on top of
+  another cgroup mount.  The workaround had the disadvantage to
+  temporarily leak a mount on the host.  The alternative that is
+  currently used is to mount a temporary tmpfs between the two cgroup
+  mounts.
+
 * crun-1.19
 
 - wasm: add new handler wamr.
-- criu: allow passing network lock method to libcriu
+- criu: allow passing network lock method to libcriu.
 - linux: honor exec cpu affinity mask.
 - build: fix build with musl libc.
 - crun: use mount API to self-clone.

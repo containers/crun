@@ -23,14 +23,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <yajl/yajl_tree.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <signal.h>
-
-#define YAJL_STR(x) ((const unsigned char *) (x))
 
 struct pid_stat
 {
@@ -177,10 +174,10 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   cleanup_free char *file_tmp = NULL;
   size_t len;
   cleanup_close int fd_write = -1;
-  const unsigned char *buf = NULL;
+  char *buf = NULL;
   struct pid_stat st;
   const char *tmp;
-  yajl_gen gen = NULL;
+  json_t *root;
 
   ret = read_pid_stat (status->pid, &st, err);
   if (UNLIKELY (ret < 0))
@@ -193,126 +190,69 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (fd_write < 0))
     return crun_make_error (err, errno, "cannot open status file");
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return crun_make_error (err, 0, "yajl_gen_alloc failed");
+  root = json_object ();
+  if (root == NULL)
+    return crun_make_error (err, 0, "json_object failed");
 
-  yajl_gen_config (gen, yajl_gen_beautify, 1);
-  yajl_gen_config (gen, yajl_gen_validate_utf8, 1);
+  r = json_object_set (root, (const char *) "pid", json_integer (status->pid));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_map_open (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("pid"), strlen ("pid"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_integer (gen, status->pid);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("process-start-time"), strlen ("process-start-time"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_integer (gen, status->process_start_time);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("cgroup-path"), strlen ("cgroup-path"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "process-start-time", json_integer (status->process_start_time));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
   tmp = status->cgroup_path ? status->cgroup_path : "";
-  r = yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("scope"), strlen ("scope"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "cgroup-path", json_string (tmp));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
   tmp = status->scope ? status->scope : "";
-  r = yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("intelrdt"), strlen ("intelrdt"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "scope", json_string (tmp));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
   tmp = status->intelrdt ? status->intelrdt : "";
-  r = yajl_gen_string (gen, YAJL_STR (tmp), strlen (tmp));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "intelrdt", json_string (tmp));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("rootfs"), strlen ("rootfs"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "rootfs", json_string (status->rootfs));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR (status->rootfs), strlen (status->rootfs));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "systemd-cgroup", json_boolean (status->systemd_cgroup));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("systemd-cgroup"), strlen ("systemd-cgroup"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "bundle", json_string (status->bundle));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_bool (gen, status->systemd_cgroup);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("bundle"), strlen ("bundle"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR (status->bundle), strlen (status->bundle));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR ("created"), strlen ("created"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_string (gen, YAJL_STR (status->created), strlen (status->created));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "created", json_string (status->created));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
   if (status->owner)
     {
-      r = yajl_gen_string (gen, YAJL_STR ("owner"), strlen ("owner"));
-      if (UNLIKELY (r != yajl_gen_status_ok))
-        goto yajl_error;
-
-      r = yajl_gen_string (gen, YAJL_STR (status->owner), strlen (status->owner));
-      if (UNLIKELY (r != yajl_gen_status_ok))
-        goto yajl_error;
+      r = json_object_set (root, (const char *) "owner", json_string (status->owner));
+      if (r != JSON_GEN_SUCCESS)
+        goto json_error;
     }
 
-  r = yajl_gen_string (gen, YAJL_STR ("detached"), strlen ("detached"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "detached", json_boolean (status->detached));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_bool (gen, status->detached);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  r = json_object_set (root, (const char *) "external_descriptors", json_string (status->external_descriptors));
+  if (r != JSON_GEN_SUCCESS)
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR ("external_descriptors"), strlen ("external_descriptors"));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  buf = json_dumps (root, JSON_INDENT (2));
+  if (buf == NULL)
+    goto json_error;
 
-  r = yajl_gen_string (gen, YAJL_STR (status->external_descriptors), strlen (status->external_descriptors));
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_map_close (gen);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
-
-  r = yajl_gen_get_buf (gen, &buf, &len);
-  if (UNLIKELY (r != yajl_gen_status_ok))
-    goto yajl_error;
+  len = strlen (buf);
 
   if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
     {
@@ -329,16 +269,16 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
     }
 
 exit:
-  if (gen)
-    yajl_gen_free (gen);
+  if (root)
+    json_decref (root);
 
   return ret;
 
-yajl_error:
-  if (gen)
-    yajl_gen_free (gen);
+json_error:
+  if (root)
+    json_decref (root);
 
-  return yajl_error_to_crun_error (r, err);
+  return json_error_to_crun_error (r, err);
 }
 
 int
@@ -346,91 +286,90 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
                                libcrun_error_t *err)
 {
   cleanup_free char *buffer = NULL;
-  char err_buffer[256];
   int ret;
   cleanup_free char *file = get_state_directory_status_file (state_root, id);
-  yajl_val tree, tmp;
+  json_error_t error;
+  json_t *tree, *tmp;
 
   ret = read_all_file (file, &buffer, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
-  if (UNLIKELY (tree == NULL))
-    return crun_make_error (err, 0, "cannot parse status file: `%s`", err_buffer);
+  tree = json_loads (buffer, 0, &error);
+  if (tree == NULL)
+    return crun_make_error (err, 0, "cannot parse status file: `%s`", error.text);
 
   {
-    const char *pid_path[] = { "pid", NULL };
-    tmp = yajl_tree_get (tree, pid_path, yajl_t_number);
+    tmp = json_object_get (tree, (const char *) "pid");
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`pid` missing in `%s`", file);
-    status->pid = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
+    status->pid = (int) json_integer_value (tmp);
   }
   {
-    const char *process_start_time_path[] = { "process-start-time", NULL };
-    tmp = yajl_tree_get (tree, process_start_time_path, yajl_t_number);
+    const char *process_start_time_path = "process-start-time";
+    tmp = json_object_get (tree, process_start_time_path);
     if (UNLIKELY (tmp == NULL))
       status->process_start_time = 0; /* backwards compatibility */
     else
-      status->process_start_time = strtoull (YAJL_GET_NUMBER (tmp), NULL, 10);
+      status->process_start_time = (int) json_integer_value (tmp);
   }
   {
-    const char *cgroup_path[] = { "cgroup-path", NULL };
-    tmp = yajl_tree_get (tree, cgroup_path, yajl_t_string);
+    const char *cgroup_path = "cgroup-path";
+    tmp = json_object_get (tree, cgroup_path);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`cgroup-path` missing in `%s`", file);
-    status->cgroup_path = xstrdup (YAJL_GET_STRING (tmp));
+    status->cgroup_path = xstrdup (json_string_value (tmp));
   }
   {
-    const char *scope[] = { "scope", NULL };
-    tmp = yajl_tree_get (tree, scope, yajl_t_string);
-    status->scope = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
+    const char *scope = "scope";
+    tmp = json_object_get (tree, scope);
+    status->scope = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
   {
-    const char *intelrdt[] = { "intelrdt", NULL };
-    tmp = yajl_tree_get (tree, intelrdt, yajl_t_string);
-    status->intelrdt = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
+    const char *intelrdt = "intelrdt";
+    tmp = json_object_get (tree, intelrdt);
+    status->intelrdt = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
   {
-    const char *rootfs[] = { "rootfs", NULL };
-    tmp = yajl_tree_get (tree, rootfs, yajl_t_string);
+    const char *rootfs = "rootfs";
+    tmp = json_object_get (tree, rootfs);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`rootfs` missing in `%s`", file);
-    status->rootfs = xstrdup (YAJL_GET_STRING (tmp));
+    status->rootfs = xstrdup (json_string_value (tmp));
   }
   {
-    const char *systemd_cgroup[] = { "systemd-cgroup", NULL };
-    status->systemd_cgroup = YAJL_IS_TRUE (yajl_tree_get (tree, systemd_cgroup, yajl_t_true));
+    const char *systemd_cgroup = "systemd-cgroup";
+    status->systemd_cgroup = json_is_true (json_object_get (tree, systemd_cgroup));
   }
   {
-    const char *bundle[] = { "bundle", NULL };
-    tmp = yajl_tree_get (tree, bundle, yajl_t_string);
+    const char *bundle = "bundle";
+    tmp = json_object_get (tree, bundle);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`bundle` missing in `%s`", file);
-    status->bundle = xstrdup (YAJL_GET_STRING (tmp));
+    status->bundle = xstrdup (json_string_value (tmp));
   }
   {
-    const char *created[] = { "created", NULL };
-    tmp = yajl_tree_get (tree, created, yajl_t_string);
+    const char *created = "created";
+    tmp = json_object_get (tree, created);
     if (UNLIKELY (tmp == NULL))
       return crun_make_error (err, 0, "`created` missing in `%s`", file);
-    status->created = xstrdup (YAJL_GET_STRING (tmp));
+    status->created = xstrdup (json_string_value (tmp));
   }
   {
-    const char *owner[] = { "owner", NULL };
-    tmp = yajl_tree_get (tree, owner, yajl_t_string);
-    status->owner = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
+    const char *owner = "owner";
+    tmp = json_object_get (tree, owner);
+    status->owner = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
   {
-    const char *detached[] = { "detached", NULL };
-    status->detached = YAJL_IS_TRUE (yajl_tree_get (tree, detached, yajl_t_true));
+    const char *detached = "detached";
+    status->detached = json_is_true (json_object_get (tree, detached));
   }
   {
-    const char *external_descriptors[] = { "external_descriptors", NULL };
-    tmp = yajl_tree_get (tree, external_descriptors, yajl_t_string);
-    status->external_descriptors = tmp ? xstrdup (YAJL_GET_STRING (tmp)) : NULL;
+    const char *external_descriptors = "external_descriptors";
+    tmp = json_object_get (tree, external_descriptors);
+    status->external_descriptors = tmp ? xstrdup (json_string_value (tmp)) : NULL;
   }
-  yajl_tree_free (tree);
+  json_decref (tree);
   return 0;
 }
 
