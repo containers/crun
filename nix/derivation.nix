@@ -19,6 +19,8 @@ with pkgs; stdenv.mkDerivation {
     python3
     which
     gcc
+    boost
+    systemd-minimal
   ];
   buildInputs =
     (if stdenv.hostPlatform.isMusl then [
