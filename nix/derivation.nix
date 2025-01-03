@@ -20,7 +20,6 @@ with pkgs; stdenv.mkDerivation {
     which
     gcc
     boost
-    systemd-minimal
   ];
   buildInputs =
     (if stdenv.hostPlatform.isMusl then [
