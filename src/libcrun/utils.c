@@ -1467,9 +1467,6 @@ set_home_env (uid_t id)
       ret = fgetpwent_r (stream, &pwd, buf, buf_size, &ret_pw);
       if (UNLIKELY (ret != 0))
         {
-          if (errno == ENOENT)
-            goto error;
-
           if (errno != ERANGE)
             goto error;
 
