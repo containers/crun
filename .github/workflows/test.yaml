@@ -107,6 +107,7 @@ jobs:
                   make -j $(nproc)
               ;;
               check)
+                  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
                   ./configure --disable-dl
                   make
                   make syntax-check

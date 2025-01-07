@@ -38,9 +38,9 @@ fill_data (char *buffer, size_t size)
 }
 
 static int
-do_test_ring_buffer_read_write (int max_data_size, int rb_size)
+do_test_ring_buffer_read_write (size_t max_data_size, size_t rb_size)
 {
-  const int repeat = 2048;
+  const size_t repeat = 2048;
   cleanup_free char *buffer_w = xmalloc (max_data_size);
   cleanup_free char *buffer_r = xmalloc (max_data_size);
   libcrun_error_t err = NULL;
@@ -121,7 +121,7 @@ do_test_ring_buffer_read_write (int max_data_size, int rb_size)
         }
 
       ret = write (fd_r[1], buffer_w, data_size);
-      if (ret != data_size)
+      if (ret != (int) data_size)
         {
           fprintf (stderr, "write failed\n");
           return 1;
@@ -140,9 +140,9 @@ do_test_ring_buffer_read_write (int max_data_size, int rb_size)
           return 1;
         }
       avail = ring_buffer_get_data_available (rb);
-      if (avail != ret)
+      if ((int) avail != ret)
         {
-          fprintf (stderr, "wrong get_data_available got %zu instead of %zu\n", avail, ret);
+          fprintf (stderr, "wrong get_data_available got %zu instead of %d\n", avail, ret);
           return 1;
         }
       avail = ring_buffer_get_space_available (rb);
@@ -164,7 +164,7 @@ do_test_ring_buffer_read_write (int max_data_size, int rb_size)
           fprintf (stderr, "write failed with EAGAIN\n");
           return 1;
         }
-      if (ret != data_size)
+      if (ret != (int) data_size)
         {
           fprintf (stderr, "write to ring_buffer wrong size\n");
           return 1;
@@ -183,7 +183,7 @@ do_test_ring_buffer_read_write (int max_data_size, int rb_size)
         }
 
       ret = read (fd_w[0], buffer_r, data_size);
-      if (ret != data_size)
+      if (ret != (int) data_size)
         {
           fprintf (stderr, "read wrong size\n");
           return 1;
@@ -230,10 +230,10 @@ do_test_ring_buffer_read_write (int max_data_size, int rb_size)
 static int
 test_ring_buffer_read_write ()
 {
-  int max_data_sizes[] = { 1, 7, 10, 101, 1024, 4096, 4096, 7919, 8191, 8192 };
-  int rb_sizes[] = { 11, 16, 128, 512, 2048, 4096, 4096, 8192, 8192, 8192 };
+  size_t max_data_sizes[] = { 1, 7, 10, 101, 1024, 4096, 4096, 7919, 8191, 8192 };
+  size_t rb_sizes[] = { 11, 16, 128, 512, 2048, 4096, 4096, 8192, 8192, 8192 };
+  size_t i;
   int ret;
-  int i;
 
   if (sizeof (max_data_sizes) != sizeof (rb_sizes))
     {
@@ -246,7 +246,7 @@ test_ring_buffer_read_write ()
       ret = do_test_ring_buffer_read_write (max_data_sizes[i], rb_sizes[i]);
       if (ret < 0)
         {
-          fprintf (stderr, "test failed with data_size=%d, rb_size=%d\n", max_data_sizes[i], rb_sizes[i]);
+          fprintf (stderr, "test failed with data_size=%zu, rb_size=%zu\n", max_data_sizes[i], rb_sizes[i]);
           return ret;
         }
     }
