@@ -30,11 +30,6 @@ self: super:
       export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -Wno-error=format-overflow"
     '';
   });
-  yajl = super.yajl.overrideAttrs (x: {
-    cmakeFlags = (x.cmakeFlags or [ ]) ++ [
-      "-DBUILD_SHARED_LIBS=OFF"
-    ];
-  });
   zstd = super.zstd.overrideAttrs (x: {
     cmakeFlags = x.cmakeFlags ++ [ "-DZSTD_BUILD_CONTRIB:BOOL=OFF" ];
     preInstall = "";

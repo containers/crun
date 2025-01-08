@@ -35,7 +35,7 @@ jobs:
 
     - run: |
        sudo apt-get update
-       sudo apt-get install -y make git gcc build-essential pkgconf libtool libsystemd-dev libcap-dev libseccomp-dev libyajl-dev go-md2man libtool autoconf python3 automake libprotobuf-c-dev
+       sudo apt-get install -y make git gcc build-essential pkgconf libtool libsystemd-dev libcap-dev libseccomp-dev libjansson-dev go-md2man libtool autoconf python3 automake libprotobuf-c-dev
        ./autogen.sh
        ./configure
        make -j $(nproc)
