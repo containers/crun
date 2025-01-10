@@ -1,4 +1,5 @@
 FROM fedora:latest
+
 ARG WASM_EDGE_VERSION="0.14.0"
 
 # Install the deps for building crun
@@ -21,10 +22,10 @@ ADD hello_wasm /hello_wasm
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 SHELL ["/bin/bash", "-c"]
 RUN source "$HOME/.cargo/env" && \
-		rustup target add wasm32-wasi && \
+		rustup target add wasm32-wasip1 && \
 		cd /hello_wasm/hello && \
-		cargo build --release --target wasm32-wasi && \
-		cp ./target/wasm32-wasi/release/hello.wasm /hello_wasm && \
+		cargo build --release --target wasm32-wasip1 && \
+		cp ./target/wasm32-wasip1/release/hello.wasm /hello_wasm && \
 		cd / && \
 		rm -rf /hello_wasm/hello
 
