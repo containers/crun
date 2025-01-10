@@ -27,7 +27,7 @@ podman run -it -p 8080:8080  --name=wasm-example  --platform=wasi/wasm32   micha
    println!("{}", "This is from a main function from a wasm module");
   }
 ```
-* Compile to `wasm32-wasi` target using `wasm-pack` or any other relevant tool. We are going to be using `cargo build --target wasm32-wasi`
+* Compile to `wasm32-wasip1` target using `wasm-pack` or any other relevant tool. We are going to be using `cargo build --target wasm32-wasip2`
 * Create relevant image and use your container manager. But for this example we will be running directly using crun and plub config manually.
 ```console
 $ crun run wasm-container
