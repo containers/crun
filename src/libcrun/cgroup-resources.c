@@ -50,6 +50,7 @@ struct default_dev_s default_devices[] = {
   { 'c', 5, 1, "rwm" },
   { 'c', 136, -1, "rwm" },
   { 'c', 5, 2, "rwm" },
+  { 'c', 10, 200, "rwm" },
   { 0, 0, 0, NULL }
 };
 
