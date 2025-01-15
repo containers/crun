@@ -305,6 +305,8 @@ read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_e
   return read_all_fd_with_size_hint (fd, description, out, len, 0, err);
 }
 
+int get_realpath_to_file (int dirfd, const char *path_name, char **absolute_path, libcrun_error_t *err);
+
 int read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err);
 
 int read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_error_t *err);

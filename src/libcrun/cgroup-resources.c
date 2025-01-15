@@ -178,8 +178,18 @@ check_cgroup_v2_controller_available_wrapper (int ret, int cgroup_dirfd, const c
         }
       if (! found)
         {
+          cleanup_free char *absolute_path = NULL;
+          libcrun_error_t tmp_err = NULL;
+
           crun_error_release (err);
-          return crun_make_error (err, 0, "the requested cgroup controller `%s` is not available", key);
+          ret = get_realpath_to_file (cgroup_dirfd, "cgroup.controllers", &absolute_path, &tmp_err);
+          if (LIKELY (ret >= 0))
+            ret = crun_make_error (err, 0, "controller `%s` is not available under %s", key, absolute_path);
+          else
+            {
+              crun_error_release (&tmp_err);
+              ret = crun_make_error (err, 0, "the requested cgroup controller `%s` is not available", key);
+            }
         }
     }
   return ret;

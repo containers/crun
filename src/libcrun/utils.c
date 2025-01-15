@@ -1057,6 +1057,31 @@ read_all_file (const char *path, char **out, size_t *len, libcrun_error_t *err)
 }
 
 int
+get_realpath_to_file (int dirfd, const char *path_name, char **absolute_path, libcrun_error_t *err)
+{
+  cleanup_close int targetfd = -1;
+
+  targetfd = TEMP_FAILURE_RETRY (openat (dirfd, path_name, O_RDONLY | O_CLOEXEC));
+  if (UNLIKELY (targetfd < 0))
+    return crun_make_error (err, errno, "error opening file `%s`", path_name);
+  else
+    {
+      ssize_t len;
+      proc_fd_path_t target_fd_path;
+
+      get_proc_self_fd_path (target_fd_path, targetfd);
+      len = safe_readlinkat (AT_FDCWD, target_fd_path, absolute_path, 0, err);
+      if (UNLIKELY (len < 0))
+        {
+          crun_error_release (err);
+          return crun_make_error (err, errno, "error unable to provide absolute path to file `%s`", path_name);
+        }
+    }
+
+  return 0;
+}
+
+int
 open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *err)
 {
   struct sockaddr_un addr = {};
