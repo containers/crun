@@ -65,7 +65,7 @@ jobs:
     trigger: pull_request
     packages: [crun-centos]
     notifications: *copr_build_failure_notification
-    targets: &centos_targets
+    targets: &centos_copr_targets
       # Need epel9 repos to fetch wasmedge build dependency
       centos-stream-9-x86_64:
         additional_repos:
@@ -107,7 +107,7 @@ jobs:
     trigger: pull_request
     packages: [crun-centos]
     notifications: *podman_system_test_fail_notification
-    targets: *centos_targets
+    targets: *centos_copr_targets
     tf_extra_params:
       environments:
         - artifacts:
