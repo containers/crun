@@ -3,14 +3,26 @@ discover:
 execute:
     how: tmt
 prepare:
-    - how: feature
-      epel: enabled
-    - when: initiator == packit
-      because: "We need to test with updated packages from rhcontainerbot/podman-next copr"
+    - when: distro == centos-stream or distro == rhel
       how: shell
       script: |
-        sed -i -n '/^priority=/!p;$apriority=1' /etc/yum.repos.d/*podman-next*.repo
+        dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm --eval '%{?rhel}').noarch.rpm
+        dnf -y config-manager --set-enabled epel
+      order: 10
+    - when: initiator == packit
+      how: shell
+      script: |
+        COPR_REPO_FILE="/etc/yum.repos.d/*podman-next*.repo"
+        if compgen -G $COPR_REPO_FILE > /dev/null; then
+            sed -i -n '/^priority=/!p;$apriority=1' $COPR_REPO_FILE
+        fi
         dnf -y upgrade --allowerasing
+      order: 20
+    - how: install
+      package:
+        - bats
+        - crun
+        - podman-tests
 
 /upstream:
     summary: Run crun specific Podman system tests on upstream PRs
