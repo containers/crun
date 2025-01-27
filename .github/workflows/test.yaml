@@ -45,7 +45,7 @@ jobs:
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
             ./autogen.sh
-            ./configure CFLAGS='-Wall -Werror'
+            ./configure CFLAGS='-Wall -Werror' || cat config.log
             make -j $(nproc) -C libocispec libocispec.la
             make git-version.h
             make -j $(nproc) libcrun.la
