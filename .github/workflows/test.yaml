@@ -6,6 +6,9 @@ jobs:
   build_job:
     runs-on: ubuntu-latest
     name: Build on ${{ matrix.arch }}
+    permissions:
+      contents: read
+      packages: write
 
     strategy:
       matrix:
