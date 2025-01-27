@@ -443,6 +443,27 @@ def test_exec_cpu_affinity():
         shutil.rmtree(tempdir)
     return 0
 
+def test_exec_getpgrp():
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        for terminal in [True, False]:
+            if terminal and os.isatty(1) == False:
+                continue
+            cmdline = ["exec", "-t" if terminal else None, cid, "/init", "getpgrp"]
+            out = run_crun_command([x for x in cmdline if x is not None])
+            pgrp = int(out.split("\n")[0])
+            if pgrp <= 0:
+                sys.stderr.write("invalid pgrp, got %d\n" % pgrp)
+                return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -457,6 +478,7 @@ all_tests = {
     "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
     "exec-test-uid-tty": test_uid_tty,
     "exec-cpu-affinity": test_exec_cpu_affinity,
+    "exec-getpgrp": test_exec_getpgrp,
 }
 
 if __name__ == "__main__":
