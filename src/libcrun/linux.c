@@ -5363,13 +5363,6 @@ libcrun_join_process (libcrun_context_t *context,
       libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
     }
 
-  if (setsid () < 0)
-    {
-      int saved_errno = errno;
-      TEMP_FAILURE_RETRY (write (sync_fd, "1", 1));
-      libcrun_fail_with_error (saved_errno, "setsid");
-    }
-
   /* We need to fork once again to join the PID namespace.  */
   pid = fork ();
   if (UNLIKELY (pid < 0))
@@ -5409,16 +5402,16 @@ libcrun_join_process (libcrun_context_t *context,
       if (UNLIKELY (ret < 0))
         _exit (EXIT_FAILURE);
 
+      ret = setsid ();
+      if (ret < 0)
+        {
+          crun_make_error (err, errno, "setsid");
+          send_error_to_sync_socket_and_die (sync_fd, true, err);
+        }
+
       if (terminal_fd)
         {
           cleanup_close int ptmx_fd = -1;
-
-          ret = setsid ();
-          if (ret < 0)
-            {
-              crun_make_error (err, errno, "setsid");
-              send_error_to_sync_socket_and_die (sync_fd, true, err);
-            }
 
           ret = set_id_init (container, err);
           if (UNLIKELY (ret < 0))

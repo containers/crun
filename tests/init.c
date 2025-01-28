@@ -690,6 +690,13 @@ main (int argc, char **argv)
   if (strcmp (argv[1], "systemd-notify") == 0)
     return sd_notify ();
 
+  if (strcmp (argv[1], "getpgrp") == 0)
+    {
+      pid_t pid = getpgrp ();
+      printf ("%d\n", pid);
+      return 0;
+    }
+
   if (strcmp (argv[1], "check-feature") == 0)
     {
       if (argc < 3)
