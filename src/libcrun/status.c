@@ -45,6 +45,16 @@ struct pid_stat
   unsigned long long starttime;
 };
 
+/* If ID is not NULL, then ennsure that it does not contain any slash.  */
+static int
+validate_id (const char *id, libcrun_error_t *err)
+{
+  if (id && strchr (id, '/') != NULL)
+    return crun_make_error (err, 0, "invalid character `/` in the ID `%s`", id);
+
+  return 0;
+}
+
 static int
 get_run_directory (char **out, const char *state_root, libcrun_error_t *err)
 {
@@ -82,6 +92,10 @@ libcrun_get_state_directory (char **out, const char *state_root, const char *id,
   cleanup_free char *path = NULL;
   cleanup_free char *root = NULL;
 
+  ret = validate_id (id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = get_run_directory (&root, state_root, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -101,6 +115,10 @@ get_state_directory_status_file (char **out, const char *state_root, const char 
   cleanup_free char *root = NULL;
   char *path = NULL;
   int ret;
+
+  ret = validate_id (id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = get_run_directory (&root, state_root, err);
   if (UNLIKELY (ret < 0))
@@ -550,6 +568,10 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   cleanup_close int rundir_dfd = -1;
   cleanup_close int dfd = -1;
   cleanup_free char *dir = NULL;
+
+  ret = validate_id (id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = get_run_directory (&dir, state_root, err);
   if (UNLIKELY (ret < 0))
