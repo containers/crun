@@ -45,12 +45,11 @@ struct pid_stat
   unsigned long long starttime;
 };
 
-static char *
-get_run_directory (const char *state_root)
+static int
+get_run_directory (char **out, const char *state_root, libcrun_error_t *err)
 {
   int ret;
-  char *root = NULL;
-  libcrun_error_t err = NULL;
+  cleanup_free char *root = NULL;
 
   if (state_root)
     root = xstrdup (state_root);
@@ -59,21 +58,21 @@ get_run_directory (const char *state_root)
       const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
       if (runtime_dir && runtime_dir[0] != '\0')
         {
-          ret = append_paths (&root, &err, runtime_dir, "crun", NULL);
+          ret = append_paths (&root, err, runtime_dir, "crun", NULL);
           if (UNLIKELY (ret < 0))
-            {
-              crun_error_release (&err);
-              return NULL;
-            }
+            return ret;
         }
     }
   if (root == NULL)
     root = xstrdup ("/run/crun");
 
-  ret = crun_ensure_directory (root, 0700, false, &err);
+  ret = crun_ensure_directory (root, 0700, false, err);
   if (UNLIKELY (ret < 0))
-    crun_error_release (&err);
-  return root;
+    return ret;
+
+  STEAL_POINTER (out, root);
+
+  return 0;
 }
 
 int
@@ -81,7 +80,11 @@ libcrun_get_state_directory (char **out, const char *state_root, const char *id,
 {
   int ret;
   cleanup_free char *path = NULL;
-  cleanup_free char *root = get_run_directory (state_root);
+  cleanup_free char *root = NULL;
+
+  ret = get_run_directory (&root, state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&path, err, root, id, NULL);
   if (UNLIKELY (ret < 0))
@@ -95,10 +98,17 @@ libcrun_get_state_directory (char **out, const char *state_root, const char *id,
 static char *
 get_state_directory_status_file (const char *state_root, const char *id)
 {
-  cleanup_free char *root = get_run_directory (state_root);
+  cleanup_free char *root = NULL;
   libcrun_error_t *err = NULL;
   char *path = NULL;
   int ret;
+
+  ret = get_run_directory (&root, state_root, err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (err);
+      return NULL;
+    }
 
   ret = append_paths (&path, err, root, id, "status", NULL);
   if (UNLIKELY (ret < 0))
@@ -442,9 +452,13 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 int
 libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err)
 {
+  cleanup_free char *run_directory = NULL;
   cleanup_free char *dir = NULL;
-  cleanup_free char *run_directory = get_run_directory (state_root);
   int ret;
+
+  ret = get_run_directory (&run_directory, state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   libcrun_debug ("Checking run directory: %s", run_directory);
   ret = crun_ensure_directory (run_directory, 0700, false, err);
@@ -534,9 +548,9 @@ libcrun_container_delete_status (const char *state_root, const char *id, libcrun
   cleanup_close int dfd = -1;
   cleanup_free char *dir = NULL;
 
-  dir = get_run_directory (state_root);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
+  ret = get_run_directory (&dir, state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   rundir_dfd = TEMP_FAILURE_RETRY (open (dir, O_DIRECTORY | O_PATH | O_CLOEXEC));
   if (UNLIKELY (rundir_dfd < 0))
@@ -577,21 +591,27 @@ libcrun_free_container_status (libcrun_container_status_t *status)
 }
 
 int
-libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root, libcrun_error_t *err)
+libcrun_get_containers_list (libcrun_container_list_t **out, const char *state_root, libcrun_error_t *err)
 {
   struct dirent *next;
   cleanup_container_list libcrun_container_list_t *tmp = NULL;
-  cleanup_free char *path = get_run_directory (state_root);
+  cleanup_free char *root = NULL;
   cleanup_dir DIR *dir = NULL;
+  int ret;
 
-  *ret = NULL;
-  dir = opendir (path);
+  *out = NULL;
+
+  ret = get_run_directory (&root, state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  dir = opendir (root);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot opendir `%s`", path);
+    return crun_make_error (err, errno, "cannot opendir `%s`", root);
 
   for (next = readdir (dir); next; next = readdir (dir))
     {
-      int r, exists;
+      int exists;
       cleanup_free char *status_file = NULL;
 
       libcrun_container_list_t *next_container;
@@ -599,9 +619,9 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       if (next->d_name[0] == '.')
         continue;
 
-      r = append_paths (&status_file, err, path, next->d_name, "status", NULL);
-      if (UNLIKELY (r < 0))
-        return r;
+      ret = append_paths (&status_file, err, root, next->d_name, "status", NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       exists = crun_path_exists (status_file, err);
       if (exists < 0)
@@ -620,8 +640,9 @@ libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_r
       next_container->next = tmp;
       tmp = next_container;
     }
-  *ret = tmp;
-  tmp = NULL;
+
+  STEAL_POINTER (out, tmp);
+
   return 0;
 }
 
