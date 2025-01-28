@@ -55,7 +55,7 @@ LIBCRUN_PUBLIC int libcrun_read_container_status (libcrun_container_status_t *st
                                                   const char *id, libcrun_error_t *err);
 LIBCRUN_PUBLIC void libcrun_free_containers_list (libcrun_container_list_t *list);
 LIBCRUN_PUBLIC int libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_t *err);
-LIBCRUN_PUBLIC char *libcrun_get_state_directory (const char *state_root, const char *id);
+LIBCRUN_PUBLIC int libcrun_get_state_directory (char **out, const char *state_root, const char *id, libcrun_error_t *err);
 LIBCRUN_PUBLIC int libcrun_container_delete_status (const char *state_root, const char *id, libcrun_error_t *err);
 LIBCRUN_PUBLIC int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root,
                                                 libcrun_error_t *err);

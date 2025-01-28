@@ -32,6 +32,13 @@
 
 #define YAJL_STR(x) ((const unsigned char *) (x))
 
+#define STEAL_POINTER(x, y) \
+  do                        \
+    {                       \
+      *x = y;               \
+      y = NULL;             \
+  } while (0)
+
 struct pid_stat
 {
   char state;
@@ -69,22 +76,20 @@ get_run_directory (const char *state_root)
   return root;
 }
 
-char *
-libcrun_get_state_directory (const char *state_root, const char *id)
+int
+libcrun_get_state_directory (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
-  char *path;
-  libcrun_error_t *err = NULL;
+  cleanup_free char *path = NULL;
   cleanup_free char *root = get_run_directory (state_root);
 
   ret = append_paths (&path, err, root, id, NULL);
   if (UNLIKELY (ret < 0))
-    {
-      crun_error_release (err);
-      return NULL;
-    }
+    return ret;
 
-  return path;
+  STEAL_POINTER (out, path);
+
+  return 0;
 }
 
 static char *
@@ -446,9 +451,9 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
   if (UNLIKELY (ret < 0))
     return ret;
 
-  dir = libcrun_get_state_directory (state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
+  ret = libcrun_get_state_directory (&dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = crun_path_exists (dir, err);
   if (UNLIKELY (ret < 0))
@@ -677,9 +682,13 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
 int
 libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
+  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   int ret, fd = -1;
+
+  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
   if (UNLIKELY (ret < 0))
@@ -700,13 +709,17 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
 int
 libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
+  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   char buffer[1] = {
     0,
   };
   cleanup_close int fd = -1;
   int ret;
+
+  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
   if (UNLIKELY (ret < 0))
@@ -730,9 +743,13 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 int
 libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = libcrun_get_state_directory (state_root, id);
+  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   int ret;
+
+  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
   if (UNLIKELY (ret < 0))

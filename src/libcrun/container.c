@@ -1604,9 +1604,9 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 
   *container = NULL;
 
-  dir = libcrun_get_state_directory (state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory from `%s`", state_root);
+  ret = libcrun_get_state_directory (&dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
@@ -2041,9 +2041,9 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
       struct libcrun_load_seccomp_notify_conf_s conf;
       memset (&conf, 0, sizeof conf);
 
-      state_root = libcrun_get_state_directory (args->context->state_root, args->context->id);
-      if (UNLIKELY (state_root == NULL))
-        return crun_make_error (err, 0, "cannot get state directory");
+      ret = libcrun_get_state_directory (&state_root, args->context->state_root, args->context->id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = append_paths (&oci_config_path, err, state_root, "config.json", NULL);
       if (UNLIKELY (ret < 0))
@@ -2777,9 +2777,9 @@ libcrun_copy_config_file (const char *id, const char *state_root, libcrun_contai
   cleanup_free char *buffer = NULL;
   size_t len;
 
-  dir = libcrun_get_state_directory (state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
+  ret = libcrun_get_state_directory (&dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&dest_path, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
@@ -3259,12 +3259,9 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
     cleanup_container libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
 
-    dir = libcrun_get_state_directory (state_root, id);
-    if (UNLIKELY (dir == NULL))
-      {
-        ret = crun_make_error (err, 0, "cannot get state directory");
-        goto exit;
-      }
+    ret = libcrun_get_state_directory (&dir, state_root, id, err);
+    if (UNLIKELY (ret < 0))
+      goto exit;
 
     ret = append_paths (&config_file, err, dir, "config.json", NULL);
     if (UNLIKELY (ret < 0))
@@ -3598,9 +3595,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     return ret;
   container_status = ret;
 
-  dir = libcrun_get_state_directory (state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
+  ret = libcrun_get_state_directory (&dir, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))
@@ -4474,9 +4471,9 @@ libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, 
   cleanup_free char *dir = NULL;
   int ret;
 
-  dir = libcrun_get_state_directory (context->state_root, id);
-  if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, 0, "cannot get state directory");
+  ret = libcrun_get_state_directory (&dir, context->state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&config_file, err, dir, "config.json", NULL);
   if (UNLIKELY (ret < 0))

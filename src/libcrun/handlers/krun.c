@@ -195,9 +195,9 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       cleanup_free char *config = NULL;
       size_t config_size;
 
-      state_dir = libcrun_get_state_directory (context->state_root, context->id);
-      if (UNLIKELY (state_dir == NULL))
-        return crun_make_error (err, 0, "could not retrieve the state directory");
+      ret = libcrun_get_state_directory (&state_dir, context->state_root, context->id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = append_paths (&origin_config_path, err, state_dir, "config.json", NULL);
       if (UNLIKELY (ret < 0))
