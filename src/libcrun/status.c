@@ -95,29 +95,24 @@ libcrun_get_state_directory (char **out, const char *state_root, const char *id,
   return 0;
 }
 
-static char *
-get_state_directory_status_file (const char *state_root, const char *id)
+static int
+get_state_directory_status_file (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *root = NULL;
-  libcrun_error_t *err = NULL;
   char *path = NULL;
   int ret;
 
   ret = get_run_directory (&root, state_root, err);
   if (UNLIKELY (ret < 0))
-    {
-      crun_error_release (err);
-      return NULL;
-    }
+    return ret;
 
   ret = append_paths (&path, err, root, id, "status", NULL);
   if (UNLIKELY (ret < 0))
-    {
-      crun_error_release (err);
-      return NULL;
-    }
+    return ret;
 
-  return path;
+  STEAL_POINTER (out, path);
+
+  return 0;
 }
 
 static int
@@ -188,14 +183,18 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
                                 libcrun_error_t *err)
 {
   int r, ret;
-  cleanup_free char *file = get_state_directory_status_file (state_root, id);
   cleanup_free char *file_tmp = NULL;
+  cleanup_free char *file = NULL;
   size_t len;
   cleanup_close int fd_write = -1;
   const unsigned char *buf = NULL;
   struct pid_stat st;
   const char *tmp;
   yajl_gen gen = NULL;
+
+  ret = get_state_directory_status_file (&file, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = read_pid_stat (status->pid, &st, err);
   if (UNLIKELY (ret < 0))
@@ -363,8 +362,12 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   cleanup_free char *buffer = NULL;
   char err_buffer[256];
   int ret;
-  cleanup_free char *file = get_state_directory_status_file (state_root, id);
+  cleanup_free char *file = NULL;
   yajl_val tree, tmp;
+
+  ret = get_state_directory_status_file (&file, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = read_all_file (file, &buffer, NULL, err);
   if (UNLIKELY (ret < 0))
