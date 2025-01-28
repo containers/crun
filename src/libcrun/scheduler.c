@@ -88,15 +88,19 @@ libcrun_reset_cpu_affinity_mask (pid_t pid, libcrun_error_t *err)
      This is undesirable, because it inherits the systemd affinity when the container
      should really move to the container space cpus.
 
-     The sched_setaffinity call will always return an error (EINVAL or ENODEV)
+     The sched_setaffinity call will always return an error (EINVAL or ENODEV);
      when used like this. This is expected and part of the backward compatibility.
+
+     Ignore ENOSYS as well, as it might be blocked by seccomp.
 
      See: https://issues.redhat.com/browse/OCPBUGS-15102   */
   ret = sched_setaffinity (pid, 0, NULL);
   if (LIKELY (ret < 0))
     {
-      if (UNLIKELY (! ((errno == EINVAL) || (errno == ENODEV))))
-        return crun_make_error (err, errno, "failed to reset affinity");
+      if (LIKELY (errno == EINVAL || errno == ENODEV || errno == ENOSYS))
+        return 0;
+
+      return crun_make_error (err, errno, "failed to reset affinity");
     }
 
   return 0;
