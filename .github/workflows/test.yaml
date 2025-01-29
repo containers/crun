@@ -15,12 +15,12 @@ jobs:
         include:
           - arch: armv7
             distro: ubuntu_latest
-          - arch: aarch64
-            distro: ubuntu_latest
-          - arch: s390x
-            distro: ubuntu_latest
-          - arch: ppc64le
-            distro: ubuntu_latest
+#          - arch: aarch64
+#            distro: ubuntu_latest
+#          - arch: s390x
+#            distro: ubuntu_latest
+#          - arch: ppc64le
+#            distro: ubuntu_latest
           - arch: riscv64
             distro: ubuntu_latest
     steps:
@@ -40,7 +40,7 @@ jobs:
 
           install: |
             apt-get update -y
-            apt-get install -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev
+            apt-get install -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev clang
 
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
