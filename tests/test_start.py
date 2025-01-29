@@ -540,6 +540,22 @@ def test_run_keep():
 
     return 0
 
+def test_invalid_id():
+    conf = base_config()
+    conf['process']['args'] = ['./init', 'echo', 'hello']
+    conf['process']['cwd'] = "/sbin"
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf, id_container="this/is/invalid")
+        return -1
+    except Exception as e:
+        err = e.output.decode()
+        if "invalid character `/` in the ID" in err:
+            return 0
+        sys.stderr.write("Got error: %s\n" % err)
+        return -1
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -562,6 +578,7 @@ all_tests = {
     "unknown-sysctl": test_unknown_sysctl,
     "ioprio": test_ioprio,
     "run-keep": test_run_keep,
+    "invalid-id": test_invalid_id,
 }
 
 if __name__ == "__main__":

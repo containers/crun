@@ -512,9 +512,10 @@ luacrun_ctx_status_container (lua_State *S)
     cleanup_container libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
 
-    dir = libcrun_get_state_directory (state_root, id);
-    if (dir == NULL)
+    ret = libcrun_get_state_directory (&dir, state_root, id, &crun_err);
+    if (UNLIKELY (ret < 0))
       {
+        libcrun_error_release (&crun_err);
         lua_pushnil (S);
         lua_pushstring (S, "cannot get state directory");
         return 2;
@@ -526,6 +527,7 @@ luacrun_ctx_status_container (lua_State *S)
     lua_pop (S, 1);
     if (container == NULL)
       {
+        libcrun_error_release (&crun_err);
         lua_pushnil (S);
         lua_pushstring (S, "error loading config.json");
         return 2;

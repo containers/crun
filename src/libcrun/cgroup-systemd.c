@@ -1551,7 +1551,9 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
 
   *can_retry = false;
 
-  state_dir = libcrun_get_state_directory (state_root, NULL);
+  ret = libcrun_get_state_directory (&state_dir, state_root, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   i = 0;
   boolean_opts[i++] = "Delegate";
@@ -1937,7 +1939,9 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   int sd_err, ret;
   int cgroup_mode;
 
-  state_dir = libcrun_get_state_directory (state_root, NULL);
+  ret = libcrun_get_state_directory (&state_dir, state_root, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))

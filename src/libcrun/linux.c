@@ -2362,7 +2362,9 @@ get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *
 
   if (host_path == NULL)
     {
-      state_dir = libcrun_get_state_directory (context->state_root, context->id);
+      ret = libcrun_get_state_directory (&state_dir, context->state_root, context->id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = append_paths (&host_notify_socket_path, err, state_dir, "notify/notify", NULL);
       if (UNLIKELY (ret < 0))
@@ -2406,13 +2408,17 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   const char *notify_socket = container->context->notify_socket;
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
-  cleanup_free char *state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
+  cleanup_free char *state_dir = NULL;
   uid_t container_root_uid = -1;
   gid_t container_root_gid = -1;
   int notify_socket_tree_fd;
 
   if (notify_socket == NULL)
     return 0;
+
+  ret = libcrun_get_state_directory (&state_dir, container->context->state_root, container->context->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&container_notify_socket_path, err, rootfs, notify_socket, "notify", NULL);
   if (UNLIKELY (ret < 0))
@@ -4284,9 +4290,9 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   if (! has_userns || is_empty_string (container->context->id) || geteuid () > 0)
     return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
 
-  state_dir = libcrun_get_state_directory (container->context->state_root, container->context->id);
-  if (state_dir == NULL)
-    return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
+  ret = libcrun_get_state_directory (&state_dir, container->context->state_root, container->context->id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = append_paths (&devs_path, err, state_dir, "devs", NULL);
   if (UNLIKELY (ret < 0))
