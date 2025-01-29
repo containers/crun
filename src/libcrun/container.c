@@ -472,7 +472,6 @@ sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_e
     {
       int ret;
 
-      errno = 0;
       ret = TEMP_FAILURE_RETRY (read (fd, &msg, sizeof (msg)));
       if (UNLIKELY (ret < 0))
         {
@@ -486,7 +485,7 @@ sync_socket_wait_sync (libcrun_context_t *context, int fd, bool flush, libcrun_e
           if (flush)
             return 0;
 
-          return crun_make_error (err, errno, "read from the init process");
+          return crun_make_error (err, 0, "read from the init process");
         }
 
       if (! flush && msg.type == SYNC_SOCKET_SYNC_MESSAGE)
