@@ -234,17 +234,17 @@ get_file_type (mode_t *mode, bool nofollow, const char *path)
 }
 
 int
-create_file_if_missing_at (int dirfd, const char *file, libcrun_error_t *err)
+create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun_error_t *err)
 {
-  cleanup_close int fd_write = openat (dirfd, file, O_CLOEXEC | O_CREAT | O_WRONLY, 0700);
+  cleanup_close int fd_write = openat (dirfd, file, O_CLOEXEC | O_CREAT | O_WRONLY, mode);
   if (fd_write < 0)
     {
-      mode_t mode;
+      mode_t tmp_mode;
       int ret;
 
       /* On errors, check if the file already exists.  */
-      ret = get_file_type_at (dirfd, &mode, false, file);
-      if (ret == 0 && S_ISREG (mode))
+      ret = get_file_type_at (dirfd, &tmp_mode, false, file);
+      if (ret == 0 && S_ISREG (tmp_mode))
         return 0;
 
       return crun_make_error (err, errno, "creating file `%s`", file);
@@ -625,33 +625,6 @@ int
 crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_error_t *err)
 {
   return crun_ensure_directory_at (AT_FDCWD, path, mode, nofollow, err);
-}
-
-int
-crun_ensure_file_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err)
-{
-  cleanup_free char *tmp = xstrdup (path);
-  size_t len = strlen (tmp);
-  char *it = tmp + len - 1;
-  int ret;
-
-  while (*it != '/' && it > tmp)
-    it--;
-  if (it > tmp)
-    {
-      *it = '\0';
-      ret = crun_ensure_directory_at (dirfd, tmp, mode, nofollow, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      *it = '/';
-    }
-  return create_file_if_missing_at (dirfd, tmp, err);
-}
-
-int
-crun_ensure_file (const char *path, int mode, bool nofollow, libcrun_error_t *err)
-{
-  return crun_ensure_file_at (AT_FDCWD, path, mode, nofollow, err);
 }
 
 static int
