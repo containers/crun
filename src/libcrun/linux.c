@@ -1815,7 +1815,7 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
 
   if (container->container_def->process && container->container_def->process->terminal)
     {
-      ret = crun_ensure_file_at (devfd, "console", 0620, true, err);
+      ret = create_file_if_missing_at (devfd, "console", 0620, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
