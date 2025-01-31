@@ -134,12 +134,8 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 		n = readlink(got_path, link_path, PATH_MAX - 1);
 		if (n < 0) {
 			/* EINVAL means the file exists but isn't a symlink. */
-			if (errno != EINVAL) {
-				/* Make sure it's null terminated. */
-				*new_path = '\0';
-				strcpy(resolved_path, got_path);
+			if (errno != EINVAL)
 				return NULL;
-			}
 		} else {
 			/* Note: readlink doesn't add the null byte. */
 			link_path[n] = '\0';
