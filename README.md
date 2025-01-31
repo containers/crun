@@ -76,9 +76,8 @@ installed with:
 
 ```console
 $ sudo yum --enablerepo='*' install -y golang
-$ export GOPATH=$HOME/go
-$ go get github.com/cpuguy83/go-md2man
-$ export PATH=$PATH:$GOPATH/bin
+$ go install github.com/cpuguy83/go-md2man@latest
+$ export PATH=$PATH:$(go env GOPATH)/bin
 ```
 
 ### Ubuntu
