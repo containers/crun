@@ -131,9 +131,6 @@ mono_configure_container (void *cookie arg_unused, enum handler_configure_phase 
   if (ret != 0)
     return ret;
 
-  /* release any error if set since we are going to be returning from here */
-  crun_error_release (err);
-
   return 0;
 }
 

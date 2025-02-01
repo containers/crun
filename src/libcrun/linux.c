@@ -2181,8 +2181,6 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
             {
               if (errno != ENOTDIR)
                 return crun_make_error (err, errno, "cannot reopen `%s`", target);
-
-              crun_error_release (err);
             }
         }
 
