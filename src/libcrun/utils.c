@@ -420,6 +420,7 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
 ssize_t
 safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err)
 {
+  /* Add 1 to make room for the NUL terminator.  */
   ssize_t buf_size = hint > 0 ? hint + 1 : 512;
   cleanup_free char *tmp_buf = NULL;
   ssize_t size;
@@ -429,8 +430,7 @@ safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun
       if (tmp_buf != NULL)
         buf_size += 256;
 
-      /* Allocate an extra byte so the buffer can be NUL terminated.  */
-      tmp_buf = xrealloc (tmp_buf, buf_size + 1);
+      tmp_buf = xrealloc (tmp_buf, buf_size);
 
       size = readlinkat (dfd, name, tmp_buf, buf_size);
       if (UNLIKELY (size < 0))
