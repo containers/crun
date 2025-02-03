@@ -259,7 +259,6 @@ static int
 libkrun_load (void **cookie, libcrun_error_t *err)
 {
   struct krun_config *kconf;
-  void *handle;
   const char *libkrun_so = "libkrun.so.1";
   const char *libkrun_sev_so = "libkrun-sev.so.1";
 
