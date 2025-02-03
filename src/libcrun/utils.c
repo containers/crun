@@ -142,24 +142,6 @@ write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, c
 }
 
 int
-write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
-{
-  return write_file_at_with_flags (dirfd, O_CLOEXEC | O_CREAT | O_TRUNC, 0700, name, data, len, err);
-}
-
-int
-write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err)
-{
-  return write_file_at_with_flags (AT_FDCWD, flags, 0700, name, data, len, err);
-}
-
-int
-write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
-{
-  return write_file_with_flags (name, O_CREAT | O_TRUNC, data, len, err);
-}
-
-int
 detach_process ()
 {
   pid_t pid;

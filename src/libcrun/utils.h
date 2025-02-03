@@ -27,6 +27,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include <sys/wait.h>
 #include "container.h"
@@ -54,6 +55,8 @@
 
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
+
+#define WRITE_FILE_DEFAULT_FLAGS (O_CLOEXEC | O_CREAT | O_TRUNC)
 
 __attribute__ ((malloc)) static inline void *
 xmalloc (size_t size)
@@ -257,13 +260,25 @@ int xasprintf (char **str, const char *fmt, ...) __attribute__ ((format (printf,
 
 int crun_path_exists (const char *path, libcrun_error_t *err);
 
-int write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err);
-
-int write_file (const char *name, const void *data, size_t len, libcrun_error_t *err);
-
-int write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err);
-
 int write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err);
+
+static inline int
+write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err)
+{
+  return write_file_at_with_flags (AT_FDCWD, flags, 0700, name, data, len, err);
+}
+
+static inline int
+write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  return write_file_with_flags (name, WRITE_FILE_DEFAULT_FLAGS, data, len, err);
+}
+
+static inline int
+write_file_at (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  return write_file_at_with_flags (dirfd, WRITE_FILE_DEFAULT_FLAGS, 0700, name, data, len, err);
+}
 
 int crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
