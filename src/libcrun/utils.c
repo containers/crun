@@ -122,21 +122,15 @@ int
 write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
   cleanup_close int fd = -1;
-  size_t remaining;
   int ret = 0;
 
   fd = openat (dirfd, name, O_CLOEXEC | O_WRONLY | flags, mode);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "opening file `%s` for writing", name);
 
-  for (remaining = len; remaining > 0;)
-    {
-      ret = TEMP_FAILURE_RETRY (write (fd, data + len - remaining, remaining));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "writing file `%s`", name);
-
-      remaining -= (size_t) ret;
-    }
+  ret = safe_write (fd, name, data, len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return (len > INT_MAX) ? INT_MAX : (int) len;
 }
