@@ -56,7 +56,7 @@
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
 
-#define WRITE_FILE_DEFAULT_FLAGS (O_CLOEXEC | O_CREAT | O_TRUNC)
+#define WRITE_FILE_DEFAULT_FLAGS (O_CLOEXEC | O_CREAT | O_TRUNC | O_WRONLY)
 
 __attribute__ ((malloc)) static inline void *
 xmalloc (size_t size)
