@@ -278,12 +278,12 @@ int crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_er
 
 int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
-int crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+int crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, const char *path, int mode, libcrun_error_t *err);
 
-int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, const char *path, int mode,
                                    libcrun_error_t *err);
 
-int crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+int crun_safe_ensure_file_at (int dirfd, const char *dirpath, const char *path, int mode,
                               libcrun_error_t *err);
 
 int crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err);
@@ -379,7 +379,7 @@ int get_file_type_fd (int fd, mode_t *mode);
 
 char *get_user_name (uid_t uid);
 
-int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
+int safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mode,
                  libcrun_error_t *err);
 
 int safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_error_t *err);

@@ -135,7 +135,6 @@ struct private_data_s
   const char *rootfs;
   int rootfsfd;
 
-  size_t rootfs_len;
   int notify_socket_tree_fd;
 
   struct libcrun_fd_map *mount_fds;
@@ -930,13 +929,12 @@ static int
 open_mount_target (libcrun_container_t *container, const char *target_rel, libcrun_error_t *err)
 {
   const char *rootfs = get_private_data (container)->rootfs;
-  size_t rootfs_len = get_private_data (container)->rootfs_len;
   int rootfsfd = get_private_data (container)->rootfsfd;
 
   if (rootfsfd < 0)
     return crun_make_error (err, 0, "invalid rootfs state");
 
-  return safe_openat (rootfsfd, rootfs, rootfs_len, target_rel, O_PATH | O_CLOEXEC, 0, err);
+  return safe_openat (rootfsfd, rootfs, target_rel, O_PATH | O_CLOEXEC, 0, err);
 }
 
 /* Attempt to open a mount of the specified type.  */
@@ -1024,7 +1022,6 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
                             libcrun_error_t *err)
 {
   unsigned long mount_flags = 0;
-  size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *rootfs = get_private_data (container)->rootfs;
   int rootfsfd = get_private_data (container)->rootfsfd;
   cleanup_close int pathfd = -1;
@@ -1035,7 +1032,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   if (rel_path[0] == '/')
     rel_path++;
 
-  pathfd = safe_openat (rootfsfd, rootfs, rootfs_len, rel_path, O_PATH | O_CLOEXEC, 0, err);
+  pathfd = safe_openat (rootfsfd, rootfs, rel_path, O_PATH | O_CLOEXEC, 0, err);
   if (UNLIKELY (pathfd < 0))
     {
       if (errno != ENOENT && errno != EACCES)
@@ -1579,7 +1576,6 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
   cleanup_close int fd = -1;
   int rootfsfd = get_private_data (container)->rootfsfd;
   const char *rootfs = get_private_data (container)->rootfs;
-  size_t rootfs_len = get_private_data (container)->rootfs_len;
   if (is_empty_string (fullname))
     return crun_make_error (err, EINVAL, "device path is empty");
   // Normalize the path by removing trailing slashes.
@@ -1609,7 +1605,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
         {
           const char *rel_path = consume_slashes (normalized_path);
 
-          fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rootfs_len, rel_path, 0755, err);
+          fd = crun_safe_create_and_open_ref_at (false, rootfsfd, rootfs, rel_path, 0755, err);
           if (UNLIKELY (fd < 0))
             return fd;
         }
@@ -1644,7 +1640,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          fd = safe_openat (devfd, rootfs, rootfs_len, rel_dev, O_PATH | O_CLOEXEC, 0, err);
+          fd = safe_openat (devfd, rootfs, rel_dev, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
             return fd;
 
@@ -1676,14 +1672,12 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
             dirfd = dup (rootfsfd);
           else
             {
-              dirfd = safe_openat (rootfsfd, rootfs, rootfs_len, dirname,
-                                   O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
+              dirfd = safe_openat (rootfsfd, rootfs, dirname, O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
               if (dirfd < 0 && ensure_parent_dir)
                 {
                   crun_error_release (err);
 
-                  dirfd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs,
-                                                            rootfs_len, dirname, 0755, err);
+                  dirfd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs, dirname, 0755, err);
                 }
             }
           if (UNLIKELY (dirfd < 0))
@@ -1697,7 +1691,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-          fd = safe_openat (dirfd, rootfs, rootfs_len, basename, O_PATH | O_CLOEXEC, 0, err);
+          fd = safe_openat (dirfd, rootfs, basename, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
             return crun_make_error (err, errno, "open `%s`", device->path);
 
@@ -1896,7 +1890,6 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
 static int
 append_tmpfs_mode_if_missing (libcrun_container_t *container, runtime_spec_schema_defs_mount *mount, char **data, libcrun_error_t *err)
 {
-  size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *rootfs = get_private_data (container)->rootfs;
   int rootfsfd = get_private_data (container)->rootfsfd;
   bool empty_data = is_empty_string (*data);
@@ -1907,7 +1900,7 @@ append_tmpfs_mode_if_missing (libcrun_container_t *container, runtime_spec_schem
   if (*data != NULL && strstr (*data, "mode="))
     return 0;
 
-  fd = safe_openat (rootfsfd, rootfs, rootfs_len, mount->destination, O_CLOEXEC | O_RDONLY, 0, err);
+  fd = safe_openat (rootfsfd, rootfs, mount->destination, O_CLOEXEC | O_RDONLY, 0, err);
   if (fd < 0)
     {
       if (crun_error_get_errno (err) != ENOENT)
@@ -1982,7 +1975,7 @@ append_mode_if_missing (char *data, const char *mode)
 }
 
 static int
-safe_create_symlink (int rootfsfd, const char *rootfs, size_t rootfs_len, const char *target, const char *destination, libcrun_error_t *err)
+safe_create_symlink (int rootfsfd, const char *rootfs, const char *target, const char *destination, libcrun_error_t *err)
 {
   cleanup_close int parent_dir_fd = -1;
   cleanup_free char *buffer = NULL;
@@ -1995,8 +1988,7 @@ safe_create_symlink (int rootfsfd, const char *rootfs, size_t rootfs_len, const 
   buffer = xstrdup (destination);
   part = dirname (buffer);
 
-  parent_dir_fd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs, rootfs_len,
-                                                    part, 0755, err);
+  parent_dir_fd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs, part, 0755, err);
   if (UNLIKELY (parent_dir_fd < 0))
     return crun_make_error (err, errno, "symlink creation");
 
@@ -2040,7 +2032,6 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
   size_t i;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
-  size_t rootfs_len = get_private_data (container)->rootfs_len;
   const char *systemd_cgroup_v1 = get_force_cgroup_v1_annotation (container);
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
 
@@ -2124,7 +2115,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           if (UNLIKELY (len < 0))
             return len;
 
-          ret = safe_create_symlink (rootfsfd, rootfs, rootfs_len, target, def->mounts[i]->destination, err);
+          ret = safe_create_symlink (rootfsfd, rootfs, target, def->mounts[i]->destination, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -2162,8 +2153,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           bool is_dir = S_ISDIR (src_mode);
 
           /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-          ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, rootfs_len, target,
-                                                  is_dir ? 01755 : 0755, err);
+          ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -2236,7 +2226,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
         {
           int destfd, tmpfd;
 
-          destfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_CLOEXEC | O_DIRECTORY, 0, err);
+          destfd = safe_openat (rootfsfd, rootfs, target, O_CLOEXEC | O_DIRECTORY, 0, err);
           if (UNLIKELY (destfd < 0))
             return crun_error_wrap (err, "open target to write for tmpcopyup");
 
@@ -2253,7 +2243,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           const bool is_dir = S_ISDIR (src_mode);
           cleanup_close int dfd = -1;
 
-          dfd = safe_openat (rootfsfd, rootfs, rootfs_len, target, O_RDONLY | O_PATH | O_CLOEXEC | (is_dir ? O_DIRECTORY : 0), 0, err);
+          dfd = safe_openat (rootfsfd, rootfs, target, O_RDONLY | O_PATH | O_CLOEXEC | (is_dir ? O_DIRECTORY : 0), 0, err);
           if (UNLIKELY (dfd < 0))
             return crun_make_error (err, errno, "open mount target `/%s`", target);
 
@@ -2275,8 +2265,6 @@ int
 libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_source, char *mount_destination, char **mount_options, size_t mount_options_len, libcrun_error_t *err)
 {
   int ret, rootfsfd;
-  size_t rootfs_len = get_private_data (container)->rootfs_len;
-
   const char *target = consume_slashes (mount_destination);
   cleanup_free char *data = NULL;
   unsigned long flags = 0;
@@ -2314,8 +2302,7 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
     }
 
   /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-  ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, rootfs_len, target,
-                                          is_dir ? 01755 : 0755, err);
+  ret = crun_safe_create_and_open_ref_at (is_dir, rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2617,7 +2604,6 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
 
   get_private_data (container)->rootfs = rootfs;
   get_private_data (container)->rootfsfd = rootfsfd;
-  get_private_data (container)->rootfs_len = rootfs ? strlen (rootfs) : 0;
 
   // configure handler mounts
   ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_MOUNTS, container, rootfs, err);
@@ -2693,8 +2679,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       libcrun_error_t tmp_err = NULL;
       const char *rel_cwd = consume_slashes (def->process->cwd);
       /* Ignore errors here and let it fail later.  */
-      (void) crun_safe_ensure_directory_at (rootfsfd, rootfs, strlen (rootfs),
-                                            rel_cwd, 0755, &tmp_err);
+      (void) crun_safe_ensure_directory_at (rootfsfd, rootfs, rel_cwd, 0755, &tmp_err);
       crun_error_release (&tmp_err);
     }
 

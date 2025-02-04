@@ -738,7 +738,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
         {
           int ret;
 
-          ret = crun_safe_ensure_directory_at (root_fd, root, strlen (root), dest, 0755, err);
+          ret = crun_safe_ensure_directory_at (root_fd, root, dest, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -746,7 +746,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
         {
           int ret;
 
-          ret = crun_safe_ensure_file_at (root_fd, root, strlen (root), dest, 0755, err);
+          ret = crun_safe_ensure_file_at (root_fd, root, dest, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }

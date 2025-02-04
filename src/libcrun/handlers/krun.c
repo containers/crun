@@ -193,6 +193,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       cleanup_free char *origin_config_path = NULL;
       cleanup_free char *state_dir = NULL;
       cleanup_free char *config = NULL;
+      cleanup_close int fd = -1;
       size_t config_size;
 
       ret = libcrun_get_state_directory (&state_dir, context->state_root, context->id, err);
