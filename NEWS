@@ -1,3 +1,23 @@
+* crun-1.20
+
+- krun: fix CVE-2025-24965.  The .krun_config.json file could be
+  created outside of the container rootfs.
+- cgroup: reverted the removal of `tun/tap` from the default allow
+  list, this was done in crun-1.5. The `tun/tap` device is now added
+  by default again.
+- CRIU: do not set `network_lock` unless explicitly specified.
+- status: disallow container names containing slashes in their name.
+- linux: Improved error message when failing to set the
+  `net.ipv4.ping_group_range` sysctl.
+- scheduler: Ignore `ENOSYS` errors when resetting the CPU affinity
+  mask.
+- linux: return a better error message when `pidfd_open` fails with
+  `EINVAL`.
+- cgroup: display the absolute path to `cgroup.controllers` when a
+  controller is unavailable.
+- exec: always call setsid.  Now processes created through `exec` get
+  the correct process group id.
+
 * crun-1.19.1
 
 - linux: fix a hang if there are no reads from the tty.  Use non
