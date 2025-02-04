@@ -2234,15 +2234,10 @@ find_annotation (libcrun_container_t *container, const char *name)
   return find_annotation_map (container->container_def->annotations, name);
 }
 
-ssize_t
-safe_write (int fd, const void *buf, ssize_t count)
+int
+safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_error_t *err)
 {
-  ssize_t written = 0;
-  if (count < 0)
-    {
-      errno = EINVAL;
-      return -1;
-    }
+  size_t written = 0;
   while (written < count)
     {
       ssize_t w = write (fd, buf + written, count - written);
@@ -2250,11 +2245,11 @@ safe_write (int fd, const void *buf, ssize_t count)
         {
           if (errno == EINTR || errno == EAGAIN)
             continue;
-          return w;
+          return crun_make_error (err, errno, "write file `%s`", fname);
         }
       written += w;
     }
-  return written;
+  return 0;
 }
 
 int

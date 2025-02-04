@@ -382,7 +382,7 @@ char *get_user_name (uid_t uid);
 int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
                  libcrun_error_t *err);
 
-ssize_t safe_write (int fd, const void *buf, ssize_t count);
+int safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_error_t *err);
 
 int append_paths (char **out, libcrun_error_t *err, ...) __attribute__ ((sentinel));
 

@@ -346,11 +346,9 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (r != yajl_gen_status_ok))
     goto yajl_error;
 
-  if (UNLIKELY (safe_write (fd_write, buf, (ssize_t) len) < 0))
-    {
-      ret = crun_make_error (err, errno, "cannot write status file");
-      goto exit;
-    }
+  ret = safe_write (fd_write, "status file", buf, len, err);
+  if (UNLIKELY (r < 0))
+    goto exit;
 
   close_and_reset (&fd_write);
 
