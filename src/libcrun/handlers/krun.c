@@ -176,8 +176,8 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   cleanup_close int devfd = -1;
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
+  bool create_sev = false;
   bool is_user_ns;
-  bool create_sev;
 
   if (rootfs == NULL)
     rootfsfd = AT_FDCWD;
