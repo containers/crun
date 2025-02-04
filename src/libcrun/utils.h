@@ -263,15 +263,9 @@ int crun_path_exists (const char *path, libcrun_error_t *err);
 int write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err);
 
 static inline int
-write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err)
-{
-  return write_file_at_with_flags (AT_FDCWD, flags, 0700, name, data, len, err);
-}
-
-static inline int
 write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  return write_file_with_flags (name, WRITE_FILE_DEFAULT_FLAGS, data, len, err);
+  return write_file_at_with_flags (AT_FDCWD, WRITE_FILE_DEFAULT_FLAGS, 0700, name, data, len, err);
 }
 
 static inline int

@@ -1999,8 +1999,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
     {
       char buf[32];
       size_t buf_len = snprintf (buf, sizeof (buf), "%d", args->pid);
-      ret = write_file_with_flags (args->context->pid_file, O_CREAT | O_TRUNC, buf,
-                                   buf_len, err);
+      ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, args->context->pid_file, buf, buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -4329,7 +4328,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     {
       char buf[32];
       size_t buf_len = snprintf (buf, sizeof (buf), "%d", status.pid);
-      ret = write_file_with_flags (context->pid_file, O_CREAT | O_TRUNC, buf, buf_len, err);
+      ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, context->pid_file, buf, buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }

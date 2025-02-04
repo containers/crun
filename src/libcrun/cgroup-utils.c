@@ -681,7 +681,7 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_file_with_flags (kill_file, 0, "1", 1, err);
+      ret = write_file_at_with_flags (AT_FDCWD, 0, 0700, kill_file, "1", 1, err);
       if (ret >= 0)
         return 0;
 
