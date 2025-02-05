@@ -56,7 +56,7 @@
 #define LIKELY(x) __builtin_expect ((x), 1)
 #define UNLIKELY(x) __builtin_expect ((x), 0)
 
-#define WRITE_FILE_DEFAULT_FLAGS (O_CLOEXEC | O_CREAT | O_TRUNC)
+#define WRITE_FILE_DEFAULT_FLAGS (O_CLOEXEC | O_CREAT | O_TRUNC | O_WRONLY)
 
 __attribute__ ((malloc)) static inline void *
 xmalloc (size_t size)
@@ -263,15 +263,9 @@ int crun_path_exists (const char *path, libcrun_error_t *err);
 int write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err);
 
 static inline int
-write_file_with_flags (const char *name, int flags, const void *data, size_t len, libcrun_error_t *err)
-{
-  return write_file_at_with_flags (AT_FDCWD, flags, 0700, name, data, len, err);
-}
-
-static inline int
 write_file (const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
-  return write_file_with_flags (name, WRITE_FILE_DEFAULT_FLAGS, data, len, err);
+  return write_file_at_with_flags (AT_FDCWD, WRITE_FILE_DEFAULT_FLAGS, 0700, name, data, len, err);
 }
 
 static inline int
@@ -284,12 +278,12 @@ int crun_ensure_directory (const char *path, int mode, bool nofollow, libcrun_er
 
 int crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, libcrun_error_t *err);
 
-int crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode, libcrun_error_t *err);
+int crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, const char *path, int mode, libcrun_error_t *err);
 
-int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+int crun_safe_ensure_directory_at (int dirfd, const char *dirpath, const char *path, int mode,
                                    libcrun_error_t *err);
 
-int crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+int crun_safe_ensure_file_at (int dirfd, const char *dirpath, const char *path, int mode,
                               libcrun_error_t *err);
 
 int crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err);
@@ -385,10 +379,10 @@ int get_file_type_fd (int fd, mode_t *mode);
 
 char *get_user_name (uid_t uid);
 
-int safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
+int safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mode,
                  libcrun_error_t *err);
 
-ssize_t safe_write (int fd, const void *buf, ssize_t count);
+int safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_error_t *err);
 
 int append_paths (char **out, libcrun_error_t *err, ...) __attribute__ ((sentinel));
 

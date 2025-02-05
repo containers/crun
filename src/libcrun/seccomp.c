@@ -849,9 +849,9 @@ libcrun_copy_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, const char *b64
   if (UNLIKELY (consumed != (int) in_size))
     return crun_make_error (err, 0, "invalid seccomp BPF data");
 
-  ret = safe_write (gen_ctx->fd, bpf_data, (ssize_t) size);
+  ret = safe_write (gen_ctx->fd, "seccomp fd", bpf_data, size, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0, "write to seccomp fd");
+    return ret;
 
   return 0;
 }

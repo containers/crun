@@ -122,21 +122,15 @@ int
 write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, const void *data, size_t len, libcrun_error_t *err)
 {
   cleanup_close int fd = -1;
-  size_t remaining;
   int ret = 0;
 
   fd = openat (dirfd, name, O_CLOEXEC | O_WRONLY | flags, mode);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "opening file `%s` for writing", name);
 
-  for (remaining = len; remaining > 0;)
-    {
-      ret = TEMP_FAILURE_RETRY (write (fd, data + len - remaining, remaining));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "writing file `%s`", name);
-
-      remaining -= (size_t) ret;
-    }
+  ret = safe_write (fd, name, data, len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return (len > INT_MAX) ? INT_MAX : (int) len;
 }
@@ -336,12 +330,13 @@ close_and_replace (int *oldfd, int newfd)
 char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
 
 static int
-safe_openat_fallback (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
-                      int flags, int mode, libcrun_error_t *err)
+safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags,
+                      int mode, libcrun_error_t *err)
 {
   const char *path_in_chroot;
   cleanup_close int fd = -1;
   char buffer[PATH_MAX];
+  size_t rootfs_len = strlen (rootfs);
   int ret;
 
   path_in_chroot = chroot_realpath (rootfs, path, buffer);
@@ -376,7 +371,7 @@ safe_openat_fallback (int dirfd, const char *rootfs, size_t rootfs_len, const ch
 }
 
 int
-safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path, int flags, int mode,
+safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mode,
              libcrun_error_t *err)
 {
   static bool openat2_supported = true;
@@ -393,7 +388,7 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
           if (errno == ENOSYS)
             openat2_supported = false;
           if (errno == ENOSYS || errno == EINVAL || errno == EPERM)
-            return safe_openat_fallback (dirfd, rootfs, rootfs_len, path, flags, mode, err);
+            return safe_openat_fallback (dirfd, rootfs, path, flags, mode, err);
 
           return crun_make_error (err, errno, "openat2 `%s`", path);
         }
@@ -401,7 +396,7 @@ safe_openat (int dirfd, const char *rootfs, size_t rootfs_len, const char *path,
       return ret;
     }
 
-  return safe_openat_fallback (dirfd, rootfs, rootfs_len, path, flags, mode, err);
+  return safe_openat_fallback (dirfd, rootfs, path, flags, mode, err);
 }
 
 ssize_t
@@ -436,8 +431,7 @@ safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun
 
 static int
 crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
-                     size_t dirpath_len, const char *path, int mode,
-                     int max_readlinks, libcrun_error_t *err)
+                     const char *path, int mode, int max_readlinks, libcrun_error_t *err)
 {
   cleanup_close int wd_cleanup = -1;
   cleanup_free char *npath = NULL;
@@ -503,7 +497,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
                   if (LIKELY (ret >= 0))
                     {
                       return crun_safe_ensure_at (do_open, dir, dirfd,
-                                                  dirpath, dirpath_len,
+                                                  dirpath,
                                                   resolved_path, mode,
                                                   max_readlinks - 1, err);
                     }
@@ -529,7 +523,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
             return crun_make_error (err, errno, "mkdir `/%s`", npath);
         }
 
-      cwd = safe_openat (dirfd, dirpath, dirpath_len, npath, (last_component ? O_PATH : 0) | O_CLOEXEC, 0, err);
+      cwd = safe_openat (dirfd, dirpath, npath, (last_component ? O_PATH : 0) | O_CLOEXEC, 0, err);
       if (UNLIKELY (cwd < 0))
         return crun_error_wrap (err, "creating `/%s`", path);
 
@@ -581,31 +575,30 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
 }
 
 int
-crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, size_t dirpath_len,
-                                  const char *path, int mode, libcrun_error_t *err)
+crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, const char *path, int mode, libcrun_error_t *err)
 {
   int fd;
 
   /* If the file/dir already exists, just open it.  */
-  fd = safe_openat (dirfd, dirpath, dirpath_len, path, O_PATH | O_CLOEXEC, 0, err);
+  fd = safe_openat (dirfd, dirpath, path, O_PATH | O_CLOEXEC, 0, err);
   if (LIKELY (fd >= 0))
     return fd;
 
-  return crun_safe_ensure_at (true, dir, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (true, dir, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
 int
-crun_safe_ensure_directory_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+crun_safe_ensure_directory_at (int dirfd, const char *dirpath, const char *path, int mode,
                                libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, true, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, true, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
 int
-crun_safe_ensure_file_at (int dirfd, const char *dirpath, size_t dirpath_len, const char *path, int mode,
+crun_safe_ensure_file_at (int dirfd, const char *dirpath, const char *path, int mode,
                           libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, false, dirfd, dirpath, dirpath_len, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, false, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
 int
@@ -2234,15 +2227,10 @@ find_annotation (libcrun_container_t *container, const char *name)
   return find_annotation_map (container->container_def->annotations, name);
 }
 
-ssize_t
-safe_write (int fd, const void *buf, ssize_t count)
+int
+safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_error_t *err)
 {
-  ssize_t written = 0;
-  if (count < 0)
-    {
-      errno = EINVAL;
-      return -1;
-    }
+  size_t written = 0;
   while (written < count)
     {
       ssize_t w = write (fd, buf + written, count - written);
@@ -2250,11 +2238,11 @@ safe_write (int fd, const void *buf, ssize_t count)
         {
           if (errno == EINTR || errno == EAGAIN)
             continue;
-          return w;
+          return crun_make_error (err, errno, "write file `%s`", fname);
         }
       written += w;
     }
-  return written;
+  return 0;
 }
 
 int

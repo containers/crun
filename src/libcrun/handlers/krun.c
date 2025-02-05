@@ -43,6 +43,8 @@
 /* libkrun has a hard-limit of 8 vCPUs per microVM. */
 #define LIBKRUN_MAX_VCPUS 8
 
+#define KRUN_CONFIG_FILE ".krun_config.json"
+
 struct krun_config
 {
   void *handle;
@@ -176,8 +178,8 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   cleanup_close int devfd = -1;
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
+  bool create_sev = false;
   bool is_user_ns;
-  bool create_sev;
 
   if (rootfs == NULL)
     rootfsfd = AT_FDCWD;
@@ -193,6 +195,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       cleanup_free char *origin_config_path = NULL;
       cleanup_free char *state_dir = NULL;
       cleanup_free char *config = NULL;
+      cleanup_close int fd = -1;
       size_t config_size;
 
       ret = libcrun_get_state_directory (&state_dir, context->state_root, context->id, err);
@@ -207,7 +210,13 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_file_at (rootfsfd, ".krun_config.json", config, config_size, err);
+      /* CVE-2025-24965: the content below rootfs cannot be trusted because it is controlled by the user.  We
+         must ensure the file is opened below the rootfs directory.  */
+      fd = safe_openat (rootfsfd, rootfs, KRUN_CONFIG_FILE, WRITE_FILE_DEFAULT_FLAGS | O_NOFOLLOW, 0700, err);
+      if (UNLIKELY (fd < 0))
+        return fd;
+
+      ret = safe_write (fd, KRUN_CONFIG_FILE, config, config_size, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
