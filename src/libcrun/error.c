@@ -71,7 +71,10 @@ crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
   int ret;
 
   if (err == NULL || *err == NULL)
-    return 0;
+    {
+      // Internal error
+      return 0;
+    }
 
   ret = -(*err)->status - 1;
 
@@ -123,8 +126,11 @@ crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
 
   if (out == NULL)
     out = stderr;
-  if (err == NULL || *err == NULL)
-    return;
+  if (err == NULL || *err == NULL || **err == NULL)
+    {
+      // Internal error
+      return;
+    }
 
   ref = **err;
   if (ref->status)
