@@ -2110,11 +2110,11 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
       switch (mode & S_IFMT)
         {
         case S_IFREG:
-          srcfd = openat (dirfd (dsrcfd), de->d_name, O_NONBLOCK | O_RDONLY | O_CLOEXEC);
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_NONBLOCK | O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
           if (UNLIKELY (srcfd < 0))
             return crun_make_error (err, errno, "open `%s/%s`", srcname, de->d_name);
 
-          destfd = openat (destdirfd, de->d_name, O_RDWR | O_CREAT | O_CLOEXEC, 0777);
+          destfd = openat (destdirfd, de->d_name, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0777);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open `%s/%s`", destname, de->d_name);
 
@@ -2137,11 +2137,11 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mkdir `%s/%s`", destname, de->d_name);
 
-          srcfd = openat (dirfd (dsrcfd), de->d_name, O_DIRECTORY | O_CLOEXEC);
+          srcfd = openat (dirfd (dsrcfd), de->d_name, O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
           if (UNLIKELY (srcfd < 0))
             return crun_make_error (err, errno, "open directory `%s/%s`", srcname, de->d_name);
 
-          destfd = openat (destdirfd, de->d_name, O_DIRECTORY | O_CLOEXEC);
+          destfd = openat (destdirfd, de->d_name, O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
           if (UNLIKELY (destfd < 0))
             return crun_make_error (err, errno, "open directory `%s/%s`", srcname, de->d_name);
 
