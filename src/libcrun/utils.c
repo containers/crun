@@ -584,6 +584,7 @@ crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, cons
   if (LIKELY (fd >= 0))
     return fd;
 
+  crun_error_release (err);
   return crun_safe_ensure_at (true, dir, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
