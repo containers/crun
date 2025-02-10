@@ -1,7 +1,7 @@
 --- !Policy
 product_versions:
   - fedora-*
-decision_context:
+decision_contexts:
   - bodhi_update_push_stable
   - bodhi_update_push_testing
 rules:
