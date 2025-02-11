@@ -2687,7 +2687,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   ret = close_and_reset (&sync_socket);
   if (UNLIKELY (ret < 0))
-    goto fail;
+    {
+      crun_make_error (err, errno, "close/reset of sync_socket failed");
+      goto fail;
+    }
 
   libcrun_debug ("Writing container status");
   ret = write_container_status (container, context, pid, cgroup_status, err);
@@ -2715,7 +2718,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
       ret = close_and_reset (&own_seccomp_receiver_fd);
       if (UNLIKELY (ret < 0))
-        goto fail;
+        {
+          crun_make_error (err, errno, "close/reset of seccomp receiver fd failed");
+          goto fail;
+        }
     }
 
   {
