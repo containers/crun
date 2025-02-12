@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+#include <stdlib.h>
 #include <errno.h>
 #include "string_map.h"
 #include "utils.h"
@@ -35,23 +36,76 @@ struct string_map_s
 {
   size_t len;
   struct kv_s *kvs;
+
+#ifdef HAVE_HSEARCH_R
+  struct hsearch_data htab;
+  bool htab_initialized;
+#endif
+
+  bool sorted;
 };
+
+static int
+compare_kv (const void *a, const void *b)
+{
+  return strcmp (((struct kv_s *) a)->key, ((struct kv_s *) b)->key);
+}
 
 const char *
 find_string_map_value (string_map *map, const char *name)
 
 {
-  size_t i;
+  struct kv_s *r, key;
 
-  if (map == NULL)
+  if (map == NULL || map->len == 0)
     return NULL;
 
-  for (i = 0; i < map->len; i++)
+#ifdef HAVE_HSEARCH_R
+  ENTRY e, *ep;
+
+  /* Do not bother with hash tables for small maps.  */
+  if (map->len < 8)
+    goto fallback;
+
+  if (! map->htab_initialized)
     {
-      if (strcmp (map->kvs[i].key, name) == 0)
-        return map->kvs[i].value;
+      size_t i;
+
+      if (hcreate_r (map->len, &map->htab) == 0)
+        goto fallback;
+
+      for (i = 0; i < map->len; i++)
+        {
+          e.key = (char *) map->kvs[i].key;
+          e.data = map->kvs[i].value;
+          if (hsearch_r (e, ENTER, &ep, &map->htab) == 0)
+            {
+              hdestroy_r (&map->htab);
+              goto fallback;
+            }
+        }
+      map->htab_initialized = true;
     }
-  return NULL;
+
+  e.key = (char *) name;
+  if (hsearch_r (e, FIND, &ep, &map->htab) == 0)
+    return NULL;
+
+  return ep->data;
+
+fallback:
+#endif
+
+  if (! map->sorted)
+    {
+      qsort (map->kvs, map->len, sizeof (struct kv_s), compare_kv);
+      map->sorted = true;
+    }
+
+  key.key = (char *) name;
+
+  r = bsearch (&key, map->kvs, map->len, sizeof (struct kv_s), compare_kv);
+  return r ? r->value : NULL;
 }
 
 string_map *
@@ -94,6 +148,9 @@ void
 free_string_map (string_map *map)
 {
   size_t i;
+
+  if (map->htab_initialized)
+    hdestroy_r (&map->htab);
 
   for (i = 0; i < map->len; i++)
     {

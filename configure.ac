@@ -30,7 +30,7 @@ AC_CHECK_HEADERS([error.h linux/openat2.h stdatomic.h linux/ioprio.h])
 
 AC_CHECK_TYPES([atomic_int], [], [], [[#include <stdatomic.h>]])
 
-AC_CHECK_FUNCS(copy_file_range fgetxattr statx fgetpwent_r issetugid memfd_create)
+AC_CHECK_FUNCS(hsearch_r copy_file_range fgetxattr statx fgetpwent_r issetugid memfd_create)
 
 AC_ARG_ENABLE(crun,
 AS_HELP_STRING([--enable-crun], [Include crun executable in installation (default: yes)]),

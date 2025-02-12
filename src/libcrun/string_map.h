@@ -22,6 +22,11 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+
+#ifdef HAVE_HSEARCH_R
+#  include <search.h>
+#endif
+
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include "error.h"
 
