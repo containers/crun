@@ -545,6 +545,8 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
   container->host_uid = geteuid ();
   container->host_gid = getegid ();
 
+  container->annotations = make_string_map_from_json (container_def->annotations);
+
   if (path)
     container->config_file = xstrdup (path);
   if (config)
@@ -593,6 +595,8 @@ libcrun_container_free (libcrun_container_t *ctr)
 
   if (ctr->container_def)
     free_runtime_spec_schema_config_schema (ctr->container_def);
+
+  free_string_map (ctr->annotations);
 
   free (ctr->config_file_content);
   free (ctr->config_file);
@@ -2520,7 +2524,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cg.manager = cgroup_manager;
   cg.id = context->id;
   cg.resources = def->linux ? def->linux->resources : NULL;
-  cg.annotations = def->annotations;
+  cg.annotations = container->annotations;
   cg.root_uid = root_uid;
   cg.root_gid = root_gid;
   cg.state_root = context->state_root;
@@ -4306,7 +4310,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   {
     struct libcrun_cgroup_args cg = {
       .resources = def->linux ? def->linux->resources : NULL,
-      .annotations = def->annotations,
+      .annotations = container->annotations,
       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
       .manager = cgroup_manager,
       .pid = status.pid,

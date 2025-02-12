@@ -1531,7 +1531,7 @@ exit:
 static int
 enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                             int cgroup_mode,
-                            json_map_string_string *annotations,
+                            string_map *annotations,
                             const char *state_root,
                             const char *scope, const char *slice,
                             pid_t pid,
@@ -1620,24 +1620,34 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   if (annotations)
     {
       size_t prefix_len = sizeof (SYSTEMD_PROPERTY_PREFIX) - 1;
+      size_t annotations_len = string_map_size (annotations);
       size_t i;
 
-      for (i = 0; i < annotations->len; i++)
+      for (i = 0; i < annotations_len; i++)
         {
+          const char *key;
+          const char *value;
           size_t len;
 
-          if (! has_prefix (annotations->keys[i], SYSTEMD_PROPERTY_PREFIX))
-            continue;
-
-          len = strlen (annotations->keys[i]);
-          if (len < prefix_len + 3)
+          ret = string_map_get_at (annotations, i, &key, &value);
+          if (UNLIKELY (ret < 0))
             {
-              ret = crun_make_error (err, EINVAL, "invalid systemd property name `%s`", annotations->keys[i]);
+              ret = crun_make_error (err, 0, "internal error: failed to get annotation at index %zu", i);
               goto exit;
             }
 
-          ret = append_systemd_annotation (m, annotations->keys[i] + prefix_len, len - prefix_len,
-                                           annotations->values[i], err);
+          if (! has_prefix (key, SYSTEMD_PROPERTY_PREFIX))
+            continue;
+
+          len = strlen (key);
+          if (len < prefix_len + 3)
+            {
+              ret = crun_make_error (err, EINVAL, "invalid systemd property name `%s`", key);
+              goto exit;
+            }
+
+          ret = append_systemd_annotation (m, key + prefix_len, len - prefix_len,
+                                           value, err);
           if (UNLIKELY (ret < 0))
             goto exit;
         }
@@ -1801,11 +1811,11 @@ exit:
 }
 
 static const char *
-find_systemd_subgroup (json_map_string_string *annotations)
+find_systemd_subgroup (string_map *annotations)
 {
   const char *annotation;
 
-  annotation = find_annotation_map (annotations, "run.oci.systemd.subgroup");
+  annotation = find_string_map_value (annotations, "run.oci.systemd.subgroup");
   if (annotation)
     {
       if (annotation[0] == '\0')

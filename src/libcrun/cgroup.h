@@ -19,6 +19,7 @@
 #define CGROUP_H
 
 #include "container.h"
+#include "string_map.h"
 #include <unistd.h>
 
 #ifndef CGROUP_ROOT
@@ -48,7 +49,7 @@ struct libcrun_cgroup_status;
 struct libcrun_cgroup_args
 {
   runtime_spec_schema_config_linux_resources *resources;
-  json_map_string_string *annotations;
+  string_map *annotations;
   const char *cgroup_path;
   int manager;
   pid_t pid;

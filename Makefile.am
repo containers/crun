@@ -35,6 +35,7 @@ endif
 check_LTLIBRARIES = libcrun_testing.la
 
 libcrun_SOURCES = src/libcrun/utils.c \
+		src/libcrun/string_map.c \
 		src/libcrun/ring_buffer.c \
 		src/libcrun/blake3/blake3.c \
 		src/libcrun/blake3/blake3_portable.c \
@@ -155,7 +156,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h \
-	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h \
+	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h src/libcrun/string_map.h \
 	crun.1.md crun.1 libcrun.lds \
 	krun.1.md krun.1 \
 	lua/luacrun.rockspec

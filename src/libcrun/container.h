@@ -22,6 +22,7 @@
 #include <config.h>
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include "error.h"
+#include "string_map.h"
 
 enum handler_configure_phase
 {
@@ -87,6 +88,8 @@ struct libcrun_container_s
 
   char *config_file;
   char *config_file_content;
+
+  string_map *annotations;
 
   void *private_data;
   void (*cleanup_private_data) (void *private_data);
