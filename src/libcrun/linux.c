@@ -1669,7 +1669,11 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           basename = found ? found + 1 : dirname;
 
           if (dirname[0] == '\0')
-            dirfd = dup (rootfsfd);
+            {
+              dirfd = dup (rootfsfd);
+              if (UNLIKELY (dirfd < 0))
+                return crun_make_error (err, errno, "dup fd for `%s`", rootfs);
+            }
           else
             {
               dirfd = safe_openat (rootfsfd, rootfs, dirname, O_DIRECTORY | O_PATH | O_CLOEXEC, 0, err);
@@ -1679,9 +1683,9 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
 
                   dirfd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs, dirname, 0755, err);
                 }
+              if (UNLIKELY (dirfd < 0))
+                return dirfd;
             }
-          if (UNLIKELY (dirfd < 0))
-            return dirfd;
 
           ret = mknodat (dirfd, basename, device->mode | type, dev);
 
