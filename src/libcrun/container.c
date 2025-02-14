@@ -3499,7 +3499,14 @@ exec_process_entrypoint (libcrun_context_t *context,
     {
       ret = find_executable (&exec_path, process->args[0], process->cwd, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          if (custom_handler == NULL || is_empty_string (process->args[0]))
+            return ret;
+
+          /* If a custom handler is used, pass argv0 as specified.  e.g. with wasm the file could miss the +x bit.  */
+          crun_error_release (err);
+          exec_path = xstrdup (process->args[0]);
+        }
     }
 
   if (UNLIKELY ((! chdir_done) && libcrun_safe_chdir (cwd, err) < 0))
