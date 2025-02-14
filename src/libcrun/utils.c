@@ -1876,8 +1876,8 @@ check_access (const char *path)
   return 0;
 }
 
-char *
-find_executable (const char *executable_path, const char *cwd)
+int
+find_executable (char **out, const char *executable_path, const char *cwd, libcrun_error_t *err)
 {
   cleanup_free char *cwd_executable_path = NULL;
   cleanup_free char *tmp = NULL;
@@ -1886,11 +1886,10 @@ find_executable (const char *executable_path, const char *cwd)
   char *it, *end;
   int ret;
 
-  if (executable_path == NULL)
-    {
-      errno = EINVAL;
-      return NULL;
-    }
+  *out = NULL;
+
+  if (executable_path == NULL || executable_path[0] == '\0')
+    return crun_make_error (err, ENOENT, "cannot find `` in $PATH");
 
   if (executable_path[0] != '/' && strchr (executable_path, '/'))
     {
@@ -1907,7 +1906,9 @@ find_executable (const char *executable_path, const char *cwd)
 
       /* Make sure the path starts with a '/' so it will hit the check
          for absolute paths.  */
-      xasprintf (&cwd_executable_path, "%s%s/%s", cwd[0] == '/' ? "" : "/", cwd, executable_path);
+      ret = append_paths (&cwd_executable_path, err, "/", cwd, executable_path, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
       executable_path = cwd_executable_path;
     }
 
@@ -1915,9 +1916,12 @@ find_executable (const char *executable_path, const char *cwd)
   if (executable_path[0] == '/')
     {
       ret = check_access (executable_path);
-      if (ret == 0)
-        return xstrdup (executable_path);
-      return NULL;
+      if (LIKELY (ret == 0))
+        {
+          *out = xstrdup (executable_path);
+          return 0;
+        }
+      goto fail;
     }
 
   end = tmp = xstrdup (getenv ("PATH"));
@@ -1935,7 +1939,10 @@ find_executable (const char *executable_path, const char *cwd)
 
       ret = check_access (path);
       if (ret == 0)
-        return xstrdup (path);
+        {
+          *out = xstrdup (path);
+          return 0;
+        }
 
       if (errno == ENOENT)
         continue;
@@ -1944,7 +1951,12 @@ find_executable (const char *executable_path, const char *cwd)
     }
 
   errno = last_error;
-  return NULL;
+
+fail:
+  if (errno == ENOENT)
+    return crun_make_error (err, errno, "executable file `%s` not found%s", executable_path, executable_path[0] == '/' ? "" : " in $PATH");
+
+  return crun_make_error (err, errno, "cannot open `%s`", executable_path);
 }
 
 #ifdef HAVE_FGETXATTR

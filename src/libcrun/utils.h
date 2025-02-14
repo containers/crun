@@ -358,7 +358,7 @@ has_prefix (const char *str, const char *prefix)
   return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
 }
 
-char *find_executable (const char *executable_path, const char *cwd);
+int find_executable (char **exec_path, const char *executable_path, const char *cwd, libcrun_error_t *err);
 
 int copy_recursive_fd_to_fd (int srcfd, int destfd, const char *srcname, const char *destname, libcrun_error_t *err);
 

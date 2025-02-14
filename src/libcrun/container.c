@@ -1260,16 +1260,18 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (def->process && def->process->args)
     {
-      *exec_path = find_executable (def->process->args[0], def->process->cwd);
-      if (UNLIKELY (*exec_path == NULL))
+      ret = find_executable (exec_path, def->process->args[0], def->process->cwd, err);
+      if (UNLIKELY (ret < 0))
         {
-          if (entrypoint_args->custom_handler == NULL && errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
+          if (entrypoint_args->custom_handler == NULL && crun_error_get_errno (err) == ENOENT)
+            return ret;
         }
+
       /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
          once the process switched to the use that runs in the container.  This might be necessary
          when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
          is not honored.  */
+      crun_error_release (err);
     }
 
   ret = libcrun_set_hostname (container, err);
@@ -1327,16 +1329,15 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (UNLIKELY (def->process && def->process->args && *exec_path == NULL))
     {
-      *exec_path = find_executable (def->process->args[0], def->process->cwd);
-      if (UNLIKELY (*exec_path == NULL))
+      ret = find_executable (exec_path, def->process->args[0], def->process->cwd, err);
+      if (UNLIKELY (ret < 0))
         {
+          if (entrypoint_args->custom_handler == NULL || is_empty_string (def->process->args[0]))
+            return ret;
+
           /* If a custom handler is used, pass argv0 as specified.  e.g. with wasm the file could miss the +x bit.  */
-          if (entrypoint_args->custom_handler && ! is_empty_string (def->process->args[0]))
-            *exec_path = xstrdup (def->process->args[0]);
-          else if (errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", def->process->args[0]);
-          else
-            return crun_make_error (err, errno, "open executable");
+          crun_error_release (err);
+          *exec_path = xstrdup (def->process->args[0]);
         }
     }
 
@@ -3432,15 +3433,17 @@ exec_process_entrypoint (libcrun_context_t *context,
       seccomp_flags_len = container->container_def->linux->seccomp->flags_len;
     }
 
-  exec_path = find_executable (process->args[0], process->cwd);
-  if (UNLIKELY (exec_path == NULL))
+  ret = find_executable (&exec_path, process->args[0], process->cwd, err);
+  if (UNLIKELY (ret < 0))
     {
-      if (errno == ENOENT)
-        return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
+      if (crun_error_get_errno (err) == ENOENT)
+        return ret;
+
       /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
          once the process switched to the use that runs in the container.  This might be necessary
          when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
          is not honored.  */
+      crun_error_release (err);
     }
 
   if (container->container_def->linux && container->container_def->linux->personality)
@@ -3494,14 +3497,9 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (UNLIKELY (exec_path == NULL))
     {
-      exec_path = find_executable (process->args[0], process->cwd);
-      if (UNLIKELY (exec_path == NULL))
-        {
-          if (errno == ENOENT)
-            return crun_make_error (err, errno, "executable file `%s` not found in $PATH", process->args[0]);
-
-          return crun_make_error (err, errno, "open executable");
-        }
+      ret = find_executable (&exec_path, process->args[0], process->cwd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (UNLIKELY ((! chdir_done) && libcrun_safe_chdir (cwd, err) < 0))
