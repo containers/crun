@@ -86,11 +86,11 @@ get_cgroup_manager (int manager, struct libcrun_cgroup_manager **out, libcrun_er
 }
 
 static const char *
-find_delegate_cgroup (json_map_string_string *annotations)
+find_delegate_cgroup (string_map *annotations)
 {
   const char *annotation;
 
-  annotation = find_annotation_map (annotations, "run.oci.delegate-cgroup");
+  annotation = find_string_map_value (annotations, "run.oci.delegate-cgroup");
   if (annotation)
     {
       if (annotation[0] == '\0')
