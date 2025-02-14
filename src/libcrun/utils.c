@@ -1881,7 +1881,6 @@ find_executable (char **out, const char *executable_path, const char *cwd, libcr
 {
   cleanup_free char *cwd_executable_path = NULL;
   cleanup_free char *tmp = NULL;
-  char path[PATH_MAX + 1];
   int last_error = ENOENT;
   char *it, *end;
   int ret;
@@ -1928,19 +1927,24 @@ find_executable (char **out, const char *executable_path, const char *cwd, libcr
 
   while ((it = strsep (&end, ":")))
     {
-      size_t len;
+      cleanup_free char *path = NULL;
 
       if (it == end)
         it = ".";
 
-      len = snprintf (path, PATH_MAX, "%s/%s", it, executable_path);
-      if (len >= PATH_MAX)
-        continue;
+      ret = append_paths (&path, err, it, executable_path, NULL);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_error_release (err);
+          continue;
+        }
 
       ret = check_access (path);
       if (ret == 0)
         {
-          *out = xstrdup (path);
+          /* Change owner.  */
+          *out = path;
+          path = NULL;
           return 0;
         }
 
