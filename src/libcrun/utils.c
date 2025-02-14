@@ -1855,10 +1855,10 @@ check_access (const char *path)
   int ret;
   mode_t mode;
 
-#ifdef ANDROID
-  ret = access (path, X_OK);
-#else
+#ifdef HAVE_EACCESS
   ret = eaccess (path, X_OK);
+#else
+  ret = access (path, X_OK);
 #endif
   if (ret < 0)
     return ret;
