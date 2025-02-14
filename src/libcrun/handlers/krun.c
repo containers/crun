@@ -160,8 +160,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun executable");
     }
-
-  return krun_start_enter (ctx_id);
+  ret = krun_start_enter (ctx_id);
+  return -ret;
 }
 
 /* libkrun_create_kvm_device: explicitly adds kvm device.  */
