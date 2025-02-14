@@ -1849,6 +1849,16 @@ parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx
   return 0;
 }
 
+#define CHECK_ACCESS_NOT_EXECUTABLE 1
+#define CHECK_ACCESS_NOT_REGULAR 2
+
+/* check that the specified path exists and it is executable.
+   Return
+   - 0 if the file is executable
+   - CHECK_ACCESS_NOT_EXECUTABLE if it exists but it is not executable
+   - CHECK_ACCESS_NOT_REGULAR if it not a regular file
+   - -errno for any other generic error
+ */
 static int
 check_access (const char *path)
 {
@@ -1856,23 +1866,35 @@ check_access (const char *path)
   mode_t mode;
 
 #ifdef HAVE_EACCESS
-  ret = eaccess (path, X_OK);
+#  define ACCESS(path, mode) (eaccess (path, mode))
 #else
-  ret = access (path, X_OK);
+#  define ACCESS(path, mode) (access (path, mode))
 #endif
+
+  ret = ACCESS (path, X_OK);
   if (ret < 0)
-    return ret;
+    {
+      /* If the file is not executable, check if it exists.  */
+      if (errno == EACCES)
+        {
+          int saved_errno = errno;
+          ret = ACCESS (path, F_OK);
+          errno = saved_errno;
+
+          if (ret == 0)
+            return CHECK_ACCESS_NOT_EXECUTABLE;
+        }
+      return -errno;
+    }
 
   ret = get_file_type (&mode, false, path);
   if (UNLIKELY (ret < 0))
-    return ret;
+    return -errno;
 
   if (! S_ISREG (mode))
-    {
-      errno = EPERM;
-      return -1;
-    }
+    return CHECK_ACCESS_NOT_REGULAR;
 
+  /* It exists, is executable and is a regular file.  */
   return 0;
 }
 
@@ -1881,7 +1903,7 @@ find_executable (char **out, const char *executable_path, const char *cwd, libcr
 {
   cleanup_free char *cwd_executable_path = NULL;
   cleanup_free char *tmp = NULL;
-  int last_error = ENOENT;
+  int last_error = -ENOENT;
   char *it, *end;
   int ret;
 
@@ -1920,6 +1942,7 @@ find_executable (char **out, const char *executable_path, const char *cwd, libcr
           *out = xstrdup (executable_path);
           return 0;
         }
+      last_error = ret;
       goto fail;
     }
 
@@ -1948,19 +1971,27 @@ find_executable (char **out, const char *executable_path, const char *cwd, libcr
           return 0;
         }
 
-      if (errno == ENOENT)
+      if (ret == -ENOENT)
         continue;
 
-      last_error = errno;
+      last_error = ret;
     }
 
-  errno = last_error;
-
 fail:
-  if (errno == ENOENT)
-    return crun_make_error (err, errno, "executable file `%s` not found%s", executable_path, executable_path[0] == '/' ? "" : " in $PATH");
+  switch (last_error)
+    {
+    case CHECK_ACCESS_NOT_EXECUTABLE:
+      return crun_make_error (err, EPERM, "the path `%s` exists but it is not executable", executable_path);
 
-  return crun_make_error (err, errno, "cannot open `%s`", executable_path);
+    case CHECK_ACCESS_NOT_REGULAR:
+      return crun_make_error (err, EPERM, "the path `%s` is not a regular file", executable_path);
+
+    default:
+      errno = -last_error;
+      if (errno == ENOENT)
+        return crun_make_error (err, errno, "executable file `%s` not found%s", executable_path, executable_path[0] == '/' ? "" : " in $PATH");
+      return crun_make_error (err, errno, "cannot open `%s`", executable_path);
+    }
 }
 
 #ifdef HAVE_FGETXATTR
