@@ -3,7 +3,27 @@ let
 in
 self: super:
 {
-  criu = (static super.criu);
+  protobufc = super.protobufc.overrideAttrs (x: {
+    configureFlags = (x.configureFlags or [ ]) ++ [ "--enable-static" ];
+  });
+  libnl = super.libnl.overrideAttrs (x: {
+    configureFlags = (x.configureFlags or [ ]) ++ [ "--enable-static" ];
+  });
+  libnet = super.libnet.overrideAttrs (x: {
+    configureFlags = (x.configureFlags or [ ]) ++ [ "--enable-static" ];
+  });
+  criu = (static super.criu).overrideAttrs (x: {
+    buildInputs = (x.buildInputs or []) ++ [
+      super.protobuf
+      super.protobufc
+      super.libnl
+      super.libnet
+    ];
+    NIX_LDFLAGS = "${x.NIX_LDFLAGS or ""} -lprotobuf-c";
+    buildPhase = ''
+      make lib
+    '';
+  });
   gpgme = (static super.gpgme);
   libassuan = (static super.libassuan);
   libgpgerror = (static super.libgpgerror);

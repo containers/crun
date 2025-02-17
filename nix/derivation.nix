@@ -33,7 +33,7 @@ with pkgs; stdenv.mkDerivation {
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
   prePatch = ''
-    export CFLAGS='-static -pthread'
+    export CFLAGS='-static -pthread -DSTATIC'
     export LDFLAGS='-s -w -static-libgcc -static'
     export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
     export CRUN_LDFLAGS='-all-static'
