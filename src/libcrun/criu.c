@@ -36,7 +36,9 @@
 #  include "cgroup.h"
 #  include "cgroup-utils.h"
 
-#  include <dlfcn.h>
+#  ifndef STATIC
+#    include <dlfcn.h>
+#  endif
 
 #  define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 #  define CRIU_RESTORE_LOG_FILE "restore.log"
@@ -105,8 +107,10 @@ cleanup_wrapper (void *p)
   if (*w == NULL)
     return;
 
+#  ifndef STATIC
   if ((*w)->handle)
     dlclose ((*w)->handle);
+#  endif
   free (*w);
   libcriu_wrapper = NULL;
 }
@@ -118,20 +122,27 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
 {
   cleanup_free struct libcriu_wrapper_s *wrapper = xmalloc0 (sizeof (*wrapper));
 
-#  define LOAD_CRIU_FUNCTION(X, ALLOW_NULL)                                                    \
-    do                                                                                         \
-      {                                                                                        \
-        wrapper->X = dlsym (wrapper->handle, #X);                                              \
-        if (! ALLOW_NULL && wrapper->X == NULL)                                                \
-          {                                                                                    \
-            dlclose (wrapper->handle);                                                         \
-            return crun_make_error (err, 0, "could not find symbol `%s` in `libcriu.so`", #X); \
-          }                                                                                    \
-    } while (0)
+#  ifdef STATIC
+#    define LOAD_CRIU_FUNCTION(X, ALLOW_NULL) \
+      wrapper->X = &X;
+#  else
+#    define LOAD_CRIU_FUNCTION(X, ALLOW_NULL)                                                    \
+      do                                                                                         \
+        {                                                                                        \
+          wrapper->X = dlsym (wrapper->handle, #X);                                              \
+          if (! ALLOW_NULL && wrapper->X == NULL)                                                \
+            {                                                                                    \
+              dlclose (wrapper->handle);                                                         \
+              return crun_make_error (err, 0, "could not find symbol `%s` in `libcriu.so`", #X); \
+            }                                                                                    \
+      } while (0)
+#  endif
 
+#  ifndef STATIC
   wrapper->handle = dlopen ("libcriu.so.2", RTLD_NOW);
   if (wrapper->handle == NULL)
     return crun_make_error (err, 0, "could not load `libcriu.so.2`");
+#  endif
 
   LOAD_CRIU_FUNCTION (criu_add_ext_mount, false);
   LOAD_CRIU_FUNCTION (criu_add_external, false);
