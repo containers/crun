@@ -1849,48 +1849,68 @@ parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx
   return 0;
 }
 
+#define CHECK_ACCESS_NOT_EXECUTABLE 1
+#define CHECK_ACCESS_NOT_REGULAR 2
+
+/* check that the specified path exists and it is executable.
+   Return
+   - 0 if the file is executable
+   - CHECK_ACCESS_NOT_EXECUTABLE if it exists but it is not executable
+   - CHECK_ACCESS_NOT_REGULAR if it not a regular file
+   - -errno for any other generic error
+ */
 static int
 check_access (const char *path)
 {
   int ret;
   mode_t mode;
 
-#ifdef ANDROID
-  ret = access (path, X_OK);
+#ifdef HAVE_EACCESS
+#  define ACCESS(path, mode) (eaccess (path, mode))
 #else
-  ret = eaccess (path, X_OK);
+#  define ACCESS(path, mode) (access (path, mode))
 #endif
+
+  ret = ACCESS (path, X_OK);
   if (ret < 0)
-    return ret;
+    {
+      /* If the file is not executable, check if it exists.  */
+      if (errno == EACCES)
+        {
+          int saved_errno = errno;
+          ret = ACCESS (path, F_OK);
+          errno = saved_errno;
+
+          if (ret == 0)
+            return CHECK_ACCESS_NOT_EXECUTABLE;
+        }
+      return -errno;
+    }
 
   ret = get_file_type (&mode, false, path);
   if (UNLIKELY (ret < 0))
-    return ret;
+    return -errno;
 
   if (! S_ISREG (mode))
-    {
-      errno = EPERM;
-      return -1;
-    }
+    return CHECK_ACCESS_NOT_REGULAR;
 
+  /* It exists, is executable and is a regular file.  */
   return 0;
 }
 
-char *
-find_executable (const char *executable_path, const char *cwd)
+int
+find_executable (char **out, const char *executable_path, const char *cwd, libcrun_error_t *err)
 {
   cleanup_free char *cwd_executable_path = NULL;
   cleanup_free char *tmp = NULL;
-  char path[PATH_MAX + 1];
-  int last_error = ENOENT;
+  int last_error = -ENOENT;
   char *it, *end;
   int ret;
 
-  if (executable_path == NULL)
-    {
-      errno = EINVAL;
-      return NULL;
-    }
+  *out = NULL;
+
+  if (executable_path == NULL || executable_path[0] == '\0')
+    return crun_make_error (err, ENOENT, "cannot find `` in $PATH");
 
   if (executable_path[0] != '/' && strchr (executable_path, '/'))
     {
@@ -1907,7 +1927,9 @@ find_executable (const char *executable_path, const char *cwd)
 
       /* Make sure the path starts with a '/' so it will hit the check
          for absolute paths.  */
-      xasprintf (&cwd_executable_path, "%s%s/%s", cwd[0] == '/' ? "" : "/", cwd, executable_path);
+      ret = append_paths (&cwd_executable_path, err, "/", cwd, executable_path, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
       executable_path = cwd_executable_path;
     }
 
@@ -1915,36 +1937,61 @@ find_executable (const char *executable_path, const char *cwd)
   if (executable_path[0] == '/')
     {
       ret = check_access (executable_path);
-      if (ret == 0)
-        return xstrdup (executable_path);
-      return NULL;
+      if (LIKELY (ret == 0))
+        {
+          *out = xstrdup (executable_path);
+          return 0;
+        }
+      last_error = ret;
+      goto fail;
     }
 
   end = tmp = xstrdup (getenv ("PATH"));
 
   while ((it = strsep (&end, ":")))
     {
-      size_t len;
+      cleanup_free char *path = NULL;
 
       if (it == end)
         it = ".";
 
-      len = snprintf (path, PATH_MAX, "%s/%s", it, executable_path);
-      if (len >= PATH_MAX)
-        continue;
+      ret = append_paths (&path, err, it, executable_path, NULL);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_error_release (err);
+          continue;
+        }
 
       ret = check_access (path);
       if (ret == 0)
-        return xstrdup (path);
+        {
+          /* Change owner.  */
+          *out = path;
+          path = NULL;
+          return 0;
+        }
 
-      if (errno == ENOENT)
+      if (ret == -ENOENT)
         continue;
 
-      last_error = errno;
+      last_error = ret;
     }
 
-  errno = last_error;
-  return NULL;
+fail:
+  switch (last_error)
+    {
+    case CHECK_ACCESS_NOT_EXECUTABLE:
+      return crun_make_error (err, EPERM, "the path `%s` exists but it is not executable", executable_path);
+
+    case CHECK_ACCESS_NOT_REGULAR:
+      return crun_make_error (err, EPERM, "the path `%s` is not a regular file", executable_path);
+
+    default:
+      errno = -last_error;
+      if (errno == ENOENT)
+        return crun_make_error (err, errno, "executable file `%s` not found%s", executable_path, executable_path[0] == '/' ? "" : " in $PATH");
+      return crun_make_error (err, errno, "cannot open `%s`", executable_path);
+    }
 }
 
 #ifdef HAVE_FGETXATTR

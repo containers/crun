@@ -297,7 +297,7 @@ log_write_to_stderr (int errno_, const char *msg, int verbosity, void *arg arg_u
 void
 log_write_to_syslog (int errno_, const char *msg, int verbosity, void *arg arg_unused)
 {
-  int priority;
+  int priority = LOG_ERR;
   switch (verbosity)
     {
     case LIBCRUN_VERBOSITY_DEBUG:
@@ -323,7 +323,7 @@ log_write_to_journald (int errno_, const char *msg, int verbosity, void *arg arg
   (void) msg;
   (void) verbosity;
 #ifdef HAVE_SYSTEMD
-  int priority;
+  int priority = LOG_ERR;
   switch (verbosity)
     {
     case LIBCRUN_VERBOSITY_DEBUG:

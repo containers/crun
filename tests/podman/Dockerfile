@@ -9,7 +9,7 @@ RUN dnf install -y golang python git gcc automake autoconf libcap-devel \
     device-mapper-devel containernetworking-plugins 'dnf-command(builddep)' && \
     dnf builddep -y podman && \
     chmod 755 /root && \
-    git clone https://github.com/containers/podman /root/go/src/github.com/containers/podman && \
+    git clone --depth=1 https://github.com/containers/podman /root/go/src/github.com/containers/podman && \
     cd /root/go/src/github.com/containers/podman && \
     make .install.ginkgo install.catatonit && cp ./test/tools/build/ginkgo /usr/local/bin && \
     make
