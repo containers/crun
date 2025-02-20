@@ -296,11 +296,21 @@ libkrun_unload (void *cookie, libcrun_error_t *err)
 {
   int r;
 
-  if (cookie)
+  struct krun_config *kconf = (struct krun_config *) cookie;
+  if (kconf != NULL)
     {
-      r = dlclose (cookie);
-      if (UNLIKELY (r < 0))
-        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+      if (kconf->handle != NULL)
+        {
+          r = dlclose (kconf->handle);
+          if (UNLIKELY (r != 0))
+            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+        }
+      if (kconf->handle_sev != NULL)
+        {
+          r = dlclose (kconf->handle_sev);
+          if (UNLIKELY (r != 0))
+            return crun_make_error (err, 0, "could not unload handle_sev: `%s`", dlerror ());
+        }
     }
   return 0;
 }
