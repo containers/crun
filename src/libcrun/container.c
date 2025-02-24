@@ -55,6 +55,7 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <grp.h>
+#include <libgen.h>
 #include <git-version.h>
 
 #ifdef HAVE_SYSTEMD
@@ -1925,6 +1926,25 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
 }
 
 static int
+send_sd_notify (const char *ready_str, libcrun_error_t *err)
+{
+#ifdef HAVE_SYSTEMD
+  int ret = sd_notify (0, ready_str);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "sd_notify");
+
+#  if HAVE_SD_NOTIFY_BARRIER
+  /* Hard-code a 30 seconds timeout.  Ignore errors.  */
+  sd_notify_barrier (0, 30 * 1000000);
+#  endif
+#else
+  (void) ready_str;
+  (void) err;
+#endif
+  return 0;
+}
+
+static int
 handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
 {
 #ifdef HAVE_SYSTEMD
@@ -1939,14 +1959,9 @@ handle_notify_socket (int notify_socketfd, libcrun_error_t *err)
   buf[ret] = '\0';
   if (strstr (buf, ready_str))
     {
-      ret = sd_notify (0, ready_str);
+      ret = send_sd_notify (ready_str, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, -ret, "sd_notify");
-
-#  if HAVE_SD_NOTIFY_BARRIER
-      /* Hard-code a 30 seconds timeout.  Ignore errors.  */
-      sd_notify_barrier (0, 30 * 1000000);
-#  endif
+        return ret;
 
       return 1;
     }
@@ -4248,14 +4263,67 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   return 0;
 }
 
+static int
+restore_proxy_process (int *proxy_pid_pipe, int cgroup_manager, libcrun_error_t *err)
+{
+  cleanup_free char *own_cgroup_copy = NULL;
+  cleanup_free char *own_cgroup = NULL;
+  const char *parent_cgroup;
+  pid_t new_pid;
+  int mode;
+  int ret;
+
+  ret = TEMP_FAILURE_RETRY (read (*proxy_pid_pipe, &new_pid, sizeof (new_pid)));
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  close_and_reset (proxy_pid_pipe);
+
+  if (cgroup_manager == CGROUP_MANAGER_SYSTEMD)
+    {
+      char ready_str[64];
+
+      sprintf (ready_str, "MAINPID=%d", new_pid);
+      ret = send_sd_notify (ready_str, err);
+      /* Do not fail on errors.  */
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
+    }
+
+  ret = libcrun_get_cgroup_process (0, &own_cgroup, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  own_cgroup_copy = xstrdup (own_cgroup);
+  parent_cgroup = dirname (own_cgroup_copy);
+
+  ret = libcrun_move_process_to_cgroup (0, 0, parent_cgroup, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (mode < 0))
+    return mode;
+
+  ret = destroy_cgroup_path (own_cgroup, mode, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
 int
 libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
                            libcrun_error_t *err)
 {
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_container libcrun_container_t *container = NULL;
+  cleanup_close int proxy_pid_pipe0 = -1;
+  cleanup_close int proxy_pid_pipe1 = -1;
   runtime_spec_schema_config_schema *def;
   libcrun_container_status_t status = {};
+  cleanup_pid pid_t proxy_pid = -1;
+  int proxy_pid_pipe[2];
   int cgroup_manager;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
@@ -4280,23 +4348,13 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   if (UNLIKELY (ret < 0))
     return ret;
 
-  /* The CRIU restore code uses bundle and rootfs of status. */
-  status.bundle = (char *) context->bundle;
-  status.rootfs = def->root->path;
-
-  ret = libcrun_container_restore_linux (&status, container, cr_options, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  /* Now that the process has been restored, moved it into is cgroup again.
-   * The whole cgroup code is copied from libcrun_container_run_internal(). */
-  def = container->container_def;
-
   cgroup_manager = CGROUP_MANAGER_CGROUPFS;
   if (context->systemd_cgroup)
     cgroup_manager = CGROUP_MANAGER_SYSTEMD;
   else if (context->force_no_cgroup)
     cgroup_manager = CGROUP_MANAGER_DISABLED;
+
+  def = container->container_def;
 
   /* If we are root (either on the host or in a namespace),
    * then chown the cgroup to root in the container user namespace. */
@@ -4313,17 +4371,86 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     }
 
   {
+    cleanup_close int cgroup_dirfd = -1;
+    bool needs_proxy_process;
     struct libcrun_cgroup_args cg = {
       .resources = def->linux ? def->linux->resources : NULL,
       .annotations = container->annotations,
       .cgroup_path = def->linux ? def->linux->cgroups_path : "",
       .manager = cgroup_manager,
-      .pid = status.pid,
       .root_uid = root_uid,
       .root_gid = root_gid,
       .id = context->id,
       .state_root = context->state_root,
     };
+
+    /* The CRIU restore code uses bundle, rootfs and cgroup_path of status.   The cgroup_path is set later.  */
+    status.bundle = (char *) context->bundle;
+    status.rootfs = def->root->path;
+
+    ret = libcrun_cgroup_preenter (&cg, &cgroup_dirfd, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    needs_proxy_process = cgroup_dirfd < 0;
+
+    /* If the target cgroup was already created (with cgroupfs), we can restore the container directly there.  */
+    if (! needs_proxy_process)
+      {
+        cleanup_free char *cgroup_path = NULL;
+
+        ret = get_cgroup_dirfd_path (cgroup_dirfd, &cgroup_path, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* Restore the container directly in the desired cgroup.  */
+        status.cgroup_path = cgroup_path;
+
+        ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* Use the container first process PID to setup the cgroup.  */
+        cg.pid = status.pid;
+      }
+    else
+      {
+        /* When using systemd, we need a process first that must exist before a cgroup is created.
+           Create a dummy process that sits and waits to receive the pid of the restored container.
+           Once the dummy process receives the pid, the dummy process will notify the new pid to systemd.  */
+        ret = pipe2 (proxy_pid_pipe, O_CLOEXEC);
+        if (UNLIKELY (ret < 0))
+          return crun_make_error (err, errno, "pipe");
+
+        /* Only used for auto cleanup.  */
+        proxy_pid_pipe0 = proxy_pid_pipe[0];
+        proxy_pid_pipe1 = proxy_pid_pipe[1];
+
+        proxy_pid = fork ();
+        if (UNLIKELY (proxy_pid < 0))
+          return crun_make_error (err, errno, "fork");
+
+        if (proxy_pid == 0)
+          {
+            close_and_reset (&proxy_pid_pipe1);
+
+            ret = restore_proxy_process (&proxy_pid_pipe0, cgroup_manager, err);
+            if (UNLIKELY (ret < 0))
+              {
+                crun_error_release (err);
+                _exit (EXIT_FAILURE);
+              }
+            _exit (EXIT_SUCCESS);
+          }
+
+        close_and_reset (&proxy_pid_pipe0);
+
+        /* Use the dummy process PID as the PID to setup the cgroup.  */
+        cg.pid = proxy_pid;
+      }
+
+    /* Complete the configuration for the cgroup.  It either contains the fully restored container with cgroupfs,
+       or the dummy process with systemd.  */
 
     ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
     if (UNLIKELY (ret < 0))
@@ -4332,6 +4459,47 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
     ret = libcrun_cgroup_enter_finalize (&cg, cgroup_status, err);
     if (UNLIKELY (ret < 0))
       return ret;
+
+    /* When using a dummy process, the container is restored here once the cgroup is configured.  */
+    if (needs_proxy_process)
+      {
+        cleanup_free char *target_cgroup = NULL;
+        cleanup_free char *proxy_cgroup = NULL;
+
+        ret = libcrun_get_cgroup_process (proxy_pid, &target_cgroup, false, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* Move the dummy process to a sub-cgroup.  */
+        ret = append_paths (&proxy_cgroup, err, target_cgroup, ".proxy-crun", NULL);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        ret = libcrun_move_process_to_cgroup (proxy_pid, 0, proxy_cgroup, true, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* Restore the container in the same cgroup where the dummy process was.  */
+        status.cgroup_path = target_cgroup;
+
+        ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* Notify the dummy process of the container PID.  It will move itself to its parent cgroup and
+           destroy the cgroup.  */
+        ret = TEMP_FAILURE_RETRY (write (proxy_pid_pipe1, &status.pid, sizeof (status.pid)));
+        if (UNLIKELY (ret < 0))
+          return crun_make_error (err, errno, "write pid to proxy process");
+        close_and_reset (&proxy_pid_pipe1);
+
+        ret = TEMP_FAILURE_RETRY (waitpid (proxy_pid, NULL, 0));
+        if (ret < 0)
+          return crun_make_error (err, errno, "waitpid");
+
+        /* Do not kill the proxy process prematurely.  */
+        proxy_pid = -1;
+      }
   }
 
   context->detach = cr_options->detach;

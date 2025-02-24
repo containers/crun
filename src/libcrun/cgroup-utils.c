@@ -944,7 +944,7 @@ enable_controllers (const char *path, libcrun_error_t *err)
 }
 
 int
-libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_error_t *err)
+libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, const char *path, bool create_if_missing, libcrun_error_t *err)
 {
   int cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
@@ -953,7 +953,7 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, char *path, libcrun_e
   if (path == NULL || *path == '\0')
     return 0;
 
-  return enter_cgroup (cgroup_mode, pid, init_pid, path, false, err);
+  return enter_cgroup (cgroup_mode, pid, init_pid, path, create_if_missing, err);
 }
 
 int
@@ -986,4 +986,77 @@ libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_
     return crun_make_error (err, errno, "open `%s`", path_to_cgroup);
 
   return cgroupdirfd;
+}
+
+int
+libcrun_migrate_all_pids_to_cgroup (pid_t init_pid, char *from, char *to, libcrun_error_t *err)
+{
+  cleanup_free pid_t *pids = NULL;
+  cleanup_close int child_dfd = -1;
+  int cgroup_mode;
+  size_t from_len;
+  size_t i;
+  int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (cgroup_mode < 0)
+    return cgroup_mode;
+
+  ret = libcrun_cgroup_pause_unpause_path (from, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_cgroup_read_pids_from_path (from, true, &pids, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  from_len = strlen (from);
+
+  for (i = 0; pids && pids[i]; i++)
+    {
+      cleanup_free char *pid_path = NULL;
+      cleanup_free char *dest_cgroup = NULL;
+
+      ret = libcrun_get_cgroup_process (pids[i], &pid_path, false, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      /* Make sure the pid is in the cgroup we are migrating from.  */
+      if (! has_prefix (pid_path, from))
+        return crun_make_error (err, 0, "error migrating pid %d.  It is not in the cgroup `%s`", pids[i], from);
+
+      /* Build the destination cgroup path, keeping the same hierarchy.  */
+      xasprintf (&dest_cgroup, "%s%s", to, pid_path + from_len);
+
+      ret = enter_cgroup (cgroup_mode, pids[i], init_pid, dest_cgroup, false, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = libcrun_cgroup_pause_unpause_path (from, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return destroy_cgroup_path (from, cgroup_mode, err);
+}
+
+int
+get_cgroup_dirfd_path (int dirfd, char **path, libcrun_error_t *err)
+{
+  cleanup_free char *cgroup_path = NULL;
+  proc_fd_path_t fd_path;
+  ssize_t len;
+
+  get_proc_self_fd_path (fd_path, dirfd);
+
+  len = safe_readlinkat (AT_FDCWD, fd_path, &cgroup_path, 0, err);
+  if (UNLIKELY (len < 0))
+    return len;
+
+  if (has_prefix (cgroup_path, CGROUP_ROOT))
+    {
+      *path = xstrdup (cgroup_path + strlen (CGROUP_ROOT));
+      return 0;
+    }
+  return crun_make_error (err, 0, "invalid cgroup path `%s`", cgroup_path);
 }

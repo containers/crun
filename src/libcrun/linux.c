@@ -5059,13 +5059,13 @@ join_process_parent_helper (libcrun_context_t *context,
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, err);
+          ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, false, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
-          ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
+          ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, false, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
