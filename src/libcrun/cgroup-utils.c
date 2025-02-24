@@ -240,7 +240,6 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
 static int
 read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
-  __attribute__ ((unused)) cleanup_close int clean_dfd = dfd;
   cleanup_close int tasksfd = -1;
   cleanup_free char *buffer = NULL;
   char *saveptr = NULL;
@@ -287,11 +286,11 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
       if (UNLIKELY (dir == NULL))
         return crun_make_error (err, errno, "open cgroup sub-directory");
       /* Now dir owns the dfd descriptor.  */
-      clean_dfd = -1;
+      dfd = -1;
 
       for (de = readdir (dir); de; de = readdir (dir))
         {
-          int nfd;
+          cleanup_close int nfd = -1;
 
           if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
             continue;
@@ -346,22 +345,16 @@ rmdir_all_fd (int dfd)
           size_t i, n_pids = 0, allocated = 0;
           cleanup_close int child_dfd = -1;
           int tmp;
-          int child_dfd_clone;
 
           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
           if (child_dfd < 0)
             return child_dfd;
 
-          /* read_pids_cgroup takes ownership for the fd, so dup it.  */
-          child_dfd_clone = dup (child_dfd);
-          if (LIKELY (child_dfd_clone >= 0))
+          ret = read_pids_cgroup (child_dfd, true, &pids, &n_pids, &allocated, &tmp_err);
+          if (UNLIKELY (ret < 0))
             {
-              ret = read_pids_cgroup (child_dfd_clone, true, &pids, &n_pids, &allocated, &tmp_err);
-              if (UNLIKELY (ret < 0))
-                {
-                  crun_error_release (&tmp_err);
-                  continue;
-                }
+              crun_error_release (&tmp_err);
+              continue;
             }
 
           for (i = 0; i < n_pids; i++)
@@ -394,8 +387,8 @@ int
 libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
+  cleanup_close int dirfd = -1;
   size_t n_pids, allocated;
-  int dirfd;
   int mode;
   int ret;
 
