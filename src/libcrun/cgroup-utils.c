@@ -161,35 +161,6 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
   return ret;
 }
 
-int
-libcrun_get_current_unified_cgroup (char **path, bool absolute, libcrun_error_t *err)
-{
-  cleanup_free char *content = NULL;
-  size_t content_size;
-  char *from, *to;
-  int ret;
-
-  ret = read_all_file (PROC_SELF_CGROUP, &content, &content_size, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  from = strstr (content, "0::");
-  if (UNLIKELY (from == NULL))
-    return crun_make_error (err, 0, "cannot find cgroup2 for the current process");
-
-  from += 3;
-  to = strchr (from, '\n');
-  if (UNLIKELY (to == NULL))
-    return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
-  *to = '\0';
-
-  if (absolute)
-    return append_paths (path, err, CGROUP_ROOT, from, NULL);
-
-  *path = xstrdup (from);
-  return 0;
-}
-
 #ifndef CGROUP2_SUPER_MAGIC
 #  define CGROUP2_SUPER_MAGIC 0x63677270
 #endif
@@ -235,6 +206,58 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
   cgroup_mode = tmp;
 
   return cgroup_mode;
+}
+
+int
+libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  char proc_cgroup_file[64];
+  char *cg_path = NULL;
+  size_t content_size;
+  char *controller;
+  char *saveptr;
+  int cgroup_mode;
+  bool has_data;
+  int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (pid == 0)
+    strcpy (proc_cgroup_file, PROC_SELF_CGROUP);
+  else
+    sprintf (proc_cgroup_file, "/proc/%d/cgroup", pid);
+
+  ret = read_all_file (proc_cgroup_file, &content, &content_size, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (has_data = read_proc_cgroup (content, &saveptr, NULL, &controller, &cg_path);
+       has_data;
+       has_data = read_proc_cgroup (NULL, &saveptr, NULL, &controller, &cg_path))
+    {
+      if (cgroup_mode == CGROUP_MODE_UNIFIED)
+        {
+          if (strcmp (controller, "") == 0 && strlen (cg_path) > 0)
+            goto found;
+        }
+      else
+        {
+          if (strcmp (controller, "memory"))
+            goto found;
+        }
+    }
+
+  return crun_make_error (err, 0, "cannot find cgroup for the process");
+
+found:
+  if (absolute)
+    return append_paths (path, err, CGROUP_ROOT, cg_path, NULL);
+
+  *path = xstrdup (cg_path);
+  return 0;
 }
 
 static int
