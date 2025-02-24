@@ -81,7 +81,12 @@ def test_resources_pid_limit_userns():
             "containerID": 1,
             "hostID": 0,
             "size": 1,
-        }
+        },
+        {
+            "containerID": 2,
+            "hostID": 2,
+            "size": 2**32-3,
+        },
     ]
 
     conf['linux']['namespaces'].append({"type" : "user"})

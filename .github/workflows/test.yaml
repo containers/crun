@@ -115,7 +115,7 @@ jobs:
                   make
                   make syntax-check
                   echo run tests as root
-                  sudo make check ASAN_OPTIONS=detect_leaks=false || cat test-suite.log
+                  sudo make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
                   echo run tests as rootless
                   make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
                   echo run tests as rootless in a user namespace
