@@ -2597,14 +2597,9 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
         return ret;
     }
 
-  if (rootfs == NULL)
-    rootfsfd = AT_FDCWD;
-  else
-    {
-      rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH | O_CLOEXEC);
-      if (UNLIKELY (rootfsfd < 0))
-        return crun_make_error (err, errno, "open `%s`", rootfs);
-    }
+  rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (rootfsfd < 0))
+    return crun_make_error (err, errno, "open `%s`", rootfs);
 
   get_private_data (container)->rootfs = rootfs;
   get_private_data (container)->rootfsfd = rootfsfd;
