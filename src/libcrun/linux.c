@@ -1380,13 +1380,13 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container, const char *source, 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mkdir `%s`", subsystem);
 
-  fd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
-  if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", subsystem_path);
-
   ret = append_paths (&subsystem_path, err, target, subsystem, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  fd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
   return do_mount (container, "cgroup", fd, subsystem_path, "cgroup", mountflags, "none,name=systemd,xattr", LABEL_NONE,
                    err);
