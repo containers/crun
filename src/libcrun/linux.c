@@ -2630,7 +2630,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       /* Read the cgroup path before we enter the cgroupns.  */
-      ret = libcrun_get_current_unified_cgroup (&unified_cgroup_path, true, err);
+      ret = libcrun_get_cgroup_process (0, &unified_cgroup_path, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -5059,13 +5059,13 @@ join_process_parent_helper (libcrun_context_t *context,
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, err);
+          ret = libcrun_move_process_to_cgroup (pid, status->pid, final_cgroup, false, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
       else
         {
-          ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, err);
+          ret = libcrun_move_process_to_cgroup (pid, status->pid, status->cgroup_path, false, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
