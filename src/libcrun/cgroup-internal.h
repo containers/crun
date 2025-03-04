@@ -56,7 +56,6 @@ int enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, 
                             libcrun_error_t *err);
 int enable_controllers (const char *path, libcrun_error_t *err);
 int chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err);
-int destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err);
 int cgroup_killall_path (const char *path, int signal, libcrun_error_t *err);
 
 int libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err);

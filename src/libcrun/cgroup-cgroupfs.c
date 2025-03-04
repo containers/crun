@@ -93,7 +93,7 @@ make_new_sibling_cgroup (char **out, const char *id, libcrun_error_t *err)
   char *dir;
   int ret;
 
-  ret = libcrun_get_current_unified_cgroup (&current_cgroup, false, err);
+  ret = libcrun_get_cgroup_process (0, &current_cgroup, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

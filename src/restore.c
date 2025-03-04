@@ -187,6 +187,8 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
   if (UNLIKELY (ret < 0))
     return ret;
 
+  cr_options.manage_cgroups_mode = -1;
+
   if (cr_options.image_path == NULL)
     {
       cleanup_free char *path = NULL;
