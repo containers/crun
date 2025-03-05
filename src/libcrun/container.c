@@ -2181,16 +2181,17 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
                 }
               else if (si.ssi_signo == SIGWINCH)
                 {
-                  if (UNLIKELY (args->terminal_fd < 0))
-                    return 0;
+                  /* Ignore the signal if the terminal is not available.  */
+                  if (args->terminal_fd > 0)
+                    {
+                      ret = ioctl (0, TIOCGWINSZ, &ws);
+                      if (UNLIKELY (ret < 0))
+                        return crun_make_error (err, errno, "copy terminal size from stdin");
 
-                  ret = ioctl (0, TIOCGWINSZ, &ws);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "copy terminal size from stdin");
-
-                  ret = ioctl (args->terminal_fd, TIOCSWINSZ, &ws);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "copy terminal size to pty");
+                      ret = ioctl (args->terminal_fd, TIOCSWINSZ, &ws);
+                      if (UNLIKELY (ret < 0))
+                        return crun_make_error (err, errno, "copy terminal size to pty");
+                    }
                 }
               else
                 {
