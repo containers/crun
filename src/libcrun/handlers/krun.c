@@ -212,7 +212,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
 
       /* CVE-2025-24965: the content below rootfs cannot be trusted because it is controlled by the user.  We
          must ensure the file is opened below the rootfs directory.  */
-      fd = safe_openat (rootfsfd, rootfs, KRUN_CONFIG_FILE, WRITE_FILE_DEFAULT_FLAGS | O_NOFOLLOW, 0700, err);
+      fd = safe_openat (rootfsfd, rootfs, KRUN_CONFIG_FILE, WRITE_FILE_DEFAULT_FLAGS | O_NOFOLLOW, S_IRUSR | S_IRGRP | S_IROTH, err);
       if (UNLIKELY (fd < 0))
         return fd;
 
