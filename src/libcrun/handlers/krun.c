@@ -65,14 +65,12 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_workdir) (uint32_t ctx_id, const char *workdir_path);
-  int32_t (*krun_set_exec) (uint32_t ctx_id, const char *exec_path, char *const argv[], char *const envp[]);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
   uint32_t num_vcpus, ram_mib;
   int32_t ctx_id, ret;
   cpu_set_t set;
-  char *const envp[] = { 0 };
 
   if (access ("/krun-sev.json", F_OK) == 0)
     {
@@ -136,9 +134,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
       krun_set_root = dlsym (handle, "krun_set_root");
       krun_set_workdir = dlsym (handle, "krun_set_workdir");
-      krun_set_exec = dlsym (handle, "krun_set_exec");
-      if (krun_set_vm_config == NULL || krun_set_root == NULL
-          || krun_set_exec == NULL)
+      if (krun_set_vm_config == NULL || krun_set_root == NULL)
         error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
 
       ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
@@ -155,10 +151,6 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
           if (UNLIKELY (ret < 0))
             error (EXIT_FAILURE, -ret, "could not set krun working directory");
         }
-
-      ret = krun_set_exec (ctx_id, pathname, &argv[1], &envp[0]);
-      if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not set krun executable");
     }
   ret = krun_start_enter (ctx_id);
   return -ret;
