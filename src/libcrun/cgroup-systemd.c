@@ -243,6 +243,7 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
   cleanup_free char *cgroup_path = NULL;
   int parent;
   int ret;
+  int levels;
 
   ret = append_paths (&cgroup_path, err, CGROUP_ROOT, "/cpuset", path ? path : "", NULL);
   if (UNLIKELY (ret < 0))
@@ -256,7 +257,10 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
   if (UNLIKELY (ret < 0))
     return ret;
 
-  for (parent = 0; parent < 2; parent++)
+  // Check if we have a subcgroup defined. If not, we only need to write this on one level.
+  levels = has_suffix (path, ".scope") ? 1 : 2;
+
+  for (parent = 0; parent < levels; parent++)
     {
       cleanup_close int dirfd_cpuset = -1;
       cleanup_free char *path_to_cpuset = NULL;
