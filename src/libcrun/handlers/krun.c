@@ -50,16 +50,34 @@ struct krun_config
   void *handle;
   void *handle_sev;
   bool sev;
+  int32_t ctx_id;
+  int32_t ctx_id_sev;
 };
 
 /* libkrun handler.  */
 #if HAVE_DLOPEN && HAVE_LIBKRUN
+static int32_t
+libkrun_create_context (void *handle, libcrun_error_t *err)
+{
+  int32_t (*krun_create_ctx) ();
+  int32_t ctx_id;
+
+  krun_create_ctx = dlsym (handle, "krun_create_ctx");
+  if (krun_create_ctx == NULL)
+    return crun_make_error (err, 0, "could not find symbol in the krun library");
+
+  ctx_id = krun_create_ctx ();
+  if (UNLIKELY (ctx_id < 0))
+    return crun_make_error (err, -ctx_id, "could not create krun context");
+
+  return ctx_id;
+}
+
 static int
 libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname, char *const argv[])
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_log_level) (uint32_t level);
-  int32_t (*krun_create_ctx) ();
   int (*krun_start_enter) (uint32_t ctx_id);
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
@@ -77,6 +95,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       if (kconf->handle_sev == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
       handle = kconf->handle_sev;
+      ctx_id = kconf->ctx_id_sev;
       kconf->sev = true;
     }
   else
@@ -84,22 +103,17 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       if (kconf->handle == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
       handle = kconf->handle;
+      ctx_id = kconf->ctx_id;
       kconf->sev = false;
     }
 
   krun_set_log_level = dlsym (handle, "krun_set_log_level");
-  krun_create_ctx = dlsym (handle, "krun_create_ctx");
   krun_start_enter = dlsym (handle, "krun_start_enter");
-  if (krun_set_log_level == NULL || krun_create_ctx == NULL
-      || krun_start_enter == NULL)
+  if (krun_set_log_level == NULL || krun_start_enter == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
 
   /* Set log level to "error" */
   krun_set_log_level (1);
-
-  ctx_id = krun_create_ctx ();
-  if (UNLIKELY (ctx_id < 0))
-    error (EXIT_FAILURE, -ctx_id, "could not create krun context");
 
   if (kconf->sev)
     {
@@ -259,6 +273,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
 static int
 libkrun_load (void **cookie, libcrun_error_t *err)
 {
+  int32_t ret;
   struct krun_config *kconf;
   const char *libkrun_so = "libkrun.so.1";
   const char *libkrun_sev_so = "libkrun-sev.so.1";
@@ -277,6 +292,32 @@ libkrun_load (void **cookie, libcrun_error_t *err)
     }
 
   kconf->sev = false;
+
+  /* Newer versions of libkrun no longer link against libkrunfw and
+     instead they open it when creating the context. This implies
+     we need to call "krun_create_ctx" before switching namespaces
+     or it won't be able to find the library bundling the kernel. */
+  if (kconf->handle)
+    {
+      ret = libkrun_create_context (kconf->handle, err);
+      if (UNLIKELY (ret < 0))
+        {
+          free (kconf);
+          return ret;
+        }
+      kconf->ctx_id = ret;
+    }
+
+  if (kconf->handle_sev)
+    {
+      ret = libkrun_create_context (kconf->handle_sev, err);
+      if (UNLIKELY (ret < 0))
+        {
+          free (kconf);
+          return ret;
+        }
+      kconf->ctx_id_sev = ret;
+    }
 
   *cookie = kconf;
 
