@@ -110,7 +110,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   krun_set_log_level = dlsym (handle, "krun_set_log_level");
   krun_start_enter = dlsym (handle, "krun_start_enter");
   if (krun_set_log_level == NULL || krun_start_enter == NULL)
-    error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
+    error (EXIT_FAILURE, 0, "could not find symbol in the krun library");
 
   /* Set log level to "error" */
   krun_set_log_level (1);
