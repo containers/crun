@@ -4195,17 +4195,12 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
 }
 
 static int
-prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+prepare_mount (libcrun_container_t *container, runtime_spec_schema_defs_mount *mnt, bool has_userns, pid_t pid, int *out_fd, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
-  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
-  size_t how_many = 0;
-  size_t i;
+  cleanup_close int fd = -1;
+  bool recursive = false;
   int ret;
-
-  if (def->mounts_len == 0)
-    return 0;
 
   if (! has_userns)
     {
@@ -4219,27 +4214,49 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
         has_userns = true;
     }
 
+  ret = maybe_get_idmapped_mount (def, mnt, pid, &fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (fd < 0 && has_userns && is_bind_mount (mnt, &recursive))
+    {
+      fd = get_bind_mount (-1, mnt->source, recursive, false, err);
+      if (UNLIKELY (fd < 0))
+        crun_error_release (err);
+    }
+
+  *out_fd = fd;
+  fd = -1;
+  return 0;
+}
+
+static int
+prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
+  size_t how_many = 0;
+  size_t i;
+  int ret;
+
+  if (def->mounts_len == 0)
+    return 0;
+
   mount_fds = make_libcrun_fd_map (def->mounts_len);
 
   for (i = 0; i < def->mounts_len; i++)
     {
-      bool recursive = false;
+      int mount_fd = -1;
 
-      mount_fds->fds[i] = -1;
-
-      ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &(mount_fds->fds[i]), err);
+      ret = prepare_mount (container, def->mounts[i], has_userns, pid, &mount_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i], &recursive))
-        {
-          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, recursive, false, err);
-          if (UNLIKELY (mount_fds->fds[i] < 0))
-            crun_error_release (err);
-        }
-
-      if (mount_fds->fds[i] >= 0)
+      if (mount_fd >= 0)
         how_many++;
+
+      mount_fds->fds[i] = mount_fd;
     }
 
   return send_mounts (sync_socket_host, mount_fds, how_many, def->mounts_len, err);
