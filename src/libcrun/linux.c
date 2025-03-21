@@ -4195,30 +4195,18 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
 }
 
 static int
-prepare_mount (libcrun_container_t *container, runtime_spec_schema_defs_mount *mnt, bool has_userns, pid_t pid, int *out_fd, libcrun_error_t *err)
+prepare_mount (libcrun_container_t *container, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int fd = -1;
   bool recursive = false;
   int ret;
 
-  if (! has_userns)
-    {
-      int is_in_userns;
-
-      is_in_userns = check_running_in_user_namespace (err);
-      if (UNLIKELY (is_in_userns < 0))
-        return is_in_userns;
-
-      if (is_in_userns > 0)
-        has_userns = true;
-    }
-
   ret = maybe_get_idmapped_mount (def, mnt, pid, &fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (fd < 0 && has_userns && is_bind_mount (mnt, &recursive))
+  if (fd < 0 && is_bind_mount (mnt, &recursive))
     {
       fd = get_bind_mount (-1, mnt->source, recursive, false, err);
       if (UNLIKELY (fd < 0))
@@ -4245,20 +4233,22 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
 
   mount_fds = make_libcrun_fd_map (def->mounts_len);
 
-  for (i = 0; i < def->mounts_len; i++)
+  if (has_userns)
     {
-      int mount_fd = -1;
+      for (i = 0; i < def->mounts_len; i++)
+        {
+          int mount_fd = -1;
 
-      ret = prepare_mount (container, def->mounts[i], has_userns, pid, &mount_fd, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+          ret = prepare_mount (container, def->mounts[i], pid, &mount_fd, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
-      if (mount_fd >= 0)
-        how_many++;
+          if (mount_fd >= 0)
+            how_many++;
 
-      mount_fds->fds[i] = mount_fd;
+          mount_fds->fds[i] = mount_fd;
+        }
     }
-
   return send_mounts (sync_socket_host, mount_fds, how_many, def->mounts_len, err);
 }
 
