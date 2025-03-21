@@ -4691,3 +4691,80 @@ libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, 
 
   return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, err);
 }
+
+static int
+libcrun_container_add_or_remove_mounts_from_file (libcrun_context_t *context, const char *id, const char *file, bool add, libcrun_error_t *err)
+{
+  cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
+  cleanup_container libcrun_container_t *container = NULL;
+  cleanup_free runtime_spec_schema_defs_mount **mounts = NULL;
+  const char *state_root = context->state_root;
+  cleanup_free parser_error parser_err = NULL;
+  struct parser_context pctx = { 0, stderr };
+  libcrun_container_status_t status = {};
+  cleanup_free char *content = NULL;
+  yajl_val tree = NULL;
+  size_t n_mounts = 0, len, i;
+  yajl_val *values;
+  int ret = 1;
+
+  ret = read_all_file (file, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_read_container_status (&status, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_container_config_from_state (&container, state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_json_file (&tree, content, &pctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! YAJL_IS_ARRAY (tree))
+    return crun_make_error (err, 0, "mounts must be an array");
+  else
+    {
+      values = YAJL_GET_ARRAY (tree)->values;
+      n_mounts = YAJL_GET_ARRAY (tree)->len;
+
+      mounts = xmalloc0 ((n_mounts + 1) * sizeof (*mounts));
+      for (i = 0; i < n_mounts; i++)
+        {
+          mounts[i] = make_runtime_spec_schema_defs_mount (values[i], &pctx, &parser_err);
+          if (mounts[i] == NULL)
+            {
+              ret = crun_make_error (err, 0, "cannot parse mount: %s", parser_err);
+              goto cleanup;
+            }
+        }
+    }
+
+  if (add)
+    ret = libcrun_make_runtime_mounts (container, &status, mounts, n_mounts, err);
+  else
+    ret = libcrun_destroy_runtime_mounts (container, &status, mounts, n_mounts, err);
+
+cleanup:
+  if (tree)
+    yajl_tree_free (tree);
+  if (mounts)
+    for (i = 0; i < n_mounts; i++)
+      free_runtime_spec_schema_defs_mount (mounts[i]);
+  return ret;
+}
+
+int
+libcrun_container_add_mounts_from_file (libcrun_context_t *context, const char *id, const char *file, libcrun_error_t *err)
+{
+  return libcrun_container_add_or_remove_mounts_from_file (context, id, file, true, err);
+}
+
+int
+libcrun_container_remove_mounts_from_file (libcrun_context_t *context, const char *id, const char *file, libcrun_error_t *err)
+{
+  return libcrun_container_add_or_remove_mounts_from_file (context, id, file, false, err);
+}
