@@ -387,7 +387,29 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 
   ret = read_all_file (file, &buffer, NULL, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+
+      if (crun_error_get_errno (err) == ENOENT)
+        {
+          cleanup_free char *statedir = NULL;
+          libcrun_error_t tmp_err;
+
+          ret = libcrun_get_state_directory (&statedir, state_root, id, &tmp_err);
+          if (UNLIKELY (ret < 0))
+            crun_error_release (&tmp_err);
+          else
+            {
+              ret = crun_path_exists (statedir, &tmp_err);
+              if (UNLIKELY (ret < 0))
+                crun_error_release (&tmp_err);
+              else if (ret == 0)
+                return crun_error_wrap (err, "container `%s` does not exist", id);
+            }
+          return ret;
+        }
+
+      return ret;
+    }
 
   tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
   if (UNLIKELY (tree == NULL))
