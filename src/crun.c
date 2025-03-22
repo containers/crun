@@ -50,6 +50,7 @@
 #include "oci_features.h"
 #include "ps.h"
 #include "checkpoint.h"
+#include "mounts.h"
 #include "restore.h"
 
 static struct crun_global_arguments arguments;
@@ -147,6 +148,7 @@ enum
   COMMAND_PS,
   COMMAND_CHECKPOINT,
   COMMAND_RESTORE,
+  COMMAND_MOUNTS,
 };
 
 struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create },
@@ -167,6 +169,7 @@ struct commands_s commands[] = { { COMMAND_CREATE, "create", crun_command_create
                                  { COMMAND_CHECKPOINT, "checkpoint", crun_command_checkpoint },
                                  { COMMAND_RESTORE, "restore", crun_command_restore },
 #endif
+                                 { COMMAND_MOUNTS, "mounts", crun_command_mounts },
                                  {
                                      0,
                                  } };
@@ -180,6 +183,7 @@ static char doc[] = "\nCOMMANDS:\n"
                     "\texec        - exec a command in a running container\n"
                     "\tfeatures    - show the enabled features\n"
                     "\tlist        - list known containers\n"
+                    "\tmounts      - add or remove mounts from a running container\n"
                     "\tkill        - send a signal to the container init process\n"
                     "\tps          - show the processes in the container\n"
 #if HAVE_CRIU && HAVE_DLOPEN

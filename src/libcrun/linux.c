@@ -105,6 +105,9 @@
 #  define FSCONFIG_CMD_CREATE 6
 #endif
 
+#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
+#define ALL_PROPAGATIONS (MS_REC | ALL_PROPAGATIONS_NO_REC)
+
 struct remount_s
 {
   struct remount_s *next;
@@ -412,17 +415,21 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
 }
 
 static int
-do_mount_setattr (const char *target, int targetfd, uint64_t clear, uint64_t set, libcrun_error_t *err)
+do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t clear, uint64_t set, libcrun_error_t *err)
 {
   struct mount_attr_s attr = {
     0,
   };
   int ret;
 
-  attr.attr_set = set;
-  attr.attr_clr = clear;
+  set &= ~MS_BIND;
+  clear &= ~MS_BIND;
 
-  ret = syscall_mount_setattr (targetfd, "", AT_RECURSIVE | AT_EMPTY_PATH, &attr);
+  attr.propagation = set & ALL_PROPAGATIONS_NO_REC;
+  attr.attr_set = set & (~ALL_PROPAGATIONS);
+  attr.attr_clr = clear & (~ALL_PROPAGATIONS);
+
+  ret = syscall_mount_setattr (targetfd, "", (recursive ? AT_RECURSIVE : 0) | AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mount_setattr `/%s`", target);
 
@@ -1108,9 +1115,6 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
   cleanup_close int fd = -1;
   const char *label = NULL;
   int ret = 0;
-
-#define ALL_PROPAGATIONS_NO_REC (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)
-#define ALL_PROPAGATIONS (MS_REC | ALL_PROPAGATIONS_NO_REC)
 
   if (container->container_def->linux && container->container_def->linux->mount_label)
     label = container->container_def->linux->mount_label;
@@ -2251,7 +2255,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
           if (UNLIKELY (dfd < 0))
             return crun_make_error (err, errno, "open mount target `/%s`", target);
 
-          ret = do_mount_setattr (target, dfd, rec_clear, rec_set, err);
+          ret = do_mount_setattr (true, target, dfd, rec_clear, rec_set, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -3990,12 +3994,14 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
     {
       if (strcmp (mnt->options[i], "bind") == 0)
         {
-          *recursive = false;
+          if (recursive)
+            *recursive = false;
           return true;
         }
       if (strcmp (mnt->options[i], "rbind") == 0)
         {
-          *recursive = true;
+          if (recursive)
+            *recursive = true;
           return true;
         }
     }
@@ -4195,6 +4201,30 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
 }
 
 static int
+prepare_mount (libcrun_container_t *container, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int fd = -1;
+  bool recursive = false;
+  int ret;
+
+  ret = maybe_get_idmapped_mount (def, mnt, pid, &fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (fd < 0 && is_bind_mount (mnt, &recursive))
+    {
+      fd = get_bind_mount (-1, mnt->source, recursive, false, err);
+      if (UNLIKELY (fd < 0))
+        crun_error_release (err);
+    }
+
+  *out_fd = fd;
+  fd = -1;
+  return 0;
+}
+
+static int
 prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -4207,41 +4237,24 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
   if (def->mounts_len == 0)
     return 0;
 
-  if (! has_userns)
-    {
-      int is_in_userns;
-
-      is_in_userns = check_running_in_user_namespace (err);
-      if (UNLIKELY (is_in_userns < 0))
-        return is_in_userns;
-
-      if (is_in_userns > 0)
-        has_userns = true;
-    }
-
   mount_fds = make_libcrun_fd_map (def->mounts_len);
 
-  for (i = 0; i < def->mounts_len; i++)
+  if (has_userns)
     {
-      bool recursive = false;
-
-      mount_fds->fds[i] = -1;
-
-      ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &(mount_fds->fds[i]), err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      if (mount_fds->fds[i] < 0 && has_userns && is_bind_mount (def->mounts[i], &recursive))
+      for (i = 0; i < def->mounts_len; i++)
         {
-          mount_fds->fds[i] = get_bind_mount (-1, def->mounts[i]->source, recursive, false, err);
-          if (UNLIKELY (mount_fds->fds[i] < 0))
-            crun_error_release (err);
+          int mount_fd = -1;
+
+          ret = prepare_mount (container, def->mounts[i], pid, &mount_fd, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          if (mount_fd >= 0)
+            how_many++;
+
+          mount_fds->fds[i] = mount_fd;
         }
-
-      if (mount_fds->fds[i] >= 0)
-        how_many++;
     }
-
   return send_mounts (sync_socket_host, mount_fds, how_many, def->mounts_len, err);
 }
 
@@ -5840,4 +5853,182 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
       return crun_make_error (err, errno, "the current working directory is not an absolute path");
     }
   return 0;
+}
+
+static int
+run_in_container_namespace (libcrun_container_status_t *status, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
+{
+  cleanup_close int pidfd = -1;
+  pid_t pid = status->pid;
+  int wait_status = 0;
+  int ret;
+
+  pidfd = syscall_pidfd_open (pid, 0);
+  if (UNLIKELY (pidfd < 0))
+    return crun_make_error (err, errno, "pidfd_open");
+
+  /* Check if the container is still running after opening the pidfd.  */
+  ret = libcrun_is_container_running (status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret == 0)
+    return crun_make_error (err, 0, "container not running");
+
+  /* must be vfork to propagate the error from the child proc.  */
+  pid = vfork ();
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "vfork");
+
+  if (pid == 0)
+    {
+      ret = setns (pidfd, CLONE_NEWNS);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_make_error (err, 0, "setns to target pid");
+          _exit (ret);
+        }
+      ret = chdir ("/");
+      if (UNLIKELY (ret < 0))
+        {
+          crun_make_error (err, errno, "chdir to `/`");
+          _exit (ret);
+        }
+
+      ret = callback (arg, err);
+      _exit (ret);
+    }
+  ret = waitpid_ignore_stopped (pid, &wait_status, 0);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return get_process_exit_status (wait_status);
+}
+
+struct umount_in_a_container_args
+{
+  runtime_spec_schema_defs_mount **mounts;
+  size_t len;
+};
+
+static int
+do_umount_in_a_container (void *arg, libcrun_error_t *err)
+{
+  struct umount_in_a_container_args *args = arg;
+  size_t i;
+  int ret;
+
+  for (i = 0; i < args->len; i++)
+    {
+      ret = umount2 (args->mounts[i]->destination, MNT_DETACH);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "umount `%s`", args->mounts[i]->destination);
+    }
+
+  return 0;
+}
+
+struct mount_in_a_container_args
+{
+  runtime_spec_schema_defs_mount **mounts;
+  int *fds;
+  int pidfd;
+  size_t len;
+};
+
+static int
+do_mount_in_a_container (void *arg, libcrun_error_t *err)
+{
+  struct mount_in_a_container_args *args = arg;
+  size_t i;
+  int ret;
+
+  for (i = 0; i < args->len; i++)
+    {
+      cleanup_close int dest_fd = -1;
+      struct stat st;
+
+      ret = fstat (args->fds[i], &st);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fstat");
+
+      dest_fd = crun_safe_create_and_open_ref_at ((st.st_mode & S_IFMT) == S_IFDIR, AT_FDCWD, "/", args->mounts[i]->destination, 0755, err);
+      if (UNLIKELY (dest_fd < 0))
+        return crun_make_error (err, errno, "open `%s`", args->mounts[i]->destination);
+
+      ret = fs_move_mount_to (args->fds[i], dest_fd, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "move mount to `%s`", args->mounts[i]->destination);
+    }
+
+  return 0;
+}
+
+int
+libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_status_t *status, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err)
+{
+  struct mount_in_a_container_args args;
+  cleanup_close_vec int *fds = NULL;
+  cleanup_close int pidfd = -1;
+  pid_t pid = status->pid;
+  size_t i;
+  int ret;
+
+  fds = xmalloc ((len + 1) * sizeof (int));
+  for (i = 0; i < len + 1; i++)
+    fds[i] = -1;
+
+  for (i = 0; i < len; i++)
+    {
+      cleanup_free char *data = NULL;
+      unsigned long extra_flags = 0;
+      unsigned long flags = 0;
+      uint64_t rec_clear = 0;
+      uint64_t rec_set = 0;
+
+      /* Limit the functionality to bind mounts for now.  */
+
+      if (! is_bind_mount (mounts[i], NULL))
+        return crun_make_error (err, 0, "unsupported mount type.  Only bind mounts are supported");
+
+      ret = prepare_mount (container, mounts[i], pid, &(fds[i]), err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if (mounts[i]->options == NULL)
+        flags = get_default_flags (container, mounts[i]->destination, &data);
+      else
+        {
+          size_t j;
+
+          for (j = 0; j < mounts[i]->options_len; j++)
+            flags |= get_mount_flags_or_option (mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+        }
+
+      ret = do_mount_setattr (false, mounts[i]->destination, fds[i], 0, flags, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = do_mount_setattr (true, mounts[i]->destination, fds[i], rec_clear, rec_set, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  args.mounts = mounts;
+  args.fds = fds;
+  args.pidfd = pidfd;
+  args.len = len;
+
+  return run_in_container_namespace (status, do_mount_in_a_container, &args, err);
+}
+
+int
+libcrun_destroy_runtime_mounts (libcrun_container_t *container arg_unused, libcrun_container_status_t *status arg_unused, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err)
+{
+  struct umount_in_a_container_args args;
+
+  args.mounts = mounts;
+  args.len = len;
+
+  return run_in_container_namespace (status, do_umount_in_a_container, &args, err);
 }
