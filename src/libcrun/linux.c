@@ -4024,6 +4024,29 @@ get_idmapped_option (runtime_spec_schema_defs_mount *mnt, bool *recursive)
 }
 
 static int
+open_mount_of_type (runtime_spec_schema_defs_mount *mnt, int *out_fd, libcrun_error_t *err)
+{
+  cleanup_close int fsopen_fd = -1;
+  cleanup_close int newfs_fd = -1;
+  int ret;
+
+  fsopen_fd = syscall_fsopen (mnt->type, FSOPEN_CLOEXEC);
+  if (UNLIKELY (fsopen_fd < 0))
+    return crun_make_error (err, errno, "fsopen `%s`", mnt->type);
+
+  ret = syscall_fsconfig (fsopen_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fsconfig create `%s`", mnt->type);
+
+  newfs_fd = syscall_fsmount (fsopen_fd, FSMOUNT_CLOEXEC, 0);
+  if (UNLIKELY (newfs_fd < 0))
+    return crun_make_error (err, errno, "fsmount `%s`", mnt->type);
+
+  *out_fd = get_and_reset (&newfs_fd);
+  return 0;
+}
+
+static int
 maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
 {
   cleanup_close int newfs_fd = -1;
@@ -4084,19 +4107,9 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
     }
   else
     {
-      cleanup_close int fsopen_fd = -1;
-
-      fsopen_fd = syscall_fsopen (mnt->type, FSOPEN_CLOEXEC);
-      if (UNLIKELY (fsopen_fd < 0))
-        return crun_make_error (err, errno, "fsopen `%s`", mnt->type);
-
-      ret = syscall_fsconfig (fsopen_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+      ret = open_mount_of_type (mnt, &newfs_fd, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "fsconfig create `%s`", mnt->type);
-
-      newfs_fd = syscall_fsmount (fsopen_fd, FSMOUNT_CLOEXEC, 0);
-      if (UNLIKELY (newfs_fd < 0))
-        return crun_make_error (err, errno, "fsmount `%s`", mnt->type);
+        return ret;
     }
 
   attr.attr_set = MOUNT_ATTR_IDMAP;
