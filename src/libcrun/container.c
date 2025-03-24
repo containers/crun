@@ -1034,8 +1034,9 @@ maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
               /* EINVAL means the user is not mapped in the current userns.
                  Ignore EPERM and EROFS as well as there is no reason to fail
                  so early, and let the container payload deal with it.
+                 EBADF means fd is closed.
               */
-              if (errno == EINVAL || errno == EPERM || errno == EROFS)
+              if (errno == EINVAL || errno == EPERM || errno == EROFS || errno == EBADF)
                 continue;
 
               return crun_make_error (err, errno, "fchown std stream %i", i);
