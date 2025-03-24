@@ -506,6 +506,21 @@ def test_invalid_id():
         return -1
     return 0
 
+def test_home_unknown_id():
+    if is_rootless():
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'printenv', "HOME"]
+    conf['process']['user']['uid'] = 101010
+    conf['process']['user']['gid'] = 101010
+    add_all_namespaces(conf)
+    out, _ = run_and_get_output(conf)
+    if out != "/":
+        sys.stderr.write("expected: `/`, got output: `%s`\n" % out)
+        return -1
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -525,6 +540,7 @@ all_tests = {
     "ioprio": test_ioprio,
     "run-keep": test_run_keep,
     "invalid-id": test_invalid_id,
+    "home-unknown-id": test_home_unknown_id,
 }
 
 if __name__ == "__main__":
