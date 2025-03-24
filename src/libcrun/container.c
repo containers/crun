@@ -1238,9 +1238,12 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
       fflush (stderr);
 
-      terminal_fd = libcrun_set_terminal (container, err);
-      if (UNLIKELY (terminal_fd < 0))
-        return terminal_fd;
+      if (console_socket >= 0 || (entrypoint_args->has_terminal_socket_pair && console_socketpair >= 0))
+        {
+          terminal_fd = libcrun_set_terminal (container, err);
+          if (UNLIKELY (terminal_fd < 0))
+            return terminal_fd;
+        }
 
       if (console_socket >= 0)
         {
