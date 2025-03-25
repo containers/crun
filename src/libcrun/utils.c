@@ -1463,7 +1463,7 @@ set_home_env (uid_t id)
 
 error:
   /* Let callers handle the error if the user was not found. */
-  return ret;
+  return ret ? -errno : 0;
 }
 
 /*if subuid or subgid exist, take the first range for the user */
