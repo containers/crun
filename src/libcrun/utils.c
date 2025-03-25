@@ -1500,7 +1500,7 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
         }
 
       if (ret != ERANGE)
-        return ret;
+        return -1;
 
       buf_size *= 2;
       buf = xrealloc (buf, buf_size);
