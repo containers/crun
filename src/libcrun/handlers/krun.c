@@ -43,7 +43,15 @@
 /* libkrun has a hard-limit of 8 vCPUs per microVM. */
 #define LIBKRUN_MAX_VCPUS 8
 
+/* crun dumps the container configuration into this file, which will be read by
+ * libkrun to set up the environment for the workload inside the microVM.
+ */
 #define KRUN_CONFIG_FILE ".krun_config.json"
+
+/* The presence of this file indicates this is a container intended to be run
+ * as a confidential workload inside a SEV-powered TEE.
+ */
+#define KRUN_SEV_FILE "/krun-sev.json"
 
 struct krun_config
 {
@@ -90,7 +98,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t ctx_id, ret;
   cpu_set_t set;
 
-  if (access ("/krun-sev.json", F_OK) == 0)
+  if (access (KRUN_SEV_FILE, F_OK) == 0)
     {
       if (kconf->handle_sev == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
@@ -126,7 +134,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set root disk");
 
-      ret = krun_set_tee_config_file (ctx_id, "/krun-sev.json");
+      ret = krun_set_tee_config_file (ctx_id, KRUN_SEV_FILE);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun tee config file");
     }
