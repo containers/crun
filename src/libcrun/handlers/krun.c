@@ -53,6 +53,12 @@
  */
 #define KRUN_SEV_FILE "/krun-sev.json"
 
+/* This file contains configuration parameters for the microVM. crun needs to
+ * read and parse it, using the information obtained from it to configure
+ * libkrun as required.
+ */
+#define KRUN_VM_FILE "/.krun_vm.json"
+
 struct krun_config
 {
   void *handle;
@@ -82,6 +88,110 @@ libkrun_create_context (void *handle, libcrun_error_t *err)
 }
 
 static int
+libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, libcrun_error_t *err)
+{
+  int32_t (*krun_set_kernel) (uint32_t ctx_id, const char *kernel_path,
+                              uint32_t kernel_format, const char *initrd_path, const char *kernel_cmdline);
+  const char *path_kernel_path[] = { "kernel_path", (const char *) 0 };
+  const char *path_kernel_format[] = { "kernel_format", (const char *) 0 };
+  const char *path_initrd_path[] = { "initrd_path", (const char *) 0 };
+  const char *path_kernel_cmdline[] = { "kernel_cmdline", (const char *) 0 };
+  yajl_val kernel_path = NULL;
+  yajl_val kernel_format = NULL;
+  yajl_val val_initrd_path = NULL;
+  yajl_val val_kernel_cmdline = NULL;
+  char *initrd_path = NULL;
+  char *kernel_cmdline = NULL;
+  int ret;
+
+  /* kernel_path and kernel_format must be present */
+  kernel_path = yajl_tree_get (*config_tree, path_kernel_path, yajl_t_string);
+  if (kernel_path == NULL || ! YAJL_IS_STRING (kernel_path))
+    return 0;
+
+  kernel_format = yajl_tree_get (*config_tree, path_kernel_format, yajl_t_number);
+  if (kernel_format == NULL || ! YAJL_IS_INTEGER (kernel_format))
+    return 0;
+
+  /* initrd and kernel_cmdline are optional */
+  val_initrd_path = yajl_tree_get (*config_tree, path_initrd_path, yajl_t_string);
+  if (val_initrd_path != NULL && YAJL_IS_STRING (val_initrd_path))
+    initrd_path = YAJL_GET_STRING (val_initrd_path);
+
+  val_kernel_cmdline = yajl_tree_get (*config_tree, path_kernel_cmdline, yajl_t_string);
+  if (val_kernel_cmdline != NULL && YAJL_IS_STRING (val_kernel_cmdline))
+    kernel_cmdline = YAJL_GET_STRING (val_kernel_cmdline);
+
+  krun_set_kernel = dlsym (handle, "krun_set_kernel");
+  if (krun_set_kernel == NULL)
+    return crun_make_error (err, 0, "could not find symbol in krun library");
+
+  ret = krun_set_kernel (ctx_id,
+                         YAJL_GET_STRING (kernel_path),
+                         YAJL_GET_INTEGER (kernel_format),
+                         initrd_path, kernel_cmdline);
+
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "could not configure a krun external kernel");
+
+  return 0;
+}
+
+static int
+libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, libcrun_error_t *err)
+{
+  int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
+  struct parser_context ctx = { 0, stderr };
+  cleanup_free char *config = NULL;
+  yajl_val config_tree = NULL;
+  yajl_val cpus = NULL;
+  yajl_val ram_mib = NULL;
+  yajl_val value = NULL;
+  const char *path_cpus[] = { "cpus", (const char *) 0 };
+  const char *path_ram_mib[] = { "ram_mib", (const char *) 0 };
+  size_t config_size;
+  int ret;
+
+  if (access (KRUN_VM_FILE, F_OK) != 0)
+    return 0;
+
+  ret = read_all_file (KRUN_VM_FILE, &config, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "could not read krun vm configuration file");
+
+  ret = parse_json_file (&config_tree, config, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, ret, "could not parse krun vm configuration file");
+
+  /* Try to configure an external kernel. If the configuration file doesn't
+   * specify a kernel, libkrun automatically fall back to using libkrunfw,
+   * if the library is present and was loaded while creating the context.
+   */
+  ret = libkrun_configure_kernel (ctx_id, handle, &config_tree, err);
+  if (UNLIKELY (ret))
+    return ret;
+
+  cpus = yajl_tree_get (config_tree, path_cpus, yajl_t_number);
+  ram_mib = yajl_tree_get (config_tree, path_ram_mib, yajl_t_number);
+  /* Both cpus and ram_mib must be present at the same time */
+  if (cpus == NULL || ram_mib == NULL || ! YAJL_IS_INTEGER (cpus) || ! YAJL_IS_INTEGER (ram_mib))
+    return 0;
+
+  krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
+
+  if (krun_set_vm_config == NULL)
+    return crun_make_error (err, 0, "could not find symbol in the krun library");
+
+  ret = krun_set_vm_config (ctx_id, YAJL_GET_INTEGER (cpus), YAJL_GET_INTEGER (ram_mib));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "could not set krun vm configuration");
+
+  *configured = true;
+
+  return 0;
+}
+
+static int
 libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname, char *const argv[])
 {
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -97,6 +207,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   uint32_t num_vcpus, ram_mib;
   int32_t ctx_id, ret;
   cpu_set_t set;
+  libcrun_error_t err;
+  bool configured = false;
 
   if (access (KRUN_SEV_FILE, F_OK) == 0)
     {
@@ -140,6 +252,37 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
     }
   else
     {
+      krun_set_root = dlsym (handle, "krun_set_root");
+      krun_set_workdir = dlsym (handle, "krun_set_workdir");
+
+      if (krun_set_root == NULL || krun_set_workdir == NULL)
+        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
+
+      ret = krun_set_root (ctx_id, "/");
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun root");
+
+      if (krun_set_workdir && def && def->process && def->process->cwd)
+        {
+          ret = krun_set_workdir (ctx_id, def->process->cwd);
+          if (UNLIKELY (ret < 0))
+            error (EXIT_FAILURE, -ret, "could not set krun working directory");
+        }
+    }
+
+  ret = libkrun_configure_vm (ctx_id, handle, &configured, &err);
+  if (UNLIKELY (ret))
+    {
+      libcrun_error_t *tmp_err = &err;
+      libcrun_error_write_warning_and_release (NULL, &tmp_err);
+      error (EXIT_FAILURE, ret, "could not configure krun vm");
+    }
+
+  /* If we couldn't configure the microVM using KRUN_VM_FILE, fall back to the
+   * legacy configuration logic.
+   */
+  if (! configured)
+    {
       /* If sched_getaffinity fails, default to 1 vcpu.  */
       num_vcpus = 1;
       /* If no memory limit is specified, default to 2G.  */
@@ -154,26 +297,15 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         num_vcpus = MIN (CPU_COUNT (&set), LIBKRUN_MAX_VCPUS);
 
       krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
-      krun_set_root = dlsym (handle, "krun_set_root");
-      krun_set_workdir = dlsym (handle, "krun_set_workdir");
-      if (krun_set_vm_config == NULL || krun_set_root == NULL)
+
+      if (krun_set_vm_config == NULL)
         error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
 
       ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
-
-      ret = krun_set_root (ctx_id, "/");
-      if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not set krun root");
-
-      if (krun_set_workdir && def && def->process && def->process->cwd)
-        {
-          ret = krun_set_workdir (ctx_id, def->process->cwd);
-          if (UNLIKELY (ret < 0))
-            error (EXIT_FAILURE, -ret, "could not set krun working directory");
-        }
     }
+
   ret = krun_start_enter (ctx_id);
   return -ret;
 }
