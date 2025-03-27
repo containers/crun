@@ -40,8 +40,8 @@
 #  include <libkrun.h>
 #endif
 
-/* libkrun has a hard-limit of 8 vCPUs per microVM. */
-#define LIBKRUN_MAX_VCPUS 8
+/* libkrun has a hard-limit of 16 vCPUs per microVM. */
+#define LIBKRUN_MAX_VCPUS 16
 
 /* crun dumps the container configuration into this file, which will be read by
  * libkrun to set up the environment for the workload inside the microVM.
