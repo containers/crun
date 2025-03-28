@@ -295,6 +295,12 @@ LIBCRUN_PUBLIC int libcrun_container_read_pids (libcrun_context_t *context, cons
 
 LIBCRUN_PUBLIC int libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err);
 
+LIBCRUN_PUBLIC int libcrun_container_add_mounts_from_file (libcrun_context_t *context, const char *id, const char *file,
+                                                           libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_container_remove_mounts_from_file (libcrun_context_t *context, const char *id, const char *file,
+                                                              libcrun_error_t *err);
+
 // Not part of the public API, just a method in container.c we need to access from linux.c
 void get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_uid, gid_t host_gid,
                              uid_t *uid, gid_t *gid);

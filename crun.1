@@ -1,24 +1,21 @@
+'\" t
 .nh
 .TH crun 1 "User Commands"
 
 .SH NAME
-.PP
-crun - a fast and lightweight OCI runtime
+crun \- a fast and lightweight OCI runtime
 
 
 .SH SYNOPSIS
-.PP
 crun [global options] command [command options] [arguments...]
 
 
 .SH DESCRIPTION
-.PP
 crun is a command line program for running Linux containers that
 follow the Open Container Initiative (OCI) format.
 
 
 .SH COMMANDS
-.PP
 \fBcreate\fP
 Create a container.  The runtime detaches from the container process
 once the container environment is created.  It is necessary to
@@ -35,6 +32,14 @@ Exec a command in a running container.
 .PP
 \fBlist\fP
 List known containers.
+
+.PP
+\fBmounts add\fP
+Add mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Each mount listed there is added to the running container.  The command is experimental and can be changed without notice.
+
+.PP
+\fBmounts remove\fP
+Remove mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Only the destination attribute for each mount is used.  The command is experimental and can be changed without notice.
 
 .PP
 \fBkill\fP
@@ -84,7 +89,6 @@ Restore a container from a checkpoint.
 
 
 .SH STATE
-.PP
 By default, when running as root user, crun saves its state under the
 \fB/run/crun\fP directory.  As unprivileged user, instead the
 \fIXDG_RUNTIME_DIR\fP environment variable is honored, and the directory
@@ -93,7 +97,6 @@ overrides this setting.
 
 
 .SH GLOBAL OPTIONS
-.PP
 \fB--debug\fP
 Produce verbose output.
 
@@ -110,16 +113,12 @@ It is specified in the form \fIBACKEND:SPECIFIER\fP\&.
 
 .PP
 These following backends are supported:
-
-.RS
 .IP \(bu 2
 file:PATH
 .IP \(bu 2
 journald:IDENTIFIER
 .IP \(bu 2
 syslog:IDENTIFIER
-
-.RE
 
 .PP
 If no backend is specified, then \fIfile:\fP is used by default.
@@ -166,7 +165,6 @@ Print a short usage message.
 Print program version
 
 .SH CREATE OPTIONS
-.PP
 crun [global options] create [options] CONTAINER
 
 .PP
@@ -195,7 +193,6 @@ Additional number of FDs to pass into the container.
 Path to the file that will contain the container process PID.
 
 .SH RUN OPTIONS
-.PP
 crun [global options] run [options] CONTAINER
 
 .PP
@@ -228,7 +225,6 @@ Path to the file that will contain the container process PID.
 Detach the container process from the current session.
 
 .SH DELETE OPTIONS
-.PP
 crun [global options] delete [options] CONTAINER
 
 .PP
@@ -240,7 +236,6 @@ Delete the container even if it is still running.
 Delete all the containers that satisfy the specified regex.
 
 .SH EXEC OPTIONS
-.PP
 crun [global options] exec [options] CONTAINER CMD
 
 .PP
@@ -302,7 +297,6 @@ Allocate a pseudo TTY.
 Specify the user in the form UID[:GID].
 
 .SH LIST OPTIONS
-.PP
 crun [global options] list [options]
 
 .PP
@@ -310,7 +304,6 @@ crun [global options] list [options]
 Show only the container ID.
 
 .SH KILL OPTIONS
-.PP
 crun [global options] kill [options] CONTAINER SIGNAL
 
 .PP
@@ -322,7 +315,6 @@ Kill all the processes in the container.
 Kill all the containers that satisfy the specified regex.
 
 .SH PS OPTIONS
-.PP
 crun [global options] ps [options]
 
 .PP
@@ -331,7 +323,6 @@ Specify the output format.  It must be either \fBtable\fR or \fBjson\fR\&.
 By default \fBtable\fR is used.
 
 .SH SPEC OPTIONS
-.PP
 crun [global options] spec [options]
 
 .PP
@@ -343,7 +334,6 @@ Path to the root of the bundle dir (default ".").
 Generate a config.json file that is usable by an unprivileged user.
 
 .SH UPDATE OPTIONS
-.PP
 crun [global options] update [options] CONTAINER
 
 .PP
@@ -407,7 +397,6 @@ Maximum number of pids allowed in the container.
 Path to the file containing the resources to update.
 
 .SH CHECKPOINT OPTIONS
-.PP
 crun [global options] checkpoint [options] CONTAINER
 
 .PP
@@ -457,7 +446,6 @@ Specify which CRIU manage cgroup mode should be used. Permitted values are
 \fBsoft\fP, \fBignore\fP, \fBfull\fP or \fBstrict\fP\&. Default is \fBsoft\fP\&.
 
 .SH RESTORE OPTIONS
-.PP
 crun [global options] restore [options] CONTAINER
 
 .PP
@@ -513,7 +501,6 @@ need to be changed during restore.
 
 .SH Extensions to OCI
 .SH \fBrun.oci.mount_context_type=context\fR
-.PP
 Set the mount context type on volumes mounted with SELinux labels.
 
 .PP
@@ -527,7 +514,6 @@ Valid context types are:
 More information on how the context mount flags works see the \fBmount(8)\fR man page.
 
 .SH \fBrun.oci.seccomp.receiver=PATH\fR
-.PP
 If the annotation \fBrun.oci.seccomp.receiver=PATH\fR is specified, the
 seccomp listener is sent to the UNIX socket listening on the specified
 path.  It can also set with the \fBRUN_OCI_SECCOMP_RECEIVER\fR environment variable.
@@ -535,7 +521,6 @@ It is an experimental feature, and the annotation will be removed once
 it is supported in the OCI runtime specs.  It must be an absolute path.
 
 .SH \fBrun.oci.seccomp.plugins=PATH\fR
-.PP
 If the annotation \fBrun.oci.seccomp.plugins=PLUGIN1[:PLUGIN2]...\fR is specified, the
 seccomp listener fd is handled through the specified plugins.  The
 plugin must either be an absolute path or a file name that is looked
@@ -543,12 +528,10 @@ up by \fBdlopen(3)\fR\&.  More information on how the lookup is performed
 are available on the \fBld.so(8)\fR man page.
 
 .SH \fBrun.oci.seccomp_fail_unknown_syscall=1\fR
-.PP
 If the annotation \fBrun.oci.seccomp_fail_unknown_syscall\fR is present, then crun
 will fail when an unknown syscall is encountered in the seccomp configuration.
 
 .SH \fBrun.oci.seccomp_bpf_data=PATH\fR
-.PP
 If the annotation \fBrun.oci.seccomp_bpf_data\fR is present, then crun
 ignores the seccomp section in the OCI configuration file and use the specified data
 as the raw data to the \fBseccomp(SECCOMP_SET_MODE_FILTER)\fR syscall.
@@ -559,14 +542,12 @@ It is an experimental feature, and the annotation will be removed once
 it is supported in the OCI runtime specs.
 
 .SH \fBrun.oci.keep_original_groups=1\fR
-.PP
 If the annotation \fBrun.oci.keep_original_groups\fR is present, then crun
 will skip the \fBsetgroups\fR syscall that is used to either set the
 additional groups specified in the OCI configuration, or to reset the
 list of additional groups if none is specified.
 
 .SH \fBrun.oci.pidfd_receiver=PATH\fR
-.PP
 It is an experimental feature and will be removed once the feature is in the
 OCI runtime specs.
 
@@ -575,7 +556,6 @@ If present, specify the path to the UNIX socket that will receive the
 pidfd for the container process.
 
 .SH \fBrun.oci.systemd.force_cgroup_v1=/PATH\fR
-.PP
 If the annotation \fBrun.oci.systemd.force_cgroup_v1=/PATH\fR is present, then crun
 will override the specified mount point \fB/PATH\fR with a cgroup v1 mount
 made of a single hierarchy \fBnone,name=systemd\fR\&.
@@ -594,17 +574,14 @@ For example, as root:
 mkdir /sys/fs/cgroup/systemd
 mount cgroup -t cgroup /sys/fs/cgroup/systemd -o none,name=systemd,xattr
 chown -R the_user.the_user /sys/fs/cgroup/systemd
-
 .EE
 
 .SH \fBrun.oci.systemd.subgroup=SUBGROUP\fR
-.PP
 Override the name for the systemd sub cgroup created under the systemd
 scope, so the final cgroup will be like:
 
 .EX
 /sys/fs/cgroup/$PATH/$SUBGROUP
-
 .EE
 
 .PP
@@ -619,11 +596,9 @@ e.g.
 
 .EX
 /sys/fs/cgroup//system.slice/foo-352700.scope/container
-
 .EE
 
 .SH \fBrun.oci.delegate-cgroup=DELEGATED-CGROUP\fR
-.PP
 If the \fBrun.oci.systemd.subgroup\fR annotation is specified, yet another
 sub-cgroup is created and the container process is moved here.
 
@@ -633,7 +608,6 @@ moving the container to the delegated cgroup.
 
 .EX
 /sys/fs/cgroup/$PATH/$SUBGROUP/$DELEGATED-CGROUP
-
 .EE
 
 .PP
@@ -649,28 +623,23 @@ Since cgroup delegation is not safe on cgroup v1, this option is
 supported only on cgroup v2.
 
 .SH \fBrun.oci.hooks.stdout=FILE\fR
-.PP
 If the annotation \fBrun.oci.hooks.stdout\fR is present, then crun
 will open the specified file and use it as the stdout for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
 
 .SH \fBrun.oci.hooks.stderr=FILE\fR
-.PP
 If the annotation \fBrun.oci.hooks.stderr\fR is present, then crun
 will open the specified file and use it as the stderr for the hook
 processes.  The file is opened in append mode and it is created if it
 doesn't already exist.
 
 .SH \fBrun.oci.handler=HANDLER\fR
-.PP
 It is an experimental feature.
 
 .PP
 If specified, run the specified handler for execing the container.
 The only supported values are \fBkrun\fR and \fBwasm\fR\&.
-
-.RS
 .IP \(bu 2
 \fBkrun\fR: When \fBkrun\fR is specified, the \fBlibkrun.so\fR shared object is loaded
 and it is used to launch the container using libkrun.
@@ -680,16 +649,12 @@ workload natively. Accepts a \fB\&.wasm\fR binary as input and if \fB\&.wat\fR i
 provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
-.RE
-
 .SH tmpcopyup mount options
-.PP
 If the \fBtmpcopyup\fR option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
 itself.
 
 .SH copy-symlink mount options
-.PP
 If the \fBcopy-symlink\fR option is specified, if the source of a bind
 mount is a symlink, the symlink is recreated at the specified
 destination instead of attempting a mount that would resolve the
@@ -697,14 +662,11 @@ symlink itself.  If the destination already exists and it is not a
 symlink with the expected content, crun will return an error.
 
 .SH r$FLAG mount options
-.PP
 If a \fBr$FLAG\fR mount option is specified then the flag \fB$FLAG\fR is set
 recursively for each children mount.
 
 .PP
 These flags are supported:
-
-.RS
 .IP \(bu 2
 "rro"
 .IP \(bu 2
@@ -748,10 +710,7 @@ These flags are supported:
 .IP \(bu 2
 "rnostrictatime"
 
-.RE
-
 .SH idmap mount options
-.PP
 If the \fBidmap\fR option is specified then the mount is ID mapped using
 the container target user namespace.  This is an experimental feature
 and can change at any time without notice.
@@ -810,7 +769,6 @@ For example, the mapping: \fBuids=@1-3-10\fR, given a configuration like
         "size": 1000
       }
     ]
-
 .EE
 
 .PP
@@ -826,7 +784,6 @@ mapping if it overlaps multiple ranges in the user namespace.  In such
 a case, there won't be any error reported.
 
 .SH Automatically create user namespace
-.PP
 When running as user different than root, an user namespace is
 automatically created even if it is not specified in the config file.
 The current user is mapped to the ID 0 in the container, and any
@@ -835,12 +792,10 @@ is automatically added starting with ID 1.
 
 
 .SH CGROUP v1
-.PP
 Support for cgroup v1 is deprecated and will be removed in a future release.
 
 
 .SH CGROUP v2
-.PP
 \fBNote\fP: cgroup v2 does not yet support control of realtime processes and
 the cpu controller can only be enabled when all RT processes are in the root
 cgroup. This will make crun fail while running alongside RT processes.
