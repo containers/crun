@@ -146,10 +146,8 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, libcrun_e
   yajl_val config_tree = NULL;
   yajl_val cpus = NULL;
   yajl_val ram_mib = NULL;
-  yajl_val value = NULL;
   const char *path_cpus[] = { "cpus", (const char *) 0 };
   const char *path_ram_mib[] = { "ram_mib", (const char *) 0 };
-  size_t config_size;
   int ret;
 
   if (access (KRUN_VM_FILE, F_OK) != 0)
