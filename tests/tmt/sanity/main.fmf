@@ -1,4 +1,3 @@
 summary: Sanity test for crun
-tag: ['upstream', 'downstream']
 test: bash ./runtest.sh
 duration: 10m
