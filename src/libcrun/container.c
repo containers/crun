@@ -2356,6 +2356,7 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
       *fd = fds[0];
       *self_receiver_fd = fds[1];
       *plugins = tmp;
+      return 0;
     }
 
   if (def && def->linux && def->linux->seccomp && def->linux->seccomp->listener_path)
@@ -2375,6 +2376,20 @@ get_seccomp_receiver_fd (libcrun_container_t *container, int *fd, int *self_rece
     }
 
   return 0;
+}
+
+static bool
+has_seccomp_receiver (libcrun_container_t *container)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+
+  if (def && def->linux && def->linux->seccomp && def->linux->seccomp->listener_path)
+    return true;
+
+  if (find_annotation (container, "run.oci.seccomp.receiver") != NULL || getenv ("RUN_OCI_SECCOMP_RECEIVER") != NULL)
+    return true;
+
+  return false;
 }
 
 static int
@@ -2482,6 +2497,11 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     return ret;
 
   umask (0);
+
+  if (find_annotation (container, "run.oci.seccomp.plugins") != NULL && has_seccomp_receiver (container))
+    {
+      return crun_make_error (err, errno, "seccomp plugins and seccomp receivers cannot be declared at the same time");
+    }
 
   if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
     {
