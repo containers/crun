@@ -557,8 +557,8 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (cgroup_mode != CGROUP_MODE_UNIFIED)
     {
       ret = checkpoint_cgroup_v1_mount (def, err);
-      if (UNLIKELY (ret != 0))
-        return crun_make_error (err, 0, "error handling cgroup v1 mounts");
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   /* Tell CRIU about external bind mounts. */

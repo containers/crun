@@ -155,11 +155,11 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, libcrun_e
 
   ret = read_all_file (KRUN_VM_FILE, &config, NULL, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "could not read krun vm configuration file");
+    return ret;
 
   ret = parse_json_file (&config_tree, config, &ctx, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, ret, "could not parse krun vm configuration file");
+    return ret;
 
   /* Try to configure an external kernel. If the configuration file doesn't
    * specify a kernel, libkrun automatically fall back to using libkrunfw,

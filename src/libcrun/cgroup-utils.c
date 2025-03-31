@@ -748,7 +748,7 @@ read_available_controllers (const char *path, libcrun_error_t *err)
 
   ret = read_all_file (controllers, &buf, NULL, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error reading from file `%s`", controllers);
+    return ret;
 
   for (token = strtok_r (buf, " \n", &saveptr); token; token = strtok_r (NULL, " \n", &saveptr))
     {
