@@ -1036,7 +1036,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   if (UNLIKELY (pathfd < 0))
     {
       if (errno != ENOENT && errno != EACCES)
-        return crun_make_error (err, errno, "open `%s`", rel_path);
+        return pathfd;
 
       crun_error_release (err);
       return 0;
