@@ -20,6 +20,7 @@ import copy
 import socket
 from tests_utils import *
 import tempfile
+import re
 
 try:
     import libmount
@@ -601,6 +602,73 @@ def test_cgroup_mount_without_netns():
             return -1
     return 0
 
+def test_add_remove_mounts():
+    if is_rootless():
+        return 77
+    conf = base_config()
+
+    conf['mounts'].append({"destination": "/foo", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]})
+    add_all_namespaces(conf, userns=True)
+
+    bind_dir = os.path.join(get_tests_root(), "bind-mount")
+    test_file = os.path.join(bind_dir, "test")
+    os.makedirs(bind_dir)
+    with open(test_file, "w+") as f:
+        f.write("test")
+
+    parent_dir_in_container = "/foo/bar"
+
+    def check_test_file(expected):
+        exists = False
+        try:
+            out = run_crun_command(["exec", cid, "/init", "cat", os.path.join(parent_dir_in_container, "test")])
+            if "test" in out:
+                exists = True
+        except:
+                pass
+        if exists == expected:
+            return True
+        if expected:
+            sys.stderr.write("test file not found")
+        else:
+            sys.stderr.write("test file found")
+        return False
+
+    new_mounts = [{"destination": parent_dir_in_container, "type": "bind", "source": bind_dir, "options": ["bind", "ro"]},
+                  {"destination": "/foo/tmpfs", "type": "tmpfs", "source": "tmpfs"}]
+    mounts_path = os.path.join(get_tests_root(), "mounts.json")
+    with open(mounts_path, "w+") as f:
+        json.dump(new_mounts, f)
+
+    cid = None
+    try:
+        conf['process']['args'] = ['/init', 'pause']
+        _, cid = run_and_get_output(conf, detach=True)
+
+        if not check_test_file(False):
+            return -1
+        run_crun_command(["mounts", "add", cid, mounts_path])
+        if not check_test_file(True):
+            return -1
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
+        if not re.search(r".*/ /foo/tmpfs .*tmpfs.*", out):
+            sys.stderr.write("/foo/tmpfs not found as a tmpfs\n")
+            return -1
+
+        run_crun_command(["mounts", "remove", cid, mounts_path])
+        if not check_test_file(False):
+            return -1
+
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
+        if re.search(r".*/ /foo/tmpfs .*tmpfs.*", out):
+            sys.stderr.write("/foo/tmpfs still mounted\n")
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(bind_dir)
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -629,6 +697,7 @@ all_tests = {
     "mount-cgroup-without-netns": test_cgroup_mount_without_netns,
     "mount-copy-symlink": test_copy_symlink,
     "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
+    "mount-add-remove-mounts": test_add_remove_mounts,
 }
 
 if __name__ == "__main__":
