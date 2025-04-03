@@ -426,7 +426,7 @@ libkrun_load (void **cookie, libcrun_error_t *err)
   if (kconf->handle == NULL && kconf->handle_sev == NULL)
     {
       free (kconf);
-      return crun_make_error (err, 0, "failed to open `%s` and `%s` for krun_config", libkrun_so, libkrun_sev_so);
+      return crun_make_error (err, 0, "failed to open `%s` and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, dlerror ());
     }
 
   kconf->sev = false;
