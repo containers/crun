@@ -337,7 +337,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
 
           wfd = openat (dirfd, "io.bfq.weight", O_WRONLY | O_CLOEXEC);
           if (UNLIKELY (wfd < 0))
-            return crun_make_error (err, errno, "open io.weight");
+            return crun_make_error (err, errno, "open `io.bfq.weight`");
           for (i = 0; i < blkio->weight_device_len; i++)
             {
               uint32_t w = blkio->weight_device[i]->weight;
@@ -346,7 +346,7 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
                              blkio->weight_device[i]->minor, w);
               ret = TEMP_FAILURE_RETRY (write (wfd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "write io.weight");
+                return crun_make_error (err, errno, "write `io.bfq.weight`");
 
               /* Ignore blkio->weight_device[i]->leaf_weight.  */
             }
@@ -479,7 +479,7 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
           len = sprintf (fmt_buf, "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
           ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write net_prio.ifpriomap");
+            return crun_make_error (err, errno, "write `net_prio.ifpriomap`");
         }
     }
 
