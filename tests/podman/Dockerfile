@@ -16,6 +16,7 @@ RUN dnf install -y golang python git gcc automake autoconf libcap-devel \
 
 ## Change default log driver to k8s-file for tests
 RUN sed -i 's/journald/k8s-file/g' /usr/share/containers/containers.conf
+RUN echo containers:200000:268435456 >> /etc/subuid && echo containers:200000:268435456 >> /etc/subgid
 COPY run-tests.sh /usr/local/bin
 WORKDIR /root/go/src/github.com/containers/podman
 ENTRYPOINT /usr/local/bin/run-tests.sh
