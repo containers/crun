@@ -3765,9 +3765,12 @@ expect_success_from_sync_socket (int sync_fd, libcrun_error_t *err)
     return 0;
 
   if (read_error_from_sync_socket (sync_fd, &res, &err_str))
-    return crun_make_error (err, res, "%s", err_str);
+    {
+      if (! is_empty_string (err_str))
+        return crun_make_error (err, res, "%s", err_str);
+    }
 
-  return crun_make_error (err, 0, "read from sync socket");
+  return crun_make_error (err, res, "read from sync socket");
 }
 
 static int
@@ -5120,9 +5123,15 @@ join_process_parent_helper (libcrun_context_t *context,
           cleanup_free char *err_str = NULL;
 
           if (read_error_from_sync_socket (sync_fd, &err_code, &err_str))
-            return crun_make_error (err, err_code, "%s", err_str);
+            {
+              if (! is_empty_string (err_str))
+                {
+                  crun_error_release (err);
+                  return crun_make_error (err, err_code, "%s", err_str);
+                }
+            }
 
-          return crun_error_wrap (err, "receive fd");
+          return crun_error_wrap (err, "receive terminal fd");
         }
       *terminal_fd = ret;
     }
