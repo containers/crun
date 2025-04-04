@@ -2001,7 +2001,7 @@ safe_create_symlink (int rootfsfd, const char *rootfs, const char *target, const
 
   parent_dir_fd = crun_safe_create_and_open_ref_at (true, rootfsfd, rootfs, part, 0755, err);
   if (UNLIKELY (parent_dir_fd < 0))
-    return crun_make_error (err, errno, "symlink creation");
+    return parent_dir_fd;
 
   /* It is safe to reuse the buffer since it was created with xstrdup (destination).  */
   strcpy (buffer, destination);
