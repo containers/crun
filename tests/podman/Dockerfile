@@ -11,7 +11,7 @@ RUN dnf install -y golang python git gcc automake autoconf libcap-devel \
     chmod 755 /root && \
     git clone --depth=1 https://github.com/containers/podman /root/go/src/github.com/containers/podman && \
     cd /root/go/src/github.com/containers/podman && \
-    make .install.ginkgo install.catatonit && cp ./test/tools/build/ginkgo /usr/local/bin && \
+    make .install.ginkgo install.catatonit && cp ./bin/ginkgo /usr/local/bin && \
     make
 
 ## Change default log driver to k8s-file for tests
