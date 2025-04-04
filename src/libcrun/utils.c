@@ -126,7 +126,7 @@ write_file_at_with_flags (int dirfd, int flags, mode_t mode, const char *name, c
 
   fd = openat (dirfd, name, O_CLOEXEC | O_WRONLY | flags, mode);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "opening file `%s` for writing", name);
+    return crun_make_error (err, errno, "open `%s` for writing", name);
 
   ret = safe_write (fd, name, data, len, err);
   if (UNLIKELY (ret < 0))
@@ -228,7 +228,7 @@ create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun_err
       if (ret == 0 && S_ISREG (tmp_mode))
         return 0;
 
-      return crun_make_error (err, errno, "creating file `%s`", file);
+      return crun_make_error (err, errno, "create file `%s`", file);
     }
   return 0;
 }
@@ -537,7 +537,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
               int saved_errno = errno;
 
               close (cwd);
-              return crun_make_error (err, saved_errno, "error stat'ing file `%s`", npath);
+              return crun_make_error (err, saved_errno, "stat `%s`", npath);
             }
           if ((st_mode & S_IFMT) != S_IFDIR)
             {
@@ -644,7 +644,7 @@ crun_dir_p_at (int dirfd, const char *path, bool nofollow, libcrun_error_t *err)
 
   ret = get_file_type_at (dirfd, &mode, nofollow, path);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "error stat'ing file `%s`", path);
+    return crun_make_error (err, errno, "stat `%s`", path);
 
   return S_ISDIR (mode);
 }
@@ -847,7 +847,7 @@ set_security_attr (const char *lsm, const char *fname, const char *data, libcrun
   // Write out data
   ret = TEMP_FAILURE_RETRY (write (fd, data, strlen (data)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write file `%s`", attr_path);
+    return crun_make_error (err, errno, "write to file `%s`", attr_path);
 
   return 0;
 }
@@ -894,7 +894,7 @@ is_current_process_confined (libcrun_error_t *err)
 
   ssize_t bytes_read = read (fd, buf, sizeof (buf) - 1);
   if (UNLIKELY (bytes_read < 0))
-    return crun_make_error (err, errno, "error reading file `%s`", attr_path);
+    return crun_make_error (err, errno, "read from `%s`", attr_path);
 
 #define UNCONFINED "unconfined"
 #define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
@@ -941,7 +941,7 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
     {
       ret = get_file_size (fd, &size);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "error stat'ing file `%s`", description);
+        return crun_make_error (err, errno, "stat `%s`", description);
 
       allocated = size == 0 ? 1023 : size;
     }
@@ -953,7 +953,7 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
     {
       ret = TEMP_FAILURE_RETRY (read (fd, buf + nread, allocated - nread));
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "error reading from file `%s`", description);
+        return crun_make_error (err, errno, "read from file `%s`", description);
 
       if (ret == 0)
         break;
@@ -996,7 +996,7 @@ read_all_file_at (int dirfd, const char *path, char **out, size_t *len, libcrun_
 
   fd = TEMP_FAILURE_RETRY (openat (dirfd, path, O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "error opening file `%s`", path);
+    return crun_make_error (err, errno, "open `%s`", path);
 
   return read_all_fd (fd, path, out, len, err);
 }
@@ -1017,7 +1017,7 @@ get_realpath_to_file (int dirfd, const char *path_name, char **absolute_path, li
 
   targetfd = TEMP_FAILURE_RETRY (openat (dirfd, path_name, O_RDONLY | O_CLOEXEC));
   if (UNLIKELY (targetfd < 0))
-    return crun_make_error (err, errno, "error opening file `%s`", path_name);
+    return crun_make_error (err, errno, "open `%s`", path_name);
   else
     {
       ssize_t len;
@@ -1048,13 +1048,13 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
 
   fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "error creating UNIX socket");
+    return crun_make_error (err, errno, "create UNIX socket");
 
   if (strlen (path) >= sizeof (addr.sun_path))
     {
       destfd = open (path, O_PATH | O_CLOEXEC);
       if (UNLIKELY (destfd < 0))
-        return crun_make_error (err, errno, "error opening `%s`", path);
+        return crun_make_error (err, errno, "open `%s`", path);
 
       get_proc_self_fd_path (name_buf, destfd);
 
@@ -1081,7 +1081,7 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
   int ret;
   cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "error creating UNIX socket");
+    return crun_make_error (err, errno, "create UNIX socket");
 
   if (strlen (path) >= sizeof (addr.sun_path))
     {
@@ -1686,7 +1686,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
          been terminated.  */
       if (errno != EPIPE)
         {
-          ret = crun_make_error (err, errno, "writing to pipe");
+          ret = crun_make_error (err, errno, "write to pipe");
           goto restore_sig_mask_and_exit;
         }
     }
@@ -1774,7 +1774,7 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
 
   dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "cannot fdopendir `/proc/self/fd`");
+    return crun_make_error (err, errno, "fdopendir `/proc/self/fd`");
 
   /* Now it is owned by dir.  */
   cfd = -1;
@@ -1795,13 +1795,13 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
         {
           ret = close (val);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "close(fd=%d)", val);
+            return crun_make_error (err, errno, "close fd `%d`", val);
         }
       else
         {
           ret = fcntl (val, F_SETFD, FD_CLOEXEC);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "cannot set CLOEXEC fd for `/proc/self/fd/%s`", name);
+            return crun_make_error (err, errno, "cannot set CLOEXEC for fd `%d`", val);
         }
     }
   return 0;
@@ -1990,7 +1990,7 @@ fail:
       errno = -last_error;
       if (errno == ENOENT)
         return crun_make_error (err, errno, "executable file `%s` not found%s", executable_path, executable_path[0] == '/' ? "" : " in $PATH");
-      return crun_make_error (err, errno, "cannot open `%s`", executable_path);
+      return crun_make_error (err, errno, "open `%s`", executable_path);
     }
 }
 
@@ -2044,7 +2044,7 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
       if (errno == ENOTSUP)
         return 0;
 
-      return crun_make_error (err, errno, "get xattr list for `%s`", srcname);
+      return crun_make_error (err, errno, "flistxattr `%s`", srcname);
     }
 
   if (xattr_len == 0)
@@ -2054,7 +2054,7 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
 
   xattr_len = flistxattr (sfd, buf, xattr_len + 1);
   if (UNLIKELY (xattr_len < 0))
-    return crun_make_error (err, errno, "get xattr list for `%s`", srcname);
+    return crun_make_error (err, errno, "flistxattr `%s`", srcname);
 
   for (it = buf; it - buf < xattr_len; it += strlen (it) + 1)
     {
@@ -2071,7 +2071,7 @@ copy_xattr (int sfd, int dfd, const char *srcname, const char *destname, libcrun
           if (errno == EINVAL || errno == EOPNOTSUPP)
             continue;
 
-          return crun_make_error (err, errno, "set xattr for `%s`", destname);
+          return crun_make_error (err, errno, "fsetxattr `%s` to `%s`", it, destname);
         }
     }
 
@@ -2133,7 +2133,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
   if (UNLIKELY (dsrcfd == NULL))
     {
       TEMP_FAILURE_RETRY (close (srcdirfd));
-      return crun_make_error (err, errno, "cannot open directory `%s`", destname);
+      return crun_make_error (err, errno, "open directory `%s`", destname);
     }
 
   for (de = readdir (dsrcfd); de; de = readdir (dsrcfd))
@@ -2212,7 +2212,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
 
           ret = symlinkat (target_buf, destdirfd, de->d_name);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "create symlink `%s/%s`", destname, de->d_name);
+            return crun_make_error (err, errno, "symlinkat `%s/%s`", destname, de->d_name);
           break;
 
         case S_IFBLK:
@@ -2221,13 +2221,13 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
         case S_IFSOCK:
           ret = mknodat (destdirfd, de->d_name, mode, rdev);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "create special file `%s/%s`", destname, de->d_name);
+            return crun_make_error (err, errno, "mknodat `%s/%s`", destname, de->d_name);
           break;
         }
 
       ret = fchownat (destdirfd, de->d_name, uid, gid, AT_SYMLINK_NOFOLLOW);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "chown `%s/%s`", destname, de->d_name);
+        return crun_make_error (err, errno, "fchownat `%s/%s`", destname, de->d_name);
 
       /*
        * ALLPERMS is not defined by POSIX
@@ -2243,7 +2243,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
           if (errno == ENOTSUP)
             continue;
 
-          return crun_make_error (err, errno, "chmod `%s/%s`", destname, de->d_name);
+          return crun_make_error (err, errno, "fchmodat `%s/%s`", destname, de->d_name);
         }
     }
 
@@ -2270,7 +2270,7 @@ safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_er
         {
           if (errno == EINTR || errno == EAGAIN)
             continue;
-          return crun_make_error (err, errno, "write file `%s`", fname);
+          return crun_make_error (err, errno, "write to `%s`", fname);
         }
       written += w;
     }
