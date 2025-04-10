@@ -65,6 +65,7 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <sched.h>
+#include <linux/sched.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -188,10 +189,10 @@ get_private_data (struct libcrun_container_s *container)
 }
 
 #ifndef CLONE_NEWTIME
-#  define CLONE_NEWTIME 0
+#  define CLONE_NEWTIME 0x00000080
 #endif
 #ifndef CLONE_NEWCGROUP
-#  define CLONE_NEWCGROUP 0
+#  define CLONE_NEWCGROUP 0x02000000
 #endif
 #ifndef AT_RECURSIVE
 #  define AT_RECURSIVE 0x8000
