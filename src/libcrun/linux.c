@@ -65,6 +65,7 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <sched.h>
+#include <linux/sched.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
