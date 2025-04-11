@@ -125,10 +125,7 @@ struct private_data_s
   /* Filled by libcrun_run_linux_container().  Useful to query what
      namespaces are available.  */
   int unshare_flags;
-
-#if CLONE_NEWCGROUP
   int unshare_cgroupns;
-#endif
 
   char *host_notify_socket_path;
   char *container_notify_socket_path;
@@ -204,12 +201,8 @@ static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS }
                                                  { "pid", "pid", CLONE_NEWPID },
                                                  { "uts", "uts", CLONE_NEWUTS },
                                                  { "user", "user", CLONE_NEWUSER },
-#if CLONE_NEWCGROUP
                                                  { "cgroup", "cgroup", CLONE_NEWCGROUP },
-#endif
-#if CLONE_NEWTIME
                                                  { "time", "time", CLONE_NEWTIME },
-#endif
                                                  { NULL, NULL, 0 } };
 
 static int
@@ -1297,13 +1290,7 @@ try_umount (int targetfd, const char *target)
 static bool
 container_has_cgroupns (libcrun_container_t *container)
 {
-  bool has_cgroupns = false;
-
-#if CLONE_NEWCGROUP
-  has_cgroupns = get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
-#endif
-
-  return has_cgroupns;
+  return get_private_data (container)->unshare_flags & CLONE_NEWCGROUP;
 }
 
 static int
@@ -2953,7 +2940,6 @@ libcrun_container_setgroups (libcrun_container_t *container,
 int
 libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error_t *err)
 {
-#if CLONE_NEWCGROUP
   if (get_private_data (container)->unshare_cgroupns)
     {
       int ret = unshare (CLONE_NEWCGROUP);
@@ -2963,7 +2949,6 @@ libcrun_container_enter_cgroup_ns (libcrun_container_t *container, libcrun_error
             return crun_make_error (err, errno, "unshare (CLONE_NEWCGROUP)");
         }
     }
-#endif
   return 0;
 }
 
@@ -4760,11 +4745,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     return ret;
 
   get_private_data (container)->unshare_flags = init_status.all_namespaces;
-#if CLONE_NEWCGROUP
   /* cgroup will be unshared later.  Once the process is in the correct cgroup.  */
   init_status.all_namespaces &= ~CLONE_NEWCGROUP;
   get_private_data (container)->unshare_cgroupns = init_status.namespaces_to_unshare & CLONE_NEWCGROUP;
-#endif
 
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket);
   if (UNLIKELY (ret < 0))
