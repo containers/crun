@@ -2357,11 +2357,17 @@ append_paths (char **out, libcrun_error_t *err, ...)
   return 0;
 }
 
+#if __has_attribute(__nonstring__)
+#  define __nonstring __attribute__ ((__nonstring__))
+#else
+#  define __nonstring
+#endif
+
 /* Adapted from mailutils 0.6.91 (distributed under LGPL 2.0+)  */
 static int
 b64_input (char c)
 {
-  const char table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const char table[64] __nonstring = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   int i;
 
   for (i = 0; i < 64; i++)
