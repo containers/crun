@@ -10,82 +10,104 @@ cat /etc/redhat-release
 uname -r
 rpm -q crun criu
 
-crun --version
-[ $? -ne 0 ] && exit 1
+if ! crun --version; then
+    exit 1
+fi
 
-crun features
-[ $? -ne 0 ] && exit 1
+if ! crun features; then
+    exit 1
+fi
 
-crun list
-[ $? -ne 0 ] && exit 1
+if ! crun list; then
+    exit 1
+fi
 
 # create the top most bundle and rootfs directory
-mkdir -p $TEMPDIR/rootfs
+mkdir -p "$TEMPDIR"/rootfs
 
 # export busybox via podman into the rootfs directory
-podman export $(podman create $TESTIMG) | tar -C $TEMPDIR/rootfs -xvf -
-[ $? -ne 0 ] && exit 1
+if ! (podman export "$(podman create $TESTIMG)" | tar -C "$TEMPDIR"/rootfs -xvf -); then
+    exit 1
+fi
 
 # use existing spec
-cp ./config.json $TEMPDIR
-ls $TEMPDIR
-cd $TEMPDIR
+cp ./config.json "$TEMPDIR"
+ls "$TEMPDIR"
+cd "$TEMPDIR"
 
-crun create $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun create $CNAME; then
+    exit 1
+fi
 
-crun list
-[ $? -ne 0 ] && exit 1
+if ! crun list; then
+    exit 1
+fi
 
-crun start $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun start $CNAME; then
+    exit 1
+fi
 
-crun list
-[ $? -ne 0 ] && exit 1
+if ! crun list; then
+    exit 1
+fi
 
-crun state $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun state $CNAME; then
+    exit 1
+fi
 
-crun ps $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun ps $CNAME; then
+    exit 1
+fi
 
-ret=$(crun exec $CNAME pwd)
-[ $? -ne 0 ] || [ $ret != '/' ] && exit 1
+if ! ret=$(crun exec $CNAME pwd) || [[ "$ret" != '/' ]]; then
+    exit 1
+fi
 
-crun pause $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun pause $CNAME; then
+    exit 1
+fi
 
-crun state $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun state $CNAME; then
+    exit 1
+fi
 
-crun resume $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun resume $CNAME; then
+    exit 1
+fi
 
-crun state $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun state $CNAME; then
+    exit 1
+fi
 
-ret=$(crun exec $CNAME pwd)
-[ $? -ne 0 ] || [ $ret != '/' ] && exit 1
+if ! ret=$(crun exec $CNAME pwd) || [[ "$ret" != '/' ]]; then
+    exit 1
+fi
 
-crun delete --force $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun delete --force $CNAME; then
+    exit 1
+fi
 
-crun list
-[ $? -ne 0 ] && exit 1
+if ! crun list; then
+    exit 1
+fi
 
-crun run $CNAME &
-[ $? -ne 0 ] && exit 1
+if ! (crun run $CNAME &); then
+    exit 1
+fi
 
-crun list
-[ $? -ne 0 ] && exit 1
+if ! crun list; then
+    exit 1
+fi
 
 # make sure the container is running state
 sleep 2
 
-ret=$(crun exec $CNAME echo 'ok')
-[ $? -ne 0 ] || [ $ret != 'ok' ] && exit 1
+if ! ret=$(crun exec $CNAME echo 'ok') || [[ "$ret" != 'ok' ]]; then
+    exit 1
+fi
 
-crun kill $CNAME
-[ $? -ne 0 ] && exit 1
+if ! crun kill $CNAME; then
+    exit 1
+fi
 
 exit 0
