@@ -1,3 +1,4 @@
 summary: Sanity test for crun
 test: bash ./runtest.sh
 duration: 10m
+tag: [ sanity ]
