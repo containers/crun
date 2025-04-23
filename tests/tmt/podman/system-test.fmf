@@ -4,3 +4,4 @@ adjust:
 
 summary: Run crun specific Podman tests
 test: bash ./system-test.sh
+tag: [ podman ]

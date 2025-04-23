@@ -1,0 +1,4 @@
+summary: Shellcheck tests
+test: find ../ -type f -name "*.sh" -exec shellcheck {} + 
+duration: 10m
+tag: [ shellcheck ]

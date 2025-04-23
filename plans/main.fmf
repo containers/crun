@@ -23,3 +23,18 @@ prepare:
         - bats
         - crun
         - podman-tests
+
+/shellcheck:
+    discover+:
+        filter: 'tag:shellcheck'
+    enabled: true
+    adjust:
+        enabled: false
+        when: distro == centos-stream-10 or distro == rhel-10
+    prepare+:
+        - how: install
+          package: ShellCheck
+
+/tests:
+    discover+:
+        filter: 'tag:podman | tag:sanity'
