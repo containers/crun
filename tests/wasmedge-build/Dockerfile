@@ -3,7 +3,7 @@ FROM fedora:latest
 ARG WASM_EDGE_VERSION="0.14.0"
 
 # Install the deps for building crun
-RUN dnf update -y && dnf install -y make python git gcc automake autoconf libcap-devel \
+RUN dnf update -y && dnf install -y awk make python git gcc automake autoconf libcap-devel \
 		systemd-devel yajl-devel libseccomp-devel pkg-config diffutils \
 		systemd-devel yajl-devel libseccomp-devel pkg-config \
 		go-md2man glibc-static python3-libmount libtool buildah podman which
