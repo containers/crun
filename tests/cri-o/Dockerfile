@@ -3,11 +3,11 @@ FROM fedora:latest
 ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 
-RUN yum install -y python git gcc automake autoconf libcap-devel \
+RUN dnf install -y awk python git gcc automake autoconf libcap-devel \
     systemd-devel yajl-devel libseccomp-devel go-md2man conntrack-tools which \
     glibc-static python3-libmount libtool make podman xz nmap-ncat jq bats \
     iproute openssl iputils socat criu-libs irqbalance && \
-    dnf install -y 'dnf-command(builddep)' && dnf builddep -y podman && \
+    dnf install -y awk 'dnf-command(builddep)' && dnf builddep -y podman && \
     dnf remove -y golang && \
     sudo dnf update -y && \
     curl -LO https://dl.google.com/go/go1.19.4.linux-amd64.tar.gz && \

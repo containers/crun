@@ -1,3 +1,3 @@
 FROM fedora:latest
 
-RUN yum install -y codespell && yum clean all -y
+RUN dnf install -y awk codespell && yum clean all -y
