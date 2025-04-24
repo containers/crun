@@ -836,10 +836,7 @@ allbox;
 l l l l 
 l l l l .
 \fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
-shares	cpu.weight	T{
-y = (1 + ((x - 2) * 9999) / 262142)
-T}
-	T{
+shares	cpu.weight	y = (1 + ((x - 2) * 9999) / 262142)	T{
 convert from [2-262144] to [1-10000]
 T}
 period	cpu.max	y = x	T{
