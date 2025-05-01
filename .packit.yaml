@@ -52,8 +52,6 @@ jobs:
     targets: &fedora_copr_targets
       - fedora-all-x86_64
       - fedora-all-aarch64
-    # https://github.com/containers/crun/issues/1729
-    osh_diff_scan_after_copr_build: false
 
   - job: copr_build
     trigger: pull_request
