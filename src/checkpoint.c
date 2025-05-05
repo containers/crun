@@ -199,7 +199,7 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
 
       path = getcwd (NULL, 0);
       if (UNLIKELY (path == NULL))
-        libcrun_fail_with_error (0, "realloc failed");
+        libcrun_fail_with_error (errno, "getcwd failed");
 
       ret = asprintf (&cr_path, "%s/checkpoint", path);
       if (UNLIKELY (ret < 0))

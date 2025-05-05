@@ -139,7 +139,11 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
 
   /* Make sure the bundle is an absolute path.  */
   if (bundle == NULL)
-    bundle = bundle_cleanup = getcwd (NULL, 0);
+    {
+      bundle = bundle_cleanup = getcwd (NULL, 0);
+      if (UNLIKELY (bundle == NULL))
+        libcrun_fail_with_error (errno, "getcwd failed");
+    }
   else
     {
       if (bundle[0] != '/')
