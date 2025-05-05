@@ -96,10 +96,17 @@ def test_multiple_containers_delete():
             return -1
     return 0
 
+def test_help_delete():
+    out = run_crun_command(["delete", "--help"])
+    if "Usage: crun [OPTION...] delete CONTAINER" not in out:
+        return -1
+    
+    return 0
 
 all_tests = {
     "test_simple_delete" : test_simple_delete,
     "test_multiple_containers_delete" : test_multiple_containers_delete,
+    "test_help_delete": test_help_delete,
 }
 
 if __name__ == "__main__":

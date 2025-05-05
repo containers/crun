@@ -427,6 +427,16 @@ fill_handler_from_argv0 (char *argv0, struct crun_global_arguments *args)
     args->handler = b + 5;
 }
 
+static char **
+copy_args (char **argv, int argc)
+{
+  char **buff = xmalloc0 ((argc + 1) * sizeof (char *));
+  for (int i = 0; i < argc; i++)
+    buff[i] = argv[i];
+
+  return buff;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -448,15 +458,19 @@ main (int argc, char **argv)
 #endif
 
   fill_handler_from_argv0 (argv[0], &arguments);
-
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);
 
   command = get_command (argv[first_argument]);
   if (command == NULL)
     libcrun_fail_with_error (0, "unknown command %s", argv[first_argument]);
 
-  ret = command->handler (&arguments, argc - first_argument, argv + first_argument, &err);
+  int command_argc = argc - first_argument;
+  cleanup_free char **command_argv = copy_args (argv + first_argument, command_argc);
+  command_argv[0] = argv[0];
+
+  ret = command->handler (&arguments, command_argc, command_argv, &err);
   if (ret && err)
     libcrun_fail_with_error (err->status, "%s", err->msg);
+
   return ret;
 }

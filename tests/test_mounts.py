@@ -669,6 +669,13 @@ def test_add_remove_mounts():
         shutil.rmtree(bind_dir)
     return 0
 
+def test_mount_help():
+    out = run_crun_command(["mounts", "--help"])
+    if "Usage: crun [OPTION...] mounts [add|remove] CONTAINER FILE" not in out:
+        return -1
+    
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -698,6 +705,7 @@ all_tests = {
     "mount-copy-symlink": test_copy_symlink,
     "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
     "mount-add-remove-mounts": test_add_remove_mounts,
+    "mount-help": test_mount_help,
 }
 
 if __name__ == "__main__":

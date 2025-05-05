@@ -464,6 +464,13 @@ def test_exec_getpgrp():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_exec_help():
+    out = run_crun_command(["exec", "--help"])
+    if "Usage: crun [OPTION...] exec CONTAINER cmd" not in out:
+        return -1
+    
+    return 0
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -479,6 +486,7 @@ all_tests = {
     "exec-test-uid-tty": test_uid_tty,
     "exec-cpu-affinity": test_exec_cpu_affinity,
     "exec-getpgrp": test_exec_getpgrp,
+    "exec-help" : test_exec_help,
 }
 
 if __name__ == "__main__":

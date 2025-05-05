@@ -521,6 +521,13 @@ def test_home_unknown_id():
         return -1
     return 0
 
+def test_start_help():
+    out = run_crun_command(["start", "--help"])
+    if "Usage: crun [OPTION...] start CONTAINER" not in out:
+        return -1
+    
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -541,6 +548,7 @@ all_tests = {
     "run-keep": test_run_keep,
     "invalid-id": test_invalid_id,
     "home-unknown-id": test_home_unknown_id,
+    "help": test_start_help,
 }
 
 if __name__ == "__main__":

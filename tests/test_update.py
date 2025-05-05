@@ -49,9 +49,16 @@ def test_update():
         shutil.rmtree(temp_dir)
     return 1
 
+def test_update_help():
+    out = run_crun_command(["update", "--help"])
+    if "Usage: crun [OPTION...] update [OPTION]... CONTAINER" not in out:
+        return -1
+    
+    return 0
 
 all_tests = {
     "test-update" : test_update,
+    "test-update-help": test_update_help,
 }
 
 if __name__ == "__main__":
