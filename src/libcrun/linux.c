@@ -5822,7 +5822,7 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
   buffer = xmalloc (PATH_MAX);
   ret = syscall_getcwd (buffer, PATH_MAX);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "getcwd");
+    return crun_make_error (err, -ret, "getcwd");
 
   /* Enforce that the returned path is an absolute path.  */
   if (ret == 0 || buffer[0] != '/')
