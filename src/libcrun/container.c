@@ -1847,6 +1847,8 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                         libcrun_error_t *err)
 {
   cleanup_free char *cwd = getcwd (NULL, 0);
+  if (UNLIKELY (cwd == NULL))
+    libcrun_fail_with_error (errno, "getcwd failed");
   cleanup_free char *owner = get_user_name (geteuid ());
   cleanup_free char *intelrdt = NULL;
   char *external_descriptors = libcrun_get_external_descriptors (container);
@@ -1882,9 +1884,6 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
   };
 
   get_current_timestamp (created, sizeof (created));
-
-  if (cwd == NULL)
-    OOM ();
 
   if (cgroup_status)
     {
