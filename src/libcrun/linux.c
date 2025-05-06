@@ -1098,6 +1098,23 @@ get_selinux_context_type (libcrun_container_t *container)
   return "context";
 }
 
+/* improve the error message on mount(2) failures.  It always returns the original ret.  */
+static int
+diagnose_mount_failure (int ret, libcrun_error_t *err, libcrun_container_t *container,
+                        const char *fstype)
+{
+  if (strcmp (fstype, "cgroup2") == 0 && get_private_data (container)->unified_cgroup_path)
+    {
+      if (access (get_private_data (container)->unified_cgroup_path, R_OK) < 0 && errno == EACCES)
+        {
+          /* The current cgroup is not accessible.  */
+          crun_error_wrap (err, "the current cgroup is not accessible (too restrictive umask?)");
+          return ret;
+        }
+    }
+  return ret;
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1196,7 +1213,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                 }
             }
 
-          return crun_make_error (err, saved_errno, "mount `%s` to `%s`", source, target);
+          ret = crun_make_error (err, saved_errno, "mount `%s` to `%s`", source, target);
+
+          return diagnose_mount_failure (ret, err, container, fstype);
         }
 
       if (targetfd >= 0)
