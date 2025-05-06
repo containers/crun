@@ -129,6 +129,8 @@ struct private_data_s
 
   char *host_notify_socket_path;
   char *container_notify_socket_path;
+  char *unified_cgroup_path;
+
   bool mount_dev_from_host;
   unsigned long rootfs_propagation;
   bool deny_setgroups;
@@ -165,6 +167,7 @@ cleanup_private_data (void *private_data)
   if (p->dev_fds)
     cleanup_close_mapp (&(p->dev_fds));
 
+  free (p->unified_cgroup_path);
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
   free (p->external_descriptors);
@@ -1294,8 +1297,8 @@ container_has_cgroupns (libcrun_container_t *container)
 }
 
 static int
-do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *target, unsigned long mountflags,
-                    const char *unified_cgroup_path, libcrun_error_t *err)
+do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *target,
+                    unsigned long mountflags, libcrun_error_t *err)
 {
   int ret;
   int cgroup_mode;
@@ -1310,6 +1313,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
       errno = crun_error_get_errno (err);
       if (errno == EPERM || errno == EBUSY)
         {
+          const char *unified_cgroup_path;
           const char *src_cgroup;
 
           crun_error_release (err);
@@ -1333,6 +1337,8 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
               /* If the previous method failed, fall back to bind mounting the current cgroup.  */
               crun_error_release (err);
             }
+
+          unified_cgroup_path = get_private_data (container)->unified_cgroup_path;
 
           /* If everything else failed, bind mount from the current cgroup.  */
           src_cgroup = unified_cgroup_path && container_has_cgroupns (container) ? unified_cgroup_path : CGROUP_ROOT;
@@ -1512,7 +1518,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
 
 static int
 do_mount_cgroup (libcrun_container_t *container, const char *source, int targetfd, const char *target,
-                 unsigned long mountflags, const char *unified_cgroup_path, libcrun_error_t *err)
+                 unsigned long mountflags, libcrun_error_t *err)
 {
   int cgroup_mode;
 
@@ -1523,7 +1529,7 @@ do_mount_cgroup (libcrun_container_t *container, const char *source, int targetf
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, unified_cgroup_path, err);
+      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, err);
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
       return do_mount_cgroup_v1 (container, source, targetfd, target, mountflags, err);
@@ -2026,7 +2032,7 @@ get_force_cgroup_v1_annotation (libcrun_container_t *container)
 }
 
 static int
-do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, const char *unified_cgroup_path, libcrun_error_t *err)
+do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
@@ -2202,7 +2208,7 @@ do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, con
             }
           else if (strcmp (type, "cgroup") == 0)
             {
-              ret = do_mount_cgroup (container, source, targetfd, target, flags, unified_cgroup_path, err);
+              ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
@@ -2557,7 +2563,6 @@ int
 libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_free char *unified_cgroup_path = NULL;
   cleanup_close int rootfsfd_cleanup = -1;
   unsigned long rootfs_propagation = 0;
   int rootfsfd = -1;
@@ -2623,22 +2628,23 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
+      char *unified_cgroup_path = NULL;
+
       /* Read the cgroup path before we enter the cgroupns.  */
       ret = libcrun_get_cgroup_process (0, &unified_cgroup_path, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      get_private_data (container)->unified_cgroup_path = unified_cgroup_path;
     }
 
   ret = libcrun_container_enter_cgroup_ns (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mounts (container, rootfsfd, rootfs, unified_cgroup_path, err);
+  ret = do_mounts (container, rootfsfd, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  free (unified_cgroup_path);
-  unified_cgroup_path = NULL;
 
   is_user_ns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER);
   if (! is_user_ns)
