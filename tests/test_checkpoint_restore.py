@@ -161,6 +161,7 @@ def test_cr_pre_dump():
 
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'pre-dump')
+    work_dir = 'work-dir'
     try:
         _, cid = run_and_get_output(
             conf,
@@ -187,7 +188,6 @@ def test_cr_pre_dump():
 
         # Do the final dump. This dump should be much smaller.
         cr_dir = os.path.join(get_tests_root(), 'checkpoint')
-        work_dir = 'work-dir'
         run_crun_command([
             "checkpoint",
             "--parent-path=../pre-dump",
