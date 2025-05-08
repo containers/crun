@@ -508,9 +508,16 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         if (UNLIKELY (criu_can_mem_track == -1))
           return -1;
         libcriu_wrapper->criu_set_track_mem (true);
-        /* The parent path needs to be a relative path. CRIU will fail
-         * if the path is not in the right format. Usually something like
-         * ../previous-dump */
+
+        /* The parent path must be relative to image path (something like ../previous-dump).
+           CRIU will fail with an unclear error message if the path is not right.
+         */
+        if (UNLIKELY (cr_options->parent_path[0] == '/'))
+          return crun_make_error (err, 0, "--parent-path must be relative");
+        int is_dir = crun_dir_p_at (image_fd, cr_options->parent_path, false, err);
+        if (UNLIKELY (is_dir <= 0))
+          return crun_make_error (err, is_dir < 0 ? errno : ENOTDIR, "invalid --parent-path");
+
         ret = libcriu_wrapper->criu_set_parent_images (cr_options->parent_path);
         if (UNLIKELY (ret != 0))
           return crun_make_error (err, -ret, "error setting CRIU parent images path to `%s`", cr_options->parent_path);
