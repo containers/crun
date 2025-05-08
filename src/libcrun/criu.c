@@ -480,7 +480,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     {
       ret = mkdir (cr_options->work_path, 0700);
       if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-        return crun_make_error (err, errno, "error creating CRIU work directory `%s`", cr_options->image_path);
+        return crun_make_error (err, errno, "error creating CRIU work directory `%s`", cr_options->work_path);
 
       work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (work_fd == -1))
