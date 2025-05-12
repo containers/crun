@@ -4002,7 +4002,7 @@ get_fd_map (libcrun_container_t *container)
   return mount_fds;
 }
 
-static bool
+bool
 is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
 {
   size_t i;

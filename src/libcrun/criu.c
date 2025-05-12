@@ -575,17 +575,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      size_t j;
-
-      for (j = 0; j < def->mounts[i]->options_len; j++)
+      if (is_bind_mount (def->mounts[i], NULL))
         {
-          if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
-            {
-              ret = libcriu_wrapper->criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->destination);
-              if (UNLIKELY (ret < 0))
-                return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->destination);
-              break;
-            }
+          ret = libcriu_wrapper->criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->destination);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->destination);
         }
     }
 
@@ -742,16 +736,11 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
         continue;
 
       /* For bind mounts check if the source is a file or a directory. */
-      for (j = 0; j < def->mounts[i]->options_len; j++)
+      if (is_bind_mount (def->mounts[i], NULL))
         {
-          const char *opt = def->mounts[i]->options[j];
-          if (strcmp (opt, "bind") == 0 || strcmp (opt, "rbind") == 0)
-            {
-              is_dir = crun_dir_p (def->mounts[i]->source, false, err);
-              if (UNLIKELY (is_dir < 0))
-                return is_dir;
-              break;
-            }
+          is_dir = crun_dir_p (def->mounts[i]->source, false, err);
+          if (UNLIKELY (is_dir < 0))
+            return is_dir;
         }
 
       root_fd = open (root, O_RDONLY | O_CLOEXEC);
@@ -901,17 +890,11 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      size_t j;
-
-      for (j = 0; j < def->mounts[i]->options_len; j++)
+      if (is_bind_mount (def->mounts[i], NULL))
         {
-          if (strcmp (def->mounts[i]->options[j], "bind") == 0 || strcmp (def->mounts[i]->options[j], "rbind") == 0)
-            {
-              ret = libcriu_wrapper->criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->source);
-              if (UNLIKELY (ret < 0))
-                return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->source);
-              break;
-            }
+          ret = libcriu_wrapper->criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->source);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->source);
         }
     }
 
