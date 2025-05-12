@@ -450,15 +450,7 @@ container_spec (PyObject *self arg_unused, PyObject *args arg_unused)
 static PyObject *
 get_verbosity (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
-  PyObject *ctx_obj = NULL;
-  libcrun_context_t *ctx;
-  int verbosity;
-
-  if (!PyArg_ParseTuple (args, "i", &verbosity))
-    return NULL;
-
-  return PyLong_FromLong (libcrun_get_verbosity (verbosity));
+  return PyLong_FromLong (libcrun_get_verbosity());
 }
 
 static PyObject *
@@ -495,7 +487,7 @@ static PyMethodDef CrunMethods[] = {
   {"make_context", (PyCFunction) make_context, METH_VARARGS | METH_KEYWORDS,
    "Create a context object."},
   {"set_verbosity", set_verbosity, METH_VARARGS, "Set the logging verbosity."},
-  {"get_verbosity", get_verbosity, METH_VARARGS, "Get the logging verbosity."},
+  {"get_verbosity", get_verbosity, METH_NOARGS, "Get the logging verbosity."},
   {"spec", container_spec, METH_VARARGS,
    "Generate a new configuration file."},
   {NULL, NULL, 0, NULL}
