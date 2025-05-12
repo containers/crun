@@ -733,15 +733,13 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
 
       /* Check if the mountpoint is on a tmpfs. CRIU restores
        * all tmpfs. We do need to recreate directories on a tmpfs. */
+      size_t dest_len = strlen (dest);
       for (j = 0; j < def->mounts_len; j++)
         {
-          cleanup_free char *dest_loop = NULL;
-
           if (def->mounts[j]->type == NULL || strcmp (def->mounts[j]->type, "tmpfs") != 0)
             continue;
-
-          xasprintf (&dest_loop, "%s/", def->mounts[j]->destination);
-          if (strncmp (dest, dest_loop, strlen (dest_loop)) == 0)
+          size_t mount_len = strlen (def->mounts[j]->destination);
+          if (mount_len < dest_len && dest[mount_len] == '/' && strncmp (dest, def->mounts[j]->destination, mount_len) == 0)
             {
               /* This is a mountpoint which is on a tmpfs.*/
               on_tmpfs = true;
