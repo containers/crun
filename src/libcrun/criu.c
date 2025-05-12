@@ -51,6 +51,9 @@
 #    define CLONE_NEWTIME 0x00000080 /* New time namespace */
 #  endif
 
+/* Defined in chroot_realpath.c  */
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
+
 static const char *console_socket = NULL;
 
 #  define LIBCRIU_MIN_VERSION 31500
@@ -579,7 +582,16 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
     {
       if (is_bind_mount (def->mounts[i], NULL))
         {
-          ret = libcriu_wrapper->criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->destination);
+          /* We need to resolve mount destination inside container's root for CRIU to handle. */
+          char buf[PATH_MAX];
+          const char *dest_in_root;
+
+          dest_in_root = chroot_realpath (rootfs, def->mounts[i]->destination, buf);
+          if (UNLIKELY (dest_in_root == NULL))
+            return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
+          dest_in_root += strlen (rootfs);
+
+          ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, dest_in_root);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->destination);
         }
@@ -783,6 +795,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_close int inherit_new_pid_fd = -1;
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
+  cleanup_free char *rootfs = NULL;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_close int work_fd = -1;
   int ret_out;
@@ -893,11 +906,23 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     }
 
   /* Tell CRIU about external bind mounts. */
+  ret = append_paths (&rootfs, err, status->bundle, status->rootfs, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
   for (i = 0; i < def->mounts_len; i++)
     {
       if (is_bind_mount (def->mounts[i], NULL))
         {
-          ret = libcriu_wrapper->criu_add_ext_mount (def->mounts[i]->destination, def->mounts[i]->source);
+          /* We need to resolve mount destination inside container's root for CRIU to handle. */
+          char buf[PATH_MAX];
+          const char *dest_in_root;
+
+          dest_in_root = chroot_realpath (rootfs, def->mounts[i]->destination, buf);
+          if (UNLIKELY (dest_in_root == NULL))
+            return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
+          dest_in_root += strlen (rootfs);
+
+          ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, def->mounts[i]->source);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->source);
         }
