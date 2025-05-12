@@ -283,7 +283,8 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
   /* First check if there is actually a cgroup mount in the container. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (strcmp (def->mounts[i]->type, "cgroup") == 0)
+      char *type = def->mounts[i]->type;
+      if (type && strcmp (type, "cgroup") == 0)
         {
           has_cgroup_mount = true;
           break;
@@ -353,7 +354,8 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
   /* First check if there is actually a cgroup mount in the container. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (strcmp (def->mounts[i]->type, "cgroup") == 0)
+      char *type = def->mounts[i]->type;
+      if (type && strcmp (type, "cgroup") == 0)
         {
           has_cgroup_mount = true;
           break;
@@ -714,7 +716,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
       size_t j;
 
       /* cgroup restore should be handled by CRIU itself */
-      if (strcmp (type, "cgroup") == 0 || strcmp (type, "cgroup2") == 0)
+      if (type && (strcmp (type, "cgroup") == 0 || strcmp (type, "cgroup2") == 0))
         continue;
 
       /* Check if the mountpoint is on a tmpfs. CRIU restores
@@ -723,8 +725,11 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
         {
           cleanup_free char *dest_loop = NULL;
 
+          if (def->mounts[j]->type == NULL || strcmp (def->mounts[j]->type, "tmpfs") != 0)
+            continue;
+
           xasprintf (&dest_loop, "%s/", def->mounts[j]->destination);
-          if (strncmp (dest, dest_loop, strlen (dest_loop)) == 0 && strcmp (def->mounts[j]->type, "tmpfs") == 0)
+          if (strncmp (dest, dest_loop, strlen (dest_loop)) == 0)
             {
               /* This is a mountpoint which is on a tmpfs.*/
               on_tmpfs = true;
