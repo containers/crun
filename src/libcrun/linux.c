@@ -1246,7 +1246,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
   if (mountflags & ALL_PROPAGATIONS)
     {
       unsigned long rec = mountflags & MS_REC;
-      unsigned long propagation = mountflags & (MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE);
+      unsigned long propagation = mountflags & ALL_PROPAGATIONS_NO_REC;
 
       if (propagation)
         {
@@ -2595,7 +2595,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (def->linux->rootfs_propagation)
     rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL, NULL, NULL);
 
-  if ((rootfs_propagation & (MS_SHARED | MS_SLAVE | MS_PRIVATE | MS_UNBINDABLE)) == 0)
+  if ((rootfs_propagation & ALL_PROPAGATIONS_NO_REC) == 0)
     rootfs_propagation = MS_REC | MS_PRIVATE;
 
   get_private_data (container)->rootfs_propagation = rootfs_propagation;
