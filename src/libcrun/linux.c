@@ -1243,17 +1243,11 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
         }
     }
 
-  if (mountflags & ALL_PROPAGATIONS)
+  if (mountflags & ALL_PROPAGATIONS_NO_REC)
     {
-      unsigned long rec = mountflags & MS_REC;
-      unsigned long propagation = mountflags & ALL_PROPAGATIONS_NO_REC;
-
-      if (propagation)
-        {
-          ret = mount (NULL, real_target, NULL, rec | propagation, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for `%s`", target);
-        }
+      ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set propagation for `%s`", target);
     }
 
   if (mountflags & (MS_BIND | MS_RDONLY))
