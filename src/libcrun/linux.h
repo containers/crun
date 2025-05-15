@@ -141,6 +141,8 @@ const char *libcrun_get_intelrdt_name (const char *ctr_name, libcrun_container_t
 
 int libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pid_t pid, int actions, libcrun_error_t *err);
 
+int libcrun_move_network_devices (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
+
 int libcrun_destroy_intelrdt (const char *name, libcrun_error_t *err);
 
 int libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *container, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata, libcrun_error_t *err);
