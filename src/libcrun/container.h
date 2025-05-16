@@ -271,6 +271,7 @@ struct libcrun_intel_rdt_update
 {
   const char *l3_cache_schema;
   const char *mem_bw_schema;
+  char *const *schemata;
 };
 
 LIBCRUN_PUBLIC int libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id,

@@ -26,6 +26,8 @@
 #include <sched.h>
 #include <fcntl.h>
 #include <sys/vfs.h>
+#include <unistd.h>
+#include <errno.h>
 
 #define INTEL_RDT_MOUNT_POINT "/sys/fs/resctrl"
 #define SCHEMATA_FILE "schemata"
@@ -45,10 +47,21 @@ is_rdt_mounted (libcrun_error_t *err)
   return sfs.f_type == RDTGROUP_SUPER_MAGIC;
 }
 
-static int
-get_rdt_value (char **out, const char *l3_cache_schema, const char *mem_bw_schema)
+int
+get_rdt_value (char **out, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata)
 {
-  return xasprintf (out, "%s%s%s\n", l3_cache_schema ?: "", (l3_cache_schema && mem_bw_schema) ? "\n" : "", mem_bw_schema ?: "");
+  cleanup_free char *schemata_joined = NULL;
+  size_t schemata_size = 0;
+
+  while (schemata && schemata[schemata_size])
+    schemata_size++;
+
+  if (schemata_size > 0)
+    schemata_joined = str_join_array (0, schemata_size, schemata, "\n");
+
+  return xasprintf (out, "%s%s%s%s%s\n", l3_cache_schema ?: "",
+                    (l3_cache_schema && mem_bw_schema) ? "\n" : "", mem_bw_schema ?: "",
+                    ((l3_cache_schema || mem_bw_schema) && schemata_joined) ? "\n" : "", schemata_joined ?: "");
 }
 
 struct key_value
@@ -189,12 +202,12 @@ validate_rdt_configuration (const char *name, const char *l3_cache_schema, const
 }
 
 static int
-write_intelrdt_string (int fd, const char *file, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
+write_intelrdt_string (int fd, const char *file, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata, libcrun_error_t *err)
 {
   cleanup_free char *formatted = NULL;
   int len, ret;
 
-  len = get_rdt_value (&formatted, l3_cache_schema, mem_bw_schema);
+  len = get_rdt_value (&formatted, l3_cache_schema, mem_bw_schema, schemata);
   if (len < 0)
     return crun_make_error (err, errno, "internal error get_rdt_value");
 
@@ -237,6 +250,8 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
   int exist;
   int ret;
 
+  *created = false;
+
   ret = is_rdt_mounted (err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -269,9 +284,12 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
     return validate_rdt_configuration (name, l3_cache_schema, mem_bw_schema, err);
 
   /* At this point, assume it was created.  */
+  ret = crun_ensure_directory (path, 0755, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
   *created = true;
 
-  return crun_ensure_directory (path, 0755, true, err);
+  return 0;
 }
 
 int
@@ -292,15 +310,17 @@ resctl_move_task_to (const char *name, pid_t pid, libcrun_error_t *err)
 }
 
 int
-resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
+resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw_schema,
+               char *const *schemata, libcrun_error_t *err)
 {
+  const char *actual_l3_cache_schema = l3_cache_schema;
   cleanup_free char *cleaned_l3_cache_schema = NULL;
   cleanup_free char *path = NULL;
   cleanup_close int fd = -1;
   int ret;
 
   /* Nothing to do.  */
-  if (l3_cache_schema == NULL && mem_bw_schema == NULL)
+  if (l3_cache_schema == NULL && mem_bw_schema == NULL && schemata == NULL)
     return 0;
 
   ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, SCHEMATA_FILE, NULL);
@@ -308,17 +328,16 @@ resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw
     return ret;
 
   if (l3_cache_schema && strstr (l3_cache_schema, "MB:"))
-    l3_cache_schema = cleaned_l3_cache_schema = intelrdt_clean_l3_cache_schema (l3_cache_schema);
+    {
+      cleaned_l3_cache_schema = intelrdt_clean_l3_cache_schema (l3_cache_schema);
+      actual_l3_cache_schema = cleaned_l3_cache_schema;
+    }
 
   fd = open (path, O_WRONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", path);
+    return crun_make_error (err, errno, "open `%s` for writing", path);
 
-  ret = write_intelrdt_string (fd, path, l3_cache_schema, mem_bw_schema, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  return 0;
+  return write_intelrdt_string (fd, path, actual_l3_cache_schema, mem_bw_schema, schemata, err);
 }
 
 int

@@ -4688,7 +4688,7 @@ libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, 
   if (UNLIKELY (container == NULL))
     return -1;
 
-  return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, err);
+  return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, update->schemata, err);
 }
 
 static int

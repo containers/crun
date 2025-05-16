@@ -26,6 +26,7 @@ typedef int (*test) ();
 
 extern int compare_rdt_configurations (const char *a, const char *b);
 extern char *intelrdt_clean_l3_cache_schema (const char *l3_cache_schema);
+extern int get_rdt_value (char **out, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata);
 
 static int
 test_compare_rdt_configurations ()
@@ -75,6 +76,56 @@ test_intelrdt_clean_l3_cache_schema ()
   return 0;
 }
 
+static int
+test_get_rdt_value ()
+{
+#define COMPARE(L3, MB, SCHEMATA, EXPECTED)              \
+  do                                                     \
+    {                                                    \
+      char *result = NULL;                               \
+      int r = get_rdt_value (&result, L3, MB, SCHEMATA); \
+      int cmp = strcmp (result, EXPECTED);               \
+      free (result);                                     \
+      if (cmp != 0)                                      \
+        return 1;                                        \
+  } while (0)
+
+  COMPARE (NULL, NULL, NULL, "\n");
+
+  COMPARE ("L3=foo", NULL, NULL, "L3=foo\n");
+  COMPARE (NULL, "MB=bar", NULL, "MB=bar\n");
+  COMPARE ("L3=foo", "MB=bar", NULL, "L3=foo\nMB=bar\n");
+
+  {
+    char *schemata1[] = { "S1", "S2", NULL };
+    COMPARE (NULL, NULL, schemata1, "S1\nS2\n");
+  }
+
+  {
+    char *schemata2[] = { "S1", "S2", NULL };
+    COMPARE ("L3=foo", NULL, schemata2, "L3=foo\nS1\nS2\n");
+  }
+
+  {
+    char *schemata3[] = { "S1", "S2", NULL };
+    COMPARE (NULL, "MB=bar", schemata3, "MB=bar\nS1\nS2\n");
+  }
+
+  {
+    char *schemata4[] = { "S1", "S2", NULL };
+    COMPARE ("L3=foo", "MB=bar", schemata4, "L3=foo\nMB=bar\nS1\nS2\n");
+  }
+
+  {
+    char *schemata5[] = { NULL };
+    COMPARE (NULL, NULL, schemata5, "\n");
+  }
+
+#undef COMPARE
+
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -97,8 +148,9 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..2\n");
+  printf ("1..3\n");
   RUN_TEST (test_compare_rdt_configurations);
   RUN_TEST (test_intelrdt_clean_l3_cache_schema);
+  RUN_TEST (test_get_rdt_value);
   return 0;
 }

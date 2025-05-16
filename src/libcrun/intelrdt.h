@@ -26,7 +26,7 @@
 
 int resctl_create (const char *name, bool explicit_clos_id, bool *created, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err);
 int resctl_move_task_to (const char *name, pid_t pid, libcrun_error_t *err);
-int resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err);
+int resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata, libcrun_error_t *err);
 int resctl_destroy (const char *name, libcrun_error_t *err);
 
 #endif

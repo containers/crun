@@ -5778,7 +5778,7 @@ libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pi
 
   if (actions & LIBCRUN_INTELRDT_UPDATE)
     {
-      ret = resctl_update (name, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, err);
+      ret = resctl_update (name, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, def->linux->intel_rdt->schemata, err);
       if (UNLIKELY (ret < 0))
         goto fail;
     }
@@ -5813,13 +5813,13 @@ libcrun_destroy_intelrdt (const char *name, libcrun_error_t *err)
 }
 
 int
-libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *container, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
+libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *container, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata, libcrun_error_t *err)
 {
   const char *name;
 
   name = libcrun_get_intelrdt_name (ctr_name, container, NULL);
 
-  return resctl_update (name, l3_cache_schema, mem_bw_schema, err);
+  return resctl_update (name, l3_cache_schema, mem_bw_schema, schemata, err);
 }
 
 /* Change the current directory and make sure the current working

@@ -121,6 +121,8 @@ jobs:
                   echo run tests as rootless in a user namespace
                   unshare -r make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
 
+                  git status
+
                   # check that the working dir is clean
                   git describe --broken --dirty --all | grep -qv dirty
               ;;
