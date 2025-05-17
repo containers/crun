@@ -69,6 +69,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/seccomp_notify.c \
 		src/libcrun/signals.c \
 		src/libcrun/status.c \
+		src/libcrun/net_device.c \
 		src/libcrun/terminal.c
 
 if HAVE_EMBEDDED_YAJL
@@ -157,6 +158,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h \
 	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h src/libcrun/string_map.h \
+	src/libcrun/net_device.h \
 	crun.1.md crun.1 libcrun.lds \
 	krun.1.md krun.1 \
 	lua/luacrun.rockspec
