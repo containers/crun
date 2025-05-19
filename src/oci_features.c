@@ -196,6 +196,15 @@ crun_features_add_intel_rdt (yajl_gen json_gen, const struct linux_info_s *linux
 }
 
 void
+crun_features_add_net_devices (yajl_gen json_gen, const struct linux_info_s *linux)
+{
+  yajl_gen_string (json_gen, (const unsigned char *) "netDevices", strlen ("netDevices"));
+  yajl_gen_map_open (json_gen);
+  add_bool_to_json (json_gen, "enabled", linux->net_devices.enabled);
+  yajl_gen_map_close (json_gen);
+}
+
+void
 crun_features_add_linux_info (yajl_gen json_gen, const struct linux_info_s *linux)
 {
   yajl_gen_string (json_gen, (const unsigned char *) "linux", strlen ("linux"));
@@ -209,6 +218,7 @@ crun_features_add_linux_info (yajl_gen json_gen, const struct linux_info_s *linu
   crun_features_add_selinux_info (json_gen, linux);
   crun_features_add_mount_ext_info (json_gen, linux);
   crun_features_add_intel_rdt (json_gen, linux);
+  crun_features_add_net_devices (json_gen, linux);
 
   yajl_gen_map_close (json_gen);
 }
