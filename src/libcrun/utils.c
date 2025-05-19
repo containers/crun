@@ -2446,9 +2446,12 @@ has_suffix (const char *str, const char *suffix)
 char *
 str_join_array (int offset, size_t size, char *const array[], const char *joint)
 {
-  size_t jlen, lens[size];
+  size_t jlen;
+  cleanup_free size_t *lens = NULL;
   size_t i, total_size = (size - 1) * (jlen = strlen (joint)) + 1;
   char *result, *p;
+
+  lens = xmalloc (size * sizeof (*lens));
 
   for (i = 0; i < size; ++i)
     {
