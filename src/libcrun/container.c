@@ -4176,6 +4176,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 
   (*info)->linux.intel_rdt.enabled = true;
 
+  (*info)->linux.net_devices.enabled = true;
+
   // Put the values for mount extensions
   (*info)->linux.mount_ext.idmap.enabled = true;
 

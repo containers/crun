@@ -139,6 +139,11 @@ struct intel_rdt_s
   bool enabled;
 };
 
+struct net_devices_s
+{
+  bool enabled;
+};
+
 struct mount_ext_info_s
 {
   struct idmap_info_s idmap;
@@ -154,6 +159,7 @@ struct linux_info_s
   struct selinux_info_s selinux;
   struct mount_ext_info_s mount_ext;
   struct intel_rdt_s intel_rdt;
+  struct net_devices_s net_devices;
 };
 
 struct annotations_info_s
