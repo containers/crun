@@ -138,6 +138,27 @@ libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, 
 }
 
 static int
+libkrun_read_vm_config (yajl_val *config_tree, libcrun_error_t *err)
+{
+  int ret;
+  cleanup_free char *config = NULL;
+  struct parser_context ctx = { 0, stderr };
+
+  if (access (KRUN_VM_FILE, F_OK) != 0)
+    return 0;
+
+  ret = read_all_file (KRUN_VM_FILE, &config, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_json_file (config_tree, config, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+static int
 libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, libcrun_error_t *err)
 {
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
@@ -206,6 +227,11 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   cpu_set_t set;
   libcrun_error_t err;
   bool configured = false;
+  yajl_val config_tree = NULL;
+
+  ret = libkrun_read_vm_config (&config_tree, &err);
+  if (UNLIKELY (ret < 0))
+    error (EXIT_FAILURE, -ret, "libkrun VM config exists, but unable to parse");
 
   if (access (KRUN_SEV_FILE, F_OK) == 0)
     {
@@ -294,6 +320,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
     }
+
+  yajl_tree_free (config_tree);
 
   ret = krun_start_enter (ctx_id);
   return -ret;
