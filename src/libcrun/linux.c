@@ -167,6 +167,9 @@ cleanup_private_data (void *private_data)
   if (p->dev_fds)
     cleanup_close_mapp (&(p->dev_fds));
 
+  if (p->rootfsfd >= 0)
+    close (p->rootfsfd);
+
   free (p->unified_cgroup_path);
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
@@ -2045,13 +2048,14 @@ get_force_cgroup_v1_annotation (libcrun_container_t *container)
 }
 
 static int
-do_mounts (libcrun_container_t *container, int rootfsfd, const char *rootfs, libcrun_error_t *err)
+do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   size_t i;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
   const char *systemd_cgroup_v1 = get_force_cgroup_v1_annotation (container);
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+  int rootfsfd = get_private_data (container)->rootfsfd;
 
   mount_fds = get_private_data (container)->mount_fds;
   get_private_data (container)->mount_fds = NULL;
@@ -2576,9 +2580,7 @@ int
 libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
-  cleanup_close int rootfsfd_cleanup = -1;
   unsigned long rootfs_propagation = 0;
-  int rootfsfd = -1;
   int cgroup_mode;
   int is_user_ns = 0;
   int ret = 0;
@@ -2609,12 +2611,12 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
         return ret;
     }
 
-  rootfsfd = rootfsfd_cleanup = open (rootfs, O_PATH | O_CLOEXEC);
-  if (UNLIKELY (rootfsfd < 0))
+  ret = open (rootfs, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "open `%s`", rootfs);
 
+  get_private_data (container)->rootfsfd = ret;
   get_private_data (container)->rootfs = rootfs;
-  get_private_data (container)->rootfsfd = rootfsfd;
 
   // configure handler mounts
   ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_MOUNTS, container, rootfs, err);
@@ -2627,7 +2629,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
       int fd;
 
-      fd = dup (rootfsfd);
+      fd = dup (get_private_data (container)->rootfsfd);
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "dup fd for `%s`", rootfs);
 
@@ -2655,7 +2657,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = do_mounts (container, rootfsfd, rootfs, err);
+  ret = do_mounts (container, rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2691,7 +2693,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       libcrun_error_t tmp_err = NULL;
       const char *rel_cwd = consume_slashes (def->process->cwd);
       /* Ignore errors here and let it fail later.  */
-      (void) crun_safe_ensure_directory_at (rootfsfd, rootfs, rel_cwd, 0755, &tmp_err);
+      (void) crun_safe_ensure_directory_at (get_private_data (container)->rootfsfd, rootfs, rel_cwd, 0755, &tmp_err);
       crun_error_release (&tmp_err);
     }
 
@@ -2708,7 +2710,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_AFTER_MOUNTS");
 
-  get_private_data (container)->rootfsfd = -1;
+  close_and_reset (&(get_private_data (container)->rootfsfd));
 
   return 0;
 }
