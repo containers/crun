@@ -449,7 +449,11 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
 
   /* Empty path, nothing to do.  */
   if (*path == '\0')
-    return 0;
+    {
+      if (do_open)
+        return open (dirpath, O_CLOEXEC | O_PATH, 0);
+      return 0;
+    }
 
   npath = xstrdup (path);
 
@@ -577,12 +581,12 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
 int
 crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, const char *path, int mode, libcrun_error_t *err)
 {
-  int fd;
+  int ret;
 
   /* If the file/dir already exists, just open it.  */
-  fd = safe_openat (dirfd, dirpath, path, O_PATH | O_CLOEXEC, 0, err);
-  if (LIKELY (fd >= 0))
-    return fd;
+  ret = safe_openat (dirfd, dirpath, path, O_PATH | O_CLOEXEC, 0, err);
+  if (LIKELY (ret >= 0))
+    return ret;
 
   crun_error_release (err);
   return crun_safe_ensure_at (true, dir, dirfd, dirpath, path, mode, MAX_READLINKS, err);
