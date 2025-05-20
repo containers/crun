@@ -1227,6 +1227,17 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           if (UNLIKELY (fd < 0))
             return fd;
 
+          /* We are replacing the rootfs, reopen it.  */
+          if (is_empty_string (target))
+            {
+              int tmp = dup (fd);
+              if (UNLIKELY (tmp < 0))
+                return crun_make_error (err, errno, "dup");
+
+              TEMP_FAILURE_RETRY (close (get_private_data (container)->rootfsfd));
+              get_private_data (container)->rootfsfd = tmp;
+            }
+
 #ifdef HAVE_FGETXATTR
           if (label_how == LABEL_XATTR)
             {

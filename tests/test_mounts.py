@@ -115,6 +115,33 @@ def test_mount_tmpfs_permissions():
         return 0
     return -1
 
+def test_mount_bind_to_rootfs():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    tmpdir = tempfile.mkdtemp()
+    shutil.copy(get_init_path(), tmpdir)
+
+    mounts = [
+        {"destination": "/", "type": "bind", "source": tmpdir, "options": ["bind"]},
+    ]
+    conf['mounts'] = mounts + conf['mounts']
+    _, _ = run_and_get_output(conf, hide_stderr=True)
+    return 0
+
+def test_mount_tmpfs_to_rootfs():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    tmpdir = tempfile.mkdtemp()
+
+    mounts = [
+        {"destination": "/", "type": "tmpfs", "source": "tmpfs", "options": ["tmpcopyup"]},
+    ]
+    conf['mounts'] = mounts + conf['mounts']
+    _, _ = run_and_get_output(conf, hide_stderr=True)
+    return 0
+
 def test_ro_cgroup():
     for cgroupns in [True, False]:
         for netns in [True, False]:
@@ -693,6 +720,8 @@ all_tests = {
     "mount-unix-socket" : test_mount_unix_socket,
     "mount-symlink-not-existing" : test_mount_symlink_not_existing,
     "mount-dev" : test_mount_dev,
+    "mount-bind-to-rootfs": test_mount_bind_to_rootfs,
+    "mount-tmpfs-to-rootfs": test_mount_tmpfs_to_rootfs,
     "mount-nodev" : test_mount_nodev,
     "mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
     "mount-userns-bind-mount" : test_userns_bind_mount,
