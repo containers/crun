@@ -4303,7 +4303,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
     return ret;
 
   ret = mkdir (devs_path, 0700);
-  if (UNLIKELY (ret < 0) && errno != EEXIST)
+  if (UNLIKELY (ret < 0 && errno != EEXIST))
     return crun_make_error (err, errno, "mkdir `%s`", devs_path);
 
   current_mountns = open ("/proc/self/ns/mnt", O_RDONLY | O_CLOEXEC);
