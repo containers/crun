@@ -109,7 +109,7 @@ def test_mount_tmpfs_permissions():
     conf = base_config()
     conf['process']['args'] = ['/init', 'mode', '/tmp']
     add_all_namespaces(conf)
-    mount_opt = {"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["bind", "ro"]}
+    conf['mounts'].append({"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["bind", "ro"]})
     out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
     if "712" in out:
         return 0
