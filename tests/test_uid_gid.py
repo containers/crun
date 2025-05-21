@@ -114,12 +114,68 @@ def test_keep_groups():
         return -1
     return 0
 
+def test_additional_gids():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    add_all_namespaces(conf)
+    conf['process']['user']['uid'] = 1000
+    conf['process']['user']['gid'] = 1000
+    conf['process']['user']['additionalGids'] = [2000, 3000]
+    out, _ = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    gids_status = proc_status['Gid'].split()
+    for g_id in gids_status:
+        if g_id != "1000":
+            return -1
+
+    groups_str = proc_status.get('Groups', "")
+    actual_supplementary_groups = set()
+    if groups_str:
+        actual_supplementary_groups = set(groups_str.split())
+
+    expected_supplementary_groups = {"2000", "3000"}
+
+    if actual_supplementary_groups != expected_supplementary_groups:
+        return -2
+    return 0
+
+def test_umask():
+    if is_rootless():
+        pass
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    test_umask_octal_str = "0027"
+    test_umask_int = 0o027
+
+    conf['process']['user']['umask'] = test_umask_int
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+
+    out, _ = run_and_get_output(conf)
+    proc_status = parse_proc_status(out)
+
+    if 'Umask' not in proc_status:
+        return -1
+
+    umask_from_status = proc_status['Umask']
+
+    if umask_from_status != test_umask_octal_str:
+        return -2
+
+    return 0
+
 all_tests = {
     "uid" : test_uid,
     "gid" : test_gid,
     "userns-full-mapping" : test_userns_full_mapping,
     "no-groups" : test_no_groups,
     "keep-groups" : test_keep_groups,
+    "additional-gids": test_additional_gids,
+    "umask": test_umask,
 }
 
 if __name__ == "__main__":
