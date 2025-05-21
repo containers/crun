@@ -606,6 +606,45 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "isfifo") == 0)
+    {
+      struct stat st;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'isfifo' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+      if (S_ISFIFO (st.st_mode))
+        exit (0);
+      else
+        exit (1);
+    }
+
+  if (strcmp (argv[1], "ischar") == 0)
+    {
+      struct stat st;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'ischar' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+      if (S_ISCHR (st.st_mode))
+        exit (0);
+      else
+        exit (1);
+    }
+
+  if (strcmp (argv[1], "isblock") == 0)
+    {
+      struct stat st;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'isblock' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+      if (S_ISBLK (st.st_mode))
+        exit (0);
+      else
+        exit (1);
+    }
+
   if (strcmp (argv[1], "owner") == 0)
     {
       struct stat st;
