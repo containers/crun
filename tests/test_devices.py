@@ -16,6 +16,8 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import subprocess
+import shutil
 from tests_utils import *
 
 def test_mode_device():
@@ -228,6 +230,64 @@ def test_trailing_slash_mknod_device():
         return -1
     return 0
 
+def test_net_devices():
+    if is_rootless():
+        return 77
+
+    ip_path = shutil.which("ip")
+    if ip_path is None:
+        sys.stderr.write("ip command not found\n")
+        return 77
+
+    current_netns = os.open("/proc/self/ns/net", os.O_RDONLY)
+    try:
+        os.unshare(os.CLONE_NEWNET)
+
+        for specify_broadcast in [True, False]:
+            for specify_name in [True, False]:
+                subprocess.run(["ip", "link", "add", "testdevice", "type", "dummy"])
+                if specify_broadcast:
+                    subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "brd", "10.1.2.254", "dev", "testdevice"])
+                else:
+                    subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "dev", "testdevice"])
+
+                conf = base_config()
+                add_all_namespaces(conf)
+                if specify_name:
+                    conf['process']['args'] = ['/init', 'ip', 'newtestdevice']
+                    conf['linux']['netDevices'] = {
+                        "testdevice": {
+                            "name": "newtestdevice"
+                        }
+                    }
+                else:
+                    conf['process']['args'] = ['/init', 'ip', 'testdevice']
+                    conf['linux']['netDevices'] = {
+                        "testdevice": {
+                        }
+                    }
+
+                try:
+                    out = run_and_get_output(conf)
+                    if "address: 10.1.2.3" not in out[0]:
+                        sys.stderr.write("address not found in output\n")
+                        return 1
+                    if specify_broadcast:
+                        if "broadcast: 10.1.2.254" not in out[0]:
+                            sys.stderr.write("broadcast address not found in output\n")
+                            return 1
+                    else:
+                        if "broadcast" in out[0]:
+                            sys.stderr.write("broadcast address found in output\n")
+                            return 1
+                except Exception as e:
+                    return -1
+    finally:
+        os.setns(current_netns, os.CLONE_NEWNET)
+        os.close(current_netns)
+
+    return 0
+
 all_tests = {
     "owner-device" : test_owner_device,
     "deny-devices" : test_deny_devices,
@@ -237,6 +297,7 @@ all_tests = {
     "mode-device"  : test_mode_device,
     "create-or-bind-mount-device" : test_create_or_bind_mount_device,
     "handle-device-trailing-slash" : test_trailing_slash_mknod_device,
+    "net-devices" : test_net_devices,
 }
 
 if __name__ == "__main__":

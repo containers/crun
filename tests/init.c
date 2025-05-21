@@ -38,6 +38,12 @@
 #include <sys/types.h>
 #include <sched.h>
 
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+
 #ifdef HAVE_LINUX_IOPRIO_H
 #  include <linux/ioprio.h>
 #endif
@@ -374,6 +380,99 @@ memhog (int megabytes)
   return 0;
 }
 
+#define BUFFER_SIZE 8192
+
+static void
+dump_net_interface (const char *ifname)
+{
+  struct sockaddr_nl sa;
+  struct nlmsghdr *nlh;
+  struct ifaddrmsg *ifa;
+  char *buffer;
+  int ifindex;
+  int sock;
+
+  ifindex = if_nametoindex (ifname);
+  if (ifindex == 0)
+    error (EXIT_FAILURE, errno, "if_nametoindex `%s`", ifname);
+
+  sock = socket (AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+  if (sock < 0)
+    error (EXIT_FAILURE, errno, "socket");
+
+  buffer = malloc (BUFFER_SIZE);
+  if (buffer == NULL)
+    error (EXIT_FAILURE, errno, "malloc");
+
+  sa.nl_family = AF_NETLINK;
+
+  if (bind (sock, (struct sockaddr *) &sa, sizeof (sa)) < 0)
+    error (EXIT_FAILURE, errno, "bind");
+
+  nlh = (struct nlmsghdr *) buffer;
+
+  memset (buffer, 0, BUFFER_SIZE);
+  nlh->nlmsg_len = NLMSG_LENGTH (sizeof (struct ifaddrmsg));
+  nlh->nlmsg_type = RTM_GETADDR;
+  nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+  nlh->nlmsg_seq = 1;
+
+  ifa = NLMSG_DATA (nlh);
+  ifa->ifa_family = AF_INET;
+
+  if (send (sock, nlh, nlh->nlmsg_len, 0) < 0)
+    error (EXIT_FAILURE, errno, "send");
+
+  while (1)
+    {
+      ssize_t len = recv (sock, buffer, BUFFER_SIZE, 0);
+      if (len < 0)
+        error (EXIT_FAILURE, errno, "recv");
+
+      for (nlh = (struct nlmsghdr *) buffer; NLMSG_OK (nlh, len); nlh = NLMSG_NEXT (nlh, len))
+        {
+          struct rtattr *rta[IFA_MAX + 1] = {};
+          struct rtattr *rta_it;
+          int rta_len;
+
+          if (nlh->nlmsg_type == NLMSG_DONE)
+            goto done;
+          if (nlh->nlmsg_type == NLMSG_ERROR)
+            error (EXIT_FAILURE, 0, "netlink error");
+
+          ifa = NLMSG_DATA (nlh);
+          if (ifa->ifa_index != ifindex)
+            continue;
+
+          rta_it = IFA_RTA (ifa);
+          rta_len = IFA_PAYLOAD (nlh);
+
+          while (RTA_OK (rta_it, rta_len))
+            {
+              if (rta_it->rta_type <= IFA_MAX)
+                rta[rta_it->rta_type] = rta_it;
+              rta_it = RTA_NEXT (rta_it, rta_len);
+            }
+
+          if (rta[IFA_ADDRESS])
+            {
+              char addr[INET_ADDRSTRLEN];
+              inet_ntop (AF_INET, RTA_DATA (rta[IFA_LOCAL]), addr, sizeof (addr));
+              printf ("address: %s/%d\n", addr, ifa->ifa_prefixlen);
+            }
+          if (rta[IFA_BROADCAST])
+            {
+              char bcast[INET_ADDRSTRLEN];
+              inet_ntop (AF_INET, RTA_DATA (rta[IFA_BROADCAST]), bcast, sizeof (bcast));
+              printf ("broadcast: %s\n", bcast);
+            }
+        }
+    }
+done:
+  close (sock);
+  free (buffer);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -585,6 +684,14 @@ main (int argc, char **argv)
       fd = atoi (argv[2]);
       printf (isatty (fd) ? "true" : "false");
       return 0;
+    }
+
+  if (strcmp (argv[1], "ip") == 0)
+    {
+      if (argc < 2)
+        error (EXIT_FAILURE, 0, "'ip' requires an argument");
+      dump_net_interface (argv[2]);
+      exit (EXIT_SUCCESS);
     }
 
   if (strcmp (argv[1], "write") == 0)

@@ -52,6 +52,7 @@
 #include "scheduler.h"
 #include "intelrdt.h"
 #include "io_priority.h"
+#include "net_device.h"
 
 #include <sys/socket.h>
 #include <libgen.h>
@@ -6058,4 +6059,34 @@ libcrun_destroy_runtime_mounts (libcrun_container_t *container arg_unused, libcr
   args.len = len;
 
   return run_in_container_namespace (status, do_umount_in_a_container, &args, err);
+}
+
+int
+libcrun_move_network_devices (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  cleanup_close int netns_fd = -1;
+  char ns_file[64];
+  size_t i;
+  int ret;
+
+  if (def == NULL || def->linux == NULL || def->linux->net_devices == NULL)
+    return 0;
+
+  snprintf (ns_file, sizeof (ns_file), "/proc/%d/ns/net", pid);
+
+  netns_fd = open (ns_file, O_RDONLY);
+  if (UNLIKELY (netns_fd < 0))
+    return crun_make_error (err, errno, "open `%s`", ns_file);
+
+  for (i = 0; i < def->linux->net_devices->len; i++)
+    {
+      const char *new_name = def->linux->net_devices->values[i]->name ?: def->linux->net_devices->keys[i];
+
+      ret = move_network_device (def->linux->net_devices->keys[i], new_name, netns_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
 }

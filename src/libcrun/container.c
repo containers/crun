@@ -2633,6 +2633,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  ret = libcrun_move_network_devices (container, pid, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
   /* sync send own pid.  */
   ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
   if (UNLIKELY (ret != sizeof (pid)))
@@ -4171,6 +4175,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   (*info)->linux.selinux.enabled = true;
 
   (*info)->linux.intel_rdt.enabled = true;
+
+  (*info)->linux.net_devices.enabled = true;
 
   // Put the values for mount extensions
   (*info)->linux.mount_ext.idmap.enabled = true;
