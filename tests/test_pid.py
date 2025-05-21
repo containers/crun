@@ -39,9 +39,35 @@ def test_pid_user():
         return 0
     return -1
 
+def test_pid_host_namespace():
+    if is_rootless():
+        return 77
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    # No PID namespace is added.  Expect PID to not be 1.
+    out, _ = run_and_get_output(conf)
+    pid = parse_proc_status(out)['Pid']
+    if pid != "1":
+        return 0
+    return -1
+
+def test_pid_ppid_is_zero():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+    add_all_namespaces(conf)
+    out, _ = run_and_get_output(conf)
+    status = parse_proc_status(out)
+    pid = status.get('Pid')
+    ppid = status.get('PPid')
+    if pid == "1" and ppid == "0":
+        return 0
+    return -1
+
 all_tests = {
     "pid" : test_pid,
     "pid-user" : test_pid_user,
+    "pid-host-namespace" : test_pid_host_namespace,
+    "pid-ppid-is-zero" : test_pid_ppid_is_zero,
 }
 
 if __name__ == "__main__":
