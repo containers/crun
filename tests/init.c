@@ -789,7 +789,11 @@ main (int argc, char **argv)
           while (ret < 0 && errno == EINTR);
           if (ret < 0)
             return ret;
-          return status;
+          if (WIFEXITED (status))
+            return WEXITSTATUS (status);
+          if (WIFSIGNALED (status))
+            return 128 + WTERMSIG (status);
+          return EXIT_FAILURE;
         }
       return ls (argv[2]);
     }
