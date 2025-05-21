@@ -251,9 +251,9 @@ cat (char *file)
 }
 
 static int
-open_only (char *file)
+open_only (char *file, int flags)
 {
-  int fd = open (file, O_RDONLY);
+  int fd = open (file, flags);
   if (fd >= 0)
     {
       close (fd);
@@ -541,7 +541,14 @@ main (int argc, char **argv)
     {
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'open' requires an argument");
-      return open_only (argv[2]);
+      return open_only (argv[2], O_RDONLY);
+    }
+
+  if (strcmp (argv[1], "openwronly") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'openwronly' requires an argument");
+      return open_only (argv[2], O_WRONLY);
     }
 
   if (strcmp (argv[1], "access") == 0)
@@ -597,6 +604,45 @@ main (int argc, char **argv)
           break;
         }
       return 0;
+    }
+
+  if (strcmp (argv[1], "isfifo") == 0)
+    {
+      struct stat st;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'isfifo' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+      if (S_ISFIFO (st.st_mode))
+        exit (0);
+      else
+        exit (1);
+    }
+
+  if (strcmp (argv[1], "ischar") == 0)
+    {
+      struct stat st;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'ischar' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+      if (S_ISCHR (st.st_mode))
+        exit (0);
+      else
+        exit (1);
+    }
+
+  if (strcmp (argv[1], "isblock") == 0)
+    {
+      struct stat st;
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'isblock' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+      if (S_ISBLK (st.st_mode))
+        exit (0);
+      else
+        exit (1);
     }
 
   if (strcmp (argv[1], "owner") == 0)
@@ -789,7 +835,11 @@ main (int argc, char **argv)
           while (ret < 0 && errno == EINTR);
           if (ret < 0)
             return ret;
-          return status;
+          if (WIFEXITED (status))
+            return WEXITSTATUS (status);
+          if (WIFSIGNALED (status))
+            return 128 + WTERMSIG (status);
+          return EXIT_FAILURE;
         }
       return ls (argv[2]);
     }
