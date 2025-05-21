@@ -159,39 +159,28 @@ libkrun_read_vm_config (yajl_val *config_tree, libcrun_error_t *err)
 }
 
 static int
-libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, libcrun_error_t *err)
+libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val *config_tree, libcrun_error_t *err)
 {
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
-  struct parser_context ctx = { 0, stderr };
-  cleanup_free char *config = NULL;
-  yajl_val config_tree = NULL;
   yajl_val cpus = NULL;
   yajl_val ram_mib = NULL;
   const char *path_cpus[] = { "cpus", (const char *) 0 };
   const char *path_ram_mib[] = { "ram_mib", (const char *) 0 };
   int ret;
 
-  if (access (KRUN_VM_FILE, F_OK) != 0)
+  if (*config_tree == NULL)
     return 0;
-
-  ret = read_all_file (KRUN_VM_FILE, &config, NULL, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = parse_json_file (&config_tree, config, &ctx, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   /* Try to configure an external kernel. If the configuration file doesn't
    * specify a kernel, libkrun automatically fall back to using libkrunfw,
    * if the library is present and was loaded while creating the context.
    */
-  ret = libkrun_configure_kernel (ctx_id, handle, &config_tree, err);
+  ret = libkrun_configure_kernel (ctx_id, handle, config_tree, err);
   if (UNLIKELY (ret))
     return ret;
 
-  cpus = yajl_tree_get (config_tree, path_cpus, yajl_t_number);
-  ram_mib = yajl_tree_get (config_tree, path_ram_mib, yajl_t_number);
+  cpus = yajl_tree_get (*config_tree, path_cpus, yajl_t_number);
+  ram_mib = yajl_tree_get (*config_tree, path_ram_mib, yajl_t_number);
   /* Both cpus and ram_mib must be present at the same time */
   if (cpus == NULL || ram_mib == NULL || ! YAJL_IS_INTEGER (cpus) || ! YAJL_IS_INTEGER (ram_mib))
     return 0;
@@ -285,7 +274,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         error (EXIT_FAILURE, -ret, "could not set krun root");
     }
 
-  ret = libkrun_configure_vm (ctx_id, handle, &configured, &err);
+  ret = libkrun_configure_vm (ctx_id, handle, &configured, &config_tree, &err);
   if (UNLIKELY (ret))
     {
       libcrun_error_t *tmp_err = &err;
