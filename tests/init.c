@@ -251,9 +251,9 @@ cat (char *file)
 }
 
 static int
-open_only (char *file)
+open_only (char *file, int flags)
 {
-  int fd = open (file, O_RDONLY);
+  int fd = open (file, flags);
   if (fd >= 0)
     {
       close (fd);
@@ -541,7 +541,14 @@ main (int argc, char **argv)
     {
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'open' requires an argument");
-      return open_only (argv[2]);
+      return open_only (argv[2], O_RDONLY);
+    }
+
+  if (strcmp (argv[1], "openwronly") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'openwronly' requires an argument");
+      return open_only (argv[2], O_WRONLY);
     }
 
   if (strcmp (argv[1], "access") == 0)
