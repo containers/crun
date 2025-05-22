@@ -59,6 +59,8 @@
  */
 #define KRUN_VM_FILE "/.krun_vm.json"
 
+#define KRUN_FLAVOR_SEV "sev"
+
 struct krun_config
 {
   void *handle;
@@ -200,6 +202,60 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
 }
 
 static int
+libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *err)
+{
+  int ret, sev_indicated = 0;
+  const char *path_flavor[] = { "flavor", (const char *) 0 };
+  struct krun_config *kconf = (struct krun_config *) cookie;
+  yajl_val val_flavor = NULL;
+  char *flavor = NULL;
+
+  // Read if the SEV flavor was indicated in the krun VM config.
+  val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
+  if (val_flavor != NULL && YAJL_IS_STRING (val_flavor))
+    {
+      flavor = YAJL_GET_STRING (val_flavor);
+
+      // The SEV flavor will be used if the krun VM config indicates to use SEV
+      // within the "flavor" field.
+      sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
+    }
+
+  // To maintain backward compatibility, also use the SEV flavor if the
+  // KRUN_SEV_FILE was found.
+  sev_indicated |= access (KRUN_SEV_FILE, F_OK) == 0;
+
+  if (sev_indicated)
+    {
+      if (kconf->handle_sev == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
+
+      // We no longer need the libkrun handle.
+      ret = dlclose (kconf->handle);
+      if (UNLIKELY (ret != 0))
+        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+
+      kconf->handle = kconf->handle_sev;
+      kconf->ctx_id = kconf->ctx_id_sev;
+      kconf->sev = true;
+    }
+  else
+    {
+      if (kconf->handle == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
+
+      // We no longer need the libkrun-sev handle.
+      ret = dlclose (kconf->handle_sev);
+      if (UNLIKELY (ret != 0))
+        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+
+      kconf->sev = false;
+    }
+
+  return 0;
+}
+
+static int
 libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname, char *const argv[])
 {
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -222,22 +278,12 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "libkrun VM config exists, but unable to parse");
 
-  if (access (KRUN_SEV_FILE, F_OK) == 0)
-    {
-      if (kconf->handle_sev == NULL)
-        error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
-      handle = kconf->handle_sev;
-      ctx_id = kconf->ctx_id_sev;
-      kconf->sev = true;
-    }
-  else
-    {
-      if (kconf->handle == NULL)
-        error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
-      handle = kconf->handle;
-      ctx_id = kconf->ctx_id;
-      kconf->sev = false;
-    }
+  ret = libkrun_configure_flavor (cookie, &config_tree, &err);
+  if (UNLIKELY (ret < 0))
+    error (EXIT_FAILURE, -ret, "unable to configure libkrun flavor");
+
+  handle = kconf->handle;
+  ctx_id = kconf->ctx_id;
 
   krun_set_log_level = dlsym (handle, "krun_set_log_level");
   krun_start_enter = dlsym (handle, "krun_start_enter");
@@ -483,12 +529,6 @@ libkrun_unload (void *cookie, libcrun_error_t *err)
           r = dlclose (kconf->handle);
           if (UNLIKELY (r != 0))
             return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
-        }
-      if (kconf->handle_sev != NULL)
-        {
-          r = dlclose (kconf->handle_sev);
-          if (UNLIKELY (r != 0))
-            return crun_make_error (err, 0, "could not unload handle_sev: `%s`", dlerror ());
         }
     }
   return 0;
