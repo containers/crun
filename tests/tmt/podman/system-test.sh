@@ -14,3 +14,4 @@ rpm -q conmon containers-common crun podman podman-tests
 bats -t /usr/share/podman/test/system/030-run.bats
 bats -t /usr/share/podman/test/system/075-exec.bats
 bats -t /usr/share/podman/test/system/280-update.bats
+bats -t /usr/share/podman/test/system/520-checkpoint.bats
