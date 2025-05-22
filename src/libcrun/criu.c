@@ -418,7 +418,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   cleanup_wrapper struct libcriu_wrapper_s *wrapper = NULL;
   cleanup_free char *descriptors_path = NULL;
   cleanup_free char *freezer_path = NULL;
-  cleanup_free char *rootfs = NULL;
+  cleanup_free char *path = NULL;
   cleanup_close int image_fd = -1;
   cleanup_close int work_fd = -1;
   int cgroup_mode;
@@ -557,13 +557,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return crun_error_wrap (err, "error saving CRIU descriptors file");
 
-  ret = append_paths (&rootfs, err, status->bundle, status->rootfs, NULL);
+  ret = append_paths (&path, err, status->bundle, status->rootfs, NULL);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcriu_wrapper->criu_set_root (rootfs);
+  ret = libcriu_wrapper->criu_set_root (path);
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, 0, "error setting CRIU root to `%s`", rootfs);
+    return crun_make_error (err, 0, "error setting CRIU root to `%s`", path);
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
