@@ -586,10 +586,16 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
           char buf[PATH_MAX];
           const char *dest_in_root;
 
-          dest_in_root = chroot_realpath (rootfs, def->mounts[i]->destination, buf);
+          dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
           if (UNLIKELY (dest_in_root == NULL))
-            return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
-          dest_in_root += strlen (rootfs);
+            {
+              if (errno != ENOENT)
+                return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
+              else
+                dest_in_root = def->mounts[i]->destination;
+            }
+          else
+            dest_in_root += strlen (status->rootfs);
 
           ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, dest_in_root);
           if (UNLIKELY (ret < 0))
@@ -793,7 +799,6 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_close int inherit_new_pid_fd = -1;
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
-  cleanup_free char *rootfs = NULL;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_close int work_fd = -1;
   int ret_out;
@@ -904,9 +909,6 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     }
 
   /* Tell CRIU about external bind mounts. */
-  ret = append_paths (&rootfs, err, status->bundle, status->rootfs, NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
   for (i = 0; i < def->mounts_len; i++)
     {
       if (is_bind_mount (def->mounts[i], NULL))
@@ -915,10 +917,15 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           char buf[PATH_MAX];
           const char *dest_in_root;
 
-          dest_in_root = chroot_realpath (rootfs, def->mounts[i]->destination, buf);
+          dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
           if (UNLIKELY (dest_in_root == NULL))
-            return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
-          dest_in_root += strlen (rootfs);
+            {
+              if (errno != ENOENT)
+                return crun_make_error (err, errno, "unable to resolve external bind mount destination `%s` under rootfs", def->mounts[i]->destination);
+              dest_in_root = def->mounts[i]->destination;
+            }
+          else
+            dest_in_root += strlen (status->rootfs);
 
           ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, def->mounts[i]->source);
           if (UNLIKELY (ret < 0))
