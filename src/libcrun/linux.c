@@ -67,6 +67,7 @@
 #include <linux/rtnetlink.h>
 #include <sched.h>
 #include <linux/sched.h>
+#include <linux/magic.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -2053,6 +2054,26 @@ get_force_cgroup_v1_annotation (libcrun_container_t *container)
 }
 
 static int
+check_valid_no_follow_file_system (int fd, const char *destination, libcrun_error_t *err)
+{
+  struct statfs sfs;
+
+  int ret = fstatfs (fd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs `%s`", destination);
+
+  switch (sfs.f_type)
+    {
+    case PROC_SUPER_MAGIC:
+    case SYSFS_MAGIC:
+    case DEVPTS_SUPER_MAGIC:
+      return crun_make_error (err, 0, "override of the mount destination `/%s` is not allowed", destination);
+    }
+
+  return 0;
+}
+
+static int
 do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -2127,14 +2148,27 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
               path = proc_buf;
             }
 
-          ret = get_file_type (&src_mode, (extra_flags & OPTION_COPY_SYMLINK) ? true : false, path);
+          if ((extra_flags & OPTION_COPY_SYMLINK) && (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_DEST_NOFOLLOW)))
+            return crun_make_error (err, 0, "`copy-symlink` is mutually exclusive with `src-nofollow` and `dest-nofollow`");
+
+          /* Do not resolve the symlink only when src-nofollow and copy-symlink are used.  */
+          ret = get_file_type (&src_mode, (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_COPY_SYMLINK)) ? true : false, path);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "cannot stat `%s`", path);
+
+          if (S_ISLNK (src_mode) && (extra_flags & OPTION_DEST_NOFOLLOW) && source_mountfd < 0)
+            {
+              ret = get_bind_mount (AT_FDCWD, def->mounts[i]->source, true, true, extra_flags & OPTION_SRC_NOFOLLOW, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              source_mountfd = ret;
+            }
 
           data = append_mode_if_missing (data, "mode=1755");
         }
 
-      if (S_ISLNK (src_mode))
+      if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
         {
           cleanup_free char *target = NULL;
           ssize_t len;
@@ -2182,12 +2216,26 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
         {
           bool is_dir = S_ISDIR (src_mode);
 
-          /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (extra_flags & OPTION_DEST_NOFOLLOW)
+            {
+              /* If dest-nofollow is specified, expect the target to exist.  */
+              ret = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_PATH | O_NOFOLLOW | O_CLOEXEC, 0, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              targetfd = ret;
 
-          targetfd = ret;
+              ret = check_valid_no_follow_file_system (targetfd, target, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else
+            {
+              /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
+              ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              targetfd = ret;
+            }
         }
 
       if (extra_flags & OPTION_TMPCOPYUP)
