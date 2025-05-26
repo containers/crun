@@ -370,7 +370,7 @@ static int seal_execfd(int *fd, int fdtype)
 static int try_bindfd_mount_api(void)
 {
 	libcrun_error_t err;
-	int mountfd = get_bind_mount (-1, "/proc/self/exe", false, true, &err);
+	int mountfd = get_bind_mount (-1, "/proc/self/exe", false, true, false, &err);
 	if (mountfd < 0) {
 		crun_error_release (&err);
 		return -1;

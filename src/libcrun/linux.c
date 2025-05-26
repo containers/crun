@@ -435,7 +435,7 @@ do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t cle
 }
 
 int
-get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun_error_t *err)
+get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool nofollow, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   struct mount_attr_s attr = {
@@ -450,7 +450,7 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC
-                                        | OPEN_TREE_CLONE | recursive_flag);
+                                        | OPEN_TREE_CLONE | recursive_flag | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
   if (UNLIKELY (open_tree_fd < 0))
     return crun_make_error (err, errno, "open_tree `%s`", src);
 
@@ -1201,7 +1201,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                       return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, false, err);
                     }
 
-                  mountfd = get_bind_mount (-1, "/sys", true, true, err);
+                  mountfd = get_bind_mount (-1, "/sys", true, true, false, err);
                   if (UNLIKELY (mountfd < 0))
                     return mountfd;
 
@@ -4203,7 +4203,7 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chown `%s`", device->path);
 
-  return get_bind_mount (devs_dirfd, name, false, false, err);
+  return get_bind_mount (devs_dirfd, name, false, false, false, err);
 }
 
 static int
@@ -4257,7 +4257,7 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
           if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive))
             {
               /* If the bind mount failed, do not fail here, but attempt to create it from within the container.  */
-              mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, err);
+              mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, false, err);
               if (UNLIKELY (mount_fd < 0))
                 crun_error_release (err);
             }
@@ -6014,7 +6014,7 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
 
           if (is_bind_mount (mounts[i], &recursive))
             {
-              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, err);
+              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, false, err);
               if (UNLIKELY (fds->fds[i] < 0))
                 return fds->fds[i];
             }

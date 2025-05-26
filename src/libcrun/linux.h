@@ -149,7 +149,7 @@ int libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *contain
 
 int libcrun_safe_chdir (const char *path, libcrun_error_t *err);
 
-int get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun_error_t *err);
+int get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool nofollow, libcrun_error_t *err);
 
 bool is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive);
 
