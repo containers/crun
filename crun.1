@@ -661,6 +661,16 @@ destination instead of attempting a mount that would resolve the
 symlink itself.  If the destination already exists and it is not a
 symlink with the expected content, crun will return an error.
 
+.SH dest-nofollow
+When this option is specified for a bind mount, and the destination of
+the bind mount is a symbolic link, \fBcrun\fR will mount the symbolic link
+itself at the target destination.
+
+.SH src-nofollow
+When this option is specified for a bind mount, and the source of the
+bind mount is a symbolic link, \fBcrun\fR will use the symlink itself
+rather than the file or directory the symbolic link points to.
+
 .SH r$FLAG mount options
 If a \fBr$FLAG\fR mount option is specified then the flag \fB$FLAG\fR is set
 recursively for each children mount.

@@ -703,6 +703,129 @@ def test_mount_help():
     
     return 0
 
+def test_bind_mount_symlink_nofollow():
+    root = get_tests_root()
+    file_target = os.path.join(root, "a-file")
+    symlink = os.path.join(root, "a-symlink")
+    target_content = file_target
+    file_target_content = "inside-the-file"
+
+    with open(file_target, "w+") as f:
+        f.write(file_target_content)
+
+    os.symlink(target_content, symlink)
+
+    def prepare_rootfs(rootfs):
+        path = os.path.join(rootfs, "target")
+        os.symlink("point-to-nowhere", path)
+
+    for userns in [True, False]:
+        for src_nofollow in [True, False]:
+            conf = base_config()
+            add_all_namespaces(conf, userns=userns)
+
+            if userns:
+                getMapping = lambda x : [
+                    {
+                        "containerID": 0,
+                        "hostID": x,
+                        "size": 1
+                    }
+                ]
+                conf['linux']['uidMappings'] = getMapping(os.geteuid())
+                conf['linux']['gidMappings'] = getMapping(os.getegid())
+
+            if src_nofollow:
+                options = ["bind", "dest-nofollow", "src-nofollow"]
+                conf['process']['args'] = ['/init', 'readlink', '/target']
+                expected = target_content
+            else:
+                options = ["bind", "dest-nofollow"]
+                conf['process']['args'] = ['/init', 'cat', '/target']
+                expected = file_target_content
+
+            mount_opt = {"destination": "/target", "type": "bind", "source": symlink, "options": options}
+            conf['mounts'].append(mount_opt)
+
+            try:
+                out, _ = run_and_get_output(conf, hide_stderr=True,callback_prepare_rootfs=prepare_rootfs)
+                sys.stderr.write("got output %s with configuration userns=%s, src-nofollow=%s\n" % (out, userns, src_nofollow))
+                if expected not in out:
+                    return -1
+            except Exception as e:
+                sys.stderr.write("error %s\n" % e)
+                return -1
+
+    return 0
+
+def test_bind_mount_symlink_nofollow_procfs():
+    root = get_tests_root()
+    symlink = os.path.join(root, "a-symlink")
+    os.symlink("does not matter", symlink)
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    options = ["bind", "dest-nofollow", "src-nofollow"]
+    conf['process']['args'] = ['/init', 'readlink', '/proc/self']
+
+    mount_opt = {"destination": "/proc/self", "type": "bind", "source": symlink, "options": options}
+    conf['mounts'].append(mount_opt)
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True,callback_prepare_rootfs=prepare_rootfs)
+        return -1
+    except Exception as e:
+        sys.stderr.write("error %s\n" % e)
+        return 0
+
+    return 0
+
+def test_bind_mount_file_nofollow():
+    root = get_tests_root()
+    target = os.path.join(root, "a-file")
+    target_content = "content-of-file"
+
+    with open(target, "w+") as f:
+        f.write(target_content)
+
+    def prepare_rootfs(rootfs):
+        path = os.path.join(rootfs, "symlink")
+        os.symlink("point-to-nowhere", path)
+
+    for userns in [True, False]:
+        for src_nofollow in [True, False]:
+            conf = base_config()
+            conf['process']['args'] = ['/init', 'cat', '/symlink']
+            add_all_namespaces(conf, userns=userns)
+
+            if userns:
+                getMapping = lambda x : [
+                    {
+                        "containerID": 0,
+                        "hostID": x,
+                        "size": 1
+                    }
+                ]
+                conf['linux']['uidMappings'] = getMapping(os.geteuid())
+                conf['linux']['gidMappings'] = getMapping(os.getegid())
+
+            if src_nofollow:
+                options = ["bind", "dest-nofollow", "src-nofollow"]
+            else:
+                options = ["bind", "dest-nofollow"]
+            mount_opt = {"destination": "/symlink", "type": "bind", "source": target, "options": options}
+            conf['mounts'].append(mount_opt)
+
+            try:
+                out, _ = run_and_get_output(conf, hide_stderr=True,callback_prepare_rootfs=prepare_rootfs)
+                sys.stderr.write("got output %s with configuration userns=%s, src-nofollow=%s\n" % (out, userns, src_nofollow))
+                if target_content not in out:
+                    return 1
+            except Exception as e:
+                sys.stderr.write("error %s\n" % e)
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -732,6 +855,9 @@ all_tests = {
     "mount-ro-cgroup": test_ro_cgroup,
     "mount-cgroup-without-netns": test_cgroup_mount_without_netns,
     "mount-copy-symlink": test_copy_symlink,
+    "mount-bind-mount-symlink-nofollow-procfs": test_bind_mount_symlink_nofollow_procfs,
+    "mount-bind-mount-symlink-nofollow": test_bind_mount_symlink_nofollow,
+    "mount-bind-mount-file-nofollow": test_bind_mount_file_nofollow,
     "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-help": test_mount_help,

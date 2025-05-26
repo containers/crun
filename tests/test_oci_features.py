@@ -106,6 +106,8 @@ def test_crun_features():
                 "defaults",
                 "async",
                 "rasync",
+                "dest-nofollow",
+                "src-nofollow",
                 "private",
                 "tmpcopyup",
                 "rexec",
