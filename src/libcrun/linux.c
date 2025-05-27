@@ -2336,8 +2336,7 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
 
   targetfd = ret;
 
-  int label_how = LABEL_MOUNT;
-  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, label_how, err);
+  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
