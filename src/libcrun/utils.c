@@ -299,6 +299,25 @@ crun_ensure_directory_at (int dirfd, const char *path, int mode, bool nofollow, 
 }
 
 static int
+check_fd_is_path (const char *path, int fd, const char *fdname, libcrun_error_t *err)
+{
+  proc_fd_path_t fdpath;
+  size_t path_len = strlen (path);
+  char link[PATH_MAX];
+  int ret;
+
+  get_proc_self_fd_path (fdpath, fd);
+  ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "readlink `%s`", fdname);
+
+  if (((size_t) ret) != path_len || memcmp (link, path, path_len))
+    return crun_make_error (err, 0, "target `%s` does not point to the directory `%s`", fdname, path);
+
+  return 0;
+}
+
+static int
 check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *fdname, libcrun_error_t *err)
 {
   proc_fd_path_t fdpath;
@@ -377,6 +396,23 @@ safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mod
   static bool openat2_supported = true;
   int ret;
 
+  if (is_empty_string (path))
+    {
+      cleanup_close int fd = -1;
+
+      fd = open (rootfs, flags, mode);
+      if (UNLIKELY (fd < 0))
+        return crun_make_error (err, errno, "open `%s`", rootfs);
+
+      ret = check_fd_is_path (rootfs, fd, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = fd;
+      fd = -1;
+      return ret;
+    }
+
   if (openat2_supported)
     {
     repeat:
@@ -449,7 +485,11 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
 
   /* Empty path, nothing to do.  */
   if (*path == '\0')
-    return 0;
+    {
+      if (do_open)
+        return open (dirpath, O_CLOEXEC | O_PATH, 0);
+      return 0;
+    }
 
   npath = xstrdup (path);
 
@@ -577,12 +617,12 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
 int
 crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, const char *path, int mode, libcrun_error_t *err)
 {
-  int fd;
+  int ret;
 
   /* If the file/dir already exists, just open it.  */
-  fd = safe_openat (dirfd, dirpath, path, O_PATH | O_CLOEXEC, 0, err);
-  if (LIKELY (fd >= 0))
-    return fd;
+  ret = safe_openat (dirfd, dirpath, path, O_PATH | O_CLOEXEC, 0, err);
+  if (LIKELY (ret >= 0))
+    return ret;
 
   crun_error_release (err);
   return crun_safe_ensure_at (true, dir, dirfd, dirpath, path, mode, MAX_READLINKS, err);
