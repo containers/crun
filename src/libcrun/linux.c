@@ -2067,6 +2067,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
   for (i = 0; i < def->mounts_len; i++)
     {
       const char *target = consume_slashes (def->mounts[i]->destination);
+      cleanup_close int source_mountfd = -1;
       cleanup_free char *data = NULL;
       char *type;
       char *source;
@@ -2079,6 +2080,9 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       bool is_sysfs_or_proc;
       uint64_t rec_clear = 0;
       uint64_t rec_set = 0;
+
+      if (mount_fds)
+        source_mountfd = get_and_reset (&(mount_fds->fds[i]));
 
       type = def->mounts[i]->type;
 
@@ -2117,9 +2121,9 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
           const char *path = def->mounts[i]->source;
 
           /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
-          if (mount_fds && mount_fds->fds[i] >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
+          if (source_mountfd >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
             {
-              get_proc_self_fd_path (proc_buf, mount_fds->fds[i]);
+              get_proc_self_fd_path (proc_buf, source_mountfd);
               path = proc_buf;
             }
 
@@ -2203,15 +2207,14 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
       /* Check if there is already a mount for the requested file system.  */
-      if (! mounted && mount_fds && mount_fds->fds[i] >= 0)
+      if (! mounted && source_mountfd >= 0)
         {
-          cleanup_close int mfd = get_and_reset (&(mount_fds->fds[i]));
 
-          ret = fs_move_mount_to (mfd, targetfd, NULL);
+          ret = fs_move_mount_to (source_mountfd, targetfd, NULL);
           if (LIKELY (ret == 0))
             {
               /* Force no MS_BIND flag to not attempt again the bind mount.  */
-              ret = do_mount (container, NULL, mfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
+              ret = do_mount (container, NULL, source_mountfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
               if (UNLIKELY (ret < 0))
                 return ret;
               mounted = true;
