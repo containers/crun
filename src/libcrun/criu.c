@@ -580,11 +580,15 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (is_bind_mount (def->mounts[i], NULL, NULL))
+      bool nofollow = false;
+      if (is_bind_mount (def->mounts[i], NULL, &nofollow))
         {
           /* We need to resolve mount destination inside container's root for CRIU to handle. */
           char buf[PATH_MAX];
           const char *dest_in_root;
+
+          if (nofollow)
+            return crun_make_error (err, 0, "CRIU does not support `src-nofollow` for bind mounts");
 
           dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
           if (UNLIKELY (dest_in_root == NULL))
@@ -729,6 +733,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
       char *dest = def->mounts[i]->destination;
       char *type = def->mounts[i]->type;
       cleanup_close int root_fd = -1;
+      bool nofollow = false;
       bool on_tmpfs = false;
       int is_dir = 1;
       size_t j;
@@ -757,8 +762,11 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
         continue;
 
       /* For bind mounts check if the source is a file or a directory. */
-      if (is_bind_mount (def->mounts[i], NULL, NULL))
+      if (is_bind_mount (def->mounts[i], NULL, &nofollow))
         {
+          if (nofollow)
+            return crun_make_error (err, 0, "CRIU does not support `src-nofollow` for bind mounts");
+
           is_dir = crun_dir_p (def->mounts[i]->source, false, err);
           if (UNLIKELY (is_dir < 0))
             return is_dir;
@@ -911,11 +919,15 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (is_bind_mount (def->mounts[i], NULL, NULL))
+      bool nofollow = false;
+      if (is_bind_mount (def->mounts[i], NULL, &nofollow))
         {
           /* We need to resolve mount destination inside container's root for CRIU to handle. */
           char buf[PATH_MAX];
           const char *dest_in_root;
+
+          if (nofollow)
+            return crun_make_error (err, 0, "CRIU does not support `src-nofollow` for bind mounts");
 
           dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
           if (UNLIKELY (dest_in_root == NULL))
