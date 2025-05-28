@@ -580,7 +580,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (is_bind_mount (def->mounts[i], NULL))
+      if (is_bind_mount (def->mounts[i], NULL, NULL))
         {
           /* We need to resolve mount destination inside container's root for CRIU to handle. */
           char buf[PATH_MAX];
@@ -757,7 +757,7 @@ prepare_restore_mounts (runtime_spec_schema_config_schema *def, char *root, libc
         continue;
 
       /* For bind mounts check if the source is a file or a directory. */
-      if (is_bind_mount (def->mounts[i], NULL))
+      if (is_bind_mount (def->mounts[i], NULL, NULL))
         {
           is_dir = crun_dir_p (def->mounts[i]->source, false, err);
           if (UNLIKELY (is_dir < 0))
@@ -911,7 +911,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   /* Tell CRIU about external bind mounts. */
   for (i = 0; i < def->mounts_len; i++)
     {
-      if (is_bind_mount (def->mounts[i], NULL))
+      if (is_bind_mount (def->mounts[i], NULL, NULL))
         {
           /* We need to resolve mount destination inside container's root for CRIU to handle. */
           char buf[PATH_MAX];

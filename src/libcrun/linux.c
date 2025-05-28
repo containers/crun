@@ -4004,9 +4004,13 @@ get_fd_map (libcrun_container_t *container)
 }
 
 bool
-is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
+is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive, bool *src_nofollow)
 {
+  bool ret = false;
   size_t i;
+
+  if (src_nofollow == NULL)
+    *src_nofollow = false;
 
   for (i = 0; i < mnt->options_len; i++)
     {
@@ -4014,16 +4018,28 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
         {
           if (recursive)
             *recursive = false;
-          return true;
+
+          ret = true;
+
+          /* if src_nofollow is not specified, or already found, shortcut.  */
+          if (src_nofollow == NULL || *src_nofollow)
+            break;
         }
       if (strcmp (mnt->options[i], "rbind") == 0)
         {
           if (recursive)
             *recursive = true;
-          return true;
+
+          ret = true;
+
+          /* if src_nofollow is not specified, or already found, shortcut.  */
+          if (src_nofollow == NULL || *src_nofollow)
+            break;
         }
+      if (src_nofollow && strcmp (mnt->options[i], "src-nofollow") == 0)
+        *src_nofollow = true;
     }
-  return false;
+  return ret;
 }
 
 static char *
@@ -4087,6 +4103,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   bool has_mappings;
   int ret;
   char *extra_msg = "";
+  bool nofollow = false;
 
   *out_fd = -1;
 
@@ -4123,9 +4140,9 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
-  if (is_bind_mount (mnt, &recursive_bind_mount))
+  if (is_bind_mount (mnt, &recursive_bind_mount, &nofollow))
     {
-      newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+      newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
       if (UNLIKELY (newfs_fd < 0))
         return crun_make_error (err, errno, "open `%s`", mnt->source);
     }
@@ -4251,16 +4268,17 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       for (i = 0; i < def->mounts_len; i++)
         {
           bool recursive = false;
+          bool nofollow = false;
           int mount_fd = -1;
 
           ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &mount_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
-          if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive))
+          if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive, &nofollow))
             {
               /* If the bind mount failed, do not fail here, but attempt to create it from within the container.  */
-              mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, false, err);
+              mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, nofollow, err);
               if (UNLIKELY (mount_fd < 0))
                 crun_error_release (err);
             }
@@ -6014,10 +6032,11 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
       if (fds->fds[i] < 0)
         {
           bool recursive = false;
+          bool nofollow = false;
 
-          if (is_bind_mount (mounts[i], &recursive))
+          if (is_bind_mount (mounts[i], &recursive, &nofollow))
             {
-              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, false, err);
+              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, nofollow, err);
               if (UNLIKELY (fds->fds[i] < 0))
                 return fds->fds[i];
             }
