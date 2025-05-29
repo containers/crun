@@ -321,6 +321,8 @@ fi
 
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
+AC_SEARCH_LIBS([log2], [m], [AC_DEFINE([HAVE_LOG2], 1, [Define if log2 is available])], [])
+
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
 AM_CONDITIONAL([LUA_BINDINGS], [test "x$with_lua_bindings" = "xyes"])
 AM_CONDITIONAL([CRIU_SUPPORT], [test "x$have_criu" = "xyes"])

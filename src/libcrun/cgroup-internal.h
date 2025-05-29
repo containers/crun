@@ -21,6 +21,11 @@
 #include "container.h"
 #include "utils.h"
 
+#include <stdint.h>
+#ifdef HAVE_LOG2
+#  include <math.h>
+#endif
+
 enum
 {
   CGROUP_MEMORY = 1 << 0,
@@ -76,8 +81,46 @@ int libcrun_cgroup_pause_unpause_path (const char *cgroup_path, const bool pause
 static inline uint64_t
 convert_shares_to_weight (uint64_t shares)
 {
-  /* convert linearly from 2-262144 to 1-10000.  */
-  return (1 + ((shares - 2) * 9999) / 262142);
+  /* The value of 0 means "unset".  */
+  if (shares == 0)
+    return 0;
+  if (shares < 2)
+    return 1;
+  if (shares > 262144)
+    return 10000;
+
+#ifdef HAVE_LOG2
+  /* Converts OCI shares (2-262144) to cgroup v2 cpu.weight (1-10000).
+     This uses the same formula as systemd, differing from the earlier linear conversion.
+     The result is clamped to ensure it falls within the valid weight range.  */
+
+  double l, exponent;
+
+  l = log2 ((double) shares);
+
+  /* Quadratic function which fits min, max, and default.  */
+  exponent = (l * l + 125 * l) / 612.0 - 7.0 / 34.0;
+
+  return (uint64_t) ceil (pow (10, exponent));
+#else
+  /* Simplified version if the math library is not present.  */
+
+  /* Split the interval in two segments making sure to map the minimum, default, and maximum value.  */
+  uint64_t weight;
+
+  if (shares < 1024)
+    {
+      /* Segment 1: Shares 2 -> 1024 maps to Weight 1 -> 100.  */
+      weight = (99ULL * shares + 824ULL) / 1022ULL;
+    }
+  else
+    {
+      /* Segment 2: Shares 1024 -> 262144 maps to Weight 100 -> 10000.  */
+      weight = (9900ULL * shares + 15974400ULL) / 261120ULL;
+    }
+
+  return weight;
+#endif
 }
 
 int initialize_cpuset_subsystem (const char *path, libcrun_error_t *err);
