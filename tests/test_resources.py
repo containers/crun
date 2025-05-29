@@ -291,13 +291,14 @@ def test_resources_cpu_weight_systemd():
             sys.stderr.write("# found wrong CPUWeight for the systemd scope\n")
             return 1
 
-        run_crun_command(['update', '--cpu-share', '4321', cid])
+        cpu_shares = 4321
+        run_crun_command(['update', '--cpu-share', str(cpu_shares), cid])
         # this is the expected cpu weight after the conversion from the CPUShares
-        expected_weight = "165"
+        expected_weight = str(max(1, min(10000, cpu_shares * 100 // 1024)))
 
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if expected_weight not in out:
-            sys.stderr.write("# found wrong CPUWeight %s for the container cgroup\n" % out)
+            sys.stderr.write("found wrong CPUWeight %s instead of %s for the container cgroup\n" % (out, expected_weight))
             return -1
 
         out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
