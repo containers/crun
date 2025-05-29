@@ -269,6 +269,41 @@ AS_IF([test "x$enable_criu" != "xno"], [
 
 ], [AC_MSG_NOTICE([CRIU support disabled per user request])])
 
+AC_MSG_CHECKING([for log2])
+AC_LINK_IFELSE([
+    AC_LANG_PROGRAM([
+        #include <math.h>
+        #include <stdlib.h>
+    ], [
+        double result = log2 ((double) rand ());
+        return (int) result;
+    ])
+], [
+    # log2 works without -lm (musl libc)
+    AC_MSG_RESULT([yes])
+    AC_DEFINE([HAVE_LOG2], [1], [Define if log2 is available])
+], [
+    # Try with -lm (glibc)
+    LIBS="$LIBS -lm"
+    AC_LINK_IFELSE([
+        AC_LANG_PROGRAM([
+            #include <math.h>
+            #include <stdlib.h>
+        ], [
+            double result = log2 ((double) rand ());
+            return (int) result;
+        ])
+    ], [
+        # log2 works with -lm
+        AC_MSG_RESULT([yes (with -lm)])
+        AC_DEFINE([HAVE_LOG2], [1], [Define if log2 is available])
+    ], [
+        # log2 not available - restore LIBS and fail
+        AC_MSG_RESULT([no])
+        AC_MSG_ERROR([*** log2 function is required but not found])
+    ])
+])
+
 FOUND_LIBS=$LIBS
 LIBS=""
 
