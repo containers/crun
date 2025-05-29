@@ -100,7 +100,7 @@ mono_load (void **cookie, libcrun_error_t *err)
 
   handle = dlopen ("libmono-native.so", RTLD_NOW);
   if (handle == NULL)
-    return crun_make_error (err, 0, "could not load `libmono-2.0.so`: `%s`", dlerror ());
+    return crun_make_error (err, 0, "could not load `libmono-native.so`: `%s`", dlerror ());
   *cookie = handle;
 
   return 0;
