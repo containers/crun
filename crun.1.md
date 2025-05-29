@@ -489,23 +489,24 @@ chown -R the_user.the_user /sys/fs/cgroup/systemd
 
 ## `run.oci.systemd.subgroup=SUBGROUP`
 
-Override the name for the systemd sub cgroup created under the systemd
-scope, so the final cgroup will be like:
+This configuration option allows you to define a sub-cgroup that will
+be created under a systemd-managed cgroup for your container.
+
+When SUBGROUP is specified, the complete cgroup path will follow this
+structure:
 
 ```
 /sys/fs/cgroup/$PATH/$SUBGROUP
 ```
 
-When it is set to the empty string, a sub cgroup is not created.
-
-If not specified, it defaults to `container` on cgroup v2, and to `""`
-on cgroup v1.
-
-e.g.
-
+If `SUBGROUP` is set to `container`, a typical path could be:
 ```
-/sys/fs/cgroup//system.slice/foo-352700.scope/container
+/sys/fs/cgroup/system.slice/foo-352700.scope/container
 ```
+
+If `SUBGROUP` is set to an empty string, no sub-cgroup will be
+created.  By default, this option is not configured, meaning no
+sub-cgroup is created unless explicitly set.
 
 ## `run.oci.delegate-cgroup=DELEGATED-CGROUP`
 
