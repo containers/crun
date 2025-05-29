@@ -73,11 +73,29 @@ is_rootless (libcrun_error_t *err)
 
 int libcrun_cgroup_pause_unpause_path (const char *cgroup_path, const bool pause, libcrun_error_t *err);
 
+#define CGROUP_WEIGHT_MIN ((uint64_t) 1)
+#define CGROUP_WEIGHT_DEFAULT ((uint64_t) 100)
+#define CGROUP_WEIGHT_MAX ((uint64_t) 10000)
+#define CGROUP_CPU_SHARES_DEFAULT ((uint64_t) 1024)
+
+static inline uint64_t
+clamp (uint64_t val, uint64_t min, uint64_t max)
+{
+  if (val < min)
+    return min;
+  if (val > max)
+    return max;
+  return val;
+}
+
 static inline uint64_t
 convert_shares_to_weight (uint64_t shares)
 {
-  /* convert linearly from 2-262144 to 1-10000.  */
-  return (1 + ((shares - 2) * 9999) / 262142);
+  /* Converts OCI shares (2-262144) to cgroup v2 cpu.weight (1-10000).
+     This uses the same formula as systemd, differing from the earlier linear conversion.
+     The result is clamped to ensure it falls within the valid weight range.  */
+  return clamp (shares * CGROUP_WEIGHT_DEFAULT / CGROUP_CPU_SHARES_DEFAULT,
+                CGROUP_WEIGHT_MIN, CGROUP_WEIGHT_MAX);
 }
 
 int initialize_cpuset_subsystem (const char *path, libcrun_error_t *err);
