@@ -145,7 +145,7 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
 #  ifndef STATIC
   wrapper->handle = dlopen ("libcriu.so.2", RTLD_NOW);
   if (wrapper->handle == NULL)
-    return crun_make_error (err, 0, "could not load `libcriu.so.2`");
+    return crun_make_error (err, 0, "could not load `libcriu.so.2`: `%s`", dlerror ());
 #  endif
 
   LOAD_CRIU_FUNCTION (criu_add_ext_mount, false);

@@ -454,7 +454,7 @@ main (int argc, char **argv)
     }
   /* Resolve all libcrun weak dependencies.  */
   if (dlopen ("libcrun.so", RTLD_GLOBAL | RTLD_DEEPBIND | RTLD_LAZY) == NULL)
-    error (EXIT_FAILURE, 0, "dlopen: %s", dlerror ());
+    error (EXIT_FAILURE, 0, "could not load `libcrun.so`: `%s`", dlerror ());
 #endif
 
   fill_handler_from_argv0 (argv[0], &arguments);
