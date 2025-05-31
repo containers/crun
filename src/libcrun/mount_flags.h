@@ -25,6 +25,8 @@ enum
   OPTION_RECURSIVE = (1 << 1),
   OPTION_IDMAP = (1 << 2),
   OPTION_COPY_SYMLINK = (1 << 3),
+  OPTION_SRC_NOFOLLOW = (1 << 4),
+  OPTION_DEST_NOFOLLOW = (1 << 5),
 };
 
 struct propagation_flags_s

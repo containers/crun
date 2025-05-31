@@ -48,14 +48,14 @@
 struct propagation_flags_s;
 enum
   {
-    TOTAL_KEYWORDS = 57,
+    TOTAL_KEYWORDS = 59,
     MIN_WORD_LENGTH = 2,
     MAX_WORD_LENGTH = 14,
     MIN_HASH_VALUE = 2,
-    MAX_HASH_VALUE = 74
+    MAX_HASH_VALUE = 79
   };
 
-/* maximum key range = 73, duplicates = 0 */
+/* maximum key range = 78, duplicates = 0 */
 
 #ifdef __GNUC__
 __inline
@@ -69,32 +69,32 @@ hash (register const char *str, register size_t len)
 {
   static const unsigned char asso_values[] =
     {
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75,  8, 29, 12,
-       3, 21,  0, 75, 31,  0, 75, 75, 15, 10,
-       0,  4, 16, 75,  0, 19,  8, 17, 26,  0,
-      16, 26, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75, 75, 75, 75, 75,
-      75, 75, 75, 75, 75, 75
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 24, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 11, 35,  9,
+       3, 20,  3, 80, 35,  0, 80, 80, 17, 17,
+       0,  4, 21, 80,  0,  9,  4, 25, 24,  0,
+      23, 33, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+      80, 80, 80, 80, 80, 80
     };
   register unsigned int hval = len;
 
@@ -138,100 +138,104 @@ static const struct propagation_flags_s wordlist[] =
     {"nodiratime", 0, MS_NODIRATIME, 0},
 #line 85 "src/libcrun/mount_flags.perf"
     {"rnodiratime", 0, MS_NODIRATIME, OPTION_RECURSIVE},
-#line 55 "src/libcrun/mount_flags.perf"
-    {"diratime", 1, MS_NODIRATIME, 0},
-#line 83 "src/libcrun/mount_flags.perf"
-    {"rnoatime", 0, MS_NOATIME, OPTION_RECURSIVE},
-#line 81 "src/libcrun/mount_flags.perf"
-    {"rnomand", 1, MS_MANDLOCK, OPTION_RECURSIVE},
-#line 82 "src/libcrun/mount_flags.perf"
-    {"ratime", 1, MS_NOATIME, OPTION_RECURSIVE},
-#line 80 "src/libcrun/mount_flags.perf"
-    {"rmand", 0, MS_MANDLOCK, OPTION_RECURSIVE},
-#line 66 "src/libcrun/mount_flags.perf"
-    {"rprivate", 0, MS_REC|MS_PRIVATE, 0},
-#line 51 "src/libcrun/mount_flags.perf"
-    {"mand", 0, MS_MANDLOCK, 0},
-#line 91 "src/libcrun/mount_flags.perf"
-    {"idmap", 0, 0, OPTION_IDMAP},
-#line 54 "src/libcrun/mount_flags.perf"
-    {"noatime", 0, MS_NOATIME, 0},
-#line 52 "src/libcrun/mount_flags.perf"
-    {"nomand", 1, MS_MANDLOCK, 0},
 #line 49 "src/libcrun/mount_flags.perf"
     {"dirsync", 0, MS_DIRSYNC, 0},
 #line 72 "src/libcrun/mount_flags.perf"
     {"rnosuid", 0, MS_NOSUID, OPTION_RECURSIVE},
-#line 53 "src/libcrun/mount_flags.perf"
-    {"atime", 1, MS_NOATIME, 0},
-#line 76 "src/libcrun/mount_flags.perf"
-    {"rnoexec", 0, MS_NOEXEC, OPTION_RECURSIVE},
-#line 44 "src/libcrun/mount_flags.perf"
-    {"nodev", 0, MS_NODEV, 0},
-#line 38 "src/libcrun/mount_flags.perf"
-    {"rbind", 0, MS_REC|MS_BIND, 0},
-#line 58 "src/libcrun/mount_flags.perf"
-    {"norelatime", 1, MS_RELATIME, 0},
-#line 37 "src/libcrun/mount_flags.perf"
-    {"bind", 0, MS_BIND, 0},
-#line 89 "src/libcrun/mount_flags.perf"
-    {"rnostrictatime", 1, MS_STRICTATIME, OPTION_RECURSIVE},
+#line 82 "src/libcrun/mount_flags.perf"
+    {"ratime", 1, MS_NOATIME, OPTION_RECURSIVE},
+#line 55 "src/libcrun/mount_flags.perf"
+    {"diratime", 1, MS_NODIRATIME, 0},
+#line 83 "src/libcrun/mount_flags.perf"
+    {"rnoatime", 0, MS_NOATIME, OPTION_RECURSIVE},
 #line 59 "src/libcrun/mount_flags.perf"
     {"strictatime", 0, MS_STRICTATIME, 0},
 #line 88 "src/libcrun/mount_flags.perf"
     {"rstrictatime", 0, MS_STRICTATIME, OPTION_RECURSIVE},
-#line 36 "src/libcrun/mount_flags.perf"
-    {"defaults", 0, 0, 0},
-#line 71 "src/libcrun/mount_flags.perf"
-    {"rsuid", 1, MS_NOSUID, OPTION_RECURSIVE},
-#line 50 "src/libcrun/mount_flags.perf"
-    {"remount", 0, MS_REMOUNT, 0},
-#line 41 "src/libcrun/mount_flags.perf"
-    {"suid", 1, MS_NOSUID, 0},
+#line 54 "src/libcrun/mount_flags.perf"
+    {"noatime", 0, MS_NOATIME, 0},
+#line 89 "src/libcrun/mount_flags.perf"
+    {"rnostrictatime", 1, MS_STRICTATIME, OPTION_RECURSIVE},
+#line 81 "src/libcrun/mount_flags.perf"
+    {"rnomand", 1, MS_MANDLOCK, OPTION_RECURSIVE},
+#line 66 "src/libcrun/mount_flags.perf"
+    {"rprivate", 0, MS_REC|MS_PRIVATE, 0},
 #line 60 "src/libcrun/mount_flags.perf"
     {"nostrictatime", 1, MS_STRICTATIME, 0},
-#line 86 "src/libcrun/mount_flags.perf"
-    {"rrelatime", 0, MS_RELATIME, OPTION_RECURSIVE},
-#line 42 "src/libcrun/mount_flags.perf"
-    {"nosuid", 0, MS_NOSUID, 0},
-#line 46 "src/libcrun/mount_flags.perf"
-    {"noexec", 0, MS_NOEXEC, 0},
+#line 76 "src/libcrun/mount_flags.perf"
+    {"rnoexec", 0, MS_NOEXEC, OPTION_RECURSIVE},
+#line 44 "src/libcrun/mount_flags.perf"
+    {"nodev", 0, MS_NODEV, 0},
+#line 80 "src/libcrun/mount_flags.perf"
+    {"rmand", 0, MS_MANDLOCK, OPTION_RECURSIVE},
+#line 58 "src/libcrun/mount_flags.perf"
+    {"norelatime", 1, MS_RELATIME, 0},
+#line 51 "src/libcrun/mount_flags.perf"
+    {"mand", 0, MS_MANDLOCK, 0},
+#line 91 "src/libcrun/mount_flags.perf"
+    {"idmap", 0, 0, OPTION_IDMAP},
+#line 53 "src/libcrun/mount_flags.perf"
+    {"atime", 1, MS_NOATIME, 0},
+#line 52 "src/libcrun/mount_flags.perf"
+    {"nomand", 1, MS_MANDLOCK, 0},
+#line 71 "src/libcrun/mount_flags.perf"
+    {"rsuid", 1, MS_NOSUID, OPTION_RECURSIVE},
+#line 38 "src/libcrun/mount_flags.perf"
+    {"rbind", 0, MS_REC|MS_BIND, 0},
+#line 41 "src/libcrun/mount_flags.perf"
+    {"suid", 1, MS_NOSUID, 0},
+#line 37 "src/libcrun/mount_flags.perf"
+    {"bind", 0, MS_BIND, 0},
 #line 64 "src/libcrun/mount_flags.perf"
     {"rslave", 0, MS_REC|MS_SLAVE, 0},
-#line 65 "src/libcrun/mount_flags.perf"
-    {"private", 0, MS_PRIVATE, 0},
+#line 42 "src/libcrun/mount_flags.perf"
+    {"nosuid", 0, MS_NOSUID, 0},
+#line 36 "src/libcrun/mount_flags.perf"
+    {"defaults", 0, 0, 0},
+#line 86 "src/libcrun/mount_flags.perf"
+    {"rrelatime", 0, MS_RELATIME, OPTION_RECURSIVE},
 #line 77 "src/libcrun/mount_flags.perf"
     {"rsync", 0, MS_SYNCHRONOUS, OPTION_RECURSIVE},
-#line 57 "src/libcrun/mount_flags.perf"
-    {"relatime", 0, MS_RELATIME, 0},
+#line 50 "src/libcrun/mount_flags.perf"
+    {"remount", 0, MS_REMOUNT, 0},
+#line 94 "src/libcrun/mount_flags.perf"
+    {"dest-nofollow", 0, 0, OPTION_DEST_NOFOLLOW},
 #line 43 "src/libcrun/mount_flags.perf"
     {"dev", 1, MS_NODEV, 0},
 #line 73 "src/libcrun/mount_flags.perf"
     {"rdev", 1, MS_NODEV, OPTION_RECURSIVE},
-#line 90 "src/libcrun/mount_flags.perf"
-    {"tmpcopyup", 0, 0, OPTION_TMPCOPYUP},
-#line 67 "src/libcrun/mount_flags.perf"
-    {"unbindable", 0, MS_UNBINDABLE, 0},
-#line 68 "src/libcrun/mount_flags.perf"
-    {"runbindable", 0, MS_REC|MS_UNBINDABLE, 0},
+#line 65 "src/libcrun/mount_flags.perf"
+    {"private", 0, MS_PRIVATE, 0},
+#line 46 "src/libcrun/mount_flags.perf"
+    {"noexec", 0, MS_NOEXEC, 0},
+#line 93 "src/libcrun/mount_flags.perf"
+    {"src-nofollow", 0, 0, OPTION_SRC_NOFOLLOW},
+#line 47 "src/libcrun/mount_flags.perf"
+    {"sync", 0, MS_SYNCHRONOUS, 0},
+#line 57 "src/libcrun/mount_flags.perf"
+    {"relatime", 0, MS_RELATIME, 0},
 #line 48 "src/libcrun/mount_flags.perf"
     {"async", 1, MS_SYNCHRONOUS, 0},
 #line 78 "src/libcrun/mount_flags.perf"
     {"rasync", 1, MS_SYNCHRONOUS, OPTION_RECURSIVE},
-#line 47 "src/libcrun/mount_flags.perf"
-    {"sync", 0, MS_SYNCHRONOUS, 0},
-#line 75 "src/libcrun/mount_flags.perf"
-    {"rexec", 1, MS_NOEXEC, OPTION_RECURSIVE},
+#line 90 "src/libcrun/mount_flags.perf"
+    {"tmpcopyup", 0, 0, OPTION_TMPCOPYUP},
 #line 61 "src/libcrun/mount_flags.perf"
     {"shared", 0, MS_SHARED, 0},
 #line 62 "src/libcrun/mount_flags.perf"
     {"rshared", 0, MS_REC|MS_SHARED, 0},
-#line 92 "src/libcrun/mount_flags.perf"
-    {"copy-symlink", 0, 0, OPTION_COPY_SYMLINK},
 #line 63 "src/libcrun/mount_flags.perf"
     {"slave", 0, MS_SLAVE, 0},
+#line 75 "src/libcrun/mount_flags.perf"
+    {"rexec", 1, MS_NOEXEC, OPTION_RECURSIVE},
+#line 67 "src/libcrun/mount_flags.perf"
+    {"unbindable", 0, MS_UNBINDABLE, 0},
+#line 68 "src/libcrun/mount_flags.perf"
+    {"runbindable", 0, MS_REC|MS_UNBINDABLE, 0},
 #line 45 "src/libcrun/mount_flags.perf"
-    {"exec", 1, MS_NOEXEC, 0}
+    {"exec", 1, MS_NOEXEC, 0},
+#line 92 "src/libcrun/mount_flags.perf"
+    {"copy-symlink", 0, 0, OPTION_COPY_SYMLINK}
   };
 
 const struct propagation_flags_s *
@@ -373,22 +377,22 @@ libcrun_mount_flag_in_word_set (register const char *str, register size_t len)
               case 48:
                 resword = &wordlist[41];
                 goto compare;
-              case 50:
+              case 49:
                 resword = &wordlist[42];
                 goto compare;
-              case 51:
+              case 50:
                 resword = &wordlist[43];
                 goto compare;
-              case 52:
+              case 51:
                 resword = &wordlist[44];
                 goto compare;
-              case 53:
+              case 52:
                 resword = &wordlist[45];
                 goto compare;
-              case 54:
+              case 53:
                 resword = &wordlist[46];
                 goto compare;
-              case 55:
+              case 54:
                 resword = &wordlist[47];
                 goto compare;
               case 56:
@@ -397,26 +401,32 @@ libcrun_mount_flag_in_word_set (register const char *str, register size_t len)
               case 57:
                 resword = &wordlist[49];
                 goto compare;
-              case 59:
+              case 58:
                 resword = &wordlist[50];
                 goto compare;
-              case 61:
+              case 59:
                 resword = &wordlist[51];
                 goto compare;
-              case 62:
+              case 60:
                 resword = &wordlist[52];
                 goto compare;
-              case 63:
+              case 64:
                 resword = &wordlist[53];
                 goto compare;
-              case 68:
+              case 66:
                 resword = &wordlist[54];
                 goto compare;
-              case 71:
+              case 68:
                 resword = &wordlist[55];
                 goto compare;
-              case 72:
+              case 69:
                 resword = &wordlist[56];
+                goto compare;
+              case 74:
+                resword = &wordlist[57];
+                goto compare;
+              case 77:
+                resword = &wordlist[58];
                 goto compare;
             }
           return 0;
@@ -431,7 +441,7 @@ libcrun_mount_flag_in_word_set (register const char *str, register size_t len)
     }
   return 0;
 }
-#line 93 "src/libcrun/mount_flags.perf"
+#line 95 "src/libcrun/mount_flags.perf"
 
 
 const struct propagation_flags_s *
