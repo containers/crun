@@ -168,9 +168,6 @@ cleanup_private_data (void *private_data)
   if (p->dev_fds)
     cleanup_close_mapp (&(p->dev_fds));
 
-  if (p->rootfsfd >= 0)
-    close (p->rootfsfd);
-
   free (p->unified_cgroup_path);
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
