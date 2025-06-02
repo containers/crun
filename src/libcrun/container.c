@@ -2926,7 +2926,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
       int status;
       close_and_reset (&pipefd1);
 
-      waitpid_ignore_stopped (ret, &status, 0);
+      waitpid_ignore_stopped (ret, NULL, 0);
 
       ret = TEMP_FAILURE_RETRY (read (pipefd0, &status, sizeof (status)));
       if (UNLIKELY (ret < 0))

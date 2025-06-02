@@ -5038,7 +5038,7 @@ join_process_parent_helper (libcrun_context_t *context,
                             bool need_move_to_cgroup, const char *sub_cgroup,
                             int *terminal_fd, libcrun_error_t *err)
 {
-  int ret, pid_status;
+  int ret;
   char res;
   pid_t pid;
   cleanup_close int sync_fd = sync_socket_fd;
@@ -5059,7 +5059,7 @@ join_process_parent_helper (libcrun_context_t *context,
     return crun_make_error (err, errno, "read from sync socket");
 
   /* Wait for the child pid so we ensure the grandchild gets properly reparented.  */
-  ret = waitpid_ignore_stopped (child_pid, &pid_status, 0);
+  ret = waitpid_ignore_stopped (child_pid, NULL, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
