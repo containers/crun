@@ -122,7 +122,6 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
   crun_context.listen_fds = 0;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
-
   crun_assert_n_args (argc - first_arg, 1, 1);
 
   /* Make sure the config is an absolute path before changing the directory.  */
@@ -164,7 +163,7 @@ crun_command_create (struct crun_global_arguments *global_args, int argc, char *
 
   container = libcrun_container_load_from_file (config_file, err);
   if (container == NULL)
-    libcrun_fail_with_error (0, "error loading config.json");
+    return -1;
 
   libcrun_debug ("Using bundle: %s", bundle);
   crun_context.bundle = bundle;

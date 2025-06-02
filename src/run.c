@@ -170,14 +170,15 @@ crun_command_run (struct crun_global_arguments *global_args, int argc, char **ar
         libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
-  container = libcrun_container_load_from_file (config_file, err);
-  if (container == NULL)
-    return -1;
-
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
+  container = libcrun_container_load_from_file (config_file, err);
+  if (container == NULL)
+    return -1;
+
+  libcrun_debug ("Using bundle: %s", bundle);
   crun_context.bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     {
