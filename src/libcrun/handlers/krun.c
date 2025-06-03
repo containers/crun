@@ -59,6 +59,7 @@
  */
 #define KRUN_VM_FILE "/.krun_vm.json"
 
+#define KRUN_FLAVOR_NITRO "aws-nitro"
 #define KRUN_FLAVOR_SEV "sev"
 
 struct krun_config
@@ -207,11 +208,15 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
 static int
 libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *err)
 {
-  int ret, sev_indicated = 0;
+  int ret, sev_indicated = 0, nitro_indicated = 0;
   const char *path_flavor[] = { "flavor", (const char *) 0 };
   struct krun_config *kconf = (struct krun_config *) cookie;
   yajl_val val_flavor = NULL;
   char *flavor = NULL;
+  void *close_handles[2];
+
+  close_handles[0] = NULL;
+  close_handles[1] = NULL;
 
   // Read if the SEV flavor was indicated in the krun VM config.
   val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
@@ -222,6 +227,7 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
       // The SEV flavor will be used if the krun VM config indicates to use SEV
       // within the "flavor" field.
       sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
+      nitro_indicated |= strcmp (flavor, KRUN_FLAVOR_NITRO) == 0;
     }
 
   // To maintain backward compatibility, also use the SEV flavor if the
@@ -233,32 +239,43 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
       if (kconf->handle_sev == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
 
-      if (kconf->handle != NULL)
-        {
-          // We no longer need the libkrun handle.
-          ret = dlclose (kconf->handle);
-          if (UNLIKELY (ret != 0))
-            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
-        }
+      close_handles[0] = kconf->handle;
+      close_handles[1] = kconf->handle_nitro;
 
       kconf->handle = kconf->handle_sev;
       kconf->ctx_id = kconf->ctx_id_sev;
       kconf->sev = true;
+    }
+  else if (nitro_indicated)
+    {
+      if (kconf->handle_nitro == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun-nitro but it's not available");
+
+      close_handles[0] = kconf->handle;
+      close_handles[1] = kconf->handle_sev;
+
+      kconf->handle = kconf->handle_nitro;
+      kconf->ctx_id = kconf->ctx_id_nitro;
+      kconf->nitro = true;
     }
   else
     {
       if (kconf->handle == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
 
-      if (kconf->handle_sev != NULL)
-        {
-          // We no longer need the libkrun-sev handle.
-          ret = dlclose (kconf->handle_sev);
-          if (UNLIKELY (ret != 0))
-            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
-        }
+      close_handles[0] = kconf->handle_sev;
+      close_handles[1] = kconf->handle_nitro;
+    }
 
-      kconf->sev = false;
+  // We no longer need the other two libkrun handles.
+  for (int i = 0; i < 2; i++)
+    {
+      if (close_handles[i] == NULL)
+        continue;
+
+      ret = dlclose (close_handles[i]);
+      if (UNLIKELY (ret != 0))
+        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
     }
 
   return 0;
