@@ -65,9 +65,12 @@ struct krun_config
 {
   void *handle;
   void *handle_sev;
+  void *handle_nitro;
   bool sev;
+  bool nitro;
   int32_t ctx_id;
   int32_t ctx_id_sev;
+  int32_t ctx_id_nitro;
 };
 
 /* libkrun handler.  */
@@ -478,6 +481,7 @@ libkrun_load (void **cookie, libcrun_error_t *err)
   struct krun_config *kconf;
   const char *libkrun_so = "libkrun.so.1";
   const char *libkrun_sev_so = "libkrun-sev.so.1";
+  const char *libkrun_nitro_so = "libkrun-nitro.so.1";
 
   kconf = malloc (sizeof (struct krun_config));
   if (kconf == NULL)
@@ -485,14 +489,16 @@ libkrun_load (void **cookie, libcrun_error_t *err)
 
   kconf->handle = dlopen (libkrun_so, RTLD_NOW);
   kconf->handle_sev = dlopen (libkrun_sev_so, RTLD_NOW);
+  kconf->handle_nitro = dlopen (libkrun_nitro_so, RTLD_NOW);
 
-  if (kconf->handle == NULL && kconf->handle_sev == NULL)
+  if (kconf->handle == NULL && kconf->handle_sev == NULL && kconf->handle_nitro == NULL)
     {
       free (kconf);
-      return crun_make_error (err, 0, "failed to open `%s` and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, dlerror ());
+      return crun_make_error (err, 0, "failed to open `%s`, `%s`, and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, libkrun_nitro_so, dlerror ());
     }
 
   kconf->sev = false;
+  kconf->nitro = false;
 
   /* Newer versions of libkrun no longer link against libkrunfw and
      instead they open it when creating the context. This implies
@@ -518,6 +524,16 @@ libkrun_load (void **cookie, libcrun_error_t *err)
           return ret;
         }
       kconf->ctx_id_sev = ret;
+    }
+  if (kconf->handle_nitro)
+    {
+      ret = libkrun_create_context (kconf->handle_nitro, err);
+      if (UNLIKELY (ret < 0))
+        {
+          free (kconf);
+          return ret;
+        }
+      kconf->ctx_id_nitro = ret;
     }
 
   *cookie = kconf;
