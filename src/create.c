@@ -17,16 +17,10 @@
  */
 
 #include <config.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <argp.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
+#include "run_create.h"
 
 enum
 {
@@ -110,69 +104,14 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
 static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
+static unsigned int
+get_options ()
+{
+  return 0;
+}
+
 int
 crun_command_create (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  int first_arg = 0, ret;
-  cleanup_container libcrun_container_t *container = NULL;
-  cleanup_free char *bundle_cleanup = NULL;
-  cleanup_free char *config_file_cleanup = NULL;
-
-  crun_context.preserve_fds = 0;
-  crun_context.listen_fds = 0;
-
-  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
-
-  crun_assert_n_args (argc - first_arg, 1, 1);
-
-  /* Make sure the config is an absolute path before changing the directory.  */
-  if ((strcmp ("config.json", config_file) != 0))
-    {
-      if (config_file[0] != '/')
-        {
-          config_file_cleanup = realpath (config_file, NULL);
-          if (config_file_cleanup == NULL)
-            libcrun_fail_with_error (errno, "realpath `%s` failed", config_file);
-          config_file = config_file_cleanup;
-        }
-    }
-
-  /* Make sure the bundle is an absolute path.  */
-  if (bundle == NULL)
-    {
-      bundle = bundle_cleanup = getcwd (NULL, 0);
-      if (UNLIKELY (bundle == NULL))
-        libcrun_fail_with_error (errno, "getcwd failed");
-    }
-  else
-    {
-      if (bundle[0] != '/')
-        {
-          bundle_cleanup = realpath (bundle, NULL);
-          if (bundle_cleanup == NULL)
-            libcrun_fail_with_error (errno, "realpath `%s` failed", bundle);
-          bundle = bundle_cleanup;
-        }
-
-      if (chdir (bundle) < 0)
-        libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
-    }
-
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  container = libcrun_container_load_from_file (config_file, err);
-  if (container == NULL)
-    libcrun_fail_with_error (0, "error loading config.json");
-
-  libcrun_debug ("Using bundle: %s", bundle);
-  crun_context.bundle = bundle;
-  if (getenv ("LISTEN_FDS"))
-    {
-      crun_context.listen_fds = parse_int_or_fail (getenv ("LISTEN_FDS"), "LISTEN_FDS");
-      crun_context.preserve_fds += crun_context.listen_fds;
-    }
-
-  return libcrun_container_create (&crun_context, container, 0, err);
+  return crun_run_create_internal (global_args, argc, argv, libcrun_container_create, get_options, &crun_context, &run_argp, &config_file, &bundle, err);
 }
