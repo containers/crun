@@ -3851,7 +3851,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   TEMP_FAILURE_RETRY (close (pipefd0));
   pipefd0 = -1;
   if (ret != 1 || b != '0')
-    ret = -1;
+    ret = crun_make_error (err, 0, "read pipe failed");
   else
     {
       /* Let's receive the seccomp notify fd and handle it as part of wait_for_process().  */
@@ -3863,7 +3863,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
           ret = close_and_reset (&own_seccomp_receiver_fd);
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_make_error (err, errno, "close seccomp receiver fd failed");
         }
 
       {
