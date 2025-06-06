@@ -232,7 +232,7 @@ static struct argp_option options[] = { { "debug", OPTION_DEBUG, 0, 0, "produce 
                                         { "log-format", OPTION_LOG_FORMAT, "FORMAT", 0, "log format: 'text' (default) or 'json'", 0 },
                                         { "log-level", OPTION_LOG_LEVEL, "LEVEL", 0, "log level to use: 'error' (default), 'warning' or 'debug'", 0 },
                                         { "root", OPTION_ROOT, "DIR", 0, NULL, 0 },
-                                        { "rootless", OPTION_ROOT, "VALUE", 0, NULL, 0 },
+                                        { "rootless", OPTION_ROOTLESS, "VALUE", 0, NULL, 0 },
                                         { "version", OPTION_VERSION, 0, 0, NULL, 0 },
                                         // alias OPTION_VERSION_CAP with OPTION_VERSION
                                         { NULL, OPTION_VERSION_CAP, 0, OPTION_ALIAS, NULL, 0 },
