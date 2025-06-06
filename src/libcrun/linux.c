@@ -67,6 +67,7 @@
 #include <linux/rtnetlink.h>
 #include <sched.h>
 #include <linux/sched.h>
+#include <linux/magic.h>
 
 #include <yajl/yajl_tree.h>
 #include <yajl/yajl_gen.h>
@@ -167,9 +168,6 @@ cleanup_private_data (void *private_data)
     cleanup_close_mapp (&(p->mount_fds));
   if (p->dev_fds)
     cleanup_close_mapp (&(p->dev_fds));
-
-  if (p->rootfsfd >= 0)
-    close (p->rootfsfd);
 
   free (p->unified_cgroup_path);
   free (p->host_notify_socket_path);
@@ -438,7 +436,7 @@ do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t cle
 }
 
 int
-get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun_error_t *err)
+get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool nofollow, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   struct mount_attr_s attr = {
@@ -453,7 +451,7 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, libcrun
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC
-                                        | OPEN_TREE_CLONE | recursive_flag);
+                                        | OPEN_TREE_CLONE | recursive_flag | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
   if (UNLIKELY (open_tree_fd < 0))
     return crun_make_error (err, errno, "open_tree `%s`", src);
 
@@ -1204,7 +1202,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                       return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, false, err);
                     }
 
-                  mountfd = get_bind_mount (-1, "/sys", true, true, err);
+                  mountfd = get_bind_mount (-1, "/sys", true, true, false, err);
                   if (UNLIKELY (mountfd < 0))
                     return mountfd;
 
@@ -2056,6 +2054,26 @@ get_force_cgroup_v1_annotation (libcrun_container_t *container)
 }
 
 static int
+check_valid_no_follow_file_system (int fd, const char *destination, libcrun_error_t *err)
+{
+  struct statfs sfs;
+
+  int ret = fstatfs (fd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs `%s`", destination);
+
+  switch (sfs.f_type)
+    {
+    case PROC_SUPER_MAGIC:
+    case SYSFS_MAGIC:
+    case DEVPTS_SUPER_MAGIC:
+      return crun_make_error (err, 0, "override of the mount destination `/%s` is not allowed", destination);
+    }
+
+  return 0;
+}
+
+static int
 do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -2070,6 +2088,7 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
   for (i = 0; i < def->mounts_len; i++)
     {
       const char *target = consume_slashes (def->mounts[i]->destination);
+      cleanup_close int source_mountfd = -1;
       cleanup_free char *data = NULL;
       char *type;
       char *source;
@@ -2082,6 +2101,9 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       bool is_sysfs_or_proc;
       uint64_t rec_clear = 0;
       uint64_t rec_set = 0;
+
+      if (mount_fds)
+        source_mountfd = get_and_reset (&(mount_fds->fds[i]));
 
       type = def->mounts[i]->type;
 
@@ -2120,20 +2142,33 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
           const char *path = def->mounts[i]->source;
 
           /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
-          if (mount_fds && mount_fds->fds[i] >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
+          if (source_mountfd >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
             {
-              get_proc_self_fd_path (proc_buf, mount_fds->fds[i]);
+              get_proc_self_fd_path (proc_buf, source_mountfd);
               path = proc_buf;
             }
 
-          ret = get_file_type (&src_mode, (extra_flags & OPTION_COPY_SYMLINK) ? true : false, path);
+          if ((extra_flags & OPTION_COPY_SYMLINK) && (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_DEST_NOFOLLOW)))
+            return crun_make_error (err, 0, "`copy-symlink` is mutually exclusive with `src-nofollow` and `dest-nofollow`");
+
+          /* Do not resolve the symlink only when src-nofollow and copy-symlink are used.  */
+          ret = get_file_type (&src_mode, (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_COPY_SYMLINK)) ? true : false, path);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "cannot stat `%s`", path);
+
+          if (S_ISLNK (src_mode) && (extra_flags & OPTION_DEST_NOFOLLOW) && source_mountfd < 0)
+            {
+              ret = get_bind_mount (AT_FDCWD, def->mounts[i]->source, true, true, extra_flags & OPTION_SRC_NOFOLLOW, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              source_mountfd = ret;
+            }
 
           data = append_mode_if_missing (data, "mode=1755");
         }
 
-      if (S_ISLNK (src_mode))
+      if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
         {
           cleanup_free char *target = NULL;
           ssize_t len;
@@ -2181,12 +2216,26 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
         {
           bool is_dir = S_ISDIR (src_mode);
 
-          /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (extra_flags & OPTION_DEST_NOFOLLOW)
+            {
+              /* If dest-nofollow is specified, expect the target to exist.  */
+              ret = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_PATH | O_NOFOLLOW | O_CLOEXEC, 0, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              targetfd = ret;
 
-          targetfd = ret;
+              ret = check_valid_no_follow_file_system (targetfd, target, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+          else
+            {
+              /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
+              ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              targetfd = ret;
+            }
         }
 
       if (extra_flags & OPTION_TMPCOPYUP)
@@ -2206,15 +2255,14 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
       source = def->mounts[i]->source ? def->mounts[i]->source : type;
 
       /* Check if there is already a mount for the requested file system.  */
-      if (! mounted && mount_fds && mount_fds->fds[i] >= 0)
+      if (! mounted && source_mountfd >= 0)
         {
-          cleanup_close int mfd = get_and_reset (&(mount_fds->fds[i]));
 
-          ret = fs_move_mount_to (mfd, targetfd, NULL);
+          ret = fs_move_mount_to (source_mountfd, targetfd, NULL);
           if (LIKELY (ret == 0))
             {
               /* Force no MS_BIND flag to not attempt again the bind mount.  */
-              ret = do_mount (container, NULL, mfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
+              ret = do_mount (container, NULL, source_mountfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
               if (UNLIKELY (ret < 0))
                 return ret;
               mounted = true;
@@ -2336,8 +2384,7 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
 
   targetfd = ret;
 
-  int label_how = LABEL_MOUNT;
-  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, label_how, err);
+  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4005,9 +4052,13 @@ get_fd_map (libcrun_container_t *container)
 }
 
 bool
-is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
+is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive, bool *src_nofollow)
 {
+  bool ret = false;
   size_t i;
+
+  if (src_nofollow == NULL)
+    *src_nofollow = false;
 
   for (i = 0; i < mnt->options_len; i++)
     {
@@ -4015,16 +4066,28 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive)
         {
           if (recursive)
             *recursive = false;
-          return true;
+
+          ret = true;
+
+          /* if src_nofollow is not specified, or already found, shortcut.  */
+          if (src_nofollow == NULL || *src_nofollow)
+            break;
         }
       if (strcmp (mnt->options[i], "rbind") == 0)
         {
           if (recursive)
             *recursive = true;
-          return true;
+
+          ret = true;
+
+          /* if src_nofollow is not specified, or already found, shortcut.  */
+          if (src_nofollow == NULL || *src_nofollow)
+            break;
         }
+      if (src_nofollow && strcmp (mnt->options[i], "src-nofollow") == 0)
+        *src_nofollow = true;
     }
-  return false;
+  return ret;
 }
 
 static char *
@@ -4088,6 +4151,7 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   bool has_mappings;
   int ret;
   char *extra_msg = "";
+  bool nofollow = false;
 
   *out_fd = -1;
 
@@ -4124,9 +4188,9 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
 
-  if (is_bind_mount (mnt, &recursive_bind_mount))
+  if (is_bind_mount (mnt, &recursive_bind_mount, &nofollow))
     {
-      newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
+      newfs_fd = syscall_open_tree (-1, mnt->source, (recursive_bind_mount ? AT_RECURSIVE : 0) | AT_NO_AUTOMOUNT | (nofollow ? AT_SYMLINK_NOFOLLOW : 0) | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE);
       if (UNLIKELY (newfs_fd < 0))
         return crun_make_error (err, errno, "open `%s`", mnt->source);
     }
@@ -4207,7 +4271,7 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chown `%s`", device->path);
 
-  return get_bind_mount (devs_dirfd, name, false, false, err);
+  return get_bind_mount (devs_dirfd, name, false, false, false, err);
 }
 
 static int
@@ -4252,16 +4316,17 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       for (i = 0; i < def->mounts_len; i++)
         {
           bool recursive = false;
+          bool nofollow = false;
           int mount_fd = -1;
 
           ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &mount_fd, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
-          if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive))
+          if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive, &nofollow))
             {
               /* If the bind mount failed, do not fail here, but attempt to create it from within the container.  */
-              mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, err);
+              mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, nofollow, err);
               if (UNLIKELY (mount_fd < 0))
                 crun_error_release (err);
             }
@@ -6015,10 +6080,11 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
       if (fds->fds[i] < 0)
         {
           bool recursive = false;
+          bool nofollow = false;
 
-          if (is_bind_mount (mounts[i], &recursive))
+          if (is_bind_mount (mounts[i], &recursive, &nofollow))
             {
-              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, err);
+              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, nofollow, err);
               if (UNLIKELY (fds->fds[i] < 0))
                 return fds->fds[i];
             }
