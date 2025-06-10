@@ -24,10 +24,17 @@ def test_limit_pid_minus_1():
         return 77
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : -1}}
-    out, _ = run_and_get_output(conf)
-    if len(out) == 0:
-        return 0
-    return -1
+    try:
+        out, _ = run_and_get_output(conf)
+        if len(out) == 0:
+            return 0
+        sys.stderr.write("# PID limit -1 test failed: expected empty output\n")
+        sys.stderr.write("# actual output length: %d\n" % len(out))
+        sys.stderr.write("# output: %s\n" % out[:100])
+        return -1
+    except Exception as e:
+        sys.stderr.write("# PID limit -1 test failed with exception: %s\n" % str(e))
+        return -1
 
 def test_limit_pid_0():
     conf = base_config()
@@ -36,10 +43,17 @@ def test_limit_pid_0():
         return 77
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : 0}}
-    out, _ = run_and_get_output(conf)
-    if len(out) == 0:
-        return 0
-    return -1
+    try:
+        out, _ = run_and_get_output(conf)
+        if len(out) == 0:
+            return 0
+        sys.stderr.write("# PID limit 0 test failed: expected empty output\n")
+        sys.stderr.write("# actual output length: %d\n" % len(out))
+        sys.stderr.write("# output: %s\n" % out[:100])
+        return -1
+    except Exception as e:
+        sys.stderr.write("# PID limit 0 test failed with exception: %s\n" % str(e))
+        return -1
 
 def test_limit_pid_n():
     conf = base_config()
@@ -47,13 +61,24 @@ def test_limit_pid_n():
         return 77
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'forkbomb', '20']
-    conf['linux']['resources'] = {"pids" : {"limit" : 10}}
+    pid_limit = 10
+    conf['linux']['resources'] = {"pids" : {"limit" : pid_limit}}
     try:
-        run_and_get_output(conf)
+        out, _ = run_and_get_output(conf)
+        sys.stderr.write("# PID limit %d test failed: expected fork bomb to be limited but command succeeded\n" % pid_limit)
+        sys.stderr.write("# output: %s\n" % out[:200])
+        return -1
     except Exception as e:
-        if "fork: Resource temporarily unavailable" in e.output.decode():
+        error_output = ""
+        if hasattr(e, 'output') and e.output:
+            error_output = e.output.decode('utf-8', errors='ignore')
+        if "fork: Resource temporarily unavailable" in error_output:
             return 0
-    return -1
+        sys.stderr.write("# PID limit %d test failed: expected 'fork: Resource temporarily unavailable' error\n" % pid_limit)
+        sys.stderr.write("# actual error: %s\n" % str(e))
+        if error_output:
+            sys.stderr.write("# error output: %s\n" % error_output[:200])
+        return -1
 
 all_tests = {
     "limit-pid-minus-1" : test_limit_pid_minus_1,
