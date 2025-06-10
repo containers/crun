@@ -4185,9 +4185,9 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 #ifdef HAVE_SECCOMP
   {
     const struct scmp_version *version = seccomp_version ();
-    int size = snprintf (NULL, 0, "%u.%u.%u", version->major, version->minor, version->micro) + 1;
-    char *version_string = xmalloc0 (size);
-    snprintf (version_string, size, "%u.%u.%u", version->major, version->minor, version->micro);
+    char *version_string = NULL;
+
+    xasprintf (&version_string, "%u.%u.%u", version->major, version->minor, version->micro);
     (*info)->annotations.io_github_seccomp_libseccomp_version = version_string;
   }
 #endif
