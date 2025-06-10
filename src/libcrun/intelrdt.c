@@ -304,7 +304,9 @@ resctl_move_task_to (const char *name, pid_t pid, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return ret;
 
-  len = sprintf (pid_str, "%d", pid);
+  len = snprintf (pid_str, sizeof (pid_str), "%d", pid);
+  if (UNLIKELY (len >= (int) sizeof (pid_str)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   return write_file (path, pid_str, len, err);
 }
