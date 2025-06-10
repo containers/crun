@@ -452,22 +452,22 @@ def test_exec_cpu_affinity():
 
         mask = exec_and_get_affinity_mask(cid)
         if mask != current_cpu_mask:
-            sys.stderr.write("current cpu mask %s != %s\n" % (current_cpu_mask, mask))
+            sys.stderr.write("# current cpu mask %s != %s\n" % (current_cpu_mask, mask))
             return -1
 
         mask = exec_and_get_affinity_mask(cid, {"initial" : "0-1"})
         if mask != "0-1":
-            sys.stderr.write("cpu mask %s != 0-1\n" % mask)
+            sys.stderr.write("# cpu mask %s != 0-1\n" % mask)
             return -1
 
         mask = exec_and_get_affinity_mask(cid, {"final" : "0-2"})
         if mask != "0-2":
-            sys.stderr.write("cpu mask %s != 0-2\n" % mask)
+            sys.stderr.write("# cpu mask %s != 0-2\n" % mask)
             return -1
 
         mask = exec_and_get_affinity_mask(cid, {"initial" : "1", "final" : "0-3"})
         if mask != "0-3":
-            sys.stderr.write("cpu mask %s != 0-2\n" % mask)
+            sys.stderr.write("# cpu mask %s != 0-2\n" % mask)
             return -1
         return 0
     finally:
@@ -490,7 +490,7 @@ def test_exec_getpgrp():
             out = run_crun_command([x for x in cmdline if x is not None])
             pgrp = int(out.split("\n")[0])
             if pgrp <= 0:
-                sys.stderr.write("invalid pgrp, got %d\n" % pgrp)
+                sys.stderr.write("# invalid pgrp, got %d\n" % pgrp)
                 return -1
     finally:
         if cid is not None:
