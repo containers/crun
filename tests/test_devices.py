@@ -47,11 +47,12 @@ def test_mode_device():
             expected = "157"
             out = run_and_get_output(conf)
             if expected not in out[0]:
-                sys.stderr.write("wrong file mode, found %s instead of %s with userns=%s" % (out[0], expected, have_userns))
-                return True
-            return False
+                sys.stderr.write("# device mode test failed with userns=%s: expected '%s' in output\n" % (have_userns, expected))
+                sys.stderr.write("# actual output: %s\n" % out[0])
+                sys.stderr.write("# device config: %s\n" % conf['linux']['devices'][0])
+                return -1
         except Exception as e:
-            print(e)
+            sys.stderr.write("# device mode test failed with userns=%s: %s\n" % (have_userns, str(e)))
             return -1
     return 0
 
@@ -79,10 +80,12 @@ def test_owner_device():
             expected = "10:11"
             out = run_and_get_output(conf)
             if expected not in out[0]:
-                sys.stderr.write("wrong file owner, found %s instead of %s with userns=%s" % (out[0], expected, have_userns))
-                return True
-            return False
+                sys.stderr.write("# device owner test failed with userns=%s: expected '%s' in output\n" % (have_userns, expected))
+                sys.stderr.write("# actual output: %s\n" % out[0])
+                sys.stderr.write("# device config: %s\n" % conf['linux']['devices'][0])
+                return -1
         except Exception as e:
+            sys.stderr.write("# device owner test failed with userns=%s: %s\n" % (have_userns, str(e)))
             return -1
     return 0
 
@@ -136,7 +139,7 @@ def test_create_or_bind_mount_device():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write(str(e) + "\n")
+        sys.stderr.write("# " + str(e) + "\n")
         return -1
     return 0
 
@@ -236,7 +239,7 @@ def test_net_devices():
 
     ip_path = shutil.which("ip")
     if ip_path is None:
-        sys.stderr.write("ip command not found\n")
+        sys.stderr.write("# ip command not found\n")
         return 77
 
     current_netns = os.open("/proc/self/ns/net", os.O_RDONLY)
@@ -270,15 +273,15 @@ def test_net_devices():
                 try:
                     out = run_and_get_output(conf)
                     if "address: 10.1.2.3" not in out[0]:
-                        sys.stderr.write("address not found in output\n")
+                        sys.stderr.write("# address not found in output\n")
                         return 1
                     if specify_broadcast:
                         if "broadcast: 10.1.2.254" not in out[0]:
-                            sys.stderr.write("broadcast address not found in output\n")
+                            sys.stderr.write("# broadcast address not found in output\n")
                             return 1
                     else:
                         if "broadcast" in out[0]:
-                            sys.stderr.write("broadcast address found in output\n")
+                            sys.stderr.write("# broadcast address found in output\n")
                             return 1
                 except Exception as e:
                     return -1
@@ -301,7 +304,7 @@ def test_mknod_fifo_device():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write(f"test_mknod_fifo_device failed: %s\n" % e)
+        sys.stderr.write("# test_mknod_fifo_device failed: %s\n" % e)
         return -1
     return 0
 
@@ -318,7 +321,7 @@ def test_mknod_char_device():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write(f"test_mknod_char_device failed: {e}\n")
+        sys.stderr.write("# test_mknod_char_device failed: {e}\n")
         return -1
     return 0
 
@@ -358,20 +361,20 @@ def test_allow_device_read_only():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write(f"test_allow_device_read_only failed: %s\n" % e)
+        sys.stderr.write("# test_allow_device_read_only failed: %s\n" % e)
         return -1
 
     conf['process']['args'] = ['/init', 'openwronly', '/dev/controlledchar']
     try:
         run_and_get_output(conf)
-        sys.stderr.write("test_allow_device_read_only: write access was unexpectedly allowed.\n")
+        sys.stderr.write("# test_allow_device_read_only: write access was unexpectedly allowed.\n")
         return 1
     except Exception as e:
         output_str = getattr(e, 'output', b'').decode(errors='ignore')
         if "Operation not permitted" in output_str or "Permission denied" in output_str:
             return 0
         else:
-            sys.stderr.write(f"test_allow_device_read_only (write attempt) failed with: %s, output: %s\n" % (e, output_str))
+            sys.stderr.write("# test_allow_device_read_only (write attempt) failed with: %s, output: %s\n" % (e, output_str))
             return 1
 
     return 1
