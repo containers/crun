@@ -326,13 +326,10 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
   bool entered_any = false;
   size_t content_size;
   char *controller;
-  char pid_str[16];
   char *saveptr;
   bool has_data;
   int rootless;
   int ret;
-
-  sprintf (pid_str, "%d", pid);
 
   rootless = is_rootless (err);
   if (UNLIKELY (rootless < 0))
