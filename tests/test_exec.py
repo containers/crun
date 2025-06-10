@@ -32,10 +32,21 @@ def test_exec():
         _, cid = run_and_get_output(conf, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "echo", "foo"])
         if "foo" not in out:
+            sys.stderr.write("# exec test failed: expected 'foo' in output\n")
+            sys.stderr.write("# container ID: %s\n" % cid)
+            sys.stderr.write("# actual output: %s\n" % out)
             return -1
+    except Exception as e:
+        sys.stderr.write("# exec test failed with exception: %s\n" % str(e))
+        if cid is not None:
+            sys.stderr.write("# container ID: %s\n" % cid)
+        raise
     finally:
         if cid is not None:
-            run_crun_command(["delete", "-f", cid])
+            try:
+                run_crun_command(["delete", "-f", cid])
+            except Exception as cleanup_e:
+                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
     return 0
 
 def test_uid_tty():
@@ -52,6 +63,7 @@ def test_uid_tty():
     add_all_namespaces(conf)
     cid = None
     ret = 1
+    last_error = None
     try:
         cid = "container-%s" % os.getpid()
         proc = run_and_get_output(conf, command='run', id_container=cid, use_popen=True)
@@ -61,16 +73,22 @@ def test_uid_tty():
                 if "1:" in out:
                     ret = 0
                     break
-            except:
+            except Exception as e:
+                last_error = e
                 pass
             time.sleep(0.01)
+        if ret != 0:
+            sys.stderr.write("# uid_tty test failed after 500 attempts\n")
+            sys.stderr.write("# container ID: %s\n" % cid)
+            if last_error:
+                sys.stderr.write("# last error: %s\n" % str(last_error))
         return ret
     finally:
         if cid is not None:
             try:
                 run_crun_command(["delete", "-f", cid])
-            except:
-                pass
+            except Exception as cleanup_e:
+                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
     return 0
 
 def test_exec_root_netns_with_userns():
@@ -87,25 +105,40 @@ def test_exec_root_netns_with_userns():
 
         with open("/proc/net/route") as f:
             payload = f.read()
-            host_routes = [i.split('\t')[0] for i in payload.split('\n')[1:]]
+            host_routes = [i.split('\t')[0] for i in payload.split('\n')[1:] if i.strip()]
 
         out = run_crun_command(["exec", cid, "/init", "cat", "/proc/net/route"])
 
-        container_routes = [i.split('\t')[0] for i in payload.split('\n')[1:]]
+        container_routes = [i.split('\t')[0] for i in out.split('\n')[1:] if i.strip()]
 
         if len(container_routes) != len(host_routes):
-            sys.stderr.write("different length for the routes in the container and on the host\n")
+            sys.stderr.write("# network namespace test failed: different route count\n")
+            sys.stderr.write("# host routes (%d): %s\n" % (len(host_routes), host_routes))
+            sys.stderr.write("# container routes (%d): %s\n" % (len(container_routes), container_routes))
+            return -1
 
         host_routes.sort()
         container_routes.sort()
 
-        for i in zip(container_routes, host_routes):
-            if i[0] != i[1]:
-                sys.stderr.write("different network device found\n")
+        for i, (container_route, host_route) in enumerate(zip(container_routes, host_routes)):
+            if container_route != host_route:
+                sys.stderr.write("# network namespace test failed: route mismatch at index %d\n" % i)
+                sys.stderr.write("# expected (host): %s\n" % host_route)
+                sys.stderr.write("# actual (container): %s\n" % container_route)
+                sys.stderr.write("# full host routes: %s\n" % host_routes)
+                sys.stderr.write("# full container routes: %s\n" % container_routes)
                 return -1
+    except Exception as e:
+        sys.stderr.write("# network namespace test failed with exception: %s\n" % str(e))
+        if cid is not None:
+            sys.stderr.write("# container ID: %s\n" % cid)
+        raise
     finally:
         if cid is not None:
-            run_crun_command(["delete", "-f", cid])
+            try:
+                run_crun_command(["delete", "-f", cid])
+            except Exception as cleanup_e:
+                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
     return 0
 
 def test_exec_not_exists_helper(detach):
