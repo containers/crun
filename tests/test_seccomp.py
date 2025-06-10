@@ -62,36 +62,53 @@ def test_seccomp_listener():
         conn = sock.accept()
         msg, fds = recv_fds(conn[0], 4096, 1)
         if len(fds) != 1:
-            print("invalid number of FDs received", file=sys.stderr)
-            return 1
+            sys.stderr.write("# seccomp listener test failed: expected 1 FD, got %d\n" % len(fds))
+            return -1
 
-        m = json.loads(msg)
-        if m['ociVersion'] != '0.2.0':
-            print("invalid OCI version", file=sys.stderr)
-            return 1
-        if len(m['fds']) != 1:
-            print("invalid fds", file=sys.stderr)
-            return 1
-        if 'pid' not in m != 1:
-            print("invalid pid", file=sys.stderr)
-            return 1
-        if m['metadata'] != listener_metadata:
-            print("invalid metadata", file=sys.stderr)
-            return 1
-        state = m['state']
-        if state['status'] != 'creating':
-            print("invalid status", file=sys.stderr)
-            return 1
-        if state['id'] != cid:
-            print("invalid container id", file=sys.stderr)
-            return 1
+        try:
+            m = json.loads(msg)
+        except json.JSONDecodeError as e:
+            sys.stderr.write("# seccomp listener test failed: invalid JSON message: %s\n" % str(e))
+            sys.stderr.write("# raw message: %s\n" % msg)
+            return -1
+
+        if m.get('ociVersion') != '0.2.0':
+            sys.stderr.write("# seccomp listener test failed: expected ociVersion '0.2.0', got '%s'\n" % m.get('ociVersion'))
+            return -1
+        if len(m.get('fds', [])) != 1:
+            sys.stderr.write("# seccomp listener test failed: expected 1 fd in message, got %d\n" % len(m.get('fds', [])))
+            return -1
+        if 'pid' not in m:
+            sys.stderr.write("# seccomp listener test failed: missing 'pid' field in message\n")
+            sys.stderr.write("# message fields: %s\n" % list(m.keys()))
+            return -1
+        if m.get('metadata') != listener_metadata:
+            sys.stderr.write("# seccomp listener test failed: expected metadata '%s', got '%s'\n" % (listener_metadata, m.get('metadata')))
+            return -1
+        state = m.get('state', {})
+        if state.get('status') != 'creating':
+            sys.stderr.write("# seccomp listener test failed: expected status 'creating', got '%s'\n" % state.get('status'))
+            return -1
+        if state.get('id') != cid:
+            sys.stderr.write("# seccomp listener test failed: expected container id '%s', got '%s'\n" % (cid, state.get('id')))
+            return -1
         return 0
+    except Exception as e:
+        sys.stderr.write("# seccomp listener test failed with exception: %s\n" % str(e))
+        if cid is not None:
+            sys.stderr.write("# container ID: %s\n" % cid)
+        sys.stderr.write("# listener path: %s\n" % listener_path)
+        return -1
     finally:
         if cid is not None:
-            run_crun_command(["delete", "-f", cid])
-        os.unlink(listener_path)
-
-    return -1
+            try:
+                run_crun_command(["delete", "-f", cid])
+            except Exception as cleanup_e:
+                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
+        try:
+            os.unlink(listener_path)
+        except Exception as cleanup_e:
+            sys.stderr.write("# warning: failed to cleanup listener socket %s: %s\n" % (listener_path, str(cleanup_e)))
 
 all_tests = {
     "seccomp-listener" : test_seccomp_listener,

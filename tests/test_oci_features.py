@@ -198,31 +198,31 @@ def test_crun_features():
 
             if key == "annotations":
                 if "annotations" not in features:
-                    sys.stderr.write("Annotations section is missing\n")
+                    sys.stderr.write("# annotations section is missing\n")
                     return -1
 
                 annotations = features["annotations"]
                 if annotations.get("run.oci.crun.commit") != get_crun_commit():
-                    sys.stderr.write("wrong value for run.oci.crun.commit\n")
+                    sys.stderr.write("# wrong value for run.oci.crun.commit\n")
                     return -1
 
                 if ('WASM' in get_crun_feature_string()
                     and annotations.get("run.oci.crun.wasm") != "true"):
-                    sys.stderr.write("wrong value for run.oci.crun.wasm\n")
+                    sys.stderr.write("# wrong value for run.oci.crun.wasm\n")
                     return -1
 
                 if 'CRIU' in get_crun_feature_string():
                     if annotations.get("org.opencontainers.runc.checkpoint.enabled") != "true":
-                        sys.stderr.write("wrong value for org.opencontainers.runc.checkpoint.enabled\n")
+                        sys.stderr.write("# wrong value for org.opencontainers.runc.checkpoint.enabled\n")
                         return -1
                     if annotations.get("run.oci.crun.checkpoint.enabled") != "true":
-                        sys.stderr.write("wrong value for run.oci.crun.checkpoint.enabled\n")
+                        sys.stderr.write("# wrong value for run.oci.crun.checkpoint.enabled\n")
                         return -1
             else:
                 if key not in features or sorted(features[key]) != sorted(value):
-                    sys.stderr.write(f"Mismatch in feature: {key}\n")
-                    sys.stderr.write(f"Expected: {value}\n")
-                    sys.stderr.write(f"Actual: {features.get(key)}\n")
+                    sys.stderr.write(f"# Mismatch in feature: {key}\n")
+                    sys.stderr.write(f"# Expected: {value}\n")
+                    sys.stderr.write(f"# Actual: {features.get(key)}\n")
                     return -1
         return 0
 

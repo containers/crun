@@ -35,7 +35,7 @@ def test_domainname():
         out, cid = run_and_get_output(conf)
         if out == "(none)\n":
             return 0
-        sys.stderr.write("unexpected success\n")
+        sys.stderr.write("# unexpected success\n")
         return -1
     except:
         return 0
@@ -56,7 +56,7 @@ def test_domainname_conflict_sysctl():
         out, cid = run_and_get_output(conf)
         if out == "(none)\n":
             return 0
-        sys.stderr.write("unexpected success\n")
+        sys.stderr.write("# unexpected success\n")
         return -1
     except:
         return 0

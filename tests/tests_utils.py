@@ -21,6 +21,8 @@ import sys
 import os
 import tempfile
 import subprocess
+import traceback
+import time
 
 default_umask = 0o22
 
@@ -179,20 +181,32 @@ def run_all_tests(all_tests, allowed_tests):
     for k, v in tests.items():
         cur = cur + 1
         ret = -1
+        test_start_time = time.time()
         try:
+            # recreate the tests_root() directory for each test
+            shutil.rmtree(get_tests_root())
+            os.mkdir(get_tests_root())
+
             ret = v()
+            test_duration = time.time() - test_start_time
             if ret == 0:
-                print("ok %d - %s" % (cur, k))
+                print("ok %d - %s # %.3fs" % (cur, k, test_duration))
             elif ret == 77:
-                print("ok %d - %s #SKIP" % (cur, k))
+                print("ok %d - %s #SKIP # %.3fs" % (cur, k, test_duration))
             else:
-                print("not ok %d - %s" % (cur, k))
+                print("not ok %d - %s # %.3fs" % (cur, k, test_duration))
+                sys.stderr.write("# Test '%s' failed with return code %d\n" % (k, ret))
         except Exception as e:
+            test_duration = time.time() - test_start_time
+            sys.stderr.write("# Test '%s' failed with exception after %.3fs:\n" % (k, test_duration))
             if hasattr(e, 'output'):
-                sys.stderr.write(str(e.output) + "\n")
-            sys.stderr.write(str(e) + "\n")
+                sys.stderr.write("# Container output: %s\n" % str(e.output))
+            sys.stderr.write("# Exception: %s\n" % str(e))
+            sys.stderr.write("# Traceback:\n")
+            for line in traceback.format_exc().splitlines():
+                sys.stderr.write("# %s\n" % line)
             ret = -1
-            print("not ok %d - %s" % (cur, k))
+            print("not ok %d - %s # %.3fs" % (cur, k, test_duration))
 
 def get_tests_root():
     return '%s/.testsuite-run-%d' % (os.getcwd(), os.getpid())
@@ -211,7 +225,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
                        all_dev_null=False, id_container=None, relative_config_path="config.json",
-                       chown_rootfs_to=None, callback_prepare_rootfs=None):
+                       chown_rootfs_to=None, callback_prepare_rootfs=None, debug_on_error=None):
 
     # Some tests require that the container user, which might not be the
     # same user as the person running the tests, is able to resolve the full path
@@ -286,6 +300,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         stdin = subprocess.DEVNULL
         stdout = subprocess.DEVNULL
         stderr = subprocess.DEVNULL
+
     if use_popen:
         if not stdout:
             stdout=subprocess.PIPE
@@ -295,20 +310,44 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                                 stderr=stderr, stdin=stdin, env=env,
                                 close_fds=False), id_container
     else:
-        return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
+        try:
+            return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
+        except subprocess.CalledProcessError as e:
+            sys.stderr.write("# Command failed: %s\n" % ' '.join(args))
+            sys.stderr.write("# Working directory: %s\n" % temp_dir)
+            sys.stderr.write("# Container ID: %s\n" % id_container)
+            sys.stderr.write("# Return code: %d\n" % e.returncode)
+            if e.output:
+                sys.stderr.write("# Output: %s\n" % e.output.decode('utf-8', errors='ignore'))
+            sys.stderr.write("# Config file saved at: %s\n" % config_path)
+            if not keep:
+                sys.stderr.write("# Note: temporary directory will be cleaned up\n")
+            raise
 
 def run_crun_command(args):
     root = get_tests_root_status()
     crun = get_crun_path()
-    args = [crun, "--root", root] + args
-    return subprocess.check_output(args, close_fds=False).decode()
+    cmd_args = [crun, "--root", root] + args
+    try:
+        return subprocess.check_output(cmd_args, close_fds=False).decode()
+    except subprocess.CalledProcessError as e:
+        sys.stderr.write("# crun command failed: %s\n" % ' '.join(cmd_args))
+        sys.stderr.write("# Return code: %d\n" % e.returncode)
+        if e.output:
+            sys.stderr.write("# Output: %s\n" % e.output.decode('utf-8', errors='ignore'))
+        raise
 
 # Similar as run_crun_command but does not performs decode of output and relays error message for further matching
 def run_crun_command_raw(args):
     root = get_tests_root_status()
     crun = get_crun_path()
-    args = [crun, "--root", root] + args
-    return subprocess.check_output(args, close_fds=False, stderr=subprocess.STDOUT)
+    cmd_args = [crun, "--root", root] + args
+    try:
+        return subprocess.check_output(cmd_args, close_fds=False, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        sys.stderr.write("# crun command failed: %s\n" % ' '.join(cmd_args))
+        sys.stderr.write("# Return code: %d\n" % e.returncode)
+        raise
 
 def running_on_systemd():
     with open('/proc/1/comm') as f:
