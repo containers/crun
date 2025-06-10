@@ -142,7 +142,9 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   char *it, *s;
   int i, ret;
 
-  sprintf (pid_stat_file, "/proc/%d/stat", pid);
+  ret = snprintf (pid_stat_file, sizeof (pid_stat_file), "/proc/%d/stat", pid);
+  if (UNLIKELY (ret >= (int) sizeof (pid_stat_file)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   fd = open (pid_stat_file, O_RDONLY | O_CLOEXEC);
   if (fd < 0)
