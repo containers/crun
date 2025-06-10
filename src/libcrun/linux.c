@@ -1104,7 +1104,7 @@ static int
 diagnose_mount_failure (int ret, libcrun_error_t *err, libcrun_container_t *container,
                         const char *fstype)
 {
-  if (strcmp (fstype, "cgroup2") == 0 && get_private_data (container)->unified_cgroup_path)
+  if (fstype && strcmp (fstype, "cgroup2") == 0 && get_private_data (container)->unified_cgroup_path)
     {
       if (access (get_private_data (container)->unified_cgroup_path, R_OK) < 0 && errno == EACCES)
         {
