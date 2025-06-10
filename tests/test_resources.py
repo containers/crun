@@ -59,7 +59,7 @@ def test_resources_pid_limit():
 
     out, _ = run_and_get_output(conf)
     if "1024" not in out:
-        sys.stderr.write("found %s instead of 1024\n" % out)
+        sys.stderr.write("# found %s instead of 1024\n" % out)
         return -1
     return 0
 
@@ -102,7 +102,7 @@ def test_resources_pid_limit_userns():
 
     out, _ = run_and_get_output(conf)
     if "1024" not in out:
-        sys.stderr.write("found %s instead of 1024\n" % out)
+        sys.stderr.write("# found %s instead of 1024\n" % out)
         return -1
     return 0
 
@@ -276,7 +276,7 @@ def test_resources_cpu_weight_systemd():
         _, cid = run_and_get_output(conf, command='run', detach=True, cgroup_manager="systemd")
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if "1234" not in out:
-            sys.stderr.write("found wrong CPUWeight for the container cgroup\n")
+            sys.stderr.write("# found wrong CPUWeight for the container cgroup\n")
             return -1
 
         state = run_crun_command(['state', cid])
@@ -288,7 +288,7 @@ def test_resources_cpu_weight_systemd():
             out = subprocess.check_output(['systemctl', '--user', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
 
         if out != "1234":
-            sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
+            sys.stderr.write("# found wrong CPUWeight for the systemd scope\n")
             return 1
 
         run_crun_command(['update', '--cpu-share', '4321', cid])
@@ -297,7 +297,7 @@ def test_resources_cpu_weight_systemd():
 
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if expected_weight not in out:
-            sys.stderr.write("found wrong CPUWeight %s for the container cgroup\n" % out)
+            sys.stderr.write("# found wrong CPUWeight %s for the container cgroup\n" % out)
             return -1
 
         out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
@@ -306,7 +306,7 @@ def test_resources_cpu_weight_systemd():
             out = subprocess.check_output(['systemctl', '--user', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
 
         if out != expected_weight:
-            sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
+            sys.stderr.write("# found wrong CPUWeight for the systemd scope\n")
             return 1
     finally:
         if cid is not None:
@@ -331,7 +331,7 @@ def test_resources_exec_cgroup():
             if i == "":
                 continue
             if "/foo" not in i:
-                sys.stderr.write("/foo not found in the output")
+                sys.stderr.write("# /foo not found in the output\n")
                 return -1
         return 0
     except Exception as e:
