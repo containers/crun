@@ -243,9 +243,11 @@ write_blkio_v1_resources_throttling (int dirfd, const char *name, throttling_s *
   for (i = 0; i < throttling_len; i++)
     {
       int ret;
-      size_t len;
-      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu64 "\n", throttling[i]->major, throttling[i]->minor,
-                     throttling[i]->rate);
+      int len;
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64 ":%" PRIu64 " %" PRIu64 "\n", throttling[i]->major, throttling[i]->minor,
+                      throttling[i]->rate);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
@@ -267,9 +269,11 @@ write_blkio_v2_resources_throttling (int fd, const char *name, throttling_s **th
   for (i = 0; i < throttling_len; i++)
     {
       int ret;
-      size_t len;
-      len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %s=%" PRIu64 "\n", throttling[i]->major, throttling[i]->minor,
-                     name, throttling[i]->rate);
+      int len;
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64 ":%" PRIu64 " %s=%" PRIu64 "\n", throttling[i]->major, throttling[i]->minor,
+                      name, throttling[i]->rate);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
 
       ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
       if (UNLIKELY (ret < 0))
@@ -283,14 +287,16 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
                        libcrun_error_t *err)
 {
   char fmt_buf[128];
-  size_t len;
+  int len;
   int ret;
 
   if (blkio->weight)
     {
       uint32_t val = blkio->weight;
 
-      len = sprintf (fmt_buf, "%" PRIu32, val);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu32, val);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       if (! cgroup2)
         {
           ret = write_cgroup_file_or_alias (dirfd, "blkio.weight", "blkio.bfq.weight", fmt_buf, len, err);
@@ -309,7 +315,9 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
                   /* convert linearly from [10-1000] to [1-10000] */
                   val = 1 + (val - 10) * 9999 / 990;
 
-                  len = sprintf (fmt_buf, "%" PRIu32, val);
+                  len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu32, val);
+                  if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+                    return crun_make_error (err, 0, "internal error: static buffer too small");
 
                   ret = write_cgroup_file (dirfd, "io.weight", fmt_buf, len, err);
                 }
@@ -323,7 +331,11 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
     {
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set leaf_weight with cgroupv2");
-      len = sprintf (fmt_buf, "%d", blkio->leaf_weight);
+
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%d", blkio->leaf_weight);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = write_cgroup_file (dirfd, "blkio.leaf_weight", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -342,8 +354,11 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
             {
               uint32_t w = blkio->weight_device[i]->weight;
 
-              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %i\n", blkio->weight_device[i]->major,
-                             blkio->weight_device[i]->minor, w);
+              len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64 ":%" PRIu64 " %i\n", blkio->weight_device[i]->major,
+                              blkio->weight_device[i]->minor, w);
+              if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+                return crun_make_error (err, 0, "internal error: static buffer too small");
+
               ret = TEMP_FAILURE_RETRY (write (wfd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write `io.bfq.weight`");
@@ -374,16 +389,22 @@ write_blkio_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux
 
           for (i = 0; i < blkio->weight_device_len; i++)
             {
-              len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major,
-                             blkio->weight_device[i]->minor, blkio->weight_device[i]->weight);
+              len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major,
+                              blkio->weight_device[i]->minor, blkio->weight_device[i]->weight);
+              if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+                return crun_make_error (err, 0, "internal error: static buffer too small");
+
               ret = TEMP_FAILURE_RETRY (write (w_device_fd, fmt_buf, len));
               if (UNLIKELY (ret < 0))
                 return crun_make_error (err, errno, "write `%s`", weight_device_file_name);
 
               if (w_leafdevice_fd >= 0)
                 {
-                  len = sprintf (fmt_buf, "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major,
-                                 blkio->weight_device[i]->minor, blkio->weight_device[i]->leaf_weight);
+                  len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64 ":%" PRIu64 " %" PRIu16 "\n", blkio->weight_device[i]->major,
+                                  blkio->weight_device[i]->minor, blkio->weight_device[i]->leaf_weight);
+                  if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+                    return crun_make_error (err, 0, "internal error: static buffer too small");
+
                   ret = TEMP_FAILURE_RETRY (write (w_leafdevice_fd, fmt_buf, len));
                   if (UNLIKELY (ret < 0))
                     return crun_make_error (err, errno, "write `%s`", leaf_weight_device_file_name);
@@ -457,11 +478,14 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
                          libcrun_error_t *err)
 {
   char fmt_buf[128];
-  size_t len;
+  int len;
   int ret;
   if (net->class_id)
     {
-      len = sprintf (fmt_buf, "%d", net->class_id);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%d", net->class_id);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = write_cgroup_file (dirfd_netclass, "net_cls.classid", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -476,7 +500,10 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
 
       for (i = 0; i < net->priorities_len; i++)
         {
-          len = sprintf (fmt_buf, "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
+          len = snprintf (fmt_buf, sizeof (fmt_buf), "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
+          if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+            return crun_make_error (err, 0, "internal error: static buffer too small");
+
           ret = TEMP_FAILURE_RETRY (write (fd, fmt_buf, len));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write `net_prio.ifpriomap`");
@@ -497,14 +524,16 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
     {
       cleanup_free char *filename = NULL;
       const char *suffix;
-      size_t len;
+      int len;
       int ret;
 
       suffix = cgroup2 ? "max" : "limit_in_bytes";
 
       xasprintf (&filename, "hugetlb.%s.%s", htlb[i]->page_size, suffix);
 
-      len = sprintf (fmt_buf, "%" PRIu64, htlb[i]->limit);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, htlb[i]->limit);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -516,7 +545,8 @@ static int
 write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
                             libcrun_error_t *err)
 {
-  size_t i, len;
+  size_t i;
+  int len;
   int ret;
 
   for (i = 0; i < devs_len; i++)
@@ -536,23 +566,27 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           char fmt_buf_major[16];
           char fmt_buf_minor[16];
 
-#define FMT_DEV(x, b)               \
-  do                                \
-    {                               \
-      if (x##_present)              \
-        sprintf (b, "%" PRIi64, x); \
-      else                          \
-        strcpy (b, "*");            \
+#define FMT_DEV(x, b)                                                                   \
+  do                                                                                    \
+    {                                                                                   \
+      if (x##_present)                                                                  \
+        {                                                                               \
+          len = snprintf (b, sizeof (b), "%" PRIi64, x);                                \
+          if (UNLIKELY (len >= (int) sizeof (b)))                                       \
+            return crun_make_error (err, 0, "internal error: static buffer too small"); \
+        }                                                                               \
+      else                                                                              \
+        strcpy (b, "*");                                                                \
   } while (0)
 
           FMT_DEV (devs[i]->major, fmt_buf_major);
           FMT_DEV (devs[i]->minor, fmt_buf_minor);
 #undef FMT_DEV
 
-          len = snprintf (fmt_buf, FMT_BUF_LEN - 1, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor,
+          len = snprintf (fmt_buf, FMT_BUF_LEN, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor,
                           devs[i]->access);
-          /* Make sure it is still a NUL terminated string.  */
-          fmt_buf[len] = '\0';
+          if (UNLIKELY (len >= FMT_BUF_LEN))
+            return crun_make_error (err, 0, "internal error: static buffer too small");
         }
       ret = write_cgroup_file (dirfd, file, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
@@ -564,14 +598,19 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
       char fmt_buf_major[16];
       char fmt_buf_minor[16];
       char device[64];
+      int len;
 
-#define FMT_DEV(x, b)         \
-  do                          \
-    {                         \
-      if (x != -1)            \
-        sprintf (b, "%d", x); \
-      else                    \
-        strcpy (b, "*");      \
+#define FMT_DEV(x, b)                                                                   \
+  do                                                                                    \
+    {                                                                                   \
+      if (x != -1)                                                                      \
+        {                                                                               \
+          len = snprintf (b, sizeof (b), "%d", x);                                      \
+          if (UNLIKELY (len >= (int) sizeof (b)))                                       \
+            return crun_make_error (err, 0, "internal error: static buffer too small"); \
+        }                                                                               \
+      else                                                                              \
+        strcpy (b, "*");                                                                \
   } while (0)
 
       FMT_DEV (default_devices[i].major, fmt_buf_major);
@@ -579,8 +618,10 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
 
 #undef FMT_DEV
 
-      snprintf (device, sizeof (device) - 1, "%c %s:%s %s", default_devices[i].type, fmt_buf_major, fmt_buf_minor,
-                default_devices[i].access);
+      len = snprintf (device, sizeof (device), "%c %s:%s %s", default_devices[i].type, fmt_buf_major, fmt_buf_minor,
+                      default_devices[i].access);
+      if (UNLIKELY (len >= (int) sizeof (device)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
 
       ret = write_cgroup_file (dirfd, "devices.allow", device, strlen (device), err);
       if (UNLIKELY (ret < 0))
@@ -718,26 +759,33 @@ write_devices_resources (int dirfd, bool cgroup2, runtime_spec_schema_defs_linux
 
 /* use for cgroupv2 files with .min, .max, .low, or .high suffix */
 static int
-cg_itoa (char *buf, int64_t value, bool use_max)
+cg_itoa (char *buf, size_t size, int64_t value, bool use_max, libcrun_error_t *err)
 {
+  int len;
+
   if (use_max && value < 0)
-    {
-      memcpy (buf, "max", 4);
-      return 3;
-    }
-  return sprintf (buf, "%" PRIi64, value);
+    len = snprintf (buf, size, "max");
+  else
+    len = snprintf (buf, size, "%" PRIi64, value);
+
+  if (UNLIKELY (len >= (int) size))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+
+  return len;
 }
 
 static int
 write_memory (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory, libcrun_error_t *err)
 {
   char limit_buf[32];
-  size_t limit_buf_len;
+  int limit_buf_len;
 
   if (! memory->limit_present)
     return 0;
 
-  limit_buf_len = cg_itoa (limit_buf, memory->limit, cgroup2);
+  limit_buf_len = cg_itoa (limit_buf, sizeof (limit_buf), memory->limit, cgroup2, err);
+  if (UNLIKELY (limit_buf_len < 0))
+    return limit_buf_len;
 
   return write_cgroup_file (dirfd, cgroup2 ? "memory.max" : "memory.limit_in_bytes", limit_buf, limit_buf_len, err);
 }
@@ -749,7 +797,7 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
   int ret;
   int64_t swap;
   char swap_buf[32];
-  size_t swap_buf_len;
+  int len;
   const char *fname = cgroup2 ? "memory.swap.max" : "memory.memsw.limit_in_bytes";
 
   if (! memory->swap_present)
@@ -769,9 +817,11 @@ write_memory_swap (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_res
       swap -= memory->limit;
     }
 
-  swap_buf_len = cg_itoa (swap_buf, swap, cgroup2);
+  len = cg_itoa (swap_buf, sizeof (swap_buf), swap, cgroup2, err);
+  if (UNLIKELY (len < 0))
+    return len;
 
-  ret = write_cgroup_file (dirfd, fname, swap_buf, swap_buf_len, err);
+  ret = write_cgroup_file (dirfd, fname, swap_buf, len, err);
   if (ret >= 0)
     return ret;
 
@@ -789,7 +839,7 @@ static int
 write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_memory *memory,
                         libcrun_error_t *err)
 {
-  size_t len;
+  int len;
   int ret;
   char fmt_buf[32];
   bool memory_limits_written = false;
@@ -864,7 +914,9 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set kernel memory with cgroupv2");
 
-      len = sprintf (fmt_buf, "%" PRIu64, memory->kernel);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, memory->kernel);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_cgroup_file (dirfd, "memory.kmem.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -885,7 +937,9 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
 
   if (memory->reservation_present)
     {
-      len = sprintf (fmt_buf, "%" PRIu64, memory->reservation);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, memory->reservation);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, cgroup2 ? "memory.low" : "memory.soft_limit_in_bytes",
                                                  NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
@@ -905,7 +959,9 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set kernel TCP with cgroupv2");
 
-      len = sprintf (fmt_buf, "%" PRIu64, memory->kernel_tcp);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, memory->kernel_tcp);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_cgroup_file (dirfd, "memory.kmem.tcp.limit_in_bytes", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -915,7 +971,9 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
       if (cgroup2)
         return crun_make_error (err, 0, "cannot set memory swappiness with cgroupv2");
 
-      len = sprintf (fmt_buf, "%" PRIu64, memory->swappiness);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, memory->swappiness);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_cgroup_file (dirfd, "memory.swappiness", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -929,12 +987,14 @@ write_cpu_burst (int cpu_dirfd, bool cgroup2, runtime_spec_schema_config_linux_r
                  libcrun_error_t *err)
 {
   char fmt_buf[32];
-  size_t len;
+  int len;
 
   if (! cpu->burst_present)
     return 0;
 
-  len = sprintf (fmt_buf, "%" PRIi64, cpu->burst);
+  len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIi64, cpu->burst);
+  if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
   return write_cgroup_file (cpu_dirfd, cgroup2 ? "cpu.max.burst" : "cpu.cfs_burst_us", fmt_buf, len, err);
 }
 
@@ -945,10 +1005,13 @@ write_pids_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linux_
   if (pids->limit)
     {
       char fmt_buf[32];
-      size_t len;
+      int len;
       int ret;
 
-      len = cg_itoa (fmt_buf, pids->limit, true);
+      len = cg_itoa (fmt_buf, sizeof (fmt_buf), pids->limit, true, err);
+      if (UNLIKELY (len < 0))
+        return len;
+
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, "pids.max", NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -961,7 +1024,7 @@ static int
 write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
                      libcrun_error_t *err)
 {
-  size_t len, period_len;
+  int len, period_len;
   int ret;
   char fmt_buf[64];
   int64_t period = -1;
@@ -975,7 +1038,9 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (cgroup2)
         val = convert_shares_to_weight (val);
 
-      len = sprintf (fmt_buf, "%u", val);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%u", val);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
 
       ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, cgroup2 ? "cpu.weight" : "cpu.shares",
                                                  NULL, fmt_buf, len, err);
@@ -988,7 +1053,9 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         period = cpu->period;
       else
         {
-          len = sprintf (fmt_buf, "%" PRIu64, cpu->period);
+          len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, cpu->period);
+          if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+            return crun_make_error (err, 0, "internal error: static buffer too small");
           ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_period_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             {
@@ -1013,7 +1080,9 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
         quota = cpu->quota;
       else
         {
-          len = sprintf (fmt_buf, "%" PRIi64, cpu->quota);
+          len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIi64, cpu->quota);
+          if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+            return crun_make_error (err, 0, "internal error: static buffer too small");
           ret = write_cgroup_file (dirfd_cpu, "cpu.cfs_quota_us", fmt_buf, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -1029,7 +1098,9 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime period not supported on cgroupv2");
-      len = sprintf (fmt_buf, "%" PRIu64, cpu->realtime_period);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, cpu->realtime_period);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_cgroup_file (dirfd_cpu, "cpu.rt_period_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1038,14 +1109,18 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
     {
       if (cgroup2)
         return crun_make_error (err, 0, "realtime runtime not supported on cgroupv2");
-      len = sprintf (fmt_buf, "%" PRIu64, cpu->realtime_runtime);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, cpu->realtime_runtime);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_cgroup_file (dirfd_cpu, "cpu.rt_runtime_us", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
   if (cpu->idle_present)
     {
-      len = sprintf (fmt_buf, "%" PRIi64, cpu->idle);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIi64, cpu->idle);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_cgroup_file (dirfd_cpu, "cpu.idle", fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1056,9 +1131,13 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (period < 0)
         period = 100000;
       if (quota < 0)
-        len = sprintf (fmt_buf, "max %" PRIi64, period);
+        len = snprintf (fmt_buf, sizeof (fmt_buf), "max %" PRIi64, period);
       else
-        len = sprintf (fmt_buf, "%" PRIi64 " %" PRIi64, quota, period);
+        len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIi64 " %" PRIi64, quota, period);
+
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = write_file_and_check_controllers_at (cgroup2, dirfd_cpu, "cpu.max", NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;

@@ -130,7 +130,9 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
   if (UNLIKELY (ret < 0))
     return ret;
 
-  sprintf (pid_str, "%d", pid);
+  ret = snprintf (pid_str, sizeof (pid_str), "%d", pid);
+  if (UNLIKELY (ret >= (int) sizeof (pid_str)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
   if (UNLIKELY (ret < 0))
@@ -228,7 +230,11 @@ libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error
   if (pid == 0)
     strcpy (proc_cgroup_file, PROC_SELF_CGROUP);
   else
-    sprintf (proc_cgroup_file, "/proc/%d/cgroup", pid);
+    {
+      int len = snprintf (proc_cgroup_file, sizeof (proc_cgroup_file), "/proc/%d/cgroup", pid);
+      if (UNLIKELY (len >= (int) sizeof (proc_cgroup_file)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+    }
 
   ret = read_all_file (proc_cgroup_file, &content, &content_size, err);
   if (UNLIKELY (ret < 0))

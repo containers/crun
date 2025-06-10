@@ -297,8 +297,13 @@ read_unified_cgroup_pid (pid_t pid, char **path, libcrun_error_t *err)
   char cgroup_path[32];
   char *from, *to;
   cleanup_free char *content = NULL;
+  int len;
 
-  sprintf (cgroup_path, "/proc/%d/cgroup", pid);
+  len = snprintf (cgroup_path, sizeof (cgroup_path), "/proc/%d/cgroup", pid);
+  if (UNLIKELY (len >= (int) sizeof (cgroup_path)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+
+  cgroup_path[len] = '\0';
 
   ret = read_all_file (cgroup_path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
@@ -352,6 +357,7 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
     {
       char subsystem_path[64];
       char *subsystem;
+      size_t len;
 
       if (has_prefix (controller, "name="))
         controller += 5;
@@ -363,7 +369,10 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
       if (strcmp (subsystem, "cpuacct,cpu") == 0)
         subsystem = "cpu,cpuacct";
 
-      snprintf (subsystem_path, sizeof (subsystem_path), CGROUP_ROOT "/%s", subsystem);
+      len = snprintf (subsystem_path, sizeof (subsystem_path), CGROUP_ROOT "/%s", subsystem);
+      if (UNLIKELY (len >= (int) sizeof (subsystem_path)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = crun_path_exists (subsystem_path, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -397,9 +406,12 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
   cleanup_free char *cgroup_path = NULL;
   char pid_str[16];
   int repeat;
+  int len;
   int ret;
 
-  sprintf (pid_str, "%d", pid);
+  len = snprintf (pid_str, sizeof (pid_str), "%d", pid);
+  if (UNLIKELY (len >= (int) sizeof (pid_str)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
   if (UNLIKELY (ret < 0))
