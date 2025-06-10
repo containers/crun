@@ -20,12 +20,20 @@ from tests_utils import *
 def test_hostname():
     conf = base_config()
     conf['process']['args'] = ['/init', 'gethostname']
-    conf['hostname'] = "foomachine"
+    expected_hostname = "foomachine"
+    conf['hostname'] = expected_hostname
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
-    if "foomachine" not in out:
+    try:
+        out, _ = run_and_get_output(conf)
+        if expected_hostname not in out:
+            sys.stderr.write("# hostname test failed: expected '%s' in output\n" % expected_hostname)
+            sys.stderr.write("# actual output: %s\n" % out.strip())
+            return -1
+        return 0
+    except Exception as e:
+        sys.stderr.write("# hostname test failed with exception: %s\n" % str(e))
+        sys.stderr.write("# expected hostname: %s\n" % expected_hostname)
         return -1
-    return 0
     
 all_tests = {
     "hostname" : test_hostname,
