@@ -338,7 +338,7 @@ int copy_from_fd_to_fd (int src, int dst, int consume, libcrun_error_t *err);
 
 int run_process (char **args, libcrun_error_t *err);
 
-size_t format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid);
+int format_default_id_mapping (char **out, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid, libcrun_error_t *err);
 
 int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp,
                                          char *stdin, size_t stdin_len, int out_fd, int err_fd, libcrun_error_t *err);

@@ -468,6 +468,7 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
   size_t written = 0, allocated = 256;
   cleanup_free char *mappings = NULL;
   const char *it;
+  int ret;
 
   mappings = xmalloc (allocated);
 
@@ -536,7 +537,12 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
           allocated += 256;
           mappings = xrealloc (mappings, allocated);
         }
-      written += sprintf (mappings + written, "%ld %ld %ld\n", value[0], value[1], value[2]);
+
+      ret = snprintf (mappings + written, allocated - written, "%ld %ld %ld\n", value[0], value[1], value[2]);
+      if (UNLIKELY (ret >= (int) (allocated - written)))
+        return crun_make_error (err, 0, "internal error: allocated buffer too small");
+
+      written += ret;
     }
   *(mappings + written) = '\0';
 
@@ -548,12 +554,16 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
   return 0;
 }
 
-static char *
-format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len, size_t *written)
+static int
+format_mount_mappings (char **out,
+                       runtime_spec_schema_defs_id_mapping **mappings,
+                       size_t mappings_len,
+                       size_t *written,
+                       libcrun_error_t *err)
 {
   /* 64 is more than enough room to print 3 uint32.  */
   const size_t max_len_mapping = 64;
-  char *ret;
+  cleanup_free char *ret = NULL;
   size_t s;
 
   *written = 0;
@@ -567,14 +577,19 @@ format_mount_mappings (runtime_spec_schema_defs_id_mapping **mappings, size_t ma
                       mappings[s]->container_id,
                       mappings[s]->host_id,
                       mappings[s]->size);
+      if (UNLIKELY (len >= max_len_mapping))
+        return crun_make_error (err, 0, "internal error: allocated buffer too small");
 
       *written += len;
     }
-  return ret;
+  *out = ret;
+  ret = NULL;
+  return 0;
 }
 
-static char *
-format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, size_t *written)
+static int
+format_mount_mapping (char **ret, uint32_t container_id, uint32_t host_id,
+                      uint32_t size, size_t *written, libcrun_error_t *err)
 {
   runtime_spec_schema_defs_id_mapping mapping = {
     .container_id = container_id,
@@ -586,7 +601,7 @@ format_mount_mapping (uint32_t container_id, uint32_t host_id, uint32_t size, si
     NULL,
   };
 
-  return format_mount_mappings (mappings, 1, written);
+  return format_mount_mappings (ret, mappings, 1, written, err);
 }
 
 static bool
@@ -658,14 +673,26 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
       size_t written = 0;
       int ret;
 
-      uid_map = format_mount_mappings (mnt->uid_mappings, mnt->uid_mappings_len, &written);
-      sprintf (proc_file, "/proc/%d/uid_map", pid);
+      ret = format_mount_mappings (&uid_map, mnt->uid_mappings, mnt->uid_mappings_len, &written, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/uid_map", pid);
+      if (UNLIKELY (ret >= (int) sizeof (proc_file)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = write_file (proc_file, uid_map, written, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      gid_map = format_mount_mappings (mnt->gid_mappings, mnt->gid_mappings_len, &written);
-      sprintf (proc_file, "/proc/%d/gid_map", pid);
+      ret = format_mount_mappings (&gid_map, mnt->gid_mappings, mnt->gid_mappings_len, &written, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/gid_map", pid);
+      if (UNLIKELY (ret >= (int) sizeof (proc_file)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = write_file (proc_file, gid_map, written, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -691,10 +718,16 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
           if (has_prefix (option, "uids="))
             {
               is_uids = true;
-              sprintf (proc_file, "/proc/%d/uid_map", pid);
+              ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/uid_map", pid);
+              if (UNLIKELY (ret >= (int) sizeof (proc_file)))
+                return crun_make_error (err, 0, "internal error: static buffer too small");
             }
           else if (has_prefix (option, "gids="))
-            sprintf (proc_file, "/proc/%d/gid_map", pid);
+            {
+              ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/gid_map", pid);
+              if (UNLIKELY (ret >= (int) sizeof (proc_file)))
+                return crun_make_error (err, 0, "internal error: static buffer too small");
+            }
           else
             return crun_make_error (err, 0, "invalid option `%s` specified", option);
 
@@ -2906,8 +2939,14 @@ uidgidmap_helper (char *helper, pid_t pid, const char *map_file, libcrun_error_t
   char *next;
   cleanup_free char *map_file_copy = xstrdup (map_file);
   size_t nargs = 0;
+  int ret;
+
   args[nargs++] = helper;
-  sprintf (pid_fmt, "%d", pid);
+
+  ret = snprintf (pid_fmt, sizeof (pid_fmt), "%d", pid);
+  if (UNLIKELY (ret >= (int) sizeof (pid_fmt)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+
   args[nargs++] = pid_fmt;
   next = map_file_copy;
   while (nargs < MAX_ARGS)
@@ -3059,21 +3098,45 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
     return 0;
 
   if (def->linux->uid_mappings_len)
-    uid_map = format_mount_mappings (def->linux->uid_mappings, def->linux->uid_mappings_len, &uid_map_len);
+    {
+      ret = format_mount_mappings (&uid_map, def->linux->uid_mappings, def->linux->uid_mappings_len, &uid_map_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
   else
     {
-      uid_map_len = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, container->host_uid, 1);
+      ret = format_default_id_mapping (&uid_map, container->container_uid, container->host_uid, container->host_uid, 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      uid_map_len = (size_t) ret;
       if (uid_map == NULL)
-        uid_map = format_mount_mapping (0, container->host_uid, container->host_uid + 1, &uid_map_len);
+        {
+          ret = format_mount_mapping (&uid_map, 0, container->host_uid, container->host_uid + 1, &uid_map_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (def->linux->gid_mappings_len)
-    gid_map = format_mount_mappings (def->linux->gid_mappings, def->linux->gid_mappings_len, &gid_map_len);
+    {
+      ret = format_mount_mappings (&gid_map, def->linux->gid_mappings, def->linux->gid_mappings_len, &gid_map_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
   else
     {
-      gid_map_len = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, container->host_gid, 0);
+      ret = format_default_id_mapping (&gid_map, container->container_gid, container->host_uid, container->host_gid, 0, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      gid_map_len = (size_t) ret;
       if (gid_map == NULL)
-        gid_map = format_mount_mapping (0, container->host_gid, container->host_gid + 1, &gid_map_len);
+        {
+          ret = format_mount_mapping (&gid_map, 0, container->host_gid, container->host_gid + 1, &gid_map_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (container->host_uid)
@@ -3099,7 +3162,9 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           if (UNLIKELY (ret < 0))
             return ret;
 
-          single_mapping = format_mount_mapping (container->container_gid, container->host_gid, 1, &single_mapping_len);
+          ret = format_mount_mapping (&single_mapping, container->container_gid, container->host_gid, 1, &single_mapping_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
           ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
         }
@@ -3133,7 +3198,9 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
                 return ret;
             }
 
-          single_mapping = format_mount_mapping (container->container_uid, container->host_uid, 1, &single_mapping_len);
+          ret = format_mount_mapping (&single_mapping, container->container_uid, container->host_uid, 1, &single_mapping_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
           ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
         }
@@ -3411,7 +3478,11 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   if (def->process == NULL || ! def->process->oom_score_adj_present)
     return 0;
   libcrun_debug ("Write OOM score adj: `%d`", def->process->oom_score_adj);
-  sprintf (oom_buffer, "%i", def->process->oom_score_adj);
+
+  ret = snprintf (oom_buffer, sizeof (oom_buffer), "%i", def->process->oom_score_adj);
+  if (UNLIKELY (ret >= (int) sizeof (oom_buffer)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+
   fd = open ("/proc/self/oom_score_adj", O_RDWR | O_CLOEXEC);
   if (fd < 0)
     return crun_make_error (err, errno, "open `/proc/self/oom_score_adj`");
@@ -4183,7 +4254,10 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   if (created_pid > 0)
     pid = created_pid;
 
-  sprintf (proc_path, "/proc/%d/ns/user", pid);
+  ret = snprintf (proc_path, sizeof (proc_path), "/proc/%d/ns/user", pid);
+  if (UNLIKELY (ret >= (int) sizeof (proc_path)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+
   fd = open (proc_path, O_RDONLY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", proc_path);
@@ -4250,7 +4324,9 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
   dev_t dev;
   int ret;
 
-  snprintf (name, sizeof (name), "%zu", i);
+  ret = snprintf (name, sizeof (name), "%zu", i);
+  if (UNLIKELY (ret >= (int) sizeof (name)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   device = def->linux->devices[i];
 
@@ -4717,7 +4793,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return crun_make_error (err, errno, "open `%s`", timens_offsets_file);
       if (def->linux->time_offsets->boottime)
         {
-          sprintf (fmt_buffer, "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
+          ret = snprintf (fmt_buffer, sizeof (fmt_buffer), "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
+          if (UNLIKELY (ret >= (int) sizeof (fmt_buffer)))
+            return crun_make_error (err, 0, "internal error: static buffer too small");
+
           libcrun_debug ("Using boot time offset: secs = `%lld`, nanosecs = `%d`", (long long int) def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
@@ -4726,7 +4805,11 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       if (def->linux->time_offsets->monotonic)
         {
           libcrun_debug ("Using monotonic time offset: secs = `%lld`, nanosecs = `%d`", (long long int) def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
-          sprintf (fmt_buffer, "monotonic %" PRIi64 " %" PRIu32, def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
+
+          ret = snprintf (fmt_buffer, sizeof (fmt_buffer), "monotonic %" PRIi64 " %" PRIu32, def->linux->time_offsets->monotonic->secs, def->linux->time_offsets->monotonic->nanosecs);
+          if (UNLIKELY (ret >= (int) sizeof (fmt_buffer)))
+            return crun_make_error (err, 0, "internal error: static buffer too small");
+
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
@@ -6146,7 +6229,9 @@ libcrun_move_network_devices (libcrun_container_t *container, pid_t pid, libcrun
   if (def == NULL || def->linux == NULL || def->linux->net_devices == NULL)
     return 0;
 
-  snprintf (ns_file, sizeof (ns_file), "/proc/%d/ns/net", pid);
+  ret = snprintf (ns_file, sizeof (ns_file), "/proc/%d/ns/net", pid);
+  if (UNLIKELY (ret >= (int) sizeof (ns_file)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   netns_fd = open (ns_file, O_RDONLY);
   if (UNLIKELY (netns_fd < 0))

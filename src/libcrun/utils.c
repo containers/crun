@@ -1578,37 +1578,55 @@ getsubidrange (uid_t id, int is_uid, uint32_t *from, uint32_t *len)
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 
-size_t
-format_default_id_mapping (char **ret, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid)
+int
+format_default_id_mapping (char **out, uid_t container_id, uid_t host_uid, uid_t host_id, int is_uid, libcrun_error_t *err)
 {
   uint32_t from = 0, available = 0;
   cleanup_free char *buffer = NULL;
-  size_t written = 0;
+  int written = 0;
+  int ret, remaining;
 
-  *ret = NULL;
+  *out = NULL;
 
   if (getsubidrange (host_uid, is_uid, &from, &available) < 0)
     return 0;
 
   /* More than enough space for all the mappings.  */
-  buffer = xmalloc (15 * 5 * 3);
+  remaining = 15 * 5 * 3;
+  buffer = xmalloc (remaining + 1);
 
   if (container_id > 0)
     {
       uint32_t used = MIN (container_id, available);
-      written += sprintf (buffer + written, "%d %d %d\n", 0, from, used);
+      ret = snprintf (buffer + written, remaining, "%d %d %d\n", 0, from, used);
+      if (UNLIKELY (ret >= remaining))
+        return crun_make_error (err, 0, "internal error: allocated buffer too small");
+
+      written += written;
+      remaining -= ret;
+
       from += used;
       available -= used;
     }
 
   /* Host ID -> Container ID.  */
-  written += sprintf (buffer + written, "%d %d 1\n", container_id, host_id);
+  ret = snprintf (buffer + written, remaining, "%d %d 1\n", container_id, host_id);
+  if (UNLIKELY (ret >= remaining))
+    return crun_make_error (err, 0, "internal error: allocated buffer too small");
+  written += ret;
+  remaining -= ret;
 
   /* Last mapping: use any id that is left.  */
   if (available)
-    written += sprintf (buffer + written, "%d %d %d\n", container_id + 1, from, available);
+    {
+      ret = snprintf (buffer + written, remaining, "%d %d %d\n", container_id + 1, from, available);
+      if (UNLIKELY (ret >= remaining))
+        return crun_make_error (err, 0, "internal error: allocated buffer too small");
+      written += ret;
+      remaining -= ret;
+    }
 
-  *ret = buffer;
+  *out = buffer;
   buffer = NULL;
   return written;
 }
@@ -1858,7 +1876,7 @@ get_current_timestamp (char *out, size_t len)
   gmtime_r (&tv.tv_sec, &now);
   strftime (timestamp, sizeof (timestamp), "%Y-%m-%dT%H:%M:%S", &now);
 
-  snprintf (out, len, "%s.%06lldZ", timestamp, (long long int) tv.tv_usec);
+  (void) snprintf (out, len, "%s.%06lldZ", timestamp, (long long int) tv.tv_usec);
   out[len - 1] = '\0';
 }
 
