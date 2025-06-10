@@ -49,7 +49,7 @@ AS_HELP_STRING([--enable-libcrun], [Include libcrun in installation (default: ye
 case "${enableval}" in
 	yes) enable_libcrun=true ;;
 	no) enable_libcrun=false ;;
-	*) AC_MSG_ERROR(bad value ${enablevaal} for --enable-libcrun) ;;
+	*) AC_MSG_ERROR(bad value ${enableval} for --enable-libcrun) ;;
 esac
 ],
 [enable_libcrun=true])
