@@ -180,6 +180,10 @@ def run_all_tests(all_tests, allowed_tests):
         cur = cur + 1
         ret = -1
         try:
+            # recreate the tests_root() directory for each test
+            shutil.rmtree(get_tests_root())
+            os.mkdir(get_tests_root())
+
             ret = v()
             if ret == 0:
                 print("ok %d - %s" % (cur, k))
