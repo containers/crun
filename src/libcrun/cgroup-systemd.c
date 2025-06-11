@@ -146,7 +146,7 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
   cleanup_close int dirfd = -1;
   bool need_set_parent = true;
   char fmt_buf[64];
-  size_t len;
+  int len;
   int ret;
 
   if (resources == NULL || resources->cpu == NULL)
@@ -169,7 +169,9 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 
   if (resources->cpu->realtime_period)
     {
-      len = sprintf (fmt_buf, "%" PRIu64, resources->cpu->realtime_period);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, resources->cpu->realtime_period);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
 
       if (need_set_parent)
         {
@@ -185,7 +187,9 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
 
   if (resources->cpu->realtime_runtime)
     {
-      len = sprintf (fmt_buf, "%" PRIu64, resources->cpu->realtime_runtime);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu64, resources->cpu->realtime_runtime);
+      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
 
       if (need_set_parent)
         {
@@ -958,10 +962,14 @@ append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_sch
   for (i = 0; resources->block_io && i < resources->block_io->weight_device_len; i++)
     {
       char name[64];
+      int len;
 
-      snprintf (name, sizeof (name), "%" PRIu64 ":%" PRIu64,
-                resources->block_io->weight_device[i]->major,
-                resources->block_io->weight_device[i]->minor);
+      len = snprintf (name, sizeof (name), "%" PRIu64 ":%" PRIu64,
+                      resources->block_io->weight_device[i]->major,
+                      resources->block_io->weight_device[i]->minor);
+      if (UNLIKELY (len >= (int) sizeof (name)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       weight = IO_WEIGHT (resources->block_io->weight_device[i]->weight);
       APPEND_IO_DEVICE_WEIGHT (name, weight);
     }
@@ -1087,6 +1095,7 @@ append_device_allow (sd_bus_message *m,
 {
   char device[64];
   int sd_err;
+  int len;
 
   if (IS_WILDCARD (major) && ! IS_WILDCARD (minor))
     {
@@ -1095,11 +1104,14 @@ append_device_allow (sd_bus_message *m,
     }
 
   if (IS_WILDCARD (major) && IS_WILDCARD (minor))
-    snprintf (device, sizeof (device) - 1, "%s-*", type == 'c' ? "char" : "block");
+    len = snprintf (device, sizeof (device), "%s-*", type == 'c' ? "char" : "block");
   else if (IS_WILDCARD (minor))
-    snprintf (device, sizeof (device) - 1, type == 'c' ? "char-%d" : "block-%d", major);
+    len = snprintf (device, sizeof (device), type == 'c' ? "char-%d" : "block-%d", major);
   else
-    snprintf (device, sizeof (device) - 1, "/dev/%s/%d:%d", type == 'c' ? "char" : "block", major, minor);
+    len = snprintf (device, sizeof (device), "/dev/%s/%d:%d", type == 'c' ? "char" : "block", major, minor);
+
+  if (UNLIKELY (len >= (int) sizeof (device)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
 
   sd_err = sd_bus_message_append (m, "(sv)", "DeviceAllow", "a(ss)", 1, device, access);
   if (UNLIKELY (sd_err < 0))

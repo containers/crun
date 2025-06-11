@@ -443,7 +443,12 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
   blake3_hasher_finalize (&hasher, hash, sizeof (hash));
 
   for (i = 0; i < 32; i++)
-    sprintf (&out[i * 2], "%02x", hash[i]);
+    {
+      size_t remaining = sizeof (seccomp_checksum_t) - i * 2;
+      ret = snprintf (&out[i * 2], remaining, "%02x", hash[i]);
+      if (UNLIKELY (ret != 2))
+        return crun_make_error (err, 0, "internal error: static buffer has wrong size");
+    }
   out[64] = 0;
 
 #undef PROCESS_STRING

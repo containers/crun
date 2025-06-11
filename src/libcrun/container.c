@@ -2021,7 +2021,9 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   if (args->context->pid_file)
     {
       char buf[32];
-      size_t buf_len = snprintf (buf, sizeof (buf), "%d", args->pid);
+      int buf_len = snprintf (buf, sizeof (buf), "%d", args->pid);
+      if (UNLIKELY (buf_len >= (int) sizeof (buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
       ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, args->context->pid_file, buf, buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -4185,9 +4187,9 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 #ifdef HAVE_SECCOMP
   {
     const struct scmp_version *version = seccomp_version ();
-    int size = snprintf (NULL, 0, "%u.%u.%u", version->major, version->minor, version->micro) + 1;
-    char *version_string = xmalloc0 (size);
-    snprintf (version_string, size, "%u.%u.%u", version->major, version->minor, version->micro);
+    char *version_string = NULL;
+
+    xasprintf (&version_string, "%u.%u.%u", version->major, version->minor, version->micro);
     (*info)->annotations.io_github_seccomp_libseccomp_version = version_string;
   }
 #endif
@@ -4313,7 +4315,10 @@ restore_proxy_process (int *proxy_pid_pipe, int cgroup_manager, libcrun_error_t 
     {
       char ready_str[64];
 
-      sprintf (ready_str, "MAINPID=%d", new_pid);
+      ret = snprintf (ready_str, sizeof (ready_str), "MAINPID=%d", new_pid);
+      if (UNLIKELY (ret >= (int) sizeof (ready_str)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = send_sd_notify (ready_str, err);
       /* Do not fail on errors.  */
       if (UNLIKELY (ret < 0))
@@ -4540,7 +4545,10 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   if (context->pid_file)
     {
       char buf[32];
-      size_t buf_len = snprintf (buf, sizeof (buf), "%d", status.pid);
+      int buf_len = snprintf (buf, sizeof (buf), "%d", status.pid);
+      if (UNLIKELY (buf_len >= (int) sizeof (buf)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+
       ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, context->pid_file, buf, buf_len, err);
       if (UNLIKELY (ret < 0))
         return ret;

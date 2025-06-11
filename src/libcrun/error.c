@@ -162,13 +162,16 @@ typedef char timestamp_t[64];
 static void
 get_timestamp (timestamp_t *timestamp, const char *suffix)
 {
+  const size_t buffer_size = sizeof (timestamp_t);
+  char *buffer = (char *) timestamp;
   struct timeval tv;
+  size_t written;
   struct tm now;
 
   gettimeofday (&tv, NULL);
   gmtime_r (&tv.tv_sec, &now);
-  strftime ((char *) timestamp, 64, "%Y-%m-%dT%H:%M:%S", &now);
-  sprintf (((char *) timestamp) + 19, ".%06lldZ%.8s", (long long int) tv.tv_usec, suffix);
+  written = strftime (buffer, buffer_size, "%Y-%m-%dT%H:%M:%S", &now);
+  snprintf (buffer + written, buffer_size - written, ".%06lldZ%.8s", (long long int) tv.tv_usec, suffix);
 }
 
 static void *

@@ -17,6 +17,14 @@ local-checks-to-skip = \
     sc_prohibit_always-defined_macros \
     sc_prohibit_gnu_make_extensions
 
+sc_prohibit_sprintf:
+	@prohibit='\<sprintf *\('					\
+	halt='do not use sprintf, use snprintf'				\
+	  $(_sc_search_regexp)
+
+local-checks-available += $(sc_prohibit_sprintf)
+
+
 #SHELL=bash -x
 show-vc-list-except:
 	@$(VC_LIST_EXCEPT)
