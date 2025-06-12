@@ -27,9 +27,12 @@
 #include <errno.h>
 #include <sys/param.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/sysmacros.h>
+#include <sys/un.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <unistd.h>
 #include <ocispec/runtime_spec_schema_config_schema.h>
 
 #ifdef HAVE_DLOPEN
@@ -139,6 +142,96 @@ libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, 
 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, -ret, "could not configure a krun external kernel");
+
+  return 0;
+}
+
+static int
+libkrun_configure_nitro (uint32_t ctx_id, void *handle, yajl_val *config_tree, libcrun_error_t *err)
+{
+  int32_t (*krun_nitro_set_image) (uint32_t ctx_id, const char *image_path, uint32_t image_type);
+  int32_t (*krun_add_vsock_port) (uint32_t ctx_id, uint32_t port, const char *c_filepath);
+  int32_t (*krun_nitro_set_start_flags) (uint32_t ctx_id, uint64_t start_flags);
+  const char *path_eif[] = { "eif_file", (const char *) 0 };
+  const char *path_sock_path[] = { "nitro_sock_path", (const char *) 0 };
+  yajl_val val_eif_image = NULL, val_sock_path = NULL;
+  uint64_t start_flags = 1;
+  struct sockaddr_un addr;
+  char *eif_image = NULL, *sock_path = NULL;
+  int ret, sock_fd = -1;
+
+  val_eif_image = yajl_tree_get (*config_tree, path_eif, yajl_t_string);
+  if (val_eif_image == NULL || ! YAJL_IS_STRING (val_eif_image))
+    return crun_make_error (err, -ret, "invalid Enclave Image Format file parameter");
+
+  eif_image = YAJL_GET_STRING (val_eif_image);
+
+  val_sock_path = yajl_tree_get (*config_tree, path_sock_path, yajl_t_string);
+  if (val_sock_path == NULL || ! YAJL_IS_STRING (val_sock_path))
+    return crun_make_error (err, -ret, "invalid Enclave Image Format file parameter");
+
+  sock_path = YAJL_GET_STRING (val_sock_path);
+
+  krun_nitro_set_image = dlsym (handle, "krun_nitro_set_image");
+  if (krun_nitro_set_image == NULL)
+    return crun_make_error (err, 0, "could not find symbol in krun library");
+
+  krun_nitro_set_start_flags = dlsym (handle, "krun_nitro_set_start_flags");
+  if (krun_nitro_set_start_flags == NULL)
+    return crun_make_error (err, 0, "could not find symbol in krun library");
+
+  krun_add_vsock_port = dlsym (handle, "krun_add_vsock_port");
+  if (krun_add_vsock_port == NULL)
+    return crun_make_error (err, 0, "could not find symbol in krun library");
+
+  ret = krun_nitro_set_image (ctx_id, eif_image, KRUN_NITRO_IMG_TYPE_EIF);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "could not configure a krun nitro EIF image");
+
+  ret = krun_nitro_set_start_flags (ctx_id, 1);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "could not configure a krun nitro start flags");
+
+  sock_fd = socket (AF_UNIX, SOCK_STREAM, 0);
+  if (sock_fd < 0)
+    return crun_make_error (err, -ret, "could not configure a krun nitro socket");
+
+  memset (&addr, 0, sizeof (struct sockaddr_un));
+  addr.sun_family = AF_UNIX;
+  unlink (sock_path);
+
+  if (UNLIKELY (sizeof (sock_path) >= sizeof (addr.sun_path)))
+    {
+      close (sock_fd);
+      return crun_make_error (err, -ret, "path of nitro socket file too many characters");
+    }
+
+  strcpy (addr.sun_path, sock_path);
+
+  ret = bind (sock_fd, (struct sockaddr *) &addr, sizeof (addr));
+  if (ret < 0)
+    {
+      close (sock_fd);
+      return crun_make_error (err, -ret, "could not bind krun nitro socket");
+    }
+
+  ret = listen (sock_fd, 1);
+  if (ret < 0)
+    {
+      close (sock_fd);
+      return crun_make_error (err, -ret, "could not listen on krun nitro socket");
+    }
+
+  /*
+   * Hardcode port 0, as nitro enclaves pre-set a known vsock port for guest
+   * communication. The port argument is essentially ignored.
+   */
+  ret = krun_add_vsock_port (ctx_id, 0, sock_path);
+  if (ret < 0)
+    {
+      close (sock_fd);
+      return crun_make_error (err, -ret, "could not listen on krun nitro socket");
+    }
 
   return 0;
 }
@@ -291,6 +384,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
+  int32_t (*krun_nitro_set_image) (uint32_t ctx_id, const char *image_path, uint32_t image_type);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
   uint32_t num_vcpus, ram_mib;
@@ -333,6 +427,12 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       ret = krun_set_tee_config_file (ctx_id, KRUN_SEV_FILE);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun tee config file");
+    }
+  else if (kconf->nitro)
+    {
+      ret = libkrun_configure_nitro (ctx_id, handle, &config_tree, &err);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not configure krun nitro enclave");
     }
   else
     {
