@@ -687,7 +687,7 @@ crun_dir_p_at (int dirfd, const char *path, bool nofollow, libcrun_error_t *err)
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "stat `%s`", path);
 
-  return S_ISDIR (mode);
+  return S_ISDIR (mode) ? 1 : 0;
 }
 
 int
