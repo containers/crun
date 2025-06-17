@@ -494,18 +494,8 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
 int
 libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *run_directory = NULL;
   cleanup_free char *dir = NULL;
   int ret;
-
-  ret = get_run_directory (&run_directory, state_root, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  libcrun_debug ("Checking run directory: %s", run_directory);
-  ret = crun_ensure_directory (run_directory, 0700, false, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = libcrun_get_state_directory (&dir, state_root, id, err);
   if (UNLIKELY (ret < 0))
