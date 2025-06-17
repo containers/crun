@@ -1073,6 +1073,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   pathfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, rel_path, O_PATH | O_CLOEXEC, 0, err);
   if (UNLIKELY (pathfd < 0))
     {
+      errno = crun_error_get_errno (err);
       if (errno != ENOENT && errno != EACCES)
         return pathfd;
 
