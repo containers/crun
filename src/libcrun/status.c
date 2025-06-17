@@ -113,7 +113,7 @@ static int
 get_state_directory_status_file (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *root = NULL;
-  char *path = NULL;
+  cleanup_free char *path = NULL;
   int ret;
 
   ret = validate_id (id, err);
