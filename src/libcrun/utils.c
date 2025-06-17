@@ -246,6 +246,7 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
       if (ret == 0 || errno == EEXIST)
         return 0;
 
+      int saved_errno = errno;
       if (parent_created || errno != ENOENT)
         {
           libcrun_error_t tmp_err = NULL;
@@ -257,7 +258,7 @@ ensure_directory_internal_at (int dirfd, char *path, size_t len, int mode, libcr
           if (ret < 0)
             crun_error_release (&tmp_err);
 
-          return crun_make_error (err, errno, "create directory `%s`", path);
+          return crun_make_error (err, saved_errno, "create directory `%s`", path);
         }
 
       while (it > path && *it != '/')
