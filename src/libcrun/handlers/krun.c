@@ -230,10 +230,13 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
       if (kconf->handle_sev == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
 
-      // We no longer need the libkrun handle.
-      ret = dlclose (kconf->handle);
-      if (UNLIKELY (ret != 0))
-        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+      if (kconf->handle != NULL)
+        {
+          // We no longer need the libkrun handle.
+          ret = dlclose (kconf->handle);
+          if (UNLIKELY (ret != 0))
+            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+        }
 
       kconf->handle = kconf->handle_sev;
       kconf->ctx_id = kconf->ctx_id_sev;
@@ -244,10 +247,13 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
       if (kconf->handle == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
 
-      // We no longer need the libkrun-sev handle.
-      ret = dlclose (kconf->handle_sev);
-      if (UNLIKELY (ret != 0))
-        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+      if (kconf->handle_sev != NULL)
+        {
+          // We no longer need the libkrun-sev handle.
+          ret = dlclose (kconf->handle_sev);
+          if (UNLIKELY (ret != 0))
+            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
+        }
 
       kconf->sev = false;
     }
