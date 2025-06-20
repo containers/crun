@@ -1406,7 +1406,7 @@ append_resources (sd_bus_message *m,
   if (resources->cpu)
     {
       /* do not bother with systemd internal representation unless both values are specified */
-      if (resources->cpu->quota && resources->cpu->period)
+      if (resources->cpu->quota > 0 && resources->cpu->period)
         {
           uint64_t quota = resources->cpu->quota;
 
