@@ -631,7 +631,7 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   return 0;
 }
 
-static struct bpf_program *
+struct bpf_program *
 create_dev_bpf (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
                 libcrun_error_t *err)
 {
