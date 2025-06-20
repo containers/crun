@@ -527,9 +527,12 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
         }
     }
 
-  ret = ebpf_attach_program (fd, dirfd, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (dirfd >= 0)
+    {
+      ret = ebpf_attach_program (fd, dirfd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   /* Optionally pin the program to the specified path.  */
   if (pin)
