@@ -3769,7 +3769,11 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
         return ret;
     }
 
-  ret = do_mount (container, pty, -1, "/dev/console", NULL, MS_BIND, NULL, LABEL_MOUNT, err);
+  ret = unlink ("/dev/console");
+  if (UNLIKELY (ret < 0) && errno != ENOENT)
+    return ret;
+
+  ret = symlink (pty, "/dev/console");
   if (UNLIKELY (ret < 0))
     return ret;
 
