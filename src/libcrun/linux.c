@@ -3769,9 +3769,22 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
         return ret;
     }
 
-  ret = do_mount (container, pty, -1, "/dev/console", NULL, MS_BIND, NULL, LABEL_MOUNT, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (get_private_data (container)->mount_dev_from_host)
+    {
+      ret = do_mount (container, pty, -1, "/dev/console", NULL, MS_BIND, NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      ret = unlink ("/dev/console");
+      if (UNLIKELY (ret < 0 && errno != ENOENT))
+        return crun_make_error (err, errno, "unlink `/dev/console`");
+
+      ret = symlink (pty, "/dev/console");
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "symlink `/dev/console` -> `%s`", pty);
+    }
 
   return get_and_reset (&fd);
 }
