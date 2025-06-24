@@ -1,3 +1,36 @@
+* crun-1.22
+
+- crun: add a new command crun mounts to dynamically add or remove
+  mounts from a running container.
+- linux: add support for moving existing network devices into the
+  container namespace as defined in the OCI specification.
+- linux: add src-nofollow and dest-nofollow mount options for more
+  precise control over how symbolic links are handled.
+- krun: implement support for external kernels, allowing users to
+  bundle a kernel image with the container.
+- krun: the vCPU limit has been increased to 16.
+- krun: add support for specifying the libkrun flavor via the
+  KRUN_VM_FILE.
+- criu: fix checkpoint and restore for containers that have a bind
+  mount where the destination is a symbolic link.
+- criu: automatically create the directory specified by --work-path if
+  it does not exist, improving compatibility with other runtimes.
+- criu: re-enable support on the riscv64 architecture.
+- cgroup: fix incorrect setting of cpu.max when the OCI quota is -1.
+- hardening: replace all uses of the insecure sprintf function with
+  safer alternatives like snprintf to prevent buffer overflows.
+- fix a regression that caused issues when dealing with paths that do
+  not exist and openat2 is not available.
+- fix an issue where the file descriptor for the rootfs would become
+  stale if the rootfs was replaced by a mount.
+- fix parsing of rootless options.
+- fix a potential crash in krun by checking if library handles exist
+  before being unloaded.
+- improve error messages for dlopen failures, making them more descriptive.
+- cgroup: fix a regression on WSL when running with cgroup v1.
+- libcrun: setup /dev/console as a symlink to pty instead of bind mount
+  when possible.
+
 * crun-1.21
 
 - criu: when running under systemd, use a proxy process to initialize
