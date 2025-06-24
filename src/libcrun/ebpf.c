@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/resource.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 #ifdef HAVE_EBPF
 #  include <linux/bpf.h>
@@ -527,9 +529,12 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
         }
     }
 
-  ret = ebpf_attach_program (fd, dirfd, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (dirfd >= 0)
+    {
+      ret = ebpf_attach_program (fd, dirfd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   /* Optionally pin the program to the specified path.  */
   if (pin)
@@ -546,4 +551,12 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
 
   return 0;
 #endif
+}
+
+bool
+has_bpf_fs ()
+{
+  struct statfs stat;
+
+  return statfs (SYS_FS_BPF, &stat) == 0 && (stat.f_type == BPF_FS_MAGIC);
 }

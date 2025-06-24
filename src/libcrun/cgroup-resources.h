@@ -36,4 +36,7 @@ int update_cgroup_resources (const char *path,
                              runtime_spec_schema_config_linux_resources *resources,
                              libcrun_error_t *err);
 
+struct bpf_program *create_dev_bpf (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                                    libcrun_error_t *err);
+
 #endif
