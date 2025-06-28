@@ -712,11 +712,11 @@ they are converted when needed from the cgroup v1 configuration.
 
 ## CPU controller
 
-| OCI (x) | cgroup 2 value (y) | conversion  |  comment |
-|---|---|---|---|
-| shares | cpu.weight | y = (1 + ((x - 2) \* 9999) / 262142) | convert from [2-262144] to [1-10000]|
-| period | cpu.max | y = x| period and quota are written together|
-| quota | cpu.max | y = x| period and quota are written together|
+| OCI (x) | cgroup 2 value (y) | conversion                                              | comment                               |
+|---------|--------------------|---------------------------------------------------------|---------------------------------------|
+| shares  | cpu.weight         | y=10^((log2(x)^2 + 125 * log2(x)) / 612.0 - 7.0 / 34.0) | convert from [2-262144] to [1-10000]  |
+| period  | cpu.max            | y = x                                                   | period and quota are written together |
+| quota   | cpu.max            | y = x                                                   | period and quota are written together |
 
 ## blkio controller
 
