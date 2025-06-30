@@ -271,6 +271,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
+  int32_t (*krun_set_gpu_options) (uint32_t ctx_id, uint32_t virgl_flags);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
   uint32_t num_vcpus, ram_mib;
@@ -360,6 +361,20 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
+
+      krun_set_gpu_options = dlsym (handle, "krun_set_gpu_options");
+      if (krun_set_gpu_options != NULL && access ("/dev/dri", F_OK) == 0)
+        {
+
+          uint32_t virgl_flags = VIRGLRENDERER_USE_EGL |           /* virtio-gpu compatible interface */
+                                 VIRGLRENDERER_RENDER_SERVER |     /* start a render server and move GPU rendering to the render server */
+                                 VIRGLRENDERER_VENUS |             /* enable venus renderer */
+                                 VIRGLRENDERER_THREAD_SYNC |       /* wait for sync objects in thread rather than polling */
+                                 VIRGLRENDERER_USE_ASYNC_FENCE_CB; /* used in conjunction with VIRGLRENDERER_THREAD_SYNC */
+          ret = krun_set_gpu_options (ctx_id, virgl_flags);
+          if (UNLIKELY (ret < 0))
+            error (EXIT_FAILURE, -ret, "could not set krun gpu options");
+        }
     }
 
   yajl_tree_free (config_tree);
