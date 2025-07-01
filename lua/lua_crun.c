@@ -49,14 +49,6 @@ static const char *LUA_CRUN_TAG_CONTS_ITER = "crun-containers-iterator";
       return luacrun_error (S, crun_err) + addret;             \
     }
 
-#if __STDC_VERSION__ < 201112L
-#  define LUACRUN_NoRet
-#elif __STDC_VERSION__ < 202300L
-#  define LUACRUN_NoRet _Noreturn
-#else
-#  define LUACRUN_NoRet [[noreturn]]
-#endif
-
 extern int lua_error (lua_State *L);
 extern int luaL_error (lua_State *L, const char *fmt, ...);
 
