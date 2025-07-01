@@ -73,6 +73,7 @@ struct krun_config
   int32_t ctx_id_sev;
   int32_t ctx_id_nitro;
   bool has_kvm;
+  bool has_nitro;
 };
 
 /* libkrun handler.  */
@@ -447,10 +448,11 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   struct krun_config *kconf = (struct krun_config *) cookie;
   struct device_s kvm_device = { "/dev/kvm", "c", 10, 232, 0666, 0, 0 };
   struct device_s sev_device = { "/dev/sev", "c", 10, 124, 0666, 0, 0 };
+  struct device_s nitro_device = { "/dev/nitro_enclaves", "c", 10, 122, 0666, 0, 0 };
   cleanup_close int devfd = -1;
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
-  bool create_sev = false;
+  bool create_sev = false, create_nitro = false;
   bool is_user_ns;
 
   if (rootfs == NULL)
@@ -516,6 +518,19 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         }
     }
 
+  if (kconf->handle_nitro != NULL)
+    {
+      create_nitro = true;
+      for (i = 0; i < def->linux->devices_len; i++)
+        {
+          if (strcmp (def->linux->devices[i]->path, "/dev/nitro_enclaves") == 0)
+            {
+              create_nitro = false;
+              break;
+            }
+        }
+    }
+
   devfd = openat (rootfsfd, "dev", O_PATH | O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
@@ -535,6 +550,13 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   if (create_sev)
     {
       ret = libcrun_create_dev (container, devfd, -1, &sev_device, is_user_ns, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (create_nitro)
+    {
+      ret = libcrun_create_dev (container, devfd, -1, &nitro_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -655,8 +677,8 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
 {
   const size_t device_size = sizeof (runtime_spec_schema_defs_linux_device_cgroup);
   struct krun_config *kconf = (struct krun_config *) cookie;
-  struct stat st_kvm, st_sev;
-  bool has_kvm = true, has_sev = true;
+  struct stat st_kvm, st_sev, st_nitro;
+  bool has_kvm = true, has_sev = true, has_nitro = true;
   size_t len;
   int ret;
 
@@ -682,6 +704,14 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
       has_sev = false;
     }
 
+  ret = stat ("/dev/nitro_enclaves", &st_nitro);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno != ENOENT)
+        return crun_make_error (err, errno, "stat `/dev/nitro_enclaves`");
+      has_nitro = false;
+    }
+
   if (has_kvm)
     {
       len = def->linux->resources->devices_len;
@@ -695,7 +725,18 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
       def->linux->resources->devices_len += has_sev ? 2 : 1;
     }
 
+  if (has_nitro)
+    {
+      len = def->linux->resources->devices_len;
+      def->linux->resources->devices = xrealloc (def->linux->resources->devices,
+                                                 device_size * (len + 2));
+
+      def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_nitro.st_rdev, true, "rwm");
+      def->linux->resources->devices_len++;
+    }
+
   kconf->has_kvm = has_kvm;
+  kconf->has_nitro = has_nitro;
 
   return 0;
 }
