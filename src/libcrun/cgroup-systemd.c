@@ -108,7 +108,8 @@ property_missing_p (char **missing_properties, const char *property)
 }
 
 static void
-get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **scope, char **slice)
+get_systemd_scope_and_slice (const char *id, bool user_slice, const char *cgroup_path,
+                             char **scope, char **slice)
 {
   char *n;
 
@@ -134,6 +135,16 @@ get_systemd_scope_and_slice (const char *id, const char *cgroup_path, char **sco
       n = strchr (*slice, ':');
       if (n)
         *n = '\0';
+
+      /* Ref: https://github.com/opencontainers/runc/blob/main/docs/systemd.md#systemd-unit-name-and-placement */
+      if (is_empty_string (*slice))
+        {
+          free (*slice);
+          if (user_slice)
+            *slice = xstrdup ("user.slice");
+          else
+            *slice = xstrdup ("system.slice");
+        }
     }
 }
 
@@ -1857,13 +1868,21 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   const char *id = args->id;
   pid_t pid = args->pid;
   int cgroup_mode;
+  int rootless = 0;
   int ret;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
-  get_systemd_scope_and_slice (id, cgroup_path, &scope, &slice);
+  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+    {
+      rootless = is_rootless (err);
+      if (UNLIKELY (rootless < 0))
+        return rootless;
+    }
+
+  get_systemd_scope_and_slice (id, rootless == 1, cgroup_path, &scope, &slice);
 
   for (;;)
     {
