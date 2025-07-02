@@ -841,6 +841,47 @@ def test_bind_mount_file_nofollow():
                 sys.stderr.write("# error %s\n" % e)
     return 0
 
+def test_idmapped_mounts_without_userns():
+    if is_rootless():
+        return 77
+    source_dir = os.path.join(get_tests_root(), "test-idmapped-mounts-no-userns")
+    try:
+        os.makedirs(source_dir)
+        target = os.path.join(source_dir, "file")
+
+        with open(target, "w+") as f:
+            f.write("")
+        os.chown(target, 0, 0)
+
+        conf = base_config()
+        add_all_namespaces(conf, userns=False)
+        conf['process']['args'] = ['/init', 'owner', '/foo/file']
+
+        mountMappings = [
+            {
+                "containerID": 0,
+                "hostID": 1000,
+                "size": 10
+            }
+        ]
+
+        options = ["bind", "ro", "idmap"]
+        mount_opt = {"destination": "/foo", "type": "bind", "source": source_dir, "options": options}
+        mount_opt["uidMappings"] = mountMappings
+        mount_opt["gidMappings"] = mountMappings
+
+        conf['mounts'].append(mount_opt)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+
+        if "1000:1000" not in out:
+            sys.stderr.write("# idmap without userns test failed: expected '1000:1000' in output\n")
+            sys.stderr.write("# actual output: %s\n" % out)
+            return 1
+    finally:
+        shutil.rmtree(source_dir)
+
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -864,6 +905,7 @@ all_tests = {
     "mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
     "mount-userns-bind-mount" : test_userns_bind_mount,
     "mount-idmapped-mounts" : test_idmapped_mounts,
+    "mount-idmapped-mounts-without-userns" : test_idmapped_mounts_without_userns,
     "mount-idmapped-mounts-symlink" : test_userns_bind_mount_symlink,
     "mount-linux-readonly-should-inherit-flags": test_mount_readonly_should_inherit_options_from_parent,
     "proc-linux-readonly-should-inherit-flags": test_proc_readonly_should_inherit_options_from_parent,
