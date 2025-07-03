@@ -1397,7 +1397,7 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
 }
 
 static int
-update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
+update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, const char *path, bool need_bpf_dev, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int cgroup_dirfd = -1;
@@ -1414,7 +1414,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
   if (UNLIKELY (cgroup_dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 
-  if (resources->devices_len)
+  if (need_bpf_dev && resources->devices_len)
     {
       ret = write_devices_resources (cgroup_dirfd, true, resources->devices, resources->devices_len, err);
       if (UNLIKELY (ret < 0))
@@ -1473,6 +1473,7 @@ int
 update_cgroup_resources (const char *path,
                          const char *state_root,
                          runtime_spec_schema_config_linux_resources *resources,
+                         bool need_bpf_dev,
                          libcrun_error_t *err)
 {
   int cgroup_mode;
@@ -1508,7 +1509,7 @@ update_cgroup_resources (const char *path,
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return update_cgroup_v2_resources (resources, path, err);
+      return update_cgroup_v2_resources (resources, path, need_bpf_dev, err);
 
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:

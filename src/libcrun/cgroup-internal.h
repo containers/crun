@@ -41,6 +41,8 @@ struct libcrun_cgroup_status
   char *scope;
 
   int manager;
+
+  bool bpf_dev_set;
 };
 
 struct libcrun_cgroup_manager
