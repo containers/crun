@@ -233,7 +233,8 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_start.py \
 	tests/test_exec.py \
 	tests/test_seccomp.py \
-	tests/test_time.py
+	tests/test_time.py \
+	tests/test_bpf_devices.py
 
 TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
 
