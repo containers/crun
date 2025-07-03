@@ -34,6 +34,7 @@ struct default_dev_s *get_default_devices ();
 int update_cgroup_resources (const char *path,
                              const char *state_root,
                              runtime_spec_schema_config_linux_resources *resources,
+                             bool need_devices,
                              libcrun_error_t *err);
 
 struct bpf_program *create_dev_bpf (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,

@@ -1388,6 +1388,7 @@ append_resources (sd_bus_message *m,
                   runtime_spec_schema_config_linux_resources *resources,
                   int cgroup_mode,
                   const char *scope,
+                  bool *devices_set,
                   libcrun_error_t *err)
 {
   uint64_t value;
@@ -1395,7 +1396,8 @@ append_resources (sd_bus_message *m,
   int ret;
   cleanup_free char *dir = NULL;
   cleanup_free char **missing_properties = NULL;
-  bool need_append_devices = true;
+
+  *devices_set = false;
 
   ret = append_paths (&dir, err, state_dir, SYSTEMD_MISSING_PROPERTIES_DIR, NULL);
   if (UNLIKELY (ret < 0))
@@ -1546,7 +1548,7 @@ append_resources (sd_bus_message *m,
                     if (UNLIKELY (sd_err < 0))
                       return crun_make_error (err, -sd_err, "sd-bus message append BPFProgram");
 
-                    need_append_devices = false;
+                    *devices_set = true;
                   }
               }
           }
@@ -1567,7 +1569,7 @@ append_resources (sd_bus_message *m,
 #  undef APPEND_UINT64
 #  undef APPEND_UINT64_VALUE
 
-  if (need_append_devices && (! is_update || resources->devices))
+  if (! *devices_set && (! is_update || resources->devices))
     {
       ret = append_devices (m, resources, err);
       if (UNLIKELY (ret < 0))
@@ -1616,6 +1618,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
                             const char *scope, const char *slice,
                             pid_t pid,
                             bool *can_retry,
+                            bool *devices_set,
                             libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
@@ -1630,6 +1633,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   cleanup_free char *state_dir = NULL;
 
   *can_retry = false;
+  *devices_set = false;
 
   ret = libcrun_get_state_directory (&state_dir, state_root, NULL, err);
   if (UNLIKELY (ret < 0))
@@ -1757,7 +1761,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         }
     }
 
-  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, err);
+  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, devices_set, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
@@ -1934,7 +1938,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
       bool can_retry = false;
 
       ret = enter_systemd_cgroup_scope (resources, cgroup_mode, args->annotations, args->state_root,
-                                        scope, slice, pid, &can_retry, err);
+                                        scope, slice, pid, &can_retry, &out->bpf_dev_set, err);
       if (LIKELY (ret >= 0))
         break;
 
@@ -2076,7 +2080,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       goto exit;
     }
 
-  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, err);
+  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, &cgroup_status->bpf_dev_set, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
