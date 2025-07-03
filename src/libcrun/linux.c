@@ -4220,7 +4220,7 @@ open_mount_of_type (runtime_spec_schema_defs_mount *mnt, int *out_fd, libcrun_er
 }
 
 static int
-maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, libcrun_error_t *err)
+maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, bool *has_mappings_out, libcrun_error_t *err)
 {
   cleanup_close int newfs_fd = -1;
   cleanup_pid pid_t created_pid = -1;
@@ -4243,6 +4243,8 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   idmap_option = get_idmapped_option (mnt, &recursive);
 
   has_mappings = mnt->uid_mappings_len > 0 || mnt->gid_mappings_len > 0 || (idmap_option != NULL);
+  if (has_mappings_out)
+    *has_mappings_out = has_mappings;
   if (! has_mappings)
     return 0;
 
@@ -4391,6 +4393,7 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
+  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
   size_t how_many = 0;
   size_t i;
   int ret;
@@ -4404,13 +4407,15 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
     {
       bool recursive = false;
       bool nofollow = false;
+      bool has_mappings = false;
       int mount_fd = -1;
 
-      ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &mount_fd, err);
+      ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &mount_fd, &has_mappings, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive, &nofollow))
+      /* If the mount has no mappings and there is not a different user namespace, create the mount later as part of the container setup.  */
+      if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow))
         {
           /* If the bind mount failed, do not fail here, but attempt to create it from within the container.  */
           mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, nofollow, err);
@@ -6167,7 +6172,7 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
       uint64_t rec_set = 0;
 
       /* Do not check whether the pid is valid or not.  run_in_container_namespace will validate it.  */
-      ret = maybe_get_idmapped_mount (def, mounts[i], pid, &(fds->fds[i]), err);
+      ret = maybe_get_idmapped_mount (def, mounts[i], pid, &(fds->fds[i]), NULL, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
