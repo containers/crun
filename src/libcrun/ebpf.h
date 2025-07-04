@@ -27,6 +27,9 @@
 #include <ocispec/runtime_spec_schema_config_schema.h>
 #include "container.h"
 
+#define SYS_FS_BPF "/sys/fs/bpf"
+#define CRUN_BPF_DIR SYS_FS_BPF "/crun"
+
 struct bpf_program;
 
 struct bpf_program *bpf_program_new (size_t size);

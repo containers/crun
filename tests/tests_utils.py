@@ -370,6 +370,9 @@ def is_rootless():
             return False
     return True
 
+def is_cgroup_v2_unified():
+    return subprocess.check_output("stat -c%T -f /sys/fs/cgroup".split()).decode("utf-8").strip() == "cgroup2fs"
+
 def get_crun_feature_string():
     for i in run_crun_command(['--version']).split('\n'):
         if i.startswith('+'):

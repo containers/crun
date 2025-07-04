@@ -21,9 +21,6 @@ import time
 from tests_utils import *
 
 
-def is_cgroup_v2_unified():
-    return subprocess.check_output("stat -c%T -f /sys/fs/cgroup".split()).decode("utf-8").strip() == "cgroup2fs"
-
 def test_resources_fail_with_enoent():
     if is_rootless():
         return 77

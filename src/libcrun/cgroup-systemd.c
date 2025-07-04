@@ -34,6 +34,9 @@
 #include <inttypes.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 #ifdef HAVE_SYSTEMD
 #  include <systemd/sd-bus.h>
@@ -1356,12 +1359,36 @@ append_devices (sd_bus_message *m,
   return 0;
 }
 
+static bool
+has_bpf_fs ()
+{
+  struct statfs stat;
+
+  return statfs (SYS_FS_BPF, &stat) == 0 && (stat.f_type == BPF_FS_MAGIC);
+}
+
+static int
+bpfprog_path_from_scope (char **path, const char *scope, libcrun_error_t *err)
+{
+  cleanup_free char *flat_scope = xstrdup (scope);
+  char *it;
+
+  /* Remove dots as EBPF code don't like them.  */
+  it = flat_scope;
+  while ((it = strchr (it, '.')) != NULL)
+    *it = '_';
+
+  return append_paths (path, err, CRUN_BPF_DIR, flat_scope, NULL);
+}
+
 static int
 append_resources (sd_bus_message *m,
                   bool is_update,
                   const char *state_dir,
                   runtime_spec_schema_config_linux_resources *resources,
                   int cgroup_mode,
+                  const char *scope,
+                  bool *devices_set,
                   libcrun_error_t *err)
 {
   uint64_t value;
@@ -1369,6 +1396,8 @@ append_resources (sd_bus_message *m,
   int ret;
   cleanup_free char *dir = NULL;
   cleanup_free char **missing_properties = NULL;
+
+  *devices_set = false;
 
   ret = append_paths (&dir, err, state_dir, SYSTEMD_MISSING_PROPERTIES_DIR, NULL);
   if (UNLIKELY (ret < 0))
@@ -1487,7 +1516,44 @@ append_resources (sd_bus_message *m,
                   return ret;
               }
           }
+
+        if (geteuid () == 0 && has_bpf_fs () && (! is_update || resources->devices))
+          {
+            const char *property_name = "BPFProgram";
+
+            if (! property_missing_p (missing_properties, property_name))
+              {
+                cleanup_free struct bpf_program *program = NULL;
+
+                program = create_dev_bpf (resources->devices, resources->devices_len, err);
+                if (UNLIKELY (program == NULL))
+                  crun_error_release (err);
+                else
+                  {
+                    cleanup_free char *path = NULL;
+
+                    ret = mkdir (CRUN_BPF_DIR, 0700);
+                    if (UNLIKELY (ret < 0 && errno != EEXIST))
+                      return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
+
+                    ret = bpfprog_path_from_scope (&path, scope, err);
+                    if (UNLIKELY (ret < 0))
+                      return ret;
+
+                    ret = libcrun_ebpf_load (program, -1, path, err);
+                    if (UNLIKELY (ret < 0))
+                      return ret;
+
+                    sd_err = sd_bus_message_append (m, "(sv)", property_name, "a(ss)", 1, "device", path);
+                    if (UNLIKELY (sd_err < 0))
+                      return crun_make_error (err, -sd_err, "sd-bus message append BPFProgram");
+
+                    *devices_set = true;
+                  }
+              }
+          }
       }
+
       break;
 
     case CGROUP_MODE_LEGACY:
@@ -1503,7 +1569,7 @@ append_resources (sd_bus_message *m,
 #  undef APPEND_UINT64
 #  undef APPEND_UINT64_VALUE
 
-  if (! is_update || resources->devices)
+  if (! *devices_set && (! is_update || resources->devices))
     {
       ret = append_devices (m, resources, err);
       if (UNLIKELY (ret < 0))
@@ -1552,6 +1618,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
                             const char *scope, const char *slice,
                             pid_t pid,
                             bool *can_retry,
+                            bool *devices_set,
                             libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
@@ -1566,6 +1633,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   cleanup_free char *state_dir = NULL;
 
   *can_retry = false;
+  *devices_set = false;
 
   ret = libcrun_get_state_directory (&state_dir, state_root, NULL, err);
   if (UNLIKELY (ret < 0))
@@ -1693,7 +1761,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         }
     }
 
-  ret = append_resources (m, false, state_dir, resources, cgroup_mode, err);
+  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, devices_set, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
@@ -1870,7 +1938,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
       bool can_retry = false;
 
       ret = enter_systemd_cgroup_scope (resources, cgroup_mode, args->annotations, args->state_root,
-                                        scope, slice, pid, &can_retry, err);
+                                        scope, slice, pid, &can_retry, &out->bpf_dev_set, err);
       if (LIKELY (ret >= 0))
         break;
 
@@ -1930,6 +1998,7 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
                                 libcrun_error_t *err)
 {
   cleanup_free char *path_to_scope = NULL;
+  cleanup_free char *bpfprog = NULL;
   int mode;
   int ret;
 
@@ -1944,6 +2013,12 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
   ret = libcrun_destroy_systemd_cgroup_scope (cgroup_status, err);
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
+
+  ret = bpfprog_path_from_scope (&bpfprog, cgroup_status->scope, err);
+  if (UNLIKELY (ret < 0))
+    crun_error_release (err);
+  else
+    unlink (bpfprog); // Best effort.
 
   path_to_scope = get_cgroup_scope_path (cgroup_status->path, cgroup_status->scope);
 
@@ -2005,7 +2080,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       goto exit;
     }
 
-  ret = append_resources (m, true, state_dir, resources, cgroup_mode, err);
+  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, &cgroup_status->bpf_dev_set, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
