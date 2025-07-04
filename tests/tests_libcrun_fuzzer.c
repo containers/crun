@@ -492,7 +492,6 @@ main (int argc, char **argv)
       if (read_all_file (argv[1], (char **) &content, &len, &err) < 0)
         {
           libcrun_fail_with_error (err->status, "%s", err->msg);
-          return -1;
         }
       return LLVMFuzzerTestOneInput (content, len);
     }

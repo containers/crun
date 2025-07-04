@@ -3597,7 +3597,6 @@ exec_process_entrypoint (libcrun_context_t *context,
         return ret;
 
       _exit (EXIT_FAILURE);
-      return 0;
     }
 
   /* Attempt to close all the files that are not needed to prevent execv to have access to them.
@@ -3610,9 +3609,6 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   TEMP_FAILURE_RETRY (execv (exec_path, process->args));
   libcrun_fail_with_error (errno, "exec");
-  _exit (EXIT_FAILURE);
-
-  return 0;
 }
 
 int
