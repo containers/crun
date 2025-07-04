@@ -4017,6 +4017,9 @@ cleanup_free_init_statusp (struct init_status_s *ns)
 {
   size_t i;
 
+  if (ns == NULL)
+    return;
+
   for (i = 0; i < ns->fd_len; i++)
     TEMP_FAILURE_RETRY (close (ns->fd[i]));
 }
