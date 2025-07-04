@@ -247,18 +247,17 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
   cleanup_free char *rundir = NULL;
   int ret;
 
-  ret = libcrun_get_state_directory (&rundir, arguments.root, NULL, &err);
-  if (UNLIKELY (ret < 0))
-    {
-      libcrun_error_release (&err);
-      fprintf (stderr, "Failed to get state directory\n");
-      exit (EXIT_FAILURE);
-    }
-
   fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
   fprintf (stream, "commit: %s\n", GIT_VERSION);
-  fprintf (stream, "rundir: %s\n", rundir);
+
+  ret = libcrun_get_state_directory (&rundir, arguments.root, NULL, &err);
+  if (LIKELY (ret == 0))
+    fprintf (stream, "rundir: %s\n", rundir);
+  else
+    libcrun_error_release (&err);
+
   fprintf (stream, "spec: 1.0.0\n");
+
 #ifdef HAVE_SYSTEMD
   fprintf (stream, "+SYSTEMD ");
 #endif
