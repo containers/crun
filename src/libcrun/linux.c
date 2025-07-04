@@ -867,6 +867,8 @@ pivot_root (const char *new_root, const char *put_old)
 static void
 free_remount (struct remount_s *r)
 {
+  if (r == NULL)
+    return;
   if (r->targetfd >= 0)
     close (r->targetfd);
   free (r->data);
