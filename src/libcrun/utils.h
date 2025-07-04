@@ -189,6 +189,9 @@ cleanup_close_vecp (int **p)
   int *pp = *p;
   int i;
 
+  if (pp == NULL)
+    return;
+
   for (i = 0; pp[i] >= 0; i++)
     TEMP_FAILURE_RETRY (close (pp[i]));
 }

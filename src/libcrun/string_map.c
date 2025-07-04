@@ -149,6 +149,9 @@ free_string_map (string_map *map)
 {
   size_t i;
 
+  if (map == NULL)
+    return;
+
   if (map->htab_initialized)
     hdestroy_r (&map->htab);
 
