@@ -121,6 +121,9 @@ handler_manager_free (struct custom_handler_manager_s *manager)
 {
   size_t i;
 
+  if (manager == NULL)
+    return;
+
   for (i = 0; i < manager->handlers_len; i++)
     {
 #ifdef HAVE_DLOPEN
