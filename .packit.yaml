@@ -127,8 +127,9 @@ jobs:
     dist_git_branches: &fedora_targets
       - fedora-all
 
+  # Disabled until we're switching to Packit for CentOS Stream
   - job: propose_downstream
-    trigger: release
+    trigger: ignore
     packages: [crun-centos]
     dist_git_branches:
       - c10s
