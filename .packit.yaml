@@ -66,16 +66,10 @@ jobs:
     packages: [crun-centos]
     notifications: *copr_build_failure_notification
     targets: &centos_copr_targets
-      # Need epel9 repos to fetch wasmedge build dependency
-      centos-stream-9-x86_64:
-        additional_repos:
-          - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/
-      centos-stream-9-aarch64:
-        additional_repos:
-          - https://dl.fedoraproject.org/pub/epel/9/Everything/aarch64/
-      # TODO: build on CS10 with wasmedge once epel-10 is available
-      centos-stream-10-x86_64: {}
-      centos-stream-10-aarch64: {}
+      - centos-stream-9-x86_64
+      - centos-stream-9-aarch64
+      - centos-stream-10-x86_64
+      - centos-stream-10-aarch64
 
   # Run on commit to main branch
   - job: copr_build
