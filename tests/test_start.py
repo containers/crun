@@ -19,6 +19,7 @@ import time
 import subprocess
 import os
 import os.path
+import random
 import threading
 import socket
 import json
@@ -528,6 +529,44 @@ def test_start_help():
     
     return 0
 
+# https://github.com/containers/crun/issues/1811.
+def test_systemd_cgroups_path_def_slice():
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return 77
+    if not running_on_systemd():
+        return 77
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+    conf['linux']['cgroupsPath'] = ':crun:%d' % random.randint(10000, 99999) # crun-NNNNN.scope
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, cgroup_manager="systemd", detach=True)
+        state = run_crun_command(['state', cid])
+        scope = json.loads(state)['systemd-scope']
+
+        want='system.slice'
+        if is_rootless():
+            want='user.slice'
+
+        got = subprocess.check_output(['systemctl', 'show','-PSlice', scope], close_fds=False).decode().strip()
+        # try once more against the user manager, as if one exists, crun will prefer it; see bug #1197
+        if got != want:
+            got = subprocess.check_output(['systemctl', '--user', 'show','-PSlice', scope], close_fds=False).decode().strip()
+
+        if got != want:
+            sys.stderr.write("# Got Slice %s, want %s\n" % got, want)
+            return 1
+    except:
+        return 1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+    return 0
+
 all_tests = {
     "start" : test_start,
     "start-override-config" : test_start_override_config,
@@ -549,6 +588,7 @@ all_tests = {
     "invalid-id": test_invalid_id,
     "home-unknown-id": test_home_unknown_id,
     "help": test_start_help,
+    "systemd-cgroups-path-def-slice": test_systemd_cgroups_path_def_slice,
 }
 
 if __name__ == "__main__":
