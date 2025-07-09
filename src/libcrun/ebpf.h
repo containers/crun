@@ -41,5 +41,7 @@ struct bpf_program *bpf_program_append_dev (struct bpf_program *program, const c
 struct bpf_program *bpf_program_complete_dev (struct bpf_program *program, libcrun_error_t *err);
 
 int libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err);
+int libcrun_ebpf_read_program (struct bpf_program **program, const char *path, libcrun_error_t *err);
+bool libcrun_ebpf_cmp_programs (struct bpf_program *program1, struct bpf_program *program2);
 
 #endif

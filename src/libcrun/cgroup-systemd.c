@@ -1420,16 +1420,6 @@ add_bpf_program (sd_bus_message *m,
   if (in_userns)
     return 0;
 
-  if (is_update)
-    {
-      if (resources->devices == NULL || resources->devices_len == 0)
-        {
-          *devices_set = true;
-          return 0;
-        }
-      return crun_make_error (err, 0, "updating device access list not supported when using BPFProgram");
-    }
-
   program = create_dev_bpf (resources->devices, resources->devices_len, err);
   if (UNLIKELY (program == NULL))
     {
@@ -1437,13 +1427,37 @@ add_bpf_program (sd_bus_message *m,
       return 0;
     }
 
-  ret = mkdir (CRUN_BPF_DIR, 0700);
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
-
   ret = bpfprog_path_from_scope (&path, scope, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  if (is_update)
+    {
+      cleanup_free struct bpf_program *program_loaded = NULL;
+
+      if (resources->devices == NULL || resources->devices_len == 0)
+        {
+          *devices_set = true;
+          return 0;
+        }
+
+      ret = libcrun_ebpf_read_program (&program_loaded, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      /* it is the same as the loaded program.  */
+      if (libcrun_ebpf_cmp_programs (program, program_loaded))
+        {
+          *devices_set = true;
+          return 0;
+        }
+
+      return crun_make_error (err, 0, "updating device access list not supported when using BPFProgram");
+    }
+
+  ret = mkdir (CRUN_BPF_DIR, 0700);
+  if (UNLIKELY (ret < 0 && errno != EEXIST))
+    return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
 
   ret = libcrun_ebpf_load (program, -1, path, err);
   if (UNLIKELY (ret < 0))

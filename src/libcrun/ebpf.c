@@ -550,3 +550,68 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
   return 0;
 #endif
 }
+
+int
+libcrun_ebpf_read_program (struct bpf_program **program_ret, const char *path, libcrun_error_t *err)
+{
+#ifndef HAVE_EBPF
+  (void) program_ret;
+  (void) path;
+
+  return crun_make_error (err, 0, "eBPF not supported");
+#else
+  cleanup_free struct bpf_program *program = NULL;
+  cleanup_free char *buffer = NULL;
+  cleanup_close int prog_fd = -1;
+  size_t buffer_size = 0;
+  struct bpf_prog_info info;
+  union bpf_attr attr;
+  int ret;
+
+  memset (&attr, 0, sizeof (attr));
+  attr.pathname = ptr_to_u64 (path);
+
+  prog_fd = bpf (BPF_OBJ_GET, &attr, sizeof (attr));
+  if (UNLIKELY (prog_fd < 0))
+    return crun_make_error (err, errno, "bpf get `%s`", path);
+
+  memset (&info, 0, sizeof (info));
+
+  memset (&attr, 0, sizeof (attr));
+  attr.info.bpf_fd = prog_fd;
+  attr.info.info = ptr_to_u64 (&info);
+  attr.info.info_len = sizeof (info);
+
+  ret = bpf (BPF_OBJ_GET_INFO_BY_FD, &attr, sizeof (attr));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "bpf get info `%s`", path);
+
+  buffer_size = info.xlated_prog_len;
+  buffer = xmalloc (buffer_size);
+
+  memset (&info, 0, sizeof (info));
+  info.xlated_prog_insns = ptr_to_u64 (buffer);
+  info.xlated_prog_len = buffer_size;
+
+  ret = bpf (BPF_OBJ_GET_INFO_BY_FD, &attr, sizeof (attr));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "bpf get info `%s`", path);
+
+  program = bpf_program_new (buffer_size);
+  program = bpf_program_append (program, buffer, buffer_size);
+
+  *program_ret = program;
+  program = NULL;
+
+  return 0;
+#endif
+}
+
+bool
+libcrun_ebpf_cmp_programs (struct bpf_program *program1, struct bpf_program *program2)
+{
+  if (program1->used != program2->used)
+    return false;
+
+  return memcmp (program1->program, program2->program, program1->used) == 0;
+}
