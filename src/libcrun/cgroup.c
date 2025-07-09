@@ -227,7 +227,7 @@ libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  return update_cgroup_resources (cgroup_status->path, state_root, resources, err);
+  return update_cgroup_resources (cgroup_status->path, state_root, resources, ! cgroup_status->bpf_dev_set, err);
 }
 
 static int
@@ -364,7 +364,7 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
 
       if (args->resources)
         {
-          ret = update_cgroup_resources (status->path, args->state_root, args->resources, err);
+          ret = update_cgroup_resources (status->path, args->state_root, args->resources, ! status->bpf_dev_set, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }

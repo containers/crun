@@ -631,25 +631,25 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   return 0;
 }
 
-static int
-write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
-                                     libcrun_error_t *err)
+struct bpf_program *
+create_dev_bpf (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                libcrun_error_t *err)
 {
-  int i, ret;
-  cleanup_free struct bpf_program *program = NULL;
+  int i;
+  struct bpf_program *program;
 
   program = bpf_program_new (2048);
 
   program = bpf_program_init_dev (program, err);
   if (UNLIKELY (program == NULL))
-    return -1;
+    return NULL;
 
   for (i = (sizeof (default_devices) / sizeof (default_devices[0])) - 1; i >= 0; i--)
     {
       program = bpf_program_append_dev (program, default_devices[i].access, default_devices[i].type,
                                         default_devices[i].major, default_devices[i].minor, true, err);
       if (UNLIKELY (program == NULL))
-        return -1;
+        return NULL;
     }
   for (i = devs_len - 1; i >= 0; i--)
     {
@@ -665,43 +665,47 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
 
       program = bpf_program_append_dev (program, devs[i]->access, type, major, minor, devs[i]->allow, err);
       if (UNLIKELY (program == NULL))
-        return -1;
+        return NULL;
     }
 
   program = bpf_program_complete_dev (program, err);
   if (UNLIKELY (program == NULL))
-    return -1;
+    return NULL;
 
-  ret = libcrun_ebpf_load (program, dirfd, NULL, err);
-  if (ret < 0)
-    return ret;
-
-  return 0;
+  return program;
 }
 
 static int
-write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
-                            libcrun_error_t *err)
+write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                                     libcrun_error_t *err)
 {
-  int ret;
+  cleanup_free struct bpf_program *program = NULL;
+
+  program = create_dev_bpf (devs, devs_len, err);
+  if (UNLIKELY (program == NULL))
+    return -1;
+
+  return libcrun_ebpf_load (program, dirfd, NULL, err);
+}
+
+static int
+can_skip_devices (bool *can_skip, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                  libcrun_error_t *err)
+{
   size_t i;
-  bool can_skip = true;
 
-  ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
-  if (LIKELY (ret == 0))
-    return 0;
+  *can_skip = true;
 
-  /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
   for (i = 0; i < devs_len; i++)
     {
       if (devs[i]->allow_present && ! devs[i]->allow)
         {
-          can_skip = false;
+          *can_skip = false;
           break;
         }
     }
 
-  if (! can_skip)
+  if (! *can_skip)
     {
       libcrun_error_t tmp_err = NULL;
       int rootless;
@@ -711,11 +715,30 @@ write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
         {
           crun_error_release (err);
           *err = tmp_err;
-          return ret;
+          return -1;
         }
       if (rootless)
-        can_skip = true;
+        *can_skip = true;
     }
+
+  return 0;
+}
+
+static int
+write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                            libcrun_error_t *err)
+{
+  int ret;
+  bool can_skip;
+
+  ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
+  if (LIKELY (ret == 0))
+    return 0;
+
+  /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
+  ret = can_skip_devices (&can_skip, devs, devs_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (can_skip)
     {
@@ -1374,7 +1397,7 @@ write_unified_resources (int cgroup_dirfd, runtime_spec_schema_config_linux_reso
 }
 
 static int
-update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
+update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resources, const char *path, bool need_bpf_dev, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int cgroup_dirfd = -1;
@@ -1391,7 +1414,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
   if (UNLIKELY (cgroup_dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 
-  if (resources->devices_len)
+  if (need_bpf_dev && resources->devices_len)
     {
       ret = write_devices_resources (cgroup_dirfd, true, resources->devices, resources->devices_len, err);
       if (UNLIKELY (ret < 0))
@@ -1450,6 +1473,7 @@ int
 update_cgroup_resources (const char *path,
                          const char *state_root,
                          runtime_spec_schema_config_linux_resources *resources,
+                         bool need_bpf_dev,
                          libcrun_error_t *err)
 {
   int cgroup_mode;
@@ -1485,7 +1509,7 @@ update_cgroup_resources (const char *path,
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return update_cgroup_v2_resources (resources, path, err);
+      return update_cgroup_v2_resources (resources, path, need_bpf_dev, err);
 
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
