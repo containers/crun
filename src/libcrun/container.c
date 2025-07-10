@@ -2219,6 +2219,7 @@ flush_fd_to_err (libcrun_context_t *context, int terminal_fd)
 {
   char buf[256];
   int flags;
+
   if (terminal_fd < 0 || stderr == NULL)
     return;
 
@@ -3399,7 +3400,7 @@ static int
 exec_process_entrypoint (libcrun_context_t *context,
                          libcrun_container_t *container,
                          runtime_spec_schema_config_schema_process *process,
-                         int pipefd1,
+                         int *pipefd1,
                          int seccomp_fd,
                          int seccomp_receiver_fd,
                          struct custom_handler_instance_s *custom_handler,
@@ -3420,7 +3421,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   container_uid = process->user ? process->user->uid : 0;
   container_gid = process->user ? process->user->gid : 0;
 
-  TEMP_FAILURE_RETRY (read (pipefd1, &own_pid, sizeof (own_pid)));
+  TEMP_FAILURE_RETRY (read (*pipefd1, &own_pid, sizeof (own_pid)));
 
   cwd = process->cwd ? process->cwd : "/";
   if (LIKELY (libcrun_safe_chdir (cwd, err) == 0))
@@ -3554,8 +3555,12 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  if (UNLIKELY ((! chdir_done) && libcrun_safe_chdir (cwd, err) < 0))
-    libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+  if (! chdir_done)
+    {
+      ret = libcrun_safe_chdir (cwd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (process->no_new_privileges)
     {
@@ -3580,9 +3585,10 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (process->user)
     umask (process->user->umask_present ? process->user->umask : 0022);
 
-  TEMP_FAILURE_RETRY (write (pipefd1, "0", 1));
-  TEMP_FAILURE_RETRY (close (pipefd1));
-  pipefd1 = -1;
+  ret = 0;
+  TEMP_FAILURE_RETRY (write (*pipefd1, &ret, sizeof (ret)));
+  TEMP_FAILURE_RETRY (close (*pipefd1));
+  *pipefd1 = -1;
 
   if (custom_handler)
     {
@@ -3638,7 +3644,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   __attribute__ ((unused)) cleanup_process_schema runtime_spec_schema_config_schema_process *process_cleanup = NULL;
   runtime_spec_schema_config_schema_process *process = opts->process;
   struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
-  char b;
+  int ret_from_child = 0;
 
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -3793,11 +3799,22 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
 
-      exec_process_entrypoint (context, container, process, pipefd1, seccomp_fd, seccomp_receiver_fd, custom_handler, err);
+      exec_process_entrypoint (context, container, process, &pipefd1, seccomp_fd, seccomp_receiver_fd, custom_handler, err);
       /* It gets here only on errors.  */
       if (*err)
-        libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
-
+        {
+          if (pipefd1 < 0)
+            libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
+          else
+            {
+              const char *msg = (*err)->msg;
+              ret = crun_error_get_errno (err);
+              TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
+              TEMP_FAILURE_RETRY (write (pipefd1, msg, strlen (msg) + 1));
+              TEMP_FAILURE_RETRY (close (pipefd1));
+              pipefd1 = -1;
+            }
+        }
       _exit (EXIT_FAILURE);
     }
 
@@ -3845,11 +3862,20 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         }
     }
 
-  ret = TEMP_FAILURE_RETRY (read (pipefd0, &b, sizeof (b)));
-  TEMP_FAILURE_RETRY (close (pipefd0));
-  pipefd0 = -1;
-  if (ret != 1 || b != '0')
+  ret = TEMP_FAILURE_RETRY (read (pipefd0, &ret_from_child, sizeof (ret_from_child)));
+  if (ret != sizeof (ret_from_child))
     ret = crun_make_error (err, 0, "read pipe failed");
+  else if (ret_from_child != 0)
+    {
+      cleanup_free char *msg = NULL;
+      size_t len = 0;
+
+      ret = read_all_fd (pipefd0, "error stream", &msg, &len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      /* the string from read_all_fd is always NUL terminated.  */
+      ret = crun_make_error (err, ret_from_child, "%s", msg);
+    }
   else
     {
       /* Let's receive the seccomp notify fd and handle it as part of wait_for_process().  */

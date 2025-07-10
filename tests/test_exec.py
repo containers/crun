@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from tests_utils import *
 import time
@@ -501,7 +502,41 @@ def test_exec_help():
     out = run_crun_command(["exec", "--help"])
     if "Usage: crun [OPTION...] exec CONTAINER cmd" not in out:
         return -1
-    
+
+    return 0
+
+def test_exec_error_propagation():
+    """Test that exec setup errors are propagated correctly without both chdir and read pipe errors"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+        try:
+            out = run_crun_command_raw(["exec", "--cwd", "/invalid/nonexistent/path", cid, "/init", "echo", "test"])
+            return -1
+        except subprocess.CalledProcessError as e:
+            error_msg = e.output.decode('utf-8', errors='ignore')
+            has_chdir_error = "chdir" in error_msg.lower() or "No such file or directory" in error_msg
+            has_read_pipe_error = "read pipe failed" in error_msg
+
+            if has_chdir_error and has_read_pipe_error:
+                sys.stderr.write("# exec error propagation test failed: both chdir and read pipe errors detected\n")
+                sys.stderr.write("# error message: %s\n" % error_msg)
+                return -1
+
+            if not has_chdir_error:
+                sys.stderr.write("# exec error propagation test failed: expected chdir error but got: %s\n" % error_msg)
+                return -1
+
+            return 0
+    finally:
+        if cid is not None:
+            try:
+                run_crun_command(["delete", "-f", cid])
+            except Exception as cleanup_e:
+                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
     return 0
 
 all_tests = {
@@ -520,6 +555,7 @@ all_tests = {
     "exec-cpu-affinity": test_exec_cpu_affinity,
     "exec-getpgrp": test_exec_getpgrp,
     "exec-help" : test_exec_help,
+    "exec-error-propagation" : test_exec_error_propagation,
 }
 
 if __name__ == "__main__":
