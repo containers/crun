@@ -689,23 +689,28 @@ write_devices_resources_v2_internal (int dirfd, runtime_spec_schema_defs_linux_d
 }
 
 static int
-can_skip_devices (bool *can_skip, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
-                  libcrun_error_t *err)
+write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                            libcrun_error_t *err)
 {
+  int ret;
   size_t i;
+  bool can_skip = true;
 
-  *can_skip = true;
+  ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
+  if (LIKELY (ret == 0))
+    return 0;
 
+  /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
   for (i = 0; i < devs_len; i++)
     {
       if (devs[i]->allow_present && ! devs[i]->allow)
         {
-          *can_skip = false;
+          can_skip = false;
           break;
         }
     }
 
-  if (! *can_skip)
+  if (! can_skip)
     {
       libcrun_error_t tmp_err = NULL;
       int rootless;
@@ -715,30 +720,11 @@ can_skip_devices (bool *can_skip, runtime_spec_schema_defs_linux_device_cgroup *
         {
           crun_error_release (err);
           *err = tmp_err;
-          return -1;
+          return ret;
         }
       if (rootless)
-        *can_skip = true;
+        can_skip = true;
     }
-
-  return 0;
-}
-
-static int
-write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
-                            libcrun_error_t *err)
-{
-  int ret;
-  bool can_skip;
-
-  ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
-  if (LIKELY (ret == 0))
-    return 0;
-
-  /* If writing the resources ebpf failed, check if it is fine to ignore the error.  */
-  ret = can_skip_devices (&can_skip, devs, devs_len, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   if (can_skip)
     {
