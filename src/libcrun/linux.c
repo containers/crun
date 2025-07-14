@@ -1111,7 +1111,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
     {
       ret = get_file_type_fd (pathfd, &mode);
       if (UNLIKELY (ret < 0))
-        return ret;
+        return crun_make_error (err, errno, "cannot stat `%s`", rel_path);
 
       if ((mode & S_IFMT) == S_IFDIR)
         ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "size=0k", LABEL_MOUNT, err);
