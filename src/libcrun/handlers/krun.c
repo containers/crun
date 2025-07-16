@@ -441,7 +441,10 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       for (i = 0; i < def->linux->devices_len; i++)
         {
           if (strcmp (def->linux->devices[i]->path, "/dev/sev") == 0)
-            create_sev = false;
+            {
+              create_sev = false;
+              break;
+            }
         }
     }
 
