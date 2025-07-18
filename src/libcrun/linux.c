@@ -5783,10 +5783,10 @@ libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
 
       if (hdr_recv->nlmsg_type == NLMSG_ERROR)
         {
-          /* The first 4 bytes in the data are the negative error code
-             in native endianness.  */
-          errno = -(*(int32_t *) (buf + sizeof (struct nlmsghdr)));
-          return crun_make_error (err, errno, "recvfrom PF_NETLINK");
+          struct nlmsgerr *err_data = (struct nlmsgerr *) NLMSG_DATA (hdr_recv);
+          /* err_data->error set to 0 means success acknowledgement due to NLM_F_ACK  */
+          if (err_data->error < 0)
+            return crun_make_error (err, -err_data->error, "netlink error while configuring network");
         }
     }
 
