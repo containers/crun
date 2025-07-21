@@ -1182,23 +1182,35 @@ write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_confi
 }
 
 static int
+open_cgroup_subsystem (const char *subsystem, const char *path, libcrun_error_t *err)
+{
+  cleanup_free char *full_path = NULL;
+  int ret, dirfd;
+
+  ret = append_paths (&full_path, err, CGROUP_ROOT, subsystem, path, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  dirfd = open (full_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", full_path);
+
+  return dirfd;
+}
+
+int
 update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resources, const char *path, libcrun_error_t *err)
 {
   int ret;
 
   if (resources->block_io)
     {
-      cleanup_free char *path_to_blkio = NULL;
       cleanup_close int dirfd_blkio = -1;
       runtime_spec_schema_config_linux_resources_block_io *blkio = resources->block_io;
 
-      ret = append_paths (&path_to_blkio, err, CGROUP_ROOT "/blkio", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_blkio = open (path_to_blkio, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_blkio = open_cgroup_subsystem ("blkio", path, err);
       if (UNLIKELY (dirfd_blkio < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_blkio);
+        return dirfd_blkio;
 
       ret = write_blkio_resources (dirfd_blkio, false, blkio, err);
       if (UNLIKELY (ret < 0))
@@ -1207,27 +1219,17 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->network)
     {
-      cleanup_free char *path_to_netclass = NULL;
       cleanup_close int dirfd_netclass = -1;
-      cleanup_free char *path_to_netprio = NULL;
       cleanup_close int dirfd_netprio = -1;
       runtime_spec_schema_config_linux_resources_network *network = resources->network;
 
-      ret = append_paths (&path_to_netclass, err, CGROUP_ROOT "/net_cls", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = append_paths (&path_to_netprio, err, CGROUP_ROOT "/net_prio", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_netclass = open (path_to_netclass, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_netclass = open_cgroup_subsystem ("net_cls", path, err);
       if (UNLIKELY (dirfd_netclass < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_netclass);
+        return dirfd_netclass;
 
-      dirfd_netprio = open (path_to_netprio, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_netprio = open_cgroup_subsystem ("net_prio", path, err);
       if (UNLIKELY (dirfd_netprio < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_netprio);
+        return dirfd_netprio;
 
       ret = write_network_resources (dirfd_netclass, dirfd_netprio, network, err);
       if (UNLIKELY (ret < 0))
@@ -1236,15 +1238,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->hugepage_limits_len)
     {
-      cleanup_free char *path_to_htlb = NULL;
       cleanup_close int dirfd_htlb = -1;
 
-      ret = append_paths (&path_to_htlb, err, CGROUP_ROOT "/hugetlb", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      dirfd_htlb = open (path_to_htlb, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_htlb = open_cgroup_subsystem ("hugetlb", path, err);
       if (UNLIKELY (dirfd_htlb < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_htlb);
+        return dirfd_htlb;
 
       ret = write_hugetlb_resources (dirfd_htlb, false, resources->hugepage_limits, resources->hugepage_limits_len,
                                      err);
@@ -1254,16 +1252,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->devices_len)
     {
-      cleanup_free char *path_to_devs = NULL;
       cleanup_close int dirfd_devs = -1;
 
-      ret = append_paths (&path_to_devs, err, CGROUP_ROOT "/devices", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_devs = open (path_to_devs, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+      dirfd_devs = open_cgroup_subsystem ("devices", path, err);
       if (UNLIKELY (dirfd_devs < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_devs);
+        return dirfd_devs;
 
       ret = write_devices_resources (dirfd_devs, false, resources->devices, resources->devices_len, err);
       if (UNLIKELY (ret < 0))
@@ -1272,16 +1265,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->memory)
     {
-      cleanup_free char *path_to_mem = NULL;
       cleanup_close int dirfd_mem = -1;
 
-      ret = append_paths (&path_to_mem, err, CGROUP_ROOT "/memory", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_mem = open (path_to_mem, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_mem = open_cgroup_subsystem ("memory", path, err);
       if (UNLIKELY (dirfd_mem < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_mem);
+        return dirfd_mem;
 
       ret = write_memory_resources (dirfd_mem, false, resources->memory, err);
       if (UNLIKELY (ret < 0))
@@ -1290,16 +1278,11 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->pids)
     {
-      cleanup_free char *path_to_pid = NULL;
       cleanup_close int dirfd_pid = -1;
 
-      ret = append_paths (&path_to_pid, err, CGROUP_ROOT "/pids", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_pid = open (path_to_pid, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_pid = open_cgroup_subsystem ("pids", path, err);
       if (UNLIKELY (dirfd_pid < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_pid);
+        return dirfd_pid;
 
       ret = write_pids_resources (dirfd_pid, false, resources->pids, err);
       if (UNLIKELY (ret < 0))
@@ -1308,18 +1291,13 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
 
   if (resources->cpu)
     {
-      cleanup_free char *path_to_cpu = NULL;
       cleanup_close int dirfd_cpu = -1;
-      cleanup_free char *path_to_cpuset = NULL;
       cleanup_close int dirfd_cpuset = -1;
 
-      ret = append_paths (&path_to_cpu, err, CGROUP_ROOT "/cpu", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_cpu = open (path_to_cpu, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_cpu = open_cgroup_subsystem ("cpu", path, err);
       if (UNLIKELY (dirfd_cpu < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_cpu);
+        return dirfd_cpu;
+
       ret = write_cpu_resources (dirfd_cpu, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -1327,13 +1305,9 @@ update_cgroup_v1_resources (runtime_spec_schema_config_linux_resources *resource
       if (resources->cpu->cpus == NULL && resources->cpu->mems == NULL)
         return 0;
 
-      ret = append_paths (&path_to_cpuset, err, CGROUP_ROOT "/cpuset", path, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      dirfd_cpuset = open (path_to_cpuset, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      dirfd_cpuset = open_cgroup_subsystem ("cpuset", path, err);
       if (UNLIKELY (dirfd_cpuset < 0))
-        return crun_make_error (err, errno, "open `%s`", path_to_cpuset);
+        return dirfd_cpuset;
 
       ret = write_cpuset_resources (dirfd_cpuset, false, resources->cpu, err);
       if (UNLIKELY (ret < 0))
