@@ -824,9 +824,7 @@ get_yajl_result (yajl_gen gen, char **out, size_t *out_len)
 
   *out_len = buf_len;
 
-  *out = malloc (buf_len + 1);
-  if (*out == NULL)
-    OOM ();
+  *out = xmalloc (buf_len + 1);
   memcpy (*out, buf, buf_len);
   (*out)[buf_len] = '\0';
 
