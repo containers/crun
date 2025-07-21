@@ -59,15 +59,21 @@
  */
 #define KRUN_VM_FILE "/.krun_vm.json"
 
+#define KRUN_FLAVOR_NITRO "aws-nitro"
 #define KRUN_FLAVOR_SEV "sev"
 
 struct krun_config
 {
   void *handle;
   void *handle_sev;
+  void *handle_nitro;
   bool sev;
+  bool nitro;
   int32_t ctx_id;
   int32_t ctx_id_sev;
+  int32_t ctx_id_nitro;
+  bool has_kvm;
+  bool has_nitro;
 };
 
 /* libkrun handler.  */
@@ -140,6 +146,42 @@ libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, 
 }
 
 static int
+libkrun_configure_nitro (uint32_t ctx_id, void *handle, yajl_val *config_tree, libcrun_error_t *err)
+{
+  int32_t (*krun_nitro_set_image) (uint32_t ctx_id, const char *image_path, uint32_t image_type);
+  int32_t (*krun_nitro_set_start_flags) (uint32_t ctx_id, uint64_t start_flags);
+  const char *path_eif[] = { "eif_file", (const char *) 0 };
+  yajl_val val_eif_image = NULL;
+  uint64_t start_flags = 1;
+  char *eif_image = NULL;
+  int ret;
+
+  val_eif_image = yajl_tree_get (*config_tree, path_eif, yajl_t_string);
+  if (val_eif_image == NULL || ! YAJL_IS_STRING (val_eif_image))
+    return crun_make_error (err, 0, "invalid Enclave Image Format file parameter");
+
+  eif_image = YAJL_GET_STRING (val_eif_image);
+
+  krun_nitro_set_image = dlsym (handle, "krun_nitro_set_image");
+  if (krun_nitro_set_image == NULL)
+    return crun_make_error (err, 0, "could not find symbol in krun library");
+
+  krun_nitro_set_start_flags = dlsym (handle, "krun_nitro_set_start_flags");
+  if (krun_nitro_set_start_flags == NULL)
+    return crun_make_error (err, 0, "could not find symbol in krun library");
+
+  ret = krun_nitro_set_image (ctx_id, eif_image, KRUN_NITRO_IMG_TYPE_EIF);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "could not configure a krun nitro EIF image");
+
+  ret = krun_nitro_set_start_flags (ctx_id, 1);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "could not configure a krun nitro start flags");
+
+  return 0;
+}
+
+static int
 libkrun_read_vm_config (yajl_val *config_tree, libcrun_error_t *err)
 {
   int ret;
@@ -204,11 +246,15 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
 static int
 libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *err)
 {
-  int ret, sev_indicated = 0;
+  int ret, sev_indicated = 0, nitro_indicated = 0;
   const char *path_flavor[] = { "flavor", (const char *) 0 };
   struct krun_config *kconf = (struct krun_config *) cookie;
   yajl_val val_flavor = NULL;
   char *flavor = NULL;
+  void *close_handles[2];
+
+  close_handles[0] = NULL;
+  close_handles[1] = NULL;
 
   // Read if the SEV flavor was indicated in the krun VM config.
   val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
@@ -219,6 +265,7 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
       // The SEV flavor will be used if the krun VM config indicates to use SEV
       // within the "flavor" field.
       sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
+      nitro_indicated |= strcmp (flavor, KRUN_FLAVOR_NITRO) == 0;
     }
 
   // To maintain backward compatibility, also use the SEV flavor if the
@@ -230,32 +277,43 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
       if (kconf->handle_sev == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
 
-      if (kconf->handle != NULL)
-        {
-          // We no longer need the libkrun handle.
-          ret = dlclose (kconf->handle);
-          if (UNLIKELY (ret != 0))
-            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
-        }
+      close_handles[0] = kconf->handle;
+      close_handles[1] = kconf->handle_nitro;
 
       kconf->handle = kconf->handle_sev;
       kconf->ctx_id = kconf->ctx_id_sev;
       kconf->sev = true;
+    }
+  else if (nitro_indicated)
+    {
+      if (kconf->handle_nitro == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun-nitro but it's not available");
+
+      close_handles[0] = kconf->handle;
+      close_handles[1] = kconf->handle_sev;
+
+      kconf->handle = kconf->handle_nitro;
+      kconf->ctx_id = kconf->ctx_id_nitro;
+      kconf->nitro = true;
     }
   else
     {
       if (kconf->handle == NULL)
         error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
 
-      if (kconf->handle_sev != NULL)
-        {
-          // We no longer need the libkrun-sev handle.
-          ret = dlclose (kconf->handle_sev);
-          if (UNLIKELY (ret != 0))
-            return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
-        }
+      close_handles[0] = kconf->handle_sev;
+      close_handles[1] = kconf->handle_nitro;
+    }
 
-      kconf->sev = false;
+  // We no longer need the other two libkrun handles.
+  for (int i = 0; i < 2; i++)
+    {
+      if (close_handles[i] == NULL)
+        continue;
+
+      ret = dlclose (close_handles[i]);
+      if (UNLIKELY (ret != 0))
+        return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
     }
 
   return 0;
@@ -271,6 +329,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
+  int32_t (*krun_nitro_set_image) (uint32_t ctx_id, const char *image_path, uint32_t image_type);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
   uint32_t num_vcpus, ram_mib;
@@ -287,6 +346,10 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   ret = libkrun_configure_flavor (cookie, &config_tree, &err);
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "unable to configure libkrun flavor");
+
+  // /dev/kvm is required for all non-nitro workloads.
+  if (! kconf->nitro && ! kconf->has_kvm)
+    error (EXIT_FAILURE, -ret, "`/dev/kvm` unavailable");
 
   handle = kconf->handle;
   ctx_id = kconf->ctx_id;
@@ -313,6 +376,12 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       ret = krun_set_tee_config_file (ctx_id, KRUN_SEV_FILE);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun tee config file");
+    }
+  else if (kconf->nitro)
+    {
+      ret = libkrun_configure_nitro (ctx_id, handle, &config_tree, &err);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not configure krun nitro enclave");
     }
   else
     {
@@ -379,10 +448,11 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   struct krun_config *kconf = (struct krun_config *) cookie;
   struct device_s kvm_device = { "/dev/kvm", "c", 10, 232, 0666, 0, 0 };
   struct device_s sev_device = { "/dev/sev", "c", 10, 124, 0666, 0, 0 };
+  struct device_s nitro_device = { "/dev/nitro_enclaves", "c", 10, 122, 0666, 0, 0 };
   cleanup_close int devfd = -1;
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
-  bool create_sev = false;
+  bool create_sev = false, create_nitro = false;
   bool is_user_ns;
 
   if (rootfs == NULL)
@@ -441,7 +511,23 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       for (i = 0; i < def->linux->devices_len; i++)
         {
           if (strcmp (def->linux->devices[i]->path, "/dev/sev") == 0)
-            create_sev = false;
+            {
+              create_sev = false;
+              break;
+            }
+        }
+    }
+
+  if (kconf->handle_nitro != NULL)
+    {
+      create_nitro = true;
+      for (i = 0; i < def->linux->devices_len; i++)
+        {
+          if (strcmp (def->linux->devices[i]->path, "/dev/nitro_enclaves") == 0)
+            {
+              create_nitro = false;
+              break;
+            }
         }
     }
 
@@ -454,13 +540,23 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
     return ret;
   is_user_ns = ret;
 
-  ret = libcrun_create_dev (container, devfd, -1, &kvm_device, is_user_ns, true, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (kconf->has_kvm)
+    {
+      ret = libcrun_create_dev (container, devfd, -1, &kvm_device, is_user_ns, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   if (create_sev)
     {
       ret = libcrun_create_dev (container, devfd, -1, &sev_device, is_user_ns, true, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (create_nitro)
+    {
+      ret = libcrun_create_dev (container, devfd, -1, &nitro_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -475,6 +571,7 @@ libkrun_load (void **cookie, libcrun_error_t *err)
   struct krun_config *kconf;
   const char *libkrun_so = "libkrun.so.1";
   const char *libkrun_sev_so = "libkrun-sev.so.1";
+  const char *libkrun_nitro_so = "libkrun-nitro.so.1";
 
   kconf = malloc (sizeof (struct krun_config));
   if (kconf == NULL)
@@ -482,14 +579,16 @@ libkrun_load (void **cookie, libcrun_error_t *err)
 
   kconf->handle = dlopen (libkrun_so, RTLD_NOW);
   kconf->handle_sev = dlopen (libkrun_sev_so, RTLD_NOW);
+  kconf->handle_nitro = dlopen (libkrun_nitro_so, RTLD_NOW);
 
-  if (kconf->handle == NULL && kconf->handle_sev == NULL)
+  if (kconf->handle == NULL && kconf->handle_sev == NULL && kconf->handle_nitro == NULL)
     {
       free (kconf);
-      return crun_make_error (err, 0, "failed to open `%s` and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, dlerror ());
+      return crun_make_error (err, 0, "failed to open `%s`, `%s`, and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, libkrun_nitro_so, dlerror ());
     }
 
   kconf->sev = false;
+  kconf->nitro = false;
 
   /* Newer versions of libkrun no longer link against libkrunfw and
      instead they open it when creating the context. This implies
@@ -515,6 +614,16 @@ libkrun_load (void **cookie, libcrun_error_t *err)
           return ret;
         }
       kconf->ctx_id_sev = ret;
+    }
+  if (kconf->handle_nitro)
+    {
+      ret = libkrun_create_context (kconf->handle_nitro, err);
+      if (UNLIKELY (ret < 0))
+        {
+          free (kconf);
+          return ret;
+        }
+      kconf->ctx_id_nitro = ret;
     }
 
   *cookie = kconf;
@@ -567,8 +676,9 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
                                   libcrun_error_t *err)
 {
   const size_t device_size = sizeof (runtime_spec_schema_defs_linux_device_cgroup);
-  struct stat st_kvm, st_sev;
-  bool has_sev = true;
+  struct krun_config *kconf = (struct krun_config *) cookie;
+  struct stat st_kvm, st_sev, st_nitro;
+  bool has_kvm = true, has_sev = true, has_nitro = true;
   size_t len;
   int ret;
 
@@ -580,7 +690,11 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
 
   ret = stat ("/dev/kvm", &st_kvm);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "stat `/dev/kvm`");
+    {
+      if (errno != ENOENT)
+        return crun_make_error (err, errno, "stat `/dev/kvm`");
+      has_kvm = false;
+    }
 
   ret = stat ("/dev/sev", &st_sev);
   if (UNLIKELY (ret < 0))
@@ -590,15 +704,39 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
       has_sev = false;
     }
 
-  len = def->linux->resources->devices_len;
-  def->linux->resources->devices = xrealloc (def->linux->resources->devices,
-                                             device_size * (len + 2 + (has_sev ? 1 : 0)));
+  ret = stat ("/dev/nitro_enclaves", &st_nitro);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno != ENOENT)
+        return crun_make_error (err, errno, "stat `/dev/nitro_enclaves`");
+      has_nitro = false;
+    }
 
-  def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_kvm.st_rdev, true, "rwm");
-  if (has_sev)
-    def->linux->resources->devices[len + 1] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
+  if (has_kvm)
+    {
+      len = def->linux->resources->devices_len;
+      def->linux->resources->devices = xrealloc (def->linux->resources->devices,
+                                                 device_size * (len + 2 + (has_sev ? 1 : 0)));
 
-  def->linux->resources->devices_len += has_sev ? 2 : 1;
+      def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_kvm.st_rdev, true, "rwm");
+      if (has_sev)
+        def->linux->resources->devices[len + 1] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
+
+      def->linux->resources->devices_len += has_sev ? 2 : 1;
+    }
+
+  if (has_nitro)
+    {
+      len = def->linux->resources->devices_len;
+      def->linux->resources->devices = xrealloc (def->linux->resources->devices,
+                                                 device_size * (len + 2));
+
+      def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_nitro.st_rdev, true, "rwm");
+      def->linux->resources->devices_len++;
+    }
+
+  kconf->has_kvm = has_kvm;
+  kconf->has_nitro = has_nitro;
 
   return 0;
 }
