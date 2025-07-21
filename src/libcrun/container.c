@@ -2393,6 +2393,240 @@ has_seccomp_receiver (libcrun_container_t *container)
 }
 
 static int
+setup_container_hooks_output (libcrun_container_t *container, runtime_spec_schema_config_schema *def,
+                              struct container_entrypoint_s *container_args, int *hooks_out_fd,
+                              int *hooks_err_fd, libcrun_error_t *err)
+{
+  int ret;
+
+  if (def->hooks
+      && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
+          || def->hooks->create_container_len || def->hooks->start_container_len))
+    {
+      ret = open_hooks_output (container, hooks_out_fd, hooks_err_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      container_args->hooks_out_fd = *hooks_out_fd;
+      container_args->hooks_err_fd = *hooks_err_fd;
+    }
+  return 0;
+}
+
+static int
+setup_container_keyring (libcrun_container_t *container, libcrun_context_t *context, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int ret;
+
+  if (! context->no_new_keyring)
+    {
+      const char *label = NULL;
+
+      libcrun_debug ("Creating new keyring");
+
+      if (def->process)
+        {
+          label = def->process->selinux_label;
+          if (label)
+            libcrun_debug ("Using SELinux process label: `%s`", label);
+        }
+
+      ret = libcrun_create_keyring (container->context->id, label, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+static int
+setup_terminal_socket_pair (libcrun_container_t *container, libcrun_context_t *context,
+                            struct container_entrypoint_s *container_args, int *socket_pair_0,
+                            int *socket_pair_1, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int ret;
+  int detach = context->detach;
+
+  if (def->process && def->process->terminal && ! detach && context->console_socket == NULL)
+    {
+      libcrun_debug ("Creating terminal socket pair");
+      container_args->has_terminal_socket_pair = 1;
+      ret = create_socket_pair (container_args->terminal_socketpair, err);
+      if (UNLIKELY (ret < 0))
+        return crun_error_wrap (err, "create terminal socket");
+
+      *socket_pair_0 = container_args->terminal_socketpair[0];
+      *socket_pair_1 = container_args->terminal_socketpair[1];
+    }
+  return 0;
+}
+
+static int
+setup_seccomp (libcrun_container_t *container, const char *seccomp_bpf_data,
+               struct libcrun_seccomp_gen_ctx_s *seccomp_gen_ctx, int *seccomp_fd, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int ret;
+
+  if (find_annotation (container, "run.oci.seccomp.plugins") != NULL && has_seccomp_receiver (container))
+    {
+      return crun_make_error (err, errno, "seccomp plugins and seccomp receivers cannot be declared at the same time");
+    }
+
+  if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
+    {
+      unsigned int seccomp_gen_options = 0;
+      const char *annotation;
+
+      libcrun_debug ("Initializing seccomp");
+      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
+      if (annotation && strcmp (annotation, "0") != 0)
+        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
+
+      if (seccomp_bpf_data)
+        seccomp_gen_options |= LIBCRUN_SECCOMP_SKIP_CACHE;
+
+      libcrun_seccomp_gen_ctx_init (seccomp_gen_ctx, container, true, seccomp_gen_options);
+
+      ret = libcrun_open_seccomp_bpf (seccomp_gen_ctx, seccomp_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+static int
+setup_console_socket (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
+                      struct container_entrypoint_s *container_args, int *console_socket_fd,
+                      libcrun_error_t *err)
+{
+  if (context->console_socket && def->process && def->process->terminal)
+    {
+      *console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
+      if (UNLIKELY (*console_socket_fd < 0))
+        return crun_error_wrap (err, "open console socket");
+      container_args->console_socket_fd = *console_socket_fd;
+    }
+  return 0;
+}
+
+static int
+setup_cgroup_manager (libcrun_context_t *context, libcrun_container_t *container,
+                      struct libcrun_cgroup_args *cg, int *cgroup_dirfd,
+                      struct libcrun_dirfd_s *cgroup_dirfd_s, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  int cgroup_manager;
+  uid_t root_uid = -1;
+  gid_t root_gid = -1;
+  int ret;
+
+  cgroup_manager = CGROUP_MANAGER_CGROUPFS;
+  if (context->systemd_cgroup)
+    {
+      libcrun_debug ("Using systemd cgroup manager");
+      cgroup_manager = CGROUP_MANAGER_SYSTEMD;
+    }
+  else if (context->force_no_cgroup)
+    {
+      libcrun_debug ("Disabling cgroup manager");
+      cgroup_manager = CGROUP_MANAGER_DISABLED;
+    }
+  else
+    libcrun_debug ("Using cgroupfs cgroup manager");
+
+  /* If we are root (either on the host or in a namespace), then chown the cgroup to root
+     in the container user namespace.  */
+  get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
+  libcrun_debug ("Using container host UID `%d` and GID `%d`", container->host_uid, container->host_gid);
+
+  memset (cg, 0, sizeof (*cg));
+
+  cg->cgroup_path = def->linux ? def->linux->cgroups_path : "";
+  cg->manager = cgroup_manager;
+  cg->id = context->id;
+  cg->resources = def->linux ? def->linux->resources : NULL;
+  cg->annotations = container->annotations;
+  cg->root_uid = root_uid;
+  cg->root_gid = root_gid;
+  cg->state_root = context->state_root;
+
+  ret = libcrun_cgroup_preenter (cg, cgroup_dirfd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  cgroup_dirfd_s->dirfd = cgroup_dirfd;
+  cgroup_dirfd_s->joined = false;
+
+  return 0;
+}
+
+static int
+set_scheduler (pid_t pid, runtime_spec_schema_config_schema *def, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = libcrun_set_scheduler (pid, def->process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_reset_cpu_affinity_mask (pid, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_set_io_priority (pid, def->process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+static int
+seccomp_generation (int seccomp_fd, const char *seccomp_bpf_data,
+                    struct libcrun_seccomp_gen_ctx_s *seccomp_gen_ctx, libcrun_error_t *err)
+{
+  int ret;
+
+  if (seccomp_fd >= 0)
+    {
+      if (seccomp_bpf_data != NULL)
+        {
+          ret = libcrun_copy_seccomp (seccomp_gen_ctx, seccomp_bpf_data, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = libcrun_generate_seccomp (seccomp_gen_ctx, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+  return 0;
+}
+
+static int
+terminal_setup (runtime_spec_schema_config_schema *def, libcrun_context_t *context,
+                int socket_pair_0, int *terminal_fd, void **orig_terminal, libcrun_error_t *err)
+{
+  int ret;
+  int detach = context->detach;
+
+  if (def->process && def->process->terminal && ! detach && context->console_socket == NULL)
+    {
+      libcrun_debug ("Receiving console socket fd");
+      *terminal_fd = receive_fd_from_socket (socket_pair_0, err);
+      if (UNLIKELY (*terminal_fd < 0))
+        return -1;
+
+      ret = libcrun_set_raw (0, orig_terminal, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  return 0;
+}
+
+static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context,
                                 int *container_ready_fd, libcrun_error_t *err)
 {
@@ -2414,9 +2648,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int own_seccomp_receiver_fd = -1;
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
-  int cgroup_manager;
-  uid_t root_uid = -1;
-  gid_t root_gid = -1;
   struct libcrun_cgroup_args cg;
   struct container_entrypoint_s container_args = {
     .container = container,
@@ -2441,16 +2672,9 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (cgroup_mode != CGROUP_MODE_UNIFIED)
     libcrun_warning ("cgroup v1 is deprecated and will be removed in a future release.  Use cgroup v2");
 
-  if (def->hooks
-      && (def->hooks->prestart_len || def->hooks->poststart_len || def->hooks->create_runtime_len
-          || def->hooks->create_container_len || def->hooks->start_container_len))
-    {
-      ret = open_hooks_output (container, &hooks_out_fd, &hooks_err_fd, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      container_args.hooks_out_fd = hooks_out_fd;
-      container_args.hooks_err_fd = hooks_err_fd;
-    }
+  ret = setup_container_hooks_output (container, def, &container_args, &hooks_out_fd, &hooks_err_fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   container->context = context;
 
@@ -2462,35 +2686,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         return crun_make_error (err, errno, "prctl set child subreaper");
     }
 
-  if (! context->no_new_keyring)
-    {
-      const char *label = NULL;
+  ret = setup_container_keyring (container, context, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
-      libcrun_debug ("Creating new keyring");
-
-      if (def->process)
-        {
-          label = def->process->selinux_label;
-          if (label)
-            libcrun_debug ("Using SELinux process label: `%s`", label);
-        }
-
-      ret = libcrun_create_keyring (container->context->id, label, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
-  if (def->process && def->process->terminal && ! detach && context->console_socket == NULL)
-    {
-      libcrun_debug ("Creating terminal socket pair");
-      container_args.has_terminal_socket_pair = 1;
-      ret = create_socket_pair (container_args.terminal_socketpair, err);
-      if (UNLIKELY (ret < 0))
-        return crun_error_wrap (err, "create terminal socket");
-
-      socket_pair_0 = container_args.terminal_socketpair[0];
-      socket_pair_1 = container_args.terminal_socketpair[1];
-    }
+  ret = setup_terminal_socket_pair (container, context, &container_args, &socket_pair_0, &socket_pair_1, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = block_signals (err);
   if (UNLIKELY (ret < 0))
@@ -2498,30 +2700,9 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   umask (0);
 
-  if (find_annotation (container, "run.oci.seccomp.plugins") != NULL && has_seccomp_receiver (container))
-    {
-      return crun_make_error (err, errno, "seccomp plugins and seccomp receivers cannot be declared at the same time");
-    }
-
-  if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
-    {
-      unsigned int seccomp_gen_options = 0;
-      const char *annotation;
-
-      libcrun_debug ("Initializing seccomp");
-      annotation = find_annotation (container, "run.oci.seccomp_fail_unknown_syscall");
-      if (annotation && strcmp (annotation, "0") != 0)
-        seccomp_gen_options = LIBCRUN_SECCOMP_FAIL_UNKNOWN_SYSCALL;
-
-      if (seccomp_bpf_data)
-        seccomp_gen_options |= LIBCRUN_SECCOMP_SKIP_CACHE;
-
-      libcrun_seccomp_gen_ctx_init (&seccomp_gen_ctx, container, true, seccomp_gen_options);
-
-      ret = libcrun_open_seccomp_bpf (&seccomp_gen_ctx, &seccomp_fd, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  ret = setup_seccomp (container, seccomp_bpf_data, &seccomp_gen_ctx, &seccomp_fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
   container_args.seccomp_fd = seccomp_fd;
 
   if (seccomp_fd >= 0)
@@ -2532,50 +2713,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         return ret;
     }
 
-  if (context->console_socket && def->process && def->process->terminal)
-    {
-      console_socket_fd = open_unix_domain_client_socket (context->console_socket, 0, err);
-      if (UNLIKELY (console_socket_fd < 0))
-        return crun_error_wrap (err, "open console socket");
-      container_args.console_socket_fd = console_socket_fd;
-    }
-
-  cgroup_manager = CGROUP_MANAGER_CGROUPFS;
-  if (context->systemd_cgroup)
-    {
-      libcrun_debug ("Using systemd cgroup manager");
-      cgroup_manager = CGROUP_MANAGER_SYSTEMD;
-    }
-  else if (context->force_no_cgroup)
-    {
-      libcrun_debug ("Disabling cgroup manager");
-      cgroup_manager = CGROUP_MANAGER_DISABLED;
-    }
-  else
-    libcrun_debug ("Using cgroupfs cgroup manager");
-
-  /* If we are root (either on the host or in a namespace), then chown the cgroup to root
-     in the container user namespace.  */
-  get_root_in_the_userns (def, container->host_uid, container->host_gid, &root_uid, &root_gid);
-  libcrun_debug ("Using container host UID `%d` and GID `%d`", container->host_uid, container->host_gid);
-
-  memset (&cg, 0, sizeof (cg));
-
-  cg.cgroup_path = def->linux ? def->linux->cgroups_path : "";
-  cg.manager = cgroup_manager;
-  cg.id = context->id;
-  cg.resources = def->linux ? def->linux->resources : NULL;
-  cg.annotations = container->annotations;
-  cg.root_uid = root_uid;
-  cg.root_gid = root_gid;
-  cg.state_root = context->state_root;
-
-  ret = libcrun_cgroup_preenter (&cg, &cgroup_dirfd, err);
+  ret = setup_console_socket (context, def, &container_args, &console_socket_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  cgroup_dirfd_s.dirfd = &cgroup_dirfd;
-  cgroup_dirfd_s.joined = false;
+  ret = setup_cgroup_manager (context, container, &cg, &cgroup_dirfd, &cgroup_dirfd_s, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_configure_handler (container_args.context->handler_manager,
                                    container_args.context,
@@ -2616,16 +2760,6 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (container_args.terminal_socketpair[1] >= 0)
     close_and_reset (&socket_pair_1);
 
-  /* If the root in the container is different than the current root user, attempt to chown
-     the std streams before entering the user namespace.  Otherwise we might lose access
-     to the user (as it is not mapped in the user namespace) and cannot chown them.  */
-  if (root_uid > 0 || root_gid > 0)
-    {
-      ret = maybe_chown_std_streams (root_uid, root_gid, err);
-      if (UNLIKELY (ret < 0))
-        goto fail;
-    }
-
   ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
   if (UNLIKELY (ret < 0))
     goto fail;
@@ -2662,15 +2796,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  ret = libcrun_set_scheduler (pid, def->process, err);
-  if (UNLIKELY (ret < 0))
-    goto fail;
-
-  ret = libcrun_reset_cpu_affinity_mask (pid, err);
-  if (UNLIKELY (ret < 0))
-    goto fail;
-
-  ret = libcrun_set_io_priority (pid, def->process, err);
+  ret = set_scheduler (pid, def, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
@@ -2693,41 +2819,21 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
         goto fail;
     }
 
-  if (seccomp_fd >= 0)
-    {
-      if (seccomp_bpf_data != NULL)
-        {
-          ret = libcrun_copy_seccomp (&seccomp_gen_ctx, seccomp_bpf_data, err);
-          if (UNLIKELY (ret < 0))
-            goto fail;
-        }
-      else
-        {
-          ret = libcrun_generate_seccomp (&seccomp_gen_ctx, err);
-          if (UNLIKELY (ret < 0))
-            goto fail;
-        }
-      close_and_reset (&seccomp_fd);
-    }
+  ret = seccomp_generation (seccomp_fd, seccomp_bpf_data, &seccomp_gen_ctx, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+  close_and_reset (&seccomp_fd);
 
   /* sync 3.  */
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  if (def->process && def->process->terminal && ! detach && context->console_socket == NULL)
-    {
-      libcrun_debug ("Receiving console socket fd");
-      terminal_fd = receive_fd_from_socket (socket_pair_0, err);
-      if (UNLIKELY (terminal_fd < 0))
-        goto fail;
+  ret = terminal_setup (def, context, socket_pair_0, &terminal_fd, &orig_terminal, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
 
-      close_and_reset (&socket_pair_0);
-
-      ret = libcrun_set_raw (0, &orig_terminal, err);
-      if (UNLIKELY (ret < 0))
-        goto fail;
-    }
+  close_and_reset (&socket_pair_0);
 
   /* sync 4.  */
   ret = sync_socket_wait_sync (context, sync_socket, false, err);
