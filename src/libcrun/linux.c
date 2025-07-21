@@ -2037,6 +2037,32 @@ append_mode_if_missing (char *data, const char *mode)
   return new_data;
 }
 
+static const char *
+get_force_cgroup_v1_annotation (libcrun_container_t *container)
+{
+  return find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+}
+
+static int
+check_valid_no_follow_file_system (int fd, const char *destination, libcrun_error_t *err)
+{
+  struct statfs sfs;
+
+  int ret = fstatfs (fd, &sfs);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "statfs `%s`", destination);
+
+  switch (sfs.f_type)
+    {
+    case PROC_SUPER_MAGIC:
+    case SYSFS_MAGIC:
+    case DEVPTS_SUPER_MAGIC:
+      return crun_make_error (err, 0, "override of the mount destination `/%s` is not allowed", destination);
+    }
+
+  return 0;
+}
+
 static int
 safe_create_symlink (int rootfsfd, const char *rootfs, const char *target, const char *destination, libcrun_error_t *err)
 {
@@ -2083,27 +2109,293 @@ safe_create_symlink (int rootfsfd, const char *rootfs, const char *target, const
   return 0;
 }
 
-static const char *
-get_force_cgroup_v1_annotation (libcrun_container_t *container)
+static int
+handle_copy_symlink (libcrun_container_t *container, const char *rootfs,
+                     runtime_spec_schema_defs_mount *mount, libcrun_error_t *err)
 {
-  return find_annotation (container, "run.oci.systemd.force_cgroup_v1");
+  cleanup_free char *target = NULL;
+  ssize_t len;
+
+  /* Copy the origin symlink instead of performing the mount operation.  */
+  len = safe_readlinkat (AT_FDCWD, mount->source, &target, 0, err);
+  if (UNLIKELY (len < 0))
+    return len;
+
+  return safe_create_symlink (get_private_data (container)->rootfsfd, rootfs,
+                              target, mount->destination, err);
 }
 
 static int
-check_valid_no_follow_file_system (int fd, const char *destination, libcrun_error_t *err)
+prepare_sysfs_or_proc_mount (libcrun_container_t *container, const char *target,
+                             int *targetfd, libcrun_error_t *err)
 {
-  struct statfs sfs;
+  int ret;
 
-  int ret = fstatfs (fd, &sfs);
+  /* Enforce sysfs and proc to be mounted on a regular directory.  */
+  ret = openat (get_private_data (container)->rootfsfd, target,
+                O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "statfs `%s`", destination);
-
-  switch (sfs.f_type)
     {
-    case PROC_SUPER_MAGIC:
-    case SYSFS_MAGIC:
-    case DEVPTS_SUPER_MAGIC:
-      return crun_make_error (err, 0, "override of the mount destination `/%s` is not allowed", destination);
+      if (errno == ENOENT)
+        {
+          if (strchr (target, '/'))
+            return crun_make_error (err, 0, "invalid target `%s`: it must be mounted at the root", target);
+
+          ret = mkdirat (get_private_data (container)->rootfsfd, target, 0755);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "mkdirat `%s`", target);
+
+          /* Try opening it again.  */
+          ret = openat (get_private_data (container)->rootfsfd, target,
+                        O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
+        }
+      else if (errno == ENOTDIR)
+        return crun_make_error (err, errno, "the target `/%s` is invalid", target);
+
+      if (ret < 0)
+        return crun_make_error (err, errno, "open `%s`", target);
+    }
+
+  *targetfd = ret;
+  return 0;
+}
+
+static int
+handle_tmpcopyup (libcrun_container_t *container, const char *rootfs, const char *target,
+                  int copy_from_fd, libcrun_error_t *err)
+{
+  int destfd, tmpfd, ret;
+
+  destfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, target,
+                        O_CLOEXEC | O_DIRECTORY, 0, err);
+  if (UNLIKELY (destfd < 0))
+    return crun_error_wrap (err, "open `%s` to write for tmpcopyup", target);
+
+  /* take ownership for the fd.  */
+  tmpfd = get_and_reset (&copy_from_fd);
+
+  ret = copy_recursive_fd_to_fd (tmpfd, destfd, target, target, err);
+  close (destfd);
+  close (tmpfd);
+
+  return ret;
+}
+
+static int
+get_mount_label_how (const char *type, bool is_sysfs_or_proc)
+{
+  if (is_sysfs_or_proc)
+    return LABEL_NONE;
+
+  if (strcmp (type, "mqueue") == 0)
+    return LABEL_XATTR;
+
+  return LABEL_MOUNT;
+}
+
+static int
+process_single_mount (libcrun_container_t *container, const char *rootfs,
+                      runtime_spec_schema_defs_mount *mount,
+                      struct libcrun_fd_map *mount_fds, size_t mount_index,
+                      const char *systemd_cgroup_v1, libcrun_error_t *err)
+{
+  const char *target = consume_slashes (mount->destination);
+  cleanup_close int source_mountfd = -1;
+  cleanup_free char *data = NULL;
+  char *type;
+  char *source;
+  unsigned long flags = 0;
+  unsigned long extra_flags = 0;
+  mode_t src_mode = S_IFDIR;
+  cleanup_close int copy_from_fd = -1;
+  cleanup_close int targetfd = -1;
+  bool mounted = false;
+  bool is_sysfs_or_proc;
+  uint64_t rec_clear = 0;
+  uint64_t rec_set = 0;
+  int ret;
+
+  if (mount_fds)
+    source_mountfd = get_and_reset (&(mount_fds->fds[mount_index]));
+
+  type = mount->type;
+
+  if (mount->options == NULL)
+    flags = get_default_flags (container, mount->destination, &data);
+  else
+    {
+      size_t j;
+
+      for (j = 0; j < mount->options_len; j++)
+        flags |= get_mount_flags_or_option (mount->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+    }
+
+  if (type == NULL && (flags & MS_BIND) == 0)
+    return crun_make_error (err, 0, "invalid mount type for `%s`", mount->destination);
+
+  if (flags & MS_BIND)
+    {
+      if (path_is_slash_dev (mount->destination))
+        get_private_data (container)->mount_dev_from_host = true;
+      /* It is used only for error messages.  */
+      type = "bind";
+    }
+  is_sysfs_or_proc = strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0;
+
+  if (strcmp (type, "tmpfs") == 0)
+    {
+      ret = append_tmpfs_mode_if_missing (container, mount, &data, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (mount->source && (flags & MS_BIND))
+    {
+      proc_fd_path_t proc_buf;
+      const char *path = mount->source;
+
+      /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
+      if (source_mountfd >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
+        {
+          get_proc_self_fd_path (proc_buf, source_mountfd);
+          path = proc_buf;
+        }
+
+      if ((extra_flags & OPTION_COPY_SYMLINK) && (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_DEST_NOFOLLOW)))
+        return crun_make_error (err, 0, "`copy-symlink` is mutually exclusive with `src-nofollow` and `dest-nofollow`");
+
+      /* Do not resolve the symlink only when src-nofollow and copy-symlink are used.  */
+      ret = get_file_type (&src_mode, (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_COPY_SYMLINK)) ? true : false, path);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "cannot stat `%s`", path);
+
+      if (S_ISLNK (src_mode) && (extra_flags & OPTION_DEST_NOFOLLOW) && source_mountfd < 0)
+        {
+          ret = get_bind_mount (AT_FDCWD, mount->source, true, true, extra_flags & OPTION_SRC_NOFOLLOW, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          source_mountfd = ret;
+        }
+
+      data = append_mode_if_missing (data, "mode=1755");
+    }
+
+  if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
+    {
+      ret = handle_copy_symlink (container, rootfs, mount, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      mounted = true;
+    }
+  else if (is_sysfs_or_proc)
+    {
+      ret = prepare_sysfs_or_proc_mount (container, target, &targetfd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+  else
+    {
+      bool is_dir = S_ISDIR (src_mode);
+
+      if (extra_flags & OPTION_DEST_NOFOLLOW)
+        {
+          /* If dest-nofollow is specified, expect the target to exist.  */
+          ret = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_PATH | O_NOFOLLOW | O_CLOEXEC, 0, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          targetfd = ret;
+
+          ret = check_valid_no_follow_file_system (targetfd, target, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
+          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          targetfd = ret;
+        }
+    }
+
+  if (extra_flags & OPTION_TMPCOPYUP)
+    {
+      if (strcmp (type, "tmpfs") != 0)
+        return crun_make_error (err, 0, "tmpcopyup can be used only with tmpfs");
+
+      /* targetfd is opened with O_PATH, reopen the fd so it can read.  */
+      copy_from_fd = openat (targetfd, ".", O_CLOEXEC | O_RDONLY | O_DIRECTORY);
+      if (UNLIKELY (copy_from_fd < 0))
+        {
+          if (errno != ENOTDIR)
+            return crun_make_error (err, errno, "cannot reopen `%s`", target);
+        }
+    }
+
+  source = mount->source ? mount->source : type;
+
+  /* Check if there is already a mount for the requested file system.  */
+  if (! mounted && source_mountfd >= 0)
+    {
+
+      ret = fs_move_mount_to (source_mountfd, targetfd, NULL);
+      if (LIKELY (ret == 0))
+        {
+          /* Force no MS_BIND flag to not attempt again the bind mount.  */
+          ret = do_mount (container, NULL, source_mountfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          mounted = true;
+        }
+    }
+
+  if (! mounted)
+    {
+      if (systemd_cgroup_v1 && strcmp (mount->destination, systemd_cgroup_v1) == 0)
+        {
+          /* Override the cgroup mount with a single named cgroup name=systemd.  */
+          ret = do_mount_cgroup_systemd_v1 (container, source, targetfd, target, flags, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else if (strcmp (type, "cgroup") == 0)
+        {
+          ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          int label_how = get_mount_label_how (type, is_sysfs_or_proc);
+
+          ret = do_mount (container, source, targetfd, target, type, flags, data, label_how, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+    }
+
+  if (copy_from_fd >= 0)
+    {
+      ret = handle_tmpcopyup (container, rootfs, target, copy_from_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (rec_clear || rec_set)
+    {
+      const bool is_dir = S_ISDIR (src_mode);
+      cleanup_close int dfd = -1;
+
+      dfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_RDONLY | O_PATH | O_CLOEXEC | (is_dir ? O_DIRECTORY : 0), 0, err);
+      if (UNLIKELY (dfd < 0))
+        return crun_make_error (err, errno, "open mount target `/%s`", target);
+
+      ret = do_mount_setattr (true, target, dfd, rec_clear, rec_set, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   return 0;
@@ -2123,247 +2415,9 @@ do_mounts (libcrun_container_t *container, const char *rootfs, libcrun_error_t *
 
   for (i = 0; i < def->mounts_len; i++)
     {
-      const char *target = consume_slashes (def->mounts[i]->destination);
-      cleanup_close int source_mountfd = -1;
-      cleanup_free char *data = NULL;
-      char *type;
-      char *source;
-      unsigned long flags = 0;
-      unsigned long extra_flags = 0;
-      mode_t src_mode = S_IFDIR;
-      cleanup_close int copy_from_fd = -1;
-      cleanup_close int targetfd = -1;
-      bool mounted = false;
-      bool is_sysfs_or_proc;
-      uint64_t rec_clear = 0;
-      uint64_t rec_set = 0;
-
-      if (mount_fds)
-        source_mountfd = get_and_reset (&(mount_fds->fds[i]));
-
-      type = def->mounts[i]->type;
-
-      if (def->mounts[i]->options == NULL)
-        flags = get_default_flags (container, def->mounts[i]->destination, &data);
-      else
-        {
-          size_t j;
-
-          for (j = 0; j < def->mounts[i]->options_len; j++)
-            flags |= get_mount_flags_or_option (def->mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
-        }
-
-      if (type == NULL && (flags & MS_BIND) == 0)
-        return crun_make_error (err, 0, "invalid mount type for `%s`", def->mounts[i]->destination);
-
-      if (flags & MS_BIND)
-        {
-          if (path_is_slash_dev (def->mounts[i]->destination))
-            get_private_data (container)->mount_dev_from_host = true;
-          /* It is used only for error messages.  */
-          type = "bind";
-        }
-      is_sysfs_or_proc = strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0;
-
-      if (strcmp (type, "tmpfs") == 0)
-        {
-          ret = append_tmpfs_mode_if_missing (container, def->mounts[i], &data, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      if (def->mounts[i]->source && (flags & MS_BIND))
-        {
-          proc_fd_path_t proc_buf;
-          const char *path = def->mounts[i]->source;
-
-          /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
-          if (source_mountfd >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
-            {
-              get_proc_self_fd_path (proc_buf, source_mountfd);
-              path = proc_buf;
-            }
-
-          if ((extra_flags & OPTION_COPY_SYMLINK) && (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_DEST_NOFOLLOW)))
-            return crun_make_error (err, 0, "`copy-symlink` is mutually exclusive with `src-nofollow` and `dest-nofollow`");
-
-          /* Do not resolve the symlink only when src-nofollow and copy-symlink are used.  */
-          ret = get_file_type (&src_mode, (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_COPY_SYMLINK)) ? true : false, path);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "cannot stat `%s`", path);
-
-          if (S_ISLNK (src_mode) && (extra_flags & OPTION_DEST_NOFOLLOW) && source_mountfd < 0)
-            {
-              ret = get_bind_mount (AT_FDCWD, def->mounts[i]->source, true, true, extra_flags & OPTION_SRC_NOFOLLOW, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-
-              source_mountfd = ret;
-            }
-
-          data = append_mode_if_missing (data, "mode=1755");
-        }
-
-      if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
-        {
-          cleanup_free char *target = NULL;
-          ssize_t len;
-
-          /* If we got here, it means the OPTION_COPY_SYMLINK was provided, so we need to copy the origin
-             symlink instead of performing the mount operation.  */
-          len = safe_readlinkat (AT_FDCWD, def->mounts[i]->source, &target, 0, err);
-          if (UNLIKELY (len < 0))
-            return len;
-
-          ret = safe_create_symlink (get_private_data (container)->rootfsfd, rootfs, target, def->mounts[i]->destination, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          mounted = true;
-        }
-      else if (is_sysfs_or_proc)
-        {
-          /* Enforce sysfs and proc to be mounted on a regular directory.  */
-          ret = openat (get_private_data (container)->rootfsfd, target, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
-          if (UNLIKELY (ret < 0))
-            {
-              if (errno == ENOENT)
-                {
-                  if (strchr (target, '/'))
-                    return crun_make_error (err, 0, "invalid target `%s`: it must be mounted at the root", target);
-
-                  ret = mkdirat (get_private_data (container)->rootfsfd, target, 0755);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "mkdirat `%s`", target);
-
-                  /* Try opening it again.  */
-                  ret = openat (get_private_data (container)->rootfsfd, target, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
-                }
-              else if (errno == ENOTDIR)
-                return crun_make_error (err, errno, "the target `/%s` is invalid", target);
-
-              if (ret < 0)
-                return crun_make_error (err, errno, "open `%s`", target);
-            }
-
-          targetfd = ret;
-        }
-      else
-        {
-          bool is_dir = S_ISDIR (src_mode);
-
-          if (extra_flags & OPTION_DEST_NOFOLLOW)
-            {
-              /* If dest-nofollow is specified, expect the target to exist.  */
-              ret = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_PATH | O_NOFOLLOW | O_CLOEXEC, 0, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              targetfd = ret;
-
-              ret = check_valid_no_follow_file_system (targetfd, target, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-          else
-            {
-              /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-              ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              targetfd = ret;
-            }
-        }
-
-      if (extra_flags & OPTION_TMPCOPYUP)
-        {
-          if (strcmp (type, "tmpfs") != 0)
-            return crun_make_error (err, 0, "tmpcopyup can be used only with tmpfs");
-
-          /* targetfd is opened with O_PATH, reopen the fd so it can read.  */
-          copy_from_fd = openat (targetfd, ".", O_CLOEXEC | O_RDONLY | O_DIRECTORY);
-          if (UNLIKELY (copy_from_fd < 0))
-            {
-              if (errno != ENOTDIR)
-                return crun_make_error (err, errno, "cannot reopen `%s`", target);
-            }
-        }
-
-      source = def->mounts[i]->source ? def->mounts[i]->source : type;
-
-      /* Check if there is already a mount for the requested file system.  */
-      if (! mounted && source_mountfd >= 0)
-        {
-
-          ret = fs_move_mount_to (source_mountfd, targetfd, NULL);
-          if (LIKELY (ret == 0))
-            {
-              /* Force no MS_BIND flag to not attempt again the bind mount.  */
-              ret = do_mount (container, NULL, source_mountfd, target, NULL, flags & ~MS_BIND, data, LABEL_NONE, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-              mounted = true;
-            }
-        }
-
-      if (! mounted)
-        {
-          if (systemd_cgroup_v1 && strcmp (def->mounts[i]->destination, systemd_cgroup_v1) == 0)
-            {
-              /* Override the cgroup mount with a single named cgroup name=systemd.  */
-              ret = do_mount_cgroup_systemd_v1 (container, source, targetfd, target, flags, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-          else if (strcmp (type, "cgroup") == 0)
-            {
-              ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-          else
-            {
-              int label_how = LABEL_MOUNT;
-
-              if (is_sysfs_or_proc)
-                label_how = LABEL_NONE;
-              else if (strcmp (type, "mqueue") == 0)
-                label_how = LABEL_XATTR;
-
-              ret = do_mount (container, source, targetfd, target, type, flags, data, label_how, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-        }
-
-      if (copy_from_fd >= 0)
-        {
-          int destfd, tmpfd;
-
-          destfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_CLOEXEC | O_DIRECTORY, 0, err);
-          if (UNLIKELY (destfd < 0))
-            return crun_error_wrap (err, "open `%s` to write for tmpcopyup", target);
-
-          /* take ownership for the fd.  */
-          tmpfd = get_and_reset (&copy_from_fd);
-
-          ret = copy_recursive_fd_to_fd (tmpfd, destfd, target, target, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      if (rec_clear || rec_set)
-        {
-          const bool is_dir = S_ISDIR (src_mode);
-          cleanup_close int dfd = -1;
-
-          dfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_RDONLY | O_PATH | O_CLOEXEC | (is_dir ? O_DIRECTORY : 0), 0, err);
-          if (UNLIKELY (dfd < 0))
-            return crun_make_error (err, errno, "open mount target `/%s`", target);
-
-          ret = do_mount_setattr (true, target, dfd, rec_clear, rec_set, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = process_single_mount (container, rootfs, def->mounts[i], mount_fds, i, systemd_cgroup_v1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
   return 0;
 }
