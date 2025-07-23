@@ -188,6 +188,7 @@ struct libcrun_checkpoint_restore_s
   char *work_path;
   bool leave_running;
   bool tcp_established;
+  bool tcp_close;
   bool shell_job;
   bool ext_unix_sk;
   bool detach;
