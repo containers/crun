@@ -182,6 +182,24 @@ libkrun_configure_nitro (uint32_t ctx_id, void *handle, yajl_val *config_tree, l
 }
 
 static int
+libkrun_enable_virtio_gpu (struct krun_config *kconf)
+{
+  int32_t (*krun_set_gpu_options) (uint32_t ctx_id, uint32_t virgl_flags);
+  krun_set_gpu_options = dlsym (kconf->handle, "krun_set_gpu_options");
+
+  // ignore if dlsym fails
+  if (krun_set_gpu_options == NULL)
+    return 0;
+
+  uint32_t virgl_flags = VIRGLRENDERER_NO_VIRGL |          /* do not expose OpenGL */
+                         VIRGLRENDERER_RENDER_SERVER |     /* start a render server and move GPU rendering to the render server */
+                         VIRGLRENDERER_VENUS |             /* enable venus renderer */
+                         VIRGLRENDERER_THREAD_SYNC |       /* wait for sync objects in thread rather than polling */
+                         VIRGLRENDERER_USE_ASYNC_FENCE_CB; /* used in conjunction with VIRGLRENDERER_THREAD_SYNC */
+  return krun_set_gpu_options (kconf->ctx_id, virgl_flags);
+}
+
+static int
 libkrun_read_vm_config (yajl_val *config_tree, libcrun_error_t *err)
 {
   int ret;
@@ -429,6 +447,13 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
+
+      if (access ("/dev/dri", F_OK) == 0 && access ("/usr/libexec/virgl_render_server", F_OK) == 0)
+        {
+          ret = libkrun_enable_virtio_gpu (kconf);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   yajl_tree_free (config_tree);
