@@ -145,6 +145,10 @@ libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, 
   return 0;
 }
 
+#  ifndef KRUN_NITRO_IMG_TYPE_EIF
+#    define KRUN_NITRO_IMG_TYPE_EIF 1
+#  endif
+
 static int
 libkrun_configure_nitro (uint32_t ctx_id, void *handle, yajl_val *config_tree, libcrun_error_t *err)
 {
@@ -346,7 +350,6 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
-  int32_t (*krun_nitro_set_image) (uint32_t ctx_id, const char *image_path, uint32_t image_type);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
   uint32_t num_vcpus, ram_mib;
