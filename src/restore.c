@@ -38,6 +38,7 @@ enum
   OPTION_IMAGE_PATH = 1000,
   OPTION_WORK_PATH,
   OPTION_TCP_ESTABLISHED,
+  OPTION_TCP_CLOSE,
   OPTION_SHELL_JOB,
   OPTION_EXT_UNIX_SK,
   OPTION_PID_FILE,
@@ -62,6 +63,7 @@ static struct argp_option options[]
         { "image-path", OPTION_IMAGE_PATH, "DIR", 0, "path for saving criu image files", 0 },
         { "work-path", OPTION_WORK_PATH, "DIR", 0, "path for saving work files and logs", 0 },
         { "tcp-established", OPTION_TCP_ESTABLISHED, 0, 0, "allow open tcp connections", 0 },
+        { "tcp-close", OPTION_TCP_CLOSE, 0, 0, "allow closed tcp connections", 0 },
         { "ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0 },
         { "shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0 },
         { "detach", 'd', 0, 0, "detach from the container's process", 0 },
@@ -101,6 +103,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_TCP_ESTABLISHED:
       cr_options.tcp_established = true;
+      break;
+
+    case OPTION_TCP_CLOSE:
+      cr_options.tcp_close = true;
       break;
 
     case OPTION_EXT_UNIX_SK:

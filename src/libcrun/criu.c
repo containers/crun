@@ -94,6 +94,7 @@ struct libcriu_wrapper_s
   int (*criu_add_cg_root) (const char *ctrl, const char *path);
   void (*criu_set_shell_job) (bool shell_job);
   void (*criu_set_tcp_established) (bool tcp_established);
+  void (*criu_set_tcp_close) (bool tcp_close);
   void (*criu_set_track_mem) (bool track_mem);
   void (*criu_set_work_dir_fd) (int fd);
   int (*criu_set_lsm_profile) (const char *name);
@@ -188,6 +189,7 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_add_cg_root, false);
   LOAD_CRIU_FUNCTION (criu_set_shell_job, false);
   LOAD_CRIU_FUNCTION (criu_set_tcp_established, false);
+  LOAD_CRIU_FUNCTION (criu_set_tcp_close, false);
   LOAD_CRIU_FUNCTION (criu_set_track_mem, false);
   LOAD_CRIU_FUNCTION (criu_set_work_dir_fd, false);
   LOAD_CRIU_FUNCTION (criu_set_lsm_profile, false);
@@ -1076,6 +1078,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   libcriu_wrapper->criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   libcriu_wrapper->criu_set_shell_job (cr_options->shell_job);
   libcriu_wrapper->criu_set_tcp_established (cr_options->tcp_established);
+  libcriu_wrapper->criu_set_tcp_close (cr_options->tcp_close);
   libcriu_wrapper->criu_set_file_locks (cr_options->file_locks);
   libcriu_wrapper->criu_set_orphan_pts_master (true);
 
