@@ -152,7 +152,6 @@ libkrun_configure_nitro (uint32_t ctx_id, void *handle, yajl_val *config_tree, l
   int32_t (*krun_nitro_set_start_flags) (uint32_t ctx_id, uint64_t start_flags);
   const char *path_eif[] = { "eif_file", (const char *) 0 };
   yajl_val val_eif_image = NULL;
-  uint64_t start_flags = 1;
   char *eif_image = NULL;
   int ret;
 
