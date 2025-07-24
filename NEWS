@@ -1,3 +1,24 @@
+* crun-1.23
+
+- krun: enable virtio-gpu.  Enable and configure a virtio-gpu device
+  if /dev/dri and /usr/libexec/virgl_render_server are present within
+  the container.
+- krun: add support for nitro enclaves.
+- criu: Add support for tcp-close.
+- linux: fix issue when RestrictAddressFamilies="AF_UNIX AF_NETLINK" is
+  in place in the systemd unit.  Regression introduced in crun 1.17.
+- cgroup,systemd: use BPFProgram=device on systemd to install the device
+  controller eBPF.
+- cgroup,systemd: allow empty slice in cgroupsPath.
+- crun: print the program version even with an invalid rundir.
+- linux: fix regression with idmapped mounts.  Support idmapped mounts
+  also when there is no user namespace specified for the container.
+  crun 1.22 introduced the regression.
+- cgroup: change formula to convert from cpu shares to cpu weight.
+  The OCI CPU shares (range [2-262144]) to cgroup v2 `cpu.weight`
+  (range [1-10000]) conversion formula has been updated to use a
+  quadratic function so that min, max and default  values match.
+
 * crun-1.22
 
 - crun: add a new command crun mounts to dynamically add or remove
