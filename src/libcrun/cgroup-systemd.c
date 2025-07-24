@@ -1965,7 +1965,7 @@ find_systemd_subgroup (string_map *annotations)
       return annotation;
     }
 
-  return "container";
+  return NULL;
 }
 
 static int
