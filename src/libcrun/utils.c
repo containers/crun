@@ -2779,7 +2779,7 @@ channel_fd_pair_process (struct channel_fd_pair *channel, int epollfd, libcrun_e
   for (i = 0, repeat = true; i < 1000 && repeat; i++)
     {
       repeat = false;
-      if (ring_buffer_get_space_available (channel->rb) >= ring_buffer_get_size (channel->rb))
+      if (ring_buffer_get_space_available (channel->rb) > 0)
         {
           ret = ring_buffer_read (channel->rb, channel->in_fd, &is_input_eagain, err);
           if (UNLIKELY (ret < 0))
