@@ -1102,7 +1102,11 @@ open_unix_domain_client_socket (const char *path, int dgram, libcrun_error_t *er
       path = name_buf;
     }
 
-  strcpy (addr.sun_path, path);
+  size_t path_len = strlen (path);
+  if (path_len >= sizeof (addr.sun_path))
+    return crun_make_error (err, ENAMETOOLONG, "socket path too long: `%s`", path);
+
+  memcpy (addr.sun_path, path, path_len + 1);
   addr.sun_family = AF_UNIX;
   ret = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
@@ -1129,7 +1133,12 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
       get_proc_self_fd_path (name_buf, fd);
       path = name_buf;
     }
-  strcpy (addr.sun_path, path);
+
+  size_t path_len = strlen (path);
+  if (path_len >= sizeof (addr.sun_path))
+    return crun_make_error (err, ENAMETOOLONG, "socket path too long: `%s`", path);
+
+  memcpy (addr.sun_path, path, path_len + 1);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
