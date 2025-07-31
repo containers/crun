@@ -1,3 +1,9 @@
+* crun-1.23.1
+
+- exec: fix a bug where the terminal could lose some bytes when
+  reading from the exec'ed process.
+- utils: add bounds checking for Unix domain socket paths.
+
 * crun-1.23
 
 - krun: enable virtio-gpu.  Enable and configure a virtio-gpu device
