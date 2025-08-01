@@ -223,7 +223,7 @@ def get_crun_path():
 
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
-                       command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
+                       command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager=None,
                        all_dev_null=False, id_container=None, relative_config_path="config.json",
                        chown_rootfs_to=None, callback_prepare_rootfs=None, debug_on_error=None):
 
@@ -287,6 +287,8 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     relative_config_path = ['--config', relative_config_path] if relative_config_path else []
 
     root = get_tests_root_status()
+    if cgroup_manager is None:
+        cgroup_manager = os.environ.get('CGROUP_MANAGER', 'cgroupfs')
     args = [crun, "--cgroup-manager", cgroup_manager, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
