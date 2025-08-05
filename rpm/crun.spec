@@ -73,6 +73,7 @@ Recommends: criu-libs
 BuildRequires: wasmedge-devel
 %endif
 BuildRequires: python
+BuildRequires: glibc-static
 Provides: oci-runtime
 
 %description

@@ -32,7 +32,9 @@ else
 noinst_LTLIBRARIES = libcrun.la
 endif
 
+if BUILD_TESTS
 check_LTLIBRARIES = libcrun_testing.la
+endif
 
 libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/string_map.c \
@@ -87,9 +89,11 @@ libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
 libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
 
 # build a version with all the symbols visible for testing
+if BUILD_TESTS
 libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
 libcrun_testing_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=default
 libcrun_testing_la_LIBADD = libocispec/libocispec.la $(maybe_libyajl.la)
+endif
 
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
@@ -163,7 +167,9 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	krun.1.md krun.1 \
 	lua/luacrun.rockspec
 
+if BUILD_TESTS
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt
+endif
 
 if ENABLE_CRUN
 bin_PROGRAMS = crun
@@ -172,6 +178,7 @@ else
 noinst_PROGRAMS = crun
 endif
 
+if BUILD_TESTS
 check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
 
 TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(maybe_libyajl.la)
@@ -205,6 +212,7 @@ tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
+endif
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
 PY_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
@@ -236,7 +244,9 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_time.py \
 	tests/test_bpf_devices.py
 
+if BUILD_TESTS
 TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
+endif
 
 .version:
 	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@

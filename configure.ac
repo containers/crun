@@ -32,6 +32,16 @@ AC_CHECK_TYPES([atomic_int], [], [], [[#include <stdatomic.h>]])
 
 AC_CHECK_FUNCS(eaccess hsearch_r copy_file_range fgetxattr statx fgetpwent_r issetugid memfd_create)
 
+case "${lt_cv_prog_compiler_static_works}" in
+	yes) build_tests=true ;;
+	no)
+		AC_MSG_WARN([Static compilation not working. Test suite cannot be built / executed. Make sure to install glibc-static or equivalent.])
+		build_tests=false
+		;;
+	*) ;;
+esac
+AM_CONDITIONAL([BUILD_TESTS], [test "x${build_tests}" = xtrue])
+
 AC_ARG_ENABLE(crun,
 AS_HELP_STRING([--enable-crun], [Include crun executable in installation (default: yes)]),
 [
