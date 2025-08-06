@@ -224,7 +224,7 @@ def get_crun_path():
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
-                       all_dev_null=False, id_container=None, relative_config_path="config.json",
+                       all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path="config.json",
                        chown_rootfs_to=None, callback_prepare_rootfs=None, debug_on_error=None):
 
     # Some tests require that the container user, which might not be the
@@ -300,6 +300,8 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         stdin = subprocess.DEVNULL
         stdout = subprocess.DEVNULL
         stderr = subprocess.DEVNULL
+    elif stdin_dev_null:
+        stdin = subprocess.DEVNULL
 
     if use_popen:
         if not stdout:
@@ -311,7 +313,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                                 close_fds=False), id_container
     else:
         try:
-            return subprocess.check_output(args, cwd=temp_dir, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
+            return subprocess.check_output(args, cwd=temp_dir, stdin=stdin, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
         except subprocess.CalledProcessError as e:
             sys.stderr.write("# Command failed: %s\n" % ' '.join(args))
             sys.stderr.write("# Working directory: %s\n" % temp_dir)

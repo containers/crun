@@ -1,7 +1,7 @@
 #!/bin/env python3
 # crun - OCI runtime written in C
 #
-# Copyright (C) 2017, 2018, 2019 Giuseppe Scrivano <giuseppe@scrivano.org>
+# Copyright (C) 2017, 2018, 2019, 2025 Giuseppe Scrivano <giuseppe@scrivano.org>
 # crun is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import sys
 from tests_utils import *
 
 def test_userns_full_mapping():
@@ -168,6 +169,81 @@ def test_umask():
 
     return 0
 
+def test_dev_null_no_chown():
+    """Test that /dev/null file descriptors are not chowned to container user."""
+    if is_rootless():
+        return 77
+
+    # Get current owner of /dev/null and use owner + 1 as container user
+    dev_null_stat = os.stat('/dev/null')
+    container_uid = dev_null_stat.st_uid + 1
+    container_gid = dev_null_stat.st_gid + 1
+
+    conf = base_config()
+    conf['process']['user'] = {"uid": container_uid, "gid": container_gid}
+    add_all_namespaces(conf)
+
+    # Check ownership of stdin fd which should be /dev/null
+    conf['process']['args'] = ['/init', 'owner', '/proc/self/fd/0']
+
+    try:
+        out, container_id = run_and_get_output(conf, stdin_dev_null=True)
+        sys.stderr.write("# Container ran successfully, output: %s\n" % repr(out))
+        if ':' in out:
+            uid_str, gid_str = out.strip().split(':')
+            uid, gid = int(uid_str), int(gid_str)
+            # Should NOT be owned by container user
+            if uid == container_uid or gid == container_gid:
+                sys.stderr.write("# dev-null-no-chown test failed: /dev/null fd owned by container user %d:%d\n" % (uid, gid))
+                sys.stderr.write("# stdout: %s\n" % repr(out))
+                return -1
+            sys.stderr.write("# dev-null-no-chown test passed: /dev/null fd owned by %d:%d (not container user %d:%d)\n" % (uid, gid, container_uid, container_gid))
+        else:
+            sys.stderr.write("# dev-null-no-chown test failed: unexpected owner output format\n")
+            sys.stderr.write("# stdout: %s\n" % repr(out))
+            return -1
+        return 0
+    except Exception as e:
+        sys.stderr.write("# dev-null-no-chown test failed with exception: %s\n" % str(e))
+        if hasattr(e, 'output'):
+            sys.stderr.write("# command output: %s\n" % repr(e.output))
+        return -1
+
+def test_regular_files_chowned():
+    """Test that regular file descriptors are chowned to container user."""
+    if is_rootless():
+        return 77
+
+    # Get current owner of /dev/null and use owner + 1 as container user
+    dev_null_stat = os.stat('/dev/null')
+    container_uid = dev_null_stat.st_uid + 1
+    container_gid = dev_null_stat.st_gid + 1
+
+    conf = base_config()
+    conf['process']['user'] = {"uid": container_uid, "gid": container_gid}
+    add_all_namespaces(conf)
+
+    # Check ownership of regular stdout (not /dev/null)
+    conf['process']['args'] = ['/init', 'owner', '/proc/self/fd/1']
+
+    try:
+        out, _ = run_and_get_output(conf)
+        if ':' in out:
+            uid_str, gid_str = out.strip().split(':')
+            uid, gid = int(uid_str), int(gid_str)
+            # Should be owned by container user
+            if uid != container_uid or gid != container_gid:
+                sys.stderr.write("# regular-files-chowned test failed: regular fd owned by %d:%d (expected %d:%d)\n" % (uid, gid, container_uid, container_gid))
+                return -1
+            sys.stderr.write("# regular-files-chowned test passed: regular fd owned by %d:%d (container user)\n" % (uid, gid))
+        else:
+            sys.stderr.write("# regular-files-chowned test failed: unexpected output format: %s\n" % repr(out))
+            return -1
+        return 0
+    except Exception as e:
+        sys.stderr.write("# regular-files-chowned test failed with exception: %s\n" % str(e))
+        return -1
+
 all_tests = {
     "uid" : test_uid,
     "gid" : test_gid,
@@ -176,6 +252,8 @@ all_tests = {
     "keep-groups" : test_keep_groups,
     "additional-gids": test_additional_gids,
     "umask": test_umask,
+    "dev-null-no-chown": test_dev_null_no_chown,
+    "regular-files-chowned": test_regular_files_chowned,
 }
 
 if __name__ == "__main__":

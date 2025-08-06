@@ -1017,8 +1017,7 @@ send_sync_cb (void *data, libcrun_error_t *err)
 }
 
 static int
-maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
-                         libcrun_error_t *err)
+maybe_chown_std_streams (uid_t container_uid, gid_t container_gid, libcrun_error_t *err)
 {
   int ret, i;
 
@@ -1026,6 +1025,19 @@ maybe_chown_std_streams (uid_t container_uid, gid_t container_gid,
     {
       if (! isatty (i))
         {
+          struct stat statbuf;
+          ret = fstat (i, &statbuf);
+          if (UNLIKELY (ret < 0))
+            {
+              if (errno == EBADF)
+                continue;
+              return crun_make_error (err, errno, "fstat fd `%d`", i);
+            }
+
+          /* Skip chown for device files */
+          if (S_ISCHR (statbuf.st_mode) || S_ISBLK (statbuf.st_mode))
+            continue;
+
           ret = fchown (i, container_uid, container_gid);
           if (UNLIKELY (ret < 0))
             {

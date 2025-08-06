@@ -248,14 +248,48 @@ def test_net_devices():
 
         for specify_broadcast in [True, False]:
             for specify_name in [True, False]:
-                subprocess.run(["ip", "link", "add", "testdevice", "type", "dummy"])
+                sys.stderr.write("# test_net_devices: creating testdevice with specify_broadcast=%s, specify_name=%s\n" % (specify_broadcast, specify_name))
+                result = subprocess.run(["ip", "link", "add", "testdevice", "type", "dummy"], capture_output=True, text=True)
+                if result.returncode != 0:
+                    sys.stderr.write("# ip link add failed: %s\n" % result.stderr)
+                    return -1
                 if specify_broadcast:
-                    subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "brd", "10.1.2.254", "dev", "testdevice"])
+                    result = subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "brd", "10.1.2.254", "dev", "testdevice"], capture_output=True, text=True)
+                    if result.returncode != 0:
+                        sys.stderr.write("# ip addr add with broadcast failed: %s\n" % result.stderr)
+                        return -1
                 else:
-                    subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "dev", "testdevice"])
+                    result = subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "dev", "testdevice"], capture_output=True, text=True)
+                    if result.returncode != 0:
+                        sys.stderr.write("# ip addr add without broadcast failed: %s\n" % result.stderr)
+                        return -1
 
                 conf = base_config()
                 add_all_namespaces(conf)
+
+                # Add network capabilities needed for network device operations
+                conf['process']['capabilities'] = {
+                    "bounding": [
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_SYS_ADMIN"
+                    ],
+                    "effective": [
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_SYS_ADMIN"
+                    ],
+                    "inheritable": [
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_SYS_ADMIN"
+                    ],
+                    "permitted": [
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_SYS_ADMIN"
+                    ]
+                }
                 if specify_name:
                     conf['process']['args'] = ['/init', 'ip', 'newtestdevice']
                     conf['linux']['netDevices'] = {
@@ -272,19 +306,28 @@ def test_net_devices():
 
                 try:
                     out = run_and_get_output(conf)
+                    sys.stderr.write("# test_net_devices: specify_broadcast=%s, specify_name=%s\n" % (specify_broadcast, specify_name))
+                    sys.stderr.write("# test_net_devices: output: %s\n" % repr(out[0]))
                     if "address: 10.1.2.3" not in out[0]:
                         sys.stderr.write("# address not found in output\n")
+                        sys.stderr.write("# full output: %s\n" % repr(out[0]))
                         return 1
                     if specify_broadcast:
                         if "broadcast: 10.1.2.254" not in out[0]:
                             sys.stderr.write("# broadcast address not found in output\n")
+                            sys.stderr.write("# full output: %s\n" % repr(out[0]))
                             return 1
                     else:
                         if "broadcast" in out[0]:
-                            sys.stderr.write("# broadcast address found in output\n")
+                            sys.stderr.write("# broadcast address found in output when it shouldn't be\n")
+                            sys.stderr.write("# full output: %s\n" % repr(out[0]))
                             return 1
                 except Exception as e:
+                    sys.stderr.write("# test_net_devices exception: %s\n" % str(e))
                     return -1
+                finally:
+                    # Clean up the test device
+                    subprocess.run(["ip", "link", "del", "testdevice"], capture_output=True)
     finally:
         os.setns(current_netns, os.CLONE_NEWNET)
         os.close(current_netns)
