@@ -50,7 +50,9 @@ open_unix_domain_socket (const char *path)
   int fd = socket (AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0)
     error (EXIT_FAILURE, errno, "error creating UNIX socket");
-
+  if (strlen (path) >= sizeof (addr.sun_path))
+    error (EXIT_FAILURE, 0, "invalid path");
+  
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
