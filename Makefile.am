@@ -67,6 +67,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/linux.c \
 		src/libcrun/mount_flags.c \
 		src/libcrun/scheduler.c \
+		src/libcrun/mempolicy.c \
 		src/libcrun/seccomp.c \
 		src/libcrun/seccomp_notify.c \
 		src/libcrun/signals.c \
@@ -160,7 +161,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/custom-handler.h src/libcrun/io_priority.h \
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
-	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h \
+	src/libcrun/scheduler.h src/libcrun/mempolicy.h src/libcrun/status.h src/libcrun/terminal.h \
 	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h src/libcrun/string_map.h \
 	src/libcrun/net_device.h \
 	crun.1.md crun.1 libcrun.lds \
@@ -225,6 +226,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_hostname.py \
 	tests/test_limits.py \
 	tests/test_oci_features.py \
+	tests/test_mempolicy.py \
 	tests/test_mounts.py \
 	tests/test_paths.py \
 	tests/test_pid.py \

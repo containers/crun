@@ -23,6 +23,7 @@
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
+#include "mempolicy.h"
 #ifdef HAVE_SECCOMP
 #  include <seccomp.h>
 #endif
@@ -165,6 +166,22 @@ static char *archs[] = {
   "SCMP_ARCH_X32",
   "SCMP_ARCH_X86",
   "SCMP_ARCH_X86_64"
+};
+
+static char *mempolicy_modes[] = {
+  "MPOL_DEFAULT",
+  "MPOL_PREFERRED",
+  "MPOL_BIND",
+  "MPOL_INTERLEAVE",
+  "MPOL_LOCAL",
+  "MPOL_PREFERRED_MANY",
+  "MPOL_WEIGHTED_INTERLEAVE"
+};
+
+static char *mempolicy_flags[] = {
+  "MPOL_F_NUMA_BALANCING",
+  "MPOL_F_RELATIVE_NODES",
+  "MPOL_F_STATIC_NODES"
 };
 
 static const char spec_file[] = "\
@@ -2768,6 +2785,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
   umask (0);
 
+  ret = libcrun_set_mempolicy (def, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = setup_seccomp (container, seccomp_bpf_data, &seccomp_gen_ctx, &seccomp_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -4324,6 +4345,8 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   size_t num_unsafe_annotations = sizeof (potentially_unsafe_annotations) / sizeof (potentially_unsafe_annotations[0]);
   cleanup_free char **capabilities = NULL;
   size_t num_capabilities = 0;
+  size_t num_mempolicy_modes = sizeof (mempolicy_modes) / sizeof (mempolicy_modes[0]);
+  size_t num_mempolicy_flags = sizeof (mempolicy_flags) / sizeof (mempolicy_flags[0]);
 
   *info = xmalloc0 (sizeof (struct features_info_s));
 
@@ -4373,6 +4396,9 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   (*info)->linux.intel_rdt.enabled = true;
 
   (*info)->linux.net_devices.enabled = true;
+
+  populate_array_field (&((*info)->linux.memory_policy.mode), mempolicy_modes, num_mempolicy_modes);
+  populate_array_field (&((*info)->linux.memory_policy.flags), mempolicy_flags, num_mempolicy_flags);
 
   // Put the values for mount extensions
   (*info)->linux.mount_ext.idmap.enabled = true;
