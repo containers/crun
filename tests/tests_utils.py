@@ -225,7 +225,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
                        all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path="config.json",
-                       chown_rootfs_to=None, callback_prepare_rootfs=None, debug_on_error=None, debug=False):
+                       chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False):
 
     # Some tests require that the container user, which might not be the
     # same user as the person running the tests, is able to resolve the full path
