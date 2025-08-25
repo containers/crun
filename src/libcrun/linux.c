@@ -4462,6 +4462,17 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
 
   mount_fds = make_libcrun_fd_map (def->mounts_len);
 
+  /* If the container is already running in a user namespace, apply the same logic as if a new
+     user namespace was created as part of the container itself.  */
+  if (! has_userns)
+    {
+      int is_in_userns = check_running_in_user_namespace (err);
+      if (UNLIKELY (is_in_userns < 0))
+        return is_in_userns;
+
+      has_userns = is_in_userns > 0;
+    }
+
   for (i = 0; i < def->mounts_len; i++)
     {
       bool recursive = false;
