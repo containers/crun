@@ -169,6 +169,15 @@ compare_rdt_configurations (const char *a, const char *b)
 }
 
 static int
+get_resctrl_path (char **path, const char *file, const char *name, libcrun_error_t *err)
+{
+  if (file)
+    return append_paths (path, err, INTEL_RDT_MOUNT_POINT, name, file, NULL);
+  else
+    return append_paths (path, err, INTEL_RDT_MOUNT_POINT, name, NULL);
+}
+
+static int
 validate_rdt_configuration (const char *name, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
 {
   cleanup_free char *existing_content = NULL;
@@ -176,7 +185,7 @@ validate_rdt_configuration (const char *name, const char *l3_cache_schema, const
   char *it, *end;
   int ret;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, SCHEMATA_FILE, NULL);
+  ret = get_resctrl_path (&path, SCHEMATA_FILE, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -259,7 +268,7 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
   if (ret == 0)
     return crun_make_error (err, 0, "the resctl file system is not mounted");
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, NULL);
+  ret = get_resctrl_path (&path, NULL, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -302,7 +311,7 @@ resctl_move_task_to (const char *name, const char *monitoring_name, pid_t pid, l
   int len;
   int ret;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, TASKS_FILE, NULL);
+  ret = get_resctrl_path (&path, TASKS_FILE, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -342,7 +351,7 @@ resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw
   if (l3_cache_schema == NULL && mem_bw_schema == NULL && schemata == NULL)
     return 0;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, SCHEMATA_FILE, NULL);
+  ret = get_resctrl_path (&path, SCHEMATA_FILE, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -394,7 +403,7 @@ resctl_destroy (const char *name, libcrun_error_t *err)
   cleanup_free char *path = NULL;
   int ret;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, NULL);
+  ret = get_resctrl_path (&path, NULL, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
