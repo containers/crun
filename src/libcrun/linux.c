@@ -1114,7 +1114,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
         return crun_make_error (err, errno, "cannot stat `%s`", rel_path);
 
       if ((mode & S_IFMT) == S_IFDIR)
-        ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "size=0k", LABEL_MOUNT, err);
+        ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1", LABEL_MOUNT, err);
       else
         ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
