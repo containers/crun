@@ -706,12 +706,8 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
   struct krun_config *kconf = (struct krun_config *) cookie;
   struct stat st_kvm, st_sev, st_nitro;
   bool has_kvm = true, has_sev = true, has_nitro = true;
-  size_t len;
+  size_t old_len, new_len;
   int ret;
-
-  if (def->linux == NULL || def->linux->resources == NULL
-      || def->linux->resources->devices == NULL)
-    return 0;
 
   /* Always allow the /dev/kvm device.  */
 
@@ -739,31 +735,38 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
       has_nitro = false;
     }
 
+  kconf->has_kvm = has_kvm;
+  kconf->has_nitro = has_nitro;
+
+  if (! has_kvm && ! has_nitro)
+    return 0;
+
+  /* spec says these are optional, ensure they exist so we can add our devices */
+  if (def->linux == NULL)
+    def->linux = xmalloc0 (sizeof (runtime_spec_schema_config_linux));
+
+  if (def->linux->resources == NULL)
+    def->linux->resources = xmalloc0 (sizeof (runtime_spec_schema_config_linux_resources));
+
+  old_len = def->linux->resources->devices_len;
+  new_len = old_len;
+  if (has_kvm)
+    new_len += has_sev ? 2 : 1;
+  if (has_nitro)
+    new_len += 1;
+
+  def->linux->resources->devices = xrealloc (def->linux->resources->devices, device_size * (new_len + 1));
+  def->linux->resources->devices_len = new_len;
+
   if (has_kvm)
     {
-      len = def->linux->resources->devices_len;
-      def->linux->resources->devices = xrealloc (def->linux->resources->devices,
-                                                 device_size * (len + 2 + (has_sev ? 1 : 0)));
-
-      def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_kvm.st_rdev, true, "rwm");
+      def->linux->resources->devices[old_len++] = make_oci_spec_dev ("a", st_kvm.st_rdev, true, "rwm");
       if (has_sev)
-        def->linux->resources->devices[len + 1] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
-
-      def->linux->resources->devices_len += has_sev ? 2 : 1;
+        def->linux->resources->devices[old_len++] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
     }
 
   if (has_nitro)
-    {
-      len = def->linux->resources->devices_len;
-      def->linux->resources->devices = xrealloc (def->linux->resources->devices,
-                                                 device_size * (len + 2));
-
-      def->linux->resources->devices[len] = make_oci_spec_dev ("a", st_nitro.st_rdev, true, "rwm");
-      def->linux->resources->devices_len++;
-    }
-
-  kconf->has_kvm = has_kvm;
-  kconf->has_nitro = has_nitro;
+    def->linux->resources->devices[old_len++] = make_oci_spec_dev ("a", st_nitro.st_rdev, true, "rwm");
 
   return 0;
 }
