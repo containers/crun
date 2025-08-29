@@ -55,7 +55,7 @@ validate_id (const char *id, libcrun_error_t *err)
   return 0;
 }
 
-static int
+int
 get_run_directory (char **out, const char *state_root, libcrun_error_t *err)
 {
   int ret;
