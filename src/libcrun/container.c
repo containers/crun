@@ -23,6 +23,7 @@
 #include "container.h"
 #include "utils.h"
 #include "seccomp.h"
+#include "mempolicy.h"
 #ifdef HAVE_SECCOMP
 #  include <seccomp.h>
 #endif
@@ -2802,6 +2803,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     return ret;
 
   ret = setup_cgroup_manager (context, container, &cg, &cgroup_dirfd, &cgroup_dirfd_s, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_set_mempolicy (def, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

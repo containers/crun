@@ -30,6 +30,7 @@ with pkgs; stdenv.mkDerivation {
       libseccomp
       libsystemd
       yajl
+      numactl
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
   prePatch = ''

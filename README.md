@@ -59,7 +59,8 @@ These dependencies are required for the build:
 $ sudo dnf install -y \
     autoconf automake gcc git-core glibc-static go-md2man \
     libcap-devel libseccomp-devel libtool make pkg-config \
-    python python-libmount systemd-devel yajl-devel
+    python python-libmount systemd-devel yajl-devel \
+    numactl-devel
 ```
 
 ### RHEL/CentOS Stream 9
@@ -69,7 +70,8 @@ $ sudo dnf config-manager --set-enabled crb
 $ sudo dnf install -y \
     autoconf automake gcc git-core glibc-static go-md2man \
     libcap-devel libseccomp-devel libtool make pkg-config \
-    python python-libmount systemd-devel yajl-devel
+    python python-libmount systemd-devel yajl-devel \
+    numactl-devel
 ```
 
 ### RHEL/CentOS Stream 10
@@ -79,7 +81,7 @@ $ sudo dnf config-manager --set-enabled crb
 $ sudo dnf install -y \
     autoconf automake gcc git-core glibc-static go-md2man \
     libcap-devel libseccomp-devel libtool make pkg-config \
-    python python-libmount systemd-devel
+    python python-libmount systemd-devel numactl-devel
 ```
 
 NOTE that you need to add `--enable-embedded-yajl` to `./configure` flags below.
@@ -89,22 +91,23 @@ NOTE that you need to add `--enable-embedded-yajl` to `./configure` flags below.
 ```console
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
-   go-md2man autoconf python3 automake
+   go-md2man autoconf python3 automake libnuma-dev
 ```
 
 ### Alpine
 
 ```console
 # apk add gcc automake autoconf libtool gettext pkgconf git make musl-dev \
-    python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man
+    python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man \
+    numactl-dev
 ```
 
 ### Tumbleweed
 
 ```console
 # zypper install make automake autoconf gettext libtool gcc libcap-devel \
-systemd-devel libyajl-devel libseccomp-devel python3 go-md2man \
-glibc-static;
+    systemd-devel libyajl-devel libseccomp-devel python3 go-md2man \
+    glibc-static libnuma-devel
 ```
 
 Note that Tumbleweed requires you to specify libseccomp's header file location

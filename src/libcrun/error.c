@@ -480,6 +480,23 @@ libcrun_warning (const char *msg, ...)
   va_end (args_list);
 }
 
+#ifdef HAVE_NUMA
+/* override libnuma internal numa_warn implementation
+ * that is defined as WEAK to allow consumers to define
+ * their own behavior.
+ * symbol has to be public for linker to use our version
+ * and allow to convert numa messages into libcrun messages */
+LIBCRUN_PUBLIC
+void
+numa_warn (int number arg_unused, char *msg, ...)
+{
+  va_list args_list;
+  va_start (args_list, msg);
+  write_log (0, LIBCRUN_VERBOSITY_WARNING, msg, args_list);
+  va_end (args_list);
+}
+#endif
+
 void
 libcrun_error (int errno_, const char *msg, ...)
 {

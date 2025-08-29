@@ -10,7 +10,7 @@ endif
 srpm-dep:
 	$(SUDO_CMD) dnf -y install autoconf automake git git-archive-all \
 		libcap-devel libseccomp-devel libtool m4 rpm-build systemd-devel \
-		yajl-devel
+		yajl-devel numactl-devel
 
 .ONESHELL:
 tarball-prep: srpm-dep
