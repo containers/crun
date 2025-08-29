@@ -578,14 +578,24 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
     {
       ret = libcrun_create_dev (container, devfd, -1, &sev_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          ret = dlclose (kconf->handle_sev);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          kconf->handle_sev = NULL;
+        }
     }
 
   if (create_nitro)
     {
       ret = libcrun_create_dev (container, devfd, -1, &nitro_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        {
+          ret = dlclose (kconf->handle_nitro);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          kconf->handle_nitro = NULL;
+        }
     }
 
   return 0;
