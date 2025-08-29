@@ -30,14 +30,16 @@
 #include <termios.h>
 #include <stdio.h>
 
-#define error(status, errno, fmt, ...) do{                              \
-    if (errno)                                                          \
-      fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
-    else                                                                \
-      fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
-    if (status)                                                         \
-      exit (status);                                                    \
-  } while(0)
+#define error(status, errno, fmt, ...)                                      \
+  do                                                                        \
+    {                                                                       \
+      if (errno)                                                            \
+        fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                      \
+      else                                                                  \
+        fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+      if (status)                                                           \
+        exit (status);                                                      \
+  } while (0)
 
 static int
 open_unix_domain_socket (const char *path)
@@ -46,7 +48,7 @@ open_unix_domain_socket (const char *path)
   int ret, fd;
   const int one = 1;
 
-  fd = socket (AF_UNIX, SOCK_DGRAM|SOCK_CLOEXEC, 0);
+  fd = socket (AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (fd < 0)
     error (EXIT_FAILURE, errno, "socket");
 
@@ -97,7 +99,7 @@ main (int argc, char **argv)
       msg.msg_control = ctrl_buf;
       msg.msg_controllen = CTRL_SIZE;
 
-      ret = recvmsg (fd, &msg, MSG_CMSG_CLOEXEC|MSG_TRUNC);
+      ret = recvmsg (fd, &msg, MSG_CMSG_CLOEXEC | MSG_TRUNC);
       if (ret < 0 && errno == EINTR)
         continue;
       if (ret < 0)

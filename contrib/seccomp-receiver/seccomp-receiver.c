@@ -30,14 +30,16 @@
 #include <termios.h>
 #include <stdio.h>
 
-#define error(status, errno, fmt, ...) do {                             \
-    if (errno)                                                          \
-      fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
-    else                                                                \
-      fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
-    if (status)                                                         \
-      exit (status);                                                    \
-  } while(0)
+#define error(status, errno, fmt, ...)                                      \
+  do                                                                        \
+    {                                                                       \
+      if (errno)                                                            \
+        fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                      \
+      else                                                                  \
+        fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+      if (status)                                                           \
+        exit (status);                                                      \
+  } while (0)
 
 static int
 open_unix_domain_socket (const char *path)
@@ -47,10 +49,10 @@ open_unix_domain_socket (const char *path)
   int fd = socket (AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0)
     error (EXIT_FAILURE, errno, "error creating UNIX socket");
-  
+
   if (strlen (path) >= sizeof (addr.sun_path))
     error (EXIT_FAILURE, 0, "invalid path");
-    
+
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
