@@ -30,14 +30,16 @@
 #include <signal.h>
 #include <stdio.h>
 
-#define error(status, errno, fmt, ...) do {                             \
-    if (!errno)                                                          \
-      fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                    \
-    else                                                                \
-      fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
-    if (status)                                                         \
-      exit (status);                                                    \
-  } while(0)
+#define error(status, errno, fmt, ...)                                      \
+  do                                                                        \
+    {                                                                       \
+      if (! errno)                                                          \
+        fprintf (stderr, "crun: " fmt, ##__VA_ARGS__);                      \
+      else                                                                  \
+        fprintf (stderr, "crun: %s:" fmt, strerror (errno), ##__VA_ARGS__); \
+      if (status)                                                           \
+        exit (status);                                                      \
+  } while (0)
 
 struct termios tset;
 int fd;
@@ -52,7 +54,7 @@ open_unix_domain_socket (const char *path)
     error (EXIT_FAILURE, errno, "error creating UNIX socket");
   if (strlen (path) >= sizeof (addr.sun_path))
     error (EXIT_FAILURE, 0, "invalid path");
-  
+
   strcpy (addr.sun_path, path);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
@@ -112,16 +114,16 @@ void
 sigint_handler (int s)
 {
   const char ctrlc = 3;
-  write(fd, &ctrlc, 1);
+  write (fd, &ctrlc, 1);
 }
 
 void
-register_handler (struct sigaction* handler)
+register_handler (struct sigaction *handler)
 {
   handler->sa_handler = sigint_handler;
-  sigemptyset(&handler->sa_mask);
+  sigemptyset (&handler->sa_mask);
   handler->sa_flags = 0;
-  sigaction(SIGINT, handler, NULL);
+  sigaction (SIGINT, handler, NULL);
 }
 
 int
@@ -135,7 +137,7 @@ main (int argc, char **argv)
 
   unlink (argv[1]);
 
-  register_handler(&ctrl_c_handler);
+  register_handler (&ctrl_c_handler);
 
   socket = open_unix_domain_socket (argv[1]);
   while (1)
@@ -144,7 +146,7 @@ main (int argc, char **argv)
       int stdin_flags, term_flags;
       int data;
 
-      printf("Press 'Ctrl \\' to exit.\nWaiting for connection ...\n");
+      printf ("Press 'Ctrl \\' to exit.\nWaiting for connection ...\n");
       do
         conn = accept (socket, NULL, NULL);
       while (conn < 0 && errno == EINTR);
@@ -158,7 +160,7 @@ main (int argc, char **argv)
           continue;
         }
 
-      if (tcgetattr(fd, &tset) == -1)
+      if (tcgetattr (fd, &tset) == -1)
         error (0, errno, "failed to get console terminal settings");
 
       tset.c_oflag |= ONLCR;
@@ -167,19 +169,19 @@ main (int argc, char **argv)
       if (tcsetattr (fd, TCSANOW, &tset) == -1)
         error (0, errno, "failed to set console terminal settings");
 
-      stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
+      stdin_flags = fcntl (STDIN_FILENO, F_GETFL);
       if (stdin_flags == -1)
         error (EXIT_FAILURE, errno, "failed to obtain STDIN flags");
 
-      ret = fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+      ret = fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
       if (ret == -1)
         error (EXIT_FAILURE, errno, "failed to set STDIN to non-blocking");
 
-      term_flags = fcntl(fd, F_GETFL);
+      term_flags = fcntl (fd, F_GETFL);
       if (term_flags == -1)
         error (EXIT_FAILURE, errno, "failed to obtain terminal flags");
 
-      ret = fcntl(fd, F_SETFL, term_flags | O_NONBLOCK);
+      ret = fcntl (fd, F_SETFL, term_flags | O_NONBLOCK);
       if (ret == -1)
         error (EXIT_FAILURE, errno, "failed to set terminal to non-blocking");
 
@@ -200,7 +202,7 @@ main (int argc, char **argv)
               data = 1;
             }
 
-          ret = read (STDIN_FILENO, buf, sizeof(buf));
+          ret = read (STDIN_FILENO, buf, sizeof (buf));
           if (ret > 0)
             {
               ret = write (fd, buf, ret);
@@ -211,13 +213,14 @@ main (int argc, char **argv)
                 }
               data = 1;
             }
-          if (!data) usleep(10000);
+          if (! data)
+            usleep (10000);
         }
       close (conn);
-      ret = fcntl(STDIN_FILENO, F_SETFL, stdin_flags);
+      ret = fcntl (STDIN_FILENO, F_SETFL, stdin_flags);
       if (ret == -1)
         error (EXIT_FAILURE, errno, "failed to reset STDIN to original setting");
-      ret = fcntl(fd, F_SETFL, term_flags);
+      ret = fcntl (fd, F_SETFL, term_flags);
       if (ret == -1)
         error (EXIT_FAILURE, errno, "failed to reset terminal to original setting");
     }
