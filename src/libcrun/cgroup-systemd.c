@@ -1669,6 +1669,28 @@ exit:
 }
 
 static int
+verify_ebpf_device_filter_installed (const char *cgroup_path, libcrun_error_t *err)
+{
+  cleanup_free uint32_t *progs = NULL;
+  cleanup_free char *full_path = NULL;
+  size_t n_progs = 0;
+  int ret;
+
+  ret = append_paths (&full_path, err, CGROUP_ROOT, cgroup_path, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_ebpf_query_cgroup_progs (full_path, &progs, &n_progs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (n_progs == 0)
+    return crun_make_error (err, 0, "systemd failed to install eBPF device filter on cgroup `%s`", full_path);
+
+  return 0;
+}
+
+static int
 enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                             int cgroup_mode,
                             string_map *annotations,
@@ -2022,6 +2044,30 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   ret = systemd_finalize (args, &path, cgroup_mode, suffix, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* Verify that systemd has actually installed the eBPF device filter if one was requested. */
+  if (out->bpf_dev_set)
+    {
+      cleanup_free char *scope_path = NULL;
+
+      /* eBPF programs are attached to the systemd scope, not the subgroup.
+         Remove the suffix that was added by systemd_finalize. */
+      if (is_empty_string (suffix))
+        scope_path = xstrdup (path);
+      else
+        {
+          size_t path_len = strlen (path);
+          size_t suffix_len = strlen (suffix);
+
+          scope_path = strndup (path, path_len - suffix_len - 1);
+          if (UNLIKELY (scope_path == NULL))
+            OOM ();
+        }
+
+      ret = verify_ebpf_device_filter_installed (scope_path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   out->path = path;
   path = NULL;

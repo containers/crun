@@ -607,6 +607,25 @@ libcrun_ebpf_read_program (struct bpf_program **program_ret, const char *path, l
 #endif
 }
 
+int
+libcrun_ebpf_query_cgroup_progs (const char *cgroup_path, uint32_t **progs_out, size_t *n_progs_out, libcrun_error_t *err)
+{
+#ifndef HAVE_EBPF
+  (void) cgroup_path;
+  *progs_out = NULL;
+  *n_progs_out = 0;
+  return crun_make_error (err, 0, "eBPF not supported");
+#else
+  cleanup_close int cgroup_fd = -1;
+
+  cgroup_fd = open (cgroup_path, O_RDONLY | O_CLOEXEC);
+  if (UNLIKELY (cgroup_fd < 0))
+    return crun_make_error (err, errno, "open cgroup path `%s`", cgroup_path);
+
+  return read_all_progs (cgroup_fd, progs_out, n_progs_out, err);
+#endif
+}
+
 bool
 libcrun_ebpf_cmp_programs (struct bpf_program *program1, struct bpf_program *program2)
 {
