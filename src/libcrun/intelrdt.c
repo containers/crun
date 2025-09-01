@@ -32,6 +32,7 @@
 #define INTEL_RDT_MOUNT_POINT "/sys/fs/resctrl"
 #define SCHEMATA_FILE "schemata"
 #define TASKS_FILE "tasks"
+#define MON_GROUPS "mon_groups"
 #define RDTGROUP_SUPER_MAGIC 0x7655821
 
 static int
@@ -293,8 +294,9 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
 }
 
 int
-resctl_move_task_to (const char *name, pid_t pid, libcrun_error_t *err)
+resctl_move_task_to (const char *name, const char *monitoring_name, pid_t pid, libcrun_error_t *err)
 {
+  cleanup_free char *monitoring_path = NULL;
   cleanup_free char *path = NULL;
   char pid_str[32];
   int len;
@@ -308,7 +310,22 @@ resctl_move_task_to (const char *name, pid_t pid, libcrun_error_t *err)
   if (UNLIKELY (len >= (int) sizeof (pid_str)))
     return crun_make_error (err, 0, "internal error: static buffer too small");
 
-  return write_file (path, pid_str, len, err);
+  ret = write_file (path, pid_str, len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (monitoring_name)
+    {
+      ret = append_paths (&monitoring_path, err, INTEL_RDT_MOUNT_POINT, name, MON_GROUPS, monitoring_name, TASKS_FILE, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = write_file (monitoring_path, pid_str, len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  return 0;
 }
 
 int
@@ -342,6 +359,35 @@ resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw
   return write_intelrdt_string (fd, path, actual_l3_cache_schema, mem_bw_schema, schemata, err);
 }
 
+static int
+resctl_get_monitoring_path (const char *resctrl_group_name, const char *container_id, char **monitoring_path, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = append_paths (monitoring_path, err, INTEL_RDT_MOUNT_POINT, resctrl_group_name, MON_GROUPS, container_id, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+int
+resctl_destroy_monitoring_group (const char *resctrl_group_name, const char *container_id, libcrun_error_t *err)
+{
+  cleanup_free char *monitoring_path = NULL;
+  int ret;
+
+  ret = resctl_get_monitoring_path (resctrl_group_name, container_id, &monitoring_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = rmdir (monitoring_path);
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
+    return crun_make_error (err, errno, "rmdir `%s`", monitoring_path);
+
+  return 0;
+}
+
 int
 resctl_destroy (const char *name, libcrun_error_t *err)
 {
@@ -353,8 +399,25 @@ resctl_destroy (const char *name, libcrun_error_t *err)
     return ret;
 
   ret = rmdir (path);
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret < 0 && errno != ENOENT))
     return crun_make_error (err, errno, "rmdir `%s`", path);
+
+  return 0;
+}
+
+int
+resctl_create_monitoring_group (const char *resctrl_group_name, const char *container_id, libcrun_error_t *err)
+{
+  cleanup_free char *monitoring_path = NULL;
+  int ret;
+
+  ret = resctl_get_monitoring_path (resctrl_group_name, container_id, &monitoring_path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = crun_ensure_directory (monitoring_path, 0755, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return 0;
 }

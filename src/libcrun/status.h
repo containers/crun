@@ -39,7 +39,6 @@ struct libcrun_container_status_s
   char *rootfs;
   char *cgroup_path;
   char *scope;
-  char *intelrdt;
   int systemd_cgroup;
   char *created;
   int detached;
