@@ -243,7 +243,7 @@ intelrdt_clean_l3_cache_schema (const char *l3_cache_schema)
 }
 
 int
-resctl_create (const char *name, bool explicit_clos_id, bool *created, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
+resctl_create (const char *name, bool explicit_clos_id, bool *created, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata, libcrun_error_t *err)
 {
   cleanup_free char *cleaned_l3_cache_schema = NULL;
   cleanup_free char *path = NULL;
@@ -269,9 +269,9 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
   if (l3_cache_schema && strstr (l3_cache_schema, "MB:"))
     l3_cache_schema = cleaned_l3_cache_schema = intelrdt_clean_l3_cache_schema (l3_cache_schema);
 
-  /* If the closID was specified and both l3cache and bwSchema are unset, the group
-     must exist.  */
-  if (explicit_clos_id && l3_cache_schema == NULL && mem_bw_schema == NULL)
+  /* If the closID was specified and both l3cache and bwSchema are unset, and schemata is empty,
+     the group must exist.  */
+  if (explicit_clos_id && is_empty_string (l3_cache_schema) && is_empty_string (mem_bw_schema) && (schemata == NULL))
     {
       if (exist)
         return 0;

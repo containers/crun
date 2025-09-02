@@ -6013,7 +6013,7 @@ libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pi
 
   if (actions & LIBCRUN_INTELRDT_CREATE)
     {
-      ret = resctl_create (name, explicit, &created, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, err);
+      ret = resctl_create (name, explicit, &created, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, def->linux->intel_rdt->schemata, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
