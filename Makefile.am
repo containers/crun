@@ -330,7 +330,7 @@ generate-mount_flags.c: src/libcrun/mount_flags.perf
 
 clang-format:
 # do not format files that were copied into the source directory.
-	git ls-files src tests | grep -E "\\.[hc]" | grep -v "blake3\|chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
+	git ls-files contrib src tests | grep -E "\\.[hc]" | grep -v "blake3\|chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
 shellcheck:
 	shellcheck autogen.sh build-aux/release.sh tests/run_all_tests.sh tests/*/*.sh contrib/*.sh
