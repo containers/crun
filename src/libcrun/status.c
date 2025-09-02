@@ -349,7 +349,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
     goto yajl_error;
 
   ret = safe_write (fd_write, "status file", buf, len, err);
-  if (UNLIKELY (r < 0))
+  if (UNLIKELY (ret < 0))
     goto exit;
 
   close_and_reset (&fd_write);
