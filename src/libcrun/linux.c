@@ -21,6 +21,7 @@
 #include <config.h>
 #include "linux.h"
 #include "utils.h"
+#include "status.h"
 #include <string.h>
 #include <sched.h>
 #include <fcntl.h>
@@ -148,6 +149,12 @@ struct private_data_s
   /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
    * and needed during restore. */
   char *external_descriptors;
+
+  /* Cached shared empty directory for masked paths optimization */
+  int maskdir_fd;
+  char *maskdir_proc_path;
+  bool maskdir_bind_failed;
+  bool maskdir_warned;
 };
 
 struct linux_namespace_s
@@ -164,6 +171,8 @@ cleanup_private_data (void *private_data)
 
   if (p->rootfsfd >= 0)
     TEMP_FAILURE_RETRY (close (p->rootfsfd));
+  if (p->maskdir_fd >= 0)
+    TEMP_FAILURE_RETRY (close (p->maskdir_fd));
   if (p->mount_fds)
     cleanup_close_mapp (&(p->mount_fds));
   if (p->dev_fds)
@@ -173,6 +182,7 @@ cleanup_private_data (void *private_data)
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
   free (p->external_descriptors);
+  free (p->maskdir_proc_path);
   free (p);
 }
 
@@ -185,6 +195,7 @@ get_private_data (struct libcrun_container_s *container)
       container->private_data = p;
       p->rootfsfd = -1;
       p->notify_socket_tree_fd = -1;
+      p->maskdir_fd = -1;
       container->cleanup_private_data = cleanup_private_data;
     }
   return container->private_data;
@@ -1058,6 +1069,103 @@ has_mount_for (libcrun_container_t *container, const char *destination)
   return false;
 }
 
+static void
+warn_tmpfs_fallback_once (struct private_data_s *private_data, const char *reason)
+{
+  if (! private_data->maskdir_warned)
+    {
+      libcrun_warning ("Falling back to tmpfs for masked dirs (reason: %s)", reason);
+      private_data->maskdir_warned = true;
+    }
+}
+
+/* Get or create the cached shared empty directory for masked paths optimization.
+ * Creates directory and FD once per container, caches /proc/self/fd path for fast mounting.
+ */
+static int
+get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path, libcrun_error_t *err)
+{
+  struct private_data_s *private_data = get_private_data (container);
+  cleanup_close int fd = -1;
+  cleanup_free char *run_dir = NULL;
+  cleanup_free char *empty_dir_path = NULL;
+  int ret;
+
+  /* Fast path: return cached proc fd path if already set up */
+  if (private_data->maskdir_proc_path != NULL)
+    {
+      *proc_fd_path = private_data->maskdir_proc_path;
+      return 0;
+    }
+
+  /* Slow path: create directory and cache everything once */
+  ret = get_run_directory (&run_dir, container->context->state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (&empty_dir_path, err, run_dir, ".empty-directory", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Ensure the empty directory exists (once per container) */
+  ret = crun_ensure_directory (empty_dir_path, 0555, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Open directory and cache FD (once per container) */
+  fd = open (empty_dir_path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
+    return crun_make_error (err, errno, "open directory `%s`", empty_dir_path);
+
+  /* Cache the /proc/self/fd path for fast mounting */
+  ret = xasprintf (&private_data->maskdir_proc_path, "/proc/self/fd/%d", fd);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "xasprintf failed");
+
+  private_data->maskdir_fd = fd;
+  fd = -1; /* Don't auto-close */
+
+  *proc_fd_path = private_data->maskdir_proc_path;
+  return 0;
+}
+
+static int
+mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_path, libcrun_error_t *err)
+{
+  struct private_data_s *private_data = get_private_data (container);
+  char *proc_fd_path = NULL;
+  libcrun_error_t tmp_err = NULL;
+  int ret;
+
+  if (private_data->maskdir_bind_failed)
+    goto fallback_to_tmpfs;
+
+  /* Get cached /proc/self/fd path (fast after first call) */
+  ret = get_shared_empty_dir_cached (container, &proc_fd_path, &tmp_err);
+  if (ret < 0)
+    {
+      private_data->maskdir_bind_failed = true;
+      warn_tmpfs_fallback_once (private_data, tmp_err->msg);
+      crun_error_release (&tmp_err);
+      goto fallback_to_tmpfs;
+    }
+
+  ret = do_mount (container, proc_fd_path, pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, &tmp_err);
+  if (LIKELY (ret >= 0))
+    return ret;
+
+  /* Bind mount failed - mark as failed and fall back for all future mounts */
+  private_data->maskdir_bind_failed = true;
+  libcrun_warning ("bind mount failed for %s to %s: %s, falling back to tmpfs",
+                   proc_fd_path, rel_path, tmp_err->msg);
+  warn_tmpfs_fallback_once (private_data, tmp_err->msg);
+  crun_error_release (&tmp_err);
+
+fallback_to_tmpfs:
+  libcrun_debug ("using tmpfs fallback for %s", rel_path);
+  return ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1", LABEL_MOUNT, err);
+}
+
 static int
 do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path, bool readonly, bool keep_flags,
                             libcrun_error_t *err)
@@ -1114,7 +1222,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
         return crun_make_error (err, errno, "cannot stat `%s`", rel_path);
 
       if ((mode & S_IFMT) == S_IFDIR)
-        ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "size=0k", LABEL_MOUNT, err);
+        ret = mount_masked_dir (container, pathfd, rel_path, err);
       else
         ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
