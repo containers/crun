@@ -1627,7 +1627,7 @@ append_resources (sd_bus_message *m,
 #  undef APPEND_UINT64
 #  undef APPEND_UINT64_VALUE
 
-  if (! *devices_set && (! is_update || resources->devices))
+  if (! is_update || resources->devices)
     {
       ret = append_devices (m, resources, err);
       if (UNLIKELY (ret < 0))
