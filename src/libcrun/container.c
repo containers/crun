@@ -1816,17 +1816,17 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         }
     }
 
+  if (def == NULL)
+    {
+      ret = read_container_config_from_state (&container, state_root, id, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      def = container->container_def;
+    }
+
   if (killall && force)
     {
-      if (def == NULL)
-        {
-          ret = read_container_config_from_state (&container, state_root, id, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          def = container->container_def;
-        }
-
       /* If the container has a pid namespace, it is enough to kill the first
          process (pid=1 in the namespace).
       */
@@ -1853,9 +1853,9 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         }
     }
 
-  if (! is_empty_string (status.intelrdt))
+  if (def->linux && def->linux->intel_rdt)
     {
-      ret = libcrun_destroy_intelrdt (status.intelrdt, err);
+      ret = libcrun_destroy_intelrdt (id, def, err);
       if (UNLIKELY (ret < 0))
         crun_error_write_warning_and_release (context->output_handler_arg, &err);
     }
@@ -1932,24 +1932,9 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
   if (UNLIKELY (cwd == NULL))
     libcrun_fail_with_error (errno, "getcwd failed");
   cleanup_free char *owner = get_user_name (geteuid ());
-  cleanup_free char *intelrdt = NULL;
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
   char created[35];
-
-  if (container_has_intelrdt (container))
-    {
-      bool explicit = false;
-      const char *tmp;
-
-      tmp = libcrun_get_intelrdt_name (context->id, container, &explicit);
-      if (tmp == NULL)
-        return crun_make_error (err, 0, "internal error: cannot get intelrdt name");
-      /* It is stored in the status only for cleanup purposes.  Delete the group only
-         if it was not explicitly set.  */
-      if (! explicit)
-        intelrdt = xstrdup (tmp);
-    }
 
   libcrun_container_status_t status = {
     .pid = pid,
@@ -1957,7 +1942,6 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
     .bundle = cwd,
     .created = created,
     .owner = owner,
-    .intelrdt = intelrdt,
     .systemd_cgroup = context->systemd_cgroup,
     .detached = context->detach,
     .external_descriptors = external_descriptors,

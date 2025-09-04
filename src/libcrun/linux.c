@@ -6083,13 +6083,9 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
   return 0;
 }
 
-const char *
-libcrun_get_intelrdt_name (const char *ctr_name, libcrun_container_t *container, bool *explicit)
+static const char *
+libcrun_get_intelrdt_name (const char *ctr_name, runtime_spec_schema_config_schema *def, bool *explicit)
 {
-  runtime_spec_schema_config_schema *def = NULL;
-
-  def = container->container_def;
-
   if (def == NULL || def->linux == NULL || def->linux->intel_rdt == NULL || def->linux->intel_rdt->clos_id == NULL)
     {
       if (explicit)
@@ -6106,6 +6102,7 @@ int
 libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pid_t pid, int actions, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = NULL;
+  bool has_monitoring = false;
   bool explicit = false;
   bool created = false;
   const char *name;
@@ -6117,13 +6114,22 @@ libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pi
   if (def == NULL || def->linux == NULL || def->linux->intel_rdt == NULL)
     return 0;
 
-  name = libcrun_get_intelrdt_name (ctr_name, container, &explicit);
+  name = libcrun_get_intelrdt_name (ctr_name, def, &explicit);
 
   if (actions & LIBCRUN_INTELRDT_CREATE)
     {
-      ret = resctl_create (name, explicit, &created, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, err);
+      ret = resctl_create (name, explicit, &created, def->linux->intel_rdt->l3cache_schema, def->linux->intel_rdt->mem_bw_schema, def->linux->intel_rdt->schemata, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (def->linux->intel_rdt->enable_monitoring)
+        {
+          ret = resctl_create_monitoring_group (name, ctr_name, err);
+          if (UNLIKELY (ret < 0))
+            goto fail;
+
+          has_monitoring = true;
+        }
     }
 
   if (actions & LIBCRUN_INTELRDT_UPDATE)
@@ -6135,7 +6141,8 @@ libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pi
 
   if (actions & LIBCRUN_INTELRDT_MOVE)
     {
-      ret = resctl_move_task_to (name, pid, err);
+      const char *monitoring_name = def->linux->intel_rdt->enable_monitoring ? ctr_name : NULL;
+      ret = resctl_move_task_to (name, monitoring_name, pid, err);
       if (UNLIKELY (ret < 0))
         goto fail;
     }
@@ -6143,6 +6150,16 @@ libcrun_apply_intelrdt (const char *ctr_name, libcrun_container_t *container, pi
   return 0;
 
 fail:
+  if (has_monitoring)
+    {
+      libcrun_error_t tmp_err = NULL;
+      int tmp_ret;
+
+      tmp_ret = resctl_destroy_monitoring_group (name, ctr_name, &tmp_err);
+      if (tmp_ret < 0)
+        crun_error_release (&tmp_err);
+    }
+
   /* Cleanup only if the resctl was created as part of this call.  */
   if (created)
     {
@@ -6157,17 +6174,40 @@ fail:
 }
 
 int
-libcrun_destroy_intelrdt (const char *name, libcrun_error_t *err)
+libcrun_destroy_intelrdt (const char *container_id, runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
-  return resctl_destroy (name, err);
+  bool explicit = false;
+  const char *clos_id = libcrun_get_intelrdt_name (container_id, def, &explicit);
+
+  if (def && def->linux && def->linux->intel_rdt && def->linux->intel_rdt->enable_monitoring)
+    {
+      int ret;
+
+      ret = resctl_destroy_monitoring_group (clos_id, container_id, err);
+      if (ret < 0)
+        return ret;
+    }
+
+  /* Do not destroy the clos_id if the name was set explicitly.  */
+  if (explicit)
+    return 0;
+
+  return resctl_destroy (clos_id, err);
 }
 
 int
 libcrun_update_intel_rdt (const char *ctr_name, libcrun_container_t *container, const char *l3_cache_schema, const char *mem_bw_schema, char *const *schemata, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_schema *def = NULL;
   const char *name;
 
-  name = libcrun_get_intelrdt_name (ctr_name, container, NULL);
+  if (container)
+    def = container->container_def;
+
+  if (def == NULL || def->linux == NULL || def->linux->intel_rdt == NULL)
+    return 0;
+
+  name = libcrun_get_intelrdt_name (ctr_name, def, NULL);
 
   return resctl_update (name, l3_cache_schema, mem_bw_schema, schemata, err);
 }
