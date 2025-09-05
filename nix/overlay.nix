@@ -28,6 +28,7 @@ self: super:
   libassuan = (static super.libassuan);
   libgpgerror = (static super.libgpgerror);
   libseccomp = (static super.libseccomp);
+  numactl = (static super.numactl);
   libcap = (static super.libcap).overrideAttrs (x: {
     postInstall = ''
       mkdir -p "$doc/share/doc/${x.pname}-${x.version}"

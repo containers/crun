@@ -74,6 +74,7 @@ BuildRequires: wasmedge-devel
 %endif
 BuildRequires: python
 BuildRequires: glibc-static
+BuildRequires: numactl-devel
 Provides: oci-runtime
 
 %description

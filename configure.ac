@@ -173,6 +173,17 @@ AS_IF([test "x$enable_systemd" != "xno"], [
 	])
 ])
 
+dnl numa
+AC_ARG_ENABLE([numa],
+	AS_HELP_STRING([--disable-numa], [Ignore numa and disable support]))
+AS_IF([test "x$enable_numa" != "xno"], [
+	AC_CHECK_HEADERS([numa.h], [], [AC_MSG_ERROR([*** Missing numa headers])])
+	AC_CHECK_HEADERS([numaif.h], [], [AC_MSG_ERROR([*** Missing numa interface headers])])
+	AS_IF([test "$ac_cv_header_numaif_h" = "yes"], [
+		AC_SEARCH_LIBS(set_mempolicy, [numa], [AC_DEFINE([HAVE_NUMA], 1, [Define if libnuma is available])], [AC_MSG_ERROR([*** Failed to find libnuma])])
+	])
+])
+
 dnl ebpf
 AC_ARG_ENABLE([bpf],
 	AS_HELP_STRING([--disable-bpf], [Ignore eBPF and disable support]))

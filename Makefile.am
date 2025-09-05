@@ -67,6 +67,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/linux.c \
 		src/libcrun/mount_flags.c \
 		src/libcrun/scheduler.c \
+		src/libcrun/mempolicy.c \
 		src/libcrun/seccomp.c \
 		src/libcrun/seccomp_notify.c \
 		src/libcrun/signals.c \
@@ -160,7 +161,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/custom-handler.h src/libcrun/io_priority.h \
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
-	src/libcrun/scheduler.h src/libcrun/status.h src/libcrun/terminal.h \
+	src/libcrun/scheduler.h src/libcrun/mempolicy.h src/libcrun/mempolicy_internal.h src/libcrun/status.h src/libcrun/terminal.h \
 	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h src/libcrun/string_map.h \
 	src/libcrun/net_device.h \
 	crun.1.md crun.1 libcrun.lds \
@@ -179,7 +180,7 @@ noinst_PROGRAMS = crun
 endif
 
 if BUILD_TESTS
-check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
+check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer tests/tests_mempolicy_helper
 
 TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(maybe_libyajl.la)
 
@@ -212,6 +213,11 @@ tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
+tests_tests_mempolicy_helper_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src/libcrun -I $(abs_top_srcdir)/src/libcrun
+tests_tests_mempolicy_helper_SOURCES = tests/tests_mempolicy_helper.c
+tests_tests_mempolicy_helper_LDADD = $(TESTS_LDADD)
+tests_tests_mempolicy_helper_LDFLAGS = $(crun_LDFLAGS)
+
 endif
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
@@ -225,6 +231,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_hostname.py \
 	tests/test_limits.py \
 	tests/test_oci_features.py \
+	tests/test_mempolicy.py \
 	tests/test_mounts.py \
 	tests/test_paths.py \
 	tests/test_pid.py \
