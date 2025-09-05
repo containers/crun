@@ -577,28 +577,26 @@ chown -R the_user.the_user /sys/fs/cgroup/systemd
 .EE
 
 .SH \fBrun.oci.systemd.subgroup=SUBGROUP\fR
-This configuration option allows you to define a sub-cgroup that will
-be created under a systemd-managed cgroup for your container.
-
-.PP
-When SUBGROUP is specified, the complete cgroup path will follow this
-structure:
+Override the name for the systemd sub cgroup created under the systemd
+scope, so the final cgroup will be like:
 
 .EX
 /sys/fs/cgroup/$PATH/$SUBGROUP
 .EE
 
 .PP
-If \fBSUBGROUP\fR is set to \fBcontainer\fR, a typical path could be:
-
-.EX
-/sys/fs/cgroup/system.slice/foo-352700.scope/container
-.EE
+When it is set to the empty string, a sub cgroup is not created.
 
 .PP
-If \fBSUBGROUP\fR is set to an empty string, no sub-cgroup will be
-created.  By default, this option is not configured, meaning no
-sub-cgroup is created unless explicitly set.
+If not specified, it defaults to \fBcontainer\fR on cgroup v2, and to \fB""\fR
+on cgroup v1.
+
+.PP
+e.g.
+
+.EX
+/sys/fs/cgroup//system.slice/foo-352700.scope/container
+.EE
 
 .SH \fBrun.oci.delegate-cgroup=DELEGATED-CGROUP\fR
 If the \fBrun.oci.systemd.subgroup\fR annotation is specified, yet another

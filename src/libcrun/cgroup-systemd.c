@@ -1987,7 +1987,7 @@ find_systemd_subgroup (string_map *annotations)
       return annotation;
     }
 
-  return NULL;
+  return "container";
 }
 
 static int
