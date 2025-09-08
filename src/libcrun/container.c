@@ -3607,7 +3607,7 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   ret = clearenv ();
   if (UNLIKELY (ret < 0))
-    return ret;
+    return crun_make_error (err, errno, "clearenv");
 
   if (process->env_len)
     {
@@ -3772,7 +3772,7 @@ exec_process_entrypoint (libcrun_context_t *context,
                                                exec_path,
                                                process->args);
       if (UNLIKELY (ret < 0))
-        return ret;
+        return crun_make_error (err, -ret, "exec container process failed with handler as `%s`", custom_handler->vtable->name);
 
       _exit (EXIT_FAILURE);
     }
