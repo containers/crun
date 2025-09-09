@@ -5903,7 +5903,7 @@ libcrun_configure_network (libcrun_container_t *container, libcrun_error_t *err)
   else
     {
       struct nlmsghdr *hdr_recv;
-      char buf[sizeof (struct nlmsghdr) + sizeof (struct ifinfomsg)];
+      char buf[sizeof (struct nlmsghdr) + sizeof (struct nlmsgerr)];
       struct sockaddr_nl addr = {
         .nl_family = AF_NETLINK,
         .nl_pid = getpid (),
