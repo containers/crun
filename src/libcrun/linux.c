@@ -1087,7 +1087,6 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
 {
   struct private_data_s *private_data = get_private_data (container);
   cleanup_close int fd = -1;
-  cleanup_free char *run_dir = NULL;
   cleanup_free char *empty_dir_path = NULL;
   int ret;
 
@@ -1099,16 +1098,7 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
     }
 
   /* Slow path: create directory and cache everything once */
-  ret = get_run_directory (&run_dir, container->context->state_root, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&empty_dir_path, err, run_dir, ".empty-directory", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  /* Ensure the empty directory exists (once per container) */
-  ret = crun_ensure_directory (empty_dir_path, 0555, false, err);
+  ret = get_shared_empty_directory_path (&empty_dir_path, container->context->state_root, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2674,7 +2664,9 @@ do_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_er
   if (notify_socket == NULL)
     return 0;
 
-  ret = libcrun_get_state_directory (&state_dir, container->context->state_root, container->context->id, err);
+  ret = libcrun_get_state_directory (&state_dir,
+                                     (container->context ? container->context->state_root : NULL),
+                                     container->context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4637,7 +4629,9 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   if (! has_userns || is_empty_string (container->context->id) || geteuid () > 0)
     return send_mounts (sync_socket_host, dev_fds, how_many, def->linux->devices_len, err);
 
-  ret = libcrun_get_state_directory (&state_dir, container->context->state_root, container->context->id, err);
+  ret = libcrun_get_state_directory (&state_dir,
+                                     (container->context ? container->context->state_root : NULL),
+                                     container->context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

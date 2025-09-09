@@ -268,6 +268,54 @@ criu_check_mem_track (char *work_path, libcrun_error_t *err)
 #  endif
 
 static int
+register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_container_t *container,
+                              struct libcriu_wrapper_s *libcriu_wrapper, bool is_restore, libcrun_error_t *err)
+{
+  cleanup_free char *empty_dir_path = NULL;
+  bool shared_dir_registered = false;
+  size_t i;
+  int ret;
+
+  for (i = 0; i < def->linux->masked_paths_len; i++)
+    {
+      struct stat statbuf;
+      ret = stat (def->linux->masked_paths[i], &statbuf);
+      if (ret != 0)
+        continue;
+
+      if (S_ISDIR (statbuf.st_mode))
+        {
+          if (! shared_dir_registered)
+            {
+              ret = get_shared_empty_directory_path (&empty_dir_path,
+                                                     (container->context ? container->context->state_root : NULL), err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              ret = libcriu_wrapper->criu_add_ext_mount (empty_dir_path, empty_dir_path);
+              if (UNLIKELY (ret < 0))
+                return crun_make_error (err, -ret, "CRIU: failed adding external mount for shared empty directory `%s`", empty_dir_path);
+
+              shared_dir_registered = true;
+            }
+
+          ret = libcriu_wrapper->criu_add_ext_mount (def->linux->masked_paths[i], empty_dir_path);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, -ret, "CRIU: failed adding external mount for masked directory `%s`", def->linux->masked_paths[i]);
+        }
+      else if (S_ISREG (statbuf.st_mode))
+        {
+          const char *bind_target = is_restore ? "/dev/null" : def->linux->masked_paths[i];
+          ret = libcriu_wrapper->criu_add_ext_mount (def->linux->masked_paths[i], bind_target);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", bind_target);
+        }
+    }
+
+  return 0;
+}
+
+static int
 restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
   cleanup_free char *content = NULL;
@@ -609,17 +657,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         }
     }
 
-  for (i = 0; i < def->linux->masked_paths_len; i++)
-    {
-      struct stat statbuf;
-      ret = stat (def->linux->masked_paths[i], &statbuf);
-      if (ret == 0 && S_ISREG (statbuf.st_mode))
-        {
-          ret = libcriu_wrapper->criu_add_ext_mount (def->linux->masked_paths[i], def->linux->masked_paths[i]);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->linux->masked_paths[i]);
-        }
-    }
+  ret = register_masked_paths_mounts (def, container, libcriu_wrapper, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   /* CRIU tries to checkpoint and restore all namespaces. However,
    * namespaces could be shared between containers in a pod.
@@ -947,17 +987,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         }
     }
 
-  for (i = 0; i < def->linux->masked_paths_len; i++)
-    {
-      struct stat statbuf;
-      ret = stat (def->linux->masked_paths[i], &statbuf);
-      if (ret == 0 && S_ISREG (statbuf.st_mode))
-        {
-          ret = libcriu_wrapper->criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", "/dev/null");
-        }
-    }
+  ret = register_masked_paths_mounts (def, container, libcriu_wrapper, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   /* do realpath on root */
   bundle_cleanup = realpath (status->bundle, NULL);

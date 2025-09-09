@@ -65,6 +65,7 @@ int libcrun_status_write_exec_fifo (const char *state_root, const char *id, libc
 int libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t *err);
 int get_run_directory (char **out, const char *state_root, libcrun_error_t *err);
+int get_shared_empty_directory_path (char **out, const char *state_root, libcrun_error_t *err);
 
 static inline void
 libcrun_free_container_listp (void *p)
