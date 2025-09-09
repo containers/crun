@@ -1,3 +1,16 @@
+* crun-1.24
+
+- linux: add support for NUMA set_mempolicy.
+- intelrdt: add support for EnableMonitoring
+- linux: optimize masked paths with shared empty directory.
+- cgroup, systemd: validate the specified ebpf program is loaded by systemd.
+- krun: avoid failing if sev/nitro are not available.
+- linux: limit tmpfs memory usage for masked paths.
+- linux: fix regression mounting within userns.  Detect when running inside a
+  user namespace and treat the mounts in the same way as they would be treated
+  with a new user namespace.
+- linux: never chown devices.
+
 * crun-1.23.1
 
 - exec: fix a bug where the terminal could lose some bytes when

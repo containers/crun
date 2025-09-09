@@ -589,7 +589,7 @@ store_seccomp_cache (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_error_t *err
   if (is_empty_string (ctx->checksum))
     return 0;
 
-  dirfd = open_rundir_dirfd (container->context->state_root, err);
+  dirfd = open_rundir_dirfd ((container->context ? container->context->state_root : NULL), err);
   if (UNLIKELY (dirfd < 0))
     return dirfd;
 
@@ -874,7 +874,7 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
   if (container == NULL || container->context == NULL)
     return crun_make_error (err, EINVAL, "invalid internal state");
 
-  dirfd = open_rundir_dirfd (container->context->state_root, err);
+  dirfd = open_rundir_dirfd ((container->context ? container->context->state_root : NULL), err);
   if (UNLIKELY (dirfd < 0))
     return dirfd;
 

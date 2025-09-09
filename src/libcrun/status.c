@@ -86,6 +86,28 @@ get_run_directory (char **out, const char *state_root, libcrun_error_t *err)
 }
 
 int
+get_shared_empty_directory_path (char **out, const char *state_root, libcrun_error_t *err)
+{
+  cleanup_free char *run_dir = NULL;
+  int ret;
+
+  ret = get_run_directory (&run_dir, state_root, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (out, err, run_dir, ".empty-directory", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Ensure the empty directory exists */
+  ret = crun_ensure_directory (*out, 0555, false, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 0;
+}
+
+int
 libcrun_get_state_directory (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
   int ret;
