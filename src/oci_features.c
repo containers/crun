@@ -151,6 +151,21 @@ crun_features_add_seccomp_info (yajl_gen json_gen, const struct linux_info_s *li
 }
 
 void
+crun_features_add_mempolicy_info (yajl_gen json_gen, const struct linux_info_s *linux)
+{
+  yajl_gen_string (json_gen, (const unsigned char *) "memoryPolicy", strlen ("memoryPolicy"));
+  yajl_gen_map_open (json_gen);
+
+  if (linux->memory_policy.mode)
+    add_array_to_json (json_gen, "modes", linux->memory_policy.mode);
+
+  if (linux->memory_policy.flags)
+    add_array_to_json (json_gen, "flags", linux->memory_policy.flags);
+
+  yajl_gen_map_close (json_gen);
+}
+
+void
 crun_features_add_apparmor_info (yajl_gen json_gen, const struct linux_info_s *linux)
 {
   yajl_gen_string (json_gen, (const unsigned char *) "apparmor", strlen ("apparmor"));
@@ -219,6 +234,7 @@ crun_features_add_linux_info (yajl_gen json_gen, const struct linux_info_s *linu
   crun_features_add_mount_ext_info (json_gen, linux);
   crun_features_add_intel_rdt (json_gen, linux);
   crun_features_add_net_devices (json_gen, linux);
+  crun_features_add_mempolicy_info (json_gen, linux);
 
   yajl_gen_map_close (json_gen);
 }
