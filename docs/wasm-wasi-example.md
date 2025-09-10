@@ -40,7 +40,7 @@ This is from a main function from a wasm module
  ```Containerfile
  FROM scratch
 COPY hello.wasm /
-CMD ["/hello.wasm"]
+ENTRYPOINT ["/hello.wasm"]
  ```
 * Build wasm image using buildah
 ```console
