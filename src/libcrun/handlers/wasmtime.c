@@ -314,8 +314,9 @@ libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine,
 static void
 libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engine, wasm_byte_vec_t *wasm)
 {
-  const char *wasi_cli_run_interface = "wasi:cli/run@0.2.0";
-  const char *wasi_cli_run_interface_run = "run";
+  const char *const wasi_cli_run_interface = "wasi:cli/run@0.2.0";
+  const char *const wasi_cli_run_interface_run = "run";
+  char *const *arg;
   wasm_byte_vec_t error_message;
 
   // Load needed functions
@@ -333,6 +334,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   void (*wasmtime_wasip2_config_inherit_stdin) (wasmtime_wasip2_config_t *config);
   void (*wasmtime_wasip2_config_inherit_stdout) (wasmtime_wasip2_config_t *config);
   void (*wasmtime_wasip2_config_inherit_stderr) (wasmtime_wasip2_config_t *config);
+  void (*wasmtime_wasip2_config_arg) (wasmtime_wasip2_config_t *config, const char *arg, size_t arg_len);
   void (*wasmtime_context_set_wasip2) (wasmtime_context_t *context, wasmtime_wasip2_config_t *config);
   wasmtime_component_linker_t *(*wasmtime_component_linker_new) (wasm_engine_t *engine);
   wasmtime_error_t *(*wasmtime_component_linker_add_wasip2) (wasmtime_component_linker_t *linker);
@@ -375,6 +377,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   wasmtime_wasip2_config_inherit_stdin = dlsym (cookie, "wasmtime_wasip2_config_inherit_stdin");
   wasmtime_wasip2_config_inherit_stdout = dlsym (cookie, "wasmtime_wasip2_config_inherit_stdout");
   wasmtime_wasip2_config_inherit_stderr = dlsym (cookie, "wasmtime_wasip2_config_inherit_stderr");
+  wasmtime_wasip2_config_arg = dlsym (cookie, "wasmtime_wasip2_config_arg");
   wasmtime_context_set_wasip2 = dlsym (cookie, "wasmtime_context_set_wasip2");
   wasmtime_component_linker_new = dlsym (cookie, "wasmtime_component_linker_new");
   wasmtime_component_linker_add_wasip2 = dlsym (cookie, "wasmtime_component_linker_add_wasip2");
@@ -391,7 +394,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   if (wasm_engine_delete == NULL || wasm_byte_vec_delete == NULL || wasmtime_store_new == NULL
       || wasmtime_store_delete == NULL || wasmtime_store_context == NULL || wasmtime_component_new == NULL
       || wasmtime_wasip2_config_new == NULL || wasmtime_wasip2_config_inherit_stdin == NULL
-      || wasmtime_wasip2_config_inherit_stdout == NULL || wasmtime_wasip2_config_inherit_stderr == NULL
+      || wasmtime_wasip2_config_inherit_stdout == NULL || wasmtime_wasip2_config_inherit_stderr == NULL || wasmtime_wasip2_config_arg == NULL
       || wasmtime_context_set_wasip2 == NULL || wasmtime_component_linker_new == NULL || wasmtime_component_linker_add_wasip2 == NULL
       || wasmtime_component_linker_instantiate == NULL || wasmtime_component_instance_get_export_index == NULL
       || wasmtime_component_instance_get_func == NULL || wasmtime_component_func_call == NULL || wasmtime_component_export_index_delete == NULL
@@ -422,7 +425,10 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   wasmtime_wasip2_config_inherit_stdin (wasi_config);
   wasmtime_wasip2_config_inherit_stdout (wasi_config);
   wasmtime_wasip2_config_inherit_stderr (wasi_config);
-  // TODO: argv
+
+  for (arg = argv; *arg != NULL; ++arg)
+    wasmtime_wasip2_config_arg (wasi_config, *arg, strlen (*arg));
+
   wasmtime_context_set_wasip2 (context, wasi_config);
 
   // Get wasi exposing linker
