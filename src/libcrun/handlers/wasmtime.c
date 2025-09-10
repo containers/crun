@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <wasmtime/store.h>
 #define _GNU_SOURCE
 
 #include <config.h>
@@ -342,11 +341,6 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
       wasmtime_context_t *context,
       const wasmtime_component_t *component,
       wasmtime_component_instance_t *instance_out);
-  wasmtime_component_export_index_t *(*wasmtime_component_get_export_index) (
-      wasmtime_component_t *component,
-      wasmtime_component_export_index_t *index,
-      const char *name,
-      size_t name_len);
   wasmtime_component_export_index_t *(*wasmtime_component_instance_get_export_index) (
       const wasmtime_component_instance_t *instance,
       wasmtime_context_t *context,
@@ -385,7 +379,6 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   wasmtime_component_linker_new = dlsym (cookie, "wasmtime_component_linker_new");
   wasmtime_component_linker_add_wasip2 = dlsym (cookie, "wasmtime_component_linker_add_wasip2");
   wasmtime_component_linker_instantiate = dlsym (cookie, "wasmtime_component_linker_instantiate");
-  wasmtime_component_get_export_index = dlsym (cookie, "wasmtime_component_get_export_index");
   wasmtime_component_instance_get_export_index = dlsym (cookie, "wasmtime_component_instance_get_export_index");
   wasmtime_component_instance_get_func = dlsym (cookie, "wasmtime_component_instance_get_func");
   wasmtime_component_func_call = dlsym (cookie, "wasmtime_component_func_call");
@@ -394,6 +387,17 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   wasmtime_component_linker_delete = dlsym (cookie, "wasmtime_component_linker_delete");
   wasmtime_error_message = dlsym (cookie, "wasmtime_error_message");
   wasmtime_error_delete = dlsym (cookie, "wasmtime_error_delete");
+
+  if (wasm_engine_delete == NULL || wasm_byte_vec_delete == NULL || wasmtime_store_new == NULL
+      || wasmtime_store_delete == NULL || wasmtime_store_context == NULL || wasmtime_component_new == NULL
+      || wasmtime_wasip2_config_new == NULL || wasmtime_wasip2_config_inherit_stdin == NULL
+      || wasmtime_wasip2_config_inherit_stdout == NULL || wasmtime_wasip2_config_inherit_stderr == NULL
+      || wasmtime_context_set_wasip2 == NULL || wasmtime_component_linker_new == NULL || wasmtime_component_linker_add_wasip2 == NULL
+      || wasmtime_component_linker_instantiate == NULL || wasmtime_component_instance_get_export_index == NULL
+      || wasmtime_component_instance_get_func == NULL || wasmtime_component_func_call == NULL || wasmtime_component_export_index_delete == NULL
+      || wasmtime_component_delete == NULL || wasmtime_component_linker_delete == NULL || wasmtime_error_message == NULL
+      || wasmtime_error_delete == NULL)
+    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
 
   // Set up wasmtime context
   wasmtime_store_t *store = wasmtime_store_new (engine, NULL, NULL);
