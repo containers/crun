@@ -60,6 +60,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   wasm_engine_t *(*wasm_engine_new) ();
   wasmtime_error_t *(*wasmtime_wat2wasm) (const char *wat, size_t wat_len, wasm_byte_vec_t *out);
   void (*wasm_byte_vec_new_uninitialized) (wasm_byte_vec_t *, size_t);
+  void (*wasm_byte_vec_delete) (wasm_byte_vec_t *);
   wasmtime_error_t *(*wasmtime_module_validate) (wasm_engine_t *engine, const uint8_t *wasm, size_t wasm_len);
   void (*wasmtime_error_message) (const wasmtime_error_t *error, wasm_name_t *message);
   void (*wasmtime_error_delete) (wasmtime_error_t *error);
@@ -67,6 +68,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   wasmtime_wat2wasm = dlsym (cookie, "wasmtime_wat2wasm");
   wasm_engine_new = dlsym (cookie, "wasm_engine_new");
   wasm_byte_vec_new_uninitialized = dlsym (cookie, "wasm_byte_vec_new_uninitialized");
+  wasm_byte_vec_delete = dlsym (cookie, "wasm_byte_vec_delete");
   wasmtime_module_validate = dlsym (cookie, "wasmtime_module_validate");
   wasmtime_error_delete = dlsym (cookie, "wasmtime_error_delete");
   wasmtime_error_message = dlsym (cookie, "wasmtime_error_message");
@@ -74,6 +76,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   if (wasmtime_wat2wasm == NULL
       || wasm_engine_new == NULL
       || wasm_byte_vec_new_uninitialized == NULL
+      || wasm_byte_vec_delete == NULL
       || wasmtime_module_validate == NULL
       || wasmtime_error_delete == NULL
       || wasmtime_error_message == NULL)
@@ -101,13 +104,14 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   // binary format.
   if (has_suffix (pathname, "wat") > 0)
     {
-      wasmtime_error_t *err = wasmtime_wat2wasm ((char *) &wasm_bytes, file_size, &wasm);
+      wasmtime_error_t *err = wasmtime_wat2wasm ((char *) wasm.data, file_size, &wasm_bytes);
       if (err != NULL)
         {
           wasmtime_error_message (err, &error_message);
           wasmtime_error_delete (err);
           error (EXIT_FAILURE, 0, "failed while compiling wat to wasm binary : %.*s", (int) error_message.size, error_message.data);
         }
+      wasm_byte_vec_delete (&wasm);
       wasm = wasm_bytes;
     }
 
