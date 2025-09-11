@@ -331,6 +331,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
       size_t len,
       wasmtime_component_t **component_out);
   wasmtime_wasip2_config_t *(*wasmtime_wasip2_config_new) (void);
+  void (*wasi_config_inherit_env) (wasi_config_t *config);
   void (*wasmtime_wasip2_config_inherit_stdin) (wasmtime_wasip2_config_t *config);
   void (*wasmtime_wasip2_config_inherit_stdout) (wasmtime_wasip2_config_t *config);
   void (*wasmtime_wasip2_config_inherit_stderr) (wasmtime_wasip2_config_t *config);
@@ -374,6 +375,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   wasmtime_store_context = dlsym (cookie, "wasmtime_store_context");
   wasmtime_component_new = dlsym (cookie, "wasmtime_component_new");
   wasmtime_wasip2_config_new = dlsym (cookie, "wasmtime_wasip2_config_new");
+  wasi_config_inherit_env = dlsym (cookie, "wasi_config_inherit_env");
   wasmtime_wasip2_config_inherit_stdin = dlsym (cookie, "wasmtime_wasip2_config_inherit_stdin");
   wasmtime_wasip2_config_inherit_stdout = dlsym (cookie, "wasmtime_wasip2_config_inherit_stdout");
   wasmtime_wasip2_config_inherit_stderr = dlsym (cookie, "wasmtime_wasip2_config_inherit_stderr");
@@ -393,7 +395,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
 
   if (wasm_engine_delete == NULL || wasm_byte_vec_delete == NULL || wasmtime_store_new == NULL
       || wasmtime_store_delete == NULL || wasmtime_store_context == NULL || wasmtime_component_new == NULL
-      || wasmtime_wasip2_config_new == NULL || wasmtime_wasip2_config_inherit_stdin == NULL
+      || wasmtime_wasip2_config_new == NULL || wasi_config_inherit_env == NULL || wasmtime_wasip2_config_inherit_stdin == NULL
       || wasmtime_wasip2_config_inherit_stdout == NULL || wasmtime_wasip2_config_inherit_stderr == NULL || wasmtime_wasip2_config_arg == NULL
       || wasmtime_context_set_wasip2 == NULL || wasmtime_component_linker_new == NULL || wasmtime_component_linker_add_wasip2 == NULL
       || wasmtime_component_linker_instantiate == NULL || wasmtime_component_instance_get_export_index == NULL
@@ -422,6 +424,7 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   wasmtime_wasip2_config_t *wasi_config = wasmtime_wasip2_config_new ();
   assert (wasi_config != NULL);
 
+  wasi_config_inherit_env ((wasi_config_t *) wasi_config);
   wasmtime_wasip2_config_inherit_stdin (wasi_config);
   wasmtime_wasip2_config_inherit_stdout (wasi_config);
   wasmtime_wasip2_config_inherit_stderr (wasi_config);
