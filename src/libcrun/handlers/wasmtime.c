@@ -29,7 +29,6 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sched.h>
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -84,17 +83,20 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
 
   // Set up wasmtime context
   wasm_engine_t *engine = wasm_engine_new ();
-  assert (engine != NULL);
+  if (engine == NULL)
+    error (EXIT_FAILURE, 0, "could not create WebAssembly engine");
 
   wasm_byte_vec_t wasm;
   // Load and parse container entrypoint
   FILE *file = fopen (pathname, "rbe");
   if (! file)
     error (EXIT_FAILURE, 0, "error loading entrypoint");
-  fseek (file, 0L, SEEK_END);
+  if (fseek (file, 0L, SEEK_END))
+    error (EXIT_FAILURE, 0, "error fully loading entrypoint");
   size_t file_size = ftell (file);
   wasm_byte_vec_new_uninitialized (&wasm, file_size);
-  fseek (file, 0L, SEEK_SET);
+  if (fseek (file, 0L, SEEK_SET))
+    error (EXIT_FAILURE, 0, "error resetting entrypoint");
   if (fread (wasm.data, file_size, 1, file) != 1)
     error (EXIT_FAILURE, 0, "error load");
   fclose (file);
@@ -125,22 +127,16 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
       wasmtime_error_delete (err);
 
       if (strcmp ((char *) error_message.data, "component passed to module validation") != 0)
-        {
-          error (EXIT_FAILURE, 0, "failed to validate module: %.*s", (int) error_message.size, error_message.data);
-        }
+        error (EXIT_FAILURE, 0, "failed to validate module: %.*s", (int) error_message.size, error_message.data);
 
       err = NULL;
       is_wasm_module = false;
     }
 
   if (is_wasm_module)
-    {
-      libwasmtime_run_module (cookie, argv, engine, &wasm);
-    }
+    libwasmtime_run_module (cookie, argv, engine, &wasm);
   else
-    {
-      libwasmtime_run_component (cookie, argv, engine, &wasm);
-    }
+    libwasmtime_run_component (cookie, argv, engine, &wasm);
 
   exit (EXIT_SUCCESS);
 }
@@ -235,7 +231,8 @@ libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine,
 
   // Set up wasmtime context
   wasmtime_store_t *store = wasmtime_store_new (engine, NULL, NULL);
-  assert (store != NULL);
+  if (store == NULL)
+    error (EXIT_FAILURE, 0, "could not create WebAssembly store");
   wasmtime_context_t *context = wasmtime_store_context (store);
 
   // Link with wasi functions defined
@@ -261,7 +258,8 @@ libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine,
 
   // Init WASI program
   wasi_config_t *wasi_config = wasi_config_new ("crun_wasi_program");
-  assert (wasi_config);
+  if (wasi_config == NULL)
+    error (EXIT_FAILURE, 0, "could not create WASI configuration");
 
   // Calculate argc for `wasi_config_set_argv`
   for (arg = argv; *arg != NULL; ++arg)
@@ -410,7 +408,8 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
 
   // Set up wasmtime context
   wasmtime_store_t *store = wasmtime_store_new (engine, NULL, NULL);
-  assert (store != NULL);
+  if (store == NULL)
+    error (EXIT_FAILURE, 0, "could not create WebAssembly store");
   wasmtime_context_t *context = wasmtime_store_context (store);
 
   // Compile wasm component
@@ -426,7 +425,8 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
 
   // Set up WASIp2 config
   wasmtime_wasip2_config_t *wasi_config = wasmtime_wasip2_config_new ();
-  assert (wasi_config != NULL);
+  if (wasi_config == NULL)
+    error (EXIT_FAILURE, 0, "could not create WASIp2 configuration");
 
   wasi_config_inherit_env ((wasi_config_t *) wasi_config);
   wasmtime_wasip2_config_inherit_stdin (wasi_config);
@@ -465,7 +465,8 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
       NULL,
       wasi_cli_run_interface,
       strlen (wasi_cli_run_interface));
-  assert (run_interface_idx != NULL);
+  if (run_interface_idx == NULL)
+    error (EXIT_FAILURE, 0, "failed to fetch export index of %.*s", (int) strlen (wasi_cli_run_interface), wasi_cli_run_interface);
   // Get index of the run function
   wasmtime_component_export_index_t *run_func_idx = wasmtime_component_instance_get_export_index (
       &component_inst,
@@ -473,14 +474,13 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
       run_interface_idx,
       wasi_cli_run_interface_run,
       strlen (wasi_cli_run_interface_run));
-  assert (run_func_idx != NULL);
+  if (run_func_idx == NULL)
+    error (EXIT_FAILURE, 0, "failed to fetch export index of %.*s", (int) strlen (wasi_cli_run_interface_run), wasi_cli_run_interface_run);
 
   // Actually retrieve the func
   wasmtime_component_func_t run_func = {};
   if (! wasmtime_component_instance_get_func (&component_inst, context, run_func_idx, &run_func))
-    {
-      error (EXIT_FAILURE, 0, "failed to retrieve run function");
-    }
+    error (EXIT_FAILURE, 0, "failed to retrieve run function");
 
   // Call the func
   wasmtime_component_val_t result = {};
