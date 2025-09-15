@@ -168,6 +168,18 @@ compare_rdt_configurations (const char *a, const char *b)
   return 0;
 }
 
+static bool
+is_default_clos (const char *name)
+{
+  return strcmp (name, "/") == 0;
+}
+
+static int
+get_resctrl_path (char **path, const char *file, const char *name, libcrun_error_t *err)
+{
+  return append_paths (path, err, INTEL_RDT_MOUNT_POINT, name, file, NULL);
+}
+
 static int
 validate_rdt_configuration (const char *name, const char *l3_cache_schema, const char *mem_bw_schema, libcrun_error_t *err)
 {
@@ -176,7 +188,7 @@ validate_rdt_configuration (const char *name, const char *l3_cache_schema, const
   char *it, *end;
   int ret;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, SCHEMATA_FILE, NULL);
+  ret = get_resctrl_path (&path, SCHEMATA_FILE, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -259,7 +271,7 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
   if (ret == 0)
     return crun_make_error (err, 0, "the resctl file system is not mounted");
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, NULL);
+  ret = get_resctrl_path (&path, NULL, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -274,7 +286,7 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
      the group must exist.  */
   if (explicit_clos_id && is_empty_string (l3_cache_schema) && is_empty_string (mem_bw_schema) && (schemata == NULL))
     {
-      if (exist)
+      if (exist || is_default_clos (name))
         return 0;
 
       return crun_make_error (err, 0, "the resctl group `%s` does not exist", name);
@@ -283,6 +295,9 @@ resctl_create (const char *name, bool explicit_clos_id, bool *created, const cha
   /* If the closID exists then it must match the specified configuration.  */
   if (exist && (l3_cache_schema != NULL || mem_bw_schema != NULL))
     return validate_rdt_configuration (name, l3_cache_schema, mem_bw_schema, err);
+
+  if (is_default_clos (name))
+    return 0;
 
   /* At this point, assume it was created.  */
   ret = crun_ensure_directory (path, 0755, true, err);
@@ -302,7 +317,7 @@ resctl_move_task_to (const char *name, const char *monitoring_name, pid_t pid, l
   int len;
   int ret;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, TASKS_FILE, NULL);
+  ret = get_resctrl_path (&path, TASKS_FILE, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -342,7 +357,7 @@ resctl_update (const char *name, const char *l3_cache_schema, const char *mem_bw
   if (l3_cache_schema == NULL && mem_bw_schema == NULL && schemata == NULL)
     return 0;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, SCHEMATA_FILE, NULL);
+  ret = get_resctrl_path (&path, SCHEMATA_FILE, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -394,7 +409,10 @@ resctl_destroy (const char *name, libcrun_error_t *err)
   cleanup_free char *path = NULL;
   int ret;
 
-  ret = append_paths (&path, err, INTEL_RDT_MOUNT_POINT, name, NULL);
+  if (is_default_clos (name))
+    return 0;
+
+  ret = get_resctrl_path (&path, NULL, name, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
