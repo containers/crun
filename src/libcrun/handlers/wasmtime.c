@@ -98,7 +98,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   if (fseek (file, 0L, SEEK_SET))
     error (EXIT_FAILURE, 0, "error resetting entrypoint");
   if (fread (wasm.data, file_size, 1, file) != 1)
-    error (EXIT_FAILURE, 0, "error load");
+    error (EXIT_FAILURE, 0, "error reading entrypoint");
   fclose (file);
 
   // If entrypoint contains a webassembly text format
