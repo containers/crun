@@ -21,6 +21,15 @@
 #include "../container.h"
 #include <unistd.h>
 
+typedef enum
+{
+  WASM_ENC_INVALID,
+  WASM_ENC_MODULE,
+  WASM_ENC_COMPONENT
+} wasm_encoding_t;
+
 int wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err);
+
+wasm_encoding_t wasm_interpete_header (const char *header);
 
 #endif

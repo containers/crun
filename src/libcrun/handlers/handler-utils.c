@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+#include <string.h>
 #include "../container.h"
 #include "../utils.h"
 #include "handler-utils.h"
@@ -68,4 +69,21 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
     }
 
   return 0;
+}
+
+wasm_encoding_t
+wasm_interpete_header (const char *header)
+{
+  // Check for the WebAssembly magic bytes
+  if (strncmp (header, "\0asm", 4))
+    return WASM_ENC_INVALID;
+
+  // We don't care for the specific WebAssembly version
+  // so we only read the value of the `layer` field.
+  if (header[6] == '\0' && header[7] == '\0')
+    return WASM_ENC_MODULE;
+
+  // `layer` does not equal 0x00 0x00 so we are working
+  // with a component.
+  return WASM_ENC_COMPONENT;
 }
