@@ -104,7 +104,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   // If entrypoint contains a webassembly text format
   // compile it on the fly and convert to equivalent
   // binary format.
-  if (has_suffix (pathname, "wat") > 0)
+  if (has_suffix (pathname, ".wat") > 0)
     {
       wasmtime_error_t *err = wasmtime_wat2wasm ((char *) wasm.data, file_size, &wasm_bytes);
       if (err != NULL)
