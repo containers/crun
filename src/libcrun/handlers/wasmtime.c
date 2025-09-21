@@ -117,26 +117,16 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
       wasm = wasm_bytes;
     }
 
-  // Check if it is a valid webassembly module or
-  // a component.
-  bool is_wasm_module = true;
-  wasmtime_error_t *err = wasmtime_module_validate (engine, (uint8_t *) wasm.data, wasm.size);
-  if (err != NULL)
-    {
-      wasmtime_error_message (err, &error_message);
-      wasmtime_error_delete (err);
+  wasm_encoding_t wasm_enc = wasm_interpete_header (wasm.data);
+  if (wasm_enc == WASM_ENC_INVALID)
+    error (EXIT_FAILURE, 0, "invalid wasm binary header");
 
-      if (strcmp ((char *) error_message.data, "component passed to module validation") != 0)
-        error (EXIT_FAILURE, 0, "failed to validate module: %.*s", (int) error_message.size, error_message.data);
-
-      err = NULL;
-      is_wasm_module = false;
-    }
-
-  if (is_wasm_module)
+  if (wasm_enc == WASM_ENC_MODULE)
     libwasmtime_run_module (cookie, argv, engine, &wasm);
-  else
+  else if (wasm_enc == WASM_ENC_COMPONENT)
     libwasmtime_run_component (cookie, argv, engine, &wasm);
+  else
+    error (EXIT_FAILURE, 0, "unsupport wasm encoding detected");
 
   exit (EXIT_SUCCESS);
 }

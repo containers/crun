@@ -75,15 +75,20 @@ wasm_encoding_t
 wasm_interpete_header (const char *header)
 {
   // Check for the WebAssembly magic bytes
+  // See: https://webassembly.github.io/spec/core/binary/modules.html#binary-module
   if (strncmp (header, "\0asm", 4))
     return WASM_ENC_INVALID;
 
-  // We don't care for the specific WebAssembly version
-  // so we only read the value of the `layer` field.
+  /* The next four bytes are the WebAssembly version.
+     We don't care for the specific WebAssembly version
+     so we only read the value of the `layer` field which
+     was defined by the component spec.
+     See: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md#component-definitions
+  */
   if (header[6] == '\0' && header[7] == '\0')
     return WASM_ENC_MODULE;
 
-  // `layer` does not equal 0x00 0x00 so we are working
+  // `layer` does not equal `0x00 0x00` so we are working
   // with a component.
   return WASM_ENC_COMPONENT;
 }
