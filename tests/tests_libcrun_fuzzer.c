@@ -463,7 +463,7 @@ LLVMFuzzerTestOneInput (uint8_t *buf, size_t len)
 }
 
 static void
-sig_chld (int)
+sig_chld (int sig arg_unused)
 {
   int status;
   pid_t p;
