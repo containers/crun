@@ -126,7 +126,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   else if (wasm_enc == WASM_ENC_COMPONENT)
     libwasmtime_run_component (cookie, argv, engine, &wasm);
   else
-    error (EXIT_FAILURE, 0, "unsupport wasm encoding detected");
+    error (EXIT_FAILURE, 0, "unsupported wasm encoding detected");
 
   exit (EXIT_SUCCESS);
 }
