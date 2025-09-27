@@ -200,12 +200,12 @@ check_idmapped_mounts (const char *path)
       _exit (EXIT_SUCCESS);
     }
 
-  sprintf (proc_path, "/proc/%d/uid_map", pid);
+  snprintf (proc_path, sizeof (proc_path), "/proc/%d/uid_map", pid);
   write_to (proc_path, "0 0 1");
-  sprintf (proc_path, "/proc/%d/gid_map", pid);
+  snprintf (proc_path, sizeof (proc_path), "/proc/%d/gid_map", pid);
   write_to (proc_path, "0 0 1");
 
-  sprintf (proc_path, "/proc/%d/ns/user", pid);
+  snprintf (proc_path, sizeof (proc_path), "/proc/%d/ns/user", pid);
   fd = open (proc_path, O_RDONLY);
   if (fd < 0)
     error (EXIT_FAILURE, errno, "open `%s`", proc_path);
@@ -766,12 +766,12 @@ main (int argc, char **argv)
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'create-sub-cgroup-and-wait' requires an argument");
 
-      sprintf (path, "/sys/fs/cgroup/%s", argv[2]);
+      snprintf (path, sizeof (path), "/sys/fs/cgroup/%s", argv[2]);
       ret = mkdir (path, 0700);
       if (ret < 0)
         error (EXIT_FAILURE, errno, "mkdir");
 
-      sprintf (path, "/sys/fs/cgroup/%s/cgroup.procs", argv[2]);
+      snprintf (path, sizeof (path), "/sys/fs/cgroup/%s/cgroup.procs", argv[2]);
 
       fd = open (path, O_WRONLY);
       if (fd < 0)

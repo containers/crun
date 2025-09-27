@@ -135,7 +135,11 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 		if (n < 0) {
 			/* If a component doesn't exist, then return what we could translate. */
 			if (errno == ENOENT) {
-				sprintf (resolved_path, "%s%s%s", got_path, path[0] == '/' || path[0] == '\0' ? "" : "/", path);
+				int ret = snprintf (resolved_path, PATH_MAX, "%s%s%s", got_path, path[0] == '/' || path[0] == '\0' ? "" : "/", path);
+				if (ret >= PATH_MAX) {
+					__set_errno(ENAMETOOLONG);
+					return NULL;
+				}
 				return resolved_path;
 			}
 			/* EINVAL means the file exists but isn't a symlink. */
