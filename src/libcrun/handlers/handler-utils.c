@@ -72,11 +72,14 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
 }
 
 wasm_encoding_t
-wasm_interpete_header (const char *header)
+wasm_interpret_header (const char *header, const size_t len)
 {
+  if (len < 8)
+    return WASM_ENC_INVALID;
+
   // Check for the WebAssembly magic bytes
   // See: https://webassembly.github.io/spec/core/binary/modules.html#binary-module
-  if (strncmp (header, "\0asm", 4))
+  if (memcmp (header, "\0asm", 4))
     return WASM_ENC_INVALID;
 
   /* The next four bytes are the WebAssembly version.
