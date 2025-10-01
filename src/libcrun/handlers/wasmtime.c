@@ -243,12 +243,14 @@ libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine,
   // Compile wasm modules
   wasmtime_module_t *module = NULL;
   err = wasmtime_module_new (engine, (uint8_t *) wasm->data, wasm->size, &module);
-  if (! module)
+  if (err != NULL)
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
       error (EXIT_FAILURE, 0, "failed to compile module: %.*s", (int) error_message.size, error_message.data);
     }
+  if (module == NULL)
+    error (EXIT_FAILURE, 0, "internal error: module is NULL");
   wasm_byte_vec_delete (wasm);
 
   // Init WASI program
@@ -422,12 +424,14 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
   // Compile wasm component
   wasmtime_component_t *component = NULL;
   wasmtime_error_t *err = wasmtime_component_new (engine, (uint8_t *) wasm->data, wasm->size, &component);
-  if (! component || err != NULL)
+  if (err != NULL)
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
       error (EXIT_FAILURE, 0, "failed to compile component: %.*s", (int) error_message.size, error_message.data);
     }
+  if (component == NULL)
+    error (EXIT_FAILURE, 0, "internal error: component is NULL");
   wasm_byte_vec_delete (wasm);
 
   // Set up WASIp2 config
