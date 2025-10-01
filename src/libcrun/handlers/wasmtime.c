@@ -44,6 +44,18 @@
 #endif
 
 #if HAVE_DLOPEN && HAVE_WASMTIME
+static void *
+load_libwasmtime_symbol (void *handle, const char *name)
+{
+  void *sym = dlsym (handle, name);
+  if (sym == NULL)
+    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`: %.*s", (int) strlen (name), name);
+
+  return sym;
+}
+
+#  define COMMON_WASM_SYMBOLS
+
 static void
 libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine, wasm_byte_vec_t *wasm);
 
@@ -117,7 +129,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
       wasm = wasm_bytes;
     }
 
-  wasm_encoding_t wasm_enc = wasm_interpete_header (wasm.data);
+  wasm_encoding_t wasm_enc = wasm_interpret_header (wasm.data, wasm.size);
   if (wasm_enc == WASM_ENC_INVALID)
     error (EXIT_FAILURE, 0, "invalid wasm binary header");
 
