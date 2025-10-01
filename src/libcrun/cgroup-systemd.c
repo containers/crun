@@ -1431,6 +1431,10 @@ add_bpf_program (sd_bus_message *m,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = mkdir (CRUN_BPF_DIR, 0700);
+  if (UNLIKELY (ret < 0 && errno != EEXIST))
+    return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
+
   if (is_update)
     {
       cleanup_free struct bpf_program *program_loaded = NULL;
@@ -1452,12 +1456,40 @@ add_bpf_program (sd_bus_message *m,
           return 0;
         }
 
+      /* Some platforms (e.g. ppc64) modify an EBPF program as it is
+       * loaded into the kernel, so in order to compare we actually
+       * have to load the new program and read it back. Seems ugly,
+       * but all this comes from the inability of systemd to modify
+       * the BPFProgram property.
+       */
+      {
+        cleanup_free struct bpf_program *program_new = NULL;
+        char tmp[64];
+        int len;
+
+        /* A unique name, as container name can't start with a digit. */
+        len = snprintf (tmp, sizeof (tmp), "%s/%d", CRUN_BPF_DIR, getpid ());
+        if (UNLIKELY (len >= (int) sizeof (tmp)))
+          return crun_make_error (err, 0, "internal error: static buffer too small");
+
+        ret = libcrun_ebpf_load (program, -1, tmp, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        ret = libcrun_ebpf_read_program (&program_new, tmp, err);
+        unlink (tmp);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        if (libcrun_ebpf_cmp_programs (program_new, program_loaded))
+          {
+            *devices_set = true;
+            return 0;
+          }
+      }
+
       return crun_make_error (err, 0, "updating device access list not supported when using BPFProgram");
     }
-
-  ret = mkdir (CRUN_BPF_DIR, 0700);
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
 
   ret = libcrun_ebpf_load (program, -1, path, err);
   if (UNLIKELY (ret < 0))
