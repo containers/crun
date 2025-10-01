@@ -117,7 +117,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
       wasm = wasm_bytes;
     }
 
-  wasm_encoding_t wasm_enc = wasm_interpete_header (wasm.data);
+  wasm_encoding_t wasm_enc = wasm_interpret_header (wasm.data, wasm.size);
   if (wasm_enc == WASM_ENC_INVALID)
     error (EXIT_FAILURE, 0, "invalid wasm binary header");
 

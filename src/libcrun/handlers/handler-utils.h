@@ -30,6 +30,6 @@ typedef enum
 
 int wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err);
 
-wasm_encoding_t wasm_interpete_header (const char *header);
+wasm_encoding_t wasm_interpret_header (const char *header, const size_t len);
 
 #endif
