@@ -1,0 +1,17 @@
+# EditorConfig is awesome: https://editorconfig.org
+
+# This is a top-most EditorConfig file.
+root = true
+
+[*.c]
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+tab_width = 8
+insert_final_newline = true
+trim_trailing_whitespace = true
