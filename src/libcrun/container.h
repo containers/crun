@@ -207,6 +207,7 @@ struct libcrun_checkpoint_restore_s
   int network_lock_method;
   char *lsm_profile;
   char *lsm_mount_context;
+  char *config_file;
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 
