@@ -43,6 +43,8 @@
 #  define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 #  define CRIU_RESTORE_LOG_FILE "restore.log"
 #  define DESCRIPTORS_FILENAME "descriptors.json"
+#  define CRIU_RUNC_CONFIG_FILE "/etc/criu/runc.conf"
+#  define CRIU_CRUN_CONFIG_FILE "/etc/criu/crun.conf"
 
 #  define CRIU_EXT_NETNS "extRootNetNS"
 #  define CRIU_EXT_PIDNS "extRootPidNS"
@@ -99,6 +101,7 @@ struct libcriu_wrapper_s
   void (*criu_set_work_dir_fd) (int fd);
   int (*criu_set_lsm_profile) (const char *name);
   int (*criu_set_lsm_mount_context) (const char *name);
+  int (*criu_set_config_file) (const char *path);
 };
 
 static struct libcriu_wrapper_s *libcriu_wrapper;
@@ -194,6 +197,9 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_set_work_dir_fd, false);
   LOAD_CRIU_FUNCTION (criu_set_lsm_profile, false);
   LOAD_CRIU_FUNCTION (criu_set_lsm_mount_context, false);
+#  if ! defined STATIC || defined CRIU_CONFIG_FILE
+  LOAD_CRIU_FUNCTION (criu_set_config_file, true);
+#  endif
 
   libcriu_wrapper = *wrapper_out = wrapper;
   wrapper = NULL;
@@ -460,6 +466,38 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
   return 0;
 }
 
+static int
+handle_criu_config_file (libcrun_container_t *container, libcrun_error_t *err)
+{
+  int ret;
+  const char *criu_config_annotation;
+  const char *config_file = CRIU_RUNC_CONFIG_FILE;
+
+  criu_config_annotation = find_annotation (container, "org.criu.config");
+
+  /* Ignore missing criu_set_config_file() API for compatibility with older CRIU versions,
+   * and show an error only if config file is explicitly set with annotation.
+   */
+  if (libcriu_wrapper->criu_set_config_file == NULL)
+    {
+      if (criu_config_annotation)
+        return crun_make_error (err, 0, "libcriu RPC config files supported in CRIU >= 4.2");
+
+      return 0;
+    }
+
+  if (criu_config_annotation)
+    config_file = criu_config_annotation;
+  else if (access (CRIU_CRUN_CONFIG_FILE, F_OK) == 0)
+    config_file = CRIU_CRUN_CONFIG_FILE;
+
+  ret = libcriu_wrapper->criu_set_config_file (config_file);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "failed to set CRIU config file");
+
+  return 0;
+}
+
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
                                          libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
@@ -522,6 +560,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   /* Set up logging. */
   libcriu_wrapper->criu_set_log_level (4);
   libcriu_wrapper->criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
+
+  /* Set up CRIU config file */
+  if (UNLIKELY (handle_criu_config_file (container, err)))
+    return -1;
+
   /* Setting the pid early as we can skip a lot of checkpoint setup if
    * we just do a pre-dump. The PID needs to be set always. Do it here.
    * The main process of the container is the process CRIU will checkpoint
@@ -1097,6 +1140,10 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         }
 #  endif
     }
+
+  /* Set up CRIU config file */
+  if (UNLIKELY (handle_criu_config_file (container, err)))
+    return -1;
 
   /* Tell CRIU if cgroup v1 needs to be handled. */
   ret = restore_cgroup_v1_mount (def, err);

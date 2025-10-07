@@ -266,6 +266,8 @@ AS_IF([test "x$enable_criu" != "xno"], [
 	        AC_MSG_NOTICE([CRIU version doesn't support for pre-dumping])])
 	PKG_CHECK_MODULES([CRIU_NETWORK_LOCK_SKIP], [criu >= 3.19], [have_criu_network_lock_skip="yes"], [have_criu_network_lock_skip="no"
 	        AC_MSG_NOTICE([CRIU version doesn't support CRIU_NETWORK_LOCK_SKIP])])
+	PKG_CHECK_MODULES([CRIU_CONFIG_FILE], [criu >= 4.2], [have_criu_config_file="yes"], [have_criu_config_file="no"
+		AC_MSG_NOTICE([libcriu version doesn't support setting RPC config file])])
 	AS_IF([test "$have_criu" = "yes"], [
 		AC_DEFINE([HAVE_CRIU], 1, [Define if CRIU is available])
 	])
@@ -277,6 +279,9 @@ AS_IF([test "x$enable_criu" != "xno"], [
 	])
 	AS_IF([test "$have_criu_network_lock_skip" = "yes"], [
 		AC_DEFINE([CRIU_NETWORK_LOCK_SKIP_SUPPORT], 1, [Define if CRIU_NETWORK_LOCK_SKIP is available])
+	])
+	AS_IF([test "$have_criu_config_file" = "yes"], [
+		AC_DEFINE([CRIU_CONFIG_FILE], 1, [Define if CRIU_CONFIG_FILE is available])
 	])
 
 ], [AC_MSG_NOTICE([CRIU support disabled per user request])])

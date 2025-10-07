@@ -174,6 +174,7 @@ def test_crun_features():
                 "module.wasm.image/variant",
                 "io.kubernetes.cri.container-type",
                 "run.oci.",
+                "org.criu.",
             ]
         }
 
