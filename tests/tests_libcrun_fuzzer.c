@@ -111,7 +111,7 @@ test_generate_ebpf (uint8_t *buf, size_t len)
   return 0;
 }
 
-char *chroot_realpath (const char *chroot, const char *path, char resolved_path[],sizeof(),unsigned long int size_resolved_path);
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[],size_t size_resolved_path);
 
 static int
 test_chroot_realpath (uint8_t *buf, size_t len)

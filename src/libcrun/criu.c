@@ -52,7 +52,7 @@
 #  endif
 
 /* Defined in chroot_realpath.c  */
-char *chroot_realpath (const char *chroot, const char *path, char resolved_path[],unsigned long int size_resolved_path);
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[],size_t size_resolved_path);
 
 static const char *console_socket = NULL;
 
