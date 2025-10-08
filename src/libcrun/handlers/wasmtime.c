@@ -44,6 +44,9 @@
 #endif
 
 #if HAVE_DLOPEN && HAVE_WASMTIME
+static void *
+libwasmtime_load_symbol (void *cookie, char *const symbol);
+
 static void
 libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine, wasm_byte_vec_t *wasm);
 
@@ -56,30 +59,19 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
 {
   wasm_byte_vec_t error_message;
   wasm_byte_vec_t wasm_bytes;
-  wasm_engine_t *(*wasm_engine_new) ();
-  wasmtime_error_t *(*wasmtime_wat2wasm) (const char *wat, size_t wat_len, wasm_byte_vec_t *out);
-  void (*wasm_byte_vec_new_uninitialized) (wasm_byte_vec_t *, size_t);
-  void (*wasm_byte_vec_delete) (wasm_byte_vec_t *);
-  wasmtime_error_t *(*wasmtime_module_validate) (wasm_engine_t *engine, const uint8_t *wasm, size_t wasm_len);
-  void (*wasmtime_error_message) (const wasmtime_error_t *error, wasm_name_t *message);
-  void (*wasmtime_error_delete) (wasmtime_error_t *error);
 
-  wasmtime_wat2wasm = dlsym (cookie, "wasmtime_wat2wasm");
-  wasm_engine_new = dlsym (cookie, "wasm_engine_new");
-  wasm_byte_vec_new_uninitialized = dlsym (cookie, "wasm_byte_vec_new_uninitialized");
-  wasm_byte_vec_delete = dlsym (cookie, "wasm_byte_vec_delete");
-  wasmtime_module_validate = dlsym (cookie, "wasmtime_module_validate");
-  wasmtime_error_delete = dlsym (cookie, "wasmtime_error_delete");
-  wasmtime_error_message = dlsym (cookie, "wasmtime_error_message");
-
-  if (wasmtime_wat2wasm == NULL
-      || wasm_engine_new == NULL
-      || wasm_byte_vec_new_uninitialized == NULL
-      || wasm_byte_vec_delete == NULL
-      || wasmtime_module_validate == NULL
-      || wasmtime_error_delete == NULL
-      || wasmtime_error_message == NULL)
-    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
+  wasm_engine_t *(*wasm_engine_new) ()
+      = libwasmtime_load_symbol (cookie, "wasm_engine_new");
+  wasmtime_error_t *(*wasmtime_wat2wasm) (const char *wat, size_t wat_len, wasm_byte_vec_t *out)
+      = libwasmtime_load_symbol (cookie, "wasmtime_wat2wasm");
+  void (*wasm_byte_vec_new_uninitialized) (wasm_byte_vec_t *, size_t)
+      = libwasmtime_load_symbol (cookie, "wasm_byte_vec_new_uninitialized");
+  void (*wasm_byte_vec_delete) (wasm_byte_vec_t *)
+      = libwasmtime_load_symbol (cookie, "wasm_byte_vec_delete");
+  void (*wasmtime_error_message) (const wasmtime_error_t *error, wasm_name_t *message)
+      = libwasmtime_load_symbol (cookie, "wasmtime_error_message");
+  void (*wasmtime_error_delete) (wasmtime_error_t *error)
+      = libwasmtime_load_symbol (cookie, "wasmtime_error_delete");
 
   // Set up wasmtime context
   wasm_engine_t *engine = wasm_engine_new ();
@@ -175,31 +167,42 @@ libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine,
 
   // Load needed functions
   WASMTIME_COMMON_SYMBOLS (cookie)
-  wasi_config_t *(*wasi_config_new) (const char *);
-  wasmtime_linker_t *(*wasmtime_linker_new) (wasm_engine_t *engine);
-  wasmtime_error_t *(*wasmtime_linker_define_wasi) (wasmtime_linker_t *linker);
+  wasi_config_t *(*wasi_config_new) (const char *)
+      = libwasmtime_load_symbol (cookie, "wasi_config_new");
+  wasmtime_linker_t *(*wasmtime_linker_new) (wasm_engine_t *engine)
+      = libwasmtime_load_symbol (cookie, "wasmtime_linker_new");
+  wasmtime_error_t *(*wasmtime_linker_define_wasi) (wasmtime_linker_t *linker)
+      = libwasmtime_load_symbol (cookie, "wasmtime_linker_define_wasi");
   wasmtime_error_t *(*wasmtime_module_new) (
       wasm_engine_t *engine,
       const uint8_t *wasm,
       size_t wasm_len,
-      wasmtime_module_t **ret);
-  void (*wasi_config_set_argv) (wasi_config_t *config, int argc, const char *argv[]);
-  void (*wasi_config_inherit_stdin) (wasi_config_t *config);
-  void (*wasi_config_inherit_stdout) (wasi_config_t *config);
-  void (*wasi_config_inherit_stderr) (wasi_config_t *config);
-  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t *context, wasi_config_t *wasi);
+      wasmtime_module_t **ret)
+      = libwasmtime_load_symbol (cookie, "wasmtime_module_new");
+  void (*wasi_config_set_argv) (wasi_config_t *config, int argc, const char *argv[])
+      = libwasmtime_load_symbol (cookie, "wasi_config_set_argv");
+  void (*wasi_config_inherit_stdin) (wasi_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasi_config_inherit_stdin");
+  void (*wasi_config_inherit_stdout) (wasi_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasi_config_inherit_stdout");
+  void (*wasi_config_inherit_stderr) (wasi_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasi_config_inherit_stderr");
+  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t *context, wasi_config_t *wasi)
+      = libwasmtime_load_symbol (cookie, "wasmtime_context_set_wasi");
   wasmtime_error_t *(*wasmtime_linker_module) (
       wasmtime_linker_t *linker,
       wasmtime_context_t *store,
       const char *name,
       size_t name_len,
-      const wasmtime_module_t *module);
+      const wasmtime_module_t *module)
+      = libwasmtime_load_symbol (cookie, "wasmtime_linker_module");
   wasmtime_error_t *(*wasmtime_linker_get_default) (
       const wasmtime_linker_t *linker,
       wasmtime_context_t *store,
       const char *name,
       size_t name_len,
-      wasmtime_func_t *func);
+      wasmtime_func_t *func)
+      = libwasmtime_load_symbol (cookie, "wasmtime_linker_get_default");
   wasmtime_error_t *(*wasmtime_func_call) (
       wasmtime_context_t *store,
       const wasmtime_func_t *func,
@@ -207,33 +210,10 @@ libwasmtime_run_module (void *cookie, char *const argv[], wasm_engine_t *engine,
       size_t nargs,
       wasmtime_val_t *results,
       size_t nresults,
-      wasm_trap_t **trap);
-  void (*wasmtime_module_delete) (wasmtime_module_t *m);
-
-  wasi_config_new = dlsym (cookie, "wasi_config_new");
-  wasi_config_set_argv = dlsym (cookie, "wasi_config_set_argv");
-  wasmtime_linker_new = dlsym (cookie, "wasmtime_linker_new");
-  wasmtime_linker_define_wasi = dlsym (cookie, "wasmtime_linker_define_wasi");
-  wasmtime_module_new = dlsym (cookie, "wasmtime_module_new");
-  wasi_config_inherit_stdout = dlsym (cookie, "wasi_config_inherit_stdout");
-  wasi_config_inherit_stdin = dlsym (cookie, "wasi_config_inherit_stdin");
-  wasi_config_inherit_stderr = dlsym (cookie, "wasi_config_inherit_stderr");
-  wasmtime_context_set_wasi = dlsym (cookie, "wasmtime_context_set_wasi");
-  wasmtime_linker_module = dlsym (cookie, "wasmtime_linker_module");
-  wasmtime_linker_get_default = dlsym (cookie, "wasmtime_linker_get_default");
-  wasmtime_func_call = dlsym (cookie, "wasmtime_func_call");
-  wasmtime_module_delete = dlsym (cookie, "wasmtime_module_delete");
-
-  if (wasm_engine_delete == NULL || wasm_byte_vec_delete == NULL
-      || wasi_config_new == NULL || wasmtime_store_new == NULL
-      || wasmtime_store_context == NULL || wasmtime_linker_new == NULL || wasmtime_linker_define_wasi == NULL
-      || wasmtime_module_new == NULL || wasi_config_inherit_stdout == NULL
-      || wasi_config_inherit_stdin == NULL || wasi_config_inherit_stderr == NULL
-      || wasi_config_inherit_env == NULL || wasmtime_context_set_wasi == NULL
-      || wasmtime_linker_module == NULL || wasmtime_linker_get_default == NULL || wasmtime_func_call == NULL
-      || wasmtime_module_delete == NULL || wasmtime_store_delete == NULL || wasi_config_set_argv == NULL
-      || wasmtime_error_delete == NULL || wasmtime_error_message == NULL || wasi_config_preopen_dir == NULL)
-    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
+      wasm_trap_t **trap)
+      = libwasmtime_load_symbol (cookie, "wasmtime_func_call");
+  void (*wasmtime_module_delete) (wasmtime_module_t *m)
+      = libwasmtime_load_symbol (cookie, "wasmtime_module_delete");
 
   // Set up wasmtime context
   wasmtime_store_t *store = wasmtime_store_new (engine, NULL, NULL);
@@ -340,69 +320,57 @@ libwasmtime_run_component (void *cookie, char *const argv[], wasm_engine_t *engi
       const wasm_engine_t *engine,
       const uint8_t *buf,
       size_t len,
-      wasmtime_component_t **component_out);
-  wasmtime_wasip2_config_t *(*wasmtime_wasip2_config_new) (void);
-  void (*wasmtime_wasip2_config_inherit_stdin) (wasmtime_wasip2_config_t *config);
-  void (*wasmtime_wasip2_config_inherit_stdout) (wasmtime_wasip2_config_t *config);
-  void (*wasmtime_wasip2_config_inherit_stderr) (wasmtime_wasip2_config_t *config);
-  void (*wasmtime_wasip2_config_arg) (wasmtime_wasip2_config_t *config, const char *arg, size_t arg_len);
-  void (*wasmtime_context_set_wasip2) (wasmtime_context_t *context, wasmtime_wasip2_config_t *config);
-  wasmtime_component_linker_t *(*wasmtime_component_linker_new) (wasm_engine_t *engine);
-  wasmtime_error_t *(*wasmtime_component_linker_add_wasip2) (wasmtime_component_linker_t *linker);
+      wasmtime_component_t **component_out)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_new");
+  wasmtime_wasip2_config_t *(*wasmtime_wasip2_config_new) (void)
+      = libwasmtime_load_symbol (cookie, "wasmtime_wasip2_config_new");
+  void (*wasmtime_wasip2_config_inherit_stdin) (wasmtime_wasip2_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasmtime_wasip2_config_inherit_stdin");
+  void (*wasmtime_wasip2_config_inherit_stdout) (wasmtime_wasip2_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasmtime_wasip2_config_inherit_stdout");
+  void (*wasmtime_wasip2_config_inherit_stderr) (wasmtime_wasip2_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasmtime_wasip2_config_inherit_stderr");
+  void (*wasmtime_wasip2_config_arg) (wasmtime_wasip2_config_t *config, const char *arg, size_t arg_len)
+      = libwasmtime_load_symbol (cookie, "wasmtime_wasip2_config_arg");
+  void (*wasmtime_context_set_wasip2) (wasmtime_context_t *context, wasmtime_wasip2_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasmtime_context_set_wasip2");
+  wasmtime_component_linker_t *(*wasmtime_component_linker_new) (wasm_engine_t *engine)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_linker_new");
+  wasmtime_error_t *(*wasmtime_component_linker_add_wasip2) (wasmtime_component_linker_t *linker)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_linker_add_wasip2");
   wasmtime_error_t *(*wasmtime_component_linker_instantiate) (
       const wasmtime_component_linker_t *linker,
       wasmtime_context_t *context,
       const wasmtime_component_t *component,
-      wasmtime_component_instance_t *instance_out);
+      wasmtime_component_instance_t *instance_out)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_linker_instantiate");
   wasmtime_component_export_index_t *(*wasmtime_component_instance_get_export_index) (
       const wasmtime_component_instance_t *instance,
       wasmtime_context_t *context,
       const wasmtime_component_export_index_t *instance_export_index,
       const char *name,
-      size_t name_len);
+      size_t name_len)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_instance_get_export_index");
   bool (*wasmtime_component_instance_get_func) (
       const wasmtime_component_instance_t *instance,
       wasmtime_context_t *context,
       const wasmtime_component_export_index_t *export_index,
-      wasmtime_component_func_t *func_out);
+      wasmtime_component_func_t *func_out)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_instance_get_func");
   wasmtime_error_t *(*wasmtime_component_func_call) (
       const wasmtime_component_func_t *func,
       wasmtime_context_t *context,
       const wasmtime_component_val_t *args,
       size_t args_size,
       wasmtime_component_val_t *results,
-      size_t results_size);
-  void (*wasmtime_component_export_index_delete) (wasmtime_component_export_index_t *export_index);
-  void (*wasmtime_component_delete) (wasmtime_component_t *c);
-  void (*wasmtime_component_linker_delete) (wasmtime_component_linker_t *linker);
-
-  wasmtime_component_new = dlsym (cookie, "wasmtime_component_new");
-  wasmtime_wasip2_config_new = dlsym (cookie, "wasmtime_wasip2_config_new");
-  wasmtime_wasip2_config_inherit_stdin = dlsym (cookie, "wasmtime_wasip2_config_inherit_stdin");
-  wasmtime_wasip2_config_inherit_stdout = dlsym (cookie, "wasmtime_wasip2_config_inherit_stdout");
-  wasmtime_wasip2_config_inherit_stderr = dlsym (cookie, "wasmtime_wasip2_config_inherit_stderr");
-  wasmtime_wasip2_config_arg = dlsym (cookie, "wasmtime_wasip2_config_arg");
-  wasmtime_context_set_wasip2 = dlsym (cookie, "wasmtime_context_set_wasip2");
-  wasmtime_component_linker_new = dlsym (cookie, "wasmtime_component_linker_new");
-  wasmtime_component_linker_add_wasip2 = dlsym (cookie, "wasmtime_component_linker_add_wasip2");
-  wasmtime_component_linker_instantiate = dlsym (cookie, "wasmtime_component_linker_instantiate");
-  wasmtime_component_instance_get_export_index = dlsym (cookie, "wasmtime_component_instance_get_export_index");
-  wasmtime_component_instance_get_func = dlsym (cookie, "wasmtime_component_instance_get_func");
-  wasmtime_component_func_call = dlsym (cookie, "wasmtime_component_func_call");
-  wasmtime_component_export_index_delete = dlsym (cookie, "wasmtime_component_export_index_delete");
-  wasmtime_component_delete = dlsym (cookie, "wasmtime_component_delete");
-  wasmtime_component_linker_delete = dlsym (cookie, "wasmtime_component_linker_delete");
-
-  if (wasm_engine_delete == NULL || wasm_byte_vec_delete == NULL || wasmtime_store_new == NULL
-      || wasmtime_store_delete == NULL || wasmtime_store_context == NULL || wasmtime_component_new == NULL
-      || wasmtime_wasip2_config_new == NULL || wasi_config_inherit_env == NULL || wasmtime_wasip2_config_inherit_stdin == NULL
-      || wasmtime_wasip2_config_inherit_stdout == NULL || wasmtime_wasip2_config_inherit_stderr == NULL || wasmtime_wasip2_config_arg == NULL
-      || wasmtime_context_set_wasip2 == NULL || wasmtime_component_linker_new == NULL || wasmtime_component_linker_add_wasip2 == NULL
-      || wasmtime_component_linker_instantiate == NULL || wasmtime_component_instance_get_export_index == NULL
-      || wasmtime_component_instance_get_func == NULL || wasmtime_component_func_call == NULL || wasmtime_component_export_index_delete == NULL
-      || wasmtime_component_delete == NULL || wasmtime_component_linker_delete == NULL || wasmtime_error_message == NULL
-      || wasmtime_error_delete == NULL || wasi_config_preopen_dir == NULL)
-    error (EXIT_FAILURE, 0, "could not find symbol in `libwasmtime.so`");
+      size_t results_size)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_func_call");
+  void (*wasmtime_component_export_index_delete) (wasmtime_component_export_index_t *export_index)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_export_index_delete");
+  void (*wasmtime_component_delete) (wasmtime_component_t *c)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_delete");
+  void (*wasmtime_component_linker_delete) (wasmtime_component_linker_t *linker)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_linker_delete");
 
   // Set up wasmtime context
   wasmtime_store_t *store = wasmtime_store_new (engine, NULL, NULL);
