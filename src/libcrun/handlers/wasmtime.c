@@ -86,6 +86,8 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   if (fseek (file, 0L, SEEK_END))
     error (EXIT_FAILURE, 0, "error fully loading entrypoint");
   size_t file_size = ftell (file);
+  if (file_size == (size_t) -1L)
+    error (EXIT_FAILURE, 0, "error getting entrypoint size");
   wasm_byte_vec_new_uninitialized (&wasm, file_size);
   if (fseek (file, 0L, SEEK_SET))
     error (EXIT_FAILURE, 0, "error resetting entrypoint");
