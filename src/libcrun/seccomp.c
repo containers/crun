@@ -698,7 +698,7 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
 
   default_action = get_seccomp_action (def_action, default_errno_value, err);
   if (UNLIKELY (err && *err != NULL))
-    return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->default_action);
+    return -1;
 
   ctx = seccomp_init (default_action);
   if (ctx == NULL)
@@ -743,7 +743,7 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
 
       action = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, err);
       if (UNLIKELY (err && *err != NULL))
-        return crun_make_error (err, 0, "invalid seccomp action `%s`", seccomp->syscalls[i]->action);
+        return -1;
 
       if (action == default_action)
         continue;
