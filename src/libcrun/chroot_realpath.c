@@ -47,7 +47,7 @@
 
 #define MAX_READLINKS 32
 
-char *chroot_realpath(const char *chroot, const char *path, char resolved_path[])
+char *chroot_realpath(const char *chroot, const char *path, char resolved_path[],size_t size_resolved_path)
 {
 	char copy_path[PATH_MAX];
 	char link_path[PATH_MAX];
@@ -135,8 +135,8 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 		if (n < 0) {
 			/* If a component doesn't exist, then return what we could translate. */
 			if (errno == ENOENT) {
-				int ret = snprintf (resolved_path, PATH_MAX, "%s%s%s", got_path, path[0] == '/' || path[0] == '\0' ? "" : "/", path);
-				if (ret >= PATH_MAX) {
+				int ret = snprintf (resolved_path, size_resolved_path, "%s%s%s", got_path, path[0] == '/' || path[0] == '\0' ? "" : "/", path);
+				if ((ret < 0 || (size_t)ret >= size_resolved_path)) {
 					__set_errno(ENAMETOOLONG);
 					return NULL;
 				}

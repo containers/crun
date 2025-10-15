@@ -111,7 +111,7 @@ test_generate_ebpf (uint8_t *buf, size_t len)
   return 0;
 }
 
-char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[], size_t size_resolved_path);
 
 static int
 test_chroot_realpath (uint8_t *buf, size_t len)
@@ -123,7 +123,7 @@ test_chroot_realpath (uint8_t *buf, size_t len)
   if (path == NULL)
     return 0;
 
-  chroot_realpath (".", path, resolved_path);
+  chroot_realpath (".", path, resolved_path, sizeof (resolved_path));
   (void) resolved_path;
   return 0;
 }
@@ -496,7 +496,7 @@ main (int argc, char **argv)
       return LLVMFuzzerTestOneInput (content, len);
     }
 #ifdef FUZZER
-  extern void HF_ITER (uint8_t **buf, size_t *len);
+  extern void HF_ITER (uint8_t * *buf, size_t * len);
   for (;;)
     {
       size_t len;

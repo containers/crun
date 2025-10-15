@@ -347,7 +347,7 @@ close_and_replace (int *oldfd, int newfd)
 }
 
 /* Defined in chroot_realpath.c  */
-char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[], size_t size_resolved_path);
 
 static int
 safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags,
@@ -359,7 +359,7 @@ safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags
   size_t rootfs_len = strlen (rootfs);
   int ret;
 
-  path_in_chroot = chroot_realpath (rootfs, path, buffer);
+  path_in_chroot = chroot_realpath (rootfs, path, buffer, sizeof (buffer));
   if (path_in_chroot == NULL)
     return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
 
@@ -2297,9 +2297,9 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "fchownat `%s/%s`", destname, de->d_name);
 
-      /*
-       * ALLPERMS is not defined by POSIX
-       */
+        /*
+         * ALLPERMS is not defined by POSIX
+         */
 #ifndef ALLPERMS
 #  define ALLPERMS (S_ISUID | S_ISGID | S_ISVTX | S_IRWXU | S_IRWXG | S_IRWXO)
 #endif
