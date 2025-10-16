@@ -82,27 +82,17 @@ int
 libcrun_reset_cpu_affinity_mask (pid_t pid, libcrun_error_t *err)
 {
   int ret;
+  cpu_set_t mask;
 
   /* Reset the inherited cpu affinity. Old kernels do that automatically, but
      new kernels remember the affinity that was set before the cgroup move.
      This is undesirable, because it inherits the systemd affinity when the container
      should really move to the container space cpus.
-
-     The sched_setaffinity call will always return an error (EINVAL or ENODEV);
-     when used like this. This is expected and part of the backward compatibility.
-
-     Ignore ENOSYS as well, as it might be blocked by seccomp.
-
      See: https://issues.redhat.com/browse/OCPBUGS-15102   */
-  ret = sched_setaffinity (pid, 0, NULL);
-  if (LIKELY (ret < 0))
-    {
-      if (LIKELY (errno == EINVAL || errno == ENODEV || errno == ENOSYS))
-        return 0;
-
-      return crun_make_error (err, errno, "failed to reset affinity");
-    }
-
+  memset (&mask, 0xFF, sizeof (cpu_set_t));
+  ret = sched_setaffinity (pid, sizeof (mask), &mask);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sched_setaffinity");
   return 0;
 }
 
