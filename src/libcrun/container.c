@@ -1722,7 +1722,7 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 
   *container = libcrun_container_load_from_file (config_file, err);
   if (*container == NULL)
-    return crun_make_error (err, 0, "load `%s`", config_file);
+    return -1;
 
   return 0;
 }
