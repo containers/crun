@@ -43,6 +43,7 @@
 #  define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 #  define CRIU_RESTORE_LOG_FILE "restore.log"
 #  define DESCRIPTORS_FILENAME "descriptors.json"
+#  define CRIU_RUNC_CONFIG_FILE "/etc/criu/runc.conf"
 
 #  define CRIU_EXT_NETNS "extRootNetNS"
 #  define CRIU_EXT_PIDNS "extRootPidNS"
@@ -99,6 +100,9 @@ struct libcriu_wrapper_s
   void (*criu_set_work_dir_fd) (int fd);
   int (*criu_set_lsm_profile) (const char *name);
   int (*criu_set_lsm_mount_context) (const char *name);
+#  ifdef CRIU_CONFIG_FILE
+  int (*criu_set_config_file) (const char *path);
+#  endif
 };
 
 static struct libcriu_wrapper_s *libcriu_wrapper;
@@ -194,6 +198,9 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_set_work_dir_fd, false);
   LOAD_CRIU_FUNCTION (criu_set_lsm_profile, false);
   LOAD_CRIU_FUNCTION (criu_set_lsm_mount_context, false);
+#  ifdef CRIU_CONFIG_FILE
+  LOAD_CRIU_FUNCTION (criu_set_config_file, false);
+#  endif
 
   libcriu_wrapper = *wrapper_out = wrapper;
   wrapper = NULL;
@@ -522,6 +529,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   /* Set up logging. */
   libcriu_wrapper->criu_set_log_level (4);
   libcriu_wrapper->criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
+
+#  ifdef CRIU_CONFIG_FILE
+  libcriu_wrapper->criu_set_config_file (CRIU_RUNC_CONFIG_FILE);
+#  endif
+
   /* Setting the pid early as we can skip a lot of checkpoint setup if
    * we just do a pre-dump. The PID needs to be set always. Do it here.
    * The main process of the container is the process CRIU will checkpoint
