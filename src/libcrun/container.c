@@ -1099,8 +1099,9 @@ libcrun_container_notify_handler (struct container_entrypoint_s *args,
 
 /* Resolve and normalize the container rootfs path.  */
 static int
-resolve_rootfs_path (runtime_spec_schema_config_schema *def, char **rootfs, libcrun_error_t *err)
+resolve_rootfs_path (libcrun_container_t *container, char **rootfs, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_schema *def = container->container_def;
   if (def->root && def->root->path)
     {
       *rootfs = realpath (def->root->path, NULL);
@@ -1111,8 +1112,14 @@ resolve_rootfs_path (runtime_spec_schema_config_schema *def, char **rootfs, libc
             {
               cleanup_free char *cwd = NULL;
               ssize_t len;
+              int ret;
 
-              len = safe_readlinkat (AT_FDCWD, "/proc/self/cwd", &cwd, 0, err);
+              ret = libcrun_open_proc_file (container, "self/cwd", O_RDONLY, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              len = safe_readlinkat (ret, "", &cwd, 0, err);
+              close (ret);
               if (UNLIKELY (len < 0))
                 return len;
 
@@ -1307,7 +1314,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = resolve_rootfs_path (def, &rootfs, err);
+  ret = resolve_rootfs_path (container, &rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
