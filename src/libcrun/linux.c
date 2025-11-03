@@ -5004,13 +5004,12 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
   if (def->linux->time_offsets)
     {
-      const char *const timens_offsets_file = "/proc/self/timens_offsets";
       char fmt_buffer[128];
       cleanup_close int fd = -1;
 
-      fd = open (timens_offsets_file, O_WRONLY | O_CLOEXEC);
+      fd = libcrun_open_proc_file (container, "self/timens_offsets", O_WRONLY, err);
       if (UNLIKELY (fd < 0))
-        return crun_make_error (err, errno, "open `%s`", timens_offsets_file);
+        return fd;
       if (def->linux->time_offsets->boottime)
         {
           ret = snprintf (fmt_buffer, sizeof (fmt_buffer), "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
@@ -5020,7 +5019,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           libcrun_debug ("Using boot time offset: secs = `%lld`, nanosecs = `%d`", (long long int) def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
+            return crun_make_error (err, errno, "write `/proc/self/timens_offsets`");
         }
       if (def->linux->time_offsets->monotonic)
         {
@@ -5032,7 +5031,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
           ret = write (fd, fmt_buffer, strlen (fmt_buffer));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write `%s`", timens_offsets_file);
+            return crun_make_error (err, errno, "write `/proc/self/timens_offsets`");
         }
     }
 
