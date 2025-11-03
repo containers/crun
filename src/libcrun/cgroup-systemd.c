@@ -1761,9 +1761,11 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         boolean_opts[i++] = "MemoryAccounting";
       if (resources->block_io)
         boolean_opts[i++] = "IOAccounting";
-      if (resources->pids)
-        boolean_opts[i++] = "TasksAccounting";
     }
+  /* Always enable TasksAccounting to ensure the pids controller is available.
+   * This allows container managers to read pids.current even when no explicit
+   * pids limit is set. */
+  boolean_opts[i++] = "TasksAccounting";
   boolean_opts[i++] = NULL;
 
   ret = open_sd_bus_connection (&bus, err);
