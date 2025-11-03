@@ -4675,9 +4675,9 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   if (UNLIKELY (ret < 0 && errno != EEXIST))
     return crun_make_error (err, errno, "mkdir `%s`", devs_path);
 
-  current_mountns = open ("/proc/self/ns/mnt", O_RDONLY | O_CLOEXEC);
+  current_mountns = libcrun_open_proc_file (container, "self/ns/mnt", O_RDONLY, err);
   if (UNLIKELY (current_mountns < 0))
-    return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
+    return current_mountns;
 
   ret = unshare (CLONE_NEWNS);
   if (UNLIKELY (ret < 0))
