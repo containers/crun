@@ -653,13 +653,13 @@ has_same_mappings (runtime_spec_schema_config_schema *def, runtime_spec_schema_d
 }
 
 static pid_t
-maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
+maybe_create_userns_for_idmapped_mount (libcrun_container_t *container,
+                                        runtime_spec_schema_config_schema *def,
                                         runtime_spec_schema_defs_mount *mnt,
                                         const char *options, pid_t *pid_out,
                                         libcrun_error_t *err)
 {
   cleanup_pid pid_t pid = -1;
-  char proc_file[64];
   bool need_new_userns = mnt->uid_mappings_len ? ! has_same_mappings (def, mnt) : options != NULL;
 
   if (! need_new_userns)
@@ -688,11 +688,13 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/uid_map", pid);
-      if (UNLIKELY (ret >= (int) sizeof (proc_file)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
+      cleanup_close int fd = -1;
 
-      ret = write_file (proc_file, uid_map, written, err);
+      fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
+      if (UNLIKELY (fd < 0))
+        return fd;
+
+      ret = safe_write (fd, "uid_map", uid_map, written, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -700,11 +702,13 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/gid_map", pid);
-      if (UNLIKELY (ret >= (int) sizeof (proc_file)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
+      close_and_reset (&fd);
 
-      ret = write_file (proc_file, gid_map, written, err);
+      fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
+      if (UNLIKELY (fd < 0))
+        return fd;
+
+      ret = safe_write (fd, "gid_map", gid_map, written, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -722,6 +726,7 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
       for (option = strtok_r (dup_options, ";", &saveptr); option; option = strtok_r (NULL, ";", &saveptr))
         {
           cleanup_free char *mappings = NULL;
+          cleanup_close int map_fd = -1;
           bool is_uids = false;
           size_t len = 0;
           int ret;
@@ -729,15 +734,15 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
           if (has_prefix (option, "uids="))
             {
               is_uids = true;
-              ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/uid_map", pid);
-              if (UNLIKELY (ret >= (int) sizeof (proc_file)))
-                return crun_make_error (err, 0, "internal error: static buffer too small");
+              map_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
+              if (UNLIKELY (map_fd < 0))
+                return map_fd;
             }
           else if (has_prefix (option, "gids="))
             {
-              ret = snprintf (proc_file, sizeof (proc_file), "/proc/%d/gid_map", pid);
-              if (UNLIKELY (ret >= (int) sizeof (proc_file)))
-                return crun_make_error (err, 0, "internal error: static buffer too small");
+              map_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
+              if (UNLIKELY (map_fd < 0))
+                return map_fd;
             }
           else
             return crun_make_error (err, 0, "invalid option `%s` specified", option);
@@ -746,7 +751,7 @@ maybe_create_userns_for_idmapped_mount (runtime_spec_schema_config_schema *def,
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = write_file (proc_file, mappings, len, err);
+          ret = safe_write (map_fd, is_uids ? "uid_map" : "gid_map", mappings, len, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -3134,13 +3139,18 @@ static int
 deny_setgroups (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
   int ret;
-  cleanup_free char *groups_file = NULL;
+  cleanup_close int fd = -1;
 
-  xasprintf (&groups_file, "/proc/%d/setgroups", pid);
-  ret = write_file (groups_file, "deny", 4, err);
-  if (ret >= 0)
-    get_private_data (container)->deny_setgroups = true;
-  return ret;
+  fd = libcrun_open_proc_pid_file (container, pid, "setgroups", O_WRONLY, err);
+  if (UNLIKELY (fd < 0))
+    return fd;
+
+  ret = TEMP_FAILURE_RETRY (write (fd, "deny", 4));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "write to `/proc/%d/setgroups`", pid);
+
+  get_private_data (container)->deny_setgroups = true;
+  return 0;
 }
 
 static int
@@ -3162,7 +3172,14 @@ can_setgroups (libcrun_container_t *container, libcrun_error_t *err)
         return strcmp (annotation, "0") == 0 ? 1 : 0;
     }
 
-  ret = read_all_file ("/proc/self/setgroups", &content, NULL, err);
+  {
+    cleanup_close int fd = -1;
+    fd = libcrun_open_proc_file (container, "self/setgroups", O_RDONLY, err);
+    if (fd < 0)
+      ret = fd;
+    else
+      ret = read_all_fd (fd, "self/setgroups", &content, NULL, err);
+  }
   if (ret < 0)
     {
       /* If the file does not exist, then the kernel does not support /proc/self/setgroups and setgroups can always be used.  */
@@ -3243,8 +3260,6 @@ is_single_mapping (runtime_spec_schema_defs_id_mapping **mappings, size_t len,
 int
 libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
-  cleanup_free char *uid_map_file = NULL;
-  cleanup_free char *gid_map_file = NULL;
   cleanup_free char *uid_map = NULL;
   cleanup_free char *gid_map = NULL;
   size_t uid_map_len = 0, gid_map_len = 0;
@@ -3307,8 +3322,13 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           crun_error_release (err);
         }
 
-      xasprintf (&gid_map_file, "/proc/%d/gid_map", pid);
-      ret = write_file (gid_map_file, gid_map, gid_map_len, err);
+      cleanup_close int gid_fd = -1;
+
+      gid_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
+      if (UNLIKELY (gid_fd < 0))
+        return gid_fd;
+
+      ret = safe_write (gid_fd, "gid_map", gid_map, gid_map_len, err);
       if (ret < 0 && (! def->linux->gid_mappings_len || is_single_mapping (def->linux->gid_mappings, def->linux->gid_mappings_len, container->host_gid, container->container_gid)))
         {
           size_t single_mapping_len;
@@ -3323,7 +3343,13 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = write_file (gid_map_file, single_mapping, single_mapping_len, err);
+          close_and_reset (&gid_fd);
+
+          gid_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
+          if (UNLIKELY (gid_fd < 0))
+            return gid_fd;
+
+          ret = safe_write (gid_fd, "gid_map", single_mapping, single_mapping_len, err);
         }
     }
   if (UNLIKELY (ret < 0))
@@ -3340,8 +3366,13 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           crun_error_release (err);
         }
 
-      xasprintf (&uid_map_file, "/proc/%d/uid_map", pid);
-      ret = write_file (uid_map_file, uid_map, uid_map_len, err);
+      cleanup_close int uid_fd = -1;
+
+      uid_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
+      if (UNLIKELY (uid_fd < 0))
+        return uid_fd;
+
+      ret = safe_write (uid_fd, "uid_map", uid_map, uid_map_len, err);
       if (ret < 0 && (! def->linux->uid_mappings_len || is_single_mapping (def->linux->uid_mappings, def->linux->uid_mappings_len, container->host_uid, container->container_uid)))
         {
           size_t single_mapping_len;
@@ -3359,7 +3390,13 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
           if (UNLIKELY (ret < 0))
             return ret;
 
-          ret = write_file (uid_map_file, single_mapping, single_mapping_len, err);
+          close_and_reset (&uid_fd);
+
+          uid_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
+          if (UNLIKELY (uid_fd < 0))
+            return uid_fd;
+
+          ret = safe_write (uid_fd, "uid_map", single_mapping, single_mapping_len, err);
         }
     }
   if (UNLIKELY (ret < 0))
@@ -4379,7 +4416,7 @@ open_mount_of_type (runtime_spec_schema_defs_mount *mnt, int *out_fd, libcrun_er
 }
 
 static int
-maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, bool *has_mappings_out, libcrun_error_t *err)
+maybe_get_idmapped_mount (libcrun_container_t *container, runtime_spec_schema_config_schema *def, runtime_spec_schema_defs_mount *mnt, pid_t pid, int *out_fd, bool *has_mappings_out, libcrun_error_t *err)
 {
   cleanup_close int newfs_fd = -1;
   cleanup_pid pid_t created_pid = -1;
@@ -4391,7 +4428,6 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
   const char *idmap_option;
   bool recursive = false;
   const char *options = NULL;
-  char proc_path[64];
   bool has_mappings;
   int ret;
   char *extra_msg = "";
@@ -4423,19 +4459,15 @@ maybe_get_idmapped_mount (runtime_spec_schema_config_schema *def, runtime_spec_s
         }
     }
 
-  ret = maybe_create_userns_for_idmapped_mount (def, mnt, options, &created_pid, err);
+  ret = maybe_create_userns_for_idmapped_mount (container, def, mnt, options, &created_pid, err);
   if (UNLIKELY (ret < 0))
     return ret;
   if (created_pid > 0)
     pid = created_pid;
 
-  ret = snprintf (proc_path, sizeof (proc_path), "/proc/%d/ns/user", pid);
-  if (UNLIKELY (ret >= (int) sizeof (proc_path)))
-    return crun_make_error (err, 0, "internal error: static buffer too small");
-
-  fd = open (proc_path, O_RDONLY | O_CLOEXEC);
+  fd = libcrun_open_proc_pid_file (container, pid, "ns/user", O_RDONLY, err);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", proc_path);
+    return fd;
 
   if (is_bind_mount (mnt, &recursive_bind_mount, &nofollow))
     {
@@ -4580,7 +4612,7 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       bool has_mappings = false;
       int mount_fd = -1;
 
-      ret = maybe_get_idmapped_mount (def, def->mounts[i], pid, &mount_fd, &has_mappings, err);
+      ret = maybe_get_idmapped_mount (container, def, def->mounts[i], pid, &mount_fd, &has_mappings, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -6384,7 +6416,7 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
       uint64_t rec_set = 0;
 
       /* Do not check whether the pid is valid or not.  run_in_container_namespace will validate it.  */
-      ret = maybe_get_idmapped_mount (def, mounts[i], pid, &(fds->fds[i]), NULL, err);
+      ret = maybe_get_idmapped_mount (container, def, mounts[i], pid, &(fds->fds[i]), NULL, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
