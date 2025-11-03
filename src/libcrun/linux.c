@@ -3796,9 +3796,9 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
     }
 
   get_private_data (container);
-  dirfd = open ("/proc/sys", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  dirfd = libcrun_open_proc_file (container, "sys", O_DIRECTORY | O_PATH, err);
   if (UNLIKELY (dirfd < 0))
-    return crun_make_error (err, errno, "open `/proc/sys`");
+    return dirfd;
 
   for (i = 0; i < def->linux->sysctl->len; i++)
     {
