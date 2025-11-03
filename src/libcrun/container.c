@@ -562,6 +562,7 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
 
   container->host_uid = geteuid ();
   container->host_gid = getegid ();
+  container->proc_fd = -1;
 
   container->annotations = make_string_map_from_json (container_def->annotations);
 
@@ -615,6 +616,9 @@ libcrun_container_free (libcrun_container_t *ctr)
     free_runtime_spec_schema_config_schema (ctr->container_def);
 
   free_string_map (ctr->annotations);
+
+  if (ctr->proc_fd >= 0)
+    close (ctr->proc_fd);
 
   free (ctr->config_file_content);
   free (ctr->config_file);

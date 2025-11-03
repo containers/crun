@@ -517,4 +517,8 @@ cleanup_channel_fd_pairp (void *p)
 }
 #define cleanup_channel_fd_pair __attribute__ ((cleanup (cleanup_channel_fd_pairp)))
 
+int libcrun_get_cached_proc_fd (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_open_proc_file (libcrun_container_t *container, const char *path, int flags, libcrun_error_t *err);
+int libcrun_open_proc_pid_file (libcrun_container_t *container, pid_t pid, const char *path, int flags, libcrun_error_t *err);
+
 #endif

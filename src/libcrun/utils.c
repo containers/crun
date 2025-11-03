@@ -2835,3 +2835,39 @@ channel_fd_pair_process (struct channel_fd_pair *channel, int epollfd, libcrun_e
     }
   return 0;
 }
+
+int
+libcrun_get_cached_proc_fd (libcrun_container_t *container, libcrun_error_t *err)
+{
+  if (container->proc_fd < 0)
+    {
+      container->proc_fd = open ("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+      if (container->proc_fd < 0)
+        return crun_make_error (err, errno, "open `/proc`");
+    }
+  return container->proc_fd;
+}
+
+int
+libcrun_open_proc_file (libcrun_container_t *container, const char *path, int flags, libcrun_error_t *err)
+{
+  int proc_fd, fd;
+
+  proc_fd = libcrun_get_cached_proc_fd (container, err);
+  if (proc_fd < 0)
+    return proc_fd;
+
+  fd = TEMP_FAILURE_RETRY (openat (proc_fd, path, flags | O_CLOEXEC));
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "openat `/proc/%s`", path);
+
+  return fd;
+}
+
+int
+libcrun_open_proc_pid_file (libcrun_container_t *container, pid_t pid, const char *path, int flags, libcrun_error_t *err)
+{
+  cleanup_free char *full_path = NULL;
+  xasprintf (&full_path, "%d/%s", pid, path);
+  return libcrun_open_proc_file (container, full_path, flags, err);
+}
