@@ -1662,7 +1662,7 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
   int dev_null_fd = -1;
   int ret;
 
-  ret = mark_or_close_fds_ge_than (3, false, &err);
+  ret = mark_or_close_fds_ge_than (NULL, 3, false, &err);
   if (UNLIKELY (ret < 0))
     libcrun_fail_with_error ((err)->status, "%s", (err)->msg);
 
@@ -1818,7 +1818,7 @@ restore_sig_mask_and_exit:
 }
 
 int
-mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
+mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now, libcrun_error_t *err)
 {
   cleanup_close int cfd = -1;
   cleanup_dir DIR *dir = NULL;
@@ -1832,17 +1832,17 @@ mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err)
   if (ret < 0 && errno != EINVAL && errno != ENOSYS && errno != EPERM)
     return crun_make_error (err, errno, "close_range from `%d`", n);
 
-  cfd = open ("/proc/self/fd", O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  cfd = libcrun_open_proc_file (container, "self/fd", O_DIRECTORY | O_RDONLY, err);
   if (UNLIKELY (cfd < 0))
-    return crun_make_error (err, errno, "open `/proc/self/fd`");
+    return cfd;
 
-  ret = check_proc_super_magic (cfd, "/proc/self/fd", err);
+  ret = check_proc_super_magic (cfd, "self/fd", err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   dir = fdopendir (cfd);
   if (UNLIKELY (dir == NULL))
-    return crun_make_error (err, errno, "fdopendir `/proc/self/fd`");
+    return crun_make_error (err, errno, "fdopendir `self/fd`");
 
   /* Now it is owned by dir.  */
   cfd = -1;
