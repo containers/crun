@@ -3677,9 +3677,9 @@ libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
   if (UNLIKELY (ret >= (int) sizeof (oom_buffer)))
     return crun_make_error (err, 0, "internal error: static buffer too small");
 
-  fd = open ("/proc/self/oom_score_adj", O_RDWR | O_CLOEXEC);
+  fd = libcrun_open_proc_file (container, "self/oom_score_adj", O_RDWR, err);
   if (fd < 0)
-    return crun_make_error (err, errno, "open `/proc/self/oom_score_adj`");
+    return fd;
   ret = TEMP_FAILURE_RETRY (write (fd, oom_buffer, strlen (oom_buffer)));
   if (ret < 0)
     return crun_make_error (err, errno, "write to `/proc/self/oom_score_adj`");
