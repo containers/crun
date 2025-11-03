@@ -743,7 +743,7 @@ static int selinux_enabled = -1;
 static int apparmor_enabled = -1;
 
 int
-libcrun_initialize_selinux (libcrun_error_t *err)
+libcrun_initialize_selinux (libcrun_container_t *container, libcrun_error_t *err)
 {
   cleanup_free char *out = NULL;
   cleanup_close int fd = -1;
@@ -753,11 +753,11 @@ libcrun_initialize_selinux (libcrun_error_t *err)
   if (selinux_enabled >= 0)
     return selinux_enabled;
 
-  fd = open ("/proc/mounts", O_RDONLY | O_CLOEXEC);
+  fd = libcrun_open_proc_file (container, "mounts", O_RDONLY, err);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `/proc/mounts`");
+    return fd;
 
-  ret = read_all_fd_with_size_hint (fd, "/proc/mounts", &out, &len, get_page_size (), err);
+  ret = read_all_fd_with_size_hint (fd, "mounts", &out, &len, get_page_size (), err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -820,18 +820,15 @@ add_selinux_mount_label (char **retlabel, const char *data, const char *label, c
 }
 
 static const char *
-lsm_attr_path (const char *lsm, const char *fname, libcrun_error_t *err)
+lsm_attr_path (libcrun_container_t *container, const char *lsm, const char *fname, libcrun_error_t *err)
 {
   cleanup_close int attr_dirfd = -1;
   cleanup_close int lsm_dirfd = -1;
   char *attr_path = NULL;
 
-  attr_dirfd = open ("/proc/thread-self/attr", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  attr_dirfd = libcrun_open_proc_file (container, "thread-self/attr", O_DIRECTORY | O_PATH, err);
   if (UNLIKELY (attr_dirfd < 0))
-    {
-      crun_make_error (err, errno, "open `/proc/thread-self/attr`");
-      return NULL;
-    }
+    return NULL;
 
   // Check for newer scoped interface in /proc/thread-self/attr/<lsm>
   if (lsm != NULL)
@@ -845,7 +842,7 @@ lsm_attr_path (const char *lsm, const char *fname, libcrun_error_t *err)
         }
     }
   // Use scoped interface if available, fall back to unscoped
-  xasprintf (&attr_path, "/proc/thread-self/attr/%s%s%s", lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
+  xasprintf (&attr_path, "thread-self/attr/%s%s%s", lsm_dirfd >= 0 ? lsm : "", lsm_dirfd >= 0 ? "/" : "", fname);
 
   return attr_path;
 }
@@ -866,20 +863,19 @@ check_proc_super_magic (int fd, const char *path, libcrun_error_t *err)
 }
 
 static int
-set_security_attr (const char *lsm, const char *fname, const char *data, libcrun_error_t *err)
+set_security_attr (libcrun_container_t *container, const char *lsm, const char *fname, const char *data, libcrun_error_t *err)
 {
   int ret;
 
-  cleanup_free const char *attr_path = lsm_attr_path (lsm, fname, err);
+  cleanup_free const char *attr_path = lsm_attr_path (container, lsm, fname, err);
   cleanup_close int fd = -1;
 
   if (UNLIKELY (attr_path == NULL))
     return -1;
 
-  fd = open (attr_path, O_WRONLY | O_CLOEXEC);
-
+  fd = libcrun_open_proc_file (container, attr_path, O_WRONLY | O_CLOEXEC, err);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
+    return fd;
 
   ret = check_proc_super_magic (fd, attr_path, err);
   if (UNLIKELY (ret < 0))
@@ -894,7 +890,7 @@ set_security_attr (const char *lsm, const char *fname, const char *data, libcrun
 }
 
 int
-set_selinux_label (const char *label, bool now, libcrun_error_t *err)
+set_selinux_label (libcrun_container_t *container, const char *label, bool now, libcrun_error_t *err)
 {
   int ret;
 
@@ -903,7 +899,7 @@ set_selinux_label (const char *label, bool now, libcrun_error_t *err)
     return ret;
 
   if (ret)
-    return set_security_attr (NULL, now ? "current" : "exec", label, err);
+    return set_security_attr (container, NULL, now ? "current" : "exec", label, err);
   return 0;
 }
 
@@ -916,19 +912,18 @@ libcrun_is_apparmor_enabled (libcrun_error_t *err)
 }
 
 static int
-is_current_process_confined (libcrun_error_t *err)
+is_current_process_confined (libcrun_container_t *container, libcrun_error_t *err)
 {
-  cleanup_free const char *attr_path = lsm_attr_path ("apparmor", "current", err);
+  cleanup_free const char *attr_path = lsm_attr_path (container, "apparmor", "current", err);
   cleanup_close int fd = -1;
   char buf[256];
 
   if (UNLIKELY (attr_path == NULL))
     return -1;
 
-  fd = open (attr_path, O_RDONLY | O_CLOEXEC);
-
+  fd = libcrun_open_proc_file (container, attr_path, O_RDONLY | O_CLOEXEC, err);
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "open `%s`", attr_path);
+    return fd;
 
   if (UNLIKELY (check_proc_super_magic (fd, attr_path, err)))
     return -1;
@@ -943,7 +938,7 @@ is_current_process_confined (libcrun_error_t *err)
 }
 
 int
-set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err)
+set_apparmor_profile (libcrun_container_t *container, const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err)
 {
   int ret;
 
@@ -954,7 +949,7 @@ set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, lib
   if (ret)
     {
       cleanup_free char *buf = NULL;
-      ret = is_current_process_confined (err);
+      ret = is_current_process_confined (container, err);
       if (UNLIKELY (ret < 0))
         return ret;
       // if confined only way for apparmor to allow change of profile with NNP is with stacking
@@ -962,7 +957,7 @@ set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, lib
                                                                          : "exec",
                  profile);
 
-      return set_security_attr ("apparmor", now ? "current" : "exec", buf, err);
+      return set_security_attr (container, "apparmor", now ? "current" : "exec", buf, err);
     }
   return 0;
 }

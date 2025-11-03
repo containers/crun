@@ -663,11 +663,11 @@ unblock_signals (libcrun_error_t *err)
 
 /* must be used on the host before pivot_root(2).  */
 static int
-initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
+initialize_security (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
 {
   int ret;
 
-  ret = libcrun_init_caps (err);
+  ret = libcrun_init_caps (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -681,7 +681,7 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
         return ret;
     }
 
-  ret = libcrun_initialize_selinux (err);
+  ret = libcrun_initialize_selinux (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1306,7 +1306,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *rootfs = NULL;
 
-  ret = initialize_security (def->process, err);
+  ret = initialize_security (container, def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1355,11 +1355,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (def->process)
     {
-      ret = libcrun_set_selinux_label (def->process, false, err);
+      ret = libcrun_set_selinux_label (container, def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_set_apparmor_profile (def->process, false, err);
+      ret = libcrun_set_apparmor_profile (container, def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1680,11 +1680,11 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
           entrypoint_args->context = NULL;
         }
 
-      ret = libcrun_set_selinux_label (def->process, true, err);
+      ret = libcrun_set_selinux_label (entrypoint_args->container, def->process, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_set_apparmor_profile (def->process, true, err);
+      ret = libcrun_set_apparmor_profile (entrypoint_args->container, def->process, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -2527,7 +2527,7 @@ setup_container_keyring (libcrun_container_t *container, libcrun_context_t *cont
             libcrun_debug ("Using SELinux process label: `%s`", label);
         }
 
-      ret = libcrun_create_keyring (container->context->id, label, err);
+      ret = libcrun_create_keyring (container, container->context->id, label, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -3669,11 +3669,11 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  ret = libcrun_set_selinux_label (process, false, err);
+  ret = libcrun_set_selinux_label (container, process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_apparmor_profile (process, false, err);
+  ret = libcrun_set_apparmor_profile (container, process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3984,7 +3984,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         }
     }
 
-  ret = initialize_security (process, err);
+  ret = initialize_security (container, process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

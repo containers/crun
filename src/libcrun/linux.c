@@ -763,26 +763,29 @@ maybe_create_userns_for_idmapped_mount (libcrun_container_t *container,
 }
 
 int
-libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err)
+libcrun_create_keyring (libcrun_container_t *container, const char *name, const char *label, libcrun_error_t *err)
 {
-  const char *const keycreate = "/proc/self/attr/keycreate";
   cleanup_close int labelfd = -1;
   bool label_set = false;
   int ret;
 
   if (label)
     {
-      labelfd = open (keycreate, O_WRONLY | O_CLOEXEC);
+      labelfd = libcrun_open_proc_file (container, "self/attr/keycreate", O_WRONLY, err);
       if (UNLIKELY (labelfd < 0))
         {
-          if (errno != ENOENT)
-            return crun_make_error (err, errno, "open `%s`", keycreate);
+          if (crun_error_get_errno (err) != ENOENT)
+            return labelfd;
+
+          crun_error_release (err);
+          labelfd = -1;
         }
-      else
+
+      if (labelfd >= 0)
         {
           ret = write (labelfd, label, strlen (label));
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "write to `%s`", keycreate);
+            return crun_make_error (err, errno, "write to `/proc/self/attr/keycreate`");
 
           label_set = true;
         }
@@ -3428,24 +3431,23 @@ has_cap_on (int cap, long unsigned *caps)
 static unsigned long cap_last_cap;
 
 int
-libcrun_init_caps (libcrun_error_t *err)
+libcrun_init_caps (libcrun_container_t *container, libcrun_error_t *err)
 {
-  const char *const cap_last_cap_file = "/proc/sys/kernel/cap_last_cap";
   cleanup_close int fd = -1;
   int ret;
   char buffer[32];
-  fd = open (cap_last_cap_file, O_RDONLY | O_CLOEXEC);
+  fd = libcrun_open_proc_file (container, "sys/kernel/cap_last_cap", O_RDONLY, err);
   if (fd < 0)
-    return crun_make_error (err, errno, "open `%s`", cap_last_cap_file);
+    return fd;
   ret = TEMP_FAILURE_RETRY (read (fd, buffer, sizeof (buffer) - 1));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from `%s`", cap_last_cap_file);
+    return crun_make_error (err, errno, "read from `/proc/sys/kernel/cap_last_cap`");
   buffer[ret] = '\0';
 
   errno = 0;
   cap_last_cap = strtoul (buffer, NULL, 10);
   if (errno != 0)
-    return crun_make_error (err, errno, "strtoul `%s` from `%s`", buffer, cap_last_cap_file);
+    return crun_make_error (err, errno, "strtoul `%s` from `/proc/sys/kernel/cap_last_cap`", buffer);
   return 0;
 }
 
@@ -3540,19 +3542,19 @@ read_caps (unsigned long caps[2], char **values, size_t len)
 }
 
 int
-libcrun_set_selinux_label (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
+libcrun_set_selinux_label (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
 {
   if (proc->selinux_label)
-    return set_selinux_label (proc->selinux_label, now, err);
+    return set_selinux_label (container, proc->selinux_label, now, err);
 
   return 0;
 }
 
 int
-libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
+libcrun_set_apparmor_profile (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err)
 {
   if (proc->apparmor_profile)
-    return set_apparmor_profile (proc->apparmor_profile, proc->no_new_privileges, now, err);
+    return set_apparmor_profile (container, proc->apparmor_profile, proc->no_new_privileges, now, err);
   return 0;
 }
 
