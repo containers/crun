@@ -1753,18 +1753,12 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
 
   i = 0;
   boolean_opts[i++] = "Delegate";
-  if (resources)
-    {
-      if (resources->cpu)
-        boolean_opts[i++] = "CPUAccounting";
-      if (resources->memory)
-        boolean_opts[i++] = "MemoryAccounting";
-      if (resources->block_io)
-        boolean_opts[i++] = "IOAccounting";
-    }
-  /* Always enable TasksAccounting to ensure the pids controller is available.
-   * This allows container managers to read pids.current even when no explicit
-   * pids limit is set. */
+
+  /* Always enable all accounting to ensure stats are readable even
+   * without resource limits. */
+  boolean_opts[i++] = "CPUAccounting";
+  boolean_opts[i++] = "MemoryAccounting";
+  boolean_opts[i++] = "IOAccounting";
   boolean_opts[i++] = "TasksAccounting";
   boolean_opts[i++] = NULL;
 
