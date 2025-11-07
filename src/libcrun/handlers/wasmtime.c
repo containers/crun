@@ -60,7 +60,9 @@ struct libwasmtime_vm
   wasm_engine_t *engine;
   wasmtime_store_t *store;
   wasmtime_context_t *context;
+#  if WASMTIME_VERSION_MAJOR < 39
   wasi_config_t *config;
+#  endif
 };
 
 static struct libwasmtime_vm *
@@ -119,36 +121,39 @@ libwasmtime_setup_vm (void *cookie, char *const argv[], struct libwasmtime_vm *v
   vm->context = wasmtime_store_context (vm->store);
 
   // Init WASI program
-  vm->config = wasi_config_new ("crun_wasi_program");
-  if (vm->config == NULL)
+  wasi_config_t *config = wasi_config_new ("crun_wasi_program");
+  if (config == NULL)
     error (EXIT_FAILURE, 0, "could not create WASI configuration");
 
   // Calculate argc for `wasi_config_set_argv`
   for (arg = argv; *arg != NULL; ++arg)
     args_size++;
 
-  wasi_config_set_argv (vm->config, args_size, (const char **) argv);
-  wasi_config_inherit_env (vm->config);
-  wasi_config_inherit_stdin (vm->config);
-  wasi_config_inherit_stdout (vm->config);
-  wasi_config_inherit_stderr (vm->config);
+  wasi_config_set_argv (config, args_size, (const char **) argv);
+  wasi_config_inherit_env (config);
+  wasi_config_inherit_stdin (config);
+  wasi_config_inherit_stdout (config);
+  wasi_config_inherit_stderr (config);
   wasi_config_preopen_dir (
-      vm->config,
+      config,
       ".",
       ".",
       WASMTIME_WASI_DIR_PERMS_READ | WASMTIME_WASI_DIR_PERMS_WRITE,
       WASMTIME_WASI_FILE_PERMS_READ | WASMTIME_WASI_FILE_PERMS_WRITE);
 
+#  if WASMTIME_VERSION_MAJOR >= 39
   // If we are compiling wasmtime against 39 or higher
   // we can make use of the unified wasi API.
-#  if WASMTIME_VERSION_MAJOR >= 39
-  wasmtime_error_t *err = wasmtime_context_set_wasi (vm->context, vm->config);
+  wasmtime_error_t *err = wasmtime_context_set_wasi (vm->context, config);
   if (err != NULL)
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
       error (EXIT_FAILURE, 0, "failed to instantiate WASI: %.*s", (int) error_message.size, error_message.data);
     }
+#  else
+  // Otherwise let each branching path apply the config.
+  vm->config = config;
 #  endif
 
   return vm;
