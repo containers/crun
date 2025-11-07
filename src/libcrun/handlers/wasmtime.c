@@ -60,6 +60,7 @@ struct libwasmtime_vm
   wasm_engine_t *engine;
   wasmtime_store_t *store;
   wasmtime_context_t *context;
+  wasi_config_t *config;
 };
 
 static struct libwasmtime_vm *
@@ -94,8 +95,6 @@ libwasmtime_setup_vm (void *cookie, char *const argv[], struct libwasmtime_vm *v
       = libwasmtime_load_symbol (cookie, "wasi_config_inherit_stdout");
   void (*wasi_config_inherit_stderr) (wasi_config_t *config)
       = libwasmtime_load_symbol (cookie, "wasi_config_inherit_stderr");
-  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t *context, wasi_config_t *wasi)
-      = libwasmtime_load_symbol (cookie, "wasmtime_context_set_wasi");
   bool (*wasi_config_preopen_dir) (
       wasi_config_t *config,
       const char *path,
@@ -103,6 +102,10 @@ libwasmtime_setup_vm (void *cookie, char *const argv[], struct libwasmtime_vm *v
       wasi_dir_perms dir_perms,
       wasi_file_perms file_perms)
       = libwasmtime_load_symbol (cookie, "wasi_config_preopen_dir");
+#  if WASMTIME_VERSION_MAJOR >= 39
+  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t *context, wasi_config_t *wasi)
+      = libwasmtime_load_symbol (cookie, "wasmtime_context_set_wasi");
+#  endif
 
   // Set up WebAssembly engine
   vm->engine = wasm_engine_new ();
@@ -116,32 +119,37 @@ libwasmtime_setup_vm (void *cookie, char *const argv[], struct libwasmtime_vm *v
   vm->context = wasmtime_store_context (vm->store);
 
   // Init WASI program
-  wasi_config_t *wasi_config = wasi_config_new ("crun_wasi_program");
-  if (wasi_config == NULL)
+  vm->config = wasi_config_new ("crun_wasi_program");
+  if (vm->config == NULL)
     error (EXIT_FAILURE, 0, "could not create WASI configuration");
 
   // Calculate argc for `wasi_config_set_argv`
   for (arg = argv; *arg != NULL; ++arg)
     args_size++;
 
-  wasi_config_set_argv (wasi_config, args_size, (const char **) argv);
-  wasi_config_inherit_env (wasi_config);
-  wasi_config_inherit_stdin (wasi_config);
-  wasi_config_inherit_stdout (wasi_config);
-  wasi_config_inherit_stderr (wasi_config);
+  wasi_config_set_argv (vm->config, args_size, (const char **) argv);
+  wasi_config_inherit_env (vm->config);
+  wasi_config_inherit_stdin (vm->config);
+  wasi_config_inherit_stdout (vm->config);
+  wasi_config_inherit_stderr (vm->config);
   wasi_config_preopen_dir (
-      wasi_config,
+      vm->config,
       ".",
       ".",
       WASMTIME_WASI_DIR_PERMS_READ | WASMTIME_WASI_DIR_PERMS_WRITE,
       WASMTIME_WASI_FILE_PERMS_READ | WASMTIME_WASI_FILE_PERMS_WRITE);
-  wasmtime_error_t *err = wasmtime_context_set_wasi (vm->context, wasi_config);
+
+  // If we are compiling wasmtime against 39 or higher
+  // we can make use of the unified wasi API.
+#  if WASMTIME_VERSION_MAJOR >= 39
+  wasmtime_error_t *err = wasmtime_context_set_wasi (vm->context, vm->config);
   if (err != NULL)
     {
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
       error (EXIT_FAILURE, 0, "failed to instantiate WASI: %.*s", (int) error_message.size, error_message.data);
     }
+#  endif
 
   return vm;
 }
@@ -241,6 +249,7 @@ libwasmtime_load_symbol (void *cookie, char *const symbol)
 static void
 libwasmtime_run_module (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t *wasm)
 {
+  wasmtime_error_t *err;
   wasm_byte_vec_t error_message;
 
   // Load needed functions
@@ -281,8 +290,20 @@ libwasmtime_run_module (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t
   void (*wasmtime_module_delete) (wasmtime_module_t *m)
       = libwasmtime_load_symbol (cookie, "wasmtime_module_delete");
 
+#  if WASMTIME_VERSION_MAJOR < 39
+  wasmtime_error_t *(*wasmtime_context_set_wasi) (wasmtime_context_t *context, wasi_config_t *wasi)
+      = libwasmtime_load_symbol (cookie, "wasmtime_context_set_wasi");
+  err = wasmtime_context_set_wasi (vm->context, vm->config);
+  if (err != NULL)
+    {
+      wasmtime_error_message (err, &error_message);
+      wasmtime_error_delete (err);
+      error (EXIT_FAILURE, 0, "failed to instantiate WASI: %.*s", (int) error_message.size, error_message.data);
+    }
+#  endif
+
   wasmtime_linker_t *linker = wasmtime_linker_new (vm->engine);
-  wasmtime_error_t *err = wasmtime_linker_define_wasi (linker);
+  err = wasmtime_linker_define_wasi (linker);
   if (err != NULL)
     {
       wasmtime_error_message (err, &error_message);
@@ -388,6 +409,12 @@ libwasmtime_run_component (void *cookie, struct libwasmtime_vm *vm, wasm_byte_ve
       = libwasmtime_load_symbol (cookie, "wasmtime_component_delete");
   void (*wasmtime_component_linker_delete) (wasmtime_component_linker_t *linker)
       = libwasmtime_load_symbol (cookie, "wasmtime_component_linker_delete");
+
+#  if WASMTIME_VERSION_MAJOR < 39
+  void (*wasmtime_context_set_wasip2) (wasmtime_context_t *context, wasmtime_wasip2_config_t *config)
+      = libwasmtime_load_symbol (cookie, "wasmtime_context_set_wasip2");
+  wasmtime_context_set_wasip2 (vm->context, (wasmtime_wasip2_config_t *) vm->config);
+#  endif
 
   // Compile wasm component
   wasmtime_component_t *component = NULL;
