@@ -75,7 +75,7 @@ libwasmtime_setup_vm (void *cookie, char *const argv[], struct libwasmtime_vm *v
   wasm_byte_vec_t error_message;
 
   if (vm == NULL)
-    vm = malloc (sizeof (struct libwasmtime_vm));
+    error (EXIT_FAILURE, 0, "internal error: cannot setup a NULL vm");
 
   // Load needed functions
   WASMTIME_COMMON_SYMBOLS (cookie)
@@ -162,7 +162,7 @@ libwasmtime_setup_vm (void *cookie, char *const argv[], struct libwasmtime_vm *v
 }
 
 static void
-libwasmtime_free_vm (void *cookie, struct libwasmtime_vm *vm)
+libwasmtime_delete_vm (void *cookie, struct libwasmtime_vm *vm)
 {
   void (*wasmtime_store_delete) (wasmtime_store_t *store)
       = libwasmtime_load_symbol (cookie, "wasmtime_store_delete");
@@ -200,22 +200,22 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
     error (EXIT_FAILURE, 0, "error loading entrypoint");
   if (fseek (file, 0L, SEEK_END))
     error (EXIT_FAILURE, 0, "error fully loading entrypoint");
-  size_t file_size = ftell (file);
-  if (file_size == (size_t) -1L)
+  long file_size = ftell (file);
+  if (file_size == -1L)
     error (EXIT_FAILURE, 0, "error getting entrypoint size");
-  wasm_byte_vec_new_uninitialized (&wasm, file_size);
+  wasm_byte_vec_new_uninitialized (&wasm, (size_t) file_size);
   if (fseek (file, 0L, SEEK_SET))
     error (EXIT_FAILURE, 0, "error resetting entrypoint");
-  if (fread (wasm.data, file_size, 1, file) != 1)
+  if (fread (wasm.data, (size_t) file_size, 1, file) != 1)
     error (EXIT_FAILURE, 0, "error reading entrypoint");
   fclose (file);
 
   // If entrypoint contains a webassembly text format
   // compile it on the fly and convert to equivalent
   // binary format.
-  if (has_suffix (pathname, ".wat") > 0)
+  if (has_case_suffix (pathname, ".wat") > 0)
     {
-      wasmtime_error_t *err = wasmtime_wat2wasm ((char *) wasm.data, file_size, &wasm_bytes);
+      wasmtime_error_t *err = wasmtime_wat2wasm ((char *) wasm.data, (size_t) file_size, &wasm_bytes);
       if (err != NULL)
         {
           wasmtime_error_message (err, &error_message);
@@ -240,7 +240,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   else
     error (EXIT_FAILURE, 0, "unsupported wasm encoding detected");
 
-  libwasmtime_free_vm (cookie, &vm);
+  libwasmtime_delete_vm (cookie, &vm);
   exit (status);
 }
 

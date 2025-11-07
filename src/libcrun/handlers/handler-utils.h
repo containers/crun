@@ -28,6 +28,8 @@ typedef enum
   WASM_ENC_COMPONENT
 } wasm_encoding_t;
 
+int has_case_suffix (const char *s, const char *suffix);
+
 int wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err);
 
 wasm_encoding_t wasm_interpret_header (const char *header, const size_t len);

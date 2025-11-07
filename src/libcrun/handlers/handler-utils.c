@@ -20,9 +20,21 @@
 
 #include <config.h>
 #include <string.h>
+#include <strings.h>
 #include "../container.h"
 #include "../utils.h"
 #include "handler-utils.h"
+
+int
+has_case_suffix (const char *s, const char *suffix)
+{
+  const unsigned long s_len = strlen (s);
+  const unsigned long suffix_len = strlen (suffix);
+  if (s_len < suffix_len)
+    return 0;
+
+  return strcasecmp (s + s_len - suffix_len, suffix) == 0 ? 1 : 0;
+}
 
 int
 wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err arg_unused)
@@ -46,7 +58,7 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
       */
       if (strcmp (annotation, "wasm-smart") == 0)
         {
-          return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
+          return ((has_case_suffix (entrypoint_executable, ".wat") > 0) || (has_case_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
         }
       return strcmp (annotation, "wasm") == 0 ? 1 : 0;
     }
@@ -62,7 +74,7 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
       */
       if (strcmp (annotation, "compat-smart") == 0)
         {
-          return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
+          return ((has_case_suffix (entrypoint_executable, ".wat") > 0) || (has_case_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
         }
 
       return strcmp (annotation, "compat") == 0 ? 1 : 0;
