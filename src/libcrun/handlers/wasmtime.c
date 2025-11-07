@@ -49,6 +49,8 @@
         = libwasmtime_load_symbol ((cookie), "wasm_byte_vec_delete");                    \
     void (*wasmtime_error_message) (const wasmtime_error_t *error, wasm_name_t *message) \
         = libwasmtime_load_symbol ((cookie), "wasmtime_error_message");                  \
+    bool (*wasmtime_error_exit_status) (const wasmtime_error_t *error, int *status)      \
+        = libwasmtime_load_symbol ((cookie), "wasmtime_error_exit_status");              \
     void (*wasmtime_error_delete) (wasmtime_error_t * error)                             \
         = libwasmtime_load_symbol ((cookie), "wasmtime_error_delete");
 
@@ -171,10 +173,10 @@ libwasmtime_free_vm (void *cookie, struct libwasmtime_vm *vm)
   wasm_engine_delete (vm->engine);
 }
 
-static void
+static int
 libwasmtime_run_module (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t *wasm);
 
-static void
+static int
 libwasmtime_run_component (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t *wasm);
 
 static int
@@ -183,6 +185,7 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
 {
   wasm_byte_vec_t error_message;
   wasm_byte_vec_t wasm_bytes;
+  int status;
 
   WASMTIME_COMMON_SYMBOLS (cookie)
   wasmtime_error_t *(*wasmtime_wat2wasm) (const char *wat, size_t wat_len, wasm_byte_vec_t *out)
@@ -231,14 +234,14 @@ libwasmtime_exec (void *cookie, libcrun_container_t *container arg_unused,
   libwasmtime_setup_vm (cookie, argv, &vm);
 
   if (wasm_enc == WASM_ENC_MODULE)
-    libwasmtime_run_module (cookie, &vm, &wasm);
+    status = libwasmtime_run_module (cookie, &vm, &wasm);
   else if (wasm_enc == WASM_ENC_COMPONENT)
-    libwasmtime_run_component (cookie, &vm, &wasm);
+    status = libwasmtime_run_component (cookie, &vm, &wasm);
   else
     error (EXIT_FAILURE, 0, "unsupported wasm encoding detected");
 
   libwasmtime_free_vm (cookie, &vm);
-  exit (EXIT_SUCCESS);
+  exit (status);
 }
 
 static void *
@@ -251,7 +254,7 @@ libwasmtime_load_symbol (void *cookie, char *const symbol)
   return sym;
 }
 
-static void
+static int
 libwasmtime_run_module (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t *wasm)
 {
   wasmtime_error_t *err;
@@ -292,6 +295,10 @@ libwasmtime_run_module (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t
       size_t nresults,
       wasm_trap_t **trap)
       = libwasmtime_load_symbol (cookie, "wasmtime_func_call");
+  void (*wasm_trap_message) (const wasm_trap_t *trap, wasm_message_t *message)
+      = libwasmtime_load_symbol (cookie, "wasm_trap_message");
+  void (*wasm_trap_delete) (wasm_trap_t *)
+      = libwasmtime_load_symbol (cookie, "wasm_trap_delete");
   void (*wasmtime_module_delete) (wasmtime_module_t *m)
       = libwasmtime_load_symbol (cookie, "wasmtime_module_delete");
 
@@ -348,20 +355,31 @@ libwasmtime_run_module (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t
       error (EXIT_FAILURE, 0, "failed to locate default export for module %.*s", (int) error_message.size, error_message.data);
     }
 
+  int status = EXIT_SUCCESS;
   wasm_trap_t *trap = NULL;
   err = wasmtime_func_call (vm->context, &func, NULL, 0, NULL, 0, &trap);
-  if (err != NULL || trap != NULL)
+  if (err != NULL && ! wasmtime_error_exit_status (err, &status))
     {
+      // The error does not describe an exit code thus we error out.
       wasmtime_error_message (err, &error_message);
       wasmtime_error_delete (err);
       error (EXIT_FAILURE, 0, "error calling default export: %.*s", (int) error_message.size, error_message.data);
     }
+  if (trap != NULL)
+    {
+      wasm_trap_message (trap, &error_message);
+      wasm_trap_delete (trap);
+      fprintf (stderr, "trap triggered in module: %.*s", (int) error_message.size, error_message.data);
+      status = EXIT_FAILURE;
+    }
 
   // Clean everything
   wasmtime_module_delete (module);
+
+  return status;
 }
 
-static void
+static int
 libwasmtime_run_component (void *cookie, struct libwasmtime_vm *vm, wasm_byte_vec_t *wasm)
 {
   const char *const wasi_cli_run_interface = "wasi:cli/run@0.2.0";
@@ -408,6 +426,8 @@ libwasmtime_run_component (void *cookie, struct libwasmtime_vm *vm, wasm_byte_ve
       wasmtime_component_val_t *results,
       size_t results_size)
       = libwasmtime_load_symbol (cookie, "wasmtime_component_func_call");
+  wasmtime_error_t *(*wasmtime_component_func_post_return) (const wasmtime_component_func_t *func, wasmtime_context_t *context)
+      = libwasmtime_load_symbol (cookie, "wasmtime_component_func_post_return");
   void (*wasmtime_component_export_index_delete) (wasmtime_component_export_index_t *export_index)
       = libwasmtime_load_symbol (cookie, "wasmtime_component_export_index_delete");
   void (*wasmtime_component_delete) (wasmtime_component_t *c)
@@ -479,13 +499,37 @@ libwasmtime_run_component (void *cookie, struct libwasmtime_vm *vm, wasm_byte_ve
     error (EXIT_FAILURE, 0, "failed to retrieve run function");
 
   // Call the func
+  int status = EXIT_SUCCESS;
+  bool func_call_caused_error = false;
   wasmtime_component_val_t result = {};
   err = wasmtime_component_func_call (&run_func, vm->context, NULL, 0, &result, 1);
   if (err != NULL)
     {
-      wasmtime_error_message (err, &error_message);
-      wasmtime_error_delete (err);
-      error (EXIT_FAILURE, 0, "error calling run function: %.*s", (int) error_message.size, error_message.data);
+      if (wasmtime_error_exit_status (err, &status))
+        {
+          wasmtime_error_delete (err);
+          func_call_caused_error = true;
+        }
+      else
+        {
+          // The error does not describe an exit code thus we error out.
+          wasmtime_error_message (err, &error_message);
+          wasmtime_error_delete (err);
+          error (EXIT_FAILURE, 0, "error calling run function: %.*s", (int) error_message.size, error_message.data);
+        }
+    }
+
+  // Call its post-return __only__ if `wasmtime_component_func_call` was successful.
+  // Even an error describing an exit code which may be 0 counts as not successful.
+  if (! func_call_caused_error)
+    {
+      err = wasmtime_component_func_post_return (&run_func, vm->context);
+      if (err != NULL)
+        {
+          wasmtime_error_message (err, &error_message);
+          wasmtime_error_delete (err);
+          error (EXIT_FAILURE, 0, "error calling run function post-return: %.*s", (int) error_message.size, error_message.data);
+        }
     }
 
   // Clean everything
@@ -493,6 +537,8 @@ libwasmtime_run_component (void *cookie, struct libwasmtime_vm *vm, wasm_byte_ve
   wasmtime_component_export_index_delete (run_interface_idx);
   wasmtime_component_linker_delete (linker);
   wasmtime_component_delete (component);
+
+  return status;
 }
 
 static int
