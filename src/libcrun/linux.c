@@ -4969,12 +4969,9 @@ handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcrun_error_
 }
 
 static bool
-has_exec_cpu_affinity (runtime_spec_schema_config_schema_process *process)
+has_exec_cpu_affinity (runtime_spec_schema_config_schema_process_exec_cpu_affinity *affinity)
 {
-  if (process == NULL || process->exec_cpu_affinity == NULL)
-    return false;
-  return (! is_empty_string (process->exec_cpu_affinity->initial))
-         || (! is_empty_string (process->exec_cpu_affinity->final));
+  return affinity && ((! is_empty_string (affinity->initial)) || (! is_empty_string (affinity->final)));
 }
 
 pid_t
@@ -5274,6 +5271,7 @@ join_process_parent_helper (libcrun_context_t *context,
   char res;
   pid_t pid;
   cleanup_close int sync_fd = sync_socket_fd;
+  runtime_spec_schema_config_schema_process_exec_cpu_affinity *cpu_affinity = NULL;
 
   if (terminal_fd)
     *terminal_fd = -1;
@@ -5296,13 +5294,18 @@ join_process_parent_helper (libcrun_context_t *context,
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
   if (process && process->exec_cpu_affinity)
+    cpu_affinity = process->exec_cpu_affinity;
+  else if (container && container->container_def && container->container_def->process && container->container_def->process->exec_cpu_affinity)
+    cpu_affinity = container->container_def->process->exec_cpu_affinity;
+
+  if (cpu_affinity)
     {
-      ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->initial, err);
+      ret = libcrun_set_cpu_affinity_from_string (pid, cpu_affinity->initial, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
-  if (! has_exec_cpu_affinity (process))
+  if (! has_exec_cpu_affinity (cpu_affinity))
     {
       ret = libcrun_reset_cpu_affinity_mask (pid, err);
       if (UNLIKELY (ret < 0))
@@ -5336,9 +5339,9 @@ join_process_parent_helper (libcrun_context_t *context,
         return ret;
     }
 
-  if (process && process->exec_cpu_affinity)
+  if (cpu_affinity)
     {
-      ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->final, err);
+      ret = libcrun_set_cpu_affinity_from_string (pid, cpu_affinity->final, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
