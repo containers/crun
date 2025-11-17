@@ -304,7 +304,6 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)
 {
   runtime_spec_schema_config_linux_resources *resources = args->resources;
-  cleanup_free char *cgroup_path = NULL;
   cleanup_free char *content = NULL;
   cleanup_free char *path = NULL;
   pid_t pid = args->pid;
@@ -312,8 +311,15 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
   char *from, *to;
   char *saveptr = NULL;
 
-  xasprintf (&cgroup_path, "/proc/%d/cgroup", pid);
-  ret = read_all_file (cgroup_path, &content, NULL, err);
+  cleanup_free char *proc_path = NULL;
+  cleanup_close int fd = -1;
+
+  xasprintf (&proc_path, "%d/cgroup", pid);
+  fd = libcrun_open_proc_file (args->container, proc_path, O_RDONLY, err);
+  if (UNLIKELY (fd < 0))
+    return fd;
+
+  ret = read_all_fd (fd, "cgroup path", &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
