@@ -379,7 +379,6 @@ int
 libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *cgroup_status arg_unused, libcrun_error_t *err)
 {
   cleanup_free char *target_cgroup = NULL;
-  cleanup_free char *cgroup_path = NULL;
   cleanup_free char *content = NULL;
   const char *delegate_cgroup;
   cleanup_free char *dir = NULL;
@@ -398,8 +397,15 @@ libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_
   if (cgroup_mode != CGROUP_MODE_UNIFIED)
     return crun_make_error (err, 0, "delegate-cgroup not supported on cgroup v1");
 
-  xasprintf (&cgroup_path, "/proc/%d/cgroup", args->pid);
-  ret = read_all_file (cgroup_path, &content, NULL, err);
+  cleanup_free char *proc_path = NULL;
+  cleanup_close int fd = -1;
+
+  xasprintf (&proc_path, "%d/cgroup", args->pid);
+  fd = libcrun_open_proc_file (args->container, proc_path, O_RDONLY, err);
+  if (UNLIKELY (fd < 0))
+    return fd;
+
+  ret = read_all_fd (fd, "cgroup path", &content, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

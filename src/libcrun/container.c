@@ -2646,6 +2646,7 @@ setup_cgroup_manager (libcrun_context_t *context, libcrun_container_t *container
   cg->root_uid = root_uid;
   cg->root_gid = root_gid;
   cg->state_root = context->state_root;
+  cg->container = container;
 
   ret = libcrun_cgroup_preenter (cg, cgroup_dirfd, err);
   if (UNLIKELY (ret < 0))
@@ -4648,6 +4649,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       .root_gid = root_gid,
       .id = context->id,
       .state_root = context->state_root,
+      .container = container,
     };
 
     /* The CRIU restore code uses bundle, rootfs and cgroup_path of status.   The cgroup_path is set later.  */
