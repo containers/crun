@@ -6483,20 +6483,18 @@ libcrun_move_network_devices (libcrun_container_t *container, pid_t pid, libcrun
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int netns_fd = -1;
-  char ns_file[64];
   size_t i;
   int ret;
 
   if (def == NULL || def->linux == NULL || def->linux->net_devices == NULL)
     return 0;
 
-  ret = snprintf (ns_file, sizeof (ns_file), "/proc/%d/ns/net", pid);
-  if (UNLIKELY (ret >= (int) sizeof (ns_file)))
-    return crun_make_error (err, 0, "internal error: static buffer too small");
+  cleanup_free char *ns_path = NULL;
 
-  netns_fd = open (ns_file, O_RDONLY);
+  xasprintf (&ns_path, "%d/ns/net", pid);
+  netns_fd = libcrun_open_proc_file (container, ns_path, O_RDONLY, err);
   if (UNLIKELY (netns_fd < 0))
-    return crun_make_error (err, errno, "open `%s`", ns_file);
+    return netns_fd;
 
   for (i = 0; i < def->linux->net_devices->len; i++)
     {
