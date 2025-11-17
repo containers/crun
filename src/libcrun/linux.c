@@ -5594,17 +5594,17 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
 
   for (i = 0; namespaces[i].ns_file; i++)
     {
-      cleanup_free char *ns_join = NULL;
+      cleanup_free char *ns_path = NULL;
 
-      xasprintf (&ns_join, "/proc/%d/ns/%s", pid_to_join, namespaces[i].ns_file);
-      fds[i] = open (ns_join, O_RDONLY | O_CLOEXEC);
+      xasprintf (&ns_path, "%d/ns/%s", pid_to_join, namespaces[i].ns_file);
+      fds[i] = libcrun_open_proc_file (container, ns_path, O_RDONLY, err);
       if (UNLIKELY (fds[i] < 0))
         {
           /* If the namespace doesn't exist, just ignore it.  */
           if (errno == ENOENT)
             continue;
 
-          ret = crun_make_error (err, errno, "open `%s`", ns_join);
+          ret = fds[i];
           goto exit;
         }
     }
