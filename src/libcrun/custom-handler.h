@@ -48,6 +48,8 @@ struct custom_handler_s
   int (*modify_oci_configuration) (void *cookie, libcrun_context_t *context,
                                    runtime_spec_schema_config_schema *def,
                                    libcrun_error_t *err);
+
+  int (*close_fds) (void *cookie, libcrun_container_t *container, int preserve_fds);
 };
 
 struct custom_handler_manager_s;
