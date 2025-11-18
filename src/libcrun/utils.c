@@ -2814,6 +2814,23 @@ libcrun_get_cached_proc_fd (libcrun_container_t *container, libcrun_error_t *err
 {
   if (container->proc_fd < 0)
     {
+#ifdef HAVE_NEW_MOUNT_API
+      cleanup_close int fsfd = -1;
+      int ret;
+
+      fsfd = syscall_fsopen ("proc", FSOPEN_CLOEXEC);
+      if (fsfd >= 0)
+        {
+          ret = syscall_fsconfig (fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+          if (ret >= 0)
+            {
+              container->proc_fd = syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
+              if (container->proc_fd >= 0)
+                return container->proc_fd;
+            }
+        }
+#endif
+
       container->proc_fd = open ("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
       if (container->proc_fd < 0)
         return crun_make_error (err, errno, "open `/proc`");
