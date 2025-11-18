@@ -74,6 +74,7 @@
 #include <yajl/yajl_gen.h>
 
 #include "mount_flags.h"
+#include "syscalls.h"
 
 #define YAJL_STR(x) ((const unsigned char *) (x))
 
@@ -237,156 +238,6 @@ libcrun_find_namespace (const char *name)
     if (strcmp (it->name, name) == 0)
       return it->value;
   return -1;
-}
-
-#ifndef __aligned_u64
-#  define __aligned_u64 uint64_t __attribute__ ((aligned (8)))
-#endif
-
-#ifndef CLONE_INTO_CGROUP
-#  define CLONE_INTO_CGROUP 0x200000000ULL
-#endif
-
-struct _clone3_args
-{
-  __aligned_u64 flags;
-  __aligned_u64 pidfd;
-  __aligned_u64 child_tid;
-  __aligned_u64 parent_tid;
-  __aligned_u64 exit_signal;
-  __aligned_u64 stack;
-  __aligned_u64 stack_size;
-  __aligned_u64 tls;
-  __aligned_u64 set_tid;
-  __aligned_u64 set_tid_size;
-  __aligned_u64 cgroup;
-};
-
-static int
-syscall_getcwd (char *path, size_t len)
-{
-  return (int) syscall (__NR_getcwd, path, len);
-}
-
-static int
-syscall_clone3 (struct _clone3_args *args)
-{
-#ifdef __NR_clone3
-  return (int) syscall (__NR_clone3, args, sizeof (*args));
-#else
-  (void) args;
-  errno = ENOSYS;
-  return -1;
-#endif
-}
-
-static int
-syscall_fsopen (const char *fs_name, unsigned int flags)
-{
-#if defined __NR_fsopen
-  return (int) syscall (__NR_fsopen, fs_name, flags);
-#else
-  (void) fs_name;
-  (void) flags;
-  errno = ENOSYS;
-  return -1;
-#endif
-}
-
-static int
-syscall_fsmount (int fsfd, unsigned int flags, unsigned int attr_flags)
-{
-#if defined __NR_fsmount
-  return (int) syscall (__NR_fsmount, fsfd, flags, attr_flags);
-#else
-  (void) fsfd;
-  (void) flags;
-  (void) attr_flags;
-  errno = ENOSYS;
-  return -1;
-#endif
-}
-
-static int
-syscall_fsconfig (int fsfd, unsigned int cmd, const char *key, const void *val, int aux)
-{
-#if defined __NR_fsconfig
-  return (int) syscall (__NR_fsconfig, fsfd, cmd, key, val, aux);
-#else
-  (void) fsfd;
-  (void) cmd;
-  (void) key;
-  (void) val;
-  (void) aux;
-  errno = ENOSYS;
-  return -1;
-#endif
-}
-
-static int
-syscall_move_mount (int from_dfd, const char *from_pathname, int to_dfd, const char *to_pathname, unsigned int flags)
-
-{
-#if defined __NR_move_mount
-  return (int) syscall (__NR_move_mount, from_dfd, from_pathname, to_dfd, to_pathname, flags);
-#else
-  (void) from_dfd;
-  (void) from_pathname;
-  (void) to_dfd;
-  (void) to_pathname;
-  (void) flags;
-  errno = ENOSYS;
-  return -1;
-#endif
-}
-
-/* ignore this being unused - it's (currently) only unused if not building with systemd,
-   but conditioning the definition of syscall_open_tree on HAVE_SYSTEMD seems pretty silly */
-__attribute__ ((unused)) static int
-syscall_open_tree (int dfd, const char *pathname, unsigned int flags)
-
-{
-#if defined __NR_open_tree
-  return (int) syscall (__NR_open_tree, dfd, pathname, flags);
-#else
-  (void) dfd;
-  (void) pathname;
-  (void) flags;
-  errno = ENOSYS;
-  return -1;
-#endif
-}
-
-struct mount_attr_s
-{
-  uint64_t attr_set;
-  uint64_t attr_clr;
-  uint64_t propagation;
-  uint64_t userns_fd;
-};
-
-#ifndef MOUNT_ATTR_RDONLY
-#  define MOUNT_ATTR_RDONLY 0x00000001 /* Mount read-only */
-#endif
-
-#ifndef MOUNT_ATTR_IDMAP
-#  define MOUNT_ATTR_IDMAP 0x00100000 /* Idmap mount to @userns_fd in struct mount_attr. */
-#endif
-
-static int
-syscall_mount_setattr (int dfd, const char *path, unsigned int flags,
-                       struct mount_attr_s *attr)
-{
-#ifdef __NR_mount_setattr
-  return (int) syscall (__NR_mount_setattr, dfd, path, flags, attr, sizeof (*attr));
-#else
-  (void) dfd;
-  (void) path;
-  (void) flags;
-  (void) attr;
-  errno = ENOSYS;
-  return -1;
-#endif
 }
 
 static int
@@ -1023,9 +874,6 @@ fsopen_mount (const char *type, const char *labeltype, const char *label)
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
 #else
   (void) type;
-  (void) syscall_fsopen;
-  (void) syscall_fsconfig;
-  (void) syscall_fsmount;
   errno = ENOSYS;
   return -1;
 #endif

@@ -50,6 +50,7 @@
 #else
 #  define atomic_long volatile long
 #endif
+#include "syscalls.h"
 
 #ifndef CLOSE_RANGE_CLOEXEC
 #  define CLOSE_RANGE_CLOEXEC (1U << 2)
@@ -65,29 +66,6 @@
 #endif
 
 #define MAX_READLINKS 32
-
-static int
-syscall_close_range (unsigned int fd, unsigned int max_fd, unsigned int flags)
-{
-  return (int) syscall (__NR_close_range, fd, max_fd, flags);
-}
-
-static int
-syscall_openat2 (int dirfd, const char *path, uint64_t flags, uint64_t mode, uint64_t resolve)
-{
-  struct openat2_open_how
-  {
-    uint64_t flags;
-    uint64_t mode;
-    uint64_t resolve;
-  } how = {
-    .flags = flags,
-    .mode = mode,
-    .resolve = resolve,
-  };
-
-  return (int) syscall (__NR_openat2, dirfd, path, &how, sizeof (how), 0);
-}
 
 int
 crun_path_exists (const char *path, libcrun_error_t *err)
