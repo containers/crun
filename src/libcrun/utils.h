@@ -299,11 +299,11 @@ int create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun
 
 int check_running_in_user_namespace (libcrun_error_t *err);
 
-int set_selinux_label (const char *label, bool now, libcrun_error_t *err);
+int set_selinux_label (libcrun_container_t *container, const char *label, bool now, libcrun_error_t *err);
 
 int add_selinux_mount_label (char **ret, const char *data, const char *label, const char *context_type, libcrun_error_t *err);
 
-int set_apparmor_profile (const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err);
+int set_apparmor_profile (libcrun_container_t *container, const char *profile, bool no_new_privileges, bool now, libcrun_error_t *err);
 
 int read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t *len, size_t hint, libcrun_error_t *err);
 
@@ -346,7 +346,7 @@ int format_default_id_mapping (char **out, uid_t container_id, uid_t host_uid, u
 int run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout, char **envp,
                                          char *stdin, size_t stdin_len, int out_fd, int err_fd, libcrun_error_t *err);
 
-int mark_or_close_fds_ge_than (int n, bool close_now, libcrun_error_t *err);
+int mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now, libcrun_error_t *err);
 
 void get_current_timestamp (char *out, size_t len);
 
@@ -367,7 +367,7 @@ int copy_recursive_fd_to_fd (int srcfd, int destfd, const char *srcname, const c
 
 int set_home_env (uid_t uid);
 
-int libcrun_initialize_selinux (libcrun_error_t *err);
+int libcrun_initialize_selinux (libcrun_container_t *container, libcrun_error_t *err);
 
 int libcrun_initialize_apparmor (libcrun_error_t *err);
 
@@ -516,5 +516,9 @@ cleanup_channel_fd_pairp (void *p)
   channel_fd_pair_free (*pp);
 }
 #define cleanup_channel_fd_pair __attribute__ ((cleanup (cleanup_channel_fd_pairp)))
+
+int libcrun_get_cached_proc_fd (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_open_proc_file (libcrun_container_t *container, const char *path, int flags, libcrun_error_t *err);
+int libcrun_open_proc_pid_file (libcrun_container_t *container, pid_t pid, const char *path, int flags, libcrun_error_t *err);
 
 #endif

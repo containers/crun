@@ -562,6 +562,7 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
 
   container->host_uid = geteuid ();
   container->host_gid = getegid ();
+  container->proc_fd = -1;
 
   container->annotations = make_string_map_from_json (container_def->annotations);
 
@@ -616,6 +617,9 @@ libcrun_container_free (libcrun_container_t *ctr)
 
   free_string_map (ctr->annotations);
 
+  if (ctr->proc_fd >= 0)
+    close (ctr->proc_fd);
+
   free (ctr->config_file_content);
   free (ctr->config_file);
   free (ctr);
@@ -659,11 +663,11 @@ unblock_signals (libcrun_error_t *err)
 
 /* must be used on the host before pivot_root(2).  */
 static int
-initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
+initialize_security (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, libcrun_error_t *err)
 {
   int ret;
 
-  ret = libcrun_init_caps (err);
+  ret = libcrun_init_caps (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -677,7 +681,7 @@ initialize_security (runtime_spec_schema_config_schema_process *proc, libcrun_er
         return ret;
     }
 
-  ret = libcrun_initialize_selinux (err);
+  ret = libcrun_initialize_selinux (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1095,8 +1099,9 @@ libcrun_container_notify_handler (struct container_entrypoint_s *args,
 
 /* Resolve and normalize the container rootfs path.  */
 static int
-resolve_rootfs_path (runtime_spec_schema_config_schema *def, char **rootfs, libcrun_error_t *err)
+resolve_rootfs_path (libcrun_container_t *container, char **rootfs, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_schema *def = container->container_def;
   if (def->root && def->root->path)
     {
       *rootfs = realpath (def->root->path, NULL);
@@ -1107,8 +1112,14 @@ resolve_rootfs_path (runtime_spec_schema_config_schema *def, char **rootfs, libc
             {
               cleanup_free char *cwd = NULL;
               ssize_t len;
+              int ret;
 
-              len = safe_readlinkat (AT_FDCWD, "/proc/self/cwd", &cwd, 0, err);
+              ret = libcrun_open_proc_file (container, "self/cwd", O_RDONLY, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              len = safe_readlinkat (ret, "", &cwd, 0, err);
+              close (ret);
               if (UNLIKELY (len < 0))
                 return len;
 
@@ -1295,7 +1306,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *rootfs = NULL;
 
-  ret = initialize_security (def->process, err);
+  ret = initialize_security (container, def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1303,7 +1314,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = resolve_rootfs_path (def, &rootfs, err);
+  ret = resolve_rootfs_path (container, &rootfs, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1344,16 +1355,16 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   if (def->process)
     {
-      ret = libcrun_set_selinux_label (def->process, false, err);
+      ret = libcrun_set_selinux_label (container, def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_set_apparmor_profile (def->process, false, err);
+      ret = libcrun_set_apparmor_profile (container, def->process, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
 
-  ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, false, err);
+  ret = mark_or_close_fds_ge_than (container, entrypoint_args->context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
 
@@ -1651,7 +1662,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
          This is a best effort operation, because the seccomp filter is already in place and it could
          stop some syscalls used by mark_or_close_fds_ge_than.
       */
-      ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
+      ret = mark_or_close_fds_ge_than (entrypoint_args->container, entrypoint_args->context->preserve_fds + 3, true, err);
       if (UNLIKELY (ret < 0))
         crun_error_release (err);
 
@@ -1669,11 +1680,11 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
           entrypoint_args->context = NULL;
         }
 
-      ret = libcrun_set_selinux_label (def->process, true, err);
+      ret = libcrun_set_selinux_label (entrypoint_args->container, def->process, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_set_apparmor_profile (def->process, true, err);
+      ret = libcrun_set_apparmor_profile (entrypoint_args->container, def->process, true, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -1690,7 +1701,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   /* Attempt to close all the files that are not needed to prevent execv to have access to them.
      This is a best effort operation since the seccomp profile is already in place now and might block
      some of the syscalls needed by mark_or_close_fds_ge_than.  */
-  ret = mark_or_close_fds_ge_than (entrypoint_args->context->preserve_fds + 3, true, err);
+  ret = mark_or_close_fds_ge_than (entrypoint_args->container, entrypoint_args->context->preserve_fds + 3, true, err);
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
@@ -2516,7 +2527,7 @@ setup_container_keyring (libcrun_container_t *container, libcrun_context_t *cont
             libcrun_debug ("Using SELinux process label: `%s`", label);
         }
 
-      ret = libcrun_create_keyring (container->context->id, label, err);
+      ret = libcrun_create_keyring (container, container->context->id, label, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2635,6 +2646,7 @@ setup_cgroup_manager (libcrun_context_t *context, libcrun_container_t *container
   cg->root_uid = root_uid;
   cg->root_gid = root_gid;
   cg->state_root = context->state_root;
+  cg->container = container;
 
   ret = libcrun_cgroup_preenter (cg, cgroup_dirfd, err);
   if (UNLIKELY (ret < 0))
@@ -3658,11 +3670,11 @@ exec_process_entrypoint (libcrun_context_t *context,
         }
     }
 
-  ret = libcrun_set_selinux_label (process, false, err);
+  ret = libcrun_set_selinux_label (container, process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_set_apparmor_profile (process, false, err);
+  ret = libcrun_set_apparmor_profile (container, process, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3692,7 +3704,7 @@ exec_process_entrypoint (libcrun_context_t *context,
         return ret;
     }
 
-  ret = mark_or_close_fds_ge_than (context->preserve_fds + 3, false, err);
+  ret = mark_or_close_fds_ge_than (container, context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3802,7 +3814,7 @@ exec_process_entrypoint (libcrun_context_t *context,
      This is a best effort operation, because the seccomp filter is already in place and it could
      stop some syscalls used by mark_or_close_fds_ge_than.
   */
-  ret = mark_or_close_fds_ge_than (context->preserve_fds + 3, true, err);
+  ret = mark_or_close_fds_ge_than (container, context->preserve_fds + 3, true, err);
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
@@ -3973,7 +3985,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         }
     }
 
-  ret = initialize_security (process, err);
+  ret = initialize_security (container, process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4637,6 +4649,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
       .root_gid = root_gid,
       .id = context->id,
       .state_root = context->state_root,
+      .container = container,
     };
 
     /* The CRIU restore code uses bundle, rootfs and cgroup_path of status.   The cgroup_path is set later.  */

@@ -65,7 +65,7 @@ int get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, i
                    libcrun_error_t *err);
 int libcrun_set_mounts (struct container_entrypoint_s *args, libcrun_container_t *container, const char *rootfs,
                         set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err);
-int libcrun_init_caps (libcrun_error_t *err);
+int libcrun_init_caps (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char *rootfs, libcrun_error_t *err);
 int libcrun_reopen_dev_null (libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
@@ -73,8 +73,8 @@ int libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *ca
                       int no_new_privileges, libcrun_error_t *err);
 int libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element **rlimits, size_t len,
                          libcrun_error_t *err);
-int libcrun_set_selinux_label (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
-int libcrun_set_apparmor_profile (runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
+int libcrun_set_selinux_label (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
+int libcrun_set_apparmor_profile (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
@@ -87,7 +87,7 @@ int libcrun_linux_container_update (libcrun_container_status_t *status,
                                     const char *state_root,
                                     runtime_spec_schema_config_linux_resources *resources,
                                     libcrun_error_t *err);
-int libcrun_create_keyring (const char *name, const char *label, libcrun_error_t *err);
+int libcrun_create_keyring (libcrun_container_t *container, const char *name, const char *label, libcrun_error_t *err);
 int libcrun_container_pause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_unpause_linux (libcrun_container_status_t *status, libcrun_error_t *err);
 int libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_source, char *mount_destination,

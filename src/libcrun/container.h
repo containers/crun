@@ -91,6 +91,8 @@ struct libcrun_container_s
 
   string_map *annotations;
 
+  int proc_fd;
+
   void *private_data;
   void (*cleanup_private_data) (void *private_data);
   struct libcrun_context_s *context;

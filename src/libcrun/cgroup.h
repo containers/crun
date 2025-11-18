@@ -59,6 +59,7 @@ struct libcrun_cgroup_args
   bool joined;
 
   const char *state_root;
+  libcrun_container_t *container;
 };
 
 /* cgroup life-cycle management.  */
