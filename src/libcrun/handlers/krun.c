@@ -24,6 +24,7 @@
 #include "../linux.h"
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <errno.h>
 #include <sys/param.h>
 #include <sys/types.h>
@@ -65,6 +66,9 @@
 #define KRUN_FLAVOR_AWS_NITRO "aws-nitro"
 #define KRUN_FLAVOR_SEV "sev"
 
+#define PASST_FD_PARENT 0
+#define PASST_FD_CHILD 1
+
 struct krun_config
 {
   void *handle;
@@ -77,6 +81,7 @@ struct krun_config
   int32_t ctx_id_awsnitro;
   bool has_kvm;
   bool has_awsnitro;
+  int passt_fds[2];
   yajl_val config_tree;
   bool use_passt;
 };
@@ -238,6 +243,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
+  int32_t (*krun_add_net_unixstream) (uint32_t ctx_id, const char *c_path, int fd, uint8_t *const c_mac, uint32_t features, uint32_t flags);
   int32_t num_vcpus, ram_mib;
   int cpus, gpu_flags, ret;
   cpu_set_t set;
@@ -284,6 +290,16 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
       ret = libkrun_enable_virtio_gpu (kconf, gpu_flags);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not enable virtio gpu");
+    }
+
+  if (kconf->use_passt)
+    {
+      krun_add_net_unixstream = dlsym (handle, "krun_add_net_unixstream");
+
+      uint8_t mac[] = { 0x5a, 0x94, 0xef, 0xe4, 0x0c, 0xee };
+      ret = krun_add_net_unixstream (ctx_id, NULL, kconf->passt_fds[PASST_FD_PARENT], &mac[0], COMPAT_NET_FEATURES, 0);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set krun net configuration");
     }
 
   if (kconf->config_tree != NULL)
@@ -495,6 +511,77 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   return ret;
 }
 
+static int
+libkrun_start_passt (void *cookie, libcrun_container_t *container)
+{
+  struct krun_config *kconf = (struct krun_config *) cookie;
+  const char *path_use_passt[] = { "use_passt", (const char *) 0 };
+  pid_t pid;
+  char fd_as_str[16];
+  int use_passt;
+  int pipefd[2];
+  int ret;
+
+  use_passt = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.use_passt", path_use_passt);
+  if (use_passt > 0)
+    kconf->use_passt = 1;
+  else
+    return 0;
+
+  socketpair (AF_UNIX, SOCK_STREAM, 0, kconf->passt_fds);
+  snprintf (fd_as_str, sizeof (fd_as_str), "%d", kconf->passt_fds[PASST_FD_CHILD]);
+
+  char *const argv[] = {
+    (char *) "passt",
+    (char *) "-t",
+    (char *) "all",
+    (char *) "-u",
+    (char *) "all",
+    (char *) "-f",
+    (char *) "--fd",
+    fd_as_str,
+    NULL
+  };
+
+  ret = pipe (pipefd);
+  if (UNLIKELY (ret == -1))
+    return ret;
+
+  pid = fork ();
+  if (pid < 0)
+    {
+      close (pipefd[0]);
+      close (pipefd[1]);
+      return pid;
+    }
+  else if (pid == 0)
+    {
+      close (pipefd[0]);
+
+      ret = dup2 (pipefd[1], STDERR_FILENO);
+      if (UNLIKELY (ret == -1))
+        {
+          exit (EXIT_FAILURE);
+        }
+
+      close (pipefd[1]);
+      execvp ("passt", argv);
+    }
+  else
+    {
+      /* We need to make sure passt has already started before continuing. A
+         simple way to do it is with a blocking read on its stdout. */
+      char buffer[1];
+      close (pipefd[1]);
+      ret = read (pipefd[0], buffer, 1);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      close (pipefd[0]);
+    }
+
+  return 0;
+}
+
 /* libkrun_create_kvm_device: explicitly adds kvm device.  */
 static int
 libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
@@ -559,6 +646,10 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
 
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
     return 0;
+
+  ret = libkrun_start_passt (cookie, container);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "start passt");
 
   /* Do nothing if /dev/kvm is already present in spec */
   for (i = 0; i < def->linux->devices_len; i++)
@@ -831,6 +922,48 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
   return 0;
 }
 
+static int
+libkrun_close_fds (void *cookie, libcrun_container_t *container, int preserve_fds)
+{
+  struct krun_config *kconf = (struct krun_config *) cookie;
+  int first_fd_to_close = preserve_fds + 3;
+  int high_passt_fd;
+  int low_passt_fd;
+  int ret;
+  int i;
+
+  if (kconf->use_passt)
+    {
+      if (kconf->passt_fds[PASST_FD_CHILD] > kconf->passt_fds[PASST_FD_PARENT])
+        {
+          high_passt_fd = kconf->passt_fds[PASST_FD_CHILD];
+          low_passt_fd = kconf->passt_fds[PASST_FD_PARENT];
+        }
+      else
+        {
+          high_passt_fd = kconf->passt_fds[PASST_FD_PARENT];
+          low_passt_fd = kconf->passt_fds[PASST_FD_CHILD];
+        }
+    }
+
+  if (first_fd_to_close < high_passt_fd)
+    {
+      for (i = first_fd_to_close; i < high_passt_fd; i++)
+        {
+          if (i == low_passt_fd)
+            continue;
+          // If we're closing proc_fd, make sure to invalidate it.
+          if (i == container->proc_fd)
+            container->proc_fd = -1;
+          close (i);
+        }
+
+      first_fd_to_close = high_passt_fd + 1;
+    }
+
+  return mark_or_close_fds_ge_than (container, first_fd_to_close, true, NULL);
+}
+
 struct custom_handler_s handler_libkrun = {
   .name = "krun",
   .alias = NULL,
@@ -840,6 +973,7 @@ struct custom_handler_s handler_libkrun = {
   .run_func = libkrun_exec,
   .configure_container = libkrun_configure_container,
   .modify_oci_configuration = libkrun_modify_oci_configuration,
+  .close_fds = libkrun_close_fds,
 };
 
 #endif
