@@ -1801,7 +1801,11 @@ mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now
 
   ret = syscall_close_range (n, UINT_MAX, close_now ? 0 : CLOSE_RANGE_CLOEXEC);
   if (ret == 0)
-    return 0;
+    {
+      if (close_now && container->proc_fd >= n)
+        container->proc_fd = -1;
+      return 0;
+    }
   if (ret < 0 && errno != EINVAL && errno != ENOSYS && errno != EPERM)
     return crun_make_error (err, errno, "close_range from `%d`", n);
 
@@ -1837,6 +1841,9 @@ mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now
           ret = close (val);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "close fd `%d`", val);
+
+          if (val == container->proc_fd)
+            container->proc_fd = -1;
         }
       else
         {
