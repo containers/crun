@@ -1,3 +1,9 @@
+* crun-1.25.1
+
+- linux: harden opens under /proc.  Use fsopen, when available, to get
+  a trusted reference to the proc file system and use it for all
+  subsequent accesses instead of relying on the /proc path directly.
+
 * crun-1.25
 
 - cgroup: enable all accounting properties to ensure stats are readable.
