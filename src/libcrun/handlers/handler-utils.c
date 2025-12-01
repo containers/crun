@@ -19,9 +19,22 @@
 #define _GNU_SOURCE
 
 #include <config.h>
+#include <string.h>
+#include <strings.h>
 #include "../container.h"
 #include "../utils.h"
 #include "handler-utils.h"
+
+int
+has_case_suffix (const char *s, const char *suffix)
+{
+  const unsigned long s_len = strlen (s);
+  const unsigned long suffix_len = strlen (suffix);
+  if (s_len < suffix_len)
+    return 0;
+
+  return strcasecmp (s + s_len - suffix_len, suffix) == 0 ? 1 : 0;
+}
 
 int
 wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err arg_unused)
@@ -45,7 +58,7 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
       */
       if (strcmp (annotation, "wasm-smart") == 0)
         {
-          return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
+          return ((has_case_suffix (entrypoint_executable, ".wat") > 0) || (has_case_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
         }
       return strcmp (annotation, "wasm") == 0 ? 1 : 0;
     }
@@ -61,11 +74,36 @@ wasm_can_handle_container (libcrun_container_t *container, libcrun_error_t *err 
       */
       if (strcmp (annotation, "compat-smart") == 0)
         {
-          return ((has_suffix (entrypoint_executable, ".wat") > 0) || (has_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
+          return ((has_case_suffix (entrypoint_executable, ".wat") > 0) || (has_case_suffix (entrypoint_executable, ".wasm") > 0)) ? 1 : 0;
         }
 
       return strcmp (annotation, "compat") == 0 ? 1 : 0;
     }
 
   return 0;
+}
+
+wasm_encoding_t
+wasm_interpret_header (const char *header, const size_t len)
+{
+  if (len < 8)
+    return WASM_ENC_INVALID;
+
+  // Check for the WebAssembly magic bytes
+  // See: https://webassembly.github.io/spec/core/binary/modules.html#binary-module
+  if (memcmp (header, "\0asm", 4))
+    return WASM_ENC_INVALID;
+
+  /* The next four bytes are the WebAssembly version.
+     We don't care for the specific WebAssembly version
+     so we only read the value of the `layer` field which
+     was defined by the component spec.
+     See: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md#component-definitions
+  */
+  if (header[6] == '\0' && header[7] == '\0')
+    return WASM_ENC_MODULE;
+
+  // `layer` does not equal `0x00 0x00` so we are working
+  // with a component.
+  return WASM_ENC_COMPONENT;
 }
