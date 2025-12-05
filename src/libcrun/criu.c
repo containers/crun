@@ -52,7 +52,7 @@
 #  endif
 
 /* Defined in chroot_realpath.c  */
-char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
+char *chroot_realpath (const char *chroot, const char *path, char resolved_path[], size_t size_resolved_path);
 
 static const char *console_socket = NULL;
 
@@ -640,7 +640,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
           if (nofollow)
             return crun_make_error (err, 0, "CRIU does not support `src-nofollow` for bind mounts");
 
-          dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
+          dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf, sizeof (buf));
           if (UNLIKELY (dest_in_root == NULL))
             {
               if (errno != ENOENT)
@@ -971,7 +971,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           if (nofollow)
             return crun_make_error (err, 0, "CRIU does not support `src-nofollow` for bind mounts");
 
-          dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
+          dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf, sizeof (buf));
           if (UNLIKELY (dest_in_root == NULL))
             {
               if (errno != ENOENT)
