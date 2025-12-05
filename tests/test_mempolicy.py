@@ -50,7 +50,7 @@ def test_mempolicy_no_conf():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -74,7 +74,7 @@ def test_mempolicy_bad_mode():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -98,7 +98,7 @@ def test_mempolicy_bad_flag():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -122,7 +122,7 @@ def test_mempolicy_numa_balancing_flag():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -146,7 +146,7 @@ def test_mempolicy_static_relative_nodes_flags():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -170,7 +170,7 @@ def test_mempolicy_no_nodes():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -194,7 +194,7 @@ def test_mempolicy_bad_nodes_string():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -218,7 +218,7 @@ def test_mempolicy_bad_nodes_number():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run')
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         logger.info("unexpected success")
         return -1
     except:
@@ -242,7 +242,7 @@ def test_mempolicy_default_mode():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " default " not in out.splitlines()[1]:
             logger.info("Unable to find ' default ' in /proc/self/numa_maps")
             logger.info(out)
@@ -269,7 +269,7 @@ def test_mempolicy_local_mode():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " local " not in out.splitlines()[1]:
             logger.info("Unable to find ' local ' in /proc/self/numa_maps")
             logger.info(out)
@@ -296,7 +296,7 @@ def test_mempolicy_bind_mode():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " bind:0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' bind:0 ' in /proc/self/numa_maps")
             logger.info(out)
@@ -323,7 +323,7 @@ def test_mempolicy_bind_mode_balancing():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " bind=balancing:0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' bind=balancing:0 ' in /proc/self/numa_maps")
             logger.info(out)
@@ -350,7 +350,7 @@ def test_mempolicy_bind_mode_balancing_relative():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " bind=relative|balancing:0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' bind=relative|balancing:0 ' in /proc/self/numa_maps")
             logger.info(out)
@@ -377,7 +377,7 @@ def test_mempolicy_preferred_mode_static():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " prefer=static:0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' prefer=static:0 ' in /proc/self/numa_maps")
             logger.info(out)
@@ -404,7 +404,7 @@ def test_mempolicy_preferred_many_mode():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " prefer (many):0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' prefer (many):0 ' in /proc/self/numa_maps")
             logger.info(out)
@@ -431,7 +431,7 @@ def test_mempolicy_interleave_mode():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " interleave:0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' interleave:0 ' in /proc/self/numa_maps")
             logger.info(out)
@@ -458,7 +458,7 @@ def test_mempolicy_weighted_interleave_mode():
 
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if " weighted interleave:0 " not in out.splitlines()[1]:
             logger.info("Unable to find ' weighted interleave ' in /proc/self/numa_maps")
             logger.info(out)

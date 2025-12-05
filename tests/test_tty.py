@@ -25,7 +25,7 @@ def tty_helper(fd):
     conf['process']['args'] = ['/init', 'isatty', fd]
     conf['process']['terminal'] = True
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "true" not in out:
         return -1
     return 0

@@ -24,7 +24,7 @@ def test_pid_file():
     conf['process']['args'] = ['/init', 'cwd', '']
     pid_file = os.path.abspath('test-pid-%s' % os.getpid())
     try:
-        run_and_get_output(conf, pid_file=pid_file)
+        run_and_get_output(conf, hide_stderr=True, pid_file=pid_file)
         with open(pid_file) as p:
             content = p.read()
             if len(content) > 0:

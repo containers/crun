@@ -45,7 +45,7 @@ def test_mode_device():
         conf['linux']['devices'] = [{"path": "/dev/foo", "type": "b", "major": 1, "minor": 5, "uid": 10, "gid": 11, "fileMode": 0o157},]
         try:
             expected = "157"
-            out = run_and_get_output(conf)
+            out = run_and_get_output(conf, hide_stderr=True)
             if expected not in out[0]:
                 logger.info("device mode test failed with userns=%s: expected '%s' in output", have_userns, expected)
                 logger.info("actual output: %s", out[0])
@@ -78,7 +78,7 @@ def test_owner_device():
         conf['linux']['devices'] = [{"path": "/dev/foo", "type": "b", "major": 1, "minor": 5, "uid": 10, "gid": 11},]
         try:
             expected = "10:11"
-            out = run_and_get_output(conf)
+            out = run_and_get_output(conf, hide_stderr=True)
             if expected not in out[0]:
                 logger.info("device owner test failed with userns=%s: expected '%s' in output", have_userns, expected)
                 logger.info("actual output: %s", out)
@@ -137,7 +137,7 @@ def test_create_or_bind_mount_device():
                                  "gid": 0
                                 }]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         logger.info("# %s", str(e))
         return -1
@@ -169,7 +169,7 @@ def test_allow_device():
     }
     conf['mounts'].append(dev)
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
@@ -199,7 +199,7 @@ def test_allow_access():
     }
     conf['mounts'].append(dev)
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
@@ -214,7 +214,7 @@ def test_mknod_device():
     conf['linux']['devices'] = [{"path": "/foo-dev", "type": "b", "major": 10, "minor": 229},
                                 {"path": "/subdir/foo-dev", "type": "b", "major": 10, "minor": 229},]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
@@ -228,7 +228,7 @@ def test_trailing_slash_mknod_device():
     conf['process']['args'] = ['/init', 'true']
     conf['linux']['devices'] = [{"path": "/mnt/", "type": "b", "major": 10, "minor": 229}]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
@@ -305,7 +305,7 @@ def test_net_devices():
                     }
 
                 try:
-                    out = run_and_get_output(conf)
+                    out = run_and_get_output(conf, hide_stderr=True)
                     logger.info("test_net_devices: specify_broadcast=%s, specify_name=%s", specify_broadcast, specify_name)
                     logger.info("test_net_devices: output: %s", out[0])
                     if "address: 10.1.2.3" not in out[0]:
@@ -345,7 +345,7 @@ def test_mknod_fifo_device():
         {"path": "/dev/testfifo", "type": "p", "fileMode": 0o0660, "uid": 1, "gid": 2}
     ]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         logger.info("test_mknod_fifo_device failed: %s", e)
         return -1
@@ -362,7 +362,7 @@ def test_mknod_char_device():
         {"path": "/dev/testchar", "type": "c", "major": 251, "minor": 1, "fileMode": 0o0640, "uid": 3, "gid": 4}
     ]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         logger.info("test_mknod_char_device failed: {e}")
         return -1

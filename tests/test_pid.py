@@ -23,7 +23,7 @@ def test_pid():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     conf['linux']['namespaces'].append({"type" : "pid"})
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     pid = parse_proc_status(out)['Pid']
     if pid == "1":
         return 0
@@ -33,7 +33,7 @@ def test_pid_user():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     pid = parse_proc_status(out)['Pid']
     if pid == "1":
         return 0
@@ -45,7 +45,7 @@ def test_pid_host_namespace():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     # No PID namespace is added.  Expect PID to not be 1.
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     pid = parse_proc_status(out)['Pid']
     if pid != "1":
         return 0
@@ -55,7 +55,7 @@ def test_pid_ppid_is_zero():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     status = parse_proc_status(out)
     pid = status.get('Pid')
     ppid = status.get('PPid')

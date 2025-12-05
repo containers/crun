@@ -58,7 +58,7 @@ def test_seccomp_listener():
     conf['process']['args'] = ['/init', 'true']
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         conn = sock.accept()
         msg, fds = recv_fds(conn[0], 4096, 1)
         if len(fds) != 1:

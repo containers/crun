@@ -86,7 +86,7 @@ def test_bpf_devices_systemd():
     bpf_path = None
     try:
         # Run container with systemd cgroup manager.
-        _, cid = run_and_get_output(conf, command='run', detach=True, cgroup_manager="systemd")
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True, cgroup_manager="systemd")
 
         # Get systemd scope.
         state = run_crun_command(['state', cid])
