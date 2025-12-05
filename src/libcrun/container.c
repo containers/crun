@@ -1233,13 +1233,13 @@ setup_executable_path (struct container_entrypoint_s *entrypoint_args, runtime_s
         {
           if (entrypoint_args->custom_handler == NULL && crun_error_get_errno (err) == ENOENT)
             return ret;
-        }
 
-      /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
-         once the process switched to the use that runs in the container.  This might be necessary
-         when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
-         is not honored.  */
-      crun_error_release (err);
+          /* If it fails for any other reason, ignore the failure.  We'll try again the lookup
+             once the process switched to the use that runs in the container.  This might be necessary
+             when opening a file that is on a network file system like NFS, where CAP_DAC_OVERRIDE
+             is not honored.  */
+          crun_error_release (err);
+        }
     }
 
   return 0;
