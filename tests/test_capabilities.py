@@ -28,7 +28,7 @@ def test_no_caps():
     conf['process']['capabilities'] = {}
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = []
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
@@ -45,7 +45,7 @@ def test_some_caps():
     conf['process']['capabilities'] = {}
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = []
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
@@ -63,7 +63,7 @@ def test_unknown_caps():
     # unknown caps must be ignored
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = ['CAP_UNKNOWN', 'UNKNOWN_CAP']
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
@@ -79,7 +79,7 @@ def test_new_privs():
     add_all_namespaces(conf)
 
     conf['process']['noNewPrivileges'] = True
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status.get('NoNewPrivs', 'MISSING')
     if no_new_privs != "1":
@@ -95,7 +95,7 @@ def test_new_privs():
             return (77, "host already has NoNewPrivs=1")
 
     conf['process']['noNewPrivileges'] = False
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status.get('NoNewPrivs', 'MISSING')
     if no_new_privs != "0":
@@ -112,7 +112,7 @@ def helper_test_some_caps(uid, captypes, proc_name):
     conf['process']['capabilities'] = {}
     for i in captypes + ['bounding']:
         conf['process']['capabilities'][i] = ["CAP_SYS_ADMIN"]
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     expected = "0000000000200000"

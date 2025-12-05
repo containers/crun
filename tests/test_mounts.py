@@ -506,12 +506,17 @@ def test_userns_bind_mount_symlink():
         os.chmod(bind_dir_parent, 0o000)
 
         conf['process']['args'] = ['/init', 'cat', "/foo/content"]
-        out, _ = run_and_get_output(conf, chown_rootfs_to=1)
+        out, _ = run_and_get_output(conf, chown_rootfs_to=1, hide_stderr=True)
         if out != "hello":
             logger.info("wrong file content, found '%s' instead of 'hello'", out)
             return -1
     finally:
-        shutil.rmtree(bind_dir)
+        try:
+            # Restore permissions so we can clean up properly
+            os.chmod(bind_dir_parent, 0o755)
+            shutil.rmtree(bind_dir_parent)
+        except Exception as e:
+            logger.info("Failed to cleanup test directory: %s", e)
     return 0
 
 def test_idmapped_mounts():

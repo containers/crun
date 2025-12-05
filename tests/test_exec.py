@@ -30,7 +30,7 @@ def test_exec():
     add_all_namespaces(conf)
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "echo", "foo"])
         if "foo" not in out:
             logger.info("exec test failed: expected 'foo' in output")
@@ -67,7 +67,7 @@ def test_uid_tty():
     last_error = None
     try:
         cid = "container-%s" % os.getpid()
-        proc = run_and_get_output(conf, command='run', id_container=cid, use_popen=True)
+        proc = run_and_get_output(conf, hide_stderr=True, command='run', id_container=cid, use_popen=True)
         for i in range(0, 500):
             try:
                 out = run_crun_command(["exec", "-t", "--user", "1", cid, "/init", "owner", "/proc/self/fd/0"])
@@ -102,7 +102,7 @@ def test_exec_root_netns_with_userns():
     conf['linux']['namespaces'].append({"type" : "network", "path" : "/proc/1/ns/net"})
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         with open("/proc/net/route") as f:
             payload = f.read()
@@ -148,7 +148,7 @@ def test_exec_not_exists_helper(detach):
     add_all_namespaces(conf)
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         try:
             if detach:
                 out = run_crun_command(["exec", "-d", cid, "/not.here"])
@@ -176,7 +176,7 @@ def test_exec_additional_gids():
     cid = None
     tempdir = tempfile.mkdtemp()
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         process_file = os.path.join(tempdir, "process.json")
         with open(process_file, "w") as f:
@@ -216,7 +216,7 @@ def test_exec_populate_home_env_from_process_uid():
     cid = None
     tempdir = tempfile.mkdtemp()
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         process_file = os.path.join(tempdir, "process.json")
         with open(process_file, "w") as f:
@@ -274,7 +274,7 @@ def test_exec_add_capability():
                 "CAP_KILL": cap_kill_dict, \
                 "CAP_SYS_ADMIN": cap_sys_admin_dict}
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         for cap, value in cap_dict.items():
             out = run_crun_command(["exec", "--cap", cap, cid, "/init", "cat", "/proc/self/status"])
             for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
@@ -300,7 +300,7 @@ def test_exec_add_env():
     env_dict_orig = {"HOME":"/", "PATH":"/bin"}
     env_dict_new = {"HOME":"/tmp", "PATH":"/usr/bin","FOO":"BAR"}
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # check original environment variable
         for env, value in env_dict_orig.items():
             out = run_crun_command(["exec", cid, "/init", "printenv", env])
@@ -338,7 +338,7 @@ def test_exec_set_user():
     uid_gid_list = ["1000:1000", "0:0", "65535:65535"]
 
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # check current user id
         out = run_crun_command(["exec", cid, "/init", "id"])
         if uid_gid_list[1] not in out:
@@ -361,7 +361,7 @@ def test_exec_no_new_privs():
     conf['process']['capabilities'] = {}
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # check original value of NoNewPrivs
         out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/status"])
         proc_status = parse_proc_status(out)
@@ -386,7 +386,7 @@ def test_exec_write_pid_file():
     cid = None
     tempdir = tempfile.mkdtemp()
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         pid_file = os.path.join(tempdir, cid)
         out = run_crun_command(["exec", "--pid-file", pid_file, cid, "/init", "echo", "hello"])
         if "hello" not in out:
@@ -449,7 +449,7 @@ def test_exec_cpu_affinity():
     try:
         with open("/proc/self/status") as f:
             current_cpu_mask = cpu_mask_from_proc_status(f.read())
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         mask = exec_and_get_affinity_mask(cid)
         if mask != current_cpu_mask:
@@ -483,7 +483,7 @@ def test_exec_getpgrp():
     conf['process']['args'] = ['/init', 'pause']
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         for terminal in [True, False]:
             if terminal and os.isatty(1) == False:
                 continue
@@ -512,7 +512,7 @@ def test_exec_error_propagation():
     add_all_namespaces(conf)
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         try:
             out = run_crun_command_raw(["exec", "--cwd", "/invalid/nonexistent/path", cid, "/init", "echo", "test"])
             return -1

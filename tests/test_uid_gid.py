@@ -38,7 +38,7 @@ def test_userns_full_mapping():
 
     for filename in ['uid_map', 'gid_map']:
         conf['process']['args'] = ['/init', 'cat', '/proc/self/%s' % filename]
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         proc_status = parse_proc_status(out)
 
         if "4294967295" not in out:
@@ -53,7 +53,7 @@ def test_uid():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
     conf['process']['user']['uid'] = 1000
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     ids = proc_status['Uid'].split()
@@ -69,7 +69,7 @@ def test_gid():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
     conf['process']['user']['gid'] = 1000
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     ids = proc_status['Gid'].split()
@@ -85,7 +85,7 @@ def test_no_groups():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
     conf['process']['user']['gid'] = 1000
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     ids = proc_status['Groups'].split()
@@ -105,7 +105,7 @@ def test_keep_groups():
         add_all_namespaces(conf)
         conf['annotations'] = {}
         conf['annotations']['run.oci.keep_original_groups'] = "1"
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
     finally:
         os.setgroups(oldgroups)
 
@@ -124,7 +124,7 @@ def test_additional_gids():
     conf['process']['user']['uid'] = 1000
     conf['process']['user']['gid'] = 1000
     conf['process']['user']['additionalGids'] = [2000, 3000]
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     gids_status = proc_status['Gid'].split()
@@ -156,7 +156,7 @@ def test_umask():
     conf['process']['user']['umask'] = test_umask_int
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
 
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     proc_status = parse_proc_status(out)
 
     if 'Umask' not in proc_status:
@@ -187,7 +187,7 @@ def test_dev_null_no_chown():
     conf['process']['args'] = ['/init', 'owner', '/proc/self/fd/0']
 
     try:
-        out, container_id = run_and_get_output(conf, stdin_dev_null=True)
+        out, container_id = run_and_get_output(conf, hide_stderr=True, stdin_dev_null=True)
         logger.info("Container ran successfully, output: %s", out)
         if ':' in out:
             uid_str, gid_str = out.strip().split(':')
@@ -227,7 +227,7 @@ def test_regular_files_chowned():
     conf['process']['args'] = ['/init', 'owner', '/proc/self/fd/1']
 
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if ':' in out:
             uid_str, gid_str = out.strip().split(':')
             uid, gid = int(uid_str), int(gid_str)

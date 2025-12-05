@@ -25,7 +25,7 @@ def test_limit_pid_minus_1():
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : -1}}
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if len(out) == 0:
             return 0
         logger.info("PID limit -1 test failed: expected empty output")
@@ -44,7 +44,7 @@ def test_limit_pid_0():
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : 0}}
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if len(out) == 0:
             return 0
         logger.info("PID limit 0 test failed: expected empty output")
@@ -64,7 +64,7 @@ def test_limit_pid_n():
     pid_limit = 10
     conf['linux']['resources'] = {"pids" : {"limit" : pid_limit}}
     try:
-        out, _ = run_and_get_output(conf, hide_stderr=True)
+        out, _ = run_and_get_output(conf)
         logger.info("PID limit %d test failed: expected fork bomb to be limited but command succeeded", pid_limit)
         logger.info("output: %s", out)
         return -1

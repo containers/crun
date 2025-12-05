@@ -48,7 +48,7 @@ def test_time_namespace():
     conf['linux']['timeOffsets'] = time_offsets
     add_all_namespaces(conf,time=True)
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
 
         for line in out.split("\n"):
             parts = line.split()

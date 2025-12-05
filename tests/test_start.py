@@ -23,6 +23,7 @@ import random
 import threading
 import socket
 import json
+import tempfile
 from tests_utils import *
 
 def test_not_allowed_ipc_sysctl():
@@ -35,7 +36,7 @@ def test_not_allowed_ipc_sysctl():
     conf['linux']['sysctl'] = {'fs.mqueue.queues_max' : '100'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
         logger.info("unexpected success")
         return -1
     except:
@@ -50,7 +51,7 @@ def test_not_allowed_ipc_sysctl():
     conf['linux']['sysctl'] = {'kernel.msgmax' : '8192'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
         logger.info("unexpected success")
         return -1
     except:
@@ -65,7 +66,7 @@ def test_not_allowed_ipc_sysctl():
     conf['linux']['sysctl'] = {'kernel.msgmax' : '8192'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         logger.info("setting msgmax with new ipc namespace failed")
         return -1
@@ -83,7 +84,7 @@ def test_not_allowed_net_sysctl():
     conf['linux']['sysctl'] = {'net.ipv4.ping_group_range' : '0 0'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
         logger.info("unexpected success")
         return -1
     except:
@@ -98,7 +99,7 @@ def test_not_allowed_net_sysctl():
     conf['linux']['sysctl'] = {'net.ipv4.ping_group_range' : '0 0'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         logger.info("setting net.ipv4.ping_group_range with new net namespace failed")
         return -1
@@ -119,7 +120,7 @@ def test_unknown_sysctl():
         conf['linux']['sysctl'] = {sysctl : 'value'}
         cid = None
         try:
-            _, cid = run_and_get_output(conf)
+            _, cid = run_and_get_output(conf, hide_stderr=True)
             logger.info("unexpected success")
             return -1
         except:
@@ -141,7 +142,7 @@ def test_uts_sysctl():
         conf['linux']['sysctl'] = {'kernel.hostname' : 'foo'}
         cid = None
         try:
-            _, cid = run_and_get_output(conf)
+            _, cid = run_and_get_output(conf, hide_stderr=True)
             logger.info("unexpected success")
             return -1
         except:
@@ -156,7 +157,7 @@ def test_uts_sysctl():
     conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
         logger.info("unexpected success")
         return -1
     except:
@@ -171,7 +172,7 @@ def test_uts_sysctl():
     conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
     cid = None
     try:
-        _, cid = run_and_get_output(conf)
+        _, cid = run_and_get_output(conf, hide_stderr=True)
         return 0
     except:
         return -1
@@ -186,7 +187,7 @@ def test_start():
     add_all_namespaces(conf)
     cid = None
     try:
-        proc, cid = run_and_get_output(conf, command='create', use_popen=True)
+        proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
         for i in range(50):
             try:
                 s = run_crun_command(["state", cid])
@@ -218,7 +219,7 @@ def test_start_override_config():
     add_all_namespaces(conf)
     cid = None
     try:
-        proc, cid = run_and_get_output(conf, command='create', use_popen=True, relative_config_path="config/config.json")
+        proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True, relative_config_path="config/config.json")
         for i in range(50):
             try:
                 s = run_crun_command(["state", cid])
@@ -243,7 +244,7 @@ def test_run_twice():
     try:
         id_container = "container-%s" % os.getpid()
         for i in range(2):
-            out, cid = run_and_get_output(conf, command='run', id_container=id_container)
+            out, cid = run_and_get_output(conf, hide_stderr=True, command='run', id_container=id_container)
             if "hi" not in str(out):
                 return -1
     except:
@@ -259,7 +260,7 @@ def test_sd_notify():
     env = dict(os.environ)
     env["NOTIFY_SOCKET"] = "/run/notify/the-socket"
     try:
-        out, cid = run_and_get_output(conf, env=env, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, env=env, command='run')
         if "/run/notify/the-socket" not in str(out):
             return -1
     except:
@@ -275,7 +276,7 @@ def test_sd_notify_file():
     env = dict(os.environ)
     env["NOTIFY_SOCKET"] = "/tmp/parent-dir/the-socket"
     try:
-        out, cid = run_and_get_output(conf, env=env, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, env=env, command='run')
         if "notify" not in str(out):
             return -1
     except:
@@ -291,7 +292,7 @@ def test_sd_notify_env():
     env = dict(os.environ)
     env["NOTIFY_SOCKET"] = "/tmp/parent-dir/the-socket"
     try:
-        out, cid = run_and_get_output(conf, env=env, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, env=env, command='run')
         if "/tmp/parent-dir/the-socket/notify" not in str(out):
             return -1
     except:
@@ -304,7 +305,7 @@ def test_delete_in_created_state():
     add_all_namespaces(conf)
     cid = None
     try:
-        proc, cid = run_and_get_output(conf, command='create', use_popen=True)
+        proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
         proc.wait()
         run_crun_command(["delete", cid])
     except:
@@ -352,7 +353,7 @@ def test_sd_notify_proxy():
             notify_thread = threading.Thread(target=notify_server)
             notify_thread.start()
             try:
-                run_and_get_output(conf, env=env, command='run', chown_rootfs_to=8000)
+                run_and_get_output(conf, hide_stderr=True, env=env, command='run', chown_rootfs_to=8000)
                 notify_thread.join()
                 if ready_datagram != b"READY=1":
                     return -1
@@ -370,7 +371,7 @@ def test_empty_home():
     conf['process']['args'] = ['/sbin/init', 'printenv', 'HOME']
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if "/" not in str(out):
             return -1
     except Exception as e:
@@ -388,7 +389,7 @@ def test_run_rootless_netns_with_userns():
     conf['linux']['namespaces'].append({"type" : "network", "path" : "/proc/1/ns/net"})
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
     except:
         # expect a failure
         return 0
@@ -406,7 +407,7 @@ def test_listen_pid_env():
     env = dict(os.environ)
     env["LISTEN_FDS"] = "1"
     try:
-        out, cid = run_and_get_output(conf, env=env, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, env=env, command='run')
         if "1" not in str(out):
             return -1
     except:
@@ -438,7 +439,7 @@ def test_ioprio():
 
     cid = None
     try:
-        output, cid = run_and_get_output(conf, command='run')
+        output, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         value = int(output)
         if ((value >> IOPRIO_CLASS_SHIFT) & IOPRIO_CLASS_MASK) != IOPRIO_CLASS_IDLE:
             logger.error("invalid ioprio class returned")
@@ -459,14 +460,14 @@ def test_run_keep():
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     add_all_namespaces(conf)
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
     except:
         logger.info("failed to create container")
         return -1
 
     # without --keep, we must be able to recreate the container with the same id
     try:
-        out, cid = run_and_get_output(conf, command='run', keep=True, id_container=cid)
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run', keep=True, id_container=cid)
     except:
         logger.info("failed to create container")
         return -1
@@ -474,7 +475,7 @@ def test_run_keep():
     # now it must fail
     try:
         try:
-            out, cid = run_and_get_output(conf, command='run', keep=True, id_container=cid)
+            out, cid = run_and_get_output(conf, hide_stderr=True, command='run', keep=True, id_container=cid)
             logger.info("run --keep succeeded twice")
             return -1
         except:
@@ -500,10 +501,13 @@ def test_invalid_id():
         out, _ = run_and_get_output(conf, id_container="this/is/invalid")
         return -1
     except Exception as e:
-        err = e.output.decode()
-        if "invalid character `/` in the ID" in err:
-            return 0
-        logger.info("got error: %s", err)
+        if hasattr(e, 'output') and e.output:
+            err = e.output.decode()
+            if "invalid character `/` in the ID" in err:
+                return 0
+            logger.info("got error: %s", err)
+        else:
+            logger.info("got exception without output: %s", str(e))
         return -1
     return 0
 
@@ -516,7 +520,7 @@ def test_home_unknown_id():
     conf['process']['user']['uid'] = 101010
     conf['process']['user']['gid'] = 101010
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if out != "/":
         logger.info("expected: `/`, got output: `%s`", out)
         return -1
@@ -543,7 +547,7 @@ def test_systemd_cgroups_path_def_slice():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, cgroup_manager="systemd", detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, cgroup_manager="systemd", detach=True)
         state = run_crun_command(['state', cid])
         scope = json.loads(state)['systemd-scope']
 

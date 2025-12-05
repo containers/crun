@@ -18,6 +18,7 @@
 import subprocess
 import sys
 import time
+import json
 from tests_utils import *
 import json
 
@@ -55,7 +56,7 @@ def test_resources_pid_limit():
 
     conf['process']['args'] = ['/init', 'cat', fn]
 
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "1024" not in out:
         logger.info("found %s instead of 1024", out)
         return -1
@@ -98,7 +99,7 @@ def test_resources_pid_limit_userns():
 
     conf['process']['args'] = ['/init', 'cat', fn]
 
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "1024" not in out:
         logger.info("found %s instead of 1024", out)
         return -1
@@ -173,7 +174,7 @@ def test_resources_unified():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/memory.high"])
         if "1073741824" not in out:
             return -1
@@ -196,7 +197,7 @@ def test_resources_cpu_weight():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if "1234" not in out:
             return -1
@@ -219,7 +220,7 @@ def test_resources_cgroupv2_swap_0():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/memory.swap.max"])
         if "0" not in out:
             return -1
@@ -242,7 +243,7 @@ def test_resources_cpu_quota_minus_one():
     }
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if "-1" not in out:
             return -1
     finally:
@@ -271,7 +272,7 @@ def test_resources_cpu_weight_systemd():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True, cgroup_manager="systemd")
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True, cgroup_manager="systemd")
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if "1234" not in out:
             logger.info("found wrong CPUWeight for the container cgroup")
@@ -324,7 +325,7 @@ def test_resources_exec_cgroup():
     conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo']
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run', detach=True)
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # Give some time to pid 1 to move to the new cgroup
         time.sleep(2)
         out = run_crun_command(["exec", "--cgroup=/foo", cid, "/init", "cat", "/proc/self/cgroup"])
