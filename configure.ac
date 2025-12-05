@@ -366,6 +366,45 @@ if test -z "$GPERF"; then
 	AC_MSG_NOTICE(gperf not found - cannot rebuild signal parser code)
 fi
 
+dnl code coverage
+AC_ARG_ENABLE([coverage],
+	AS_HELP_STRING([--enable-coverage], [Enable code coverage support]),
+	[enable_coverage=$enableval], [enable_coverage=no])
+
+AS_IF([test "x$enable_coverage" = "xyes"], [
+	AC_CHECK_TOOL([GCOV], [gcov])
+	if test -z "$GCOV"; then
+		AC_MSG_ERROR([gcov is required for code coverage])
+	fi
+
+	AC_CHECK_TOOL([LCOV], [lcov])
+	AC_CHECK_TOOL([GCOVR], [gcovr])
+
+	# Choose the best available coverage tool
+	if test -n "$LCOV"; then
+		coverage_tool=lcov
+	elif test -n "$GCOVR"; then
+		coverage_tool=gcovr
+	else
+		coverage_tool=gcov
+	fi
+
+	AC_MSG_NOTICE([Using $coverage_tool for code coverage reporting])
+
+	# Add coverage flags
+	COVERAGE_CFLAGS="--coverage -g -O0 -fno-inline -fno-inline-small-functions -fno-default-inline"
+	COVERAGE_LDFLAGS="--coverage"
+
+	AC_SUBST([COVERAGE_CFLAGS])
+	AC_SUBST([COVERAGE_LDFLAGS])
+	AC_SUBST([GCOV])
+	AC_SUBST([LCOV])
+	AC_SUBST([GCOVR])
+	AC_SUBST([coverage_tool], [$coverage_tool])
+])
+
+AM_CONDITIONAL([ENABLE_COVERAGE], [test "x$enable_coverage" = "xyes"])
+
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
