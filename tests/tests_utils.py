@@ -210,9 +210,25 @@ def run_all_tests(all_tests, allowed_tests):
         except Exception as e:
             test_duration = time.time() - test_start_time
             sys.stderr.write("# Test '%s' failed with exception after %.3fs:\n" % (k, test_duration))
+            sys.stderr.write("# Exception type: %s\n" % type(e).__name__)
+            sys.stderr.write("# Exception message: %s\n" % str(e))
+
+            # Enhanced error details for subprocess errors
+            if hasattr(e, 'returncode'):
+                sys.stderr.write("# Process return code: %d\n" % e.returncode)
+            if hasattr(e, 'cmd'):
+                sys.stderr.write("# Failed command: %s\n" % ' '.join(e.cmd) if isinstance(e.cmd, list) else str(e.cmd))
             if hasattr(e, 'output'):
-                sys.stderr.write("# Container output: %s\n" % str(e.output))
-            sys.stderr.write("# Exception: %s\n" % str(e))
+                sys.stderr.write("# Process output: %s\n" % str(e.output))
+            if hasattr(e, 'stderr') and e.stderr:
+                sys.stderr.write("# Process stderr: %s\n" % str(e.stderr))
+
+            # Environment information
+            sys.stderr.write("# Working directory: %s\n" % os.getcwd())
+            sys.stderr.write("# Test root: %s\n" % get_tests_root())
+            if 'TMPDIR' in os.environ:
+                sys.stderr.write("# TMPDIR: %s\n" % os.environ['TMPDIR'])
+
             sys.stderr.write("# Traceback:\n")
             for line in traceback.format_exc().splitlines():
                 sys.stderr.write("# %s\n" % line)
