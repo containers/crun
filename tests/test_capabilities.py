@@ -92,8 +92,7 @@ def test_new_privs():
         # if nonewprivs is already set, it cannot be unset, so skip the
         # next test
         if host_no_new_privs == "1":
-            sys.stderr.write("# skipping noNewPrivileges=false test: host already has NoNewPrivs=1\n")
-            return 0
+            return (77, "host already has NoNewPrivs=1")
 
     conf['process']['noNewPrivileges'] = False
     out, _ = run_and_get_output(conf)
@@ -138,27 +137,27 @@ def test_some_caps_permitted():
 
 def test_some_caps_effective_non_root():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     return helper_test_some_caps(1000, ["effective", "permitted", "inheritable", "ambient"], 'CapEff')
 
 def test_some_caps_bounding_non_root():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     return helper_test_some_caps(1000, ["bounding"], 'CapBnd')
 
 def test_some_caps_inheritable_non_root():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     return helper_test_some_caps(1000, ["inheritable"], 'CapInh')
 
 def test_some_caps_ambient_non_root():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     return helper_test_some_caps(1000, ["ambient", "permitted", "inheritable"], 'CapAmb')
 
 def test_some_caps_permitted_non_root():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     return helper_test_some_caps(1000, ["ambient", "permitted", "inheritable"], 'CapPrm')
 
 

@@ -215,11 +215,15 @@ def run_all_tests(all_tests, allowed_tests):
 
             if ret == 0:
                 print("ok %d - %s # %.3fs" % (cur, k, test_duration))
-            elif ret == 77:
-                print("ok %d - %s #SKIP # %.3fs" % (cur, k, test_duration))
+            elif ret == 77 or (isinstance(ret, tuple) and ret[0] == 77):
+                skip_reason = ""
+                if isinstance(ret, tuple) and len(ret) > 1 and ret[1]:
+                    skip_reason = " " + str(ret[1])
+                print("ok %d - %s #SKIP%s # %.3fs" % (cur, k, skip_reason, test_duration))
             else:
+                actual_ret = ret[0] if isinstance(ret, tuple) else ret
                 print("not ok %d - %s # %.3fs" % (cur, k, test_duration))
-                sys.stderr.write("# Test '%s' failed with return code %d\n" % (k, ret))
+                sys.stderr.write("# Test '%s' failed with return code %d\n" % (k, actual_ret))
         except Exception as e:
             test_duration = time.time() - test_start_time
             sys.stderr.write("# Test '%s' failed with exception after %.3fs:\n" % (k, test_duration))

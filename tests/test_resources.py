@@ -23,7 +23,7 @@ from tests_utils import *
 
 def test_resources_fail_with_enoent():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     if not is_cgroup_v2_unified():
         return 77
 
@@ -42,7 +42,7 @@ def test_resources_fail_with_enoent():
 
 def test_resources_pid_limit():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
     add_all_namespaces(conf)
@@ -62,7 +62,7 @@ def test_resources_pid_limit():
 
 def test_resources_pid_limit_userns():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
@@ -105,7 +105,7 @@ def test_resources_pid_limit_userns():
 
 def test_resources_unified_invalid_controller():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -134,7 +134,7 @@ def test_resources_unified_invalid_controller():
 
 def test_resources_unified_invalid_key():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -160,7 +160,7 @@ def test_resources_unified_invalid_key():
 
 def test_resources_unified():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -183,7 +183,7 @@ def test_resources_unified():
 
 def test_resources_cpu_weight():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -206,7 +206,7 @@ def test_resources_cpu_weight():
 
 def test_resources_cgroupv2_swap_0():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -229,7 +229,7 @@ def test_resources_cgroupv2_swap_0():
 
 def test_resources_cpu_quota_minus_one():
     if is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v1 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -253,11 +253,11 @@ def test_resources_cpu_quota_minus_one():
 
 def test_resources_cpu_weight_systemd():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     if not running_on_systemd():
-        return 77
+        return (77, "not running on systemd")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -316,7 +316,7 @@ def test_resources_cpu_weight_systemd():
 
 def test_resources_exec_cgroup():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)

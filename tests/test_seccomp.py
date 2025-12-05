@@ -39,7 +39,7 @@ def recv_fds(sock, msglen, maxfds):
 
 def test_seccomp_listener():
     if not is_seccomp_listener_supported():
-        return 77
+        return (77, "seccomp listener not supported")
 
     listener_path = "%s/seccomp-listener" % get_tests_root()
     listener_metadata = "SOME-RANDOM-METADATA"
