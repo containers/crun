@@ -36,7 +36,7 @@ def test_not_allowed_ipc_sysctl():
     cid = None
     try:
         _, cid = run_and_get_output(conf)
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -51,7 +51,7 @@ def test_not_allowed_ipc_sysctl():
     cid = None
     try:
         _, cid = run_and_get_output(conf)
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -67,7 +67,7 @@ def test_not_allowed_ipc_sysctl():
     try:
         _, cid = run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write("# setting msgmax with new ipc namespace failed\n")
+        logger.info("setting msgmax with new ipc namespace failed")
         return -1
     finally:
         if cid is not None:
@@ -84,7 +84,7 @@ def test_not_allowed_net_sysctl():
     cid = None
     try:
         _, cid = run_and_get_output(conf)
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -100,7 +100,7 @@ def test_not_allowed_net_sysctl():
     try:
         _, cid = run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write("# setting net.ipv4.ping_group_range with new net namespace failed\n")
+        logger.info("setting net.ipv4.ping_group_range with new net namespace failed")
         return -1
     finally:
         if cid is not None:
@@ -120,7 +120,7 @@ def test_unknown_sysctl():
         cid = None
         try:
             _, cid = run_and_get_output(conf)
-            sys.stderr.write("# unexpected success\n")
+            logger.info("unexpected success")
             return -1
         except:
             return 0
@@ -142,7 +142,7 @@ def test_uts_sysctl():
         cid = None
         try:
             _, cid = run_and_get_output(conf)
-            sys.stderr.write("# unexpected success\n")
+            logger.info("unexpected success")
             return -1
         except:
             return 0
@@ -157,7 +157,7 @@ def test_uts_sysctl():
     cid = None
     try:
         _, cid = run_and_get_output(conf)
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         return 0
@@ -205,7 +205,7 @@ def test_start():
             status = json.load(f)
             descriptors = status["external_descriptors"]
             if not isinstance(descriptors, str):
-                print("external_descriptors is not a string")
+                logger.error("external_descriptors is not a string")
                 return -1
     finally:
         if cid is not None:
@@ -441,10 +441,10 @@ def test_ioprio():
         output, cid = run_and_get_output(conf, command='run')
         value = int(output)
         if ((value >> IOPRIO_CLASS_SHIFT) & IOPRIO_CLASS_MASK) != IOPRIO_CLASS_IDLE:
-            print("invalid ioprio class returned")
+            logger.error("invalid ioprio class returned")
             return 1
         if value & IOPRIO_PRIO_MASK != 0:
-            print("invalid ioprio priority returned")
+            logger.error("invalid ioprio priority returned")
             return 1
         return 0
     except Exception as e:
@@ -461,21 +461,21 @@ def test_run_keep():
     try:
         out, cid = run_and_get_output(conf, command='run')
     except:
-        sys.stderr.write("# failed to create container\n")
+        logger.info("failed to create container")
         return -1
 
     # without --keep, we must be able to recreate the container with the same id
     try:
         out, cid = run_and_get_output(conf, command='run', keep=True, id_container=cid)
     except:
-        sys.stderr.write("# failed to create container\n")
+        logger.info("failed to create container")
         return -1
 
     # now it must fail
     try:
         try:
             out, cid = run_and_get_output(conf, command='run', keep=True, id_container=cid)
-            sys.stderr.write("# run --keep succeeded twice\n")
+            logger.info("run --keep succeeded twice")
             return -1
         except:
             # expected
@@ -484,7 +484,7 @@ def test_run_keep():
         try:
             s = run_crun_command(["state", cid])
         except:
-            sys.stderr.write("# crun state failed on --keep container\n")
+            logger.info("crun state failed on --keep container")
             return -1
     finally:
         run_crun_command(["delete", "-f", cid])
@@ -503,7 +503,7 @@ def test_invalid_id():
         err = e.output.decode()
         if "invalid character `/` in the ID" in err:
             return 0
-        sys.stderr.write("# got error: %s\n" % err)
+        logger.info("got error: %s", err)
         return -1
     return 0
 
@@ -518,7 +518,7 @@ def test_home_unknown_id():
     add_all_namespaces(conf)
     out, _ = run_and_get_output(conf)
     if out != "/":
-        sys.stderr.write("# expected: `/`, got output: `%s`\n" % out)
+        logger.info("expected: `/`, got output: `%s`", out)
         return -1
     return 0
 
@@ -557,7 +557,7 @@ def test_systemd_cgroups_path_def_slice():
             got = subprocess.check_output(['systemctl', '--user', 'show','-PSlice', scope], close_fds=False).decode().strip()
 
         if got != want:
-            sys.stderr.write("# Got Slice %s, want %s\n" % got, want)
+            logger.info("Got Slice %s, want %s", got, want)
             return 1
     except:
         return 1

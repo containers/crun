@@ -188,25 +188,25 @@ def test_dev_null_no_chown():
 
     try:
         out, container_id = run_and_get_output(conf, stdin_dev_null=True)
-        sys.stderr.write("# Container ran successfully, output: %s\n" % repr(out))
+        logger.info("Container ran successfully, output: %s", out)
         if ':' in out:
             uid_str, gid_str = out.strip().split(':')
             uid, gid = int(uid_str), int(gid_str)
             # Should NOT be owned by container user
             if uid == container_uid or gid == container_gid:
-                sys.stderr.write("# dev-null-no-chown test failed: /dev/null fd owned by container user %d:%d\n" % (uid, gid))
-                sys.stderr.write("# stdout: %s\n" % repr(out))
+                logger.info("dev-null-no-chown test failed: /dev/null fd owned by container user %d:%d", container_uid, container_gid)
+                logger.info("stdout: %s", out)
                 return -1
-            sys.stderr.write("# dev-null-no-chown test passed: /dev/null fd owned by %d:%d (not container user %d:%d)\n" % (uid, gid, container_uid, container_gid))
+            logger.info("dev-null-no-chown test passed: /dev/null fd owned by %d:%d (not container user %d:%d)", uid, gid, container_uid, container_gid)
         else:
-            sys.stderr.write("# dev-null-no-chown test failed: unexpected owner output format\n")
-            sys.stderr.write("# stdout: %s\n" % repr(out))
+            logger.info("dev-null-no-chown test failed: unexpected owner output format")
+            logger.info("stdout: %s", out)
             return -1
         return 0
     except Exception as e:
-        sys.stderr.write("# dev-null-no-chown test failed with exception: %s\n" % str(e))
+        logger.info("dev-null-no-chown test failed with exception: %s", e)
         if hasattr(e, 'output'):
-            sys.stderr.write("# command output: %s\n" % repr(e.output))
+            logger.info("command output: %s", e.output)
         return -1
 
 def test_regular_files_chowned():
@@ -233,15 +233,15 @@ def test_regular_files_chowned():
             uid, gid = int(uid_str), int(gid_str)
             # Should be owned by container user
             if uid != container_uid or gid != container_gid:
-                sys.stderr.write("# regular-files-chowned test failed: regular fd owned by %d:%d (expected %d:%d)\n" % (uid, gid, container_uid, container_gid))
+                logger.info("regular-files-chowned test failed: regular fd owned by %d:%d (expected %d:%d)", uid, gid, container_uid, container_gid)
                 return -1
-            sys.stderr.write("# regular-files-chowned test passed: regular fd owned by %d:%d (container user)\n" % (uid, gid))
+            logger.info("regular-files-chowned test passed: regular fd owned by %d:%d (container user)", uid, gid)
         else:
-            sys.stderr.write("# regular-files-chowned test failed: unexpected output format: %s\n" % repr(out))
+            logger.info("regular-files-chowned test failed: unexpected output format: %s", out)
             return -1
         return 0
     except Exception as e:
-        sys.stderr.write("# regular-files-chowned test failed with exception: %s\n" % str(e))
+        logger.info("regular-files-chowned test failed with exception: %s", e)
         return -1
 
 all_tests = {

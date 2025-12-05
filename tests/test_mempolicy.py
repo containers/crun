@@ -30,10 +30,10 @@ def check_numa_hw():
 def check_mempolicy_prerequisites(need_interleave=False):
     """Check all prerequisites for numa mempolicy tests. Returns 77 (skip) if not met, 0 if OK"""
     if not check_numa_hw():
-        sys.stderr.write("# numa missing\n")
+        logger.info("numa missing")
         return (77, "NUMA hardware not available")
     if need_interleave and not check_numa_interleave():
-        sys.stderr.write("# interleave missing\n")
+        logger.info("interleave missing")
         return (77, "NUMA interleave not supported")
 
 def test_mempolicy_no_conf():
@@ -49,7 +49,7 @@ def test_mempolicy_no_conf():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -72,7 +72,7 @@ def test_mempolicy_bad_mode():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -95,7 +95,7 @@ def test_mempolicy_bad_flag():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -118,7 +118,7 @@ def test_mempolicy_numa_balancing_flag():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -141,7 +141,7 @@ def test_mempolicy_static_relative_nodes_flags():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -164,7 +164,7 @@ def test_mempolicy_no_nodes():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -187,7 +187,7 @@ def test_mempolicy_bad_nodes_string():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -210,7 +210,7 @@ def test_mempolicy_bad_nodes_number():
     cid = None
     try:
         _, cid = run_and_get_output(conf, command='run')
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         pass
@@ -234,11 +234,11 @@ def test_mempolicy_default_mode():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " default " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' default ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' default ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -260,11 +260,11 @@ def test_mempolicy_local_mode():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " local " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' local ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' local ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -286,11 +286,11 @@ def test_mempolicy_bind_mode():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " bind:0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' bind:0 ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' bind:0 ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -312,11 +312,11 @@ def test_mempolicy_bind_mode_balancing():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " bind=balancing:0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' bind=balancing:0 ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' bind=balancing:0 ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -338,11 +338,11 @@ def test_mempolicy_bind_mode_balancing_relative():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " bind=relative|balancing:0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' bind=relative|balancing:0 ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' bind=relative|balancing:0 ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -364,11 +364,11 @@ def test_mempolicy_preferred_mode_static():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " prefer=static:0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' prefer=static:0 ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' prefer=static:0 ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -390,11 +390,11 @@ def test_mempolicy_preferred_many_mode():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " prefer (many):0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' prefer (many):0 ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' prefer (many):0 ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -416,11 +416,11 @@ def test_mempolicy_interleave_mode():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " interleave:0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' interleave:0 ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' interleave:0 ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:
@@ -442,11 +442,11 @@ def test_mempolicy_weighted_interleave_mode():
     try:
         out, cid = run_and_get_output(conf, command='run')
         if " weighted interleave:0 " not in out.splitlines()[1]:
-            sys.stderr.write("# Unable to find ' weighted interleave ' in /proc/self/numa_maps\n")
-            sys.stderr.write(out)
+            logger.info("Unable to find ' weighted interleave ' in /proc/self/numa_maps")
+            logger.info(out)
             return -1
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:

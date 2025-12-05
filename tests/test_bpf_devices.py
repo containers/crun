@@ -96,12 +96,12 @@ def test_bpf_devices_systemd():
 
         output = subprocess.check_output(['systemctl', 'show', '-PBPFProgram', scope], close_fds=False).decode().strip()
         if output == "":
-            sys.stderr.write("# BPFProgram property not found or empty\n")
+            logger.info("BPFProgram property not found or empty")
             return -1
 
         # Should look like "device:/sys/fs/bpf/crun/crun-xxx_scope".
         if "device:/sys/fs/bpf/crun/" not in output:
-            sys.stderr.write("# Bad BPFProgram property value: `%s`\n" % output)
+            logger.info("Bad BPFProgram property value: `%s`", prop_value)
             return -1
 
         # Test 2: Check that BPF program file was created.
@@ -109,7 +109,7 @@ def test_bpf_devices_systemd():
         # Extract the path.
         bpf_path = output.split("device:", 1)[1]
         if not os.path.exists(bpf_path):
-            sys.stderr.write("# BPF program file `%s` not found\n" % bpf_path)
+            logger.info("BPF program file `%s` not found", prog_file)
             return -1
 
         # Test 3: Check that BPF program is cleaned up.
@@ -118,13 +118,13 @@ def test_bpf_devices_systemd():
         run_crun_command(["delete", "-f", cid])
         cid = None
         if os.path.exists(bpf_path):
-            sys.stderr.write("# BPF program `%s` still exist after crun delete\n" % bpf_path)
+            logger.info("BPF program `%s` still exist after crun delete", prog_file)
             return -1
 
         return 0
 
     except Exception as e:
-        sys.stderr.write("# Test failed with exception: %s\n" % str(e))
+        logger.info("Test failed with exception: %s", e)
         return -1
     finally:
         if cid is not None:

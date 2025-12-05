@@ -57,7 +57,7 @@ def test_rlimits():
     for v in rlimits:
         limit = limits.get(v['type'])
         if str(limit[1]) != str(v['soft']) or str(limit[2]) != str(v['hard']):
-            sys.stderr.write("# %s: %s %s\n" % (limit[0], limit[1], limit[2]))
+            logger.info("%s: %s %s", key, soft_limit, hard_limit)
             return -1
     return 0
 

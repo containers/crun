@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import logging
 import shutil
 import sys
 import os
@@ -25,6 +26,20 @@ import traceback
 import time
 
 default_umask = 0o22
+
+# Simple logging setup for TAP diagnostics
+logging.basicConfig(
+    level=logging.INFO,
+    format='# %(message)s',
+    stream=sys.stderr
+)
+logger = logging.getLogger('crun.tests')
+
+# Export logger for use in test files
+__all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'run_crun_command_raw',
+           'parse_proc_status', 'add_all_namespaces', 'tests_main', 'is_rootless',
+           'is_cgroup_v2_unified', 'get_crun_feature_string', 'running_on_systemd',
+           'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path']
 
 base_conf = """
 {
@@ -207,11 +222,11 @@ def run_all_tests(all_tests, allowed_tests):
 
             # Check for slow tests and emit warnings
             if test_duration > VERY_SLOW_TEST_THRESHOLD:
-                sys.stderr.write("# WARNING: Test '%s' took %.3fs (>%.1fs very slow threshold)\n" %
-                                (k, test_duration, VERY_SLOW_TEST_THRESHOLD))
+                logger.warning("Test '%s' took %.3fs (>%.1fs very slow threshold)",
+                              k, test_duration, VERY_SLOW_TEST_THRESHOLD)
             elif test_duration > SLOW_TEST_THRESHOLD:
-                sys.stderr.write("# WARNING: Test '%s' took %.3fs (>%.1fs slow threshold)\n" %
-                                (k, test_duration, SLOW_TEST_THRESHOLD))
+                logger.warning("Test '%s' took %.3fs (>%.1fs slow threshold)",
+                              k, test_duration, SLOW_TEST_THRESHOLD)
 
             if ret == 0:
                 print("ok %d - %s # %.3fs" % (cur, k, test_duration))
@@ -223,32 +238,33 @@ def run_all_tests(all_tests, allowed_tests):
             else:
                 actual_ret = ret[0] if isinstance(ret, tuple) else ret
                 print("not ok %d - %s # %.3fs" % (cur, k, test_duration))
-                sys.stderr.write("# Test '%s' failed with return code %d\n" % (k, actual_ret))
+                logger.error("Test '%s' failed with return code %d", k, actual_ret)
         except Exception as e:
             test_duration = time.time() - test_start_time
-            sys.stderr.write("# Test '%s' failed with exception after %.3fs:\n" % (k, test_duration))
-            sys.stderr.write("# Exception type: %s\n" % type(e).__name__)
-            sys.stderr.write("# Exception message: %s\n" % str(e))
+            logger.error("Test '%s' failed with exception after %.3fs:", k, test_duration)
+            logger.error("Exception type: %s", type(e).__name__)
+            logger.error("Exception message: %s", str(e))
 
             # Enhanced error details for subprocess errors
             if hasattr(e, 'returncode'):
-                sys.stderr.write("# Process return code: %d\n" % e.returncode)
+                logger.error("Process return code: %d", e.returncode)
             if hasattr(e, 'cmd'):
-                sys.stderr.write("# Failed command: %s\n" % ' '.join(e.cmd) if isinstance(e.cmd, list) else str(e.cmd))
+                cmd_str = ' '.join(e.cmd) if isinstance(e.cmd, list) else str(e.cmd)
+                logger.error("Failed command: %s", cmd_str)
             if hasattr(e, 'output'):
-                sys.stderr.write("# Process output: %s\n" % str(e.output))
+                logger.error("Process output: %s", str(e.output))
             if hasattr(e, 'stderr') and e.stderr:
-                sys.stderr.write("# Process stderr: %s\n" % str(e.stderr))
+                logger.error("Process stderr: %s", str(e.stderr))
 
             # Environment information
-            sys.stderr.write("# Working directory: %s\n" % os.getcwd())
-            sys.stderr.write("# Test root: %s\n" % get_tests_root())
+            logger.error("Working directory: %s", os.getcwd())
+            logger.error("Test root: %s", get_tests_root())
             if 'TMPDIR' in os.environ:
-                sys.stderr.write("# TMPDIR: %s\n" % os.environ['TMPDIR'])
+                logger.error("TMPDIR: %s", os.environ['TMPDIR'])
 
-            sys.stderr.write("# Traceback:\n")
+            logger.error("Traceback:")
             for line in traceback.format_exc().splitlines():
-                sys.stderr.write("# %s\n" % line)
+                logger.error("%s", line)
             ret = -1
             print("not ok %d - %s # %.3fs" % (cur, k, test_duration))
 
@@ -360,15 +376,15 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         try:
             return subprocess.check_output(args, cwd=temp_dir, stdin=stdin, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
         except subprocess.CalledProcessError as e:
-            sys.stderr.write("# Command failed: %s\n" % ' '.join(args))
-            sys.stderr.write("# Working directory: %s\n" % temp_dir)
-            sys.stderr.write("# Container ID: %s\n" % id_container)
-            sys.stderr.write("# Return code: %d\n" % e.returncode)
+            logger.error("Command failed: %s", ' '.join(args))
+            logger.error("Working directory: %s", temp_dir)
+            logger.error("Container ID: %s", id_container)
+            logger.error("Return code: %d", e.returncode)
             if e.output:
-                sys.stderr.write("# Output: %s\n" % e.output.decode('utf-8', errors='ignore'))
-            sys.stderr.write("# Config file saved at: %s\n" % config_path)
+                logger.error("Output: %s", e.output.decode('utf-8', errors='ignore'))
+            logger.error("Config file saved at: %s", config_path)
             if not keep:
-                sys.stderr.write("# Note: temporary directory will be cleaned up\n")
+                logger.error("Note: temporary directory will be cleaned up")
             raise
 
 def run_crun_command(args):
@@ -378,10 +394,10 @@ def run_crun_command(args):
     try:
         return subprocess.check_output(cmd_args, close_fds=False).decode()
     except subprocess.CalledProcessError as e:
-        sys.stderr.write("# crun command failed: %s\n" % ' '.join(cmd_args))
-        sys.stderr.write("# Return code: %d\n" % e.returncode)
+        logger.error("crun command failed: %s", ' '.join(cmd_args))
+        logger.error("Return code: %d", e.returncode)
         if e.output:
-            sys.stderr.write("# Output: %s\n" % e.output.decode('utf-8', errors='ignore'))
+            logger.error("Output: %s", e.output.decode('utf-8', errors='ignore'))
         raise
 
 # Similar as run_crun_command but does not performs decode of output and relays error message for further matching
@@ -392,8 +408,8 @@ def run_crun_command_raw(args):
     try:
         return subprocess.check_output(cmd_args, close_fds=False, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        sys.stderr.write("# crun command failed: %s\n" % ' '.join(cmd_args))
-        sys.stderr.write("# Return code: %d\n" % e.returncode)
+        logger.error("crun command failed: %s", ' '.join(cmd_args))
+        logger.error("Return code: %d", e.returncode)
         raise
 
 def running_on_systemd():
