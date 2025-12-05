@@ -116,14 +116,14 @@ def test_mount_unix_socket():
 
 def test_mount_tmpfs_permissions():
     def prepare_rootfs(rootfs):
-        path = os.path.join(rootfs, "tmp")
+        path = os.path.join(rootfs, "test-tmpfs")
         os.mkdir(path)
         os.chmod(path, 0o712)
 
     conf = base_config()
-    conf['process']['args'] = ['/init', 'mode', '/tmp']
+    conf['process']['args'] = ['/init', 'mode', '/test-tmpfs']
     add_all_namespaces(conf)
-    conf['mounts'].append({"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["ro"]})
+    conf['mounts'].append({"destination": "/test-tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["ro"]})
     out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
     if "712" in out:
         return 0
