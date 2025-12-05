@@ -28,9 +28,9 @@ def test_time_namespace():
     timens_offsets = "/proc/self/timens_offsets"
 
     if not os.path.exists(timens_offsets):
-        return 77
+        return (77, "time namespaces not supported")
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     time_offsets = {
         "monotonic": {

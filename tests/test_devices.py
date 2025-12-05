@@ -22,7 +22,7 @@ from tests_utils import *
 
 def test_mode_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     # verify the umask doesn't affect the result
     os.umask(0o22)
@@ -58,7 +58,7 @@ def test_mode_device():
 
 def test_owner_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     for have_userns in [True, False]:
         conf = base_config()
@@ -91,12 +91,12 @@ def test_owner_device():
 
 def test_deny_devices():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -123,7 +123,7 @@ def test_create_or_bind_mount_device():
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -146,12 +146,12 @@ def test_create_or_bind_mount_device():
 
 def test_allow_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -176,12 +176,12 @@ def test_allow_device():
 
 def test_allow_access():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -206,7 +206,7 @@ def test_allow_access():
 
 def test_mknod_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -221,7 +221,7 @@ def test_mknod_device():
 
 def test_trailing_slash_mknod_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -235,12 +235,12 @@ def test_trailing_slash_mknod_device():
 
 def test_net_devices():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     ip_path = shutil.which("ip")
     if ip_path is None:
         sys.stderr.write("# ip command not found\n")
-        return 77
+        return (77, "ip command not found")
 
     current_netns = os.open("/proc/self/ns/net", os.O_RDONLY)
     try:
@@ -336,7 +336,7 @@ def test_net_devices():
 
 def test_mknod_fifo_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -353,7 +353,7 @@ def test_mknod_fifo_device():
 
 def test_mknod_char_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -370,7 +370,7 @@ def test_mknod_char_device():
 
 def test_allow_device_read_only():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         # Best effort load
@@ -381,7 +381,7 @@ def test_allow_device_read_only():
         st = os.stat("/dev/nullb0")
         major, minor = os.major(st.st_rdev), os.minor(st.st_rdev)
     except:
-        return 77
+        return (77, "/dev/nullb0 device not available")
 
     conf = base_config()
     add_all_namespaces(conf)

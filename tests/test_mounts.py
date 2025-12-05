@@ -18,6 +18,8 @@
 import sys
 import copy
 import socket
+import os
+import shutil
 from tests_utils import *
 import tempfile
 import re
@@ -442,7 +444,7 @@ def test_mount_dev():
 
 def test_userns_bind_mount():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
@@ -473,7 +475,7 @@ def test_userns_bind_mount():
 
 def test_userns_bind_mount_symlink():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
@@ -512,7 +514,7 @@ def test_userns_bind_mount_symlink():
 
 def test_idmapped_mounts():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     source_dir = os.path.join(get_tests_root(), "test-idmapped-mounts")
     try:
         os.makedirs(source_dir)
@@ -524,7 +526,7 @@ def test_idmapped_mounts():
 
         idmapped_mounts_status = subprocess.call([get_init_path(), "check-feature", "idmapped-mounts", source_dir])
         if idmapped_mounts_status != 0:
-            return 77
+            return (77, "idmapped mounts not supported")
 
         template = base_config()
         add_all_namespaces(template, userns=True)
@@ -647,7 +649,7 @@ def test_cgroup_mount_without_netns():
 
 def test_add_remove_mounts():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
 
     conf['mounts'].append({"destination": "/foo", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]})
@@ -844,7 +846,7 @@ def test_bind_mount_file_nofollow():
 
 def test_idmapped_mounts_without_userns():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     source_dir = os.path.join(get_tests_root(), "test-idmapped-mounts-no-userns")
     try:
         os.makedirs(source_dir)

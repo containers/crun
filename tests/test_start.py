@@ -27,7 +27,7 @@ from tests_utils import *
 
 def test_not_allowed_ipc_sysctl():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'true']
@@ -76,7 +76,7 @@ def test_not_allowed_ipc_sysctl():
 
 def test_not_allowed_net_sysctl():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'true']
     add_all_namespaces(conf, netns=False)
@@ -110,7 +110,7 @@ def test_not_allowed_net_sysctl():
 
 def test_unknown_sysctl():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     for sysctl in ['kernel.foo', 'bar.baz', 'fs.baz']:
         conf = base_config()
@@ -131,7 +131,7 @@ def test_unknown_sysctl():
 
 def test_uts_sysctl():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     # setting kernel.hostname must always fail.
     for utsns in [True, False]:
@@ -252,7 +252,7 @@ def test_run_twice():
 
 def test_sd_notify():
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
     add_all_namespaces(conf)
@@ -268,7 +268,7 @@ def test_sd_notify():
 
 def test_sd_notify_file():
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     conf = base_config()
     conf['process']['args'] = ['/init', 'ls', '/tmp/parent-dir/the-socket/']
     add_all_namespaces(conf)
@@ -284,7 +284,7 @@ def test_sd_notify_file():
 
 def test_sd_notify_env():
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     conf = base_config()
     conf['process']['args'] = ['/init', 'printenv', 'NOTIFY_SOCKET']
     add_all_namespaces(conf)
@@ -316,14 +316,14 @@ def test_delete_in_created_state():
 
 def test_sd_notify_proxy():
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     has_open_tree_status = subprocess.call([get_init_path(), "check-feature", "open_tree"])
     has_move_mount_status = subprocess.call([get_init_path(), "check-feature", "move_mount"])
     if has_open_tree_status != 0 or has_move_mount_status != 0:
-        return 77
+        return (77, "requires open_tree and move_mount syscalls")
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'systemd-notify', '--ready']
@@ -379,7 +379,7 @@ def test_empty_home():
 
 def test_run_rootless_netns_with_userns():
     if not is_rootless():
-        return 77
+        return (77, "requires rootless mode")
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
@@ -425,7 +425,7 @@ def test_ioprio():
 
     supported = subprocess.call([get_init_path(), "check-feature", "ioprio"])
     if supported != 0:
-        return 77
+        return (77, "ioprio support not available")
 
     conf = base_config()
     add_all_namespaces(conf, netns=False)
@@ -509,7 +509,7 @@ def test_invalid_id():
 
 def test_home_unknown_id():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'printenv', "HOME"]
@@ -532,9 +532,9 @@ def test_start_help():
 # https://github.com/containers/crun/issues/1811.
 def test_systemd_cgroups_path_def_slice():
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     if not running_on_systemd():
-        return 77
+        return (77, "not running on systemd")
 
     conf = base_config()
     add_all_namespaces(conf)

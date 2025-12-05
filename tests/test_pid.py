@@ -19,7 +19,7 @@ from tests_utils import *
 
 def test_pid():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     conf['linux']['namespaces'].append({"type" : "pid"})
@@ -41,7 +41,7 @@ def test_pid_user():
 
 def test_pid_host_namespace():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     # No PID namespace is added.  Expect PID to not be 1.

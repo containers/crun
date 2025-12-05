@@ -47,27 +47,27 @@ def check_bpf_prerequisites():
     """Check all prerequisites for BPF device tests. Returns 77 (skip) if not met, 0 if OK"""
     # Skip if not root
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     # Skip if not cgroup v2
     if not is_cgroup_v2_unified():
-        return 77
+        return (77, "requires cgroup v2")
 
     # Skip if systemd not available
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
 
     # Skip if not running on systemd
     if not running_on_systemd():
-        return 77
+        return (77, "not running on systemd")
 
     # Skip if no BPF support
     if not has_bpf_fs():
-        return 77
+        return (77, "BPF filesystem not available")
 
     # Skip if systemd doesn't support BPFProgram
     if not systemd_supports_bpf_program():
-        return 77
+        return (77, "systemd BPFProgram not supported")
 
     return 0
 

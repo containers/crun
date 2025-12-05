@@ -21,7 +21,7 @@ def test_limit_pid_minus_1():
     conf = base_config()
     add_all_namespaces(conf)
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : -1}}
     try:
@@ -40,7 +40,7 @@ def test_limit_pid_0():
     conf = base_config()
     add_all_namespaces(conf)
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : 0}}
     try:
@@ -58,7 +58,7 @@ def test_limit_pid_0():
 def test_limit_pid_n():
     conf = base_config()
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'forkbomb', '20']
     pid_limit = 10

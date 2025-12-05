@@ -21,7 +21,7 @@ from tests_utils import *
 
 def test_userns_full_mapping():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
@@ -48,7 +48,7 @@ def test_userns_full_mapping():
 
 def test_uid():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
@@ -64,7 +64,7 @@ def test_uid():
 
 def test_gid():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
@@ -80,7 +80,7 @@ def test_gid():
 
 def test_no_groups():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
@@ -95,7 +95,7 @@ def test_no_groups():
 
 def test_keep_groups():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     oldgroups = os.getgroups()
     out = ""
     try:
@@ -117,7 +117,7 @@ def test_keep_groups():
 
 def test_additional_gids():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
@@ -172,7 +172,7 @@ def test_umask():
 def test_dev_null_no_chown():
     """Test that /dev/null file descriptors are not chowned to container user."""
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     # Get current owner of /dev/null and use owner + 1 as container user
     dev_null_stat = os.stat('/dev/null')
@@ -212,7 +212,7 @@ def test_dev_null_no_chown():
 def test_regular_files_chowned():
     """Test that regular file descriptors are chowned to container user."""
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     # Get current owner of /dev/null and use owner + 1 as container user
     dev_null_stat = os.stat('/dev/null')

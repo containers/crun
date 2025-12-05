@@ -31,15 +31,15 @@ def check_mempolicy_prerequisites(need_interleave=False):
     """Check all prerequisites for numa mempolicy tests. Returns 77 (skip) if not met, 0 if OK"""
     if not check_numa_hw():
         sys.stderr.write("# numa missing\n")
-        return 77
+        return (77, "NUMA hardware not available")
     if need_interleave and not check_numa_interleave():
         sys.stderr.write("# interleave missing\n")
-        return 77
+        return (77, "NUMA interleave not supported")
 
 def test_mempolicy_no_conf():
     """Test numa mempolicy without configuration"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -62,7 +62,7 @@ def test_mempolicy_no_conf():
 def test_mempolicy_bad_mode():
     """Test numa mempolicy with bad mode"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -85,7 +85,7 @@ def test_mempolicy_bad_mode():
 def test_mempolicy_bad_flag():
     """Test numa mempolicy with bad flag"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -108,7 +108,7 @@ def test_mempolicy_bad_flag():
 def test_mempolicy_numa_balancing_flag():
     """Test numa mempolicy preferred with numa_balancing flag"""
     if check_mempolicy_prerequisites(need_interleave=True):
-        return 77
+        return check_mempolicy_prerequisites(need_interleave=True)
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -131,7 +131,7 @@ def test_mempolicy_numa_balancing_flag():
 def test_mempolicy_static_relative_nodes_flags():
     """Test numa mempolicy preferred with numa_balancing flag"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -154,7 +154,7 @@ def test_mempolicy_static_relative_nodes_flags():
 def test_mempolicy_no_nodes():
     """Test numa mempolicy without nodes configuration"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -177,7 +177,7 @@ def test_mempolicy_no_nodes():
 def test_mempolicy_bad_nodes_string():
     """Test numa mempolicy without nodes configuration"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -200,7 +200,7 @@ def test_mempolicy_bad_nodes_string():
 def test_mempolicy_bad_nodes_number():
     """Test numa mempolicy without nodes configuration"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -223,7 +223,7 @@ def test_mempolicy_bad_nodes_number():
 def test_mempolicy_default_mode():
     """Test numa mempolicy default mode"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -249,7 +249,7 @@ def test_mempolicy_default_mode():
 def test_mempolicy_local_mode():
     """Test numa mempolicy local mode"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -275,7 +275,7 @@ def test_mempolicy_local_mode():
 def test_mempolicy_bind_mode():
     """Test numa mempolicy bind mode"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -301,7 +301,7 @@ def test_mempolicy_bind_mode():
 def test_mempolicy_bind_mode_balancing():
     """Test numa mempolicy bind mode balancing"""
     if check_mempolicy_prerequisites(need_interleave=True):
-        return 77
+        return check_mempolicy_prerequisites(need_interleave=True)
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -327,7 +327,7 @@ def test_mempolicy_bind_mode_balancing():
 def test_mempolicy_bind_mode_balancing_relative():
     """Test numa mempolicy bind mode balancing with relative nodes"""
     if check_mempolicy_prerequisites(need_interleave=True):
-        return 77
+        return check_mempolicy_prerequisites(need_interleave=True)
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -353,7 +353,7 @@ def test_mempolicy_bind_mode_balancing_relative():
 def test_mempolicy_preferred_mode_static():
     """Test numa mempolicy preferred mode with static nodes"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -379,7 +379,7 @@ def test_mempolicy_preferred_mode_static():
 def test_mempolicy_preferred_many_mode():
     """Test numa mempolicy preferred many mode with all nodes"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -405,7 +405,7 @@ def test_mempolicy_preferred_many_mode():
 def test_mempolicy_interleave_mode():
     """Test numa mempolicy interleave mode"""
     if check_mempolicy_prerequisites():
-        return 77
+        return check_mempolicy_prerequisites()
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
@@ -431,7 +431,7 @@ def test_mempolicy_interleave_mode():
 def test_mempolicy_weighted_interleave_mode():
     """Test numa mempolicy weighted interleave mode"""
     if check_mempolicy_prerequisites(need_interleave=True):
-        return 77
+        return check_mempolicy_prerequisites(need_interleave=True)
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/numa_maps']
