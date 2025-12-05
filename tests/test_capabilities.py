@@ -34,7 +34,7 @@ def test_no_caps():
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
         if proc_status.get(i, '') != "0000000000000000":
             actual = proc_status.get(i, 'MISSING')
-            sys.stderr.write("# %s capability check failed: expected '0000000000000000', got '%s'\n" % (i, actual))
+            logger.info("%s capability check failed: expected '0000000000000000', got '%s'", i, actual)
             return -1
     return 0
 
@@ -51,7 +51,7 @@ def test_some_caps():
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
         if proc_status.get(i, '') != "0000000000000000":
             actual = proc_status.get(i, 'MISSING')
-            sys.stderr.write("# %s capability check failed: expected '0000000000000000', got '%s'\n" % (i, actual))
+            logger.info("%s capability check failed: expected '0000000000000000', got '%s'", i, actual)
             return -1
     return 0
 
@@ -69,7 +69,7 @@ def test_unknown_caps():
     for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
         if proc_status.get(i, '') != "0000000000000000":
             actual = proc_status.get(i, 'MISSING')
-            sys.stderr.write("# %s capability check failed (unknown caps should be ignored): expected '0000000000000000', got '%s'\n" % (i, actual))
+            logger.info("%s capability check failed (unknown caps should be ignored): expected '0000000000000000', got '%s'", i, actual)
             return -1
     return 0
 
@@ -83,11 +83,11 @@ def test_new_privs():
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status.get('NoNewPrivs', 'MISSING')
     if no_new_privs != "1":
-        sys.stderr.write("# noNewPrivileges=true test failed: expected '1', got '%s'\n" % no_new_privs)
+        logger.info("noNewPrivileges=true test failed: expected '1', got '%s'", no_new_privs)
         return -1
 
     with open("/proc/self/status") as f:
-        host_proc_status = parse_proc_status("\n".join(f.readlines()))
+        host_proc_status = parse_proc_status(f.read())
         host_no_new_privs = host_proc_status.get('NoNewPrivs', '0')
         # if nonewprivs is already set, it cannot be unset, so skip the
         # next test
@@ -99,7 +99,7 @@ def test_new_privs():
     proc_status = parse_proc_status(out)
     no_new_privs = proc_status.get('NoNewPrivs', 'MISSING')
     if no_new_privs != "0":
-        sys.stderr.write("# noNewPrivileges=false test failed: expected '0', got '%s'\n" % no_new_privs)
+        logger.info("noNewPrivileges=false test failed: expected '0', got '%s'", no_new_privs)
         return -1
 
     return 0
@@ -118,8 +118,8 @@ def helper_test_some_caps(uid, captypes, proc_name):
     expected = "0000000000200000"
     actual = proc_status.get(proc_name, 'MISSING')
     if actual != expected:
-        sys.stderr.write("# %s capability check failed for uid %d with caps %s: expected '%s', got '%s'\n" %
-                        (proc_name, uid, captypes, expected, actual))
+        logger.info("%s capability check failed for uid %d with caps %s: expected '%s', got '%s'",
+                        proc_name, uid, captypes, expected, actual)
         return -1
     return 0
 
