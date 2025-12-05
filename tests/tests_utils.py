@@ -187,6 +187,10 @@ def run_all_tests(all_tests, allowed_tests):
         allowed_tests = allowed_tests.split()
         tests = {k: v for k, v in tests.items() if k in allowed_tests}
 
+    # Test timing thresholds
+    SLOW_TEST_THRESHOLD = 30.0  # seconds
+    VERY_SLOW_TEST_THRESHOLD = 60.0  # seconds
+
     print("1..%d" % len(tests))
     cur = 0
     for k, v in tests.items():
@@ -200,6 +204,15 @@ def run_all_tests(all_tests, allowed_tests):
 
             ret = v()
             test_duration = time.time() - test_start_time
+
+            # Check for slow tests and emit warnings
+            if test_duration > VERY_SLOW_TEST_THRESHOLD:
+                sys.stderr.write("# WARNING: Test '%s' took %.3fs (>%.1fs very slow threshold)\n" %
+                                (k, test_duration, VERY_SLOW_TEST_THRESHOLD))
+            elif test_duration > SLOW_TEST_THRESHOLD:
+                sys.stderr.write("# WARNING: Test '%s' took %.3fs (>%.1fs slow threshold)\n" %
+                                (k, test_duration, SLOW_TEST_THRESHOLD))
+
             if ret == 0:
                 print("ok %d - %s # %.3fs" % (cur, k, test_duration))
             elif ret == 77:
