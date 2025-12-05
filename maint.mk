@@ -1581,7 +1581,7 @@ init-coverage:
 	lcov --directory . --zerocounters
 
 COVERAGE_CCOPTS ?= "-g --coverage"
-COVERAGE_OUT ?= doc/coverage
+COVERAGE_OUT ?= docs/coverage
 
 build-coverage:
 	$(MAKE) $(AM_MAKEFLAGS) CFLAGS=$(COVERAGE_CCOPTS) CXXFLAGS=$(COVERAGE_CCOPTS)
@@ -1594,7 +1594,10 @@ gen-coverage:
 	genhtml --output-directory $(COVERAGE_OUT) \
 		$(COVERAGE_OUT)/$(PACKAGE).info \
 		--highlight --frames --legend \
-		--title "$(PACKAGE_NAME)"
+		--title "$(PACKAGE_NAME)" \
+		--ignore-errors unmapped
+
+.NOTPARALLEL: coverage init-coverage build-coverage gen-coverage
 
 coverage:
 	$(MAKE) init-coverage
