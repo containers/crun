@@ -122,6 +122,17 @@ base_conf = """
 		"noexec",
 		"nodev"
 	    ]
+	},
+	{
+	    "destination": "/tmp",
+	    "type": "tmpfs",
+	    "source": "tmpfs",
+	    "options": [
+		"nosuid",
+		"nodev",
+		"mode=1777",
+		"size=65536k"
+	    ]
 	}
     ],
     "linux": {
