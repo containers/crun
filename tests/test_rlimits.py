@@ -32,7 +32,7 @@ def parse_proc_limits(content):
 
 def test_rlimits():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/limits']
     rlimits = [
@@ -51,13 +51,13 @@ def test_rlimits():
     ]
     conf['process']['rlimits'] = rlimits
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     limits = parse_proc_limits(out)
 
     for v in rlimits:
         limit = limits.get(v['type'])
         if str(limit[1]) != str(v['soft']) or str(limit[2]) != str(v['hard']):
-            sys.stderr.write("# %s: %s %s\n" % (limit[0], limit[1], limit[2]))
+            logger.info("%s: %s %s", key, soft_limit, hard_limit)
             return -1
     return 0
 

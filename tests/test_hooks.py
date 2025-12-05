@@ -23,7 +23,7 @@ def test_fail_prestart():
     conf['hooks'] = {"prestart" : [{"path" : "/bin/false"}]}
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
     except:
         return 0
     return -1
@@ -33,7 +33,7 @@ def test_success_prestart():
     conf['hooks'] = {"prestart" : [{"path" : "/bin/true"}]}
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
     except:
         return -1
     return 0
@@ -48,7 +48,7 @@ def test_hook_env_inherit():
     add_all_namespaces(conf)
     print(conf['hooks'])
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
     except:
         return -1
     return 0
@@ -62,7 +62,7 @@ def test_hook_env_no_inherit():
     add_all_namespaces(conf)
     print(conf['hooks'])
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
     except:
         return -1
     return 0

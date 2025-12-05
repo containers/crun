@@ -86,13 +86,22 @@ libocispec/libocispec.la:
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
-libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
+if ENABLE_COVERAGE
+libcrun_la_CFLAGS += $(COVERAGE_CFLAGS)
+libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(COVERAGE_LDFLAGS)
+else
 libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+endif
+libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(maybe_libyajl.la)
 
 # build a version with all the symbols visible for testing
 if BUILD_TESTS
 libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
 libcrun_testing_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=default
+if ENABLE_COVERAGE
+libcrun_testing_la_CFLAGS += $(COVERAGE_CFLAGS)
+libcrun_testing_la_LDFLAGS = $(COVERAGE_LDFLAGS)
+endif
 libcrun_testing_la_LIBADD = libocispec/libocispec.la $(maybe_libyajl.la)
 endif
 
@@ -137,15 +146,26 @@ dist-luarock: $(LUACRUN_ROCK)
 endif
 
 crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
+if ENABLE_COVERAGE
+crun_CFLAGS += $(COVERAGE_CFLAGS)
+endif
 crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpause.c src/oci_features.c src/spec.c \
 		src/exec.c src/list.c src/create.c src/start.c src/state.c src/update.c src/ps.c \
 		src/checkpoint.c src/restore.c src/mounts.c src/run_create.c
 
 if DYNLOAD_LIBCRUN
+if ENABLE_COVERAGE
+crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS)
+else
 crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS)
+endif
 else
 crun_LDADD = libcrun.la $(FOUND_LIBS) $(maybe_libyajl.la)
+if ENABLE_COVERAGE
+crun_LDFLAGS = $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS)
+else
 crun_LDFLAGS = $(CRUN_LDFLAGS)
+endif
 endif
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec autogen.sh \
@@ -187,6 +207,7 @@ TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(maybe_libyajl.la)
 
 tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
+tests_init_CFLAGS = -g -O2
 tests_init_SOURCES = tests/init.c
 
 tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
@@ -338,4 +359,105 @@ clang-format:
 shellcheck:
 	shellcheck autogen.sh build-aux/release.sh tests/run_all_tests.sh tests/*/*.sh contrib/*.sh
 
-.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck
+# Code coverage targets
+if ENABLE_COVERAGE
+
+# Clean coverage data
+coverage-clean:
+	@rm -rf coverage-html coverage.info coverage.xml
+	@find . -name "*.gcda" -delete
+	@find . -name "*.gcno" -delete
+
+# Reset coverage counters
+coverage-reset:
+	@if test -n "$(LCOV)"; then \
+		$(LCOV) --zerocounters --directory .; \
+	fi
+
+# Run tests and collect coverage data
+coverage-check: coverage-reset
+	@echo "Running tests for coverage (single-threaded to avoid race conditions)..."
+	$(MAKE) -j1 check
+	@echo "Collecting coverage data..."
+
+# Generate HTML coverage report (preferred method with lcov)
+coverage-html: coverage-check
+	@if test -n "$(LCOV)"; then \
+		echo "Generating coverage report with lcov..."; \
+		$(LCOV) --capture --directory . --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '/usr/*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/libocispec/*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/tests/test_*.py*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/tests/init*' --output-file coverage.info; \
+		genhtml coverage.info --output-directory coverage-html; \
+		echo "Coverage report generated in coverage-html/index.html"; \
+	elif test -n "$(GCOVR)"; then \
+		echo "Generating coverage report with gcovr..."; \
+		$(GCOVR) --html --html-details -o coverage.html \
+			--exclude '/usr/.*' --exclude '.*/libocispec/.*' --exclude '.*/tests/test_.*\.py.*' --exclude '.*/tests/init.*'; \
+		echo "Coverage report generated in coverage.html"; \
+	else \
+		echo "Generating coverage report with gcov..."; \
+		mkdir -p coverage-html; \
+		for src in $(libcrun_SOURCES) $(crun_SOURCES); do \
+			if test -f "$${src}.gcno"; then \
+				$(GCOV) -o . $$src || true; \
+			fi; \
+		done; \
+		mv *.gcov coverage-html/ 2>/dev/null || true; \
+		echo "Coverage files generated in coverage-html/"; \
+	fi
+
+# Generate XML coverage report (for CI tools)
+coverage-xml: coverage-check
+	@if test -n "$(GCOVR)"; then \
+		echo "Generating XML coverage report with gcovr..."; \
+		$(GCOVR) --xml -o coverage.xml \
+			--exclude '/usr/.*' --exclude '.*/libocispec/.*' --exclude '.*/tests/test_.*\.py.*' --exclude '.*/tests/init.*'; \
+		echo "Coverage report generated in coverage.xml"; \
+	elif test -n "$(LCOV)"; then \
+		echo "Generating XML coverage report with lcov..."; \
+		$(LCOV) --capture --directory . --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '/usr/*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/libocispec/*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/tests/test_*.py*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/tests/init*' --output-file coverage.info; \
+		echo "Coverage data collected in coverage.info"; \
+	else \
+		echo "XML coverage requires gcovr or lcov"; \
+		exit 1; \
+	fi
+
+# Generate coverage summary
+coverage-summary: coverage-check
+	@if test -n "$(LCOV)"; then \
+		echo "Coverage summary (lcov):"; \
+		$(LCOV) --capture --directory . --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '/usr/*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/libocispec/*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/tests/test_*.py*' --output-file coverage.info; \
+		$(LCOV) --remove coverage.info '*/tests/init*' --output-file coverage.info; \
+		$(LCOV) --summary coverage.info; \
+	elif test -n "$(GCOVR)"; then \
+		echo "Coverage summary (gcovr):"; \
+		$(GCOVR) --exclude '/usr/.*' --exclude '.*/libocispec/.*' --exclude '.*/tests/test_.*\.py.*' --exclude '.*/tests/init.*'; \
+	else \
+		echo "Coverage summary requires lcov or gcovr"; \
+	fi
+
+else
+
+coverage-clean:
+	@echo "Coverage support not enabled. Reconfigure with --enable-coverage"
+
+coverage-reset coverage-check coverage-html coverage-xml coverage-summary:
+	@echo "Coverage support not enabled. Reconfigure with --enable-coverage"
+
+endif
+
+clean-local: coverage-clean
+
+# Coverage targets must not run in parallel due to race conditions in .gcda file writes
+.NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary
+
+.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary

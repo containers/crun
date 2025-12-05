@@ -18,6 +18,10 @@
 import sys
 import copy
 import socket
+import os
+import shutil
+import subprocess
+import json
 from tests_utils import *
 import tempfile
 import re
@@ -52,14 +56,14 @@ def helper_mount(options: str, tmpfs: bool = True, userns: bool = False, is_file
             target = '/var/file' if is_file else '/var/dir'
             m = t.find_target(target)
             if m is None:
-                sys.stderr.write("# helper_mount failed: mount target '%s' not found in mountinfo\n" % target)
-                sys.stderr.write("# mount options: %s, tmpfs=%s, userns=%s, is_file=%s\n" % (options, tmpfs, userns, is_file))
-                sys.stderr.write("# mountinfo output: %s\n" % out[:300])
+                logger.info("helper_mount failed: mount target '%s' not found in mountinfo", target)
+                logger.info("mount options: %s, tmpfs=%s, userns=%s, is_file=%s", options, tmpfs, userns, is_file)
+                logger.info("mountinfo output: %s", out)
                 return [None, None]
             return [m.vfs_options, m.fs_options]
     except Exception as e:
-        sys.stderr.write("# helper_mount failed with exception: %s\n" % str(e))
-        sys.stderr.write("# mount options: %s, tmpfs=%s, userns=%s, is_file=%s\n" % (options, tmpfs, userns, is_file))
+        logger.info("helper_mount failed with exception: %s", e)
+        logger.info("mount options: %s, tmpfs=%s, userns=%s, is_file=%s", options, tmpfs, userns, is_file)
         return [None, None]
 
 def test_mount_symlink():
@@ -71,8 +75,8 @@ def test_mount_symlink():
     out, _ = run_and_get_output(conf, hide_stderr=True)
     if "Rome" in out:
         return 0
-    sys.stderr.write("# symlink mount test failed: expected 'Rome' in mountinfo output\n")
-    sys.stderr.write("# actual output: %s\n" % out[:200])
+    logger.info("symlink mount test failed: expected 'Rome' in mountinfo output")
+    logger.info("actual output: %s", out)
     return -1
 
 def test_mount_fifo():
@@ -89,8 +93,8 @@ def test_mount_fifo():
         conf['mounts'].append(mount_opt)
         out, _ = run_and_get_output(conf, hide_stderr=True)
         if "FIFO" not in out:
-            sys.stderr.write("# FIFO mount test failed with options %s: expected 'FIFO' in output\n" % options)
-            sys.stderr.write("# actual output: %s\n" % out)
+            logger.info("FIFO mount test failed with options %s: expected 'FIFO' in output", options)
+            logger.info("actual output: %s", out)
             return 1
     return 0
 
@@ -109,26 +113,26 @@ def test_mount_unix_socket():
         conf['mounts'].append(mount_opt)
         out, _ = run_and_get_output(conf, hide_stderr=True)
         if "socket" not in out:
-            sys.stderr.write("# unix socket mount test failed with options %s: expected 'socket' in output\n" % options)
-            sys.stderr.write("# actual output: %s\n" % out)
+            logger.info("unix socket mount test failed with options %s: expected 'socket' in output", options)
+            logger.info("actual output: %s", out)
             return 1
     return 0
 
 def test_mount_tmpfs_permissions():
     def prepare_rootfs(rootfs):
-        path = os.path.join(rootfs, "tmp")
+        path = os.path.join(rootfs, "test-tmpfs")
         os.mkdir(path)
         os.chmod(path, 0o712)
 
     conf = base_config()
-    conf['process']['args'] = ['/init', 'mode', '/tmp']
+    conf['process']['args'] = ['/init', 'mode', '/test-tmpfs']
     add_all_namespaces(conf)
-    conf['mounts'].append({"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["ro"]})
+    conf['mounts'].append({"destination": "/test-tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["ro"]})
     out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
     if "712" in out:
         return 0
-    sys.stderr.write("# tmpfs permissions test failed: expected '712' in mode output\n")
-    sys.stderr.write("# actual output: %s\n" % out)
+    logger.info("tmpfs permissions test failed: expected '712' in mode output")
+    logger.info("actual output: %s", out)
     return -1
 
 def test_mount_bind_to_rootfs():
@@ -202,7 +206,7 @@ def test_ro_cgroup():
                 for i in reversed(out.split("\n")):
                     if i.find("/sys/fs/cgroup") >= 0:
                         if i.find("ro,") < 0:
-                            print("fail with cgroupns=%s, netns=%s and cgroup_mount=%s, got %s" % (cgroupns, netns, has_cgroup_mount, i), file=sys.stderr)
+                            logger.error("fail with cgroupns=%s, netns=%s and cgroup_mount=%s, got %s", cgroupns, netns, has_cgroup_mount, i)
                             return -1
                         break
     return 0
@@ -442,7 +446,7 @@ def test_mount_dev():
 
 def test_userns_bind_mount():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
@@ -473,7 +477,7 @@ def test_userns_bind_mount():
 
 def test_userns_bind_mount_symlink():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
@@ -486,7 +490,7 @@ def test_userns_bind_mount_symlink():
     ]
     conf['linux']['uidMappings'] = fullMapping
     conf['linux']['gidMappings'] = fullMapping
-    sys.stderr.write("# start\n")
+    logger.info("start")
 
     bind_dir_parent = os.path.join(get_tests_root(), "bind-mount-userns-symlink")
     bind_dir = os.path.join(bind_dir_parent, "m")
@@ -502,17 +506,22 @@ def test_userns_bind_mount_symlink():
         os.chmod(bind_dir_parent, 0o000)
 
         conf['process']['args'] = ['/init', 'cat', "/foo/content"]
-        out, _ = run_and_get_output(conf, chown_rootfs_to=1)
+        out, _ = run_and_get_output(conf, chown_rootfs_to=1, hide_stderr=True)
         if out != "hello":
-            sys.stderr.write("# wrong file owner, found %s instead of %s\n" % (out, "hello"))
+            logger.info("wrong file content, found '%s' instead of 'hello'", out)
             return -1
     finally:
-        shutil.rmtree(bind_dir)
+        try:
+            # Restore permissions so we can clean up properly
+            os.chmod(bind_dir_parent, 0o755)
+            shutil.rmtree(bind_dir_parent)
+        except Exception as e:
+            logger.info("Failed to cleanup test directory: %s", e)
     return 0
 
 def test_idmapped_mounts():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     source_dir = os.path.join(get_tests_root(), "test-idmapped-mounts")
     try:
         os.makedirs(source_dir)
@@ -524,7 +533,7 @@ def test_idmapped_mounts():
 
         idmapped_mounts_status = subprocess.call([get_init_path(), "check-feature", "idmapped-mounts", source_dir])
         if idmapped_mounts_status != 0:
-            return 77
+            return (77, "idmapped mounts not supported")
 
         template = base_config()
         add_all_namespaces(template, userns=True)
@@ -557,7 +566,7 @@ def test_idmapped_mounts():
             conf['mounts'].append(mount_opt)
             out = run_and_get_output(conf, chown_rootfs_to=1)
             if expected not in out[0]:
-                sys.stderr.write("# wrong file owner, found %s instead of %s\n" % (out[0], expected))
+                logger.info("wrong file owner, found %s instead of %s", out[0], expected)
                 return True
             return False
 
@@ -641,13 +650,13 @@ def test_cgroup_mount_without_netns():
             if i.find("/sys/fs/cgroup") >= 0:
                 count = count + 1
         if count < 2:
-            sys.stderr.write("# fail with cgroupns=%s, got %s\n" % (cgroupns, out))
+            logger.info("fail with cgroupns=%s, got %s", cgroupns, i)
             return -1
     return 0
 
 def test_add_remove_mounts():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
 
     conf['mounts'].append({"destination": "/foo", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]})
@@ -672,9 +681,9 @@ def test_add_remove_mounts():
         if exists == expected:
             return True
         if expected:
-            sys.stderr.write("# test file not found\n")
+            logger.info("test file not found")
         else:
-            sys.stderr.write("# test file found\n")
+            logger.info("test file found")
         return False
 
     new_mounts = [{"destination": parent_dir_in_container, "type": "bind", "source": bind_dir, "options": ["bind", "ro"]},
@@ -695,7 +704,7 @@ def test_add_remove_mounts():
             return -1
         out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
         if not re.search(r".*/ /foo/tmpfs .*tmpfs.*", out):
-            sys.stderr.write("# /foo/tmpfs not found as a tmpfs\n")
+            logger.info("/foo/tmpfs not found as a tmpfs")
             return -1
 
         run_crun_command(["mounts", "remove", cid, mounts_path])
@@ -704,7 +713,7 @@ def test_add_remove_mounts():
 
         out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
         if re.search(r".*/ /foo/tmpfs .*tmpfs.*", out):
-            sys.stderr.write("# /foo/tmpfs still mounted\n")
+            logger.info("/foo/tmpfs still mounted")
             return -1
     finally:
         if cid is not None:
@@ -764,12 +773,12 @@ def test_bind_mount_symlink_nofollow():
             conf['mounts'].append(mount_opt)
 
             try:
-                out, _ = run_and_get_output(conf, hide_stderr=True,callback_prepare_rootfs=prepare_rootfs)
-                sys.stderr.write("# got output %s with configuration userns=%s, src-nofollow=%s\n" % (out, userns, src_nofollow))
+                out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+                logger.info("got output %s with configuration userns=%s, src-nofollow=%s", out, userns, src_nofollow)
                 if expected not in out:
                     return -1
             except Exception as e:
-                sys.stderr.write("# error %s\n" % e)
+                logger.info("error %s", e)
                 return -1
 
     return 0
@@ -789,10 +798,10 @@ def test_bind_mount_symlink_nofollow_procfs():
     conf['mounts'].append(mount_opt)
 
     try:
-        out, _ = run_and_get_output(conf, hide_stderr=True,callback_prepare_rootfs=prepare_rootfs)
+        out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
         return -1
     except Exception as e:
-        sys.stderr.write("# error %s\n" % e)
+        logger.info("error %s", e)
         return 0
 
     return 0
@@ -834,17 +843,17 @@ def test_bind_mount_file_nofollow():
             conf['mounts'].append(mount_opt)
 
             try:
-                out, _ = run_and_get_output(conf, hide_stderr=True,callback_prepare_rootfs=prepare_rootfs)
-                sys.stderr.write("# got output %s with configuration userns=%s, src-nofollow=%s\n" % (out, userns, src_nofollow))
+                out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+                logger.info("got output %s with configuration userns=%s, src-nofollow=%s", out, userns, src_nofollow)
                 if target_content not in out:
                     return 1
             except Exception as e:
-                sys.stderr.write("# error %s\n" % e)
+                logger.info("error %s", e)
     return 0
 
 def test_idmapped_mounts_without_userns():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     source_dir = os.path.join(get_tests_root(), "test-idmapped-mounts-no-userns")
     try:
         os.makedirs(source_dir)
@@ -875,8 +884,8 @@ def test_idmapped_mounts_without_userns():
         out, _ = run_and_get_output(conf, hide_stderr=True)
 
         if "1000:1000" not in out:
-            sys.stderr.write("# idmap without userns test failed: expected '1000:1000' in output\n")
-            sys.stderr.write("# actual output: %s\n" % out)
+            logger.info("idmap without userns test failed: expected '1000:1000' in output")
+            logger.info("actual output: %s", out)
             return 1
     finally:
         shutil.rmtree(source_dir)

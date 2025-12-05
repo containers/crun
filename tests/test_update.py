@@ -17,6 +17,7 @@
 
 import os
 import shutil
+import tempfile
 from tests_utils import *
 
 def test_update():
@@ -25,11 +26,11 @@ def test_update():
     add_all_namespaces(conf)
 
     temp_dir = tempfile.mkdtemp(dir=get_tests_root())
-    out, container_id = run_and_get_output(conf, detach=True)
+    out, container_id = run_and_get_output(conf, hide_stderr=True, detach=True)
     try:
         p = "/sys/fs/cgroup/memory/system.slice/libcrun-%s.scope/memory.limit_in_bytes" % container_id
         if not os.path.exists(p):
-            return 77
+            return (77, "cgroup v1 memory controller not available")
         with open(p) as f:
             oldval = f.read()
 

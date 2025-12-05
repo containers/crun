@@ -24,15 +24,15 @@ def test_hostname():
     conf['hostname'] = expected_hostname
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if expected_hostname not in out:
-            sys.stderr.write("# hostname test failed: expected '%s' in output\n" % expected_hostname)
-            sys.stderr.write("# actual output: %s\n" % out.strip())
+            logger.info("hostname test failed: expected '%s' in output", expected_hostname)
+            logger.info("actual output: %s", out)
             return -1
         return 0
     except Exception as e:
-        sys.stderr.write("# hostname test failed with exception: %s\n" % str(e))
-        sys.stderr.write("# expected hostname: %s\n" % expected_hostname)
+        logger.info("hostname test failed with exception: %s", e)
+        logger.info("expected hostname: %s", expected_hostname)
         return -1
     
 all_tests = {

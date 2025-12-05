@@ -28,9 +28,9 @@ def test_time_namespace():
     timens_offsets = "/proc/self/timens_offsets"
 
     if not os.path.exists(timens_offsets):
-        return 77
+        return (77, "time namespaces not supported")
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     time_offsets = {
         "monotonic": {
@@ -48,7 +48,7 @@ def test_time_namespace():
     conf['linux']['timeOffsets'] = time_offsets
     add_all_namespaces(conf,time=True)
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
 
         for line in out.split("\n"):
             parts = line.split()
