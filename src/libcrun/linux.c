@@ -2662,9 +2662,11 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
       parentfd = openat (rootfsfd, "..", O_PATH | O_CLOEXEC);
       if (parentfd < 0)
         {
+          int saved_errno = errno;
           ret = faccessat (rootfsfd, "..", X_OK, AT_EACCESS);
           if (ret != 0)
             return crun_make_error (err, EACCES, "make `%s` private: a component is not accessible", rootfs);
+          return crun_make_error (err, saved_errno, "make `%s` private: cannot open component", rootfs);
         }
 
       close_and_reset (&rootfsfd);
