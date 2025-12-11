@@ -2802,6 +2802,14 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (UNLIKELY (ret < 0))
     return ret;
 
+  return 0;
+}
+
+int
+libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
+{
+  int ret;
+
   ret = finalize_mounts (container, err);
   if (UNLIKELY (ret < 0))
     return ret;
