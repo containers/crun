@@ -1353,6 +1353,10 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
         return ret;
     }
 
+  ret = libcrun_finalize_mounts (entrypoint_args, container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (def->process)
     {
       ret = libcrun_set_selinux_label (container, def->process, false, err);
