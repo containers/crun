@@ -46,7 +46,6 @@ def test_hook_env_inherit():
     conf['hooks'] = {"prestart" : [hook]}
 
     add_all_namespaces(conf)
-    print(conf['hooks'])
     try:
         out, _ = run_and_get_output(conf)
     except:
@@ -60,7 +59,6 @@ def test_hook_env_no_inherit():
     conf['hooks'] = {"prestart" : [hook]}
 
     add_all_namespaces(conf)
-    print(conf['hooks'])
     try:
         out, _ = run_and_get_output(conf)
     except:
