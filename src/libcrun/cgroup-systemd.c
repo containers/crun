@@ -484,12 +484,13 @@ systemd_job_removed (sd_bus_message *m, void *userdata, sd_bus_error *error arg_
 
   if (strcmp (d->path, path) == 0)
     {
-      d->terminated = 1;
       if (strcmp (result, "done") != 0)
         {
           crun_make_error (&d->err, 0, "error `%s` systemd unit `%s`: got `%s`", d->op, unit, result);
+          d->terminated = 1;
           return -1;
         }
+        d->terminated = 1;
     }
   return 0;
 }
