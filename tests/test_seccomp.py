@@ -39,7 +39,7 @@ def recv_fds(sock, msglen, maxfds):
 
 def test_seccomp_listener():
     if not is_seccomp_listener_supported():
-        return 77
+        return (77, "seccomp listener not supported")
 
     listener_path = "%s/seccomp-listener" % get_tests_root()
     listener_metadata = "SOME-RANDOM-METADATA"
@@ -58,57 +58,57 @@ def test_seccomp_listener():
     conf['process']['args'] = ['/init', 'true']
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         conn = sock.accept()
         msg, fds = recv_fds(conn[0], 4096, 1)
         if len(fds) != 1:
-            sys.stderr.write("# seccomp listener test failed: expected 1 FD, got %d\n" % len(fds))
+            logger.info("seccomp listener test failed: expected 1 FD, got %d", len(fds))
             return -1
 
         try:
             m = json.loads(msg)
         except json.JSONDecodeError as e:
-            sys.stderr.write("# seccomp listener test failed: invalid JSON message: %s\n" % str(e))
-            sys.stderr.write("# raw message: %s\n" % msg)
+            logger.info("seccomp listener test failed: invalid JSON message: %s", str(e))
+            logger.info("raw message: %s", msg)
             return -1
 
         if m.get('ociVersion') != '0.2.0':
-            sys.stderr.write("# seccomp listener test failed: expected ociVersion '0.2.0', got '%s'\n" % m.get('ociVersion'))
+            logger.info("seccomp listener test failed: expected ociVersion '0.2.0', got '%s'", m.get('ociVersion'))
             return -1
         if len(m.get('fds', [])) != 1:
-            sys.stderr.write("# seccomp listener test failed: expected 1 fd in message, got %d\n" % len(m.get('fds', [])))
+            logger.info("seccomp listener test failed: expected 1 fd in message, got %d", len(m.get("fds", [])))
             return -1
         if 'pid' not in m:
-            sys.stderr.write("# seccomp listener test failed: missing 'pid' field in message\n")
-            sys.stderr.write("# message fields: %s\n" % list(m.keys()))
+            logger.info("seccomp listener test failed: missing 'pid' field in message")
+            logger.info("message fields: %s", list(m.keys()))
             return -1
         if m.get('metadata') != listener_metadata:
-            sys.stderr.write("# seccomp listener test failed: expected metadata '%s', got '%s'\n" % (listener_metadata, m.get('metadata')))
+            logger.info("seccomp listener test failed: expected metadata '%s', got '%s'", listener_metadata, m.get('metadata'))
             return -1
         state = m.get('state', {})
         if state.get('status') != 'creating':
-            sys.stderr.write("# seccomp listener test failed: expected status 'creating', got '%s'\n" % state.get('status'))
+            logger.info("seccomp listener test failed: expected status 'creating', got '%s'", state.get('status'))
             return -1
         if state.get('id') != cid:
-            sys.stderr.write("# seccomp listener test failed: expected container id '%s', got '%s'\n" % (cid, state.get('id')))
+            logger.info("seccomp listener test failed: expected container id '%s', got '%s'", cid, state.get('id'))
             return -1
         return 0
     except Exception as e:
-        sys.stderr.write("# seccomp listener test failed with exception: %s\n" % str(e))
+        logger.info("seccomp listener test failed with exception: %s", e)
         if cid is not None:
-            sys.stderr.write("# container ID: %s\n" % cid)
-        sys.stderr.write("# listener path: %s\n" % listener_path)
+            logger.info("container ID: %s", cid)
+        logger.info("listener path: %s", listener_path)
         return -1
     finally:
         if cid is not None:
             try:
                 run_crun_command(["delete", "-f", cid])
             except Exception as cleanup_e:
-                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
+                logger.info("warning: failed to cleanup container %s: %s", cid, cleanup_e)
         try:
             os.unlink(listener_path)
         except Exception as cleanup_e:
-            sys.stderr.write("# warning: failed to cleanup listener socket %s: %s\n" % (listener_path, str(cleanup_e)))
+            logger.info("warning: failed to cleanup listener socket %s: %s", listener_path, cleanup_e)
 
 all_tests = {
     "seccomp-listener" : test_seccomp_listener,

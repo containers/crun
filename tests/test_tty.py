@@ -20,12 +20,12 @@ from tests_utils import *
 
 def tty_helper(fd):
     if os.isatty(1) == False:
-        return 77
+        return (77, "requires TTY")
     conf = base_config()
     conf['process']['args'] = ['/init', 'isatty', fd]
     conf['process']['terminal'] = True
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "true" not in out:
         return -1
     return 0
@@ -41,7 +41,7 @@ def test_stderr_tty():
 
 def test_tty_and_detach():
     if os.isatty(1) == False:
-        return 77
+        return (77, "requires TTY")
     conf = base_config()
     conf['process']['args'] = ['/init', 'isatty', 0]
     conf['process']['terminal'] = True

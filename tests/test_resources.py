@@ -18,12 +18,14 @@
 import subprocess
 import sys
 import time
+import json
 from tests_utils import *
+import json
 
 
 def test_resources_fail_with_enoent():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     if not is_cgroup_v2_unified():
         return 77
 
@@ -42,7 +44,7 @@ def test_resources_fail_with_enoent():
 
 def test_resources_pid_limit():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf = base_config()
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
     add_all_namespaces(conf)
@@ -54,15 +56,15 @@ def test_resources_pid_limit():
 
     conf['process']['args'] = ['/init', 'cat', fn]
 
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "1024" not in out:
-        sys.stderr.write("# found %s instead of 1024\n" % out)
+        logger.info("found %s instead of 1024", out)
         return -1
     return 0
 
 def test_resources_pid_limit_userns():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
@@ -97,15 +99,15 @@ def test_resources_pid_limit_userns():
 
     conf['process']['args'] = ['/init', 'cat', fn]
 
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "1024" not in out:
-        sys.stderr.write("# found %s instead of 1024\n" % out)
+        logger.info("found %s instead of 1024", out)
         return -1
     return 0
 
 def test_resources_unified_invalid_controller():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -134,7 +136,7 @@ def test_resources_unified_invalid_controller():
 
 def test_resources_unified_invalid_key():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -160,7 +162,7 @@ def test_resources_unified_invalid_key():
 
 def test_resources_unified():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -172,7 +174,7 @@ def test_resources_unified():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/memory.high"])
         if "1073741824" not in out:
             return -1
@@ -183,7 +185,7 @@ def test_resources_unified():
 
 def test_resources_cpu_weight():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -195,7 +197,7 @@ def test_resources_cpu_weight():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if "1234" not in out:
             return -1
@@ -206,7 +208,7 @@ def test_resources_cpu_weight():
 
 def test_resources_cgroupv2_swap_0():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -218,7 +220,7 @@ def test_resources_cgroupv2_swap_0():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/memory.swap.max"])
         if "0" not in out:
             return -1
@@ -229,7 +231,7 @@ def test_resources_cgroupv2_swap_0():
 
 def test_resources_cpu_quota_minus_one():
     if is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v1 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -241,7 +243,7 @@ def test_resources_cpu_quota_minus_one():
     }
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run')
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run')
         if "-1" not in out:
             return -1
     finally:
@@ -253,11 +255,11 @@ def test_resources_cpu_quota_minus_one():
 
 def test_resources_cpu_weight_systemd():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
     if 'SYSTEMD' not in get_crun_feature_string():
-        return 77
+        return (77, "systemd support not compiled in")
     if not running_on_systemd():
-        return 77
+        return (77, "not running on systemd")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
@@ -270,10 +272,10 @@ def test_resources_cpu_weight_systemd():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True, cgroup_manager="systemd")
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True, cgroup_manager="systemd")
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if "1234" not in out:
-            sys.stderr.write("# found wrong CPUWeight for the container cgroup\n")
+            logger.info("found wrong CPUWeight for the container cgroup")
             return -1
 
         state = run_crun_command(['state', cid])
@@ -285,7 +287,7 @@ def test_resources_cpu_weight_systemd():
             out = subprocess.check_output(['systemctl', '--user', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
 
         if out != "1234":
-            sys.stderr.write("# found wrong CPUWeight for the systemd scope\n")
+            logger.info("found wrong CPUWeight for the systemd scope")
             return 1
 
         for values in [(2, 1), (3, 2), (1024, 100), (260000, 9929), (262144, 10000)]:
@@ -297,7 +299,7 @@ def test_resources_cpu_weight_systemd():
 
             out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
             if expected_weight not in out:
-                sys.stderr.write("found wrong CPUWeight %s instead of %s for the container cgroup\n" % (out, expected_weight))
+                logger.info("found wrong CPUWeight %s instead of %s for the container cgroup", out, expected_weight)
                 return -1
 
             out = subprocess.check_output(['systemctl', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
@@ -306,7 +308,7 @@ def test_resources_cpu_weight_systemd():
                 out = subprocess.check_output(['systemctl', '--user', 'show','-PCPUWeight', scope ], close_fds=False).decode().strip()
 
             if out != expected_weight:
-                sys.stderr.write("found wrong CPUWeight for the systemd scope\n")
+                logger.info("found wrong CPUWeight for the systemd scope: expected %s, got %s", expected_weight, out)
                 return 1
     finally:
         if cid is not None:
@@ -316,14 +318,14 @@ def test_resources_cpu_weight_systemd():
 
 def test_resources_exec_cgroup():
     if not is_cgroup_v2_unified() or is_rootless():
-        return 77
+        return (77, "requires cgroup v2 and root privileges")
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
     conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo']
     cid = None
     try:
-        out, cid = run_and_get_output(conf, command='run', detach=True)
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # Give some time to pid 1 to move to the new cgroup
         time.sleep(2)
         out = run_crun_command(["exec", "--cgroup=/foo", cid, "/init", "cat", "/proc/self/cgroup"])
@@ -331,7 +333,7 @@ def test_resources_exec_cgroup():
             if i == "":
                 continue
             if "/foo" not in i:
-                sys.stderr.write("# /foo not found in the output\n")
+                logger.info("/foo not found in the output")
                 return -1
         return 0
     except Exception as e:

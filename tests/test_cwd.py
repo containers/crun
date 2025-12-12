@@ -22,7 +22,7 @@ def test_cwd():
     conf['process']['args'] = ['/init', 'cwd']
     conf['process']['cwd'] = "/var"
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "/var" not in out:
         return -1
     return 0
@@ -33,7 +33,7 @@ def test_cwd_relative():
     conf['process']['cwd'] = "/sbin"
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if "hello" not in str(out):
             return -1
     except Exception as e:
@@ -46,7 +46,7 @@ def test_cwd_relative_subdir():
     conf['process']['cwd'] = "/"
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if "hello" not in str(out):
             return -1
     except:
@@ -59,7 +59,7 @@ def test_cwd_not_exist():
     conf['process']['cwd'] = "/doesnotexist"
     add_all_namespaces(conf)
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except:
         return -1
     return 0
@@ -70,7 +70,7 @@ def test_cwd_absolute():
     conf['process']['cwd'] = "/sbin"
     add_all_namespaces(conf)
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if "hello" not in str(out):
             return -1
     except:

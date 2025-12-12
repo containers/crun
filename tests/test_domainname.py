@@ -22,7 +22,7 @@ def test_domainname():
     conf['process']['args'] = ['/init', 'getdomainname']
     conf['domainname'] = "foomachine"
     add_all_namespaces(conf)
-    out, _ = run_and_get_output(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
     if "foomachine" not in out:
         return -1
     conf = base_config()
@@ -32,10 +32,10 @@ def test_domainname():
     # in both of the above situation the test should pass. Anything other than this
     # must be considered as failure.
     try:
-        out, cid = run_and_get_output(conf)
+        out, cid = run_and_get_output(conf, hide_stderr=True)
         if out == "(none)\n":
             return 0
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         return 0
@@ -53,10 +53,10 @@ def test_domainname_conflict_sysctl():
     conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
     cid = None
     try:
-        out, cid = run_and_get_output(conf)
+        out, cid = run_and_get_output(conf, hide_stderr=True)
         if out == "(none)\n":
             return 0
-        sys.stderr.write("# unexpected success\n")
+        logger.info("unexpected success")
         return -1
     except:
         return 0
@@ -75,7 +75,7 @@ def test_domainname_with_sysctl():
     conf['linux']['sysctl'] = {'kernel.domainname' : 'foo'}
     cid = None
     try:
-        out, cid = run_and_get_output(conf)
+        out, cid = run_and_get_output(conf, hide_stderr=True)
         if out == "(none)\n":
             return 0
         return 0

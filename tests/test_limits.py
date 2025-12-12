@@ -21,52 +21,52 @@ def test_limit_pid_minus_1():
     conf = base_config()
     add_all_namespaces(conf)
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : -1}}
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if len(out) == 0:
             return 0
-        sys.stderr.write("# PID limit -1 test failed: expected empty output\n")
-        sys.stderr.write("# actual output length: %d\n" % len(out))
-        sys.stderr.write("# output: %s\n" % out[:100])
+        logger.info("PID limit -1 test failed: expected empty output")
+        logger.info("actual output length: %d", len(out))
+        logger.info("output: %s", out)
         return -1
     except Exception as e:
-        sys.stderr.write("# PID limit -1 test failed with exception: %s\n" % str(e))
+        logger.info("PID limit -1 test failed with exception: %s", e)
         return -1
 
 def test_limit_pid_0():
     conf = base_config()
     add_all_namespaces(conf)
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     conf['process']['args'] = ['/init', 'cat', '/dev/null']
     conf['linux']['resources'] = {"pids" : {"limit" : 0}}
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         if len(out) == 0:
             return 0
-        sys.stderr.write("# PID limit 0 test failed: expected empty output\n")
-        sys.stderr.write("# actual output length: %d\n" % len(out))
-        sys.stderr.write("# output: %s\n" % out[:100])
+        logger.info("PID limit 0 test failed: expected empty output")
+        logger.info("actual output length: %d", len(out))
+        logger.info("output: %s", out)
         return -1
     except Exception as e:
-        sys.stderr.write("# PID limit 0 test failed with exception: %s\n" % str(e))
+        logger.info("PID limit 0 test failed with exception: %s", e)
         return -1
 
 def test_limit_pid_n():
     conf = base_config()
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'forkbomb', '20']
     pid_limit = 10
     conf['linux']['resources'] = {"pids" : {"limit" : pid_limit}}
     try:
         out, _ = run_and_get_output(conf)
-        sys.stderr.write("# PID limit %d test failed: expected fork bomb to be limited but command succeeded\n" % pid_limit)
-        sys.stderr.write("# output: %s\n" % out[:200])
+        logger.info("PID limit %d test failed: expected fork bomb to be limited but command succeeded", pid_limit)
+        logger.info("output: %s", out)
         return -1
     except Exception as e:
         error_output = ""
@@ -74,10 +74,10 @@ def test_limit_pid_n():
             error_output = e.output.decode('utf-8', errors='ignore')
         if "fork: Resource temporarily unavailable" in error_output:
             return 0
-        sys.stderr.write("# PID limit %d test failed: expected 'fork: Resource temporarily unavailable' error\n" % pid_limit)
-        sys.stderr.write("# actual error: %s\n" % str(e))
+        logger.info("PID limit %d test failed: expected 'fork: Resource temporarily unavailable' error", pid_limit)
+        logger.info("actual error: %s", e.output)
         if error_output:
-            sys.stderr.write("# error output: %s\n" % error_output[:200])
+            logger.info("error output: %s", e.output)
         return -1
 
 all_tests = {

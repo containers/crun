@@ -36,7 +36,7 @@ def get_crun_commit():
             raise ValueError("Commit information not found")
 
     except (subprocess.CalledProcessError, ValueError) as e:
-        print(f"Error retrieving crun commit: {str(e)}")
+        logger.error("Error retrieving crun commit: %s", str(e))
         return None
 
 def test_crun_features():
@@ -198,36 +198,36 @@ def test_crun_features():
 
             if key == "annotations":
                 if "annotations" not in features:
-                    sys.stderr.write("# annotations section is missing\n")
+                    logger.info("annotations section is missing")
                     return -1
 
                 annotations = features["annotations"]
                 if annotations.get("run.oci.crun.commit") != get_crun_commit():
-                    sys.stderr.write("# wrong value for run.oci.crun.commit\n")
+                    logger.info("wrong value for run.oci.crun.commit")
                     return -1
 
                 if ('WASM' in get_crun_feature_string()
                     and annotations.get("run.oci.crun.wasm") != "true"):
-                    sys.stderr.write("# wrong value for run.oci.crun.wasm\n")
+                    logger.info("wrong value for run.oci.crun.wasm")
                     return -1
 
                 if 'CRIU' in get_crun_feature_string():
                     if annotations.get("org.opencontainers.runc.checkpoint.enabled") != "true":
-                        sys.stderr.write("# wrong value for org.opencontainers.runc.checkpoint.enabled\n")
+                        logger.info("wrong value for org.opencontainers.runc.checkpoint.enabled")
                         return -1
                     if annotations.get("run.oci.crun.checkpoint.enabled") != "true":
-                        sys.stderr.write("# wrong value for run.oci.crun.checkpoint.enabled\n")
+                        logger.info("wrong value for run.oci.crun.checkpoint.enabled")
                         return -1
             else:
                 if key not in features or sorted(features[key]) != sorted(value):
-                    sys.stderr.write(f"# Mismatch in feature: {key}\n")
-                    sys.stderr.write(f"# Expected: {value}\n")
-                    sys.stderr.write(f"# Actual: {features.get(key)}\n")
+                    logger.info("# Mismatch in feature: %s", key)
+                    logger.info("# Expected: %s", value)
+                    logger.info("# Actual: %s", features.get(key))
                     return -1
         return 0
 
     except Exception as e:
-        print("Error running crun features:", str(e))
+        logger.error("Error running crun features: %s", str(e))
         return -1
 
 all_tests = {

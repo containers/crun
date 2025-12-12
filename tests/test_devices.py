@@ -22,7 +22,7 @@ from tests_utils import *
 
 def test_mode_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     # verify the umask doesn't affect the result
     os.umask(0o22)
@@ -45,20 +45,20 @@ def test_mode_device():
         conf['linux']['devices'] = [{"path": "/dev/foo", "type": "b", "major": 1, "minor": 5, "uid": 10, "gid": 11, "fileMode": 0o157},]
         try:
             expected = "157"
-            out = run_and_get_output(conf)
+            out = run_and_get_output(conf, hide_stderr=True)
             if expected not in out[0]:
-                sys.stderr.write("# device mode test failed with userns=%s: expected '%s' in output\n" % (have_userns, expected))
-                sys.stderr.write("# actual output: %s\n" % out[0])
-                sys.stderr.write("# device config: %s\n" % conf['linux']['devices'][0])
+                logger.info("device mode test failed with userns=%s: expected '%s' in output", have_userns, expected)
+                logger.info("actual output: %s", out[0])
+                logger.info("device config: %s", conf['linux']['devices'])
                 return -1
         except Exception as e:
-            sys.stderr.write("# device mode test failed with userns=%s: %s\n" % (have_userns, str(e)))
+            logger.info("device mode test failed with userns=%s: %s", have_userns, e)
             return -1
     return 0
 
 def test_owner_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     for have_userns in [True, False]:
         conf = base_config()
@@ -78,25 +78,25 @@ def test_owner_device():
         conf['linux']['devices'] = [{"path": "/dev/foo", "type": "b", "major": 1, "minor": 5, "uid": 10, "gid": 11},]
         try:
             expected = "10:11"
-            out = run_and_get_output(conf)
+            out = run_and_get_output(conf, hide_stderr=True)
             if expected not in out[0]:
-                sys.stderr.write("# device owner test failed with userns=%s: expected '%s' in output\n" % (have_userns, expected))
-                sys.stderr.write("# actual output: %s\n" % out[0])
-                sys.stderr.write("# device config: %s\n" % conf['linux']['devices'][0])
+                logger.info("device owner test failed with userns=%s: expected '%s' in output", have_userns, expected)
+                logger.info("actual output: %s", out)
+                logger.info("device config: %s", conf["linux"]["devices"])
                 return -1
         except Exception as e:
-            sys.stderr.write("# device owner test failed with userns=%s: %s\n" % (have_userns, str(e)))
+            logger.info("device owner test failed with userns=%s: %s", have_userns, e)
             return -1
     return 0
 
 def test_deny_devices():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -123,7 +123,7 @@ def test_create_or_bind_mount_device():
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -137,21 +137,21 @@ def test_create_or_bind_mount_device():
                                  "gid": 0
                                 }]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
-        sys.stderr.write("# " + str(e) + "\n")
+        logger.info("# %s", str(e))
         return -1
     return 0
 
 
 def test_allow_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -169,19 +169,19 @@ def test_allow_device():
     }
     conf['mounts'].append(dev)
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
 
 def test_allow_access():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         os.stat("/dev/fuse")
     except:
-        return 77
+        return (77, "/dev/fuse device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -199,14 +199,14 @@ def test_allow_access():
     }
     conf['mounts'].append(dev)
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
 
 def test_mknod_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -214,33 +214,33 @@ def test_mknod_device():
     conf['linux']['devices'] = [{"path": "/foo-dev", "type": "b", "major": 10, "minor": 229},
                                 {"path": "/subdir/foo-dev", "type": "b", "major": 10, "minor": 229},]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
 
 def test_trailing_slash_mknod_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
     conf['process']['args'] = ['/init', 'true']
     conf['linux']['devices'] = [{"path": "/mnt/", "type": "b", "major": 10, "minor": 229}]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
         return -1
     return 0
 
 def test_net_devices():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     ip_path = shutil.which("ip")
     if ip_path is None:
-        sys.stderr.write("# ip command not found\n")
-        return 77
+        logger.info("ip command not found")
+        return (77, "ip command not found")
 
     current_netns = os.open("/proc/self/ns/net", os.O_RDONLY)
     try:
@@ -248,20 +248,20 @@ def test_net_devices():
 
         for specify_broadcast in [True, False]:
             for specify_name in [True, False]:
-                sys.stderr.write("# test_net_devices: creating testdevice with specify_broadcast=%s, specify_name=%s\n" % (specify_broadcast, specify_name))
+                logger.info("test_net_devices: creating testdevice with specify_broadcast=%s, specify_name=%s", specify_broadcast, specify_name)
                 result = subprocess.run(["ip", "link", "add", "testdevice", "type", "dummy"], capture_output=True, text=True)
                 if result.returncode != 0:
-                    sys.stderr.write("# ip link add failed: %s\n" % result.stderr)
+                    logger.info("ip link add failed: %s", result.stderr)
                     return -1
                 if specify_broadcast:
                     result = subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "brd", "10.1.2.254", "dev", "testdevice"], capture_output=True, text=True)
                     if result.returncode != 0:
-                        sys.stderr.write("# ip addr add with broadcast failed: %s\n" % result.stderr)
+                        logger.info("ip addr add with broadcast failed: %s", result.stderr)
                         return -1
                 else:
                     result = subprocess.run(["ip", "addr", "add", "10.1.2.3/24", "dev", "testdevice"], capture_output=True, text=True)
                     if result.returncode != 0:
-                        sys.stderr.write("# ip addr add without broadcast failed: %s\n" % result.stderr)
+                        logger.info("ip addr add without broadcast failed: %s", result.stderr)
                         return -1
 
                 conf = base_config()
@@ -305,25 +305,25 @@ def test_net_devices():
                     }
 
                 try:
-                    out = run_and_get_output(conf)
-                    sys.stderr.write("# test_net_devices: specify_broadcast=%s, specify_name=%s\n" % (specify_broadcast, specify_name))
-                    sys.stderr.write("# test_net_devices: output: %s\n" % repr(out[0]))
+                    out = run_and_get_output(conf, hide_stderr=True)
+                    logger.info("test_net_devices: specify_broadcast=%s, specify_name=%s", specify_broadcast, specify_name)
+                    logger.info("test_net_devices: output: %s", out[0])
                     if "address: 10.1.2.3" not in out[0]:
-                        sys.stderr.write("# address not found in output\n")
-                        sys.stderr.write("# full output: %s\n" % repr(out[0]))
+                        logger.info("address not found in output")
+                        logger.info("full output: %s", out[0])
                         return 1
                     if specify_broadcast:
                         if "broadcast: 10.1.2.254" not in out[0]:
-                            sys.stderr.write("# broadcast address not found in output\n")
-                            sys.stderr.write("# full output: %s\n" % repr(out[0]))
+                            logger.info("broadcast address not found in output")
+                            logger.info("full output: %s", out[0])
                             return 1
                     else:
                         if "broadcast" in out[0]:
-                            sys.stderr.write("# broadcast address found in output when it shouldn't be\n")
-                            sys.stderr.write("# full output: %s\n" % repr(out[0]))
+                            logger.info("broadcast address found in output when it shouldn't be")
+                            logger.info("full output: %s", out[0])
                             return 1
                 except Exception as e:
-                    sys.stderr.write("# test_net_devices exception: %s\n" % str(e))
+                    logger.info("test_net_devices exception: %s", e)
                     return -1
                 finally:
                     # Clean up the test device
@@ -336,7 +336,7 @@ def test_net_devices():
 
 def test_mknod_fifo_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -345,15 +345,15 @@ def test_mknod_fifo_device():
         {"path": "/dev/testfifo", "type": "p", "fileMode": 0o0660, "uid": 1, "gid": 2}
     ]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
-        sys.stderr.write("# test_mknod_fifo_device failed: %s\n" % e)
+        logger.info("test_mknod_fifo_device failed: %s", e)
         return -1
     return 0
 
 def test_mknod_char_device():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -362,15 +362,15 @@ def test_mknod_char_device():
         {"path": "/dev/testchar", "type": "c", "major": 251, "minor": 1, "fileMode": 0o0640, "uid": 3, "gid": 4}
     ]
     try:
-        run_and_get_output(conf)
+        run_and_get_output(conf, hide_stderr=True)
     except Exception as e:
-        sys.stderr.write("# test_mknod_char_device failed: {e}\n")
+        logger.info("test_mknod_char_device failed: {e}")
         return -1
     return 0
 
 def test_allow_device_read_only():
     if is_rootless():
-        return 77
+        return (77, "requires root privileges")
 
     try:
         # Best effort load
@@ -381,7 +381,7 @@ def test_allow_device_read_only():
         st = os.stat("/dev/nullb0")
         major, minor = os.major(st.st_rdev), os.minor(st.st_rdev)
     except:
-        return 77
+        return (77, "/dev/nullb0 device not available")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -404,20 +404,20 @@ def test_allow_device_read_only():
     try:
         run_and_get_output(conf)
     except Exception as e:
-        sys.stderr.write("# test_allow_device_read_only failed: %s\n" % e)
+        logger.info("test_allow_device_read_only failed: %s", e)
         return -1
 
     conf['process']['args'] = ['/init', 'openwronly', '/dev/controlledchar']
     try:
         run_and_get_output(conf)
-        sys.stderr.write("# test_allow_device_read_only: write access was unexpectedly allowed.\n")
+        logger.info("test_allow_device_read_only: write access was unexpectedly allowed.")
         return 1
     except Exception as e:
         output_str = getattr(e, 'output', b'').decode(errors='ignore')
         if "Operation not permitted" in output_str or "Permission denied" in output_str:
             return 0
         else:
-            sys.stderr.write("# test_allow_device_read_only (write attempt) failed with: %s, output: %s\n" % (e, output_str))
+            logger.info("test_allow_device_read_only (write attempt) failed with: %s, output: %s", e, output_str)
             return 1
 
     return 1

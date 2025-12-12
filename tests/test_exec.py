@@ -30,24 +30,24 @@ def test_exec():
     add_all_namespaces(conf)
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         out = run_crun_command(["exec", cid, "/init", "echo", "foo"])
         if "foo" not in out:
-            sys.stderr.write("# exec test failed: expected 'foo' in output\n")
-            sys.stderr.write("# container ID: %s\n" % cid)
-            sys.stderr.write("# actual output: %s\n" % out)
+            logger.info("exec test failed: expected 'foo' in output")
+            logger.info("container ID: %s", cid)
+            logger.info("actual output: %s", out)
             return -1
     except Exception as e:
-        sys.stderr.write("# exec test failed with exception: %s\n" % str(e))
+        logger.info("exec test failed with exception: %s", e)
         if cid is not None:
-            sys.stderr.write("# container ID: %s\n" % cid)
+            logger.info("container ID: %s", cid)
         raise
     finally:
         if cid is not None:
             try:
                 run_crun_command(["delete", "-f", cid])
             except Exception as cleanup_e:
-                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
+                logger.info("warning: failed to cleanup container %s: %s", cid, cleanup_e)
     return 0
 
 def test_uid_tty():
@@ -67,7 +67,7 @@ def test_uid_tty():
     last_error = None
     try:
         cid = "container-%s" % os.getpid()
-        proc = run_and_get_output(conf, command='run', id_container=cid, use_popen=True)
+        proc = run_and_get_output(conf, hide_stderr=True, command='run', id_container=cid, use_popen=True)
         for i in range(0, 500):
             try:
                 out = run_crun_command(["exec", "-t", "--user", "1", cid, "/init", "owner", "/proc/self/fd/0"])
@@ -79,17 +79,17 @@ def test_uid_tty():
                 pass
             time.sleep(0.01)
         if ret != 0:
-            sys.stderr.write("# uid_tty test failed after 500 attempts\n")
-            sys.stderr.write("# container ID: %s\n" % cid)
+            logger.info("uid_tty test failed after 500 attempts")
+            logger.info("container ID: %s", cid)
             if last_error:
-                sys.stderr.write("# last error: %s\n" % str(last_error))
+                logger.info("last error: %s", e)
         return ret
     finally:
         if cid is not None:
             try:
                 run_crun_command(["delete", "-f", cid])
             except Exception as cleanup_e:
-                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
+                logger.info("warning: failed to cleanup container %s: %s", cid, cleanup_e)
     return 0
 
 def test_exec_root_netns_with_userns():
@@ -102,7 +102,7 @@ def test_exec_root_netns_with_userns():
     conf['linux']['namespaces'].append({"type" : "network", "path" : "/proc/1/ns/net"})
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         with open("/proc/net/route") as f:
             payload = f.read()
@@ -113,9 +113,9 @@ def test_exec_root_netns_with_userns():
         container_routes = [i.split('\t')[0] for i in out.split('\n')[1:] if i.strip()]
 
         if len(container_routes) != len(host_routes):
-            sys.stderr.write("# network namespace test failed: different route count\n")
-            sys.stderr.write("# host routes (%d): %s\n" % (len(host_routes), host_routes))
-            sys.stderr.write("# container routes (%d): %s\n" % (len(container_routes), container_routes))
+            logger.info("network namespace test failed: different route count")
+            logger.info("host routes (%d): %s", len(host_routes), host_routes)
+            logger.info("container routes (%d): %s", len(container_routes), container_routes)
             return -1
 
         host_routes.sort()
@@ -123,23 +123,23 @@ def test_exec_root_netns_with_userns():
 
         for i, (container_route, host_route) in enumerate(zip(container_routes, host_routes)):
             if container_route != host_route:
-                sys.stderr.write("# network namespace test failed: route mismatch at index %d\n" % i)
-                sys.stderr.write("# expected (host): %s\n" % host_route)
-                sys.stderr.write("# actual (container): %s\n" % container_route)
-                sys.stderr.write("# full host routes: %s\n" % host_routes)
-                sys.stderr.write("# full container routes: %s\n" % container_routes)
+                logger.info("network namespace test failed: route mismatch at index %d", i)
+                logger.info("expected (host): %s", host_route)
+                logger.info("actual (container): %s", container_route)
+                logger.info("full host routes: %s", host_routes)
+                logger.info("full container routes: %s", container_routes)
                 return -1
     except Exception as e:
-        sys.stderr.write("# network namespace test failed with exception: %s\n" % str(e))
+        logger.info("network namespace test failed with exception: %s", e)
         if cid is not None:
-            sys.stderr.write("# container ID: %s\n" % cid)
+            logger.info("container ID: %s", cid)
         raise
     finally:
         if cid is not None:
             try:
                 run_crun_command(["delete", "-f", cid])
             except Exception as cleanup_e:
-                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
+                logger.info("warning: failed to cleanup container %s: %s", cid, cleanup_e)
     return 0
 
 def test_exec_not_exists_helper(detach):
@@ -148,7 +148,7 @@ def test_exec_not_exists_helper(detach):
     add_all_namespaces(conf)
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         try:
             if detach:
                 out = run_crun_command(["exec", "-d", cid, "/not.here"])
@@ -176,7 +176,7 @@ def test_exec_additional_gids():
     cid = None
     tempdir = tempfile.mkdtemp()
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         process_file = os.path.join(tempdir, "process.json")
         with open(process_file, "w") as f:
@@ -216,7 +216,7 @@ def test_exec_populate_home_env_from_process_uid():
     cid = None
     tempdir = tempfile.mkdtemp()
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         process_file = os.path.join(tempdir, "process.json")
         with open(process_file, "w") as f:
@@ -274,7 +274,7 @@ def test_exec_add_capability():
                 "CAP_KILL": cap_kill_dict, \
                 "CAP_SYS_ADMIN": cap_sys_admin_dict}
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         for cap, value in cap_dict.items():
             out = run_crun_command(["exec", "--cap", cap, cid, "/init", "cat", "/proc/self/status"])
             for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
@@ -300,7 +300,7 @@ def test_exec_add_env():
     env_dict_orig = {"HOME":"/", "PATH":"/bin"}
     env_dict_new = {"HOME":"/tmp", "PATH":"/usr/bin","FOO":"BAR"}
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # check original environment variable
         for env, value in env_dict_orig.items():
             out = run_crun_command(["exec", cid, "/init", "printenv", env])
@@ -338,7 +338,7 @@ def test_exec_set_user():
     uid_gid_list = ["1000:1000", "0:0", "65535:65535"]
 
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # check current user id
         out = run_crun_command(["exec", cid, "/init", "id"])
         if uid_gid_list[1] not in out:
@@ -361,7 +361,7 @@ def test_exec_no_new_privs():
     conf['process']['capabilities'] = {}
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # check original value of NoNewPrivs
         out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/status"])
         proc_status = parse_proc_status(out)
@@ -386,7 +386,7 @@ def test_exec_write_pid_file():
     cid = None
     tempdir = tempfile.mkdtemp()
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         pid_file = os.path.join(tempdir, cid)
         out = run_crun_command(["exec", "--pid-file", pid_file, cid, "/init", "echo", "hello"])
         if "hello" not in out:
@@ -449,26 +449,26 @@ def test_exec_cpu_affinity():
     try:
         with open("/proc/self/status") as f:
             current_cpu_mask = cpu_mask_from_proc_status(f.read())
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
 
         mask = exec_and_get_affinity_mask(cid)
         if mask != current_cpu_mask:
-            sys.stderr.write("# current cpu mask %s != %s\n" % (current_cpu_mask, mask))
+            logger.info("current cpu mask %s != %s", mask, current_cpu_mask)
             return -1
 
         mask = exec_and_get_affinity_mask(cid, {"initial" : "0-1"})
         if mask != "0-1":
-            sys.stderr.write("# cpu mask %s != 0-1\n" % mask)
+            logger.info("cpu mask %s != 0-1", mask)
             return -1
 
         mask = exec_and_get_affinity_mask(cid, {"final" : "0-2"})
         if mask != "0-2":
-            sys.stderr.write("# cpu mask %s != 0-2\n" % mask)
+            logger.info("cpu mask %s != 0-2", mask)
             return -1
 
         mask = exec_and_get_affinity_mask(cid, {"initial" : "1", "final" : "0-3"})
         if mask != "0-3":
-            sys.stderr.write("# cpu mask %s != 0-2\n" % mask)
+            logger.info("cpu mask %s != 0-3", mask)
             return -1
         return 0
     finally:
@@ -483,7 +483,7 @@ def test_exec_getpgrp():
     conf['process']['args'] = ['/init', 'pause']
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         for terminal in [True, False]:
             if terminal and os.isatty(1) == False:
                 continue
@@ -491,7 +491,7 @@ def test_exec_getpgrp():
             out = run_crun_command([x for x in cmdline if x is not None])
             pgrp = int(out.split("\n")[0])
             if pgrp <= 0:
-                sys.stderr.write("# invalid pgrp, got %d\n" % pgrp)
+                logger.info("invalid pgrp, got %d", pgrp)
                 return -1
     finally:
         if cid is not None:
@@ -512,7 +512,7 @@ def test_exec_error_propagation():
     add_all_namespaces(conf)
     cid = None
     try:
-        _, cid = run_and_get_output(conf, command='run', detach=True)
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         try:
             out = run_crun_command_raw(["exec", "--cwd", "/invalid/nonexistent/path", cid, "/init", "echo", "test"])
             return -1
@@ -522,12 +522,12 @@ def test_exec_error_propagation():
             has_read_pipe_error = "read pipe failed" in error_msg
 
             if has_chdir_error and has_read_pipe_error:
-                sys.stderr.write("# exec error propagation test failed: both chdir and read pipe errors detected\n")
-                sys.stderr.write("# error message: %s\n" % error_msg)
+                logger.info("exec error propagation test failed: both chdir and read pipe errors detected")
+                logger.info("error message: %s", error_output)
                 return -1
 
             if not has_chdir_error:
-                sys.stderr.write("# exec error propagation test failed: expected chdir error but got: %s\n" % error_msg)
+                logger.info("exec error propagation test failed: expected chdir error but got: %s", error_msg)
                 return -1
 
             return 0
@@ -536,7 +536,7 @@ def test_exec_error_propagation():
             try:
                 run_crun_command(["delete", "-f", cid])
             except Exception as cleanup_e:
-                sys.stderr.write("# warning: failed to cleanup container %s: %s\n" % (cid, str(cleanup_e)))
+                logger.info("warning: failed to cleanup container %s: %s", cid, cleanup_e)
     return 0
 
 all_tests = {
