@@ -19,6 +19,8 @@ import time
 import json
 import os
 import subprocess
+import errno
+import tempfile
 from tests_utils import *
 
 criu_version = 0
@@ -82,7 +84,7 @@ def _get_cmdline(cid, tests_root):
     return ""
 
 
-def run_cr_test(conf):
+def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'checkpoint')
     work_dir = 'work-dir'
@@ -98,6 +100,9 @@ def run_cr_test(conf):
         if first_cmdline == "":
             return -1
 
+        if before_checkpoint_cb is not None:
+            before_checkpoint_cb()
+
         run_crun_command([
             "checkpoint",
             "--image-path=%s" % cr_dir,
@@ -109,6 +114,9 @@ def run_cr_test(conf):
             get_tests_root(),
             cid.split('-')[1]
         )
+
+        if before_restore_cb is not None:
+            before_restore_cb()
 
         run_crun_command([
             "restore",
@@ -263,10 +271,99 @@ def test_cr_with_ext_ns():
     return run_cr_test(conf)
 
 
+def _remove_file(filename):
+    try:
+        os.remove(filename)
+    except OSError as e:
+        # ignore "no such file" and raise other exceptions
+        if e.errno != errno.ENOENT:
+            raise
+
+
+def _clean_up_criu_configs():
+    for conf_file in ["crun.conf", "runc.conf", "annotation.conf"]:
+        _remove_file(os.path.join("/etc/criu", conf_file))
+
+
+def _create_criu_config(file_name, content):
+    config_dir = "/etc/criu/"
+    os.makedirs(config_dir, 0o755, exist_ok=True)
+    with open(os.path.join(config_dir, f"{file_name}.conf"), "w") as f:
+        print(content, file=f)
+
+
+def _run_cr_test_with_config(config_name, log_names, extra_configs=None, annotations=None):
+    """
+    Helper to run CRIU tests with a configuration file.
+
+    :param config_name: The main config to create before checkpoint/restore.
+    :param log_names: Tuple of (dump_log_name, restore_log_name) for the test.
+    :param extra_configs: Optional dict of extra config_name -> content to create before test.
+    :param annotations: Optional dict of annotations to set in the config.
+    :return: 0 on success, -1 on failure.
+    """
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dump_log_path = os.path.join(tmp, log_names[0])
+        restore_log_path = os.path.join(tmp, log_names[1])
+
+        if extra_configs:
+            for name, content in extra_configs.items():
+                _create_criu_config(name, content)
+
+        if annotations:
+            conf['annotations'] = annotations
+
+        ret = run_cr_test(
+            conf,
+            before_checkpoint_cb=lambda: _create_criu_config(config_name, f"log-file={dump_log_path}"),
+            before_restore_cb=lambda: _create_criu_config(config_name, f"log-file={restore_log_path}")
+        )
+        _clean_up_criu_configs()
+
+        if ret != 0:
+            return ret
+
+        for path in [dump_log_path, restore_log_path]:
+            if not os.path.isfile(path) or os.path.getsize(path) == 0:
+                return -1
+    return 0
+
+
+def test_cr_with_runc_config():
+    if is_rootless() or 'CRIU' not in get_crun_feature_string():
+        return 77
+    return _run_cr_test_with_config("runc", ("runc-dump.log", "runc-restore.log"))
+
+
+def test_cr_with_crun_config():
+    if is_rootless() or 'CRIU' not in get_crun_feature_string():
+        return 77
+    # runc.conf should be ignored by crun
+    extra = {"runc": "log-file=test.log"}
+    return _run_cr_test_with_config("crun", ("crun-dump.log", "crun-restore.log"), extra_configs=extra)
+
+
+def test_cr_with_annotation_config():
+    if is_rootless() or 'CRIU' not in get_crun_feature_string():
+        return 77
+    # Create annotation config file
+    annotations = {"org.criu.config": "/etc/criu/annotation.conf"}
+    _create_criu_config("annotation", f"log-file=annotation.log")
+    # The following config files should be ignored by crun
+    extra = {"runc": "log-file=test-runc.log", "crun": "log-file=test-crun.log"}
+    return _run_cr_test_with_config("annotation", ("dump.log", "restore.log"), extra_configs=extra, annotations=annotations)
+
+
 all_tests = {
     "checkpoint-restore": test_cr,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-pre-dump": test_cr_pre_dump,
+    "checkpoint-restore-with-runc-config": test_cr_with_runc_config,
+    "checkpoint-restore-with-crun-config": test_cr_with_crun_config,
+    "checkpoint-restore-with-annotation-config": test_cr_with_annotation_config,
 }
 
 if __name__ == "__main__":
