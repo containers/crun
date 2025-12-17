@@ -39,7 +39,8 @@ logger = logging.getLogger('crun.tests')
 __all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'run_crun_command_raw',
            'parse_proc_status', 'add_all_namespaces', 'tests_main', 'is_rootless',
            'is_cgroup_v2_unified', 'get_crun_feature_string', 'running_on_systemd',
-           'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path']
+           'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path',
+           'get_cgroup_manager', 'get_test_environment']
 
 base_conf = """
 {
@@ -281,9 +282,37 @@ def get_crun_path():
     cwd = os.getcwd()
     return os.getenv("OCI_RUNTIME") or os.path.join(cwd, "crun")
 
+def get_cgroup_manager():
+    """Get cgroup manager from CGROUP_MANAGER env var or default to cgroupfs."""
+    return os.getenv('CGROUP_MANAGER', 'cgroupfs')
+
+def get_test_environment():
+    """Return a dict describing the current test environment.
+
+    Useful for debugging which code paths are exercised in different environments.
+    """
+    in_userns = False
+    try:
+        with open('/proc/self/uid_map') as f:
+            content = f.read()
+            # If we have a full mapping (4294967295), we're not in a restricted userns
+            in_userns = '4294967295' not in content
+    except:
+        pass
+
+    return {
+        'uid': os.getuid(),
+        'gid': os.getgid(),
+        'rootless': is_rootless(),
+        'systemd': running_on_systemd(),
+        'cgroup_v2': is_cgroup_v2_unified(),
+        'cgroup_manager': get_cgroup_manager(),
+        'in_userns': in_userns,
+    }
+
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
-                       command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager='cgroupfs',
+                       command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager=None,
                        all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path="config.json",
                        chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False):
 
@@ -346,6 +375,10 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
     relative_config_path = ['--config', relative_config_path] if relative_config_path else []
     debug_arg = ['--debug'] if debug else []
+
+    # Use env var if cgroup_manager not explicitly specified
+    if cgroup_manager is None:
+        cgroup_manager = get_cgroup_manager()
 
     root = get_tests_root_status()
     args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
