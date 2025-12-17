@@ -190,7 +190,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	lua/luacrun.rockspec
 
 if BUILD_TESTS
-UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt
+UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal
 endif
 
 if ENABLE_CRUN
@@ -235,6 +235,11 @@ tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
+tests_tests_libcrun_terminal_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_terminal_SOURCES = tests/tests_libcrun_terminal.c
+tests_tests_libcrun_terminal_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_terminal_LDFLAGS = $(crun_LDFLAGS)
+
 endif
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
@@ -267,6 +272,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_seccomp.py \
 	tests/test_time.py \
 	tests/test_bpf_devices.py \
+	tests/test_terminal.py \
 	tests/test_commands.py \
 	tests/test_net_device.py \
 	tests/test_cgroup_resources.py
