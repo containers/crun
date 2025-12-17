@@ -557,6 +557,18 @@ workload natively. Accepts a `.wasm` binary as input and if `.wat` is
 provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
+## `org.criu.config=FILE`
+
+This annotation allows specifying a CRIU RPC configuration file.
+If not provided, crun will look for `/etc/criu/crun.conf`. If
+neither the annotation nor `crun.conf` exists, `/etc/criu/runc.conf`
+is used for compatibility with runc. This functionality requires
+CRIU version 4.2 or newer. The options specified in the configuration
+file override the default values of CRIU options specified by crun.
+For example, specifying `tcp-established` or `tcp-close` can be used
+to checkpoint/restore containers with TCP established connections,
+and `log-file=<file>` to set a custom CRIU logs file.
+
 ## tmpcopyup mount options
 
 If the `tmpcopyup` option is specified for a tmpfs, then the path that
