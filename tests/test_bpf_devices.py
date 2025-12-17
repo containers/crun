@@ -101,7 +101,7 @@ def test_bpf_devices_systemd():
 
         # Should look like "device:/sys/fs/bpf/crun/crun-xxx_scope".
         if "device:/sys/fs/bpf/crun/" not in output:
-            logger.info("Bad BPFProgram property value: `%s`", prop_value)
+            logger.info("Bad BPFProgram property value: `%s`", output)
             return -1
 
         # Test 2: Check that BPF program file was created.
@@ -109,7 +109,7 @@ def test_bpf_devices_systemd():
         # Extract the path.
         bpf_path = output.split("device:", 1)[1]
         if not os.path.exists(bpf_path):
-            logger.info("BPF program file `%s` not found", prog_file)
+            logger.info("BPF program file `%s` not found", bpf_path)
             return -1
 
         # Test 3: Check that BPF program is cleaned up.
@@ -118,7 +118,7 @@ def test_bpf_devices_systemd():
         run_crun_command(["delete", "-f", cid])
         cid = None
         if os.path.exists(bpf_path):
-            logger.info("BPF program `%s` still exist after crun delete", prog_file)
+            logger.info("BPF program `%s` still exist after crun delete", bpf_path)
             return -1
 
         return 0
