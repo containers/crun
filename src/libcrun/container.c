@@ -1825,6 +1825,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
           crun_error_release (&tmp_err);
           return 0;
         }
+      crun_error_release (err);
       return libcrun_container_delete_status (state_root, id, err);
     }
 
