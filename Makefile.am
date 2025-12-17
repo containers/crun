@@ -364,7 +364,7 @@ if ENABLE_COVERAGE
 
 # Clean coverage data
 coverage-clean:
-	@rm -rf coverage-html coverage.info coverage.xml
+	@rm -rf docs/coverage coverage.info coverage.xml
 	@find . -name "*.gcda" -delete
 	@find . -name "*.gcno" -delete
 
@@ -389,8 +389,8 @@ coverage-html: coverage-check
 		$(LCOV) --remove coverage.info '*/libocispec/*' --output-file coverage.info; \
 		$(LCOV) --remove coverage.info '*/tests/test_*.py*' --output-file coverage.info; \
 		$(LCOV) --remove coverage.info '*/tests/init*' --output-file coverage.info; \
-		genhtml coverage.info --output-directory coverage-html; \
-		echo "Coverage report generated in coverage-html/index.html"; \
+		genhtml coverage.info --output-directory docs/coverage; \
+		echo "Coverage report generated in docs/coverage/index.html"; \
 	elif test -n "$(GCOVR)"; then \
 		echo "Generating coverage report with gcovr..."; \
 		$(GCOVR) --html --html-details -o coverage.html \
@@ -398,14 +398,14 @@ coverage-html: coverage-check
 		echo "Coverage report generated in coverage.html"; \
 	else \
 		echo "Generating coverage report with gcov..."; \
-		mkdir -p coverage-html; \
+		mkdir -p docs/coverage; \
 		for src in $(libcrun_SOURCES) $(crun_SOURCES); do \
 			if test -f "$${src}.gcno"; then \
 				$(GCOV) -o . $$src || true; \
 			fi; \
 		done; \
-		mv *.gcov coverage-html/ 2>/dev/null || true; \
-		echo "Coverage files generated in coverage-html/"; \
+		mv *.gcov docs/coverage/ 2>/dev/null || true; \
+		echo "Coverage files generated in docs/coverage/"; \
 	fi
 
 # Generate XML coverage report (for CI tools)
@@ -445,12 +445,21 @@ coverage-summary: coverage-check
 		echo "Coverage summary requires lcov or gcovr"; \
 	fi
 
+# Multi-environment coverage (requires root)
+# Runs tests in multiple environments to maximize coverage
+coverage-multi-env:
+	@if test $$(id -u) -ne 0; then \
+		echo "Error: coverage-multi-env requires root"; \
+		exit 1; \
+	fi
+	$(PYTHON) $(srcdir)/tests/run_coverage_multi_env.py
+
 else
 
 coverage-clean:
 	@echo "Coverage support not enabled. Reconfigure with --enable-coverage"
 
-coverage-reset coverage-check coverage-html coverage-xml coverage-summary:
+coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env:
 	@echo "Coverage support not enabled. Reconfigure with --enable-coverage"
 
 endif
@@ -458,6 +467,6 @@ endif
 clean-local: coverage-clean
 
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
-.NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary
+.NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary
+.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
