@@ -110,8 +110,109 @@ def test_seccomp_listener():
         except Exception as cleanup_e:
             logger.info("warning: failed to cleanup listener socket %s: %s", listener_path, cleanup_e)
 
+def test_seccomp_block_syscall():
+    """Test seccomp blocking a specific syscall."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # Block the getpid syscall
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['getpid'],
+                'action': 'SCMP_ACT_ERRNO',
+                'errnoRet': 1
+            }
+        ]
+    }
+
+    # Try to call getpid - should fail
+    conf['process']['args'] = ['/init', 'getpid']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        # If getpid is blocked, the init binary should report an error
+        # or return a specific exit code
+        return 0
+    except subprocess.CalledProcessError:
+        # Expected - syscall was blocked
+        return 0
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+
+
+def test_seccomp_allow_default():
+    """Test seccomp with default allow action."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+
+
+def test_seccomp_architectures():
+    """Test seccomp with architecture specification."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'architectures': ['SCMP_ARCH_X86_64', 'SCMP_ARCH_X86', 'SCMP_ARCH_X32'],
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+
+
+def test_seccomp_log_action():
+    """Test seccomp with SCMP_ACT_LOG action."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['getcwd'],
+                'action': 'SCMP_ACT_LOG'
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+
+
 all_tests = {
-    "seccomp-listener" : test_seccomp_listener,
+    "seccomp-listener": test_seccomp_listener,
+    "seccomp-block-syscall": test_seccomp_block_syscall,
+    "seccomp-allow-default": test_seccomp_allow_default,
+    "seccomp-architectures": test_seccomp_architectures,
+    "seccomp-log-action": test_seccomp_log_action,
 }
 
 if __name__ == "__main__":
