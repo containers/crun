@@ -272,6 +272,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_seccomp.py \
 	tests/test_time.py \
 	tests/test_bpf_devices.py \
+	tests/test_namespaces.py \
 	tests/test_scheduler.py \
 	tests/test_terminal.py \
 	tests/test_commands.py \
