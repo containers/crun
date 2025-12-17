@@ -267,6 +267,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_seccomp.py \
 	tests/test_time.py \
 	tests/test_bpf_devices.py \
+	tests/test_net_device.py \
 	tests/test_cgroup_resources.py
 
 if BUILD_TESTS
