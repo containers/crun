@@ -89,35 +89,43 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
     cr_dir = os.path.join(get_tests_root(), 'checkpoint')
     work_dir = 'work-dir'
     try:
+        logger.info("run_cr_test: starting container")
         _, cid = run_and_get_output(
             conf,
             all_dev_null=True,
             use_popen=True,
             detach=True
         )
+        logger.info("run_cr_test: container started with id=%s", cid)
 
         first_cmdline = _get_cmdline(cid, get_tests_root())
+        logger.info("run_cr_test: first_cmdline='%s'", first_cmdline)
         if first_cmdline == "":
+            logger.info("run_cr_test: FAILED - first_cmdline is empty")
             return -1
 
         if before_checkpoint_cb is not None:
             before_checkpoint_cb()
 
+        logger.info("run_cr_test: starting checkpoint to %s", cr_dir)
         run_crun_command([
             "checkpoint",
             "--image-path=%s" % cr_dir,
             "--work-path=%s" % work_dir,
             cid
         ])
+        logger.info("run_cr_test: checkpoint completed")
 
         bundle = os.path.join(
             get_tests_root(),
             cid.split('-')[1]
         )
+        logger.info("run_cr_test: bundle path=%s", bundle)
 
         if before_restore_cb is not None:
             before_restore_cb()
 
+        logger.info("run_cr_test: starting restore from %s", cr_dir)
         run_crun_command([
             "restore",
             "-d",
@@ -126,12 +134,20 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
             "--bundle=%s" % bundle,
             cid
         ])
+        logger.info("run_cr_test: restore completed")
 
         second_cmdline = _get_cmdline(cid, get_tests_root())
+        logger.info("run_cr_test: second_cmdline='%s'", second_cmdline)
         if first_cmdline != second_cmdline:
+            logger.info("run_cr_test: FAILED - cmdline mismatch: first='%s' second='%s'", first_cmdline, second_cmdline)
             return -1
+        logger.info("run_cr_test: SUCCESS - cmdlines match")
+    except Exception as e:
+        logger.info("run_cr_test: EXCEPTION - %s", e)
+        raise
     finally:
         if cid is not None:
+            logger.info("run_cr_test: cleaning up container %s", cid)
             run_crun_command(["delete", "-f", cid])
     return 0
 
@@ -154,9 +170,12 @@ def test_cr_pre_dump():
 
     def _get_pre_dump_size(cr_dir):
         size = 0
-        for f in os.listdir(cr_dir):
-            if os.path.isfile(os.path.join(cr_dir, f)):
-                size += os.path.getsize(os.path.join(cr_dir, f))
+        try:
+            for f in os.listdir(cr_dir):
+                if os.path.isfile(os.path.join(cr_dir, f)):
+                    size += os.path.getsize(os.path.join(cr_dir, f))
+        except FileNotFoundError:
+            return 0
         return size
 
     conf = base_config()
@@ -180,6 +199,7 @@ def test_cr_pre_dump():
 
         first_cmdline = _get_cmdline(cid, get_tests_root())
         if first_cmdline == "":
+            logger.info("test_cr_pre_dump: failed to get first cmdline")
             return -1
 
         # Let's do one pre-dump first
@@ -193,6 +213,9 @@ def test_cr_pre_dump():
 
         # Get the size of the pre-dump
         pre_dump_size = _get_pre_dump_size(cr_dir)
+        if pre_dump_size == 0:
+            logger.info("test_cr_pre_dump: pre-dump size is 0")
+            return -1
 
         # Do the final dump. This dump should be much smaller.
         cr_dir = os.path.join(get_tests_root(), 'checkpoint')
@@ -208,6 +231,8 @@ def test_cr_pre_dump():
         if (final_dump_size > pre_dump_size):
             # If the final dump is not smaller than the pre-dump
             # something was not working as expected.
+            logger.info("test_cr_pre_dump: final_dump_size (%d) > pre_dump_size (%d)",
+                       final_dump_size, pre_dump_size)
             return -1
 
         bundle = os.path.join(
@@ -226,8 +251,12 @@ def test_cr_pre_dump():
 
         second_cmdline = _get_cmdline(cid, get_tests_root())
         if first_cmdline != second_cmdline:
+            logger.info("test_cr_pre_dump: cmdline mismatch after restore")
             return -1
 
+    except Exception as e:
+        logger.info("test_cr_pre_dump: exception: %s", e)
+        return -1
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
@@ -255,6 +284,11 @@ def test_cr_with_ext_ns():
     conf['process']['args'] = ['/init', 'pause']
     add_all_namespaces(conf)
 
+    # Remove time namespace - external time ns checkpoint/restore not supported
+    conf['linux']['namespaces'] = [
+        ns for ns in conf['linux']['namespaces'] if ns['type'] != 'time'
+    ]
+
     ns_path = os.path.join('/proc', str(os.getpid()), 'ns')
     for ns in conf['linux']['namespaces']:
         if ns['type'] == 'pid':
@@ -265,8 +299,6 @@ def test_cr_with_ext_ns():
             ns.update({'path': os.path.join(ns_path, 'ipc')})
         if ns['type'] == 'uts':
             ns.update({'path': os.path.join(ns_path, 'uts')})
-        if ns['type'] == 'time':
-            ns.update({'path': os.path.join(ns_path, 'time')})
 
     return run_cr_test(conf)
 
