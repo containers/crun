@@ -272,6 +272,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_seccomp.py \
 	tests/test_time.py \
 	tests/test_bpf_devices.py \
+	tests/test_linux_features.py \
 	tests/test_io_priority.py \
 	tests/test_create.py \
 	tests/test_cgroup_setup.py \
