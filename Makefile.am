@@ -281,7 +281,8 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_terminal.py \
 	tests/test_commands.py \
 	tests/test_net_device.py \
-	tests/test_cgroup_resources.py
+	tests/test_cgroup_resources.py \
+	tests/test_error_handling.py
 
 if BUILD_TESTS
 TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
