@@ -136,6 +136,9 @@ def test_mount_tmpfs_permissions():
     return -1
 
 def test_mount_bind_to_rootfs():
+    if is_rootless():
+        return (77, "requires root for bind mount to rootfs")
+
     conf = base_config()
     conf['process']['args'] = ['/init', 'true']
     add_all_namespaces(conf)
