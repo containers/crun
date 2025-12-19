@@ -190,7 +190,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	lua/luacrun.rockspec
 
 if BUILD_TESTS
-UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify
+UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify tests/tests_libcrun_cgroup
 endif
 
 if ENABLE_CRUN
@@ -269,6 +269,11 @@ tests_tests_libcrun_seccomp_notify_CFLAGS = -I $(abs_top_builddir)/libocispec/sr
 tests_tests_libcrun_seccomp_notify_SOURCES = tests/tests_libcrun_seccomp_notify.c
 tests_tests_libcrun_seccomp_notify_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_seccomp_notify_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_cgroup_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_cgroup_SOURCES = tests/tests_libcrun_cgroup.c
+tests_tests_libcrun_cgroup_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_cgroup_LDFLAGS = $(crun_LDFLAGS)
 
 endif
 TEST_EXTENSIONS = .py

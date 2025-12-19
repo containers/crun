@@ -45,6 +45,9 @@ struct libcrun_cgroup_status
   bool bpf_dev_set;
 };
 
+/* Forward declaration for function pointers below.  */
+struct libcrun_cgroup_args;
+
 struct libcrun_cgroup_manager
 {
   /* Create a new cgroup and fill PATH in OUT.  */
