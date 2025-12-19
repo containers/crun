@@ -469,6 +469,248 @@ def test_state_command():
 
 
 
+def test_state_created_container():
+    """Test state command on a created but not started container."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    cid = None
+    proc = None
+    try:
+        # use_popen=True is required because 'create' blocks waiting for 'start'
+        proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
+
+        # Wait for container to be ready (create is async with use_popen=True)
+        state = None
+        for i in range(50):
+            try:
+                output = run_crun_command(['state', cid])
+                state = json.loads(output)
+                break
+            except Exception:
+                time.sleep(0.1)
+
+        if state is None:
+            logger.info("test_state_created_container: container never became ready")
+            return -1
+
+        # Verify container is in created state
+        if state['status'] != 'created':
+            logger.info("test_state_created_container: expected 'created', got '%s'", state['status'])
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_state_created_container failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        if proc is not None:
+            proc.wait()
+
+
+def test_state_stopped_container():
+    """Test state command on a stopped container."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', keep=True)
+
+        # Container should have exited, get state
+        output = run_crun_command(['state', cid])
+        state = json.loads(output)
+
+        # Verify container is stopped
+        if state['status'] != 'stopped':
+            logger.info("test_state_stopped_container: expected 'stopped', got '%s'", state['status'])
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_state_stopped_container failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_features_command():
+    """Test features command returns valid JSON."""
+    try:
+        output = run_crun_command(['features'])
+        features = json.loads(output)
+
+        # Verify basic features structure
+        if 'ociVersionMin' not in features:
+            logger.info("features missing ociVersionMin")
+            return -1
+        if 'ociVersionMax' not in features:
+            logger.info("features missing ociVersionMax")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_features_command failed: %s", e)
+        return -1
+
+
+def test_ps_json_format():
+    """Test ps command with JSON format."""
+    if is_rootless():
+        return (77, "requires root for cgroup access")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        # Get process list with JSON format
+        output = run_crun_command(['ps', '--format', 'json', cid])
+        processes = json.loads(output)
+
+        # Should have at least one process
+        if not isinstance(processes, list) or len(processes) == 0:
+            logger.info("test_ps_json_format: no processes returned")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_ps_json_format failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_delete_force():
+    """Test delete command with force flag on running container."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        # Verify container is running
+        state = json.loads(run_crun_command(['state', cid]))
+        if state['status'] != 'running':
+            logger.info("test_delete_force: container not running")
+            return -1
+
+        # Force delete running container
+        run_crun_command(['delete', '-f', cid])
+        cid = None  # Deleted, don't cleanup again
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_delete_force failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_start_command():
+    """Test start command on a created container."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    cid = None
+    proc = None
+    try:
+        # use_popen=True is required because 'create' blocks waiting for 'start'
+        proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
+
+        # Wait for container to be ready (create is async with use_popen=True)
+        state = None
+        for i in range(50):
+            try:
+                state = json.loads(run_crun_command(['state', cid]))
+                break
+            except Exception:
+                time.sleep(0.1)
+
+        if state is None:
+            logger.info("test_start_command: container never became ready")
+            return -1
+
+        if state['status'] != 'created':
+            logger.info("test_start_command: container not in created state, got '%s'", state['status'])
+            return -1
+
+        # Start the container
+        run_crun_command(['start', cid])
+
+        # Wait for container to finish
+        time.sleep(0.1)
+
+        # Verify container is stopped (since /init true exits immediately)
+        state = json.loads(run_crun_command(['state', cid]))
+        if state['status'] != 'stopped':
+            logger.info("test_start_command: container not stopped after start, status=%s", state['status'])
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_start_command failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        if proc is not None:
+            proc.wait()
+
+
+def test_version_command():
+    """Test version command."""
+    try:
+        output = run_crun_command(['--version'])
+
+        # Should contain version info
+        if 'crun version' not in output:
+            logger.info("test_version_command: missing version info")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_version_command failed: %s", e)
+        return -1
+
+
+def test_help_command():
+    """Test help command."""
+    try:
+        output = run_crun_command(['--help'])
+
+        # Should contain usage info
+        if 'Usage:' not in output and 'usage:' not in output.lower():
+            logger.info("test_help_command: missing usage info")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_help_command failed: %s", e)
+        return -1
+
+
 all_tests = {
     "pause-unpause": test_pause_unpause,
     "kill-signal": test_kill_signal,
@@ -479,9 +721,17 @@ all_tests = {
     "list-table-format": test_list_table_format,
     "list-quiet": test_list_quiet,
     "ps-table-format": test_ps_table_format,
+    "ps-json-format": test_ps_json_format,
     "spec-generation": test_spec_generation,
     "spec-rootless": test_spec_rootless,
     "state-command": test_state_command,
+    "state-created": test_state_created_container,
+    "state-stopped": test_state_stopped_container,
+    "features-command": test_features_command,
+    "delete-force": test_delete_force,
+    "start-command": test_start_command,
+    "version-command": test_version_command,
+    "help-command": test_help_command,
 }
 
 if __name__ == "__main__":

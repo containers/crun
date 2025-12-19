@@ -539,6 +539,148 @@ def test_exec_error_propagation():
                 logger.info("warning: failed to cleanup container %s: %s", cid, cleanup_e)
     return 0
 
+def test_exec_cwd():
+    """Test exec with working directory option."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        out = run_crun_command(["exec", "--cwd", "/", cid, "/init", "cwd"])
+        if "/" not in out:
+            logger.info("test_exec_cwd: expected '/' in output, got: %s", out)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test_exec_cwd failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_exec_process_json():
+    """Test exec with process.json file."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    process_file = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        # Create a process.json file
+        process_spec = {
+            "terminal": False,
+            "user": {"uid": 0, "gid": 0},
+            "args": ["/init", "echo", "hello"],
+            "env": ["PATH=/bin", "TERM=xterm"],
+            "cwd": "/"
+        }
+
+        # Use a regular temp file and close it before using
+        fd, process_file = tempfile.mkstemp(suffix='.json')
+        with os.fdopen(fd, 'w') as f:
+            json.dump(process_spec, f)
+
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        if "hello" not in out:
+            logger.info("test_exec_process_json: expected 'hello' in output, got: %s", out)
+            return -1
+        return 0
+
+    except Exception as e:
+        logger.info("test_exec_process_json failed: %s", e)
+        return -1
+    finally:
+        if process_file and os.path.exists(process_file):
+            os.unlink(process_file)
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_exec_detach():
+    """Test exec with detach option."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        # Run a detached exec that writes to a file
+        run_crun_command(["exec", "--detach", cid, "/init", "true"])
+
+        # If we get here without error, the test passed
+        return 0
+
+    except Exception as e:
+        logger.info("test_exec_detach failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_exec_multiple():
+    """Test multiple exec calls on same container."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        # Run multiple exec commands
+        for i in range(3):
+            out = run_crun_command(["exec", cid, "/init", "echo", str(i)])
+            if str(i) not in out:
+                logger.info("test_exec_multiple: iteration %d failed, expected '%d' in output", i, i)
+                return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_exec_multiple failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_exec_exit_code():
+    """Test that exec returns correct exit code."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        # Run exec that exits with code 0
+        run_crun_command(["exec", cid, "/init", "exit", "0"])
+
+        # Run exec that exits with non-zero code
+        try:
+            run_crun_command_raw(["exec", cid, "/init", "exit", "42"])
+            logger.info("test_exec_exit_code: expected non-zero exit but got success")
+            return -1
+        except subprocess.CalledProcessError as e:
+            if e.returncode != 42:
+                logger.info("test_exec_exit_code: expected exit code 42, got %d", e.returncode)
+                return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_exec_exit_code failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -556,6 +698,11 @@ all_tests = {
     "exec-getpgrp": test_exec_getpgrp,
     "exec-help" : test_exec_help,
     "exec-error-propagation" : test_exec_error_propagation,
+    "exec-cwd" : test_exec_cwd,
+    "exec-process-json" : test_exec_process_json,
+    "exec-detach" : test_exec_detach,
+    "exec-multiple" : test_exec_multiple,
+    "exec-exit-code" : test_exec_exit_code,
 }
 
 if __name__ == "__main__":

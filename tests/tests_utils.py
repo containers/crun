@@ -240,6 +240,13 @@ def run_all_tests(all_tests, allowed_tests):
                 actual_ret = ret[0] if isinstance(ret, tuple) else ret
                 print("not ok %d - %s # %.3fs" % (cur, k, test_duration))
                 logger.error("Test '%s' failed with return code %d", k, actual_ret)
+                # Log environment context for failed tests
+                try:
+                    env_info = get_test_environment()
+                    logger.error("Test environment: uid=%d rootless=%s cgroup_v2=%s cgroup_manager=%s",
+                                env_info['uid'], env_info['rootless'], env_info['cgroup_v2'], env_info['cgroup_manager'])
+                except Exception:
+                    pass
         except Exception as e:
             test_duration = time.time() - test_start_time
             logger.error("Test '%s' failed with exception after %.3fs:", k, test_duration)
@@ -262,6 +269,14 @@ def run_all_tests(all_tests, allowed_tests):
             logger.error("Test root: %s", get_tests_root())
             if 'TMPDIR' in os.environ:
                 logger.error("TMPDIR: %s", os.environ['TMPDIR'])
+
+            # Test environment context
+            try:
+                env_info = get_test_environment()
+                logger.error("Test environment: uid=%d rootless=%s cgroup_v2=%s cgroup_manager=%s",
+                            env_info['uid'], env_info['rootless'], env_info['cgroup_v2'], env_info['cgroup_manager'])
+            except Exception:
+                pass
 
             logger.error("Traceback:")
             for line in traceback.format_exc().splitlines():
