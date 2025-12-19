@@ -571,8 +571,11 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
           return crun_make_error (err, 0, "--parent-path must be relative");
         int is_dir = crun_dir_p_at (image_fd, cr_options->parent_path, false, err);
         if (UNLIKELY (is_dir <= 0))
-          return crun_make_error (err, is_dir < 0 ? errno : ENOTDIR, "invalid --parent-path");
-
+          {
+            if (is_dir < 0)
+              return crun_error_wrap (err, "invalid --parent-path");
+            return crun_make_error (err, ENOTDIR, "invalid --parent-path");
+          }
         ret = libcriu_wrapper->criu_set_parent_images (cr_options->parent_path);
         if (UNLIKELY (ret != 0))
           return crun_make_error (err, -ret, "error setting CRIU parent images path to `%s`", cr_options->parent_path);
