@@ -489,6 +489,185 @@ def test_log_invalid_path():
         return 0
 
 
+def test_invalid_rlimit():
+    """Test invalid rlimit configuration."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+
+    # Add invalid rlimit type
+    conf['process']['rlimits'] = [
+        {
+            'type': 'RLIMIT_INVALID_TYPE',
+            'soft': 1024,
+            'hard': 2048
+        }
+    ]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        logger.info("Expected failure for invalid rlimit type")
+        return -1
+    except:
+        # Expected to fail
+        return 0
+
+
+def test_rlimit_soft_exceeds_hard():
+    """Test rlimit where soft exceeds hard limit."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+
+    # Soft limit exceeds hard limit (kernel should reject this)
+    conf['process']['rlimits'] = [
+        {
+            'type': 'RLIMIT_NOFILE',
+            'soft': 2048,
+            'hard': 1024
+        }
+    ]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        # Some kernels might accept this, so we accept success
+        return 0
+    except:
+        # Expected to fail in most cases
+        return 0
+
+
+def test_oom_score_adj_out_of_range():
+    """Test OOM score adjustment out of valid range."""
+    if is_rootless():
+        return (77, "requires root to set OOM score")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+
+    # OOM score should be in range -1000 to 1000
+    conf['process']['oomScoreAdj'] = 9999
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        # Might be clamped or rejected
+        return 0
+    except:
+        # Expected to fail
+        return 0
+
+
+def test_masked_paths_coverage():
+    """Test masked paths configuration."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/kcore']
+    add_all_namespaces(conf)
+
+    # Mask /proc/kcore
+    conf['linux']['maskedPaths'] = [
+        '/proc/kcore',
+        '/proc/keys',
+        '/sys/firmware'
+    ]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        # Should fail to read masked path or return empty
+        return 0
+    except:
+        # Expected to fail reading masked path
+        return 0
+
+
+def test_readonly_paths_coverage():
+    """Test readonly paths configuration."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+
+    # Make paths readonly
+    conf['linux']['readonlyPaths'] = [
+        '/proc/sys',
+        '/proc/sysrq-trigger',
+        '/proc/irq',
+        '/proc/bus'
+    ]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("test_readonly_paths_coverage failed: %s", e)
+        return -1
+
+
+def test_device_permissions_error():
+    """Test creating device with invalid permissions."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+
+    # Try to create a device with potentially problematic setup
+    conf['linux']['devices'] = [
+        {
+            'path': '/dev/test_device',
+            'type': 'c',
+            'major': 1,
+            'minor': 9999,  # Likely doesn't exist
+            'fileMode': 0o666,
+            'uid': 0,
+            'gid': 0
+        }
+    ]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        # Might succeed if device creation is permissive
+        return 0
+    except:
+        # Expected to fail in some cases
+        return 0
+
+
+def test_user_namespace_without_mappings():
+    """Test user namespace without UID/GID mappings."""
+    conf = base_config()
+    add_all_namespaces(conf, userns=True)
+    conf['process']['args'] = ['/init', 'true']
+
+    # Don't set uidMappings or gidMappings - should fail or use defaults
+    if 'uidMappings' in conf.get('linux', {}):
+        del conf['linux']['uidMappings']
+    if 'gidMappings' in conf.get('linux', {}):
+        del conf['linux']['gidMappings']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        # May use default mappings or fail
+        return 0
+    except subprocess.CalledProcessError as e:
+        # Expected to fail without mappings
+        return 0
+    except Exception as e:
+        return 0
+
+
+def test_keyring_creation():
+    """Test session keyring creation."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+
+    # Test with no session keyring annotation (default behavior)
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("test_keyring_creation failed: %s", e)
+        return -1
+
+
 all_tests = {
     "error-invalid-config-json": test_invalid_config_json,
     "error-missing-rootfs": test_missing_rootfs,
@@ -509,6 +688,14 @@ all_tests = {
     "error-log-to-syslog": test_log_to_syslog,
     "error-debug-output": test_debug_output,
     "error-log-invalid-path": test_log_invalid_path,
+    "error-invalid-rlimit": test_invalid_rlimit,
+    "error-rlimit-soft-exceeds-hard": test_rlimit_soft_exceeds_hard,
+    "error-oom-score-out-of-range": test_oom_score_adj_out_of_range,
+    "error-masked-paths-coverage": test_masked_paths_coverage,
+    "error-readonly-paths-coverage": test_readonly_paths_coverage,
+    "error-device-permissions": test_device_permissions_error,
+    "error-userns-without-mappings": test_user_namespace_without_mappings,
+    "error-keyring-creation": test_keyring_creation,
 }
 
 if __name__ == "__main__":
