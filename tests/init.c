@@ -484,6 +484,14 @@ main (int argc, char **argv)
       exit (0);
     }
 
+  if (strcmp (argv[1], "exit") == 0)
+    {
+      int code = 0;
+      if (argc >= 3)
+        code = atoi (argv[2]);
+      exit (code);
+    }
+
   if (strcmp (argv[1], "echo") == 0)
     {
       if (argc < 3)
