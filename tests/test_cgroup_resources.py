@@ -277,22 +277,30 @@ def test_memory_high():
     add_all_namespaces(conf, cgroupns=True)
 
     # memory.high is a throttling limit
+    # Use unified map which works with both cgroupfs and systemd managers
     conf['linux']['resources'] = {
-        'memory': {
-            'high': 134217728  # 128MB
+        'unified': {
+            'memory.high': '134217728'  # 128MB
         }
     }
 
     conf['process']['args'] = ['/init', 'cat', '/sys/fs/cgroup/memory.high']
 
     try:
-        out, _ = run_and_get_output(conf, hide_stderr=True)
+        out, _ = run_and_get_output(conf, hide_stderr=False)
         if '134217728' in out:
             return 0
-        logger.info("Expected 134217728, got: %s", out.strip())
+        logger.info("test_memory_high: Expected 134217728, got: %s", out.strip())
+        return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        stderr = e.stderr.decode('utf-8', errors='ignore') if hasattr(e, 'stderr') and e.stderr else ''
+        logger.info("test_memory_high failed with return code %s", e.returncode)
+        logger.info("test_memory_high stdout: %s", output)
+        logger.info("test_memory_high stderr: %s", stderr)
         return -1
     except Exception as e:
-        logger.info("memory.high test failed: %s", e)
+        logger.info("test_memory_high exception: %s", e)
         return -1
 
 
