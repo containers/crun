@@ -301,7 +301,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 
                   /* Do not wait longer than 5 seconds.  */
                   if (timeout++ > 5000)
-                    _exit (EINVAL);
+                    _safe_exit (EINVAL);
                   continue;
                 }
 #  if ! HAVE_STDATOMIC_H
@@ -316,8 +316,8 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
                                                 receiver_fd_payload_len,
                                                 err);
           if (UNLIKELY (ret < 0))
-            _exit (crun_error_get_errno (err));
-          _exit (0);
+            _safe_exit (crun_error_get_errno (err));
+          _safe_exit (0);
         }
     }
 

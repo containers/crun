@@ -123,7 +123,7 @@ detach_process ()
   if (pid < 0)
     return -1;
   if (pid != 0)
-    _exit (EXIT_SUCCESS);
+    _safe_exit (EXIT_SUCCESS);
   return 0;
 }
 
@@ -1372,7 +1372,7 @@ run_process (char **args, libcrun_error_t *err)
     }
 
   execvp (args[0], args);
-  _exit (EXIT_FAILURE);
+  _safe_exit (EXIT_FAILURE);
 }
 
 #ifndef HAVE_FGETPWENT_R
@@ -1643,7 +1643,7 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
     {
       dev_null_fd = open ("/dev/null", O_WRONLY | O_CLOEXEC);
       if (UNLIKELY (dev_null_fd < 0))
-        _exit (EXIT_FAILURE);
+        _safe_exit (EXIT_FAILURE);
     }
 
   TEMP_FAILURE_RETRY (close (pipe_w));
@@ -1669,10 +1669,10 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
     args = tmp_args;
 
   if (cwd && chdir (cwd) < 0)
-    _exit (EXIT_FAILURE);
+    _safe_exit (EXIT_FAILURE);
 
   execvpe (path, args, envp);
-  _exit (EXIT_FAILURE);
+  _safe_exit (EXIT_FAILURE);
 }
 
 /* It changes the signals mask for the current process.  */

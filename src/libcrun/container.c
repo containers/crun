@@ -3813,7 +3813,7 @@ exec_process_entrypoint (libcrun_context_t *context,
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "exec container process failed with handler as `%s`", custom_handler->vtable->name);
 
-      _exit (EXIT_FAILURE);
+      _safe_exit (EXIT_FAILURE);
     }
 
   /* Attempt to close all the files that are not needed to prevent execv to have access to them.
@@ -4026,7 +4026,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
               pipefd1 = -1;
             }
         }
-      _exit (EXIT_FAILURE);
+      _safe_exit (EXIT_FAILURE);
     }
 
   TEMP_FAILURE_RETRY (close (pipefd1));
@@ -4712,9 +4712,9 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
             if (UNLIKELY (ret < 0))
               {
                 crun_error_release (err);
-                _exit (EXIT_FAILURE);
+                _safe_exit (EXIT_FAILURE);
               }
-            _exit (EXIT_SUCCESS);
+            _safe_exit (EXIT_SUCCESS);
           }
 
         close_and_reset (&proxy_pid_pipe0);
