@@ -326,6 +326,82 @@ def test_multiple_hooks():
             os.unlink(marker_file)
 
 
+def test_annotation_hook_stdout_stderr():
+    """Test run.oci.hooks.stdout and run.oci.hooks.stderr annotations."""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    import tempfile
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    stdout_file = None
+    stderr_file = None
+    try:
+        # Create temp files for hook output
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            stdout_file = f.name
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            stderr_file = f.name
+
+        # Hook that writes to stdout and stderr
+        hook = {
+            "path": "/bin/sh",
+            "args": ["/bin/sh", "-c", "echo 'stdout message' && echo 'stderr message' >&2"]
+        }
+        conf['hooks'] = {"prestart": [hook]}
+
+        # Add annotations for hook output redirection
+        if 'annotations' not in conf:
+            conf['annotations'] = {}
+        conf['annotations']['run.oci.hooks.stdout'] = stdout_file
+        conf['annotations']['run.oci.hooks.stderr'] = stderr_file
+
+        run_and_get_output(conf, hide_stderr=True)
+
+        # Verify hook stdout was redirected
+        if not os.path.exists(stdout_file):
+            logger.info("hook stdout file not created")
+            return -1
+
+        with open(stdout_file) as f:
+            stdout_content = f.read()
+            if "stdout message" not in stdout_content:
+                logger.info("hook stdout not redirected properly: %s", stdout_content)
+                return -1
+
+        # Verify hook stderr was redirected
+        if not os.path.exists(stderr_file):
+            logger.info("hook stderr file not created")
+            return -1
+
+        with open(stderr_file) as f:
+            stderr_content = f.read()
+            if "stderr message" not in stderr_content:
+                logger.info("hook stderr not redirected properly: %s", stderr_content)
+                return -1
+
+        logger.info("hook stdout/stderr redirection successful")
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if any(x in output.lower() for x in ["mount", "proc", "permission", "rootfs", "private", "busy"]):
+            return (77, "not available in nested namespaces")
+        logger.info("test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if stdout_file and os.path.exists(stdout_file):
+            os.unlink(stdout_file)
+        if stderr_file and os.path.exists(stderr_file):
+            os.unlink(stderr_file)
+
+
 all_tests = {
     "test-fail-prestart" : test_fail_prestart,
     "test-success-prestart" : test_success_prestart,
@@ -339,6 +415,7 @@ all_tests = {
     "test-hook-with-timeout": test_hook_with_timeout,
     "test-hook-receives-state": test_hook_receives_state,
     "test-multiple-hooks": test_multiple_hooks,
+    "test-annotation-hook-stdout-stderr": test_annotation_hook_stdout_stderr,
 }
 
 if __name__ == "__main__":

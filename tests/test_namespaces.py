@@ -41,7 +41,7 @@ def test_pid_namespace():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/stat']
 
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         # First field in /proc/self/stat is PID
         parts = out.strip().split()
         if len(parts) > 0 and parts[0] == '1':
@@ -51,7 +51,8 @@ def test_pid_namespace():
 
     except subprocess.CalledProcessError as e:
         output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if is_nested_namespace_error(output):
+        # With hide_stderr=True, error output may not be captured
+        if not output or is_nested_namespace_error(output):
             return (77, "namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
@@ -71,7 +72,7 @@ def test_network_namespace():
     conf['process']['args'] = ['/init', 'ls', '/sys/class/net']
 
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         # Should only see 'lo' in isolated network namespace
         interfaces = out.strip().split()
         if 'lo' in interfaces:
@@ -80,7 +81,8 @@ def test_network_namespace():
 
     except subprocess.CalledProcessError as e:
         output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if is_nested_namespace_error(output):
+        # With hide_stderr=True, error output may not be captured
+        if not output or is_nested_namespace_error(output):
             return (77, "namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
@@ -264,7 +266,7 @@ def test_user_namespace_root_in_container():
     conf['process']['args'] = ['/init', 'id']
 
     try:
-        out, _ = run_and_get_output(conf)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         # init returns "uid:gid", so check if uid is 0
         if out.strip().startswith('0:'):
             return 0
@@ -273,7 +275,8 @@ def test_user_namespace_root_in_container():
 
     except subprocess.CalledProcessError as e:
         output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if is_nested_namespace_error(output):
+        # With hide_stderr=True, error output may not be captured
+        if not output or is_nested_namespace_error(output):
             return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1

@@ -68,6 +68,8 @@ def test_domainname_conflict_sysctl():
 def test_domainname_with_sysctl():
     # Setting sysctl `kernel.domainname` and OCI field `domainname` must pass
     # when both have exact same value
+    if is_rootless():
+        return (77, "sysctl requires root privileges")
     conf = base_config()
     conf['process']['args'] = ['/init', 'getdomainname']
     conf['domainname'] = "foo"
@@ -79,7 +81,11 @@ def test_domainname_with_sysctl():
         if out == "(none)\n":
             return 0
         return 0
-    except:
+    except Exception as e:
+        # May fail in rootless or restricted environments
+        err_str = str(e).lower()
+        if "permission" in err_str or "operation not permitted" in err_str:
+            return (77, "sysctl not available")
         return -1
     finally:
         if cid is not None:

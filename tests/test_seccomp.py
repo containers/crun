@@ -405,6 +405,65 @@ def test_seccomp_flags():
         return -1
 
 
+def test_annotation_seccomp_fail_unknown_syscall():
+    """Test run.oci.seccomp_fail_unknown_syscall annotation."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # Create a seccomp config with a made-up syscall name
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['this_syscall_does_not_exist_12345'],
+                'action': 'SCMP_ACT_ERRNO',
+                'errnoRet': 1
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    # First test: without annotation, should succeed (unknown syscalls ignored)
+    try:
+        out, _ = run_and_get_output(conf)
+        logger.info("seccomp with unknown syscall succeeded as expected (no annotation)")
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if any(x in output.lower() for x in ["mount", "proc", "permission", "rootfs", "private", "busy"]):
+            return (77, "not available in nested namespaces")
+        logger.info("seccomp test without annotation unexpectedly failed: %s", e)
+        return -1
+    except Exception as e:
+        if any(x in str(e).lower() for x in ["mount", "proc", "permission", "rootfs", "private", "busy"]):
+            return (77, "not available in nested namespaces")
+        logger.info("seccomp test without annotation unexpectedly failed: %s", e)
+        return -1
+
+    # Second test: with annotation, should fail
+    if 'annotations' not in conf:
+        conf['annotations'] = {}
+    conf['annotations']['run.oci.seccomp_fail_unknown_syscall'] = '1'
+
+    try:
+        out, _ = run_and_get_output(conf)
+        # Should have failed with the annotation
+        logger.info("seccomp with unknown syscall and annotation succeeded unexpectedly")
+        return -1
+    except subprocess.CalledProcessError as e:
+        # Expected to fail
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if any(x in output.lower() for x in ["mount", "proc", "permission", "rootfs", "private", "busy"]):
+            return (77, "not available in nested namespaces")
+        logger.info("seccomp with unknown syscall and annotation failed as expected")
+        return 0
+    except Exception as e:
+        if any(x in str(e).lower() for x in ["mount", "proc", "permission", "rootfs", "private", "busy"]):
+            return (77, "not available in nested namespaces")
+        logger.info("Exception: %s", e)
+        return -1
+
+
 all_tests = {
     "seccomp-listener": test_seccomp_listener,
     "seccomp-block-syscall": test_seccomp_block_syscall,
@@ -417,6 +476,7 @@ all_tests = {
     "seccomp-errno-default": test_seccomp_errno_default,
     "seccomp-comparison-ops": test_seccomp_comparison_ops,
     "seccomp-flags": test_seccomp_flags,
+    "annotation-seccomp-fail-unknown-syscall": test_annotation_seccomp_fail_unknown_syscall,
 }
 
 if __name__ == "__main__":

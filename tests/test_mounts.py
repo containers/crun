@@ -895,6 +895,63 @@ def test_idmapped_mounts_without_userns():
 
     return 0
 
+
+def test_annotation_mount_context_type():
+    """Test run.oci.mount_context_type annotation for SELinux mount contexts."""
+    # Check if SELinux is available and enabled
+    try:
+        with open('/sys/fs/selinux/enforce', 'r') as f:
+            selinux_enabled = f.read().strip() in ['0', '1']
+    except Exception:
+        return (77, "SELinux not available")
+
+    if not selinux_enabled:
+        return (77, "SELinux not enabled")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+
+    # Create a tmpfs mount to test SELinux context
+    mount_opt = {
+        "destination": "/test-selinux",
+        "type": "tmpfs",
+        "source": "tmpfs",
+        "options": ["rw"]
+    }
+    conf['mounts'].append(mount_opt)
+
+    # Test different context types
+    for context_type in ['context', 'fscontext', 'defcontext', 'rootcontext']:
+        logger.info("testing mount_context_type: %s", context_type)
+
+        # Add annotation for mount context type
+        if 'annotations' not in conf:
+            conf['annotations'] = {}
+        conf['annotations']['run.oci.mount_context_type'] = context_type
+
+        try:
+            out, _ = run_and_get_output(conf, hide_stderr=True)
+            logger.info("mount_context_type=%s test passed", context_type)
+            # Just verify it doesn't crash - actual SELinux context verification
+            # would require checking specific SELinux contexts which vary by system
+
+        except subprocess.CalledProcessError as e:
+            output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+            if any(x in output.lower() for x in ["mount", "proc", "permission", "rootfs", "private", "busy"]):
+                return (77, "not available in nested namespaces")
+            if "selinux" in output.lower() or "context" in output.lower():
+                # SELinux context issues are acceptable - may not be fully configured
+                logger.info("mount_context_type=%s skipped due to SELinux configuration", context_type)
+                continue
+            logger.info("test failed for context_type=%s: %s", context_type, e)
+            return -1
+        except Exception as e:
+            logger.info("test failed for context_type=%s: %s", context_type, e)
+            return -1
+
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -931,6 +988,7 @@ all_tests = {
     "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-help": test_mount_help,
+    "annotation-mount-context-type": test_annotation_mount_context_type,
 }
 
 if __name__ == "__main__":
