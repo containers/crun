@@ -649,6 +649,17 @@ workload natively. Accepts a \fB\&.wasm\fR binary as input and if \fB\&.wat\fR i
 provided it will be automatically compiled into a wasm module. Stdout of
 wasm module is relayed back via crun.
 
+.SH \fBorg.criu.config=FILE\fR
+This annotation allows specifying a CRIU RPC configuration file.
+If not provided, crun will look for \fB/etc/criu/crun.conf\fR\&. If
+neither the annotation nor \fBcrun.conf\fR exists, \fB/etc/criu/runc.conf\fR
+is used for compatibility with runc. This functionality requires
+CRIU version 4.2 or newer. The options specified in the configuration
+file override the default values of CRIU options specified by crun.
+For example, specifying \fBtcp-established\fR or \fBtcp-close\fR can be used
+to checkpoint/restore containers with TCP established connections,
+and \fBlog-file=<file>\fR to set a custom CRIU logs file.
+
 .SH tmpcopyup mount options
 If the \fBtmpcopyup\fR option is specified for a tmpfs, then the path that
 is shadowed by the tmpfs mount is recursively copied up to the tmpfs
@@ -848,8 +859,7 @@ l l l l .
 \fBOCI (x)\fP	\fBcgroup 2 value (y)\fP	\fBconversion\fP	\fBcomment\fP
 shares	cpu.weight	T{
 y=10^((log2(x)^2 + 125 * log2(x)) / 612.0 - 7.0 / 34.0)
-T}
-	T{
+T}	T{
 convert from [2-262144] to [1-10000]
 T}
 period	cpu.max	y = x	T{
