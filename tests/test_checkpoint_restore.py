@@ -73,11 +73,14 @@ def _get_cmdline(cid, tests_root):
             time.sleep(0.1)
 
     if len(s) == 0:
+        logger.info("_get_cmdline: no state found for container %s", cid)
         return ""
 
     if s['status'] != "running":
+        logger.info("_get_cmdline: container %s status is '%s', expected 'running'", cid, s['status'])
         return ""
     if s['id'] != cid:
+        logger.info("_get_cmdline: container id mismatch: got '%s', expected '%s'", s['id'], cid)
         return ""
     with open("/proc/%s/cmdline" % s['pid'], 'r') as cmdline_fd:
         return cmdline_fd.read()
@@ -356,10 +359,15 @@ def _run_cr_test_with_config(config_name, log_names, extra_configs=None, annotat
         _clean_up_criu_configs()
 
         if ret != 0:
+            logger.info("_run_cr_test_with_config: run_cr_test returned %d", ret)
             return ret
 
         for path in [dump_log_path, restore_log_path]:
-            if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            if not os.path.isfile(path):
+                logger.info("_run_cr_test_with_config: log file not found: %s", path)
+                return -1
+            if os.path.getsize(path) == 0:
+                logger.info("_run_cr_test_with_config: log file is empty: %s", path)
                 return -1
     return 0
 
