@@ -60,8 +60,8 @@ struct libcrun_cgroup_manager
 };
 
 int move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libcrun_error_t *err);
-int enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing,
-                            libcrun_error_t *err);
+int enter_cgroup_v1_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing,
+                               libcrun_error_t *err);
 int enable_controllers (const char *path, libcrun_error_t *err);
 int chown_cgroups (const char *path, uid_t uid, gid_t gid, libcrun_error_t *err);
 int cgroup_killall_path (const char *path, int signal, libcrun_error_t *err);
