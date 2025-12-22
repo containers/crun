@@ -190,7 +190,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	lua/luacrun.rockspec
 
 if BUILD_TESTS
-UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt
+UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify tests/tests_libcrun_cgroup
 endif
 
 if ENABLE_CRUN
@@ -235,6 +235,46 @@ tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
+tests_tests_libcrun_terminal_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_terminal_SOURCES = tests/tests_libcrun_terminal.c
+tests_tests_libcrun_terminal_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_terminal_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_custom_handler_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_custom_handler_SOURCES = tests/tests_libcrun_custom_handler.c
+tests_tests_libcrun_custom_handler_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_custom_handler_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_linux_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_linux_SOURCES = tests/tests_libcrun_linux.c
+tests_tests_libcrun_linux_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_linux_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_signals_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_signals_SOURCES = tests/tests_libcrun_signals.c
+tests_tests_libcrun_signals_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_signals_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_mount_flags_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_mount_flags_SOURCES = tests/tests_libcrun_mount_flags.c
+tests_tests_libcrun_mount_flags_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_mount_flags_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_chroot_realpath_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_chroot_realpath_SOURCES = tests/tests_libcrun_chroot_realpath.c
+tests_tests_libcrun_chroot_realpath_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_chroot_realpath_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_seccomp_notify_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_seccomp_notify_SOURCES = tests/tests_libcrun_seccomp_notify.c
+tests_tests_libcrun_seccomp_notify_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_seccomp_notify_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_cgroup_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_cgroup_SOURCES = tests/tests_libcrun_cgroup.c
+tests_tests_libcrun_cgroup_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_cgroup_LDFLAGS = $(crun_LDFLAGS)
+
 endif
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
@@ -246,6 +286,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_checkpoint_restore.py \
 	tests/test_devices.py \
 	tests/test_hostname.py \
+	tests/test_domainname.py \
 	tests/test_limits.py \
 	tests/test_oci_features.py \
 	tests/test_mempolicy.py \
@@ -258,6 +299,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_rlimits.py \
 	tests/test_tty.py \
 	tests/test_hooks.py \
+	tests/test_annotations.py \
 	tests/test_update.py \
 	tests/test_detach.py \
 	tests/test_delete.py \
@@ -266,7 +308,19 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_exec.py \
 	tests/test_seccomp.py \
 	tests/test_time.py \
-	tests/test_bpf_devices.py
+	tests/test_bpf_devices.py \
+	tests/test_linux_features.py \
+	tests/test_io_priority.py \
+	tests/test_create.py \
+	tests/test_cgroup_setup.py \
+	tests/test_namespaces.py \
+	tests/test_scheduler.py \
+	tests/test_terminal.py \
+	tests/test_commands.py \
+	tests/test_net_device.py \
+	tests/test_cgroup_resources.py \
+	tests/test_error_handling.py \
+	tests/test_custom_handler.py
 
 if BUILD_TESTS
 TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
@@ -291,7 +345,7 @@ dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 	$(AM__GEN)cp git-version.h $(distdir)/.tarball-git-version.h
 
-EXTRA_DIST += $(PYTHON_TESTS) tests/Makefile.tests tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen src/libcrun/signals.perf src/libcrun/mount_flags.perf
+EXTRA_DIST += $(PYTHON_TESTS) tests/run_all_tests.sh tests/tests_utils.py build-aux/git-version-gen src/libcrun/signals.perf src/libcrun/mount_flags.perf
 BUILT_SOURCES = .version git-version.h
 
 CLEANFILES = crun.spec .version git-version.h $(LUACRUN_ROCKSPEC)
@@ -364,7 +418,7 @@ if ENABLE_COVERAGE
 
 # Clean coverage data
 coverage-clean:
-	@rm -rf coverage-html coverage.info coverage.xml
+	@rm -rf docs/coverage coverage.info coverage.xml
 	@find . -name "*.gcda" -delete
 	@find . -name "*.gcno" -delete
 
@@ -389,8 +443,8 @@ coverage-html: coverage-check
 		$(LCOV) --remove coverage.info '*/libocispec/*' --output-file coverage.info; \
 		$(LCOV) --remove coverage.info '*/tests/test_*.py*' --output-file coverage.info; \
 		$(LCOV) --remove coverage.info '*/tests/init*' --output-file coverage.info; \
-		genhtml coverage.info --output-directory coverage-html; \
-		echo "Coverage report generated in coverage-html/index.html"; \
+		genhtml coverage.info --output-directory docs/coverage; \
+		echo "Coverage report generated in docs/coverage/index.html"; \
 	elif test -n "$(GCOVR)"; then \
 		echo "Generating coverage report with gcovr..."; \
 		$(GCOVR) --html --html-details -o coverage.html \
@@ -398,14 +452,14 @@ coverage-html: coverage-check
 		echo "Coverage report generated in coverage.html"; \
 	else \
 		echo "Generating coverage report with gcov..."; \
-		mkdir -p coverage-html; \
+		mkdir -p docs/coverage; \
 		for src in $(libcrun_SOURCES) $(crun_SOURCES); do \
 			if test -f "$${src}.gcno"; then \
 				$(GCOV) -o . $$src || true; \
 			fi; \
 		done; \
-		mv *.gcov coverage-html/ 2>/dev/null || true; \
-		echo "Coverage files generated in coverage-html/"; \
+		mv *.gcov docs/coverage/ 2>/dev/null || true; \
+		echo "Coverage files generated in docs/coverage/"; \
 	fi
 
 # Generate XML coverage report (for CI tools)
@@ -445,12 +499,21 @@ coverage-summary: coverage-check
 		echo "Coverage summary requires lcov or gcovr"; \
 	fi
 
+# Multi-environment coverage (requires root)
+# Runs tests in multiple environments to maximize coverage
+coverage-multi-env:
+	@if test $$(id -u) -ne 0; then \
+		echo "Error: coverage-multi-env requires root"; \
+		exit 1; \
+	fi
+	$(PYTHON) $(srcdir)/tests/run_coverage_multi_env.py
+
 else
 
 coverage-clean:
 	@echo "Coverage support not enabled. Reconfigure with --enable-coverage"
 
-coverage-reset coverage-check coverage-html coverage-xml coverage-summary:
+coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env:
 	@echo "Coverage support not enabled. Reconfigure with --enable-coverage"
 
 endif
@@ -458,6 +521,6 @@ endif
 clean-local: coverage-clean
 
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
-.NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary
+.NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary
+.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env

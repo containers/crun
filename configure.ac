@@ -406,6 +406,8 @@ AS_IF([test "x$enable_coverage" = "xyes"], [
 	AC_SUBST([LCOV])
 	AC_SUBST([GCOVR])
 	AC_SUBST([coverage_tool], [$coverage_tool])
+
+	AC_DEFINE([HAVE_COVERAGE], [1], [Define if code coverage is enabled])
 ])
 
 AM_CONDITIONAL([ENABLE_COVERAGE], [test "x$enable_coverage" = "xyes"])

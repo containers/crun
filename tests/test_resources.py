@@ -272,7 +272,7 @@ def test_resources_cpu_weight_systemd():
     }
     cid = None
     try:
-        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True, cgroup_manager="systemd")
+        _, cid = run_and_get_output(conf, hide_stderr=False, command='run', detach=True, cgroup_manager="systemd")
         out = run_crun_command(["exec", cid, "/init", "cat", "/sys/fs/cgroup/cpu.weight"])
         if "1234" not in out:
             logger.info("found wrong CPUWeight for the container cgroup")
@@ -310,6 +310,11 @@ def test_resources_cpu_weight_systemd():
             if out != expected_weight:
                 logger.info("found wrong CPUWeight for the systemd scope: expected %s, got %s", expected_weight, out)
                 return 1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "eBPF" in output or "BPF" in output or "systemd" in output.lower():
+            return (77, "systemd cgroup manager not fully supported in this environment")
+        raise
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])

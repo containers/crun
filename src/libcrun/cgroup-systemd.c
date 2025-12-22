@@ -381,7 +381,7 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
 
           if (strcmp (subpath, path))
             {
-              ret = enter_cgroup_subsystem (pid, subsystem, path, true, err);
+              ret = enter_cgroup_v1_subsystem (pid, subsystem, path, true, err);
               if (UNLIKELY (ret < 0))
                 {
                   /* If it is a named hierarchy, skip the error.  */

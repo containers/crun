@@ -48,11 +48,27 @@ struct libcrun_error_s
 };
 typedef struct libcrun_error_s *libcrun_error_t;
 
+/* Coverage support: flush coverage data before _exit() in forked processes */
+#ifdef HAVE_COVERAGE
+extern void __gcov_dump (void);
+#  define GCOV_DUMP() __gcov_dump ()
+#else
+#  define GCOV_DUMP()
+#endif
+
+/* Use this instead of _exit() to ensure coverage data is flushed */
+#define _safe_exit(status) \
+  do                       \
+    {                      \
+      GCOV_DUMP ();        \
+      _exit (status);      \
+  } while (0)
+
 #define OOM()                            \
   do                                     \
     {                                    \
       fprintf (stderr, "out of memory"); \
-      _exit (EXIT_FAILURE);              \
+      _safe_exit (EXIT_FAILURE);         \
   } while (0)
 
 typedef void (*crun_output_handler) (int errno_, const char *msg, int verbosity, void *arg);

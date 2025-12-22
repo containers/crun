@@ -492,6 +492,143 @@ test_cpuset_string_to_bitmask ()
 }
 #endif
 
+static int
+test_has_prefix ()
+{
+  if (! has_prefix ("hello world", "hello"))
+    return -1;
+  if (! has_prefix ("hello", "hello"))
+    return -1;
+  if (! has_prefix ("hello", ""))
+    return -1;
+  if (has_prefix ("hello", "world"))
+    return -1;
+  if (has_prefix ("hello", "hello world"))
+    return -1;
+  if (has_prefix ("", "hello"))
+    return -1;
+  return 0;
+}
+
+static int
+test_has_suffix ()
+{
+  if (! has_suffix ("hello world", "world"))
+    return -1;
+  if (! has_suffix ("world", "world"))
+    return -1;
+  if (! has_suffix ("hello", ""))
+    return -1;
+  if (has_suffix ("hello", "world"))
+    return -1;
+  if (has_suffix ("world", "hello world"))
+    return -1;
+  if (has_suffix ("", "hello"))
+    return -1;
+  return 0;
+}
+
+static int
+test_str_join_array ()
+{
+  {
+    char *array[] = { "a", "b", "c", NULL };
+    cleanup_free char *result = str_join_array (0, 3, array, ",");
+    if (result == NULL)
+      return -1;
+    if (strcmp (result, "a,b,c") != 0)
+      return -1;
+  }
+  {
+    char *array[] = { "hello", "world", NULL };
+    cleanup_free char *result = str_join_array (0, 2, array, " ");
+    if (result == NULL)
+      return -1;
+    if (strcmp (result, "hello world") != 0)
+      return -1;
+  }
+  {
+    char *array[] = { "single", NULL };
+    cleanup_free char *result = str_join_array (0, 1, array, ",");
+    if (result == NULL)
+      return -1;
+    if (strcmp (result, "single") != 0)
+      return -1;
+  }
+  {
+    /* Test with offset - size is the end index (exclusive) */
+    char *array[] = { "skip", "a", "b", NULL };
+    cleanup_free char *result = str_join_array (1, 3, array, "-");
+    if (result == NULL)
+      return -1;
+    if (strcmp (result, "a-b") != 0)
+      return -1;
+  }
+  return 0;
+}
+
+static int
+test_get_current_timestamp ()
+{
+  char buf[64];
+
+  get_current_timestamp (buf, sizeof (buf));
+
+  /* Check that timestamp is not empty */
+  if (buf[0] == '\0')
+    return -1;
+
+  /* Check that timestamp has expected format: starts with year (4 digits) */
+  if (buf[0] != '2') /* Year should start with 2 for 2xxx */
+    return -1;
+
+  /* Check that timestamp contains T separator (ISO 8601 format) */
+  if (strchr (buf, 'T') == NULL && strchr (buf, '-') == NULL)
+    return -1;
+
+  return 0;
+}
+
+static int
+test_crun_ensure_directory ()
+{
+  libcrun_error_t err = NULL;
+  cleanup_free char *path = NULL;
+  int ret;
+
+  xasprintf (&path, "/tmp/crun-test-dir-%d", getpid ());
+
+  /* Create directory */
+  ret = crun_ensure_directory (path, 0755, false, &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  /* Verify it's a directory */
+  ret = crun_dir_p (path, false, &err);
+  if (ret <= 0)
+    {
+      rmdir (path);
+      crun_error_release (&err);
+      return -1;
+    }
+
+  /* Creating again should succeed (already exists) */
+  ret = crun_ensure_directory (path, 0755, false, &err);
+  if (ret < 0)
+    {
+      rmdir (path);
+      crun_error_release (&err);
+      return -1;
+    }
+
+  /* Cleanup */
+  rmdir (path);
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -515,9 +652,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..11\n");
+  printf ("1..16\n");
 #else
-  printf ("1..8\n");
+  printf ("1..13\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -527,6 +664,11 @@ main ()
   RUN_TEST (test_send_receive_fd);
   RUN_TEST (test_append_paths);
   RUN_TEST (test_path_is_slash_dev);
+  RUN_TEST (test_has_prefix);
+  RUN_TEST (test_has_suffix);
+  RUN_TEST (test_str_join_array);
+  RUN_TEST (test_get_current_timestamp);
+  RUN_TEST (test_crun_ensure_directory);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
   RUN_TEST (test_get_scope_path);

@@ -77,6 +77,141 @@ test_crun_write_warning_and_release ()
   return 0;
 }
 
+static int
+test_crun_error_wrap ()
+{
+  libcrun_error_t err = NULL;
+  int ret;
+
+  ret = crun_make_error (&err, 5, "inner error");
+  if (ret >= 0)
+    return -1;
+
+  ret = crun_error_wrap (&err, "outer context");
+  if (ret >= 0)
+    return -1;
+
+  if (err->status != 5)
+    return -1;
+
+  /* Message should be "outer context: inner error" */
+  if (strstr (err->msg, "outer context") == NULL)
+    return -1;
+  if (strstr (err->msg, "inner error") == NULL)
+    return -1;
+
+  crun_error_release (&err);
+
+  /* Test with NULL error */
+  ret = crun_error_wrap (NULL, "should not crash");
+  if (ret != 0)
+    return -1;
+
+  return 0;
+}
+
+static int
+test_crun_error_get_errno ()
+{
+  libcrun_error_t err = NULL;
+  int ret;
+
+  /* Test with NULL */
+  ret = crun_error_get_errno (NULL);
+  if (ret != 0)
+    return -1;
+
+  /* Test with NULL pointer */
+  ret = crun_error_get_errno (&err);
+  if (ret != 0)
+    return -1;
+
+  /* Test with actual error */
+  crun_make_error (&err, 42, "test error");
+  ret = crun_error_get_errno (&err);
+  if (ret != 42)
+    return -1;
+
+  crun_error_release (&err);
+  return 0;
+}
+
+static int
+test_libcrun_verbosity ()
+{
+  int orig = libcrun_get_verbosity ();
+
+  libcrun_set_verbosity (LIBCRUN_VERBOSITY_WARNING);
+  if (libcrun_get_verbosity () != LIBCRUN_VERBOSITY_WARNING)
+    return -1;
+
+  libcrun_set_verbosity (LIBCRUN_VERBOSITY_DEBUG);
+  if (libcrun_get_verbosity () != LIBCRUN_VERBOSITY_DEBUG)
+    return -1;
+
+  libcrun_set_verbosity (LIBCRUN_VERBOSITY_ERROR);
+  if (libcrun_get_verbosity () != LIBCRUN_VERBOSITY_ERROR)
+    return -1;
+
+  /* Restore original */
+  libcrun_set_verbosity (orig);
+  return 0;
+}
+
+static int
+test_libcrun_set_log_format ()
+{
+  libcrun_error_t err = NULL;
+  int ret;
+
+  /* Test valid formats */
+  ret = libcrun_set_log_format ("text", &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  ret = libcrun_set_log_format ("json", &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  /* Test invalid format */
+  ret = libcrun_set_log_format ("invalid", &err);
+  if (ret >= 0)
+    return -1;
+
+  crun_error_release (&err);
+
+  /* Restore to text */
+  libcrun_set_log_format ("text", &err);
+  crun_error_release (&err);
+
+  return 0;
+}
+
+static int
+test_crun_error_release_null ()
+{
+  libcrun_error_t err = NULL;
+  int ret;
+
+  /* Should handle NULL gracefully */
+  ret = crun_error_release (NULL);
+  if (ret != 0)
+    return -1;
+
+  /* Should handle pointer to NULL gracefully */
+  ret = crun_error_release (&err);
+  if (ret != 0)
+    return -1;
+
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -99,8 +234,13 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..2\n");
+  printf ("1..7\n");
   RUN_TEST (test_crun_make_error);
   RUN_TEST (test_crun_write_warning_and_release);
+  RUN_TEST (test_crun_error_wrap);
+  RUN_TEST (test_crun_error_get_errno);
+  RUN_TEST (test_libcrun_verbosity);
+  RUN_TEST (test_libcrun_set_log_format);
+  RUN_TEST (test_crun_error_release_null);
   return 0;
 }

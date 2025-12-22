@@ -58,8 +58,9 @@ def test_simple_delete():
                 cleanup_result = -1
             else:
                 # this is expected for cgroup v1 so ignore
-                if not output or b'Device or resource busy' in output:
-                    # if output is empty or expected error pass
+                # also ignore profiling messages from coverage builds
+                if not output or b'Device or resource busy' in output or b'profiling:' in output:
+                    # if output is empty or expected error or profiling output, pass
                     pass
                 else:
                     # anything else is error

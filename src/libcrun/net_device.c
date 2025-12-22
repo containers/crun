@@ -474,9 +474,9 @@ move_network_device (const char *ifname, const char *newifname, int netns_fd, li
     {
       ret = setup_network_device_in_ns_helper (buffer, buffer_size, netns_fd, newifname, ips, err);
       if (UNLIKELY (ret < 0))
-        _exit (-ret);
+        _safe_exit (-ret);
 
-      _exit (0);
+      _safe_exit (0);
     }
 
   ret = waitpid_ignore_stopped (pid, &wait_status, 0);

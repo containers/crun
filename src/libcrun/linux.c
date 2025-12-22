@@ -525,7 +525,7 @@ maybe_create_userns_for_idmapped_mount (libcrun_container_t *container,
       prctl (PR_SET_PDEATHSIG, SIGKILL);
       while (1)
         pause ();
-      _exit (EXIT_SUCCESS);
+      _safe_exit (EXIT_SUCCESS);
     }
 
   if (mnt->uid_mappings_len)
@@ -3937,7 +3937,7 @@ send_error_to_sync_socket_and_die (int sync_socket_fd, bool has_terminal, libcru
   char *msg;
 
   if (err == NULL || *err == NULL)
-    _exit (EXIT_FAILURE);
+    _safe_exit (EXIT_FAILURE);
 
   if (! send_error_to_sync_socket (sync_socket_fd, has_terminal, err))
     {
@@ -3945,7 +3945,7 @@ send_error_to_sync_socket_and_die (int sync_socket_fd, bool has_terminal, libcru
       msg = (*err)->msg;
       libcrun_fail_with_error (errno, "%s", msg);
     }
-  _exit (EXIT_FAILURE);
+  _safe_exit (EXIT_FAILURE);
 }
 
 static int
@@ -4764,7 +4764,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           if (UNLIKELY (ret < 0))
             kill (new_pid, SIGKILL);
 
-          _exit (0);
+          _safe_exit (0);
         }
 
       /* In the new process.  Wait for the parent to receive the new PID.  */
@@ -4918,7 +4918,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write to sync socket");
 
-          _exit (EXIT_SUCCESS);
+          _safe_exit (EXIT_SUCCESS);
         }
 
       ret = expect_success_from_sync_socket (sync_socket_container, err);
@@ -5251,9 +5251,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   /* If cursor is here most likely we returned from a custom handler eg. wasm, libkrun */
   /* Allow cleanup attributes to perform cleanup and exit with success if return code was 0 */
   if (ret == 0)
-    _exit (EXIT_SUCCESS);
+    _safe_exit (EXIT_SUCCESS);
 
-  _exit (EXIT_FAILURE);
+  _safe_exit (EXIT_FAILURE);
 }
 
 static int
@@ -5644,17 +5644,17 @@ libcrun_join_process (libcrun_context_t *context,
       if (UNLIKELY (ret < 0))
         {
           kill (pid, SIGKILL);
-          _exit (EXIT_FAILURE);
+          _safe_exit (EXIT_FAILURE);
         }
 
       ret = TEMP_FAILURE_RETRY (write (sync_fd, &pid, sizeof (pid)));
       if (UNLIKELY (ret < 0))
         {
           kill (pid, SIGKILL);
-          _exit (EXIT_FAILURE);
+          _safe_exit (EXIT_FAILURE);
         }
 
-      _exit (EXIT_SUCCESS);
+      _safe_exit (EXIT_SUCCESS);
     }
   else
     {
@@ -5665,7 +5665,7 @@ libcrun_join_process (libcrun_context_t *context,
 
       ret = TEMP_FAILURE_RETRY (read (sync_fd, &r, sizeof (r)));
       if (UNLIKELY (ret < 0))
-        _exit (EXIT_FAILURE);
+        _safe_exit (EXIT_FAILURE);
 
       ret = setsid ();
       if (ret < 0)
@@ -5692,7 +5692,7 @@ libcrun_join_process (libcrun_context_t *context,
         }
 
       if (r < 0)
-        _exit (EXIT_FAILURE);
+        _safe_exit (EXIT_FAILURE);
     }
 
   return 0;
@@ -5859,7 +5859,7 @@ libcrun_rexec (void)
   if (ensure_cloned_binary () < 0)
     {
       fprintf (stderr, "Failed to re-execute libcrun via memory file descriptor\n");
-      _exit (EXIT_FAILURE);
+      _safe_exit (EXIT_FAILURE);
     }
 }
 
@@ -6174,17 +6174,17 @@ run_in_container_namespace (libcrun_container_status_t *status, int (*callback) 
       if (UNLIKELY (ret < 0))
         {
           crun_make_error (err, 0, "setns to target pid");
-          _exit (ret);
+          _safe_exit (ret);
         }
       ret = chdir ("/");
       if (UNLIKELY (ret < 0))
         {
           crun_make_error (err, errno, "chdir to `/`");
-          _exit (ret);
+          _safe_exit (ret);
         }
 
       ret = callback (arg, err);
-      _exit (ret);
+      _safe_exit (ret);
     }
 
   ret = waitpid_ignore_stopped (pid, &wait_status, 0);

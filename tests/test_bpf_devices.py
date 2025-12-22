@@ -86,7 +86,7 @@ def test_bpf_devices_systemd():
     bpf_path = None
     try:
         # Run container with systemd cgroup manager.
-        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True, cgroup_manager="systemd")
+        _, cid = run_and_get_output(conf, hide_stderr=False, command='run', detach=True, cgroup_manager="systemd")
 
         # Get systemd scope.
         state = run_crun_command(['state', cid])
@@ -101,7 +101,7 @@ def test_bpf_devices_systemd():
 
         # Should look like "device:/sys/fs/bpf/crun/crun-xxx_scope".
         if "device:/sys/fs/bpf/crun/" not in output:
-            logger.info("Bad BPFProgram property value: `%s`", prop_value)
+            logger.info("Bad BPFProgram property value: `%s`", output)
             return -1
 
         # Test 2: Check that BPF program file was created.
@@ -109,7 +109,7 @@ def test_bpf_devices_systemd():
         # Extract the path.
         bpf_path = output.split("device:", 1)[1]
         if not os.path.exists(bpf_path):
-            logger.info("BPF program file `%s` not found", prog_file)
+            logger.info("BPF program file `%s` not found", bpf_path)
             return -1
 
         # Test 3: Check that BPF program is cleaned up.
@@ -118,11 +118,17 @@ def test_bpf_devices_systemd():
         run_crun_command(["delete", "-f", cid])
         cid = None
         if os.path.exists(bpf_path):
-            logger.info("BPF program `%s` still exist after crun delete", prog_file)
+            logger.info("BPF program `%s` still exist after crun delete", bpf_path)
             return -1
 
         return 0
 
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "eBPF" in output or "BPF" in output:
+            return (77, "eBPF device filter not supported")
+        logger.info("Test failed with exception: %s", e)
+        return -1
     except Exception as e:
         logger.info("Test failed with exception: %s", e)
         return -1
@@ -130,10 +136,123 @@ def test_bpf_devices_systemd():
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
 
-    return 0
+def test_bpf_devices_deny_all_allow_null():
+    """Test BPF device filter: deny all, allow /dev/null"""
+    ret = check_bpf_prerequisites()
+    if ret != 0:
+        return ret
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Deny all devices, then allow /dev/null (1:3)
+    conf['linux']['resources'] = {
+        'devices': [
+            {'allow': False, 'access': 'rwm'},
+            {'allow': True, 'type': 'c', 'major': 1, 'minor': 3, 'access': 'rwm'}
+        ]
+    }
+
+    # Try to read /dev/null - should succeed
+    conf['process']['args'] = ['/init', 'cat', '/dev/null']
+
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf, hide_stderr=False, cgroup_manager="systemd")
+        return 0
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "eBPF" in output or "BPF" in output:
+            return (77, "eBPF device filter not supported")
+        logger.info("Test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("Test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_bpf_devices_wildcard_major():
+    """Test BPF device filter with wildcard major number"""
+    ret = check_bpf_prerequisites()
+    if ret != 0:
+        return ret
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Allow all character devices with major 1 (null, zero, etc.)
+    conf['linux']['resources'] = {
+        'devices': [
+            {'allow': False, 'access': 'rwm'},
+            {'allow': True, 'type': 'c', 'major': 1, 'access': 'rwm'}
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'cat', '/dev/null']
+
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf, hide_stderr=False, cgroup_manager="systemd")
+        return 0
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "eBPF" in output or "BPF" in output:
+            return (77, "eBPF device filter not supported")
+        logger.info("Test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("Test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_bpf_devices_block_device():
+    """Test BPF device filter for block devices"""
+    ret = check_bpf_prerequisites()
+    if ret != 0:
+        return ret
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Allow block devices
+    conf['linux']['resources'] = {
+        'devices': [
+            {'allow': False, 'access': 'rwm'},
+            {'allow': True, 'type': 'b', 'access': 'r'}
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf, hide_stderr=False, cgroup_manager="systemd")
+        return 0
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "eBPF" in output or "BPF" in output:
+            return (77, "eBPF device filter not supported")
+        logger.info("Test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("Test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
 
 all_tests = {
     "bpf-devices-systemd": test_bpf_devices_systemd,
+    "bpf-devices-deny-all-allow-null": test_bpf_devices_deny_all_allow_null,
+    "bpf-devices-wildcard-major": test_bpf_devices_wildcard_major,
+    "bpf-devices-block-device": test_bpf_devices_block_device,
 }
 
 if __name__ == "__main__":

@@ -194,8 +194,8 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
 }
 
 int
-enter_cgroup_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing,
-                        libcrun_error_t *err)
+enter_cgroup_v1_subsystem (pid_t pid, const char *subsystem, const char *path, bool create_if_missing,
+                           libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   int ret;
@@ -380,7 +380,7 @@ enter_cgroup_v1 (pid_t pid, const char *path, bool create_if_missing, libcrun_er
         continue;
 
       entered_any = true;
-      ret = enter_cgroup_subsystem (pid, subsystem, path, create_if_missing, err);
+      ret = enter_cgroup_v1_subsystem (pid, subsystem, path, create_if_missing, err);
       if (UNLIKELY (ret < 0))
         {
           int errcode = crun_error_get_errno (err);
