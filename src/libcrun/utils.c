@@ -2816,47 +2816,63 @@ channel_fd_pair_process (struct channel_fd_pair *channel, int epollfd, libcrun_e
   return 0;
 }
 
+static int
+open_proc (libcrun_error_t *err)
+{
+  int fd;
+
+#ifdef HAVE_NEW_MOUNT_API
+  cleanup_close int fsfd = -1;
+  int ret;
+
+  fsfd = syscall_fsopen ("proc", FSOPEN_CLOEXEC);
+  if (fsfd >= 0)
+    {
+      ret = syscall_fsconfig (fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+      if (ret >= 0)
+        {
+          fd = syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
+          if (fd >= 0)
+            return fd;
+        }
+    }
+#endif
+
+  fd = open ("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (fd < 0)
+    return crun_make_error (err, errno, "open `/proc`");
+  return fd;
+}
+
 int
 libcrun_get_cached_proc_fd (libcrun_container_t *container, libcrun_error_t *err)
 {
+  if (! container)
+    return open_proc (err);
+
   if (container->proc_fd < 0)
-    {
-#ifdef HAVE_NEW_MOUNT_API
-      cleanup_close int fsfd = -1;
-      int ret;
+    container->proc_fd = open_proc (err);
 
-      fsfd = syscall_fsopen ("proc", FSOPEN_CLOEXEC);
-      if (fsfd >= 0)
-        {
-          ret = syscall_fsconfig (fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
-          if (ret >= 0)
-            {
-              container->proc_fd = syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
-              if (container->proc_fd >= 0)
-                return container->proc_fd;
-            }
-        }
-#endif
-
-      container->proc_fd = open ("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-      if (container->proc_fd < 0)
-        return crun_make_error (err, errno, "open `/proc`");
-    }
   return container->proc_fd;
 }
 
 int
 libcrun_open_proc_file (libcrun_container_t *container, const char *path, int flags, libcrun_error_t *err)
 {
-  int proc_fd, fd;
+  int proc_fd, fd, saved_errno;
 
   proc_fd = libcrun_get_cached_proc_fd (container, err);
   if (proc_fd < 0)
     return proc_fd;
 
   fd = TEMP_FAILURE_RETRY (openat (proc_fd, path, flags | O_CLOEXEC));
+  saved_errno = errno;
+  /* requires closing if not cached */
+  if (! container)
+    TEMP_FAILURE_RETRY (close (proc_fd));
+
   if (UNLIKELY (fd < 0))
-    return crun_make_error (err, errno, "openat `/proc/%s`", path);
+    return crun_make_error (err, saved_errno, "openat `/proc/%s`", path);
 
   return fd;
 }
