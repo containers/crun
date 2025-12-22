@@ -1,3 +1,12 @@
+* crun-1.26
+
+- criu: enable setting of RPC config file via annotation
+  org.criu.config.  crun also reads /etc/criu/crun.conf or
+  /etc/criu/runc.conf for CRIU configuration.
+- linux: run createContainer hooks before making root read-only.
+- utils: handle NULL container passed to libcrun_open_proc_file().
+- container: fix error release on failure paths.
+
 * crun-1.25.1
 
 - linux: harden opens under /proc.  Use fsopen, when available, to get
