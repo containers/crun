@@ -1799,6 +1799,12 @@ mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now
   int fd;
   struct dirent *next;
 
+#ifdef ENABLE_GCOV
+  /* Flush gcov data before closing all fds.  Any code coverage after this point will be lost.  */
+  if (close_now)
+    GCOV_DUMP ();
+#endif
+
   ret = syscall_close_range (n, UINT_MAX, close_now ? 0 : CLOSE_RANGE_CLOEXEC);
   if (ret == 0)
     {
