@@ -2964,9 +2964,9 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (context->fifo_exec_wait_fd < 0 && def->hooks && def->hooks->poststart_len)
     {
       libcrun_debug ("Running `poststart` hooks");
-      ret = do_hooks (def, pid, context->id, true, NULL, "running", (hook **) def->hooks->poststart,
+      ret = do_hooks (def, pid, context->id, false, NULL, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret != 0))
         goto fail;
     }
 
@@ -3387,10 +3387,10 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_hooks (def, status.pid, context->id, true, status.bundle, "running", (hook **) def->hooks->poststart,
+      ret = do_hooks (def, status.pid, context->id, false, status.bundle, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, err);
-      if (UNLIKELY (ret < 0))
-        crun_error_release (err);
+      if (UNLIKELY (ret != 0))
+        return ret;
     }
 
   return 0;

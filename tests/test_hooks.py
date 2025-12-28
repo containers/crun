@@ -66,6 +66,28 @@ def test_hook_env_no_inherit():
     return 0
 
 
+def test_fail_poststart():
+    """Test that a failing poststart hook causes container start to fail."""
+    conf = base_config()
+    conf['hooks'] = {"poststart" : [{"path" : "/bin/false"}]}
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+    except:
+        return 0
+    return -1
+
+def test_success_poststart():
+    """Test that a successful poststart hook does not cause container start to fail."""
+    conf = base_config()
+    conf['hooks'] = {"poststart" : [{"path" : "/bin/true"}]}
+    add_all_namespaces(conf)
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+    except:
+        return -1
+    return 0
+
 def test_poststart_hook():
     """Test poststart hook is called after container starts."""
     if is_rootless():
@@ -405,6 +427,8 @@ def test_annotation_hook_stdout_stderr():
 all_tests = {
     "test-fail-prestart" : test_fail_prestart,
     "test-success-prestart" : test_success_prestart,
+    "test-fail-poststart" : test_fail_poststart,
+    "test-success-poststart" : test_success_poststart,
     "test-hook-env-inherit" : test_hook_env_inherit,
     "test-hook-env-no-inherit" : test_hook_env_no_inherit,
     "test-poststart-hook": test_poststart_hook,
