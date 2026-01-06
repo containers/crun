@@ -312,6 +312,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
   int32_t (*krun_set_console_output) (uint32_t ctx_id, const char *c_filepath);
+  int32_t (*krun_set_exec) (uint32_t ctx_id, const char *exec_path,
+                            const char *const argv[], const char *const envp[]);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
   uint32_t num_vcpus, ram_mib;
@@ -374,13 +376,19 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   if (kconf->nitro)
     {
       krun_set_console_output = dlsym (handle, "krun_set_console_output");
-      if (krun_set_console_output == NULL)
-        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
+      krun_set_exec = dlsym (handle, "krun_set_exec");
+      if (krun_set_console_output == NULL || krun_set_exec == NULL)
+        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun-nitro.so`");
 
       // Redirect all enclave output (read from vsock) to stdout.
       ret = krun_set_console_output (ctx_id, "/dev/stdout");
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not redirect enclave output to stdout");
+
+      ret = krun_set_exec (ctx_id, pathname, (const char *const *) argv,
+                           (const char *const *) def->process->env);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not set enclave execution arguments");
     }
 
   ret = libkrun_configure_vm (ctx_id, handle, &configured, &config_tree, &err);
