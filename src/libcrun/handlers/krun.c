@@ -145,45 +145,6 @@ libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, 
   return 0;
 }
 
-#  ifndef KRUN_NITRO_IMG_TYPE_EIF
-#    define KRUN_NITRO_IMG_TYPE_EIF 1
-#  endif
-
-static int
-libkrun_configure_nitro (uint32_t ctx_id, void *handle, yajl_val *config_tree, libcrun_error_t *err)
-{
-  int32_t (*krun_nitro_set_image) (uint32_t ctx_id, const char *image_path, uint32_t image_type);
-  int32_t (*krun_nitro_set_start_flags) (uint32_t ctx_id, uint64_t start_flags);
-  const char *path_eif[] = { "eif_file", (const char *) 0 };
-  yajl_val val_eif_image = NULL;
-  char *eif_image = NULL;
-  int ret;
-
-  val_eif_image = yajl_tree_get (*config_tree, path_eif, yajl_t_string);
-  if (val_eif_image == NULL || ! YAJL_IS_STRING (val_eif_image))
-    return crun_make_error (err, 0, "invalid Enclave Image Format file parameter");
-
-  eif_image = YAJL_GET_STRING (val_eif_image);
-
-  krun_nitro_set_image = dlsym (handle, "krun_nitro_set_image");
-  if (krun_nitro_set_image == NULL)
-    return crun_make_error (err, 0, "could not find symbol in krun library");
-
-  krun_nitro_set_start_flags = dlsym (handle, "krun_nitro_set_start_flags");
-  if (krun_nitro_set_start_flags == NULL)
-    return crun_make_error (err, 0, "could not find symbol in krun library");
-
-  ret = krun_nitro_set_image (ctx_id, eif_image, KRUN_NITRO_IMG_TYPE_EIF);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, -ret, "could not configure a krun nitro EIF image");
-
-  ret = krun_nitro_set_start_flags (ctx_id, 1);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, -ret, "could not configure a krun nitro start flags");
-
-  return 0;
-}
-
 static int
 libkrun_enable_virtio_gpu (struct krun_config *kconf)
 {
@@ -396,12 +357,6 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       ret = krun_set_tee_config_file (ctx_id, KRUN_SEV_FILE);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not set krun tee config file");
-    }
-  else if (kconf->nitro)
-    {
-      ret = libkrun_configure_nitro (ctx_id, handle, &config_tree, &err);
-      if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not configure krun nitro enclave");
     }
   else
     {
