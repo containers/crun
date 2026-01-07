@@ -4366,8 +4366,14 @@ get_id_in_user_namespace (uid_t id, bool is_uid, runtime_spec_schema_config_sche
   size_t len;
   size_t i;
 
+  if (! def || ! def->linux)
+    goto exit;
+
   mappings = is_uid ? def->linux->uid_mappings : def->linux->gid_mappings;
   len = is_uid ? def->linux->uid_mappings_len : def->linux->gid_mappings_len;
+
+  if (! mappings)
+    goto exit;
 
   for (i = 0; i < len; i++)
     {
@@ -4375,7 +4381,7 @@ get_id_in_user_namespace (uid_t id, bool is_uid, runtime_spec_schema_config_sche
           && id < mappings[i]->container_id + mappings[i]->size)
         return id - mappings[i]->container_id + mappings[i]->host_id;
     }
-
+exit:
   return is_uid ? get_overflow_uid () : get_overflow_gid ();
 }
 
