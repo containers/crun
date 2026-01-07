@@ -1754,6 +1754,9 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   dev_fds = get_private_data (container)->dev_fds;
   get_private_data (container)->dev_fds = NULL;
 
+  if (! def || ! def->linux)
+    return 0;
+
   devfd = openat (get_private_data (container)->rootfsfd, "dev", O_CLOEXEC | O_PATH | O_DIRECTORY);
   if (UNLIKELY (devfd < 0))
     return crun_make_error (err, errno, "open `/dev` directory in `%s`", rootfs);
@@ -1838,6 +1841,9 @@ do_masked_and_readonly_paths (libcrun_container_t *container, libcrun_error_t *e
   size_t i;
   int ret;
   runtime_spec_schema_config_schema *def = container->container_def;
+
+  if (! def || ! def->linux)
+    return 0;
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
@@ -2689,7 +2695,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   if (rootfs == NULL || def->mounts == NULL)
     return 0;
 
-  if (def->linux->rootfs_propagation)
+  if (def->linux && def->linux->rootfs_propagation)
     rootfs_propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL, NULL, NULL);
 
   if ((rootfs_propagation & ALL_PROPAGATIONS_NO_REC) == 0)
@@ -3128,6 +3134,9 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
   runtime_spec_schema_config_schema *def = container->container_def;
 
   if ((get_private_data (container)->unshare_flags & CLONE_NEWUSER) == 0)
+    return 0;
+
+  if (! def || ! def->linux)
     return 0;
 
   if (def->linux->uid_mappings_len)
