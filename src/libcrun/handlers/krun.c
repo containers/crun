@@ -226,26 +226,30 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
 }
 
 static int
-libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *err)
+libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret, sev_indicated = 0, nitro_indicated = 0;
   const char *path_flavor[] = { "flavor", (const char *) 0 };
   struct krun_config *kconf = (struct krun_config *) cookie;
   yajl_val val_flavor = NULL;
-  char *flavor = NULL;
+  const char *flavor = NULL;
   void *close_handles[2];
 
   close_handles[0] = NULL;
   close_handles[1] = NULL;
 
-  // Read if the SEV flavor was indicated in the krun VM config.
-  val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
-  if (val_flavor != NULL && YAJL_IS_STRING (val_flavor))
+  // Check if the user provided the krun variant through OCI annotations.
+  flavor = find_annotation (container, "krun.variant");
+  if (flavor == NULL && *config_tree != NULL)
     {
-      flavor = YAJL_GET_STRING (val_flavor);
+      // If the user doesn't specify a variant via OCI annotations, check the krun VM config to see if the "flavor" field was populated.
+      val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
+      if (val_flavor != NULL && YAJL_IS_STRING (val_flavor))
+        flavor = YAJL_GET_STRING (val_flavor);
+    }
 
-      // The SEV flavor will be used if the krun VM config indicates to use SEV
-      // within the "flavor" field.
+  if (flavor != NULL)
+    {
       sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
       nitro_indicated |= strcmp (flavor, KRUN_FLAVOR_NITRO) == 0;
     }
@@ -327,7 +331,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "libkrun VM config exists, but unable to parse");
 
-  ret = libkrun_configure_flavor (cookie, &config_tree, &err);
+  ret = libkrun_configure_flavor (cookie, &config_tree, container, &err);
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "unable to configure libkrun flavor");
 
