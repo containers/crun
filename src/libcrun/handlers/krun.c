@@ -611,10 +611,7 @@ libkrun_load (void **cookie, libcrun_error_t *err)
     {
       ret = libkrun_create_context (kconf->handle, err);
       if (UNLIKELY (ret < 0))
-        {
-          free (kconf);
-          return ret;
-        }
+        goto error;
       kconf->ctx_id = ret;
     }
 
@@ -622,26 +619,30 @@ libkrun_load (void **cookie, libcrun_error_t *err)
     {
       ret = libkrun_create_context (kconf->handle_sev, err);
       if (UNLIKELY (ret < 0))
-        {
-          free (kconf);
-          return ret;
-        }
+        goto error;
       kconf->ctx_id_sev = ret;
     }
   if (kconf->handle_nitro)
     {
       ret = libkrun_create_context (kconf->handle_nitro, err);
       if (UNLIKELY (ret < 0))
-        {
-          free (kconf);
-          return ret;
-        }
+        goto error;
       kconf->ctx_id_nitro = ret;
     }
 
   *cookie = kconf;
 
   return 0;
+
+error:
+  if (kconf->handle)
+    dlclose (kconf->handle);
+  if (kconf->handle_sev)
+    dlclose (kconf->handle_sev);
+  if (kconf->handle_nitro)
+    dlclose (kconf->handle_nitro);
+  free (kconf);
+  return ret;
 }
 
 static int
@@ -658,6 +659,19 @@ libkrun_unload (void *cookie, libcrun_error_t *err)
           if (UNLIKELY (r != 0))
             return crun_make_error (err, 0, "could not unload handle: `%s`", dlerror ());
         }
+      if (kconf->handle_sev != NULL)
+        {
+          r = dlclose (kconf->handle_sev);
+          if (UNLIKELY (r != 0))
+            return crun_make_error (err, 0, "could not unload handle_sev: `%s`", dlerror ());
+        }
+      if (kconf->handle_nitro != NULL)
+        {
+          r = dlclose (kconf->handle_nitro);
+          if (UNLIKELY (r != 0))
+            return crun_make_error (err, 0, "could not unload handle_nitro: `%s`", dlerror ());
+        }
+      free (kconf);
     }
   return 0;
 }
