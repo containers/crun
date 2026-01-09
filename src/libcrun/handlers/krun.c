@@ -61,6 +61,7 @@
 
 #define KRUN_FLAVOR_NITRO "aws-nitro"
 #define KRUN_FLAVOR_SEV "sev"
+#define KRUN_FLAVOR_DEFAULT "default"
 
 struct krun_config
 {
@@ -185,14 +186,47 @@ libkrun_read_vm_config (yajl_val *config_tree, libcrun_error_t *err)
 }
 
 static int
-libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val *config_tree, libcrun_error_t *err)
+libkrun_parse_resource_configuration (yajl_val *config_tree, libcrun_container_t *container, char *annotation, const char *path[], int default_val)
+{
+  char *annotation_val;
+  char *endptr;
+  int resource_val = default_val;
+  yajl_val krun_file_val = NULL;
+
+  annotation_val = (char *) find_annotation (container, annotation);
+  if (annotation_val != NULL)
+    {
+      errno = 0;
+      resource_val = strtol (annotation_val, &endptr, 10);
+      if (errno != 0 || endptr == annotation_val || *endptr != '\0')
+        {
+          fprintf (stderr, "failed to convert %s value to an integer: falling back to the default value %d\n", annotation, default_val);
+          return default_val;
+        }
+    }
+  else
+    {
+      krun_file_val = yajl_tree_get (*config_tree, path, yajl_t_number);
+      if (! YAJL_IS_INTEGER (krun_file_val))
+        {
+          fprintf (stderr, "failed to convert %s value in krun_vm.json to an integer: falling back to the default value %d\n", path[0], default_val);
+          return default_val;
+        }
+
+      if (krun_file_val != NULL)
+        resource_val = YAJL_GET_INTEGER (krun_file_val);
+    }
+
+  return resource_val;
+}
+
+static int
+libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
 {
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
-  yajl_val cpus = NULL;
-  yajl_val ram_mib = NULL;
+  int cpus, ram_mib, ret;
   const char *path_cpus[] = { "cpus", (const char *) 0 };
   const char *path_ram_mib[] = { "ram_mib", (const char *) 0 };
-  int ret;
 
   if (*config_tree == NULL)
     return 0;
@@ -205,18 +239,15 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
   if (UNLIKELY (ret))
     return ret;
 
-  cpus = yajl_tree_get (*config_tree, path_cpus, yajl_t_number);
-  ram_mib = yajl_tree_get (*config_tree, path_ram_mib, yajl_t_number);
-  /* Both cpus and ram_mib must be present at the same time */
-  if (cpus == NULL || ram_mib == NULL || ! YAJL_IS_INTEGER (cpus) || ! YAJL_IS_INTEGER (ram_mib))
-    return 0;
+  cpus = libkrun_parse_resource_configuration (config_tree, container, "krun.cpus", path_cpus, 1);
+  ram_mib = libkrun_parse_resource_configuration (config_tree, container, "krun.ram_mib", path_ram_mib, 1024);
 
   krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
 
   if (krun_set_vm_config == NULL)
     return crun_make_error (err, 0, "could not find symbol in the krun library");
 
-  ret = krun_set_vm_config (ctx_id, YAJL_GET_INTEGER (cpus), YAJL_GET_INTEGER (ram_mib));
+  ret = krun_set_vm_config (ctx_id, cpus, ram_mib);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, -ret, "could not set krun vm configuration");
 
@@ -226,7 +257,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
 }
 
 static int
-libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *err)
+libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret, sev_indicated = 0, nitro_indicated = 0;
   const char *path_flavor[] = { "flavor", (const char *) 0 };
@@ -238,14 +269,18 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_error_t *
   close_handles[0] = NULL;
   close_handles[1] = NULL;
 
-  // Read if the SEV flavor was indicated in the krun VM config.
-  val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
-  if (val_flavor != NULL && YAJL_IS_STRING (val_flavor))
+  // Check if the user provided the krun variant through OCI annotations.
+  flavor = (char *) find_annotation (container, "krun.variant");
+  if (flavor == NULL)
     {
-      flavor = YAJL_GET_STRING (val_flavor);
+      // If the user doesn't specify a variant via OCI annotations, check the krun VM config to see if the "flavor" field was populated.
+      val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
+      if (val_flavor != NULL && YAJL_IS_STRING (val_flavor))
+        flavor = YAJL_GET_STRING (val_flavor);
+    }
 
-      // The SEV flavor will be used if the krun VM config indicates to use SEV
-      // within the "flavor" field.
+  if (flavor != NULL)
+    {
       sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
       nitro_indicated |= strcmp (flavor, KRUN_FLAVOR_NITRO) == 0;
     }
@@ -327,7 +362,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "libkrun VM config exists, but unable to parse");
 
-  ret = libkrun_configure_flavor (cookie, &config_tree, &err);
+  ret = libkrun_configure_flavor (cookie, &config_tree, container, &err);
   if (UNLIKELY (ret < 0))
     error (EXIT_FAILURE, -ret, "unable to configure libkrun flavor");
 
@@ -391,7 +426,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         error (EXIT_FAILURE, -ret, "could not set enclave execution arguments");
     }
 
-  ret = libkrun_configure_vm (ctx_id, handle, &configured, &config_tree, &err);
+  ret = libkrun_configure_vm (ctx_id, handle, &configured, &config_tree, container, &err);
   if (UNLIKELY (ret))
     {
       libcrun_error_t *tmp_err = &err;
