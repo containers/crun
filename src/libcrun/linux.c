@@ -5033,7 +5033,8 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_container_notify_handler (args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, container->container_def->root->path, err);
+  ret = libcrun_container_notify_handler (args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container,
+                                          container->container_def->root ? container->container_def->root->path : NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
