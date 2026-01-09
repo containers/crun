@@ -1336,10 +1336,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_BEFORE_MOUNTS, container, rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
   ret = libcrun_set_mounts (entrypoint_args, container, rootfs, send_sync_cb, &sync_socket, err);
   if (UNLIKELY (ret < 0))
