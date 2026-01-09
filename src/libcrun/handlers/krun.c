@@ -467,7 +467,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         return crun_make_error (err, errno, "open `%s`", rootfs);
     }
 
-  if (phase == HANDLER_CONFIGURE_BEFORE_MOUNTS)
+  if (phase == HANDLER_CONFIGURE_BEFORE_USERNS)
     {
       cleanup_free char *origin_config_path = NULL;
       cleanup_free char *state_dir = NULL;
