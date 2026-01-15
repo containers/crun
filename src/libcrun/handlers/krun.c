@@ -430,7 +430,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         {
           ret = libkrun_enable_virtio_gpu (kconf);
           if (UNLIKELY (ret < 0))
-            return ret;
+            return -ret;
         }
     }
 
