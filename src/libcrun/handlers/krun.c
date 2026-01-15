@@ -343,8 +343,19 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   if (krun_set_log_level == NULL || krun_start_enter == NULL)
     error (EXIT_FAILURE, 0, "could not find symbol in the krun library");
 
-  /* Set log level to "error" */
-  krun_set_log_level (1);
+  /* Set log level according to crun's verbosity. */
+  switch (libcrun_get_verbosity ())
+    {
+    case LIBCRUN_VERBOSITY_DEBUG:
+      krun_set_log_level (KRUN_LOG_LEVEL_DEBUG);
+      break;
+    case LIBCRUN_VERBOSITY_WARNING:
+      krun_set_log_level (KRUN_LOG_LEVEL_WARN);
+      break;
+    default:
+      krun_set_log_level (KRUN_LOG_LEVEL_ERROR);
+      break;
+    }
 
   if (kconf->sev)
     {
