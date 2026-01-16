@@ -383,6 +383,7 @@ static char *potentially_unsafe_annotations[] = {
   "io.kubernetes.cri.container-type",
   "run.oci.",
   "org.criu.",
+  "krun.",
 };
 
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
