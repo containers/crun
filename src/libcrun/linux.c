@@ -5033,6 +5033,11 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_container_notify_handler (args, HANDLER_CONFIGURE_BEFORE_USERNS, container,
+                                          container->container_def->root ? container->container_def->root->path : NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   /* If a new user namespace must be created, but there are other namespaces to join, then delay
      the userns creation after the namespaces are joined.  */
   init_status.delayed_userns_create
