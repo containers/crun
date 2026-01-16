@@ -114,6 +114,27 @@ test_load_nonexistent_plugin ()
   return 0;
 }
 
+/* Test load with multiple non-existent plugins to verify cleanup of n_plugins.  */
+static int
+test_load_multiple_nonexistent_plugins ()
+{
+  libcrun_error_t err = NULL;
+  struct seccomp_notify_context_s *ctx = NULL;
+  int ret;
+
+  ret = libcrun_load_seccomp_notify_plugins (&ctx, "/nonexistent/p1.so:/nonexistent/p2.so:/nonexistent/p3.so", NULL, &err);
+  if (ret >= 0)
+    {
+      if (ctx)
+        libcrun_free_seccomp_notify_plugins (ctx, &err);
+      crun_error_release (&err);
+      return -1;
+    }
+
+  crun_error_release (&err);
+  return 0;
+}
+
 /* Test seccomp_notify_plugins returns error without seccomp support */
 static int
 test_notify_no_seccomp ()
@@ -167,11 +188,12 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..5\n");
+  printf ("1..6\n");
   RUN_TEST (test_cleanup_null);
   RUN_TEST (test_free_null_context);
   RUN_TEST (test_load_invalid_path);
   RUN_TEST (test_load_nonexistent_plugin);
+  RUN_TEST (test_load_multiple_nonexistent_plugins);
   RUN_TEST (test_notify_no_seccomp);
   return 0;
 }

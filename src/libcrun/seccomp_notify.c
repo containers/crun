@@ -95,13 +95,17 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
   ctx->sreq = xmalloc (ctx->sizes.seccomp_notif);
   ctx->sresp = xmalloc (ctx->sizes.seccomp_notif_resp);
 
-  ctx->n_plugins = 1;
-  for (it = b; it; it = strchr (it, ':'))
-    ctx->n_plugins++;
-
-  ctx->plugins = xmalloc0 (sizeof (struct plugin) * (ctx->n_plugins + 1));
+  if (is_empty_string (plugins))
+    return 0;
 
   b = xstrdup (plugins);
+
+  ctx->n_plugins = 1;
+  for (it = b; *it; it++)
+    if (*it == ':')
+      ctx->n_plugins++;
+
+  ctx->plugins = xmalloc0 (sizeof (struct plugin) * (ctx->n_plugins + 1));
   for (s = 0, it = strtok_r (b, ":", &saveptr); it; s++, it = strtok_r (NULL, ":", &saveptr))
     {
       run_oci_seccomp_notify_plugin_version_cb version_cb;
@@ -254,6 +258,7 @@ libcrun_free_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, libcr
         dlclose (ctx->plugins[i].handle);
       }
 
+  free (ctx->plugins);
   free (ctx);
 
   return 0;
