@@ -430,14 +430,17 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         {
           ret = libkrun_enable_virtio_gpu (kconf);
           if (UNLIKELY (ret < 0))
-            return ret;
+            error (EXIT_FAILURE, -ret, "could not enable virtio gpu");
         }
     }
 
   yajl_tree_free (config_tree);
 
   ret = krun_start_enter (ctx_id);
-  return -ret;
+  if (UNLIKELY (ret < 0))
+    error (EXIT_FAILURE, -ret, "could not start krun");
+
+  return ret;
 }
 
 /* libkrun_create_kvm_device: explicitly adds kvm device.  */
