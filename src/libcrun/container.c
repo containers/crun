@@ -801,6 +801,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   ret = 0;
 
+  bool error_created = false;
   for (i = 0; i < hooks_len; i++)
     {
       char **env = environ;
@@ -809,11 +810,14 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
         env = hooks[i]->env;
 
       /* Release the error from the previous iteration, if any.  */
-      if (err && *err)
+      if (error_created)
         crun_error_release (err);
 
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
                                                  stdin, stdin_len, out_fd, err_fd, err);
+      if (UNLIKELY (ret < 0))
+        error_created = true;
+
       if (UNLIKELY (ret != 0))
         {
           if (keep_going)
