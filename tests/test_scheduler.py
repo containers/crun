@@ -194,9 +194,11 @@ def test_scheduler_nice_value():
 
 
 def test_scheduler_deadline():
-    """Test SCHED_DEADLINE scheduler policy."""
+    """Test SCHED_DEADLINE scheduler policy with all parameters (working case)."""
     if is_rootless():
         return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
 
     conf = base_config()
     add_all_namespaces(conf)
@@ -216,16 +218,41 @@ def test_scheduler_deadline():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # SCHED_DEADLINE often not available
-        if "scheduler" in output.lower() or "permission" in output.lower() or "deadline" in output.lower():
-            return (77, "SCHED_DEADLINE not available")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        error_str = str(e).lower()
-        if "deadline" in error_str or "scheduler" in error_str:
-            return (77, "SCHED_DEADLINE not available")
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_no_period():
+    """Test SCHED_DEADLINE scheduler policy without period (should work - kernel allows it)."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # SCHED_DEADLINE with runtime and deadline but no period
+    # Kernel should accept this and use deadline as period
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 10000000,    # 10ms
+        'deadline': 20000000    # 20ms, no period
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0  # Should succeed
+
+    except subprocess.CalledProcessError as e:
+        logger.info("test failed: %s", e)
+        return -1
+    except Exception as e:
         logger.info("test failed: %s", e)
         return -1
 
@@ -252,10 +279,255 @@ def test_scheduler_flags():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if "scheduler" in output.lower() or "permission" in output.lower():
-            return (77, "scheduler flags not available")
         logger.info("test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_missing_runtime():
+    """Test SCHED_DEADLINE validation - missing runtime parameter."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # Missing runtime parameter
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'deadline': 20000000,   # 20ms
+        'period': 20000000      # 20ms
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to missing runtime
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` requires `runtime`" in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_missing_deadline():
+    """Test SCHED_DEADLINE validation - missing deadline parameter."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # Missing deadline parameter
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 10000000,    # 10ms
+        'period': 20000000      # 20ms
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to missing deadline
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` requires `deadline`" in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+
+
+def test_scheduler_deadline_zero_runtime():
+    """Test SCHED_DEADLINE validation - zero runtime."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # Zero runtime
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 0,
+        'deadline': 20000000,   # 20ms
+        'period': 20000000      # 20ms
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to zero runtime
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` runtime must be greater than 0" in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_invalid_order():
+    """Test SCHED_DEADLINE validation - runtime > deadline."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # runtime > deadline (invalid)
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 30000000,    # 30ms
+        'deadline': 20000000,   # 20ms
+        'period': 40000000      # 40ms
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to invalid order
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` runtime" in output and "must be <=" in output and "deadline" in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_invalid_deadline_period():
+    """Test SCHED_DEADLINE validation - deadline > period."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # deadline > period (invalid)
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 10000000,    # 10ms
+        'deadline': 30000000,   # 30ms
+        'period': 20000000      # 20ms
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to invalid order
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` deadline" in output and "must be <=" in output and "period" in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_too_small_runtime():
+    """Test SCHED_DEADLINE validation - runtime < min."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 1023,        # too small
+        'deadline': 10000000,   # 10ms
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to too small runtime.
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be between " in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_too_big_runtime():
+    """Test SCHED_DEADLINE validation - runtime > max."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 9223372036854775809,
+        'deadline': 9223372036854775810,
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        # Should have failed due to too big runtime.
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be between " in output:
+            return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
         return -1
     except Exception as e:
         logger.info("test failed: %s", e)
@@ -270,7 +542,15 @@ all_tests = {
     "scheduler-other": test_scheduler_other,
     "scheduler-nice-value": test_scheduler_nice_value,
     "scheduler-deadline": test_scheduler_deadline,
+    "scheduler-deadline-no-period": test_scheduler_deadline_no_period,
     "scheduler-flags": test_scheduler_flags,
+    "scheduler-deadline-missing-runtime": test_scheduler_deadline_missing_runtime,
+    "scheduler-deadline-missing-deadline": test_scheduler_deadline_missing_deadline,
+    "scheduler-deadline-zero-runtime": test_scheduler_deadline_zero_runtime,
+    "scheduler-deadline-invalid-order": test_scheduler_deadline_invalid_order,
+    "scheduler-deadline-invalid-deadline-period": test_scheduler_deadline_invalid_deadline_period,
+    "scheduler-deadline-too-small-runtime": test_scheduler_deadline_too_small_runtime,
+    "scheduler-deadline-too-big-runtime": test_scheduler_deadline_too_big_runtime,
 }
 
 if __name__ == "__main__":
