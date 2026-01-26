@@ -175,6 +175,7 @@ def test_crun_features():
                 "io.kubernetes.cri.container-type",
                 "run.oci.",
                 "org.criu.",
+                "krun.",
             ]
         }
 
