@@ -394,9 +394,10 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   ret = libkrun_configure_vm (ctx_id, handle, &configured, &config_tree, &err);
   if (UNLIKELY (ret))
     {
+      int errcode = crun_error_get_errno (&err);
       libcrun_error_t *tmp_err = &err;
       libcrun_error_write_warning_and_release (NULL, &tmp_err);
-      error (EXIT_FAILURE, ret, "could not configure krun vm");
+      error (EXIT_FAILURE, errcode, "could not configure krun vm");
     }
 
   /* If we couldn't configure the microVM using KRUN_VM_FILE, fall back to the
