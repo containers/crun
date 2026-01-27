@@ -477,6 +477,66 @@ def test_exec_cpu_affinity():
         shutil.rmtree(tempdir)
     return 0
 
+def test_exec_cpu_affinity_config_file():
+    """Test that exec honors execCPUAffinity from container configuration when not specified in exec process"""
+    if len(os.sched_getaffinity(0)) < 4:
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    # Set execCPUAffinity in the container's main process configuration
+    conf['process']['execCPUAffinity'] = {"initial": "0-1", "final": "0-2"}
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+
+    def cpu_mask_from_proc_status(status):
+        for l in status.split("\n"):
+            parts = l.split(":")
+            if parts[0] == "Cpus_allowed_list":
+                return parts[1].strip()
+        return ""
+
+    def exec_without_cpu_affinity_and_get_mask(cid):
+        """Execute a process without specifying execCPUAffinity and get its CPU mask"""
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            process = {
+                "user": {
+                    "uid": 0,
+                    "gid": 0
+                },
+                "terminal": False,
+                "cwd": "/",
+                "args": [
+                    "/init",
+                    "cat",
+                    "/proc/self/status"
+                ]
+                # Note: No execCPUAffinity specified here - should fall back to container config
+            }
+            json.dump(process, f)
+
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        return cpu_mask_from_proc_status(out)
+
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True)
+
+        # Execute without specifying execCPUAffinity - should use container's config final value
+        mask = exec_without_cpu_affinity_and_get_mask(cid)
+        if mask != "0-2":
+            sys.stderr.write("# execCPUAffinity fallback test failed: cpu mask %s != 0-2\n" % mask)
+            sys.stderr.write("# expected to use container's execCPUAffinity.final value\n")
+            return -1
+
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+    return 0
+
 def test_exec_getpgrp():
     conf = base_config()
     add_all_namespaces(conf)
@@ -695,6 +755,7 @@ all_tests = {
     "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
     "exec-test-uid-tty": test_uid_tty,
     "exec-cpu-affinity": test_exec_cpu_affinity,
+    "exec-cpu-affinity-config-file": test_exec_cpu_affinity_config_file,
     "exec-getpgrp": test_exec_getpgrp,
     "exec-help" : test_exec_help,
     "exec-error-propagation" : test_exec_error_propagation,
