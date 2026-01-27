@@ -377,15 +377,23 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
 
   ret = libkrun_read_vm_config (&config_tree, &err);
   if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, -ret, "libkrun VM config exists, but unable to parse");
+    {
+      int errcode = crun_error_get_errno (&err);
+      crun_error_release (&err);
+      error (EXIT_FAILURE, errcode, "libkrun VM config exists, but unable to parse");
+    }
 
   ret = libkrun_configure_flavor (cookie, &config_tree, container, &err);
   if (UNLIKELY (ret < 0))
-    error (EXIT_FAILURE, -ret, "unable to configure libkrun flavor");
+    {
+      int errcode = crun_error_get_errno (&err);
+      crun_error_release (&err);
+      error (EXIT_FAILURE, errcode, "unable to configure libkrun flavor");
+    }
 
   // /dev/kvm is required for all non-nitro workloads.
   if (! kconf->nitro && ! kconf->has_kvm)
-    error (EXIT_FAILURE, -ret, "`/dev/kvm` unavailable");
+    error (EXIT_FAILURE, 0, "`/dev/kvm` unavailable");
 
   handle = kconf->handle;
   ctx_id = kconf->ctx_id;
