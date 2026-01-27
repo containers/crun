@@ -812,7 +812,10 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
       /* Release the error from the previous iteration, if any.  */
       if (error_created)
-        crun_error_release (err);
+        {
+          crun_error_release (err);
+          error_created = false;
+        }
 
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
                                                  stdin, stdin_len, out_fd, err_fd, err);
