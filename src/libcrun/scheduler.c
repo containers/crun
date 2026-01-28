@@ -96,6 +96,38 @@ libcrun_reset_cpu_affinity_mask (pid_t pid, libcrun_error_t *err)
   return 0;
 }
 
+static int
+diagnose_scheduler_failure (int ret, libcrun_error_t *err, runtime_spec_schema_config_schema_process *process,
+                            struct sched_attr_s *attr)
+{
+  if (attr->sched_policy == SCHED_DEADLINE && errno == EINVAL)
+    {
+      if (! process->scheduler->runtime_present)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` requires `runtime`");
+      if (! process->scheduler->deadline_present)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` requires `deadline`");
+
+      if (attr->sched_runtime == 0)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` runtime must be greater than 0");
+      if (attr->sched_deadline == 0)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` deadline must be greater than 0");
+      if (attr->sched_period == 0)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` period must be greater than 0");
+
+      if (attr->sched_runtime > attr->sched_deadline)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` runtime (%" PRIu64 ") must be <= deadline (%" PRIu64 ")",
+                                attr->sched_runtime, attr->sched_deadline);
+      if (attr->sched_deadline > attr->sched_period)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` deadline (%" PRIu64 ") must be <= period (%" PRIu64 ")",
+                                attr->sched_deadline, attr->sched_period);
+
+      return crun_make_error (err, errno, "sched_setattr: invalid `SCHED_DEADLINE` parameters (runtime=%" PRIu64 ", deadline=%" PRIu64 ", period=%" PRIu64 ")",
+                              attr->sched_runtime, attr->sched_deadline, attr->sched_period);
+    }
+
+  return crun_make_error (err, errno, "sched_setattr");
+}
+
 int
 libcrun_set_scheduler (pid_t pid, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err)
 {
@@ -176,7 +208,7 @@ libcrun_set_scheduler (pid_t pid, runtime_spec_schema_config_schema_process *pro
 
   ret = syscall_sched_setattr (pid, &attr, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "sched_setattr");
+    return diagnose_scheduler_failure (ret, err, process, &attr);
 
   return 0;
 }
