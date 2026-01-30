@@ -361,7 +361,7 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
             it++;
 
           if (*it == '\0')
-            return crun_make_error (err, errno, "invalid mapping specified `%s`", option);
+            return crun_make_error (err, 0, "invalid mapping specified `%s`", option);
 
           errno = 0;
           value[i] = strtol (it, &endptr, 10);
