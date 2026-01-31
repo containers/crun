@@ -3367,7 +3367,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
 
               ret = select (fd + 1, &read_set, NULL, NULL, &timeout);
               if (UNLIKELY (ret < 0))
-                return ret;
+                return crun_make_error (err, errno, "select failed");
               if (ret)
                 {
                   ret = handle_notify_socket (fd, err);
@@ -4461,16 +4461,21 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
 int
 libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err)
 {
+  int ret;
   int cgroup_mode;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
-  return fprintf (out, spec_file,
-                  root ? spec_pts_tty_group : "\n",
-                  root ? "" : spec_user,
-                  cgroup_mode == CGROUP_MODE_UNIFIED ? spec_cgroupns : "");
+  ret = fprintf (out, spec_file,
+                 root ? spec_pts_tty_group : "\n",
+                 root ? "" : spec_user,
+                 cgroup_mode == CGROUP_MODE_UNIFIED ? spec_cgroupns : "");
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fprintf failed");
+
+  return ret;
 }
 
 int
@@ -4557,7 +4562,7 @@ restore_proxy_process (int *proxy_pid_pipe, int cgroup_manager, libcrun_error_t 
 
   ret = TEMP_FAILURE_RETRY (read (*proxy_pid_pipe, &new_pid, sizeof (new_pid)));
   if (UNLIKELY (ret < 0))
-    return ret;
+    return crun_make_error (err, errno, "read failed");
 
   close_and_reset (proxy_pid_pipe);
 
