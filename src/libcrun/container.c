@@ -4994,7 +4994,10 @@ libcrun_container_add_or_remove_mounts_from_file (libcrun_context_t *context, co
     return ret;
 
   if (! YAJL_IS_ARRAY (tree))
-    return crun_make_error (err, 0, "mounts must be an array");
+    {
+      ret = crun_make_error (err, 0, "mounts must be an array");
+      goto cleanup;
+    }
   else
     {
       values = YAJL_GET_ARRAY (tree)->values;
