@@ -3738,7 +3738,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
 
   gen = yajl_gen_alloc (NULL);
   if (gen == NULL)
-    return crun_make_error (err, errno, "yajl_gen_alloc");
+    return crun_make_error (err, 0, "yajl_gen_alloc");
 
   ret = yajl_gen_array_open (gen);
   if (UNLIKELY (ret != yajl_gen_status_ok))
