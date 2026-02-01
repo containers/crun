@@ -4247,7 +4247,7 @@ libcrun_container_update_from_values (libcrun_context_t *context, const char *id
 
   gen = yajl_gen_alloc (NULL);
   if (gen == NULL)
-    return crun_make_error (err, errno, "yajl_gen_create failed");
+    return crun_make_error (err, 0, "yajl_gen_alloc failed");
   yajl_gen_map_open (gen);
 
   qsort (values, len, sizeof (struct libcrun_update_value_s), compare_update_values);
