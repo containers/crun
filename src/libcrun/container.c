@@ -3308,6 +3308,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
     {
       force_delete_container_status (context, def);
       libcrun_error ((*err)->status, "%s", (*err)->msg);
+      crun_error_release (err);
       crun_set_output_handler (log_write_to_stderr, NULL);
     }
 
