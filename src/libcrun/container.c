@@ -3297,7 +3297,11 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
   ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
   if (UNLIKELY (ret < 0))
-    libcrun_fail_with_error (errno, "copy config file");
+    {
+      int errcode = crun_error_get_errno (err);
+      crun_error_release (err);
+      libcrun_fail_with_error (errcode, "copy config file");
+    }
 
   ret = libcrun_container_run_internal (container, context, &pipefd1, err);
   if (UNLIKELY (ret < 0))
