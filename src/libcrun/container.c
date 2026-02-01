@@ -2584,7 +2584,7 @@ setup_seccomp (libcrun_container_t *container, const char *seccomp_bpf_data,
 
   if (find_annotation (container, "run.oci.seccomp.plugins") != NULL && has_seccomp_receiver (container))
     {
-      return crun_make_error (err, errno, "seccomp plugins and seccomp receivers cannot be declared at the same time");
+      return crun_make_error (err, 0, "seccomp plugins and seccomp receivers cannot be declared at the same time");
     }
 
   if (def->linux && (def->linux->seccomp || seccomp_bpf_data))
