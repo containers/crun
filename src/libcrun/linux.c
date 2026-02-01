@@ -2345,7 +2345,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
       dfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, target, O_RDONLY | O_PATH | O_CLOEXEC | (is_dir ? O_DIRECTORY : 0), 0, err);
       if (UNLIKELY (dfd < 0))
-        return crun_make_error (err, errno, "open mount target `/%s`", target);
+        return crun_error_wrap (err, "open mount target `/%s`", target);
 
       ret = do_mount_setattr (true, target, dfd, rec_clear, rec_set, err);
       if (UNLIKELY (ret < 0))
@@ -2722,7 +2722,7 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   // configure handler mounts
   ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_MOUNTS");
+    return crun_error_wrap (err, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_MOUNTS");
 
   if (def->root->readonly)
     {
@@ -2817,7 +2817,7 @@ libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun
   // configure handler mounts for phase: HANDLER_CONFIGURE_AFTER_MOUNTS
   ret = libcrun_container_notify_handler (entrypoint_args, HANDLER_CONFIGURE_AFTER_MOUNTS, container, rootfs, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_AFTER_MOUNTS");
+    return crun_error_wrap (err, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_AFTER_MOUNTS");
 
   close_and_reset (&(get_private_data (container)->rootfsfd));
 
