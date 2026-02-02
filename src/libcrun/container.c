@@ -3274,20 +3274,20 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       waitpid_ignore_stopped (ret, NULL, 0);
 
       ret = TEMP_FAILURE_RETRY (read (pipefd0, &exit_code, sizeof (exit_code)));
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "waiting for container to be ready");
-      if (ret > 0)
-        {
-          if (exit_code != 0)
-            {
-              libcrun_debug ("Exit code is `%d`, deleting container", exit_code);
-              libcrun_error_t tmp_err = NULL;
-              libcrun_container_delete (context, def, context->id, true, &tmp_err);
-              crun_error_release (&tmp_err);
-            }
-          return -exit_code;
-        }
-      return 1;
+      if (UNLIKELY (ret <= 0))
+        return crun_make_error (err, ret < 0 ? errno : 0, "waiting for container to be ready");
+
+      if (ret != sizeof (exit_code) || exit_code < 0)
+        return crun_make_error (err, 0, "internal error: read invalid exit code");
+
+      if (exit_code == 0)
+        return 0;
+
+      libcrun_debug ("Exit code is `%d`, deleting container", exit_code);
+      libcrun_error_t tmp_err = NULL;
+      libcrun_container_delete (context, def, context->id, true, &tmp_err);
+      crun_error_release (&tmp_err);
+      return crun_make_error (err, 0, "error creating container");
     }
 
   /* forked process.  */
