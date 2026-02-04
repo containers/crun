@@ -65,21 +65,21 @@
  */
 #define KRUN_VM_FILE "/.krun_vm.json"
 
-#define KRUN_FLAVOR_NITRO "aws-nitro"
+#define KRUN_FLAVOR_AWS_NITRO "aws-nitro"
 #define KRUN_FLAVOR_SEV "sev"
 
 struct krun_config
 {
   void *handle;
   void *handle_sev;
-  void *handle_nitro;
+  void *handle_awsnitro;
   bool sev;
-  bool nitro;
+  bool awsnitro;
   int32_t ctx_id;
   int32_t ctx_id_sev;
-  int32_t ctx_id_nitro;
+  int32_t ctx_id_awsnitro;
   bool has_kvm;
-  bool has_nitro;
+  bool has_awsnitro;
 };
 
 /* libkrun handler.  */
@@ -276,7 +276,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
 static int
 libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
 {
-  int ret, sev_indicated = 0, nitro_indicated = 0;
+  int ret, sev_indicated = 0, awsnitro_indicated = 0;
   const char *path_flavor[] = { "flavor", (const char *) 0 };
   struct krun_config *kconf = (struct krun_config *) cookie;
   yajl_val val_flavor = NULL;
@@ -299,7 +299,7 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container
   if (flavor != NULL)
     {
       sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
-      nitro_indicated |= strcmp (flavor, KRUN_FLAVOR_NITRO) == 0;
+      awsnitro_indicated |= strcmp (flavor, KRUN_FLAVOR_AWS_NITRO) == 0;
     }
 
   // To maintain backward compatibility, also use the SEV flavor if the
@@ -312,23 +312,23 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container
         error (EXIT_FAILURE, 0, "the container requires libkrun-sev but it's not available");
 
       close_handles[0] = kconf->handle;
-      close_handles[1] = kconf->handle_nitro;
+      close_handles[1] = kconf->handle_awsnitro;
 
       kconf->handle = kconf->handle_sev;
       kconf->ctx_id = kconf->ctx_id_sev;
       kconf->sev = true;
     }
-  else if (nitro_indicated)
+  else if (awsnitro_indicated)
     {
-      if (kconf->handle_nitro == NULL)
-        error (EXIT_FAILURE, 0, "the container requires libkrun-nitro but it's not available");
+      if (kconf->handle_awsnitro == NULL)
+        error (EXIT_FAILURE, 0, "the container requires libkrun-awsnitro but it's not available");
 
       close_handles[0] = kconf->handle;
       close_handles[1] = kconf->handle_sev;
 
-      kconf->handle = kconf->handle_nitro;
-      kconf->ctx_id = kconf->ctx_id_nitro;
-      kconf->nitro = true;
+      kconf->handle = kconf->handle_awsnitro;
+      kconf->ctx_id = kconf->ctx_id_awsnitro;
+      kconf->awsnitro = true;
     }
   else
     {
@@ -336,7 +336,7 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container
         error (EXIT_FAILURE, 0, "the container requires libkrun but it's not available");
 
       close_handles[0] = kconf->handle_sev;
-      close_handles[1] = kconf->handle_nitro;
+      close_handles[1] = kconf->handle_awsnitro;
     }
 
   // We no longer need the other two libkrun handles.
@@ -391,8 +391,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       error (EXIT_FAILURE, errcode, "unable to configure libkrun flavor");
     }
 
-  // /dev/kvm is required for all non-nitro workloads.
-  if (! kconf->nitro && ! kconf->has_kvm)
+  // /dev/kvm is required for all non AWS nitro workloads.
+  if (! kconf->awsnitro && ! kconf->has_kvm)
     error (EXIT_FAILURE, 0, "`/dev/kvm` unavailable");
 
   handle = kconf->handle;
@@ -444,12 +444,12 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         error (EXIT_FAILURE, -ret, "could not set krun root");
     }
 
-  if (kconf->nitro)
+  if (kconf->awsnitro)
     {
       krun_set_console_output = dlsym (handle, "krun_set_console_output");
       krun_set_exec = dlsym (handle, "krun_set_exec");
       if (krun_set_console_output == NULL || krun_set_exec == NULL)
-        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun-nitro.so`");
+        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun-awsnitro.so`");
 
       // Redirect all enclave output (read from vsock) to stdout.
       ret = krun_set_console_output (ctx_id, "/dev/stdout");
@@ -530,7 +530,7 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   cleanup_close int devfd = -1;
   cleanup_close int rootfsfd_cleanup = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
-  bool create_sev = false, create_nitro = false;
+  bool create_sev = false, create_awsnitro = false;
   bool is_user_ns;
 
   if (rootfs == NULL)
@@ -596,14 +596,14 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         }
     }
 
-  if (kconf->handle_nitro != NULL)
+  if (kconf->handle_awsnitro != NULL)
     {
-      create_nitro = true;
+      create_awsnitro = true;
       for (i = 0; i < def->linux->devices_len; i++)
         {
           if (strcmp (def->linux->devices[i]->path, "/dev/nitro_enclaves") == 0)
             {
-              create_nitro = false;
+              create_awsnitro = false;
               break;
             }
         }
@@ -637,15 +637,15 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         }
     }
 
-  if (create_nitro)
+  if (create_awsnitro)
     {
       ret = libcrun_create_dev (container, devfd, -1, &nitro_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
         {
-          ret = dlclose (kconf->handle_nitro);
+          ret = dlclose (kconf->handle_awsnitro);
           if (UNLIKELY (ret < 0))
             return ret;
-          kconf->handle_nitro = NULL;
+          kconf->handle_awsnitro = NULL;
         }
     }
 
@@ -659,7 +659,7 @@ libkrun_load (void **cookie, libcrun_error_t *err)
   struct krun_config *kconf;
   const char *libkrun_so = "libkrun.so.1";
   const char *libkrun_sev_so = "libkrun-sev.so.1";
-  const char *libkrun_nitro_so = "libkrun-nitro.so.1";
+  const char *libkrun_awsnitro_so = "libkrun-awsnitro.so.1";
 
   kconf = malloc (sizeof (struct krun_config));
   if (kconf == NULL)
@@ -667,16 +667,16 @@ libkrun_load (void **cookie, libcrun_error_t *err)
 
   kconf->handle = dlopen (libkrun_so, RTLD_NOW);
   kconf->handle_sev = dlopen (libkrun_sev_so, RTLD_NOW);
-  kconf->handle_nitro = dlopen (libkrun_nitro_so, RTLD_NOW);
+  kconf->handle_awsnitro = dlopen (libkrun_awsnitro_so, RTLD_NOW);
 
-  if (kconf->handle == NULL && kconf->handle_sev == NULL && kconf->handle_nitro == NULL)
+  if (kconf->handle == NULL && kconf->handle_sev == NULL && kconf->handle_awsnitro == NULL)
     {
       free (kconf);
-      return crun_make_error (err, 0, "failed to open `%s`, `%s`, and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, libkrun_nitro_so, dlerror ());
+      return crun_make_error (err, 0, "failed to open `%s`, `%s`, and `%s` for krun_config: %s", libkrun_so, libkrun_sev_so, libkrun_awsnitro_so, dlerror ());
     }
 
   kconf->sev = false;
-  kconf->nitro = false;
+  kconf->awsnitro = false;
 
   /* Newer versions of libkrun no longer link against libkrunfw and
      instead they open it when creating the context. This implies
@@ -697,12 +697,12 @@ libkrun_load (void **cookie, libcrun_error_t *err)
         goto error;
       kconf->ctx_id_sev = ret;
     }
-  if (kconf->handle_nitro)
+  if (kconf->handle_awsnitro)
     {
-      ret = libkrun_create_context (kconf->handle_nitro, err);
+      ret = libkrun_create_context (kconf->handle_awsnitro, err);
       if (UNLIKELY (ret < 0))
         goto error;
-      kconf->ctx_id_nitro = ret;
+      kconf->ctx_id_awsnitro = ret;
     }
 
   *cookie = kconf;
@@ -714,8 +714,8 @@ error:
     dlclose (kconf->handle);
   if (kconf->handle_sev)
     dlclose (kconf->handle_sev);
-  if (kconf->handle_nitro)
-    dlclose (kconf->handle_nitro);
+  if (kconf->handle_awsnitro)
+    dlclose (kconf->handle_awsnitro);
   free (kconf);
   return ret;
 }
@@ -740,11 +740,11 @@ libkrun_unload (void *cookie, libcrun_error_t *err)
           if (UNLIKELY (r != 0))
             return crun_make_error (err, 0, "could not unload handle_sev: `%s`", dlerror ());
         }
-      if (kconf->handle_nitro != NULL)
+      if (kconf->handle_awsnitro != NULL)
         {
-          r = dlclose (kconf->handle_nitro);
+          r = dlclose (kconf->handle_awsnitro);
           if (UNLIKELY (r != 0))
-            return crun_make_error (err, 0, "could not unload handle_nitro: `%s`", dlerror ());
+            return crun_make_error (err, 0, "could not unload handle_awsnitro: `%s`", dlerror ());
         }
       free (kconf);
     }
@@ -779,8 +779,8 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
 {
   const size_t device_size = sizeof (runtime_spec_schema_defs_linux_device_cgroup);
   struct krun_config *kconf = (struct krun_config *) cookie;
-  struct stat st_kvm, st_sev, st_nitro;
-  bool has_kvm = true, has_sev = true, has_nitro = true;
+  struct stat st_kvm, st_sev, st_awsnitro;
+  bool has_kvm = true, has_sev = true, has_awsnitro = true;
   size_t old_len, new_len;
   int ret;
 
@@ -802,18 +802,18 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
       has_sev = false;
     }
 
-  ret = stat ("/dev/nitro_enclaves", &st_nitro);
+  ret = stat ("/dev/nitro_enclaves", &st_awsnitro);
   if (UNLIKELY (ret < 0))
     {
       if (errno != ENOENT)
         return crun_make_error (err, errno, "stat `/dev/nitro_enclaves`");
-      has_nitro = false;
+      has_awsnitro = false;
     }
 
   kconf->has_kvm = has_kvm;
-  kconf->has_nitro = has_nitro;
+  kconf->has_awsnitro = has_awsnitro;
 
-  if (! has_kvm && ! has_nitro)
+  if (! has_kvm && ! has_awsnitro)
     return 0;
 
   /* spec says these are optional, ensure they exist so we can add our devices */
@@ -827,7 +827,7 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
   new_len = old_len;
   if (has_kvm)
     new_len += has_sev ? 2 : 1;
-  if (has_nitro)
+  if (has_awsnitro)
     new_len += 1;
 
   def->linux->resources->devices = xrealloc (def->linux->resources->devices, device_size * (new_len + 1));
@@ -840,8 +840,8 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
         def->linux->resources->devices[old_len++] = make_oci_spec_dev ("a", st_sev.st_rdev, true, "rwm");
     }
 
-  if (has_nitro)
-    def->linux->resources->devices[old_len++] = make_oci_spec_dev ("a", st_nitro.st_rdev, true, "rwm");
+  if (has_awsnitro)
+    def->linux->resources->devices[old_len++] = make_oci_spec_dev ("a", st_awsnitro.st_rdev, true, "rwm");
 
   return 0;
 }
