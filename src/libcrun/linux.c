@@ -5268,7 +5268,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   if (*err)
     libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
 
-  /* If cursor is here most likely we returned from a custom handler eg. wasm, libkrun */
+  /* If we got here likely we returned from a custom handler eg. wasm, libkrun */
   /* Allow cleanup attributes to perform cleanup and exit with success if return code was 0 */
   if (ret == 0)
     _safe_exit (EXIT_SUCCESS);

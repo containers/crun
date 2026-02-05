@@ -1577,10 +1577,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
     {
       /* If it fails to write the error using the sync socket, then fallback
          to stderr.  */
-      if (sync_socket_write_error (sync_socket, err) < 0)
-        return ret;
-
-      crun_error_release (err);
+      if (sync_socket_write_error (sync_socket, err) == 0)
+        {
+          crun_error_release (err);
+          /* A return value of > 0 means to fail with an error without err being set so to avoid
+             printing it twice.  */
+          return 1;
+        }
       return ret;
     }
 
