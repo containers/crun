@@ -285,26 +285,26 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (len == 0)
-    return 0;
-
-  for (n_new_pids = 0, it = buffer; it; it = strchr (it + 1, '\n'))
-    n_new_pids++;
-
-  if (*allocated < *n_pids + n_new_pids + 1)
+  if (len > 0)
     {
-      *allocated = *n_pids + n_new_pids + 1;
-      *pids = xrealloc (*pids, sizeof (pid_t) * *allocated);
-    }
+      for (n_new_pids = 0, it = buffer; it; it = strchr (it + 1, '\n'))
+        n_new_pids++;
 
-  for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
-    {
-      pid_t pid = strtoul (it, NULL, 10);
+      if (*allocated < *n_pids + n_new_pids + 1)
+        {
+          *allocated = *n_pids + n_new_pids + 1;
+          *pids = xrealloc (*pids, sizeof (pid_t) * *allocated);
+        }
 
-      if (pid > 0)
-        (*pids)[(*n_pids)++] = pid;
+      for (it = strtok_r (buffer, "\n", &saveptr); it; it = strtok_r (NULL, "\n", &saveptr))
+        {
+          pid_t pid = strtoul (it, NULL, 10);
+
+          if (pid > 0)
+            (*pids)[(*n_pids)++] = pid;
+        }
+      (*pids)[*n_pids] = 0;
     }
-  (*pids)[*n_pids] = 0;
 
   if (recurse)
     {

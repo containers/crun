@@ -594,6 +594,43 @@ def test_ps_json_format():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_ps_child_cgroup():
+    """Test ps command lists processes that moved into a child cgroup when parent cgroup is empty."""
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if is_rootless():
+        return (77, "requires root for cgroup access")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo']
+
+    cid = None
+    try:
+        proc, cid = run_and_get_output(conf, command='run', detach=True, use_popen=True)
+
+        # Wait for init to close stdout, which signals it has moved into the child cgroup
+        proc.stdout.read()
+
+        # Get process list with JSON format
+        output = run_crun_command(['ps', '--format', 'json', cid])
+        processes = json.loads(output)
+
+        # Should list the process
+        if not isinstance(processes, list) or len(processes) != 1:
+            logger.info("test_ps_child_cgroup: expected 1 process, got %s", len(processes) if isinstance(processes, list) else processes)
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_ps_child_cgroup failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 def test_delete_force():
     """Test delete command with force flag on running container."""
     conf = base_config()
@@ -722,6 +759,7 @@ all_tests = {
     "list-quiet": test_list_quiet,
     "ps-table-format": test_ps_table_format,
     "ps-json-format": test_ps_json_format,
+    "ps-child-cgroup": test_ps_child_cgroup,
     "spec-generation": test_spec_generation,
     "spec-rootless": test_spec_rootless,
     "state-command": test_state_command,
