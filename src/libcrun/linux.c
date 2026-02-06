@@ -2987,7 +2987,12 @@ uidgidmap_helper (char *helper, pid_t pid, const char *map_file, libcrun_error_t
     }
   args[nargs++] = NULL;
 
-  return run_process (args, err) ? -1 : 0;
+  ret = run_process (args, err);
+  if (ret < 0)
+    return ret;
+  if (ret > 0)
+    return crun_make_error (err, 0, "`%s` exited with status %d", helper, ret);
+  return 0;
 }
 
 static int
