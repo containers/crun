@@ -775,7 +775,7 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
       return 0;
     }
 
-  return crun_make_error (err, errno, "unknown type for `%s`", name);
+  return crun_make_error (err, 0, "unknown type for `%s`", name);
 }
 
 static int
