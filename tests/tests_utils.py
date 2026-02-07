@@ -38,7 +38,7 @@ logger = logging.getLogger('crun.tests')
 # Export logger for use in test files
 __all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'run_crun_command_raw',
            'parse_proc_status', 'add_all_namespaces', 'tests_main', 'is_rootless',
-           'is_cgroup_v2_unified', 'get_crun_feature_string', 'running_on_systemd',
+           'is_cgroup_v2_unified', 'is_sched_deadline_available', 'get_crun_feature_string', 'running_on_systemd',
            'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path',
            'get_cgroup_manager', 'get_test_environment']
 
@@ -483,6 +483,10 @@ def is_rootless():
 
 def is_cgroup_v2_unified():
     return subprocess.check_output("stat -c%T -f /sys/fs/cgroup".split()).decode("utf-8").strip() == "cgroup2fs"
+
+def is_sched_deadline_available():
+    """Check if SCHED_DEADLINE is available in the kernel."""
+    return os.path.exists("/proc/sys/kernel/sched_deadline_period_max_us")
 
 def get_crun_feature_string():
     for i in run_crun_command(['--version']).split('\n'):
