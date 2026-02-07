@@ -1898,7 +1898,7 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
         {
           ret = libcrun_cgroup_killall (cgroup_status, SIGKILL, err);
           if (UNLIKELY (ret < 0))
-            return 0;
+            return ret;
         }
     }
 
