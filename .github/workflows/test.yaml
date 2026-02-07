@@ -110,6 +110,12 @@ jobs:
                   make -j $(nproc)
               ;;
               check)
+                  # Fedora (used by maintainers as well as for packaging) has
+                  # newer md2man than in Ubuntu, so we have to update it.
+                  # Always use the latest go-md2man version here.
+                  go install github.com/cpuguy83/go-md2man/v2@latest
+                  export PATH=$(go env GOROOT)/bin:$PATH
+
                   sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
                   ./configure --disable-dl
                   make
@@ -122,7 +128,7 @@ jobs:
                   unshare -r make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
 
                   git status
-                  git diff
+                  git diff --exit-code
 
                   # check that the working dir is clean
                   git describe --broken --dirty --all | grep -qv dirty
