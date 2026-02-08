@@ -1040,10 +1040,7 @@ get_realpath_to_file (int dirfd, const char *path_name, char **absolute_path, li
       get_proc_self_fd_path (target_fd_path, targetfd);
       len = safe_readlinkat (AT_FDCWD, target_fd_path, absolute_path, 0, err);
       if (UNLIKELY (len < 0))
-        {
-          crun_error_release (err);
-          return crun_make_error (err, errno, "error unable to provide absolute path to file `%s`", path_name);
-        }
+        return crun_error_wrap (err, "error unable to provide absolute path to file `%s`", path_name);
     }
 
   return 0;
