@@ -629,7 +629,6 @@ libcrun_create_keyring (libcrun_container_t *container, const char *name, const 
             return labelfd;
 
           crun_error_release (err);
-          labelfd = -1;
         }
 
       if (labelfd >= 0)
