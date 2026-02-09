@@ -2124,19 +2124,16 @@ static int
 handle_tmpcopyup (libcrun_container_t *container, const char *rootfs, const char *target,
                   int copy_from_fd, libcrun_error_t *err)
 {
-  int destfd, tmpfd, ret;
-
+  int destfd, ret;
+  cleanup_close int tmpfd = copy_from_fd;
   destfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, target,
                         O_CLOEXEC | O_DIRECTORY, 0, err);
   if (UNLIKELY (destfd < 0))
     return crun_error_wrap (err, "open `%s` to write for tmpcopyup", target);
 
-  /* take ownership for the fd.  */
-  tmpfd = get_and_reset (&copy_from_fd);
-
+  // copy_recursive_fd_to_fd closes tmpfd and destfd
   ret = copy_recursive_fd_to_fd (tmpfd, destfd, target, target, err);
-  close (destfd);
-  close (tmpfd);
+  tmpfd = -1;
 
   return ret;
 }
@@ -2339,7 +2336,9 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
   if (copy_from_fd >= 0)
     {
+      // handle_tmpcopyup closes copy_from_fd
       ret = handle_tmpcopyup (container, rootfs, target, copy_from_fd, err);
+      copy_from_fd = -1;
       if (UNLIKELY (ret < 0))
         return ret;
     }
