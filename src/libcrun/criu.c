@@ -1217,7 +1217,7 @@ out_umount:
     }
 out:
   ret_out = rmdir (root);
-  if (UNLIKELY (ret == -1))
+  if (UNLIKELY (ret < 0))
     return ret;
   if (UNLIKELY (ret_out == -1))
     return crun_make_error (err, errno, "error removing restore directory `%s`", root);
