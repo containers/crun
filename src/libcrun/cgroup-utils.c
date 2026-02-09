@@ -347,7 +347,9 @@ rmdir_all_fd (int dfd)
   dir = fdopendir (dfd);
   if (dir == NULL)
     {
+      int saved_errno = errno;
       TEMP_FAILURE_RETRY (close (dfd));
+      errno = saved_errno;
       return -1;
     }
 
