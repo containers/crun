@@ -3968,7 +3968,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       process = make_runtime_spec_schema_config_schema_process (tree, &ctx, &parser_err);
       if (UNLIKELY (process == NULL))
         {
-          ret = crun_make_error (err, errno, "cannot parse process file: `%s`", parser_err);
+          ret = crun_make_error (err, 0, "cannot parse process file: `%s`", parser_err);
           free (parser_err);
           if (tree)
             yajl_tree_free (tree);
@@ -4177,7 +4177,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
   resources = make_runtime_spec_schema_config_linux_resources (tree, &ctx, &parser_err);
   if (UNLIKELY (resources == NULL))
     {
-      ret = crun_make_error (err, errno, "cannot parse resources: %s", parser_err);
+      ret = crun_make_error (err, 0, "cannot parse resources: %s", parser_err);
       goto cleanup;
     }
 
