@@ -4501,7 +4501,7 @@ libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_err
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
-    return crun_make_error (err, errno, "the container `%s` is not running", id);
+    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   return libcrun_container_pause_linux (&status, err);
 }
@@ -4521,7 +4521,7 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
-    return crun_make_error (err, errno, "the container `%s` is not running", id);
+    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   return libcrun_container_unpause_linux (&status, err);
 }
