@@ -2250,6 +2250,7 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
             return ret;
 #endif
 
+          // copy_recursive_fd_to_fd closes srcfd and destfd
           ret = copy_recursive_fd_to_fd (srcfd, destfd, de->d_name, de->d_name, err);
           srcfd = destfd = -1;
           if (UNLIKELY (ret < 0))
