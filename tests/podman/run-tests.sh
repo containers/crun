@@ -101,5 +101,6 @@ SKIP_TESTS=(
 SKIP_REGEX=$(IFS='|'; echo "${SKIP_TESTS[*]}")
 
 ginkgo --focus='.*' --skip="$SKIP_REGEX" \
-	 -vv -tags "seccomp ostree selinux exclude_graphdriver_devicemapper" \
-	 -timeout=50m -cover -flake-attempts 3 -progress -trace -no-color test/e2e/.
+	 -v --show-node-events --trace \
+	 -tags "seccomp ostree selinux" \
+	 -timeout=50m -cover -flake-attempts 3 -no-color test/e2e/.
