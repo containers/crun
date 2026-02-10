@@ -3969,7 +3969,7 @@ expect_success_from_sync_socket (int sync_fd, libcrun_error_t *err)
 
   ret = TEMP_FAILURE_RETRY (read (sync_fd, &res, sizeof (res)));
   if (UNLIKELY (ret != sizeof (res)))
-    return crun_make_error (err, errno, "read status from sync socket");
+    return crun_make_error (err, ret < 0 ? errno : 0, "read status from sync socket");
 
   if (res == 0)
     return 0;
@@ -5171,7 +5171,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
           ret = TEMP_FAILURE_RETRY (read (sync_socket_host, &new_pid, sizeof (new_pid)));
           if (UNLIKELY (ret != sizeof (new_pid)))
-            return crun_make_error (err, errno, "read pid from sync socket");
+            return crun_make_error (err, ret < 0 ? errno : 0, "read pid from sync socket");
 
           /* Cleanup the first process.  */
           ret = waitpid_ignore_stopped (pid, NULL, 0);
