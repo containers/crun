@@ -963,9 +963,7 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
     return crun_make_error (err, errno, "open directory `%s`", empty_dir_path);
 
   /* Cache the /proc/self/fd path for fast mounting */
-  ret = xasprintf (&private_data->maskdir_proc_path, "/proc/self/fd/%d", fd);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "xasprintf failed");
+  xasprintf (&private_data->maskdir_proc_path, "/proc/self/fd/%d", fd);
 
   private_data->maskdir_fd = fd;
   fd = -1; /* Don't auto-close */
