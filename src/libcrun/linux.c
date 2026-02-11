@@ -3695,10 +3695,11 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
       ret = TEMP_FAILURE_RETRY (write (fd, def->linux->sysctl->values[i], strlen (def->linux->sysctl->values[i])));
       if (UNLIKELY (ret < 0))
         {
+          int saved_errno = errno;
           cleanup_free char *reason = NULL;
 
-          reason = sysctl_error_reason (def->linux->sysctl->keys[i], namespaces_created, errno);
-          return crun_make_error (err, errno, "write to `/proc/sys/%s`%s%s%s", name, reason ? " (" : "", reason ?: "", reason ? ")" : "");
+          reason = sysctl_error_reason (def->linux->sysctl->keys[i], namespaces_created, saved_errno);
+          return crun_make_error (err, saved_errno, "write to `/proc/sys/%s`%s%s%s", name, reason ? " (" : "", reason ?: "", reason ? ")" : "");
         }
     }
   return 0;
