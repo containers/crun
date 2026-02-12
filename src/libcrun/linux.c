@@ -1706,7 +1706,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
 
           fd = safe_openat (dirfd, rootfs, basename, O_PATH | O_CLOEXEC, 0, err);
           if (UNLIKELY (fd < 0))
-            return crun_make_error (err, errno, "openat `%s`", device->path);
+            return crun_error_wrap (err, "openat `%s`", device->path);
 
           get_proc_self_fd_path (fd_buffer, fd);
 
