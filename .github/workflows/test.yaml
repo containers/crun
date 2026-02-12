@@ -186,8 +186,8 @@ jobs:
                   sudo docker run --cgroupns=host -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v ${PWD}:/crun crun-fuzzing
               ;;
               codespell)
-                  sudo docker build -t crun-codespell tests/codespell
-                  sudo docker run --rm -w /crun -v ${PWD}:/crun crun-codespell codespell -q 0
+                  pip install --break-system-packages codespell==v2.4.1 # Use known version
+                  codespell
               ;;
               wasmedge-build)
                   sudo docker build -t wasmedge tests/wasmedge-build
