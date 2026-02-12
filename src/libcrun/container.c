@@ -1188,8 +1188,9 @@ setup_environment (runtime_spec_schema_config_schema *def, uid_t container_uid, 
       ret = set_home_env (container_uid);
       if (UNLIKELY (ret < 0 && errno != ENOTSUP))
         {
-          setenv ("HOME", "/", 1);
           libcrun_warning ("cannot detect HOME environment variable, setting default");
+          if (setenv ("HOME", "/", 1) < 0)
+            return crun_make_error (err, errno, "setenv HOME");
         }
     }
 
@@ -1407,8 +1408,9 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   /* Set primary process to 1 explicitly if nothing is configured and LISTEN_FD is not set.  */
   if (entrypoint_args->context->listen_fds > 0 && getenv ("LISTEN_PID") == NULL)
     {
-      setenv ("LISTEN_PID", "1", 1);
       libcrun_warning ("setting LISTEN_PID=1 since no previous configuration was found");
+      if (setenv ("LISTEN_PID", "1", 1) < 0)
+        return crun_make_error (err, errno, "setenv LISTENPID");
     }
 
   /* Attempt to chdir immediately here, before doing the setresuid.  If we fail here, let's
@@ -3691,8 +3693,9 @@ exec_process_entrypoint (libcrun_context_t *context,
       ret = set_home_env (container_uid);
       if (UNLIKELY (ret < 0 && errno != ENOTSUP))
         {
-          setenv ("HOME", "/", 1);
           libcrun_warning ("cannot detect HOME environment variable, setting default");
+          if (setenv ("HOME", "/", 1) < 0)
+            return crun_make_error (err, errno, "setenv HOME");
         }
     }
 
