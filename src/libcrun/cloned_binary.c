@@ -466,7 +466,6 @@ static ssize_t fd_to_fd(int outfd, int infd)
 
 static int clone_binary(void)
 {
-	cleanup_close int binfd = -1;
 	cleanup_close int execfd = -1;
 	struct stat statbuf = {};
 	ssize_t sent = 0;
@@ -499,24 +498,26 @@ static int clone_binary(void)
 	if (execfd < 0 || fdtype == EFD_NONE)
 		return -ENOTRECOVERABLE;
 
-	binfd = open("/proc/self/exe", O_RDONLY | O_CLOEXEC);
-	if (binfd < 0)
-		goto error;
+	{
+		cleanup_close int binfd = -1;
+		binfd = open("/proc/self/exe", O_RDONLY | O_CLOEXEC);
+		if (binfd < 0)
+			goto error;
 
-	if (fstat(binfd, &statbuf) < 0)
-		goto error;
+		if (fstat(binfd, &statbuf) < 0)
+			goto error;
 
-	while (sent < statbuf.st_size) {
-		int n = sendfile(execfd, binfd, NULL, statbuf.st_size - sent);
-		if (n < 0) {
-			/* sendfile can fail so we fallback to a dumb user-space copy. */
-			n = fd_to_fd(execfd, binfd);
-			if (n < 0)
-				goto error;
+		while (sent < statbuf.st_size) {
+			int n = sendfile(execfd, binfd, NULL, statbuf.st_size - sent);
+			if (n < 0) {
+				/* sendfile can fail so we fallback to a dumb user-space copy. */
+				n = fd_to_fd(execfd, binfd);
+				if (n < 0)
+					goto error;
+			}
+			sent += n;
 		}
-		sent += n;
 	}
-	close(binfd);
 	if (sent != statbuf.st_size)
 		goto error;
 
