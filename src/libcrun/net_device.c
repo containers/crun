@@ -474,7 +474,10 @@ move_network_device (const char *ifname, const char *newifname, int netns_fd, li
     {
       ret = setup_network_device_in_ns_helper (buffer, buffer_size, netns_fd, newifname, ips, err);
       if (UNLIKELY (ret < 0))
-        _safe_exit (-ret);
+        {
+          /* Do not release the error as it will be used by the parent proc.  */
+          _safe_exit (-ret);
+        }
 
       _safe_exit (0);
     }
@@ -484,7 +487,11 @@ move_network_device (const char *ifname, const char *newifname, int netns_fd, li
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
   if (wait_status != 0)
-    return -get_process_exit_status (wait_status);
+    {
+      /* Reuse the error from the child proc.
+         In other words, do not call crun_make_error() here. */
+      return -get_process_exit_status (wait_status);
+    }
 
   return 0;
 }
