@@ -1186,7 +1186,7 @@ setup_environment (runtime_spec_schema_config_schema *def, uid_t container_uid, 
   if (getenv ("HOME") == NULL)
     {
       ret = set_home_env (container_uid);
-      if (UNLIKELY (ret < 0 && errno != ENOTSUP))
+      if (UNLIKELY (ret < 0))
         {
           setenv ("HOME", "/", 1);
           libcrun_warning ("cannot detect HOME environment variable, setting default");
@@ -3689,7 +3689,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (getenv ("HOME") == NULL)
     {
       ret = set_home_env (container_uid);
-      if (UNLIKELY (ret < 0 && errno != ENOTSUP))
+      if (UNLIKELY (ret < 0))
         {
           setenv ("HOME", "/", 1);
           libcrun_warning ("cannot detect HOME environment variable, setting default");
