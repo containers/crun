@@ -6198,17 +6198,21 @@ run_in_container_namespace (libcrun_container_status_t *status, int (*callback) 
       ret = setns (pidfd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
         {
+          /* Create an error for the parent proc.  */
           crun_make_error (err, 0, "setns to target pid");
           _safe_exit (ret);
         }
       ret = chdir ("/");
       if (UNLIKELY (ret < 0))
         {
+          /* Create an error for the parent proc.  */
           crun_make_error (err, errno, "chdir to `/`");
           _safe_exit (ret);
         }
 
       ret = callback (arg, err);
+      /* On failure (ret < 0) the created error will be
+         used by the parent proc */
       _safe_exit (ret);
     }
 
@@ -6216,6 +6220,9 @@ run_in_container_namespace (libcrun_container_status_t *status, int (*callback) 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
+  /* The vfork() child shares the parent's memory space, so the error
+     object populated by the child is available to the parent.
+     Do not call crun_make_error() here. */
   return get_process_exit_status (wait_status);
 }
 
