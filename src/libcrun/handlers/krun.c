@@ -80,6 +80,8 @@ struct krun_config
   int32_t ctx_id_awsnitro;
   bool has_kvm;
   bool has_awsnitro;
+  yajl_val config_tree;
+  bool use_passt;
 };
 
 /* libkrun handler.  */
@@ -170,20 +172,27 @@ libkrun_enable_virtio_gpu (struct krun_config *kconf)
 }
 
 static int
-libkrun_read_vm_config (yajl_val *config_tree, libcrun_error_t *err)
+libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *config = NULL;
+  cleanup_close int fd = -1;
   struct parser_context ctx = { 0, stderr };
 
-  if (access (KRUN_VM_FILE, F_OK) != 0)
-    return 0;
+  fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_PATH | O_NOFOLLOW, 0, err);
+  if (fd < 0)
+    {
+      // The configuration file is optional, don't generate an error if it's missing.
+      if (errno == ENOENT)
+        return 0;
+      return fd;
+    }
 
-  ret = read_all_file (KRUN_VM_FILE, &config, NULL, err);
+  ret = read_all_fd (fd, "krun configuration file", &config, NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = parse_json_file (config_tree, config, &ctx, err);
+  ret = parse_json_file (&kconf->config_tree, config, &ctx, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -373,17 +382,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   cpu_set_t set;
   libcrun_error_t err;
   bool configured = false;
-  yajl_val config_tree = NULL;
 
-  ret = libkrun_read_vm_config (&config_tree, &err);
-  if (UNLIKELY (ret < 0))
-    {
-      int errcode = crun_error_get_errno (&err);
-      crun_error_release (&err);
-      error (EXIT_FAILURE, errcode, "libkrun VM config exists, but unable to parse");
-    }
-
-  ret = libkrun_configure_flavor (cookie, &config_tree, container, &err);
+  ret = libkrun_configure_flavor (cookie, &kconf->config_tree, container, &err);
   if (UNLIKELY (ret < 0))
     {
       int errcode = crun_error_get_errno (&err);
@@ -462,7 +462,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         error (EXIT_FAILURE, -ret, "could not set enclave execution arguments");
     }
 
-  ret = libkrun_configure_vm (ctx_id, handle, &configured, &config_tree, container, &err);
+  ret = libkrun_configure_vm (ctx_id, handle, &configured, &kconf->config_tree, container, &err);
   if (UNLIKELY (ret))
     {
       int errcode = crun_error_get_errno (&err);
@@ -506,7 +506,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         }
     }
 
-  yajl_tree_free (config_tree);
+  yajl_tree_free (kconf->config_tree);
 
   ret = krun_start_enter (ctx_id);
   if (UNLIKELY (ret < 0))
@@ -569,6 +569,10 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         return fd;
 
       ret = safe_write (fd, KRUN_CONFIG_FILE, config, config_size, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = libkrun_read_vm_config (kconf, rootfsfd, rootfs, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -664,6 +668,7 @@ libkrun_load (void **cookie, libcrun_error_t *err)
   kconf = malloc (sizeof (struct krun_config));
   if (kconf == NULL)
     return crun_make_error (err, 0, "could not allocate memory for krun_config");
+  memset (kconf, 0, sizeof (struct krun_config));
 
   kconf->handle = dlopen (libkrun_so, RTLD_NOW);
   kconf->handle_sev = dlopen (libkrun_sev_so, RTLD_NOW);
