@@ -43,9 +43,6 @@
 /* libkrun has a hard-limit of 16 vCPUs per microVM. */
 #define LIBKRUN_MAX_VCPUS 16
 
-/* If the user doesn't configure the vCPU count, fallback to this value. */
-#define LIBKRUN_DEFAULT_VCPUS 1
-
 /* If the user doesn't configure the RAM amount, fallback to this value. */
 #define LIBKRUN_DEFAULT_RAM_MIB 1024
 
@@ -154,7 +151,7 @@ libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, 
 }
 
 static int
-libkrun_enable_virtio_gpu (struct krun_config *kconf)
+libkrun_enable_virtio_gpu (struct krun_config *kconf, uint32_t virgl_flags)
 {
   int32_t (*krun_set_gpu_options) (uint32_t ctx_id, uint32_t virgl_flags);
   krun_set_gpu_options = dlsym (kconf->handle, "krun_set_gpu_options");
@@ -163,11 +160,6 @@ libkrun_enable_virtio_gpu (struct krun_config *kconf)
   if (krun_set_gpu_options == NULL)
     return 0;
 
-  uint32_t virgl_flags = VIRGLRENDERER_NO_VIRGL |          /* do not expose OpenGL */
-                         VIRGLRENDERER_RENDER_SERVER |     /* start a render server and move GPU rendering to the render server */
-                         VIRGLRENDERER_VENUS |             /* enable venus renderer */
-                         VIRGLRENDERER_THREAD_SYNC |       /* wait for sync objects in thread rather than polling */
-                         VIRGLRENDERER_USE_ASYNC_FENCE_CB; /* used in conjunction with VIRGLRENDERER_THREAD_SYNC */
   return krun_set_gpu_options (kconf->ctx_id, virgl_flags);
 }
 
@@ -242,20 +234,34 @@ libkrun_parse_resource_configuration (yajl_val *config_tree, libcrun_container_t
 }
 
 static int
-libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
+libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, libcrun_container_t *container, libcrun_error_t *err)
 {
+  runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
-  int cpus, ram_mib, ret;
+  int32_t num_vcpus, ram_mib;
+  int cpus, gpu_flags, ret;
+  cpu_set_t set;
   const char *path_cpus[] = { "cpus", (const char *) 0 };
   const char *path_ram_mib[] = { "ram_mib", (const char *) 0 };
+  const char *path_gpu_flags[] = { "gpu_flags", (const char *) 0 };
 
-  cpus = libkrun_parse_resource_configuration (config_tree, container, "krun.cpus", path_cpus);
+  cpus = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.cpus", path_cpus);
   if (cpus <= 0)
-    cpus = LIBKRUN_DEFAULT_VCPUS;
+    {
+      CPU_ZERO (&set);
+      if (sched_getaffinity (getpid (), sizeof (set), &set) == 0)
+        num_vcpus = MIN (CPU_COUNT (&set), LIBKRUN_MAX_VCPUS);
+    }
 
-  ram_mib = libkrun_parse_resource_configuration (config_tree, container, "krun.ram_mib", path_ram_mib);
+  ram_mib = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.ram_mib", path_ram_mib);
   if (ram_mib <= 0)
-    ram_mib = LIBKRUN_DEFAULT_RAM_MIB;
+    {
+      if (def && def->linux && def->linux->resources && def->linux->resources->memory
+          && def->linux->resources->memory->limit_present)
+        ram_mib = def->linux->resources->memory->limit / (1024 * 1024);
+      else
+        ram_mib = LIBKRUN_DEFAULT_RAM_MIB;
+    }
 
   krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
 
@@ -266,18 +272,30 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, bool *configured, yajl_val 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, -ret, "could not set krun vm configuration");
 
-  if (*config_tree != NULL)
+  gpu_flags = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.gpu_flags", path_gpu_flags);
+  if (gpu_flags > 0)
+    {
+      if (access ("/dev/dri", F_OK) != 0)
+        return crun_make_error (err, -ret, "gpu requested but /dev/dri is not available");
+
+      if (access ("/usr/libexec/virgl_render_server", F_OK) != 0)
+        return crun_make_error (err, -ret, "gpu requested but virgl_render_server is not available");
+
+      ret = libkrun_enable_virtio_gpu (kconf, gpu_flags);
+      if (UNLIKELY (ret < 0))
+        error (EXIT_FAILURE, -ret, "could not enable virtio gpu");
+    }
+
+  if (kconf->config_tree != NULL)
     {
       /* Try to configure an external kernel. If the configuration file doesn't
        * specify a kernel, libkrun automatically fall back to using libkrunfw,
        * if the library is present and was loaded while creating the context.
        */
-      ret = libkrun_configure_kernel (ctx_id, handle, config_tree, err);
+      ret = libkrun_configure_kernel (ctx_id, handle, &kconf->config_tree, err);
       if (UNLIKELY (ret))
         return ret;
     }
-
-  *configured = true;
 
   return 0;
 }
@@ -377,11 +395,8 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
                             const char *const argv[], const char *const envp[]);
   struct krun_config *kconf = (struct krun_config *) cookie;
   void *handle;
-  uint32_t num_vcpus, ram_mib;
   int32_t ctx_id, ret;
-  cpu_set_t set;
   libcrun_error_t err;
-  bool configured = false;
 
   ret = libkrun_configure_flavor (cookie, &kconf->config_tree, container, &err);
   if (UNLIKELY (ret < 0))
@@ -462,48 +477,13 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
         error (EXIT_FAILURE, -ret, "could not set enclave execution arguments");
     }
 
-  ret = libkrun_configure_vm (ctx_id, handle, &configured, &kconf->config_tree, container, &err);
+  ret = libkrun_configure_vm (ctx_id, handle, kconf, container, &err);
   if (UNLIKELY (ret))
     {
       int errcode = crun_error_get_errno (&err);
       libcrun_error_t *tmp_err = &err;
       libcrun_error_write_warning_and_release (NULL, &tmp_err);
       error (EXIT_FAILURE, errcode, "could not configure krun vm");
-    }
-
-  /* If we couldn't configure the microVM using KRUN_VM_FILE, fall back to the
-   * legacy configuration logic.
-   */
-  if (! configured)
-    {
-      /* If sched_getaffinity fails, default to 1 vcpu.  */
-      num_vcpus = 1;
-      /* If no memory limit is specified, default to 2G.  */
-      ram_mib = 2 * 1024;
-
-      if (def && def->linux && def->linux->resources && def->linux->resources->memory
-          && def->linux->resources->memory->limit_present)
-        ram_mib = def->linux->resources->memory->limit / (1024 * 1024);
-
-      CPU_ZERO (&set);
-      if (sched_getaffinity (getpid (), sizeof (set), &set) == 0)
-        num_vcpus = MIN (CPU_COUNT (&set), LIBKRUN_MAX_VCPUS);
-
-      krun_set_vm_config = dlsym (handle, "krun_set_vm_config");
-
-      if (krun_set_vm_config == NULL)
-        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
-
-      ret = krun_set_vm_config (ctx_id, num_vcpus, ram_mib);
-      if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not set krun vm configuration");
-
-      if (access ("/dev/dri", F_OK) == 0 && access ("/usr/libexec/virgl_render_server", F_OK) == 0)
-        {
-          ret = libkrun_enable_virtio_gpu (kconf);
-          if (UNLIKELY (ret < 0))
-            error (EXIT_FAILURE, -ret, "could not enable virtio gpu");
-        }
     }
 
   yajl_tree_free (kconf->config_tree);
