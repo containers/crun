@@ -1087,66 +1087,100 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       const int open_flags_for_inherit = O_RDONLY; /* Cannot be O_CLOEXEC as it is passed to the child process. */
       int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
       if (UNLIKELY (value < 0))
-        return crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
+        {
+          ret = crun_make_error (err, 0, "invalid namespace type: `%s`", def->linux->namespaces[i]->type);
+          goto out_umount;
+        }
 
       if (value == CLONE_NEWNET && def->linux->namespaces[i]->path != NULL)
         {
           inherit_new_net_fd = open (def->linux->namespaces[i]->path, open_flags_for_inherit);
           if (UNLIKELY (inherit_new_net_fd < 0))
-            return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+            {
+              ret = crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+              goto out_umount;
+            }
 
           ret = libcriu_wrapper->criu_add_inherit_fd (inherit_new_net_fd, CRIU_EXT_NETNS);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding fd");
+            {
+              ret = crun_make_error (err, -ret, "CRIU: failed adding fd");
+              goto out_umount;
+            }
         }
 
       if (value == CLONE_NEWPID && def->linux->namespaces[i]->path != NULL)
         {
           inherit_new_pid_fd = open (def->linux->namespaces[i]->path, open_flags_for_inherit);
           if (UNLIKELY (inherit_new_pid_fd < 0))
-            return crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+            {
+              ret = crun_make_error (err, errno, "unable to open(): `%s`", def->linux->namespaces[i]->path);
+              goto out_umount;
+            }
 
           ret = libcriu_wrapper->criu_add_inherit_fd (inherit_new_pid_fd, CRIU_EXT_PIDNS);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding fd");
+            {
+              ret = crun_make_error (err, -ret, "CRIU: failed adding fd");
+              goto out_umount;
+            }
         }
 
 #  ifdef CRIU_JOIN_NS_SUPPORT
       if (value == CLONE_NEWTIME && def->linux->namespaces[i]->path != NULL)
         {
           if (libcriu_wrapper->criu_join_ns_add == NULL)
-            return crun_make_error (err, 0, "shared time namespace restore is supported in CRIU >= 3.16.1");
+            {
+              ret = crun_make_error (err, 0, "shared time namespace restore is supported in CRIU >= 3.16.1");
+              goto out_umount;
+            }
 
           ret = libcriu_wrapper->criu_join_ns_add ("time", def->linux->namespaces[i]->path, NULL);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external namespace `%s`", def->linux->namespaces[i]->path);
+            {
+              ret = crun_make_error (err, -ret, "CRIU: failed adding external namespace `%s`", def->linux->namespaces[i]->path);
+              goto out_umount;
+            }
         }
 
       if (value == CLONE_NEWIPC && def->linux->namespaces[i]->path != NULL)
         {
           if (libcriu_wrapper->criu_join_ns_add == NULL)
-            return crun_make_error (err, 0, "shared ipc namespace restore is supported in CRIU >= 3.16.1");
+            {
+              ret = crun_make_error (err, 0, "shared ipc namespace restore is supported in CRIU >= 3.16.1");
+              goto out_umount;
+            }
 
           ret = libcriu_wrapper->criu_join_ns_add ("ipc", def->linux->namespaces[i]->path, NULL);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external namespace `%s`", def->linux->namespaces[i]->path);
+            {
+              ret = crun_make_error (err, -ret, "CRIU: failed adding external namespace `%s`", def->linux->namespaces[i]->path);
+              goto out_umount;
+            }
         }
 
       if (value == CLONE_NEWUTS && def->linux->namespaces[i]->path != NULL)
         {
           if (libcriu_wrapper->criu_join_ns_add == NULL)
-            return crun_make_error (err, 0, "shared uts namespace restore is supported in CRIU >= 3.16.1");
+            {
+              ret = crun_make_error (err, 0, "shared uts namespace restore is supported in CRIU >= 3.16.1");
+              goto out_umount;
+            }
 
           ret = libcriu_wrapper->criu_join_ns_add ("uts", def->linux->namespaces[i]->path, NULL);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external namespace `%s`", def->linux->namespaces[i]->path);
+            {
+              ret = crun_make_error (err, -ret, "CRIU: failed adding external namespace `%s`", def->linux->namespaces[i]->path);
+              goto out_umount;
+            }
         }
 #  endif
     }
 
   /* Set up CRIU config file */
-  if (UNLIKELY (handle_criu_config_file (container, err)))
-    return -1;
+  ret = handle_criu_config_file (container, err);
+  if (UNLIKELY (ret < 0))
+    goto out_umount;
 
   /* Tell CRIU if cgroup v1 needs to be handled. */
   ret = restore_cgroup_v1_mount (def, err);
@@ -1168,7 +1202,10 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     {
       ret = libcriu_wrapper->criu_add_cg_root (NULL, status->cgroup_path);
       if (UNLIKELY (ret != 0))
-        return crun_make_error (err, 0, "error setting CRIU cgroup root to `%s`", status->cgroup_path);
+        {
+          ret = crun_make_error (err, 0, "error setting CRIU cgroup root to `%s`", status->cgroup_path);
+          goto out_umount;
+        }
     }
 
   if (cr_options->manage_cgroups_mode == -1)
@@ -1182,13 +1219,19 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     {
       ret = libcriu_wrapper->criu_set_network_lock (cr_options->network_lock_method);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "CRIU: failed setting network lock");
+        {
+          ret = crun_make_error (err, 0, "CRIU: failed setting network lock");
+          goto out_umount;
+        }
     }
 
   libcriu_wrapper->criu_set_log_level (4);
   ret = libcriu_wrapper->criu_set_log_file (CRIU_RESTORE_LOG_FILE);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, -ret, "error setting CRIU log file to `%s`", CRIU_RESTORE_LOG_FILE);
+    {
+      ret = crun_make_error (err, -ret, "error setting CRIU log file to `%s`", CRIU_RESTORE_LOG_FILE);
+      goto out_umount;
+    }
 
   /* criu_restore() returns the PID of the process of the restored process
    * tree. This PID will not be the same as status->pid if the container is
@@ -1212,8 +1255,12 @@ out_umount:
   ret_out = umount (root);
   if (UNLIKELY (ret_out == -1))
     {
+      int saved_errno = errno;
       rmdir (root);
-      return crun_make_error (err, errno, "error unmounting restore directory `%s`", root);
+      if (ret < 0)
+        return crun_error_wrap (err, "error unmounting restore directory `%s`", root);
+      else
+        return crun_make_error (err, saved_errno, "error unmounting restore directory `%s`", root);
     }
 out:
   ret_out = rmdir (root);
