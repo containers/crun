@@ -1,4 +1,4 @@
-FROM fedora:latest
+FROM quay.io/fedora/fedora:latest
 
 ARG WASM_EDGE_VERSION="0.14.0"
 
