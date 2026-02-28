@@ -1479,8 +1479,11 @@ set_home_env (uid_t id)
 
       if (ret_pw && ret_pw->pw_uid == id)
         {
-          setenv ("HOME", ret_pw->pw_dir, 1);
-          return 0;
+          ret = setenv ("HOME", ret_pw->pw_dir, 1);
+          if (UNLIKELY(ret < 0))
+            goto error;
+          else
+            return 0;
         }
     }
 }
