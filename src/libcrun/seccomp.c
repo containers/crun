@@ -106,20 +106,30 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 static enum scmp_compare
 get_seccomp_operator_raw (const char *name)
 {
-  if (strcmp (name, "SCMP_CMP_NE") == 0)
+  const char *p;
+
+  p = name;
+  if (strncmp (p, "SCMP_CMP_", 9))
+    goto fail;
+
+  p += 9;
+
+  if (strcmp (p, "NE") == 0)
     return SCMP_CMP_NE;
-  if (strcmp (name, "SCMP_CMP_LT") == 0)
+  if (strcmp (p, "LT") == 0)
     return SCMP_CMP_LT;
-  if (strcmp (name, "SCMP_CMP_LE") == 0)
+  if (strcmp (p, "LE") == 0)
     return SCMP_CMP_LE;
-  if (strcmp (name, "SCMP_CMP_EQ") == 0)
+  if (strcmp (p, "EQ") == 0)
     return SCMP_CMP_EQ;
-  if (strcmp (name, "SCMP_CMP_GE") == 0)
+  if (strcmp (p, "GE") == 0)
     return SCMP_CMP_GE;
-  if (strcmp (name, "SCMP_CMP_GT") == 0)
+  if (strcmp (p, "GT") == 0)
     return SCMP_CMP_GT;
-  if (strcmp (name, "SCMP_CMP_MASKED_EQ") == 0)
+  if (strcmp (p, "MASKED_EQ") == 0)
     return SCMP_CMP_MASKED_EQ;
+
+fail:
   return _SCMP_CMP_MIN; // Error.
 }
 
