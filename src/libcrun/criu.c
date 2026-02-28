@@ -803,9 +803,14 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = libcriu_wrapper->criu_dump ();
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, ret < 0 ? -ret : 0,
-                            "CRIU checkpointing failed %d.  Please check CRIU logfile %s/%s",
-                            ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+    {
+      cleanup_free char *cmd = NULL;
+      xasprintf (&cmd, "grep -n -B5 Error %s/%s", cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+      system (cmd);
+      return crun_make_error (err, ret < 0 ? -ret : 0,
+                              "CRIU checkpointing failed %d.  Please check CRIU logfile %s/%s",
+                              ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+    }
 
   return 0;
 }
