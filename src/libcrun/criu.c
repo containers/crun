@@ -498,6 +498,22 @@ handle_criu_config_file (libcrun_container_t *container, libcrun_error_t *err)
   return 0;
 }
 
+static int
+validate_criu_version (libcrun_error_t *err)
+{
+  int ret;
+
+  // validate that the libcriu version is at least LIBCRIU_MIN_VERSION
+  ret = libcriu_wrapper->criu_check_version (LIBCRIU_MIN_VERSION);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "CRIU: failed checking version");
+
+  if (ret == 0)
+    return crun_make_error (err, 0, "libcriu is too old");
+
+  return 0;
+}
+
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
                                          libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
@@ -541,8 +557,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "CRIU init failed with %d", ret);
 
-  if (! libcriu_wrapper->criu_check_version (LIBCRIU_MIN_VERSION))
-    return crun_make_error (err, 0, "libcriu is too old");
+  ret = validate_criu_version (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (UNLIKELY (cr_options->image_path == NULL))
     return crun_make_error (err, 0, "image path not set");
@@ -912,8 +929,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, 0, "CRIU init failed with %d", ret);
 
-  if (! libcriu_wrapper->criu_check_version (LIBCRIU_MIN_VERSION))
-    return crun_make_error (err, 0, "libcriu is too old");
+  ret = validate_criu_version (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (UNLIKELY (cr_options->image_path == NULL))
     return crun_make_error (err, 0, "image path not set");
