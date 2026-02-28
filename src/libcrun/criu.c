@@ -510,6 +510,41 @@ validate_criu_version (libcrun_error_t *err)
   return 0;
 }
 
+static void
+show_criu_log (const char *work_path, const char *log)
+{
+  cleanup_free char *log_path = NULL;
+  libcrun_error_t *tmp_err = NULL;
+  char line[1024];
+  FILE *f;
+
+  if (UNLIKELY (append_paths (&log_path, tmp_err, work_path, log, NULL)) < 0)
+    {
+      crun_error_release (tmp_err);
+      return;
+    }
+
+  f = fopen (log_path, "r");
+  if (f == NULL)
+    {
+      if (errno != ENOENT)
+        libcrun_error (errno, "Can't open CRIU log `%s`", log_path);
+      return;
+    }
+
+  /* Log with error verbosity as this is the default. */
+  libcrun_error (0, "--- excerpt from CRIU log `%s`", log_path);
+  while (fgets (line, sizeof (line), f) != NULL)
+    if (strstr (line, "Error ") != NULL)
+      {
+        line[strcspn (line, "\n")] = '\0';
+        libcrun_error (0, "%s", line);
+      }
+
+  fclose (f);
+  libcrun_error (0, "--- end of excerpt");
+}
+
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
                                          libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
@@ -648,9 +683,10 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         libcriu_wrapper->criu_set_track_mem (true);
         ret = libcriu_wrapper->criu_pre_dump ();
         if (UNLIKELY (ret != 0))
-          return crun_make_error (err, 0,
-                                  "CRIU pre-dump failed %d.  Please check CRIU logfile %s/%s",
-                                  ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+          {
+            show_criu_log (cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+            return crun_make_error (err, 0, "CRIU pre-dump failed: %d", ret);
+          }
         return 0;
       }
   }
@@ -816,9 +852,10 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   ret = libcriu_wrapper->criu_dump ();
   if (UNLIKELY (ret != 0))
-    return crun_make_error (err, ret < 0 ? -ret : 0,
-                            "CRIU checkpointing failed %d.  Please check CRIU logfile %s/%s",
-                            ret, cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+    {
+      show_criu_log (cr_options->work_path, CRIU_CHECKPOINT_LOG_FILE);
+      return crun_make_error (err, ret < 0 ? -ret : 0, "CRIU checkpointing failed: %d", ret);
+    }
 
   return 0;
 }
@@ -1253,9 +1290,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = libcriu_wrapper->criu_restore_child ();
   if (UNLIKELY (ret <= 0))
     {
-      ret = crun_make_error (err, 0,
-                             "CRIU restoring failed %d.  Please check CRIU logfile `%s/%s`",
-                             ret, cr_options->work_path, CRIU_RESTORE_LOG_FILE);
+      show_criu_log (cr_options->work_path, CRIU_RESTORE_LOG_FILE);
+      ret = crun_make_error (err, 0, "CRIU restoring failed: %d", ret);
       goto out_umount;
     }
 
