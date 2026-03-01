@@ -101,14 +101,7 @@ jobs:
     trigger: pull_request
     packages: [crun-centos]
     notifications: *test_failure_notification
-    # TODO: Re-enable centos-stream-10-x86_64 once criu issues are solved
-    # Ref: https://github.com/containers/crun/pull/1758#issuecomment-2901772392
-    # Issue filed: https://github.com/containers/crun/issues/1759
-    #targets: *centos_copr_targets
-    targets:
-      - centos-stream-9-x86_64
-      - centos-stream-9-aarch64
-      - centos-stream-10-aarch64
+    targets: *centos_copr_targets
     tf_extra_params:
       environments:
         - artifacts:
