@@ -69,5 +69,5 @@ crun_command_mounts (struct crun_global_arguments *global_args, int argc, char *
   else if (strcmp (argv[first_arg], "remove") == 0)
     return libcrun_container_remove_mounts_from_file (&crun_context, argv[first_arg + 1], argv[first_arg + 2], err);
 
-  return crun_make_error (err, 0, "unknown command %s", argv[first_arg + 1]);
+  return crun_make_error (err, 0, "unknown command %s", argv[first_arg]);
 }
