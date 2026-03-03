@@ -244,7 +244,7 @@ criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
 #  ifdef CRIU_PRE_DUMP_SUPPORT
 
 static int
-criu_check_mem_track (char *work_path, libcrun_error_t *err)
+criu_check_mem_track (libcrun_error_t *err)
 {
   struct criu_feature_check features = { 0 };
   int ret;
@@ -259,16 +259,12 @@ criu_check_mem_track (char *work_path, libcrun_error_t *err)
 
   ret = libcriu_wrapper->criu_feature_check (&features, sizeof (features));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, 0,
-                            "CRIU feature checking failed %d.  Please check CRIU logfile %s/%s",
-                            ret, work_path, CRIU_CHECKPOINT_LOG_FILE);
+    return crun_make_error (err, 0, "CRIU feature checking failed: %d", ret);
 
   if (features.mem_track == true)
     return 1;
 
-  return crun_make_error (err, 0,
-                          "memory tracking not supported. Please check CRIU logfile %s/%s",
-                          work_path, CRIU_CHECKPOINT_LOG_FILE);
+  return crun_make_error (err, 0, "CRIU memory tracking not supported");
 }
 
 #  endif
@@ -619,7 +615,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
      * changed compared to the previous dump. */
     if (cr_options->parent_path != NULL)
       {
-        criu_can_mem_track = criu_check_mem_track (cr_options->work_path, err);
+        criu_can_mem_track = criu_check_mem_track (err);
         if (UNLIKELY (criu_can_mem_track == -1))
           return -1;
         libcriu_wrapper->criu_set_track_mem (true);
@@ -645,7 +641,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
       {
         if (criu_can_mem_track != 1)
           {
-            criu_can_mem_track = criu_check_mem_track (cr_options->work_path, err);
+            criu_can_mem_track = criu_check_mem_track (err);
             if (UNLIKELY (criu_can_mem_track == -1))
               return -1;
           }
