@@ -1310,7 +1310,7 @@ container_has_cgroupns (libcrun_container_t *container)
 
 static int
 do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *target,
-                    unsigned long mountflags, libcrun_error_t *err)
+                    unsigned long mountflags, const char *data, libcrun_error_t *err)
 {
   int ret;
   int cgroup_mode;
@@ -1319,7 +1319,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
-  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
+  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data, LABEL_NONE, err);
   if (UNLIKELY (ret < 0))
     {
       errno = crun_error_get_errno (err);
@@ -1338,7 +1338,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
               ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", MS_PRIVATE, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
               if (LIKELY (ret == 0))
                 {
-                  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, NULL, LABEL_NONE, err);
+                  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data, LABEL_NONE, err);
                   if (LIKELY (ret == 0))
                     return ret;
 
@@ -1530,7 +1530,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
 
 static int
 do_mount_cgroup (libcrun_container_t *container, const char *source, int targetfd, const char *target,
-                 unsigned long mountflags, libcrun_error_t *err)
+                 unsigned long mountflags, const char *data, libcrun_error_t *err)
 {
   int cgroup_mode;
 
@@ -1541,7 +1541,7 @@ do_mount_cgroup (libcrun_container_t *container, const char *source, int targetf
   switch (cgroup_mode)
     {
     case CGROUP_MODE_UNIFIED:
-      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, err);
+      return do_mount_cgroup_v2 (container, targetfd, target, mountflags, data, err);
     case CGROUP_MODE_LEGACY:
     case CGROUP_MODE_HYBRID:
       return do_mount_cgroup_v1 (container, source, targetfd, target, mountflags, err);
@@ -2317,7 +2317,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
         }
       else if (strcmp (type, "cgroup") == 0)
         {
-          ret = do_mount_cgroup (container, source, targetfd, target, flags, err);
+          ret = do_mount_cgroup (container, source, targetfd, target, flags, data, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
