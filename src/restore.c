@@ -173,7 +173,10 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
 
   if (bundle == NULL)
     {
-      bundle = realpath (".", NULL);
+      bundle_cleanup = realpath (".", NULL);
+      if (bundle_cleanup == NULL)
+        libcrun_fail_with_error (errno, "realpath `.` failed");
+      bundle = bundle_cleanup;
     }
   else
     {
