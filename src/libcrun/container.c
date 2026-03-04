@@ -1153,18 +1153,6 @@ resolve_rootfs_path (libcrun_container_t *container, char **rootfs, libcrun_erro
   return 0;
 }
 
-/* Configure terminal socket pair for container communication.  */
-static int
-setup_terminal_socketpair (struct container_entrypoint_s *entrypoint_args, int *console_socketpair)
-{
-  if (entrypoint_args->terminal_socketpair[0] >= 0)
-    {
-      close_and_reset (&entrypoint_args->terminal_socketpair[0]);
-      *console_socketpair = entrypoint_args->terminal_socketpair[1];
-    }
-  return 0;
-}
-
 /* Initialize the environment variables.  */
 static int
 setup_environment (runtime_spec_schema_config_schema *def, uid_t container_uid, libcrun_error_t *err)
@@ -1331,9 +1319,12 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = setup_terminal_socketpair (entrypoint_args, &console_socketpair);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  /* Configure terminal socket pair for container communication.  */
+  if (entrypoint_args->terminal_socketpair[0] >= 0)
+    {
+      close_and_reset (&entrypoint_args->terminal_socketpair[0]);
+      console_socketpair = entrypoint_args->terminal_socketpair[1];
+    }
 
   /* sync 1.  */
   ret = sync_socket_wait_sync (NULL, sync_socket, false, err);
