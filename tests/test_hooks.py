@@ -198,6 +198,72 @@ def test_createRuntime_hook():
         return -1
 
 
+def test_createRuntime_hook_bundle_path():
+    """Test that createRuntime hook receives correct bundle path."""
+    import tempfile
+    import json
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    state_file = None
+    try:
+        # Create a temp file to capture hook state
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            state_file = f.name
+
+        # Hook script that saves stdin (state) to file
+        hook = {
+            "path": "/bin/sh",
+            "args": ["/bin/sh", "-c", "cat > " + state_file]
+        }
+        conf['hooks'] = {"createRuntime": [hook]}
+
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+
+        # Verify state was written and contains the correct bundle path
+        if os.path.exists(state_file) and os.path.getsize(state_file) > 0:
+            with open(state_file) as f:
+                state = json.load(f)
+
+                # Verify required fields exist
+                if not all(field in state for field in ['ociVersion', 'id', 'bundle', 'status']):
+                    logger.info("hook state missing required fields: %s", state)
+                    return -1
+
+                bundle_path = state['bundle']
+
+                # Bundle path should be an absolute path, not "/"
+                if bundle_path == "/" or bundle_path == "":
+                    logger.info("createRuntime hook received incorrect bundle path: '%s'", bundle_path)
+                    return -1
+
+                # Bundle path should exist and be a directory
+                if not os.path.isdir(bundle_path):
+                    logger.info("createRuntime hook bundle path is not a directory: '%s'", bundle_path)
+                    return -1
+
+                # Bundle should contain config.json
+                config_path = os.path.join(bundle_path, "config.json")
+                if not os.path.exists(config_path):
+                    logger.info("createRuntime hook bundle missing config.json: '%s'", bundle_path)
+                    return -1
+
+                logger.info("createRuntime hook received correct bundle path: '%s'", bundle_path)
+                return 0
+
+        logger.info("createRuntime hook did not receive state or state file is empty")
+        return -1
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if state_file and os.path.exists(state_file):
+            os.unlink(state_file)
+
+
 def test_createContainer_hook():
     """Test createContainer hook."""
     conf = base_config()
@@ -434,6 +500,7 @@ all_tests = {
     "test-poststart-hook": test_poststart_hook,
     "test-poststop-hook": test_poststop_hook,
     "test-createRuntime-hook": test_createRuntime_hook,
+    "test-createRuntime-hook-bundle-path": test_createRuntime_hook_bundle_path,
     "test-createContainer-hook": test_createContainer_hook,
     "test-startContainer-hook": test_startContainer_hook,
     "test-hook-with-timeout": test_hook_with_timeout,
