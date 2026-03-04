@@ -1624,7 +1624,7 @@ unset_cloexec_flag (int fd)
 
 static void __attribute__ ((__noreturn__))
 run_process_child (char *path, char **args, const char *cwd, char **envp, int pipe_r,
-                   int pipe_w, int out_fd, int err_fd)
+                   int pipe_w, int out_fd, int err_fd, bool can_ignore_chdir_errors)
 {
   char *tmp_args[] = { path, NULL };
   libcrun_error_t err = NULL;
@@ -1665,7 +1665,10 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
     args = tmp_args;
 
   if (cwd && chdir (cwd) < 0)
-    _safe_exit (EXIT_FAILURE);
+    {
+      if (! can_ignore_chdir_errors || (errno != EACCES && errno != EPERM))
+        _safe_exit (EXIT_FAILURE);
+    }
 
   execvpe (path, args, envp);
   _safe_exit (EXIT_FAILURE);
@@ -1675,7 +1678,7 @@ run_process_child (char *path, char **args, const char *cwd, char **envp, int pi
 int
 run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, int timeout,
                                      char **envp, char *stdin, size_t stdin_len, int out_fd,
-                                     int err_fd, libcrun_error_t *err)
+                                     int err_fd, bool can_ignore_chdir_errors, libcrun_error_t *err)
 {
   int stdin_pipe[2];
   pid_t pid;
@@ -1711,7 +1714,7 @@ run_process_with_stdin_timeout_envp (char *path, char **args, const char *cwd, i
   if (pid == 0)
     {
       /* run_process_child doesn't return.  */
-      run_process_child (path, args, cwd, envp, pipe_r, pipe_w, out_fd, err_fd);
+      run_process_child (path, args, cwd, envp, pipe_r, pipe_w, out_fd, err_fd, can_ignore_chdir_errors);
     }
 
   close_and_reset (&pipe_r);
