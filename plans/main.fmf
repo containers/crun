@@ -18,6 +18,14 @@ prepare:
         fi
         dnf -y upgrade --allowerasing
       order: 20
+
+    # TODO: Remove once https://issues.redhat.com/browse/RHEL-153064 is fixed.
+    - when: distro == centos-stream-9
+      how: install
+      package:
+        - iptables-legacy
+      order: 30
+
     - how: install
       package:
         - bats
