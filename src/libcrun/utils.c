@@ -2798,8 +2798,11 @@ channel_fd_pair_process (struct channel_fd_pair *channel, int epollfd, libcrun_e
       size_t used = ring_buffer_get_data_available (channel->rb);
       int events;
 
-      /* If there is space available in the buffer, we want to read more.  */
-      events = (available > 0) ? (EPOLLIN | (is_input_eagain ? EPOLLET : 0)) : 0;
+      /* If there is space available in the buffer and the output is not
+         blocked, we want to read more.  When the output got EAGAIN, stop
+         reading until the output fd becomes writable again to avoid a
+         busy loop when the consumer is not draining the pipe.  */
+      events = (available > 0 && ! is_output_eagain) ? (EPOLLIN | (is_input_eagain ? EPOLLET : 0)) : 0;
       if (events != channel->infd_epoll_events)
         {
           ret = epoll_helper_toggle (epollfd, channel->in_fd, events, err);

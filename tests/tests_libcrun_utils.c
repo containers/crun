@@ -21,8 +21,10 @@
 #include <libcrun/cgroup.h>
 #include <libcrun/cgroup-systemd.h>
 #include <sys/types.h>
+#include <sys/epoll.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 
 typedef int (*test) ();
 
@@ -629,6 +631,73 @@ test_crun_ensure_directory ()
   return 0;
 }
 
+static int
+test_channel_fd_pair_no_busy_loop_on_blocked_output ()
+{
+  /* When the output pipe is blocked, channel_fd_pair_process must not register
+     EPOLLIN on the input fd.  Verify by writing new data to the input AFTER
+     processing and checking that epoll_wait does not fire.  */
+  libcrun_error_t err = NULL;
+  cleanup_close int infd0 = -1, infd1 = -1, outfd0 = -1, outfd1 = -1;
+  cleanup_close int epollfd = -1;
+  cleanup_channel_fd_pair struct channel_fd_pair *channel = NULL;
+  struct epoll_event ev;
+  char buf[4096];
+  int input_pipe[2], output_pipe[2];
+  int ret;
+
+  if (pipe (input_pipe) < 0 || pipe (output_pipe) < 0)
+    return -1;
+
+  infd0 = input_pipe[0];
+  infd1 = input_pipe[1];
+  outfd0 = output_pipe[0];
+  outfd1 = output_pipe[1];
+
+  fcntl (input_pipe[0], F_SETFL, O_NONBLOCK);
+  fcntl (input_pipe[1], F_SETFL, O_NONBLOCK);
+  fcntl (output_pipe[0], F_SETFL, O_NONBLOCK);
+  fcntl (output_pipe[1], F_SETFL, O_NONBLOCK);
+
+  /* Fill the output pipe so writes return EAGAIN.  */
+  memset (buf, 'X', sizeof (buf));
+  while (write (output_pipe[1], buf, sizeof (buf)) > 0)
+    ;
+
+  /* Seed some input data so channel_fd_pair_process has work to do.  */
+  if (write (input_pipe[1], "A", 1) != 1)
+    return -1;
+
+  epollfd = epoll_create1 (EPOLL_CLOEXEC);
+  if (epollfd < 0)
+    return -1;
+
+  channel = channel_fd_pair_new (input_pipe[0], output_pipe[1], 4096);
+
+  ret = channel_fd_pair_process (channel, epollfd, &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  /* Write new data so that an edge-triggered EPOLLIN (if registered) fires.  */
+  if (write (input_pipe[1], "B", 1) != 1)
+    return -1;
+
+  /* With the fix EPOLLIN is not registered, so epoll_wait must time out.
+     Without the fix EPOLLIN|EPOLLET is registered and the new data triggers
+     an immediate wake-up.  */
+  ret = epoll_wait (epollfd, &ev, 1, 0);
+  if (ret > 0 && ev.data.fd == input_pipe[0])
+    {
+      fprintf (stderr, "epoll fired on input fd while output is blocked\n");
+      return -1;
+    }
+
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -652,9 +721,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..16\n");
+  printf ("1..17\n");
 #else
-  printf ("1..13\n");
+  printf ("1..14\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -669,6 +738,7 @@ main ()
   RUN_TEST (test_str_join_array);
   RUN_TEST (test_get_current_timestamp);
   RUN_TEST (test_crun_ensure_directory);
+  RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
   RUN_TEST (test_get_scope_path);
