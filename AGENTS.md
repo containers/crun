@@ -29,3 +29,7 @@
 - Python tests go in `tests/test_*.py`, register in `all_tests` dict, and add to `PYTHON_TESTS` in root `Makefile.am`
 - C unit tests go in `tests/tests_libcrun_*.c`, add to `UNIT_TESTS` in root `Makefile.am` with build rules
 - Test functions should return `0` (pass), `-1` (fail), or `77` (skip)
+
+## Error handling
+
+- C code error handling convention is described in [design-docs/error_handling.md](design-docs/error_handling.md)
