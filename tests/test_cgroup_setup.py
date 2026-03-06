@@ -1337,6 +1337,39 @@ def test_annotation_systemd_force_cgroup_v1():
         logger.info("test failed: %s", e)
         return -1
 
+def test_cgroup_mount_options():
+    """Test that cgroup mount options are passed to the kernel."""
+
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Test this by intentionally providing an invalid mount option.
+    # If the options are ignored, the mount will succeed.
+    # If they are correctly passed to the kernel, the mount will fail.
+    for mount in conf['mounts']:
+        if mount.get('destination') == '/sys/fs/cgroup':
+            if 'options' not in mount:
+                mount['options'] = []
+            mount['options'].append("invalid_cgroup_option")
+            break
+
+    import subprocess
+    try:
+        run_and_get_output(conf, hide_stderr=False)
+        logger.error("expected mount failure due to invalid mount option, but it succeeded")
+        return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ""
+        if "Invalid argument" not in output:
+            logger.error("failed, but did not find expected 'Invalid argument' error message. Output: %s", output)
+            return -1
+        logger.info("caught expected error for invalid mount option")
+
+    return 0
 
 all_tests = {
     "cgroup-creation": test_cgroup_creation,
@@ -1377,6 +1410,7 @@ all_tests = {
     "annotation-systemd-subgroup": test_annotation_systemd_subgroup,
     "annotation-delegate-cgroup": test_annotation_delegate_cgroup,
     "annotation-systemd-force-cgroup-v1": test_annotation_systemd_force_cgroup_v1,
+    "cgroup-mount-options": test_cgroup_mount_options,
 }
 
 if __name__ == "__main__":
