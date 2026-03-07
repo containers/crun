@@ -214,14 +214,13 @@ make_oci_process_user (const char *userspec)
   l = strtoll (userspec, &endptr, 10);
   if (errno == ERANGE)
     libcrun_fail_with_error (0, "invalid UID specified");
+  if (l < INT_MIN || l > INT_MAX)
+    libcrun_fail_with_error (0, "invalid UID specified");
+  u->uid = (int) l;
   if (*endptr == '\0')
     return u;
   if (*endptr != ':')
     libcrun_fail_with_error (0, "invalid USERSPEC specified");
-  if (l < INT_MIN || l > INT_MAX)
-    libcrun_fail_with_error (0, "invalid UID specified");
-
-  u->uid = (int) l;
 
   errno = 0;
   l = strtoll (endptr + 1, &endptr, 10);
