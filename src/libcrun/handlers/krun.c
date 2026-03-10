@@ -46,6 +46,9 @@
 /* If the user doesn't configure the RAM amount, fallback to this value. */
 #define LIBKRUN_DEFAULT_RAM_MIB 1024
 
+/* The minimum amount of RAM for a viable microVM is 128 MB. */
+#define LIBKRUN_MINIMUM_RAM_MIB 128
+
 /* crun dumps the container configuration into this file, which will be read by
  * libkrun to set up the environment for the workload inside the microVM.
  */
@@ -258,7 +261,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
     }
 
   ram_mib = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.ram_mib", path_ram_mib);
-  if (ram_mib <= 0)
+  if (ram_mib <= LIBKRUN_MINIMUM_RAM_MIB)
     {
       if (def && def->linux && def->linux->resources && def->linux->resources->memory
           && def->linux->resources->memory->limit_present)
