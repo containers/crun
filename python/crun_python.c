@@ -73,7 +73,7 @@ free_container (PyObject *ptr)
 static PyObject *
 container_load_from_file (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   const char *path;
   libcrun_container_t *ctr;
 
@@ -90,7 +90,7 @@ container_load_from_file (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_load_from_memory (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   const char *def;
   libcrun_container_t *ctr;
 
@@ -146,7 +146,7 @@ make_context (PyObject *self arg_unused, PyObject *args, PyObject *kwargs)
 static PyObject *
 container_run (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   PyObject *ctr_obj = NULL;
   libcrun_container_t *ctr;
@@ -176,7 +176,7 @@ container_run (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_create (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   PyObject *ctr_obj = NULL;
   libcrun_container_t *ctr;
@@ -206,7 +206,7 @@ container_create (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_delete (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   char *id = NULL;
   bool force;
@@ -232,7 +232,7 @@ container_delete (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_kill (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   char *id = NULL;
   char *signal;
@@ -258,7 +258,7 @@ container_kill (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_start (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   char *id = NULL;
   libcrun_context_t *ctx;
@@ -283,7 +283,7 @@ container_start (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 containers_list (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
   libcrun_container_list_t *containers, *it;
@@ -324,7 +324,7 @@ containers_list (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_status (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
   char *id = NULL;
@@ -377,7 +377,7 @@ load_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx 
 static PyObject *
 container_update (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
   char *id = NULL;
@@ -426,7 +426,7 @@ container_update (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 container_spec (PyObject *self arg_unused, PyObject *args arg_unused)
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
   char *id = NULL;
