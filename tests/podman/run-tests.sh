@@ -97,6 +97,9 @@ SKIP_TESTS=(
 
 	# Does not work inside container as upperdir is overlayfs (issue 1999).
 	'podman build and remove basic alpine with TMPDIR as relative'
+
+	# Not related to runtime.
+	'--tls-details'
 )
 SKIP_REGEX=$(IFS='|'; echo "${SKIP_TESTS[*]}")
 
