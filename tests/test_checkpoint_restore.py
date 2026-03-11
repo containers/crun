@@ -60,6 +60,17 @@ def _get_criu_version():
     return version
 
 
+def _check_cr_requirements(min_criu_version=0):
+    if is_rootless():
+        return 77, "CRIU requires root"
+    if 'CRIU' not in get_crun_feature_string():
+        return 77, "crun built without CRIU support"
+    if min_criu_version and _get_criu_version() < min_criu_version:
+        return 77, "old CRIU version (need >= %d)" % min_criu_version
+
+    return None
+
+
 def _get_cmdline(cid, tests_root):
     s = {}
     for _ in range(50):
@@ -156,11 +167,8 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
 
 
 def test_cr_pre_dump():
-    if is_rootless() or 'CRIU' not in get_crun_feature_string():
-        return 77
-
-    if _get_criu_version() < 31700:
-        return 77
+    if r := _check_cr_requirements(min_criu_version=31700):
+        return r
 
     has_pre_dump = False
     for i in run_crun_command(["checkpoint", "--help"]).split('\n'):
@@ -169,7 +177,7 @@ def test_cr_pre_dump():
             break
 
     if not has_pre_dump:
-        return 77
+        return 77, "crun built without pre-dump support"
 
     def _get_pre_dump_size(cr_dir):
         size = 0
@@ -267,8 +275,8 @@ def test_cr_pre_dump():
 
 
 def test_cr():
-    if is_rootless() or 'CRIU' not in get_crun_feature_string():
-        return 77
+    if r := _check_cr_requirements():
+        return r
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
@@ -277,11 +285,8 @@ def test_cr():
 
 
 def test_cr_with_ext_ns():
-    if is_rootless() or 'CRIU' not in get_crun_feature_string():
-        return 77
-
-    if _get_criu_version() < 31601:
-        return 77
+    if r := _check_cr_requirements(min_criu_version=31601):
+        return r
 
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
@@ -373,22 +378,22 @@ def _run_cr_test_with_config(config_name, log_names, extra_configs=None, annotat
 
 
 def test_cr_with_runc_config():
-    if is_rootless() or 'CRIU' not in get_crun_feature_string():
-        return 77
+    if r := _check_cr_requirements():
+        return r
     return _run_cr_test_with_config("runc", ("runc-dump.log", "runc-restore.log"))
 
 
 def test_cr_with_crun_config():
-    if is_rootless() or 'CRIU' not in get_crun_feature_string():
-        return 77
+    if r := _check_cr_requirements():
+        return r
     # runc.conf should be ignored by crun
     extra = {"runc": "log-file=test.log"}
     return _run_cr_test_with_config("crun", ("crun-dump.log", "crun-restore.log"), extra_configs=extra)
 
 
 def test_cr_with_annotation_config():
-    if is_rootless() or 'CRIU' not in get_crun_feature_string():
-        return 77
+    if r := _check_cr_requirements():
+        return r
     # Create annotation config file
     annotations = {"org.criu.config": "/etc/criu/annotation.conf"}
     _create_criu_config("annotation", f"log-file=annotation.log")
