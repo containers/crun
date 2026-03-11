@@ -30,26 +30,80 @@ export GO111MODULE=off
 ulimit -u unlimited
 export TMPDIR=/var/tmp
 
-# Skip some tests that are not currently supported in the testing environment:
-#
-# - search|pull from docker|trust|inspect|logs|generate|import|mounted rw|inherit host devices|privileged CapEff|prune unused images|podman images filter|image list filter
-#   Flaky or not using the runtime.
-#
-# - selinux
-#   Travis runs on Ubuntu.
-#
-# - systemd
-# - notify_socket
-#
-# - podman run exit 12*|podman run exit code on failure to exec|failed to start
-#   device-cgroup-rule|capabilities|network|overlay volume flag|prune removes a pod with a stopped container: not working on github actions
-#
-# - Podman run with specified static IPv6 has correct IP
-#   Does not work inside test environment.
-#
-# - podman build and remove basic alpine with TMPDIR as relative
-#   Does not work inside container as upperdir is overlayfs (issue 1999).
+# Skip some tests that are not currently supported in the testing environment.
+SKIP_TESTS=(
+	# Flaky or not using the runtime.
+	'generate'
+	'image list filter'
+	'import'
+	'inherit host devices'
+	'inspect'
+	'logs'
+	'mounted rw'
+	'podman images filter'
+	'privileged CapEff'
+	'prune unused images'
+	'pull from docker'
+	'search'
+	'trust'
 
-ginkgo --focus='.*' --skip='.*(selinux|notify_socket|systemd|podman run exit 12*|podman run exit code on failure to exec|failed to start|search|trust|inspect|logs|generate|import|mounted rw|inherit host devices|play kube|cgroups=disabled|privileged CapEff|device-cgroup-rule|capabilities|network|pull from docker|--add-host|removes a pod with a container|prune removes a pod with a stopped container|overlay volume flag|prune unused images|podman images filter|image list filter|create --pull|podman ps json format|using journald for container|image tree|--pull|shared layers|child images|cached images|flag with multiple mounts|overlay and used as workdir|image_copy_tmp_dir|Podman run with specified static IPv6 has correct IP|authenticated push|pod create --share-parent|podman kill paused container|login and logout|podman top on privileged container|local registry with authorization|podman update container all options v2|push test|podman pull and run on split imagestore|Podman kube play|uidmapping and gidmapping|push with --add-compression|enforces DiffID matching|push with authorization|artifact|podman build and remove basic alpine with TMPDIR as relative).*' \
-	 -vv -tags "seccomp ostree selinux exclude_graphdriver_devicemapper" \
-	 -timeout=50m -cover -flake-attempts 3 -progress -trace -no-color test/e2e/.
+	# Selinux not supported on Ubuntu.
+	'selinux'
+
+	'notify_socket'
+	'systemd'
+
+	# Not working on GitHub Actions.
+	'Podman run with specified static IPv6 has correct IP'
+	'capabilities'
+	'device-cgroup-rule'
+	'failed to start'
+	'network'
+	'overlay volume flag'
+	'podman run exit 12'
+	'podman run exit code on failure to exec'
+	'prune removes a pod with a stopped container'
+
+	'--add-host'
+	'--pull'
+	'Podman kube play'
+	'artifact'
+	'authenticated push'
+	'cached images'
+	'cgroups=disabled'
+	'child images'
+	'create --pull'
+	'enforces DiffID matching'
+	'flag with multiple mounts'
+	'image tree'
+	'image_copy_tmp_dir'
+	'local registry with authorization'
+	'login and logout'
+	'overlay and used as workdir'
+	'play kube'
+	'pod create --share-parent'
+	'podman kill paused container'
+	'podman ps json format'
+	'podman pull and run on split imagestore'
+	'podman top on privileged container'
+	'podman update container all options v2'
+	'push test'
+	'push with --add-compression'
+	'push with authorization'
+	'removes a pod with a container'
+	'shared layers'
+	'uidmapping and gidmapping'
+	'using journald for container'
+
+	# Does not work inside container as upperdir is overlayfs (issue 1999).
+	'podman build and remove basic alpine with TMPDIR as relative'
+
+	# Not related to runtime.
+	'--tls-details'
+)
+SKIP_REGEX=$(IFS='|'; echo "${SKIP_TESTS[*]}")
+
+ginkgo --focus='.*' --skip="$SKIP_REGEX" \
+	 -v --show-node-events --trace \
+	 -tags "seccomp ostree selinux" \
+	 -timeout=50m -cover -flake-attempts 3 -no-color test/e2e/.
