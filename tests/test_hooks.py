@@ -414,6 +414,51 @@ def test_multiple_hooks():
             os.unlink(marker_file)
 
 
+def test_poststop_hook_failure_warning():
+    """Test that a failing poststop hook logs a warning but container still succeeds."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    hook = {"path": "/bin/false"}
+    conf['hooks'] = {"poststop": [hook]}
+
+    try:
+        out, _ = run_and_get_output(conf)
+    except Exception as e:
+        logger.error("container failed unexpectedly: %s", e)
+        return -1
+
+    if "poststop hook failed with exit code" not in out:
+        logger.error("expected warning about poststop hook failure, got: %s", out)
+        return -1
+
+    return 0
+
+
+def test_multiple_poststop_hooks_failure():
+    """Test that multiple failing poststop hooks do not prevent container cleanup."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    hook1 = {"path": "/bin/false"}
+    hook2 = {"path": "/bin/false"}
+    conf['hooks'] = {"poststop": [hook1, hook2]}
+
+    try:
+        out, _ = run_and_get_output(conf)
+    except Exception as e:
+        logger.error("container failed unexpectedly: %s", e)
+        return -1
+
+    if "poststop hook failed with exit code" not in out:
+        logger.error("expected warning about poststop hook failure, got: %s", out)
+        return -1
+
+    return 0
+
+
 def test_annotation_hook_stdout_stderr():
     """Test run.oci.hooks.stdout and run.oci.hooks.stderr annotations."""
     if is_rootless():
@@ -507,6 +552,8 @@ all_tests = {
     "test-hook-receives-state": test_hook_receives_state,
     "test-multiple-hooks": test_multiple_hooks,
     "test-annotation-hook-stdout-stderr": test_annotation_hook_stdout_stderr,
+    "test-poststop-hook-failure-warning": test_poststop_hook_failure_warning,
+    "test-multiple-poststop-hooks-failure": test_multiple_poststop_hooks_failure,
 }
 
 if __name__ == "__main__":
