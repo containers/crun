@@ -1465,6 +1465,9 @@ set_home_env (uid_t id)
       int ret = fgetpwent_r (stream, &pwd, buf, buf_size, &ret_pw);
       if (UNLIKELY (ret != 0))
         {
+          if (ret == EINTR)
+            continue;
+
           if (ret != ERANGE)
             {
               /* Let callers handle the error if the user was not found. */
