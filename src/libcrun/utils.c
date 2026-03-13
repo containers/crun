@@ -206,7 +206,7 @@ create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun_err
       if (ret == 0 && S_ISREG (tmp_mode))
         return 0;
 
-      return crun_make_error (err, errno, "create file `%s`", file);
+      return crun_make_error (err, ret ? errno : 0, "create file `%s`", file);
     }
   return 0;
 }
