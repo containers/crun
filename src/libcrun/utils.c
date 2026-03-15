@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <string.h>
+#include <libgen.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1094,21 +1095,35 @@ open_unix_domain_socket (const char *path, int dgram, libcrun_error_t *err)
   struct sockaddr_un addr = {};
   proc_fd_path_t name_buf;
   int ret;
+  cleanup_close int dirfd = -1;
   cleanup_close int fd = socket (AF_UNIX, dgram ? SOCK_DGRAM : SOCK_STREAM, 0);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "create UNIX socket");
 
   if (strlen (path) >= sizeof (addr.sun_path))
     {
-      get_proc_self_fd_path (name_buf, fd);
-      path = name_buf;
+      cleanup_free char *dpath = xstrdup (path);
+      cleanup_free char *bpath = xstrdup (path);
+      const char *parent_dir = dirname (dpath);
+      const char *base = basename (bpath);
+      int n;
+
+      dirfd = open (parent_dir, O_PATH | O_DIRECTORY | O_CLOEXEC);
+      if (UNLIKELY (dirfd < 0))
+        return crun_make_error (err, errno, "open directory `%s`", parent_dir);
+
+      get_proc_self_fd_path (name_buf, dirfd);
+
+      n = snprintf (addr.sun_path, sizeof (addr.sun_path), "%s/%s", name_buf, base);
+      if (n < 0 || (size_t) n >= sizeof (addr.sun_path))
+        return crun_make_error (err, ENAMETOOLONG, "socket path too long: `%s`", path);
+    }
+  else
+    {
+      size_t path_len = strlen (path);
+      memcpy (addr.sun_path, path, path_len + 1);
     }
 
-  size_t path_len = strlen (path);
-  if (path_len >= sizeof (addr.sun_path))
-    return crun_make_error (err, ENAMETOOLONG, "socket path too long: `%s`", path);
-
-  memcpy (addr.sun_path, path, path_len + 1);
   addr.sun_family = AF_UNIX;
   ret = bind (fd, (struct sockaddr *) &addr, sizeof (addr));
   if (UNLIKELY (ret < 0))
