@@ -3416,7 +3416,12 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
       ret = do_hooks (def, status.pid, context->id, false, status.bundle, "running", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
-        return ret;
+        {
+          libcrun_error_t tmp_err = NULL;
+          container_delete_internal (context, def, id, true, true, &tmp_err);
+          crun_error_release (&tmp_err);
+          return ret;
+        }
     }
 
   return 0;
