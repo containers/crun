@@ -1798,8 +1798,13 @@ run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, 
 
       ret = do_hooks (def, 0, id, true, status->bundle, "stopped", (hook **) def->hooks->poststop,
                       def->hooks->poststop_len, hooks_out_fd, hooks_err_fd, false, err);
-      if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+      if (UNLIKELY (ret != 0))
+        {
+          if (ret < 0)
+            crun_error_write_warning_and_release (context->output_handler_arg, &err);
+          else
+            libcrun_error (0, "poststop hook failed with exit code: %d", ret);
+        }
     }
   return 0;
 }

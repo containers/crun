@@ -490,6 +490,36 @@ def test_annotation_hook_stdout_stderr():
             os.unlink(stderr_file)
 
 
+def _test_failing_poststop_hooks(hooks):
+    """Helper: verify that failing poststop hooks log a warning but container still succeeds."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+    conf['hooks'] = {"poststop": hooks}
+
+    try:
+        out, _ = run_and_get_output(conf)
+    except Exception as e:
+        logger.error("container failed unexpectedly: %s", e)
+        return -1
+
+    if "poststop hook failed with exit code" not in out:
+        logger.error("expected warning about poststop hook failure, got: %s", out)
+        return -1
+
+    return 0
+
+
+def test_poststop_hook_failure_warning():
+    """Test that a failing poststop hook logs a warning but container still succeeds."""
+    return _test_failing_poststop_hooks([{"path": "/bin/false"}])
+
+
+def test_multiple_poststop_hooks_failure():
+    """Test that multiple failing poststop hooks do not prevent container cleanup."""
+    return _test_failing_poststop_hooks([{"path": "/bin/false"}, {"path": "/bin/false"}])
+
+
 all_tests = {
     "test-fail-prestart" : test_fail_prestart,
     "test-success-prestart" : test_success_prestart,
@@ -507,6 +537,8 @@ all_tests = {
     "test-hook-receives-state": test_hook_receives_state,
     "test-multiple-hooks": test_multiple_hooks,
     "test-annotation-hook-stdout-stderr": test_annotation_hook_stdout_stderr,
+    "test-poststop-hook-failure-warning": test_poststop_hook_failure_warning,
+    "test-multiple-poststop-hooks-failure": test_multiple_poststop_hooks_failure,
 }
 
 if __name__ == "__main__":
