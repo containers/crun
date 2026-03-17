@@ -520,6 +520,46 @@ def test_multiple_poststop_hooks_failure():
     return _test_failing_poststop_hooks([{"path": "/bin/false"}, {"path": "/bin/false"}])
 
 
+def test_poststart_fail_deletes_container():
+    """Test that the container is deleted when a poststart hook fails."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    cid = None
+    try:
+        conf['hooks'] = {
+            "poststart": [{"path": "/bin/false"}],
+        }
+
+        proc, cid = run_and_get_output(conf, command='create', use_popen=True, hide_stderr=True)
+        proc.wait()
+
+        try:
+            run_crun_command(["start", cid])
+            logger.error("start succeeded but poststart hook should have failed")
+            return -1
+        except Exception:
+            pass
+
+        try:
+            run_crun_command(["state", cid])
+            logger.error("container still exists after poststart hook failure")
+            return -1
+        except Exception:
+            return 0
+
+    except Exception as e:
+        logger.error("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            try:
+                run_crun_command(["delete", "-f", cid])
+            except Exception:
+                pass
+
+
 all_tests = {
     "test-fail-prestart" : test_fail_prestart,
     "test-success-prestart" : test_success_prestart,
@@ -539,6 +579,7 @@ all_tests = {
     "test-annotation-hook-stdout-stderr": test_annotation_hook_stdout_stderr,
     "test-poststop-hook-failure-warning": test_poststop_hook_failure_warning,
     "test-multiple-poststop-hooks-failure": test_multiple_poststop_hooks_failure,
+    "test-poststart-fail-deletes-container": test_poststart_fail_deletes_container,
 }
 
 if __name__ == "__main__":
