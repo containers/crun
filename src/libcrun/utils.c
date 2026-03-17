@@ -749,22 +749,39 @@ int
 libcrun_initialize_apparmor (libcrun_error_t *err)
 {
   cleanup_close int fd = -1;
+  int ret;
   int size;
   char buf[2];
 
   if (apparmor_enabled >= 0)
     return apparmor_enabled;
 
-  if (crun_dir_p_at (AT_FDCWD, "/sys/kernel/security/apparmor", true, err))
+  ret = crun_dir_p_at (AT_FDCWD, "/sys/kernel/security/apparmor", true, err);
+  if (UNLIKELY (ret < 0))
     {
-      fd = open ("/sys/module/apparmor/parameters/enabled", O_RDONLY | O_CLOEXEC);
-      if (fd == -1)
-        return 0;
-
-      size = TEMP_FAILURE_RETRY (read (fd, &buf, 2));
-
-      apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
+      /* Directory doesn't exist — not an error, just no AppArmor.  */
+      crun_error_release (err);
+      apparmor_enabled = 0;
+      return 0;
     }
+
+  if (ret == 0)
+    {
+      /* Path exists but is not a directory — no AppArmor.  */
+      apparmor_enabled = 0;
+      return 0;
+    }
+
+  fd = open ("/sys/module/apparmor/parameters/enabled", O_RDONLY | O_CLOEXEC);
+  if (fd == -1)
+    {
+      apparmor_enabled = 0;
+      return 0;
+    }
+
+  size = TEMP_FAILURE_RETRY (read (fd, &buf, 2));
+
+  apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
 
   return apparmor_enabled;
 }
