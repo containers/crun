@@ -199,6 +199,7 @@ create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun_err
   cleanup_close int fd_write = openat (dirfd, file, O_CLOEXEC | O_CREAT | O_WRONLY, mode);
   if (fd_write < 0)
     {
+      int saved_errno = errno;
       mode_t tmp_mode;
       int ret;
 
@@ -207,7 +208,7 @@ create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun_err
       if (ret == 0 && S_ISREG (tmp_mode))
         return 0;
 
-      return crun_make_error (err, errno, "create file `%s`", file);
+      return crun_make_error (err, saved_errno, "create file `%s`", file);
     }
   return 0;
 }
