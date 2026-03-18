@@ -1691,6 +1691,27 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
             return 0;
         }
 
+      {
+        cleanup_close int mountfd = -1;
+
+        /* Try open_tree+mount_setattr to apply flags atomically.  */
+        mountfd = get_bind_mount (-1, fullname, false, false, false, err);
+        if (mountfd >= 0)
+          {
+            ret = do_mount_setattr (false, normalized_path, mountfd, 0, MS_NOSUID | MS_NOEXEC, err);
+            if (LIKELY (ret == 0))
+              {
+                ret = fs_move_mount_to (mountfd, fd, NULL);
+                if (LIKELY (ret == 0))
+                  return 0;
+              }
+            else
+              crun_error_release (err);
+          }
+        else
+          crun_error_release (err);
+      }
+
       ret = do_mount (container, fullname, fd, normalized_path, NULL, MS_BIND | MS_PRIVATE | MS_NOEXEC | MS_NOSUID, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
