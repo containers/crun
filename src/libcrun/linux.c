@@ -1007,6 +1007,19 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
+  {
+    cleanup_close int mountfd = -1;
+
+    mountfd = get_bind_mount (-1, proc_fd_path, false, true, false, &tmp_err);
+    if (mountfd >= 0)
+      {
+        ret = fs_move_mount_to (mountfd, pathfd, NULL);
+        if (LIKELY (ret == 0))
+          return 0;
+      }
+    crun_error_release (&tmp_err);
+  }
+
   ret = do_mount (container, proc_fd_path, pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, &tmp_err);
   if (LIKELY (ret >= 0))
     return ret;
@@ -1101,7 +1114,19 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
       if ((mode & S_IFMT) == S_IFDIR)
         ret = mount_masked_dir (container, pathfd, rel_path, err);
       else
-        ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
+        {
+          cleanup_close int mountfd = -1;
+
+          mountfd = get_bind_mount (-1, "/dev/null", false, true, false, err);
+          if (mountfd >= 0)
+            ret = fs_move_mount_to (mountfd, pathfd, NULL);
+
+          if (mountfd < 0 || ret < 0)
+            {
+              crun_error_release (err);
+              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
+            }
+        }
       if (UNLIKELY (ret < 0))
         return ret;
     }
