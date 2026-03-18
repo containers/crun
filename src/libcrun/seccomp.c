@@ -106,20 +106,30 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 static enum scmp_compare
 get_seccomp_operator_raw (const char *name)
 {
-  if (strcmp (name, "SCMP_CMP_NE") == 0)
+  const char *p;
+
+  p = name;
+  if (strncmp (p, "SCMP_CMP_", 9))
+    goto fail;
+
+  p += 9;
+
+  if (strcmp (p, "NE") == 0)
     return SCMP_CMP_NE;
-  if (strcmp (name, "SCMP_CMP_LT") == 0)
+  if (strcmp (p, "LT") == 0)
     return SCMP_CMP_LT;
-  if (strcmp (name, "SCMP_CMP_LE") == 0)
+  if (strcmp (p, "LE") == 0)
     return SCMP_CMP_LE;
-  if (strcmp (name, "SCMP_CMP_EQ") == 0)
+  if (strcmp (p, "EQ") == 0)
     return SCMP_CMP_EQ;
-  if (strcmp (name, "SCMP_CMP_GE") == 0)
+  if (strcmp (p, "GE") == 0)
     return SCMP_CMP_GE;
-  if (strcmp (name, "SCMP_CMP_GT") == 0)
+  if (strcmp (p, "GT") == 0)
     return SCMP_CMP_GT;
-  if (strcmp (name, "SCMP_CMP_MASKED_EQ") == 0)
+  if (strcmp (p, "MASKED_EQ") == 0)
     return SCMP_CMP_MASKED_EQ;
+
+fail:
   return _SCMP_CMP_MIN; // Error.
 }
 
@@ -134,8 +144,8 @@ get_seccomp_operator (const char *name, enum scmp_compare *op, libcrun_error_t *
   return 0;
 }
 
-static int
-get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_error_t *err)
+static uint32_t
+get_seccomp_action_raw (const char *name, int errno_ret)
 {
   const char *p;
 
@@ -146,61 +156,45 @@ get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_e
   p += 9;
 
   if (strcmp (p, "ALLOW") == 0)
-    {
-      *action = SCMP_ACT_ALLOW;
-      return 0;
-    }
-  else if (strcmp (p, "ERRNO") == 0)
-    {
-      *action = SCMP_ACT_ERRNO (errno_ret);
-      return 0;
-    }
-  else if (strcmp (p, "KILL") == 0)
-    {
-      *action = SCMP_ACT_KILL;
-      return 0;
-    }
+    return SCMP_ACT_ALLOW;
+  if (strcmp (p, "ERRNO") == 0)
+    return SCMP_ACT_ERRNO (errno_ret);
+  if (strcmp (p, "KILL") == 0)
+    return SCMP_ACT_KILL;
 #  ifdef SCMP_ACT_LOG
-  else if (strcmp (p, "LOG") == 0)
-    {
-      *action = SCMP_ACT_LOG;
-      return 0;
-    }
+  if (strcmp (p, "LOG") == 0)
+    return SCMP_ACT_LOG;
 #  endif
-  else if (strcmp (p, "TRAP") == 0)
-    {
-      *action = SCMP_ACT_TRAP;
-      return 0;
-    }
-  else if (strcmp (p, "TRACE") == 0)
-    {
-      *action = SCMP_ACT_TRACE (errno_ret);
-      return 0;
-    }
+  if (strcmp (p, "TRAP") == 0)
+    return SCMP_ACT_TRAP;
+  if (strcmp (p, "TRACE") == 0)
+    return SCMP_ACT_TRACE (errno_ret);
 #  ifdef SCMP_ACT_KILL_PROCESS
-  else if (strcmp (p, "KILL_PROCESS") == 0)
-    {
-      *action = SCMP_ACT_KILL_PROCESS;
-      return 0;
-    }
+  if (strcmp (p, "KILL_PROCESS") == 0)
+    return SCMP_ACT_KILL_PROCESS;
 #  endif
 #  ifdef SCMP_ACT_KILL_THREAD
-  else if (strcmp (p, "KILL_THREAD") == 0)
-    {
-      *action = SCMP_ACT_KILL_THREAD;
-      return 0;
-    }
+  if (strcmp (p, "KILL_THREAD") == 0)
+    return SCMP_ACT_KILL_THREAD;
 #  endif
 #  ifdef SCMP_ACT_NOTIFY
-  else if (strcmp (p, "NOTIFY") == 0)
-    {
-      *action = SCMP_ACT_NOTIFY;
-      return 0;
-    }
+  if (strcmp (p, "NOTIFY") == 0)
+    return SCMP_ACT_NOTIFY;
 #  endif
 
 fail:
-  return crun_make_error (err, 0, "seccomp get action `%s`", name);
+  return ~0U; // Error.
+}
+
+static int
+get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_error_t *err)
+{
+  *action = get_seccomp_action_raw (name, errno_ret);
+
+  if (*action == ~0U)
+    return crun_make_error (err, 0, "seccomp get action `%s`", name);
+
+  return 0;
 }
 #endif
 
