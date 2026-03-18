@@ -115,6 +115,11 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
 
   out->path = make_cgroup_path (args->cgroup_path, args->id);
 
+  /* If the cgroup was already joined via CLONE_INTO_CGROUP, the controllers
+     were already enabled by precreate_cgroup.  */
+  if (args->joined)
+    return 0;
+
   if (cgroup_mode == CGROUP_MODE_UNIFIED)
     {
       int ret;
@@ -146,10 +151,6 @@ libcrun_cgroup_enter_cgroupfs (struct libcrun_cgroup_args *args, struct libcrun_
             return ret;
         }
     }
-
-  /* The cgroup was already joined, nothing more left to do.  */
-  if (args->joined)
-    return 0;
 
   return enter_cgroup (cgroup_mode, pid, 0, out->path, true, err);
 }
