@@ -816,6 +816,19 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
     {
       struct remount_s *next = r->next;
 
+      /* Try mount_setattr() first to avoid the statfs+retry fallback.  */
+      if (r->targetfd >= 0 && (r->flags & MS_RDONLY))
+        {
+          ret = do_mount_setattr (false, r->target, r->targetfd, 0, r->flags & ~MS_REMOUNT, err);
+          if (LIKELY (ret == 0))
+            {
+              free_remount (r);
+              r = next;
+              continue;
+            }
+          crun_error_release (err);
+        }
+
       ret = do_remount (r->targetfd, r->target, r->flags, r->data, err);
       if (UNLIKELY (ret < 0))
         goto cleanup;
