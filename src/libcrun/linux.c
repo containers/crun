@@ -1074,14 +1074,24 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   return 0;
 }
 
-static inline const char *
-get_selinux_context_type (libcrun_container_t *container)
+static const char *
+get_selinux_context_type (libcrun_container_t *container, libcrun_error_t *err)
 {
   const char *context_type;
 
   context_type = find_annotation (container, "run.oci.mount_context_type");
   if (context_type)
-    return context_type;
+    {
+      if (strcmp (context_type, "context") != 0
+          && strcmp (context_type, "fscontext") != 0
+          && strcmp (context_type, "defcontext") != 0
+          && strcmp (context_type, "rootcontext") != 0)
+        {
+          crun_make_error (err, 0, "invalid mount context type `%s` (must be one of: context, fscontext, defcontext, rootcontext)", context_type);
+          return NULL;
+        }
+      return context_type;
+    }
 
   return "context";
 }
@@ -1134,7 +1144,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (label_how == LABEL_MOUNT)
     {
-      const char *context_type = get_selinux_context_type (container);
+      const char *context_type = get_selinux_context_type (container, err);
+      if (UNLIKELY (context_type == NULL))
+        return -1;
 
       ret = add_selinux_mount_label (&data_with_label, data, label, context_type, err);
       if (ret < 0)
@@ -4573,7 +4585,12 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   if (container->container_def->linux && container->container_def->linux->mount_label)
     {
       label = container->container_def->linux->mount_label;
-      context_type = get_selinux_context_type (container);
+      context_type = get_selinux_context_type (container, err);
+      if (UNLIKELY (context_type == NULL))
+        {
+          ret = -1;
+          goto restore_mountns;
+        }
     }
 
   devs_mountfd = fsopen_mount ("tmpfs", context_type, label);
