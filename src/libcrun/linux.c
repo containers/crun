@@ -137,6 +137,7 @@ struct private_data_s
 
   bool mount_dev_from_host;
   unsigned long rootfs_propagation;
+  bool root_propagation_private;
   bool deny_setgroups;
 
   const char *rootfs;
@@ -815,6 +816,19 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
     {
       struct remount_s *next = r->next;
 
+      /* Try mount_setattr() first to avoid the statfs+retry fallback.  */
+      if (r->targetfd >= 0 && (r->flags & MS_RDONLY))
+        {
+          ret = do_mount_setattr (false, r->target, r->targetfd, 0, r->flags & ~MS_REMOUNT, err);
+          if (LIKELY (ret == 0))
+            {
+              free_remount (r);
+              r = next;
+              continue;
+            }
+          crun_error_release (err);
+        }
+
       ret = do_remount (r->targetfd, r->target, r->flags, r->data, err);
       if (UNLIKELY (ret < 0))
         goto cleanup;
@@ -993,6 +1007,19 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
+  {
+    cleanup_close int mountfd = -1;
+
+    mountfd = get_bind_mount (-1, proc_fd_path, false, true, false, &tmp_err);
+    if (mountfd >= 0)
+      {
+        ret = fs_move_mount_to (mountfd, pathfd, NULL);
+        if (LIKELY (ret == 0))
+          return 0;
+      }
+    crun_error_release (&tmp_err);
+  }
+
   ret = do_mount (container, proc_fd_path, pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, &tmp_err);
   if (LIKELY (ret >= 0))
     return ret;
@@ -1037,26 +1064,46 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   if (readonly)
     {
       proc_fd_path_t source_buffer;
+      cleanup_close int mountfd = -1;
 
       get_proc_self_fd_path (source_buffer, pathfd);
-      mount_flags = MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC;
-      if (keep_flags)
-        {
-          ret = statfs (source_buffer, &sfs);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "statfs `%s`", source_buffer);
-          mount_flags = mount_flags | sfs.f_flags;
 
-          // Parent might contain `MS_REMOUNT` but the new readonly path is not
-          // actually mounted. Specifically in the case of `/proc` this will end
-          // up with EINVAL therefore remove `MS_REMOUNT` if it's getting
-          // inherited from the parent.
-          mount_flags = mount_flags & ~MS_REMOUNT;
+      /* Try open_tree + mount_setattr to apply MS_RDONLY atomically.
+         Only when keep_flags is false, since keep_flags needs statfs
+         to inherit parent mount flags.  */
+      if (! keep_flags)
+        {
+          mountfd = get_bind_mount (-1, source_buffer, true, true, false, err);
+          if (mountfd >= 0)
+            ret = fs_move_mount_to (mountfd, pathfd, NULL);
+          else
+            ret = -1;
+
+          if (ret < 0)
+            crun_error_release (err);
         }
-      ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, mount_flags, NULL,
-                      LABEL_NONE, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+
+      if (keep_flags || ret < 0)
+        {
+          mount_flags = MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC;
+          if (keep_flags)
+            {
+              ret = statfs (source_buffer, &sfs);
+              if (UNLIKELY (ret < 0))
+                return crun_make_error (err, errno, "statfs `%s`", source_buffer);
+              mount_flags = mount_flags | sfs.f_flags;
+
+              // Parent might contain `MS_REMOUNT` but the new readonly path is not
+              // actually mounted. Specifically in the case of `/proc` this will end
+              // up with EINVAL therefore remove `MS_REMOUNT` if it's getting
+              // inherited from the parent.
+              mount_flags = mount_flags & ~MS_REMOUNT;
+            }
+          ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, mount_flags, NULL,
+                          LABEL_NONE, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
   else
     {
@@ -1067,7 +1114,19 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
       if ((mode & S_IFMT) == S_IFDIR)
         ret = mount_masked_dir (container, pathfd, rel_path, err);
       else
-        ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
+        {
+          cleanup_close int mountfd = -1;
+
+          mountfd = get_bind_mount (-1, "/dev/null", false, true, false, err);
+          if (mountfd >= 0)
+            ret = fs_move_mount_to (mountfd, pathfd, NULL);
+
+          if (mountfd < 0 || ret < 0)
+            {
+              crun_error_release (err);
+              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
+            }
+        }
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -1256,9 +1315,15 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (mountflags & ALL_PROPAGATIONS_NO_REC)
     {
-      ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "set propagation for `%s`", target);
+      unsigned long prop_only = mountflags & ALL_PROPAGATIONS_NO_REC;
+
+      /* Skip redundant MS_PRIVATE when root is already recursively private.  */
+      if (prop_only != MS_PRIVATE || ! get_private_data (container)->root_propagation_private)
+        {
+          ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "set propagation for `%s`", target);
+        }
     }
 
   if (mountflags & (MS_BIND | MS_RDONLY))
@@ -1637,6 +1702,27 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (LIKELY (ret >= 0))
             return 0;
         }
+
+      {
+        cleanup_close int mountfd = -1;
+
+        /* Try open_tree+mount_setattr to apply flags atomically.  */
+        mountfd = get_bind_mount (-1, fullname, false, false, false, err);
+        if (mountfd >= 0)
+          {
+            ret = do_mount_setattr (false, normalized_path, mountfd, 0, MS_NOSUID | MS_NOEXEC, err);
+            if (LIKELY (ret == 0))
+              {
+                ret = fs_move_mount_to (mountfd, fd, NULL);
+                if (LIKELY (ret == 0))
+                  return 0;
+              }
+            else
+              crun_error_release (err);
+          }
+        else
+          crun_error_release (err);
+      }
 
       ret = do_mount (container, fullname, fd, normalized_path, NULL, MS_BIND | MS_PRIVATE | MS_NOEXEC | MS_NOSUID, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
@@ -2717,9 +2803,14 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = make_parent_mount_private (rootfs, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if ((rootfs_propagation & (MS_REC | MS_PRIVATE)) == (MS_REC | MS_PRIVATE))
+        get_private_data (container)->root_propagation_private = true;
+      else
+        {
+          ret = make_parent_mount_private (rootfs, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = do_mount (container, rootfs, -1, rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))

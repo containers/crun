@@ -94,6 +94,8 @@ struct container_entrypoint_s
   int hooks_err_fd;
 
   struct custom_handler_instance_s *custom_handler;
+
+  bool reset_signal_handlers;
 };
 
 struct sync_socket_message_s
@@ -640,25 +642,31 @@ block_signals (libcrun_error_t *err)
 }
 
 static int
-unblock_signals (libcrun_error_t *err)
+unblock_signals (bool reset_handlers, libcrun_error_t *err)
 {
-  int i;
   int ret;
   sigset_t mask;
-  struct sigaction act = {};
 
   sigfillset (&mask);
   ret = sigprocmask (SIG_UNBLOCK, &mask, NULL);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sigprocmask");
 
-  act.sa_handler = SIG_DFL;
-  for (i = 0; i < NSIG; i++)
-    {
-      ret = sigaction (i, &act, NULL);
-      if (ret < 0 && errno != EINVAL)
-        return crun_make_error (err, errno, "sigaction");
-    }
+  if (! reset_handlers)
+    return 0;
+
+  {
+    int i;
+    struct sigaction act = {};
+
+    act.sa_handler = SIG_DFL;
+    for (i = 0; i < NSIG; i++)
+      {
+        ret = sigaction (i, &act, NULL);
+        if (ret < 0 && errno != EINVAL)
+          return crun_make_error (err, errno, "sigaction");
+      }
+  }
 
   return 0;
 }
@@ -1586,7 +1594,8 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
   entrypoint_args->sync_socket = -1;
 
-  ret = unblock_signals (err);
+  /* Reset signal handlers when used as a library (prefork path).  */
+  ret = unblock_signals (entrypoint_args->reset_signal_handlers, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2752,7 +2761,8 @@ terminal_setup (runtime_spec_schema_config_schema *def, libcrun_context_t *conte
 
 static int
 libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_t *context,
-                                int *container_ready_fd, libcrun_error_t *err)
+                                int *container_ready_fd, bool reset_signal_handlers,
+                                libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int ret;
@@ -2782,6 +2792,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     .hooks_err_fd = -1,
     .seccomp_receiver_fd = -1,
     .custom_handler = NULL,
+    .reset_signal_handlers = reset_signal_handlers,
   };
   cleanup_close int cgroup_dirfd = -1;
   struct libcrun_dirfd_s cgroup_dirfd_s;
@@ -3141,7 +3152,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = libcrun_container_run_internal (container, context, NULL, err);
+      ret = libcrun_container_run_internal (container, context, NULL, false, err);
       if (! (options & LIBCRUN_RUN_OPTIONS_KEEP))
         force_delete_container_status (context, def);
       return ret;
@@ -3197,7 +3208,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  ret = libcrun_container_run_internal (container, context, NULL, &tmp_err);
+  ret = libcrun_container_run_internal (container, context, NULL, true, &tmp_err);
   TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
   if (UNLIKELY (ret < 0))
     goto fail;
@@ -3260,7 +3271,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
       if (UNLIKELY (ret < 0))
         return ret;
-      ret = libcrun_container_run_internal (container, context, NULL, err);
+      ret = libcrun_container_run_internal (container, context, NULL, false, err);
       if (UNLIKELY (ret < 0))
         force_delete_container_status (context, def);
       return ret;
@@ -3312,7 +3323,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       libcrun_fail_with_error (errcode, "copy config file");
     }
 
-  ret = libcrun_container_run_internal (container, context, &pipefd1, err);
+  ret = libcrun_container_run_internal (container, context, &pipefd1, true, err);
   if (UNLIKELY (ret < 0))
     {
       force_delete_container_status (context, def);
@@ -3671,7 +3682,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   else
     crun_error_release (err);
 
-  ret = unblock_signals (err);
+  ret = unblock_signals (true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
