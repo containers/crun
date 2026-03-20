@@ -346,7 +346,7 @@ libcrun_apply_seccomp (int infd, int listener_receiver_fd, const char *receiver_
 
       ret = get_process_exit_status (status);
       if (ret != 0)
-        return crun_make_error (err, ret, "send listener fd `%d` to receiver", listener_fd);
+        return crun_make_error (err, 0, "send listener fd `%d` to receiver", listener_fd);
     }
 
   return 0;
