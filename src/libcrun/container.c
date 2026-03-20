@@ -1723,7 +1723,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
                                                                exec_path,
                                                                def->process->args);
       if (ret != 0)
-        return crun_make_error (err, ret, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->vtable->name);
+        return crun_make_error (err, 0, "exec container process failed with handler as `%s`", entrypoint_args->custom_handler->vtable->name);
 
       return ret;
     }

@@ -143,7 +143,7 @@ libcrun_load_seccomp_notify_plugins (struct seccomp_notify_context_s **out, cons
 
           ret = start_cb (&opq, conf, sizeof (*conf));
           if (UNLIKELY (ret != 0))
-            return crun_make_error (err, -ret, "error loading `%s`", it);
+            return crun_make_error (err, 0, "error loading `%s`", it);
         }
       ctx->plugins[s].opaque = opq;
     }
@@ -189,7 +189,7 @@ libcrun_seccomp_notify_plugins (struct seccomp_notify_context_s *ctx, int seccom
           ret = ctx->plugins[i].handle_request_cb (ctx->plugins[i].opaque, &ctx->sizes, ctx->sreq, ctx->sresp,
                                                    seccomp_fd, &handled);
           if (UNLIKELY (ret != 0))
-            return crun_make_error (err, -ret, "error handling seccomp notify request");
+            return crun_make_error (err, 0, "error handling seccomp notify request");
 
           switch (handled)
             {
