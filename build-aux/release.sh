@@ -48,7 +48,7 @@ BUILD_CMD=(
 	-w "${PWD}"
 	"${NIX_IMAGE}"
 	nix
-	--extra-experimental-features nix-command
+	--extra-experimental-features "nix-command flakes"
 	--print-build-logs
 	--option cores "$(nproc)"
 	--option max-jobs "$(nproc)"
@@ -59,11 +59,11 @@ BUILD_CMD=(
 mkdir -p /nix
 
 for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
-    "${BUILD_CMD[@]}" --file nix/default-${ARCH}.nix
+    "${BUILD_CMD[@]}" ".?submodules=1#crun-static-${ARCH}"
     cp ./result/bin/crun "$OUTDIR/crun-$VERSION-linux-${ARCH}"
     rm -rf result
 
-    "${BUILD_CMD[@]}" --file nix/default-${ARCH}.nix --arg enableSystemd false
+    "${BUILD_CMD[@]}" ".?submodules=1#crun-static-${ARCH}-disable-systemd"
     cp ./result/bin/crun "$OUTDIR/crun-$VERSION-linux-${ARCH}-disable-systemd"
     rm -rf result
 done

@@ -32,12 +32,24 @@ with pkgs; stdenv.mkDerivation {
       yajl
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
-  prePatch = ''
+  prePatch = let
+    staticLibs =
+      lib.optional enableCriu "${criu}/lib/libcriu.a"
+      ++ (if stdenv.hostPlatform.isMusl
+          then map (l: "${musl}/lib/${l}") [ "libc.a" "libpthread.a" "librt.a" ]
+          else map (l: "${glibc.static}/lib/${l}") [ "libc.a" "libpthread.a" "librt.a" ])
+      ++ [
+        "${lib.getLib libcap}/lib/libcap.a"
+        "${lib.getLib libseccomp}/lib/libseccomp.a"
+      ]
+      ++ lib.optional enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"
+      ++ [ "${yajl}/lib/libyajl.a" ];
+  in ''
     export CFLAGS='-static -pthread -DSTATIC'
     export LDFLAGS='-s -w -static-libgcc -static'
     export EXTRA_LDFLAGS='-s -w -linkmode external -extldflags "-static -lm"'
     export CRUN_LDFLAGS='-all-static'
-    export LIBS='${lib.optionalString enableCriu "${criu}/lib/libcriu.a"} ${if stdenv.hostPlatform.isMusl then "${musl}/lib/libc.a ${musl}/lib/libpthread.a ${musl}/lib/librt.a" else "${glibc.static}/lib/libc.a ${glibc.static}/lib/libpthread.a ${glibc.static}/lib/librt.a"} ${lib.getLib libcap}/lib/libcap.a ${lib.getLib libseccomp}/lib/libseccomp.a ${lib.optionalString enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"} ${yajl}/lib/libyajl.a'
+    export LIBS='${lib.concatStringsSep " " staticLibs}'
   '';
   buildPhase = ''
     patchShebangs .
