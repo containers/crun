@@ -2,6 +2,11 @@
 , pkgs
 , enableCriu
 , enableSystemd
+, libcap
+, libseccomp
+, libsystemd
+, yajl
+, criu
 }:
 with pkgs; stdenv.mkDerivation {
   name = "crun";

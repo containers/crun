@@ -37,14 +37,68 @@
 
       mkCrunPackage = arch: { system, crossSystem, enableCriu }: enableSystemd:
         let
-          pkgsArgs = {
-            inherit system;
-            overlays = [ (import ./nix/overlay.nix) ];
-          } // (if crossSystem != null then { inherit crossSystem; } else {});
+          pkgsArgs = { inherit system; }
+            // (if crossSystem != null then { inherit crossSystem; } else {});
           pkgs = import nixpkgs pkgsArgs;
+          static = import ./nix/static.nix;
+
+          # Build static variants locally — these don't pollute the global package set
+          staticLibcap = (static pkgs.libcap).overrideAttrs (x: {
+            postInstall = ''
+              mkdir -p "$doc/share/doc/${x.pname}-${x.version}"
+              cp License "$doc/share/doc/${x.pname}-${x.version}/"
+              mkdir -p "$pam/lib/security"
+              mv "$lib"/lib/security "$pam/lib"
+            '';
+          });
+          staticLibseccomp = static pkgs.libseccomp;
+          staticYajl = pkgs.yajl.overrideAttrs (x: {
+            cmakeFlags = (x.cmakeFlags or []) ++ [ "-DBUILD_SHARED_LIBS=OFF" ];
+          });
+          staticSystemd = (static pkgs.systemdMinimal).overrideAttrs (x: {
+            outputs = [ "out" "dev" ];
+            mesonFlags = x.mesonFlags ++ [
+              "-Dbpf-compiler=gcc"
+              "-Dbpf-framework=false"
+              "-Dglib=false"
+              "-Dstatic-libsystemd=true"
+            ];
+            # TODO: remove when https://github.com/systemd/systemd/issues/30448
+            # got resolved or fixed in nixpkgs.
+            preConfigure = ''
+              export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -Wno-error=format-overflow"
+            '';
+          });
+          staticCriu = let
+            staticProtobufc = pkgs.protobufc.overrideAttrs (x: {
+              configureFlags = (x.configureFlags or []) ++ [ "--enable-static" ];
+            });
+            staticLibnl = pkgs.libnl.overrideAttrs (x: {
+              configureFlags = (x.configureFlags or []) ++ [ "--enable-static" ];
+            });
+            staticLibnet = pkgs.libnet.overrideAttrs (x: {
+              configureFlags = (x.configureFlags or []) ++ [ "--enable-static" ];
+            });
+          in (static pkgs.criu).overrideAttrs (x: {
+            buildInputs = (x.buildInputs or []) ++ [
+              pkgs.protobuf
+              staticProtobufc
+              staticLibnl
+              staticLibnet
+            ];
+            NIX_LDFLAGS = "${x.NIX_LDFLAGS or ""} -lprotobuf-c";
+            buildPhase = ''
+              make lib
+            '';
+          });
         in
           pkgs.callPackage ./nix/derivation.nix {
             inherit enableCriu enableSystemd;
+            libcap = staticLibcap;
+            libseccomp = staticLibseccomp;
+            yajl = staticYajl;
+            libsystemd = staticSystemd;
+            criu = staticCriu;
           };
 
       # Generate packages for all architectures and variants
