@@ -63,11 +63,11 @@ if [ ! -d /nix/store ] || ! "${RUNTIME:-podman}" run --init --rm -v /nix:/nix "$
 fi
 
 for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
-    "${BUILD_CMD[@]}" ".?submodules=1#crun-static-${ARCH}"
+    "${BUILD_CMD[@]}" "path:.#crun-static-${ARCH}"
     cp ./result/bin/crun "$OUTDIR/crun-$VERSION-linux-${ARCH}"
     rm -rf result
 
-    "${BUILD_CMD[@]}" ".?submodules=1#crun-static-${ARCH}-disable-systemd"
+    "${BUILD_CMD[@]}" "path:.#crun-static-${ARCH}-disable-systemd"
     cp ./result/bin/crun "$OUTDIR/crun-$VERSION-linux-${ARCH}-disable-systemd"
     rm -rf result
 done
