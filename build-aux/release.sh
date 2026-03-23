@@ -57,6 +57,10 @@ BUILD_CMD=(
 )
 
 mkdir -p /nix
+if [ ! -d /nix/store ] || ! "${RUNTIME:-podman}" run --init --rm -v /nix:/nix "${NIX_IMAGE}" nix --version >/dev/null 2>&1; then
+    "${RUNTIME:-podman}" run --init --rm -v /nix:/host-nix "${NIX_IMAGE}" \
+        sh -c 'rm -rf /host-nix/*; cp -a /nix/. /host-nix/'
+fi
 
 for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
     "${BUILD_CMD[@]}" ".?submodules=1#crun-static-${ARCH}"
