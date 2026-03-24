@@ -311,6 +311,11 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
   if (rdonly)
     attr.attr_set = MS_RDONLY;
 
+  /* Detached mounts created by open_tree(OPEN_TREE_CLONE) do not inherit
+     the propagation type from the parent mount tree.  Always set MS_PRIVATE
+     to prevent mount events from leaking back to the host namespace.  */
+  attr.propagation = MS_PRIVATE;
+
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC

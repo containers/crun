@@ -952,6 +952,37 @@ def test_annotation_mount_context_type():
 
     return 0
 
+def test_mount_propagation_private():
+    """Verify bind mounts have private propagation and don't leak to the host.
+
+    Regression test for https://github.com/containers/crun/issues/2059.
+    Detached mounts from open_tree(OPEN_TREE_CLONE) do not inherit
+    propagation from the parent mount tree, so they must explicitly
+    set MS_PRIVATE to prevent mount events from leaking back.
+    """
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    conf['linux']['rootfsPropagation'] = 'rprivate'
+    mount_opt = {"destination": "/mnt", "type": "bind", "source": get_tests_root(),
+                 "options": ["bind", "rprivate"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    for line in out.splitlines():
+        if '/mnt' not in line:
+            continue
+        # mountinfo optional fields (between the hyphen separator and the
+        # mount ID fields) contain "shared:N" for shared propagation.
+        # With private propagation there should be no "shared:" tag.
+        if 'shared:' in line:
+            logger.info("bind mount at /mnt has shared propagation, expected private")
+            logger.info("mountinfo line: %s", line)
+            return -1
+        return 0
+    logger.info("/mnt not found in mountinfo")
+    logger.info("mountinfo output: %s", out)
+    return -1
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -989,6 +1020,7 @@ all_tests = {
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
+    "mount-propagation-private": test_mount_propagation_private,
 }
 
 if __name__ == "__main__":
