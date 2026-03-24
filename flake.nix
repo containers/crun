@@ -37,7 +37,27 @@
 
       mkCrunPackage = arch: { system, crossSystem, enableCriu }: enableSystemd:
         let
-          pkgsArgs = { inherit system; }
+          # https://github.com/madler/zlib/issues/1200
+          # Only patch target-platform zlib so native build tools stay cached.
+          zlibOverlay = final: prev: {
+            zlib = if final.stdenv.hostPlatform.isS390x
+              then prev.zlib.overrideAttrs (old: {
+                postPatch = (old.postPatch or "") + ''
+                  substituteInPlace configure --replace-fail \
+                    '/^ZINCOUT *=/s#=.*#=$ZINCOUT#' \
+                    '/^ZINCOUT *=/s#=.*#=$ZINCOUT#
+/^VGFMAFLAG *=/s#=.*#=$VGFMAFLAG#'
+                  substituteInPlace contrib/crc32vx/crc32_vx.c --replace-fail \
+                    'HWCAP_S390_VX' 'HWCAP_S390_VXRS'
+                '';
+              })
+              else prev.zlib;
+          };
+          needsZlibFix = crossSystem != null
+            && crossSystem ? config
+            && builtins.match ".*s390x.*" crossSystem.config != null;
+          overlays = if needsZlibFix then [ zlibOverlay ] else [];
+          pkgsArgs = { inherit system overlays; }
             // (if crossSystem != null then { inherit crossSystem; } else {});
           pkgs = import nixpkgs pkgsArgs;
           static = import ./nix/static.nix;
