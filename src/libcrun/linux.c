@@ -3951,7 +3951,18 @@ libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err)
     {
       ret = unlink ("/dev/console");
       if (UNLIKELY (ret < 0 && errno != ENOENT))
-        return crun_make_error (err, errno, "unlink `/dev/console`");
+        {
+          if (errno == EROFS)
+            {
+              /* If the file system is read-only, fall back to a bind mount.  */
+              ret = do_mount (container, pty, -1, "/dev/console", NULL, MS_BIND, NULL, LABEL_MOUNT, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+
+              return get_and_reset (&fd);
+            }
+          return crun_make_error (err, errno, "unlink `/dev/console`");
+        }
 
       ret = symlink (pty, "/dev/console");
       if (UNLIKELY (ret < 0))
