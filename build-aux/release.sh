@@ -5,7 +5,7 @@ set -xeuo pipefail
 SKIP_GPG=${SKIP_GPG:-}
 SKIP_CHECKS=${SKIP_CHECKS:-}
 
-NIX_IMAGE=${NIX_IMAGE:-nixos/nix:2.24.9}
+NIX_IMAGE=${NIX_IMAGE:-nixos/nix:2.34.2}
 
 test -e Makefile && make distclean
 
@@ -48,7 +48,7 @@ BUILD_CMD=(
 	-w "${PWD}"
 	"${NIX_IMAGE}"
 	nix
-	--extra-experimental-features nix-command
+	--extra-experimental-features "nix-command flakes"
 	--print-build-logs
 	--option cores "$(nproc)"
 	--option max-jobs "$(nproc)"
@@ -57,13 +57,17 @@ BUILD_CMD=(
 )
 
 mkdir -p /nix
+if [ ! -d /nix/store ] || ! "${RUNTIME:-podman}" run --init --rm -v /nix:/nix "${NIX_IMAGE}" nix --version >/dev/null 2>&1; then
+    "${RUNTIME:-podman}" run --init --rm -v /nix:/host-nix "${NIX_IMAGE}" \
+        sh -c 'rm -rf /host-nix/*; cp -a /nix/. /host-nix/'
+fi
 
 for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
-    "${BUILD_CMD[@]}" --file nix/default-${ARCH}.nix
+    "${BUILD_CMD[@]}" "path:.#crun-static-${ARCH}"
     cp ./result/bin/crun "$OUTDIR/crun-$VERSION-linux-${ARCH}"
     rm -rf result
 
-    "${BUILD_CMD[@]}" --file nix/default-${ARCH}.nix --arg enableSystemd false
+    "${BUILD_CMD[@]}" "path:.#crun-static-${ARCH}-disable-systemd"
     cp ./result/bin/crun "$OUTDIR/crun-$VERSION-linux-${ARCH}-disable-systemd"
     rm -rf result
 done
