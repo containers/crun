@@ -1,3 +1,39 @@
+* crun-1.27
+
+- CVE-2026-30892: fix parsing in `crun exec -u` that could lead to the
+  process running with the wrong user.
+- linux: use open_tree+mount_setattr and open_tree+move_mount for
+  device mounts, masked paths, and readonly paths.  This avoids
+  unnecessary syscalls and improves container startup performance.
+- linux: use mount_setattr for readonly remounts in finalize_mounts.
+- linux: skip redundant MS_PRIVATE propagation mounts.
+- linux: validate run.oci.mount_context_type annotation value.
+- container: skip sigaction reset in unblock_signals for the run path.
+- container: delete the container on poststart hooks failures.
+- container: fix createRuntime hooks not receiving bundle path.
+- container: fix exit code return.
+- cgroup: skip enable_controllers when joined via CLONE_INTO_CGROUP.
+- cgroup: pass cgroup2 mount options to the kernel.
+- cgroup: fix read_pids_cgroup skipping child cgroups.
+- hooks: allow ignoring chdir permission errors for container hooks.
+- hooks: exit immediately if poststart hooks fail.
+- krun: parse annotations for krun.cpus, krun.ram_mib, and
+  krun.variant.
+- krun: propagate crun log level to libkrun.
+- krun: rename nitro module to awsnitro.
+- criu: show excerpt from log file on checkpoint/restore error.
+- criu: fix missing umount() in error path.
+- scheduler: add diagnostic messages for SCHED_DEADLINE.
+- utils: fix memory leak and missing cache in
+  libcrun_initialize_apparmor().
+- utils: use parent dir fd for bind on long socket paths.
+- utils: retry fgetpwent_r() on EINTR.
+- python: initialize error variable to NULL in Python bindings.
+- container: fix CPU busy loop when output pipe is blocked.
+- seccomp: fix n_plugins calculation.
+- restore: fix memory leak.
+- numerous fixes for error handling, errno usage, and resource leaks.
+
 * crun-1.26
 
 - criu: enable setting of RPC config file via annotation
