@@ -379,6 +379,32 @@ def test_terminal_zero_size():
         return -1
 
 
+def test_terminal_readonly_rootfs_no_dev_tmpfs():
+    """Test terminal with readonly rootfs and no /dev tmpfs (issue #1745)."""
+    if os.isatty(1) == False:
+        return (77, "requires TTY")
+
+    conf = base_config()
+    add_all_namespaces(conf, userns=True)
+    conf['process']['terminal'] = True
+    conf['process']['args'] = ['/init', 'true']
+    conf['root']['readonly'] = True
+
+    # Remove the /dev tmpfs mount so /dev/console lives on the read-only rootfs.
+    # Keep /dev/pts which is needed for terminal allocation.
+    conf['mounts'] = [m for m in conf['mounts']
+                      if m['destination'] != '/dev'
+                      and m['destination'] != '/dev/shm'
+                      and m['destination'] != '/dev/mqueue']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
 all_tests = {
     "terminal-allocation": test_terminal_allocation,
     "terminal-size": test_terminal_size,
@@ -392,6 +418,7 @@ all_tests = {
     "terminal-exec": test_terminal_exec,
     "terminal-exec-no-tty": test_terminal_exec_no_tty,
     "terminal-env-term": test_terminal_env_term,
+    "terminal-readonly-rootfs-no-dev-tmpfs": test_terminal_readonly_rootfs_no_dev_tmpfs,
 }
 
 if __name__ == "__main__":
