@@ -31,6 +31,8 @@
 #include <sys/vfs.h>
 #include <inttypes.h>
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -38,12 +40,71 @@
 #include <libgen.h>
 
 static char *
+get_current_cpuset_group ()
+{
+  FILE *f = fopen ("/proc/self/cgroup", "r");
+  if (! f)
+    return NULL;
+
+  char *line = NULL;
+  size_t len = 0;
+  char *res = NULL;
+
+  while ((res == NULL) && (getline (&line, &len, f) != -1))
+    {
+      char *sep1 = strchr (line, ':');
+      if (! sep1)
+        continue;
+
+      char *sep2 = strchr (sep1 + 1, ':');
+      if (! sep2)
+        continue;
+
+      int is_v2 = ((*line == '0') && (line + 1 == sep1) && (sep1 + 1 == sep2)); // in v2 check '0::'
+
+      char *controllers = sep1 + 1;
+      *sep2 = '\0';
+      int is_cpuset = (strstr (controllers, "cpuset") != NULL); // search for cpuset (it can be that thereis more that one name)
+      *sep2 = ':';
+
+      if (is_v2 || is_cpuset)
+        {
+          char *path = sep2 + 1;
+          while (*path == '/')
+            path++;
+
+          size_t p_len = strlen (path);
+          if (p_len > 0 && path[p_len - 1] == '\n')
+            {
+              path[p_len - 1] = '\0';
+            }
+
+          if (*path != '\0')
+            res = xstrdup (path);
+        }
+    }
+
+  free (line);
+  fclose (f);
+  return res;
+}
+
+static char *
 make_cgroup_path (const char *path, const char *id)
 {
   char *ret;
 
   if (path == NULL)
-    xasprintf (&ret, "/%s", id);
+    {
+      char * const lpath = get_current_cpuset_group ();
+      if (lpath == NULL)
+        xasprintf (&ret, "/%s", id);
+      else
+      {
+        xasprintf (&ret, "/%s/%s", lpath, id);
+        free (lpath);
+      }
+    }
   else if (path[0] == '/')
     ret = xstrdup (path);
   else
