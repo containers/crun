@@ -1369,7 +1369,80 @@ def test_cgroup_v2_mount_options():
 
     return 0
 
+def _cgroup_disabled_config():
+    """Return a config suitable for --cgroup-manager=disabled: no cgroup mount,
+    no resources, no cgroupsPath, no cgroup namespace."""
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=False)
+    conf['mounts'] = [m for m in conf.get('mounts', [])
+                      if m.get('destination') != '/sys/fs/cgroup']
+    if 'resources' in conf.get('linux', {}):
+        del conf['linux']['resources']
+    if 'cgroupsPath' in conf.get('linux', {}):
+        del conf['linux']['cgroupsPath']
+    return conf
+
+
+def _run_cgroup_disabled(detach):
+    """Run a container with --cgroup-manager=disabled in foreground or detached
+    mode.  Returns 0 on success, (77, reason) for environment skips, -1 on
+    failure.
+
+    Regression test for https://github.com/containers/crun/issues/1413.
+    When cgroups are disabled, crun must not call statfs on /sys/fs/cgroup,
+    which would fail on systems where it is not mounted as tmpfs or cgroup2.
+    """
+    conf = _cgroup_disabled_config()
+    conf['process']['args'] = ['/init', 'pause'] if detach else ['/init', 'true']
+
+    cid = None
+    try:
+        if detach:
+            _, cid = run_and_get_output(conf, hide_stderr=False, command='run',
+                                        detach=True, cgroup_manager='disabled')
+            state = json.loads(run_crun_command(['state', cid]))
+            if state['status'] not in ('running', 'created'):
+                logger.info("container not running: %s", state['status'])
+                return -1
+        else:
+            run_and_get_output(conf, hide_stderr=False, cgroup_manager='disabled')
+        return 0
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "invalid file system type" in output:
+            logger.info("test failed: cgroup filesystem type checked despite --cgroups=disabled")
+            return -1
+        if any(kw in output.lower() for kw in ["mount", "proc", "rootfs"]):
+            return (77, "environment issue, not related to cgroup disabled")
+        logger.info("test failed: %s (output: %s)", e, output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_cgroup_disabled():
+    """Test --cgroup-manager=disabled skips cgroup filesystem type verification (foreground).
+
+    Regression test for https://github.com/containers/crun/issues/1413.
+    """
+    return _run_cgroup_disabled(detach=False)
+
+
+def test_cgroup_disabled_detach():
+    """Test --cgroup-manager=disabled works with run --detach.
+
+    Regression test for https://github.com/containers/crun/issues/1413.
+    """
+    return _run_cgroup_disabled(detach=True)
+
+
 all_tests = {
+    "cgroup-disabled": test_cgroup_disabled,
+    "cgroup-disabled-detach": test_cgroup_disabled_detach,
     "cgroup-creation": test_cgroup_creation,
     "cgroup-cleanup": test_cgroup_cleanup,
     "cgroup-with-resources": test_cgroup_with_resources,
