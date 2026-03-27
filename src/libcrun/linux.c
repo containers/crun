@@ -2848,20 +2848,23 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       get_private_data (container)->remounts = r;
     }
 
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
-
-  if (cgroup_mode == CGROUP_MODE_UNIFIED)
+  if (! container->context->force_no_cgroup)
     {
-      char *unified_cgroup_path = NULL;
+      cgroup_mode = libcrun_get_cgroup_mode (err);
+      if (UNLIKELY (cgroup_mode < 0))
+        return cgroup_mode;
 
-      /* Read the cgroup path before we enter the cgroupns.  */
-      ret = libcrun_get_cgroup_process (0, &unified_cgroup_path, true, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (cgroup_mode == CGROUP_MODE_UNIFIED)
+        {
+          char *unified_cgroup_path = NULL;
 
-      get_private_data (container)->unified_cgroup_path = unified_cgroup_path;
+          /* Read the cgroup path before we enter the cgroupns.  */
+          ret = libcrun_get_cgroup_process (0, &unified_cgroup_path, true, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          get_private_data (container)->unified_cgroup_path = unified_cgroup_path;
+        }
     }
 
   ret = libcrun_container_enter_cgroup_ns (container, err);
