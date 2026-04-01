@@ -524,8 +524,10 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
   struct krun_config *kconf = (struct krun_config *) cookie;
   const char *path_use_passt[] = { "use_passt", (const char *) 0 };
   pid_t pid;
+  char *passt_argv[9];
   char fd_as_str[16];
   int use_passt;
+  int argv_idx;
   int status;
   int null;
   int ret;
@@ -541,17 +543,21 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
     return ret;
   snprintf (fd_as_str, sizeof (fd_as_str), "%d", kconf->passt_fds[PASST_FD_CHILD]);
 
-  char *const argv[] = {
-    (char *) "passt",
-    (char *) "--no-dhcp-dns",
-    (char *) "-t",
-    (char *) "all",
-    (char *) "-u",
-    (char *) "all",
-    (char *) "--fd",
-    fd_as_str,
-    NULL
-  };
+  argv_idx = 0;
+  passt_argv[argv_idx++] = (char *) "passt";
+  passt_argv[argv_idx++] = (char *) "-t";
+  passt_argv[argv_idx++] = (char *) "all";
+
+  if (! kconf->has_awsnitro)
+    {
+      passt_argv[argv_idx++] = (char *) "-u";
+      passt_argv[argv_idx++] = (char *) "all";
+      passt_argv[argv_idx++] = (char *) "--no-dhcp-dns";
+    }
+
+  passt_argv[argv_idx++] = (char *) "--fd";
+  passt_argv[argv_idx++] = fd_as_str;
+  passt_argv[argv_idx] = NULL;
 
   pid = fork ();
   if (pid < 0)
@@ -570,7 +576,7 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
       dup2 (null, STDERR_FILENO);
       close (null);
 
-      execvp ("passt", argv);
+      execvp ("passt", passt_argv);
       // Only reachable on error.
       _exit (EXIT_FAILURE);
     }
