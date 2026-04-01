@@ -2789,12 +2789,15 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   const char *seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
   int cgroup_mode;
 
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
+  if (! context->force_no_cgroup)
+    {
+      cgroup_mode = libcrun_get_cgroup_mode (err);
+      if (UNLIKELY (cgroup_mode < 0))
+        return cgroup_mode;
 
-  if (cgroup_mode != CGROUP_MODE_UNIFIED)
-    libcrun_warning ("cgroup v1 is deprecated and will be removed in a future release.  Use cgroup v2");
+      if (cgroup_mode != CGROUP_MODE_UNIFIED)
+        libcrun_warning ("cgroup v1 is deprecated and will be removed in a future release.  Use cgroup v2");
+    }
 
   ret = setup_container_hooks_output (container, def, &container_args, &hooks_out_fd, &hooks_err_fd, err);
   if (UNLIKELY (ret < 0))
