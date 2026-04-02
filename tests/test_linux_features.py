@@ -233,6 +233,84 @@ def test_process_apparmor_profile():
         return -1
 
 
+def test_process_apparmor_profile_userns():
+    """Test AppArmor profile is applied inside a user namespace.
+
+    Regression test: when a user namespace with UID/GID mappings is used,
+    the AppArmor profile must still be applied.  A refactoring of
+    libcrun_initialize_apparmor() caused it to treat a failed stat on
+    /sys/kernel/security/apparmor (which is expected inside a user
+    namespace where securityfs is not accessible) as "AppArmor disabled",
+    silently skipping the profile setup.
+    """
+
+    if not os.path.exists('/sys/kernel/security/apparmor'):
+        return (77, "AppArmor not available")
+
+    if is_rootless():
+        return (77, "requires root for user namespace with id mappings")
+
+    # Load a test AppArmor profile so we can distinguish "profile applied"
+    # from "no profile" (both would show 'unconfined' otherwise).
+    profile_name = "crun-test-userns"
+    profile_text = """
+profile %s flags=(attach_disconnected) {
+  /** rwlk,
+  /** ix,
+  capability,
+  network,
+  mount,
+  umount,
+  pivot_root,
+  signal,
+  ptrace,
+  unix,
+}
+""" % profile_name
+
+    try:
+        p = subprocess.run(["apparmor_parser", "--replace"],
+                           input=profile_text.encode(), capture_output=True)
+        if p.returncode != 0:
+            return (77, "cannot load test AppArmor profile")
+    except FileNotFoundError:
+        return (77, "apparmor_parser not found")
+
+    try:
+        conf = base_config()
+        add_all_namespaces(conf, userns=True)
+        conf['process']['args'] = ['/init', 'cat', '/proc/1/attr/current']
+
+        conf['process']['apparmorProfile'] = profile_name
+
+        conf['linux']['uidMappings'] = [
+            {'containerID': 0, 'hostID': os.getuid(), 'size': 65536}
+        ]
+        conf['linux']['gidMappings'] = [
+            {'containerID': 0, 'hostID': os.getgid(), 'size': 65536}
+        ]
+
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        if profile_name not in out:
+            logger.info("test failed: expected '%s' in output, got: %s",
+                        profile_name, out.strip())
+            return -1
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if any(x in output.lower() for x in ["apparmor", "mount", "proc", "user", "mapping"]):
+            return (77, "AppArmor with user namespace not available")
+        logger.info("test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        subprocess.run(["apparmor_parser", "--remove"],
+                       input=profile_text.encode(), capture_output=True)
+
+
 def test_process_selinux_label():
     """Test SELinux label."""
 
@@ -1753,6 +1831,7 @@ all_tests = {
     "process-no-new-privileges": test_process_no_new_privileges,
     "process-oom-score-adj": test_process_oom_score_adj,
     "process-apparmor-profile": test_process_apparmor_profile,
+    "process-apparmor-profile-userns": test_process_apparmor_profile_userns,
     "process-selinux-label": test_process_selinux_label,
     "process-umask": test_process_umask,
     "mount-label": test_mount_label,
