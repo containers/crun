@@ -983,6 +983,37 @@ def test_mount_propagation_private():
     logger.info("mountinfo output: %s", out)
     return -1
 
+def test_mount_propagation_slave():
+    """Verify bind mounts with rslave propagation have master peer group.
+
+    The mount must preserve its propagation peer group so that rslave propagation
+    can be applied later.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    conf['linux']['rootfsPropagation'] = 'rslave'
+    mount_opt = {"destination": "/mnt", "type": "bind", "source": get_tests_root(),
+                 "options": ["bind", "rslave"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    for line in out.splitlines():
+        fields = line.split()
+        if len(fields) < 5 or fields[4] != '/mnt':
+            continue
+        # With rslave propagation, the mount should have a master peer group
+        # indicated by "master:N" in the optional fields.
+        if 'master:' in line:
+            return 0
+        logger.info("bind mount at /mnt has no master peer group, expected rslave propagation")
+        logger.info("mountinfo line: %s", line)
+        return -1
+    logger.info("/mnt not found in mountinfo")
+    logger.info("mountinfo output: %s", out)
+    return -1
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1021,6 +1052,7 @@ all_tests = {
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
     "mount-propagation-private": test_mount_propagation_private,
+    "mount-propagation-slave": test_mount_propagation_slave,
 }
 
 if __name__ == "__main__":
