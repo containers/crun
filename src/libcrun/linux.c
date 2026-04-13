@@ -137,6 +137,7 @@ struct private_data_s
 
   bool mount_dev_from_host;
   unsigned long rootfs_propagation;
+  bool root_propagation_private;
   bool deny_setgroups;
 
   const char *rootfs;
@@ -309,11 +310,6 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
 
   if (rdonly)
     attr.attr_set = MS_RDONLY;
-
-  /* Detached mounts created by open_tree(OPEN_TREE_CLONE) do not inherit
-     the propagation type from the parent mount tree.  Always set MS_PRIVATE
-     to prevent mount events from leaking back to the host namespace.  */
-  attr.propagation = MS_PRIVATE;
 
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
@@ -1319,9 +1315,15 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (mountflags & ALL_PROPAGATIONS_NO_REC)
     {
-      ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "set propagation for `%s`", target);
+      unsigned long prop_only = mountflags & ALL_PROPAGATIONS_NO_REC;
+
+      /* Skip redundant MS_PRIVATE when root is already recursively private.  */
+      if (prop_only != MS_PRIVATE || ! get_private_data (container)->root_propagation_private)
+        {
+          ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "set propagation for `%s`", target);
+        }
     }
 
   if (mountflags & (MS_BIND | MS_RDONLY))
@@ -2801,7 +2803,9 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if ((rootfs_propagation & (MS_REC | MS_PRIVATE)) != (MS_REC | MS_PRIVATE))
+      if ((rootfs_propagation & (MS_REC | MS_PRIVATE)) == (MS_REC | MS_PRIVATE))
+        get_private_data (container)->root_propagation_private = true;
+      else
         {
           ret = make_parent_mount_private (rootfs, err);
           if (UNLIKELY (ret < 0))
