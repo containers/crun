@@ -24,8 +24,7 @@ dependencies = {"lua >= 5.4"}
 build = {
     type = "command",
     build_command = [[
-        rm -rf libocispec/yajl/src/api && ln -s ./headers/yajl libocispec/yajl/src/api &&
-        ./configure --prefix=$(PREFIX) --libdir=$(LIBDIR) --disable-lua-path-guessing --disable-crun --disable-libcrun --enable-shared --with-lua-bindings --enable-embedded-yajl LUA=$(LUA) LUA_INCLUDE=-I$(LUA_INCDIR) &&
+        ./configure --prefix=$(PREFIX) --libdir=$(LIBDIR) --disable-lua-path-guessing --disable-crun --disable-libcrun --enable-shared --with-lua-bindings --enable-embedded-yyjson LUA=$(LUA) LUA_INCLUDE=-I$(LUA_INCDIR) &&
         make -j]],
     install_command = "make install",
 }

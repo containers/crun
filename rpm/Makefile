@@ -9,8 +9,7 @@ endif
 # rpm build deps
 srpm-dep:
 	$(SUDO_CMD) dnf -y install autoconf automake git git-archive-all \
-		libcap-devel libseccomp-devel libtool m4 rpm-build systemd-devel \
-		yajl-devel
+		libcap-devel libseccomp-devel libtool m4 rpm-build systemd-devel
 
 .ONESHELL:
 tarball-prep: srpm-dep
@@ -19,11 +18,11 @@ tarball-prep: srpm-dep
 	git config --global --add safe.directory /crun/libocispec
 	git config --global --add safe.directory /crun/libocispec/image-spec
 	git config --global --add safe.directory /crun/libocispec/runtime-spec
-	git config --global --add safe.directory /crun/libocispec/yajl
+	git config --global --add safe.directory /crun/libocispec/yyjson
 	git config --global --add safe.directory $(shell pwd)/libocispec
 	git config --global --add safe.directory $(shell pwd)/libocispec/image-spec
 	git config --global --add safe.directory $(shell pwd)/libocispec/runtime-spec
-	git config --global --add safe.directory $(shell pwd)/libocispec/yajl
+	git config --global --add safe.directory $(shell pwd)/libocispec/yyjson
 	git-archive-all --prefix=crun-HEAD/ --force-submodules crun-HEAD.tar.gz
 
 # Configure options intentionally don't match the ones used in crun.spec.in to

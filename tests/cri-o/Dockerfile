@@ -4,7 +4,7 @@ ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 
 RUN dnf install -y awk python git gcc automake autoconf libcap-devel \
-    systemd-devel yajl-devel libseccomp-devel go-md2man conntrack-tools which \
+    systemd-devel yyjson-devel libseccomp-devel go-md2man conntrack-tools which \
     glibc-static python3-libmount libtool make podman xz nmap-ncat jq bats \
     iproute openssl iputils socat criu-libs irqbalance && \
     dnf install -y awk 'dnf-command(builddep)' && dnf builddep -y podman && \

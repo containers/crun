@@ -652,20 +652,23 @@ luacrun_ctx_update_container (lua_State *S)
   const char *content = luaL_checkstring (S, 3);
   luaL_checkstack (S, 2, NULL);
 
-  char errbuf[1024] = {};
-  yajl_val parsed_json = yajl_tree_parse (content, errbuf, sizeof (errbuf));
-  if (parsed_json == NULL)
+  struct parser_context parser_ctx = { .options = 0, .errfile = stderr };
+  libcrun_error_t crun_parse_err = NULL;
+  yyjson_doc *doc = NULL;
+  int parse_ret = parse_json_file (&doc, content, &parser_ctx, &crun_parse_err);
+  if (parse_ret < 0)
     {
       lua_pushboolean (S, false);
-      lua_pushfstring (S, "cannot parse the data: \"%s\"", errbuf);
+      lua_pushfstring (S, "cannot parse the data: \"%s\"", crun_parse_err ? crun_parse_err->msg : "unknown error");
+      if (crun_parse_err)
+        libcrun_error_release (&crun_parse_err);
       return 2;
     }
 
-  struct parser_context parser_ctx = { .options = 0, .errfile = stderr };
   runtime_spec_schema_config_schema_process *rt_spec_process;
   parser_error p_err = NULL;
-  rt_spec_process = make_runtime_spec_schema_config_schema_process (parsed_json, &parser_ctx, &p_err);
-  yajl_tree_free (parsed_json);
+  rt_spec_process = make_runtime_spec_schema_config_schema_process (yyjson_doc_get_root (doc), &parser_ctx, &p_err);
+  yyjson_doc_free (doc);
   if (rt_spec_process == NULL)
     {
       lua_pushboolean (S, false);

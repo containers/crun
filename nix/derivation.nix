@@ -5,7 +5,7 @@
 , libcap
 , libseccomp
 , libsystemd
-, yajl
+, yyjson
 , criu
 }:
 with pkgs; stdenv.mkDerivation {
@@ -34,7 +34,7 @@ with pkgs; stdenv.mkDerivation {
       libcap
       libseccomp
       libsystemd
-      yajl
+      yyjson
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
   prePatch = let
@@ -48,7 +48,7 @@ with pkgs; stdenv.mkDerivation {
         "${lib.getLib libseccomp}/lib/libseccomp.a"
       ]
       ++ lib.optional enableSystemd "${lib.getLib libsystemd}/lib/libsystemd.a"
-      ++ [ "${yajl}/lib/libyajl.a" ];
+      ++ [ "${yyjson}/lib/libyyjson.a" ];
   in ''
     export CFLAGS='-static -pthread -DSTATIC'
     export LDFLAGS='-s -w -static-libgcc -static'

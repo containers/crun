@@ -4,7 +4,7 @@
 
 test -e rootfs || mkdir rootfs
 
-./configure --enable-embedded-yajl CC=hfuzz-clang  CPPFLAGS='-D FUZZER' CFLAGS="-ggdb3"
+./configure --enable-embedded-yyjson CC=hfuzz-clang  CPPFLAGS='-D FUZZER' CFLAGS="-ggdb3"
 
 make
 
