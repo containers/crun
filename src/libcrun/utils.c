@@ -454,7 +454,7 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
   cleanup_free char *npath = NULL;
   bool last_component = false;
   size_t depth = 0;
-  const char *cur;
+  char *cur;
   char *it;
   int cwd;
   int ret;
