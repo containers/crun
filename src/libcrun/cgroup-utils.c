@@ -308,14 +308,18 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
 
   if (recurse)
     {
+      cleanup_close int dfd_clone = openat (dfd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
       cleanup_dir DIR *dir = NULL;
       struct dirent *de;
 
-      dir = fdopendir (dfd);
+      if (UNLIKELY (dfd_clone < 0))
+        return crun_make_error (err, errno, "open cgroup sub-directory");
+
+      dir = fdopendir (dfd_clone);
       if (UNLIKELY (dir == NULL))
         return crun_make_error (err, errno, "open cgroup sub-directory");
-      /* Now dir owns the dfd descriptor.  */
-      dfd = -1;
+      /* fdopendir takes ownership of dfd_clone.  */
+      dfd_clone = -1;
 
       for (de = readdir (dir); de; de = readdir (dir))
         {
@@ -330,6 +334,7 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
           nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY | O_CLOEXEC);
           if (UNLIKELY (nfd < 0))
             return crun_make_error (err, errno, "open cgroup directory `%s`", de->d_name);
+
           ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -375,7 +380,6 @@ rmdir_all_fd (int dfd)
           libcrun_error_t tmp_err = NULL;
           size_t i, n_pids = 0, allocated = 0;
           cleanup_close int child_dfd = -1;
-          int tmp;
 
           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
           if (child_dfd < 0)
@@ -397,9 +401,13 @@ rmdir_all_fd (int dfd)
           for (i = 0; i < n_pids; i++)
             kill (pids[i], SIGKILL);
 
-          tmp = child_dfd;
+          ret = rmdir_all_fd (child_dfd);
           child_dfd = -1;
-          return rmdir_all_fd (tmp);
+          if (ret < 0)
+            return ret;
+
+          /* Retry removing the directory now that its children are gone.  */
+          unlinkat (dfd, name, AT_REMOVEDIR);
         }
     }
   return 0;
