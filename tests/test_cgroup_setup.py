@@ -1440,6 +1440,70 @@ def test_cgroup_disabled_detach():
     return _run_cgroup_disabled(detach=True)
 
 
+def test_cgroup_subcgroup_cleanup():
+    """Test that subcgroups are cleaned up on container delete.
+
+    Regression test for a bug where read_pids_cgroup() consumed the
+    caller's fd via fdopendir(), causing rmdir_all_fd() to fail with
+    EBADF when cleaning up nested cgroup directories.
+    """
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if is_rootless():
+        return (77, "requires root for cgroup manipulation")
+    if get_cgroup_manager() == 'systemd':
+        return (77, "test uses cgroupfs-style paths")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait',
+                               'sub1', 'sub1/nested', 'sub2']
+
+    cgroup_path = f'/test-subcgroup-cleanup-{os.getpid()}'
+    conf['linux']['cgroupsPath'] = cgroup_path
+
+    host_cgroup_dir = f'/sys/fs/cgroup{cgroup_path}'
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=False, command='run', detach=True)
+
+        # Verify the cgroup directory exists
+        if not os.path.isdir(host_cgroup_dir):
+            logger.info("cgroup directory %s does not exist", host_cgroup_dir)
+            return -1
+
+        # Delete the container -- crun must clean up all subcgroups
+        run_crun_command(['delete', '-f', cid])
+        cid = None
+
+        # Give a moment for cleanup
+        time.sleep(0.5)
+
+        # Verify cgroup directory is fully removed
+        if os.path.exists(host_cgroup_dir):
+            logger.info("cgroup directory %s still exists after delete", host_cgroup_dir)
+            return -1
+
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "Bad file descriptor" in output:
+            logger.info("EBADF during cgroup cleanup (known regression): %s", output)
+            return -1
+        if any(kw in output.lower() for kw in ["mount", "proc", "rootfs"]):
+            return (77, "environment issue")
+        logger.info("test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 all_tests = {
     "cgroup-disabled": test_cgroup_disabled,
     "cgroup-disabled-detach": test_cgroup_disabled_detach,
@@ -1482,6 +1546,7 @@ all_tests = {
     "annotation-delegate-cgroup": test_annotation_delegate_cgroup,
     "annotation-systemd-force-cgroup-v1": test_annotation_systemd_force_cgroup_v1,
     "cgroup-v2-mount-options": test_cgroup_v2_mount_options,
+    "cgroup-subcgroup-cleanup": test_cgroup_subcgroup_cleanup,
 }
 
 if __name__ == "__main__":

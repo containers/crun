@@ -770,15 +770,21 @@ main (int argc, char **argv)
       char path[PATH_MAX];
       int ret;
       int fd;
+      int i;
 
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'create-sub-cgroup-and-wait' requires an argument");
 
-      snprintf (path, sizeof (path), "/sys/fs/cgroup/%s", argv[2]);
-      ret = mkdir (path, 0700);
-      if (ret < 0)
-        error (EXIT_FAILURE, errno, "mkdir");
+      /* Create all requested subcgroups.  */
+      for (i = 2; i < argc; i++)
+        {
+          snprintf (path, sizeof (path), "/sys/fs/cgroup/%s", argv[i]);
+          ret = mkdir (path, 0700);
+          if (ret < 0)
+            error (EXIT_FAILURE, errno, "mkdir `%s`", path);
+        }
 
+      /* Move into the first subcgroup.  */
       snprintf (path, sizeof (path), "/sys/fs/cgroup/%s/cgroup.procs", argv[2]);
 
       fd = open (path, O_WRONLY);
@@ -786,7 +792,7 @@ main (int argc, char **argv)
         error (EXIT_FAILURE, errno, "open `%s`", path);
       ret = write (fd, "1", 1);
       if (ret < 0)
-        error (EXIT_FAILURE, errno, "open `%s`", path);
+        error (EXIT_FAILURE, errno, "write `%s`", path);
       close (fd);
 
       do_pause ();
