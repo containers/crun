@@ -983,6 +983,89 @@ def test_mount_propagation_private():
     logger.info("mountinfo output: %s", out)
     return -1
 
+def test_mount_no_leak_to_host():
+    """Verify idmapped mounts get private propagation, not shared.
+
+    When maybe_get_idmapped_mount() creates a detached mount via
+    open_tree(OPEN_TREE_CLONE|AT_RECURSIVE), the clone inherits shared
+    propagation from the source.  The per-mount MS_PRIVATE in do_mount()
+    must convert it to private; without it the mount stays shared inside
+    the container, allowing mount events to leak back to the host.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    source_dir = os.path.join(get_tests_root(), "test-mount-leak")
+    try:
+        os.makedirs(source_dir, exist_ok=True)
+
+        idmapped_mounts_status = subprocess.call(
+            [get_init_path(), "check-feature", "idmapped-mounts", source_dir])
+        if idmapped_mounts_status != 0:
+            return (77, "idmapped mounts not supported")
+
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+        add_all_namespaces(conf, userns=True)
+        mount_opt = {
+            "destination": "/mnt",
+            "type": "bind",
+            "source": source_dir,
+            "options": ["rbind", "rprivate"],
+            "uidMappings": [{"containerID": 0, "hostID": 0, "size": 1}],
+            "gidMappings": [{"containerID": 0, "hostID": 0, "size": 1}],
+        }
+        conf['mounts'].append(mount_opt)
+
+        out, _ = run_and_get_output(conf)
+        for line in out.splitlines():
+            fields = line.split()
+            if len(fields) >= 5 and fields[4] == '/mnt':
+                # Shared mounts have 'shared:N' in the optional fields.
+                sep_idx = fields.index('-') if '-' in fields else len(fields)
+                optional = ' '.join(fields[5:sep_idx])
+                if 'shared:' in optional:
+                    sys.stderr.write("# idmapped mount at /mnt has shared propagation, expected private\n")
+                    sys.stderr.write("# mountinfo line: %s\n" % line)
+                    return -1
+                return 0
+
+        sys.stderr.write("# /mnt mount not found in mountinfo\n")
+        return -1
+    finally:
+        shutil.rmtree(source_dir, ignore_errors=True)
+
+def test_mount_propagation_slave():
+    """Verify bind mounts with rslave propagation have master peer group.
+
+    The mount must preserve its propagation peer group so that rslave propagation
+    can be applied later.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf, userns=True)
+    conf['linux']['rootfsPropagation'] = 'rslave'
+    mount_opt = {"destination": "/mnt", "type": "bind", "source": "/usr",
+                 "options": ["bind", "rslave"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    for line in out.splitlines():
+        fields = line.split()
+        if len(fields) < 5 or fields[4] != '/mnt':
+            continue
+        # With rslave propagation, the mount should have a master peer group
+        # indicated by "master:N" in the optional fields.
+        if 'master:' in line:
+            return 0
+        logger.info("bind mount at /mnt has no master peer group, expected rslave propagation")
+        logger.info("mountinfo line: %s", line)
+        return -1
+    logger.info("/mnt not found in mountinfo")
+    logger.info("mountinfo output: %s", out)
+    return -1
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1021,6 +1104,8 @@ all_tests = {
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
     "mount-propagation-private": test_mount_propagation_private,
+    "mount-no-leak-to-host": test_mount_no_leak_to_host,
+    "mount-propagation-slave": test_mount_propagation_slave,
 }
 
 if __name__ == "__main__":

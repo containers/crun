@@ -137,7 +137,6 @@ struct private_data_s
 
   bool mount_dev_from_host;
   unsigned long rootfs_propagation;
-  bool root_propagation_private;
   bool deny_setgroups;
 
   const char *rootfs;
@@ -299,7 +298,7 @@ do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t cle
 }
 
 int
-get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool nofollow, libcrun_error_t *err)
+get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool nofollow, unsigned long propagation, libcrun_error_t *err)
 {
   cleanup_close int open_tree_fd = -1;
   struct mount_attr_s attr = {
@@ -311,10 +310,7 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
   if (rdonly)
     attr.attr_set = MS_RDONLY;
 
-  /* Detached mounts created by open_tree(OPEN_TREE_CLONE) do not inherit
-     the propagation type from the parent mount tree.  Always set MS_PRIVATE
-     to prevent mount events from leaking back to the host namespace.  */
-  attr.propagation = MS_PRIVATE;
+  attr.propagation = propagation;
 
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
@@ -1015,7 +1011,7 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
   {
     cleanup_close int mountfd = -1;
 
-    mountfd = get_bind_mount (-1, proc_fd_path, false, true, false, &tmp_err);
+    mountfd = get_bind_mount (-1, proc_fd_path, false, true, false, MS_PRIVATE, &tmp_err);
     if (mountfd >= 0)
       {
         ret = fs_move_mount_to (mountfd, pathfd, NULL);
@@ -1078,7 +1074,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
          to inherit parent mount flags.  */
       if (! keep_flags)
         {
-          mountfd = get_bind_mount (-1, source_buffer, true, true, false, err);
+          mountfd = get_bind_mount (-1, source_buffer, true, true, false, MS_PRIVATE, err);
           if (mountfd >= 0)
             ret = fs_move_mount_to (mountfd, pathfd, NULL);
           else
@@ -1122,7 +1118,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
         {
           cleanup_close int mountfd = -1;
 
-          mountfd = get_bind_mount (-1, "/dev/null", false, true, false, err);
+          mountfd = get_bind_mount (-1, "/dev/null", false, true, false, MS_PRIVATE, err);
           if (mountfd >= 0)
             ret = fs_move_mount_to (mountfd, pathfd, NULL);
 
@@ -1265,7 +1261,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                       return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, false, err);
                     }
 
-                  mountfd = get_bind_mount (-1, "/sys", true, true, false, err);
+                  mountfd = get_bind_mount (-1, "/sys", true, true, false, MS_PRIVATE, err);
                   if (UNLIKELY (mountfd < 0))
                     return mountfd;
 
@@ -1320,15 +1316,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (mountflags & ALL_PROPAGATIONS_NO_REC)
     {
-      unsigned long prop_only = mountflags & ALL_PROPAGATIONS_NO_REC;
-
-      /* Skip redundant MS_PRIVATE when root is already recursively private.  */
-      if (prop_only != MS_PRIVATE || ! get_private_data (container)->root_propagation_private)
-        {
-          ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for `%s`", target);
-        }
+      ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set propagation for `%s`", target);
     }
 
   if (mountflags & (MS_BIND | MS_RDONLY))
@@ -1712,7 +1702,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
         cleanup_close int mountfd = -1;
 
         /* Try open_tree+mount_setattr to apply flags atomically.  */
-        mountfd = get_bind_mount (-1, fullname, false, false, false, err);
+        mountfd = get_bind_mount (-1, fullname, false, false, false, MS_PRIVATE, err);
         if (mountfd >= 0)
           {
             ret = do_mount_setattr (false, normalized_path, mountfd, 0, MS_NOSUID | MS_NOEXEC, err);
@@ -2328,7 +2318,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
       if (S_ISLNK (src_mode) && (extra_flags & OPTION_DEST_NOFOLLOW) && source_mountfd < 0)
         {
-          ret = get_bind_mount (AT_FDCWD, mount->source, true, true, extra_flags & OPTION_SRC_NOFOLLOW, err);
+          ret = get_bind_mount (AT_FDCWD, mount->source, true, true, extra_flags & OPTION_SRC_NOFOLLOW, MS_PRIVATE, err);
           if (UNLIKELY (ret < 0))
             return ret;
 
@@ -2808,14 +2798,9 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       if (UNLIKELY (ret < 0))
         return ret;
 
-      if ((rootfs_propagation & (MS_REC | MS_PRIVATE)) == (MS_REC | MS_PRIVATE))
-        get_private_data (container)->root_propagation_private = true;
-      else
-        {
-          ret = make_parent_mount_private (rootfs, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = make_parent_mount_private (rootfs, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       ret = do_mount (container, rootfs, -1, rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
@@ -4553,7 +4538,7 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chown `%s`", device->path);
 
-  return get_bind_mount (devs_dirfd, name, false, false, false, err);
+  return get_bind_mount (devs_dirfd, name, false, false, false, MS_PRIVATE, err);
 }
 
 static int
@@ -4618,8 +4603,15 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       /* If the mount has no mappings and there is not a different user namespace, create the mount later as part of the container setup.  */
       if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow))
         {
+          unsigned long propagation = 0;
+
+          if (def->linux && def->linux->rootfs_propagation)
+            propagation = get_mount_flags (def->linux->rootfs_propagation, 0, NULL, NULL, NULL, NULL) & ALL_PROPAGATIONS_NO_REC;
+          if (propagation == 0)
+            propagation = MS_PRIVATE;
+
           /* If the bind mount failed, do not fail here, but attempt to create it from within the container.  */
-          mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, nofollow, err);
+          mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, nofollow, propagation, err);
           if (UNLIKELY (mount_fd < 0))
             crun_error_release (err);
         }
@@ -6438,6 +6430,16 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
       if (UNLIKELY (ret < 0))
         return ret;
 
+      if (mounts[i]->options == NULL)
+        flags = get_default_flags (container, mounts[i]->destination, &data);
+      else
+        {
+          size_t j;
+
+          for (j = 0; j < mounts[i]->options_len; j++)
+            flags |= get_mount_flags_or_option (mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+        }
+
       if (fds->fds[i] < 0)
         {
           bool recursive = false;
@@ -6445,7 +6447,11 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
 
           if (is_bind_mount (mounts[i], &recursive, &nofollow))
             {
-              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, nofollow, err);
+              unsigned long propagation = flags & ALL_PROPAGATIONS_NO_REC;
+              if (propagation == 0)
+                propagation = MS_PRIVATE;
+
+              fds->fds[i] = get_bind_mount (-1, mounts[i]->source, recursive, false, nofollow, propagation, err);
               if (UNLIKELY (fds->fds[i] < 0))
                 return fds->fds[i];
             }
@@ -6455,16 +6461,6 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
               if (UNLIKELY (ret < 0))
                 return ret;
             }
-        }
-
-      if (mounts[i]->options == NULL)
-        flags = get_default_flags (container, mounts[i]->destination, &data);
-      else
-        {
-          size_t j;
-
-          for (j = 0; j < mounts[i]->options_len; j++)
-            flags |= get_mount_flags_or_option (mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
         }
 
       ret = do_mount_setattr (false, mounts[i]->destination, fds->fds[i], 0, flags, err);
