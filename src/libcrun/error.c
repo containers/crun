@@ -191,7 +191,7 @@ enum
 static int
 get_log_type (const char *log, const char **data)
 {
-  char *sep = strchr (log, ':');
+  const char *sep = strchr (log, ':');
   if (sep == NULL)
     {
       *data = log;

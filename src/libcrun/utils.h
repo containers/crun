@@ -233,13 +233,13 @@ xstrdup (const char *str)
 
 void consume_trailing_slashes (char *path);
 
-static inline const char *
-consume_slashes (const char *t)
-{
-  while (*t == '/')
-    t++;
-  return t;
-}
+#define consume_slashes(t) \
+  ({                       \
+    typeof (t) _s = (t);   \
+    while (*_s == '/')     \
+      _s++;                \
+    _s;                    \
+  })
 
 static inline bool
 path_is_slash_dev (const char *path)

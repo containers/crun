@@ -114,7 +114,8 @@ static void
 get_systemd_scope_and_slice (const char *id, bool user_slice, const char *cgroup_path,
                              char **scope, char **slice)
 {
-  char *n;
+  const char *n;
+  char *p;
 
   if (cgroup_path == NULL || cgroup_path[0] == '\0')
     {
@@ -128,16 +129,16 @@ get_systemd_scope_and_slice (const char *id, bool user_slice, const char *cgroup
   else
     {
       xasprintf (scope, "%s.scope", n + 1);
-      n = strchr (*scope, ':');
-      if (n)
-        *n = '-';
+      p = strchr (*scope, ':');
+      if (p)
+        *p = '-';
     }
   if (slice)
     {
       *slice = xstrdup (cgroup_path);
-      n = strchr (*slice, ':');
-      if (n)
-        *n = '\0';
+      p = strchr (*slice, ':');
+      if (p)
+        *p = '\0';
 
       /* Ref: https://github.com/opencontainers/runc/blob/main/docs/systemd.md#systemd-unit-name-and-placement */
       if (is_empty_string (*slice))
@@ -638,7 +639,7 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
 
       it = v_start = xstrdup (value);
 
-      end = strchr (it + 1, '\'');
+      end = strchr (v_start + 1, '\'');
       if (end == NULL)
         return crun_make_error (err, 0, "invalid variant `%s`", value);
       *end = '\0';
