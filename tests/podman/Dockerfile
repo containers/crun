@@ -9,7 +9,7 @@ RUN dnf install -y awk golang python git gcc automake autoconf libcap-devel \
     device-mapper-devel containernetworking-plugins 'dnf-command(builddep)' && \
     dnf builddep -y podman && \
     chmod 755 /root && \
-    git clone --depth=1 https://github.com/containers/podman /root/go/src/github.com/containers/podman && \
+    git clone --depth=1 https://github.com/containers/podman -b v5.8 /root/go/src/github.com/containers/podman && \
     cd /root/go/src/github.com/containers/podman && \
     make .install.ginkgo && cp ./bin/ginkgo /usr/local/bin && \
     make

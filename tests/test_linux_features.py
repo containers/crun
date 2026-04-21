@@ -513,9 +513,9 @@ def test_process_rlimits_multiple():
             'hard': 4096
         },
         {
-            'type': 'RLIMIT_NPROC',
-            'soft': 1024,
-            'hard': 2048
+            'type': 'RLIMIT_CORE',
+            'soft': 0,
+            'hard': 0
         },
         {
             'type': 'RLIMIT_STACK',

@@ -1,3 +1,22 @@
+* crun-1.27.1
+
+- linux: fix bind mount propagation regression.  Mounts hot-plugged
+  after container start (e.g. USB drives) were invisible or owned by
+  nobody inside the container because propagation peer groups were
+  destroyed.
+- utils: fix AppArmor profile inside a user namespace.
+- cgroup: fix recursive cgroup cleanup failure that could cause EBADF
+  errors when deleting containers with sub-cgroups.
+- libcrun: do not check the cgroup file system type when cgroups are
+  disabled with --cgroup-manager=disabled, fixing startup failures on
+  systems where /sys/fs/cgroup is not a standard mount (e.g. Android
+  with Linux Deploy).
+- libcrun: fix "unlink /dev/console: Read-only file system" error when
+  running containers with --read-only.
+- krun: add support for passt-based networking in microVMs via the
+  krun.use_passt annotation.
+- krun: ignore RAM configurations below 128MB.
+
 * crun-1.27
 
 - CVE-2026-30892: fix parsing in `crun exec -u` that could lead to the
