@@ -179,7 +179,7 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
   cleanup_close int fd = -1;
   struct parser_context ctx = { 0, stderr };
 
-  fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_PATH | O_NOFOLLOW, 0, err);
+  fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW, 0, err);
   if (fd < 0)
     {
       // The configuration file is optional, don't generate an error if it's missing.
