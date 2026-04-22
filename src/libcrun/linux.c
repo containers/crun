@@ -973,7 +973,7 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
     return ret;
 
   /* Open directory and cache FD (once per container) */
-  fd = open (empty_dir_path, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  fd = open (empty_dir_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (fd < 0)
     return crun_make_error (err, errno, "open directory `%s`", empty_dir_path);
 
@@ -1466,7 +1466,7 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container, const char *source, 
   if (UNLIKELY (ret < 0))
     return ret;
 
-  fd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+  fd = openat (targetfd, subsystem, O_CLOEXEC | O_PATH | O_DIRECTORY | O_NOFOLLOW);
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "openat `%s`", subsystem_path);
 
@@ -1547,7 +1547,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "mkdirat `%s`", subsystem_path);
 
-      subsystemfd = openat (targetfd, subsystem, O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+      subsystemfd = openat (targetfd, subsystem, O_CLOEXEC | O_PATH | O_DIRECTORY | O_NOFOLLOW);
       if (UNLIKELY (subsystemfd < 0))
         return crun_make_error (err, errno, "open `%s`", subsystem_path);
 
@@ -1961,7 +1961,7 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   if (UNLIKELY (oldrootfd < 0))
     return crun_make_error (err, errno, "open `/`");
 
-  newrootfd = open (rootfs, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+  newrootfd = open (rootfs, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (newrootfd < 0))
     return crun_make_error (err, errno, "open `%s`", rootfs);
 
@@ -4702,7 +4702,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
       goto restore_mountns;
     }
 
-  targetfd = open (devs_path, O_DIRECTORY | O_CLOEXEC);
+  targetfd = open (devs_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (targetfd < 0)
     {
       ret = crun_make_error (err, errno, "open `%s`", devs_path);
@@ -4718,7 +4718,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
 
   close_and_reset (&targetfd);
 
-  targetfd = openat (devs_mountfd, ".", O_DIRECTORY | O_CLOEXEC);
+  targetfd = openat (devs_mountfd, ".", O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (targetfd < 0)
     {
       ret = crun_make_error (err, errno, "open `%s`", devs_path);

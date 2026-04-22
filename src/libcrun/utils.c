@@ -2873,7 +2873,7 @@ open_proc (libcrun_error_t *err)
     }
 #endif
 
-  fd = open ("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  fd = open ("/proc", O_PATH | O_DIRECTORY | O_CLOEXEC);
   if (fd < 0)
     return crun_make_error (err, errno, "open `/proc`");
   return fd;
