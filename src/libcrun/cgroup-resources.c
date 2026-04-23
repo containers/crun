@@ -1370,7 +1370,7 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
   if (UNLIKELY (ret < 0))
     return ret;
 
-  cgroup_dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+  cgroup_dirfd = open (cgroup_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (UNLIKELY (cgroup_dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 

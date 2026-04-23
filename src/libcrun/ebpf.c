@@ -618,7 +618,7 @@ libcrun_ebpf_query_cgroup_progs (const char *cgroup_path, uint32_t **progs_out, 
 #else
   cleanup_close int cgroup_fd = -1;
 
-  cgroup_fd = open (cgroup_path, O_RDONLY | O_CLOEXEC);
+  cgroup_fd = open (cgroup_path, O_PATH | O_CLOEXEC);
   if (UNLIKELY (cgroup_fd < 0))
     return crun_make_error (err, errno, "open cgroup path `%s`", cgroup_path);
 

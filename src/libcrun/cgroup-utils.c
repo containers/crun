@@ -331,7 +331,7 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
           if (de->d_type != DT_DIR)
             continue;
 
-          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY | O_CLOEXEC);
+          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY | O_PATH | O_CLOEXEC);
           if (UNLIKELY (nfd < 0))
             return crun_make_error (err, errno, "open cgroup directory `%s`", de->d_name);
 
@@ -463,7 +463,7 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
       return crun_make_error (err, 0, "invalid cgroup mode `%d`", mode);
     }
 
-  dirfd = open (cgroup_path, O_DIRECTORY | O_CLOEXEC);
+  dirfd = open (cgroup_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
   if (dirfd < 0)
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 

@@ -79,7 +79,7 @@ libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  *dirfd = open (cgroup_path, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_RDONLY);
+  *dirfd = open (cgroup_path, O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY | O_PATH);
   if (UNLIKELY (*dirfd < 0))
     return crun_make_error (err, errno, "open `%s`", cgroup_path);
 
