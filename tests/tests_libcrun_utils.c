@@ -698,6 +698,70 @@ test_channel_fd_pair_no_busy_loop_on_blocked_output ()
   return 0;
 }
 
+static int
+test_format_default_id_mapping ()
+{
+  libcrun_error_t err = NULL;
+  cleanup_free char *out = NULL;
+  int ret;
+  uid_t host_uid = getuid ();
+
+  /* container_id=0: single-line or no mapping depending on subuid availability.  */
+  ret = format_default_id_mapping (&out, 0, host_uid, host_uid, 1, &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+  if (ret == 0 && out == NULL)
+    return 77; /* SKIP: no subordinate UID range configured for this user.  */
+
+  if (out == NULL || ret == 0)
+    return -1;
+
+  free (out);
+  out = NULL;
+
+  /* container_id > 0: triggers multi-line mapping (the path fixed by P3-002).  */
+  ret = format_default_id_mapping (&out, 1000, host_uid, host_uid, 1, &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+  if (ret == 0 && out == NULL)
+    return 77;
+
+  if (out == NULL || ret == 0)
+    return -1;
+
+  /* The buffer must contain 3 newlines (three mapping lines).  */
+  {
+    int newlines = 0;
+    const char *p;
+    for (p = out; *p; p++)
+      if (*p == '\n')
+        newlines++;
+    if (newlines != 3)
+      return -1;
+  }
+
+  /* The returned length must match the actual string length.  */
+  if (ret != (int) strlen (out))
+    return -1;
+
+  /* The first mapping line must start with "0 " (UIDs 0..container_id-1).
+     The bug at utils.c:1610 caused this line to be overwritten.  */
+  if (strncmp (out, "0 ", 2) != 0)
+    return -1;
+
+  /* Verify the mapping string contains the container_id (1000).  */
+  if (strstr (out, "1000 ") == NULL)
+    return -1;
+
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -721,9 +785,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..17\n");
+  printf ("1..18\n");
 #else
-  printf ("1..14\n");
+  printf ("1..15\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -739,6 +803,7 @@ main ()
   RUN_TEST (test_get_current_timestamp);
   RUN_TEST (test_crun_ensure_directory);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
+  RUN_TEST (test_format_default_id_mapping);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
   RUN_TEST (test_get_scope_path);

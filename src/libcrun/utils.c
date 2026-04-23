@@ -1607,7 +1607,7 @@ format_default_id_mapping (char **out, uid_t container_id, uid_t host_uid, uid_t
       if (UNLIKELY (ret >= remaining))
         return crun_make_error (err, 0, "internal error: allocated buffer too small");
 
-      written += written;
+      written += ret;
       remaining -= ret;
 
       from += used;
