@@ -409,7 +409,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_log_level) (uint32_t level);
   int (*krun_start_enter) (uint32_t ctx_id);
-  int32_t (*krun_set_root) (uint32_t ctx_id, const char *root_path);
+  int32_t (*krun_add_virtiofs2) (uint32_t ctx_id, const char *c_tag, const char *c_path, uint64_t shm_size);
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
   int32_t (*krun_set_console_output) (uint32_t ctx_id, const char *c_filepath);
@@ -471,14 +471,36 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
     }
   else
     {
-      krun_set_root = dlsym (handle, "krun_set_root");
+      const char *path_virtiofs_tag[] = { "virtiofs_tag", (const char *) 0 };
+      const char *path_virtiofs_shm_size[] = { "virtiofs_shm_size", (const char *) 0 };
+      yajl_val val_virtiofs_tag = NULL;
+      yajl_val val_virtiofs_shm_size = NULL;
+      const char *virtiofs_tag = NULL;
+      // Default to a conservative DAX size of 512MB, just like krun_set_root() does.
+      uint64_t virtiofs_shm_size = 512 * 1024 * 1024ULL;
 
-      if (krun_set_root == NULL)
-        error (EXIT_FAILURE, 0, "could not find symbol in `libkrun.so`");
+      if (kconf->config_tree != NULL)
+        {
+          val_virtiofs_tag = yajl_tree_get (kconf->config_tree, path_virtiofs_tag, yajl_t_string);
+          if (val_virtiofs_tag != NULL && YAJL_IS_STRING (val_virtiofs_tag))
+            virtiofs_tag = YAJL_GET_STRING (val_virtiofs_tag);
 
-      ret = krun_set_root (ctx_id, "/");
+          val_virtiofs_shm_size = yajl_tree_get (kconf->config_tree, path_virtiofs_shm_size, yajl_t_number);
+          if (val_virtiofs_shm_size != NULL && YAJL_IS_INTEGER (val_virtiofs_shm_size))
+            virtiofs_shm_size = (uint64_t) YAJL_GET_INTEGER (val_virtiofs_shm_size);
+        }
+
+      if (virtiofs_tag == NULL)
+        virtiofs_tag = "/dev/root";
+
+      krun_add_virtiofs2 = dlsym (handle, "krun_add_virtiofs2");
+
+      if (krun_add_virtiofs2 == NULL)
+        error (EXIT_FAILURE, 0, "could not find symbol `krun_add_virtiofs2` in `libkrun.so`");
+
+      ret = krun_add_virtiofs2 (ctx_id, virtiofs_tag, "/", virtiofs_shm_size);
       if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not set krun root");
+        error (EXIT_FAILURE, -ret, "could not add virtiofs root with tag `%s`", virtiofs_tag);
     }
 
   if (kconf->awsnitro)
