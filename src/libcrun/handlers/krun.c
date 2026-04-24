@@ -179,7 +179,7 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
   cleanup_close int fd = -1;
   struct parser_context ctx = { 0, stderr };
 
-  fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_PATH | O_NOFOLLOW, 0, err);
+  fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW, 0, err);
   if (fd < 0)
     {
       // The configuration file is optional, don't generate an error if it's missing.
@@ -234,11 +234,11 @@ libkrun_parse_resource_configuration (yajl_val *config_tree, libcrun_container_t
   else if (*config_tree != NULL)
     {
       val_json = yajl_tree_get (*config_tree, path, yajl_t_number);
+      if (val_json == NULL)
+        return val;
       if (! YAJL_IS_INTEGER (val_json))
         error (EXIT_FAILURE, 0, "krun krun_vm.json %s value is not an integer", path[0]);
-
-      if (! (val = (int) YAJL_GET_INTEGER (val_json)))
-        error (EXIT_FAILURE, 0, "krun krun_vm.json %s value must be a positive integer", path[0]);
+      val = (int) YAJL_GET_INTEGER (val_json);
     }
 
   return val;
