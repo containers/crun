@@ -59,7 +59,7 @@ These dependencies are required for the build:
 $ sudo dnf install -y \
     autoconf automake gcc git-core glibc-static go-md2man \
     libcap-devel libseccomp-devel libtool make pkg-config \
-    python python-libmount systemd-devel yajl-devel
+    python python-libmount systemd-devel yyjson-devel
 ```
 
 ### RHEL/CentOS Stream 9
@@ -69,7 +69,7 @@ $ sudo dnf config-manager --set-enabled crb
 $ sudo dnf install -y \
     autoconf automake gcc git-core glibc-static go-md2man \
     libcap-devel libseccomp-devel libtool make pkg-config \
-    python python-libmount systemd-devel yajl-devel
+    python python-libmount systemd-devel yyjson-devel
 ```
 
 ### RHEL/CentOS Stream 10
@@ -82,13 +82,13 @@ $ sudo dnf install -y \
     python python-libmount systemd-devel
 ```
 
-NOTE that you need to add `--enable-embedded-yajl` to `./configure` flags below.
+NOTE that you need to add `--enable-embedded-yyjson` to `./configure` flags below.
 
 ### Ubuntu
 
 ```console
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
-   libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyajl-dev \
+   libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libyyjson-dev \
    go-md2man autoconf python3 automake
 ```
 
@@ -96,14 +96,14 @@ $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
 
 ```console
 # apk add gcc automake autoconf libtool gettext pkgconf git make musl-dev \
-    python3 libcap-dev libseccomp-dev yajl-dev argp-standalone go-md2man
+    python3 libcap-dev libseccomp-dev yyjson-dev argp-standalone go-md2man
 ```
 
 ### Tumbleweed
 
 ```console
 # zypper install make automake autoconf gettext libtool gcc libcap-devel \
-systemd-devel libyajl-devel libseccomp-devel python3 go-md2man \
+systemd-devel libyyjson-devel libseccomp-devel python3 go-md2man \
 glibc-static;
 ```
 

@@ -85,7 +85,8 @@ struct krun_config
   bool has_kvm;
   bool has_awsnitro;
   int passt_fds[2];
-  yajl_val config_tree;
+  yyjson_doc *config_doc;
+  yyjson_val *config_tree;
   bool use_passt;
 };
 
@@ -109,47 +110,43 @@ libkrun_create_context (void *handle, libcrun_error_t *err)
 }
 
 static int
-libkrun_configure_kernel (uint32_t ctx_id, void *handle, yajl_val *config_tree, libcrun_error_t *err)
+libkrun_configure_kernel (uint32_t ctx_id, void *handle, yyjson_val *config_tree, libcrun_error_t *err)
 {
   int32_t (*krun_set_kernel) (uint32_t ctx_id, const char *kernel_path,
                               uint32_t kernel_format, const char *initrd_path, const char *kernel_cmdline);
-  const char *path_kernel_path[] = { "kernel_path", (const char *) 0 };
-  const char *path_kernel_format[] = { "kernel_format", (const char *) 0 };
-  const char *path_initrd_path[] = { "initrd_path", (const char *) 0 };
-  const char *path_kernel_cmdline[] = { "kernel_cmdline", (const char *) 0 };
-  yajl_val kernel_path = NULL;
-  yajl_val kernel_format = NULL;
-  yajl_val val_initrd_path = NULL;
-  yajl_val val_kernel_cmdline = NULL;
-  char *initrd_path = NULL;
-  char *kernel_cmdline = NULL;
+  yyjson_val *kernel_path = NULL;
+  yyjson_val *kernel_format = NULL;
+  yyjson_val *val_initrd_path = NULL;
+  yyjson_val *val_kernel_cmdline = NULL;
+  const char *initrd_path = NULL;
+  const char *kernel_cmdline = NULL;
   int ret;
 
   /* kernel_path and kernel_format must be present */
-  kernel_path = yajl_tree_get (*config_tree, path_kernel_path, yajl_t_string);
-  if (kernel_path == NULL || ! YAJL_IS_STRING (kernel_path))
+  kernel_path = yyjson_obj_get (config_tree, "kernel_path");
+  if (kernel_path == NULL || ! yyjson_is_str (kernel_path))
     return 0;
 
-  kernel_format = yajl_tree_get (*config_tree, path_kernel_format, yajl_t_number);
-  if (kernel_format == NULL || ! YAJL_IS_INTEGER (kernel_format))
+  kernel_format = yyjson_obj_get (config_tree, "kernel_format");
+  if (kernel_format == NULL || ! yyjson_is_int (kernel_format))
     return 0;
 
   /* initrd and kernel_cmdline are optional */
-  val_initrd_path = yajl_tree_get (*config_tree, path_initrd_path, yajl_t_string);
-  if (val_initrd_path != NULL && YAJL_IS_STRING (val_initrd_path))
-    initrd_path = YAJL_GET_STRING (val_initrd_path);
+  val_initrd_path = yyjson_obj_get (config_tree, "initrd_path");
+  if (val_initrd_path != NULL && yyjson_is_str (val_initrd_path))
+    initrd_path = yyjson_get_str (val_initrd_path);
 
-  val_kernel_cmdline = yajl_tree_get (*config_tree, path_kernel_cmdline, yajl_t_string);
-  if (val_kernel_cmdline != NULL && YAJL_IS_STRING (val_kernel_cmdline))
-    kernel_cmdline = YAJL_GET_STRING (val_kernel_cmdline);
+  val_kernel_cmdline = yyjson_obj_get (config_tree, "kernel_cmdline");
+  if (val_kernel_cmdline != NULL && yyjson_is_str (val_kernel_cmdline))
+    kernel_cmdline = yyjson_get_str (val_kernel_cmdline);
 
   krun_set_kernel = dlsym (handle, "krun_set_kernel");
   if (krun_set_kernel == NULL)
     return crun_make_error (err, 0, "could not find symbol in krun library");
 
   ret = krun_set_kernel (ctx_id,
-                         YAJL_GET_STRING (kernel_path),
-                         YAJL_GET_INTEGER (kernel_format),
+                         yyjson_get_str (kernel_path),
+                         (uint32_t) yyjson_get_sint (kernel_format),
                          initrd_path, kernel_cmdline);
 
   if (UNLIKELY (ret < 0))
@@ -177,7 +174,6 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
   int ret;
   cleanup_free char *config = NULL;
   cleanup_close int fd = -1;
-  struct parser_context ctx = { 0, stderr };
 
   fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW, 0, err);
   if (fd < 0)
@@ -195,10 +191,11 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = parse_json_file (&kconf->config_tree, config, &ctx, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  kconf->config_doc = yyjson_read (config, strlen (config), 0);
+  if (kconf->config_doc == NULL)
+    return crun_make_error (err, 0, "cannot parse `%s`", KRUN_VM_FILE);
 
+  kconf->config_tree = yyjson_doc_get_root (kconf->config_doc);
   return 0;
 }
 
@@ -211,11 +208,11 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
  * OCI annotations -> krun_vm.json.
  */
 static int
-libkrun_parse_resource_configuration (yajl_val *config_tree, libcrun_container_t *container, const char *annotation, const char *path[])
+libkrun_parse_resource_configuration (yyjson_val *config_tree, libcrun_container_t *container, const char *annotation, const char *key)
 {
   char *val_str, *endptr;
   int val = -1;
-  yajl_val val_json = NULL;
+  yyjson_val *val_json = NULL;
 
   val_str = (char *) find_annotation (container, annotation);
   if (val_str != NULL)
@@ -231,14 +228,15 @@ libkrun_parse_resource_configuration (yajl_val *config_tree, libcrun_container_t
 
       return val;
     }
-  else if (*config_tree != NULL)
+  else if (config_tree != NULL)
     {
-      val_json = yajl_tree_get (*config_tree, path, yajl_t_number);
+      val_json = yyjson_obj_get (config_tree, key);
       if (val_json == NULL)
         return val;
-      if (! YAJL_IS_INTEGER (val_json))
-        error (EXIT_FAILURE, 0, "krun krun_vm.json %s value is not an integer", path[0]);
-      val = (int) YAJL_GET_INTEGER (val_json);
+      if (! yyjson_is_int (val_json))
+        error (EXIT_FAILURE, 0, "krun krun_vm.json %s value is not an integer", key);
+
+      val = (int) yyjson_get_sint (val_json);
     }
 
   return val;
@@ -252,11 +250,8 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
   int32_t (*krun_add_net_unixstream) (uint32_t ctx_id, const char *c_path, int fd, uint8_t *const c_mac, uint32_t features, uint32_t flags);
   int cpus, ram_mib, gpu_flags, ret;
   cpu_set_t set;
-  const char *path_cpus[] = { "cpus", (const char *) 0 };
-  const char *path_ram_mib[] = { "ram_mib", (const char *) 0 };
-  const char *path_gpu_flags[] = { "gpu_flags", (const char *) 0 };
 
-  cpus = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.cpus", path_cpus);
+  cpus = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.cpus", "cpus");
   if (cpus <= 0)
     {
       CPU_ZERO (&set);
@@ -266,7 +261,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
         cpus = 1;
     }
 
-  ram_mib = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.ram_mib", path_ram_mib);
+  ram_mib = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.ram_mib", "ram_mib");
   if (ram_mib <= LIBKRUN_MINIMUM_RAM_MIB)
     {
       if (def && def->linux && def->linux->resources && def->linux->resources->memory
@@ -285,7 +280,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, -ret, "could not set krun vm configuration");
 
-  gpu_flags = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.gpu_flags", path_gpu_flags);
+  gpu_flags = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.gpu_flags", "gpu_flags");
   if (gpu_flags > 0)
     {
       if (access ("/dev/dri", F_OK) != 0)
@@ -315,7 +310,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
        * specify a kernel, libkrun automatically fall back to using libkrunfw,
        * if the library is present and was loaded while creating the context.
        */
-      ret = libkrun_configure_kernel (ctx_id, handle, &kconf->config_tree, err);
+      ret = libkrun_configure_kernel (ctx_id, handle, kconf->config_tree, err);
       if (UNLIKELY (ret))
         return ret;
     }
@@ -324,12 +319,11 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
 }
 
 static int
-libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
+libkrun_configure_flavor (void *cookie, yyjson_val *config_tree, libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret, sev_indicated = 0, awsnitro_indicated = 0;
-  const char *path_flavor[] = { "flavor", (const char *) 0 };
   struct krun_config *kconf = (struct krun_config *) cookie;
-  yajl_val val_flavor = NULL;
+  yyjson_val *val_flavor = NULL;
   const char *flavor = NULL;
   void *close_handles[2];
 
@@ -338,12 +332,12 @@ libkrun_configure_flavor (void *cookie, yajl_val *config_tree, libcrun_container
 
   // Check if the user provided the krun variant through OCI annotations.
   flavor = find_annotation (container, "krun.variant");
-  if (flavor == NULL && *config_tree != NULL)
+  if (flavor == NULL && config_tree != NULL)
     {
       // If the user doesn't specify a variant via OCI annotations, check the krun VM config to see if the "flavor" field was populated.
-      val_flavor = yajl_tree_get (*config_tree, path_flavor, yajl_t_string);
-      if (val_flavor != NULL && YAJL_IS_STRING (val_flavor))
-        flavor = YAJL_GET_STRING (val_flavor);
+      val_flavor = yyjson_obj_get (config_tree, "flavor");
+      if (val_flavor != NULL && yyjson_is_str (val_flavor))
+        flavor = yyjson_get_str (val_flavor);
     }
 
   if (flavor != NULL)
@@ -420,7 +414,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t ctx_id, ret;
   libcrun_error_t err;
 
-  ret = libkrun_configure_flavor (cookie, &kconf->config_tree, container, &err);
+  ret = libkrun_configure_flavor (cookie, kconf->config_tree, container, &err);
   if (UNLIKELY (ret < 0))
     {
       int errcode = crun_error_get_errno (&err);
@@ -471,23 +465,21 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
     }
   else
     {
-      const char *path_virtiofs_tag[] = { "virtiofs_tag", (const char *) 0 };
-      const char *path_virtiofs_shm_size[] = { "virtiofs_shm_size", (const char *) 0 };
-      yajl_val val_virtiofs_tag = NULL;
-      yajl_val val_virtiofs_shm_size = NULL;
+      yyjson_val *val_virtiofs_tag = NULL;
+      yyjson_val *val_virtiofs_shm_size = NULL;
       const char *virtiofs_tag = NULL;
       // Default to a conservative DAX size of 512MB, just like krun_set_root() does.
       uint64_t virtiofs_shm_size = 512 * 1024 * 1024ULL;
 
       if (kconf->config_tree != NULL)
         {
-          val_virtiofs_tag = yajl_tree_get (kconf->config_tree, path_virtiofs_tag, yajl_t_string);
-          if (val_virtiofs_tag != NULL && YAJL_IS_STRING (val_virtiofs_tag))
-            virtiofs_tag = YAJL_GET_STRING (val_virtiofs_tag);
+          val_virtiofs_tag = yyjson_obj_get (kconf->config_tree, "virtiofs_tag");
+          if (val_virtiofs_tag != NULL && yyjson_is_str (val_virtiofs_tag))
+            virtiofs_tag = yyjson_get_str (val_virtiofs_tag);
 
-          val_virtiofs_shm_size = yajl_tree_get (kconf->config_tree, path_virtiofs_shm_size, yajl_t_number);
-          if (val_virtiofs_shm_size != NULL && YAJL_IS_INTEGER (val_virtiofs_shm_size))
-            virtiofs_shm_size = (uint64_t) YAJL_GET_INTEGER (val_virtiofs_shm_size);
+          val_virtiofs_shm_size = yyjson_obj_get (kconf->config_tree, "virtiofs_shm_size");
+          if (val_virtiofs_shm_size != NULL && yyjson_is_int (val_virtiofs_shm_size))
+            virtiofs_shm_size = (uint64_t) yyjson_get_sint (val_virtiofs_shm_size);
         }
 
       if (virtiofs_tag == NULL)
@@ -530,7 +522,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       error (EXIT_FAILURE, errcode, "could not configure krun vm");
     }
 
-  yajl_tree_free (kconf->config_tree);
+  yyjson_doc_free (kconf->config_doc);
 
   ret = krun_start_enter (ctx_id);
   if (UNLIKELY (ret < 0))
@@ -543,7 +535,6 @@ static int
 libkrun_start_passt (void *cookie, libcrun_container_t *container)
 {
   struct krun_config *kconf = (struct krun_config *) cookie;
-  const char *path_use_passt[] = { "use_passt", (const char *) 0 };
   pid_t pid;
   char *passt_argv[9];
   char fd_as_str[16];
@@ -553,7 +544,7 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
   int null;
   int ret;
 
-  use_passt = libkrun_parse_resource_configuration (&kconf->config_tree, container, "krun.use_passt", path_use_passt);
+  use_passt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.use_passt", "use_passt");
   if (use_passt > 0)
     kconf->use_passt = 1;
   else

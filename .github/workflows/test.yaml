@@ -40,7 +40,7 @@ jobs:
 
           install: |
             apt-get update -y
-            apt-get install -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev clang mawk
+            apt-get install -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libprotobuf-c-dev clang mawk
 
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
@@ -94,7 +94,7 @@ jobs:
 
           sudo add-apt-repository -y ppa:criu/ppa
           # add-apt-repository runs apt-get update so we don't have to.
-          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget libsystemd-dev gperf clang-format libyajl-dev containerd runc libasan6 libprotobuf-c-dev mawk
+          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget libsystemd-dev gperf clang-format containerd runc libasan6 libprotobuf-c-dev mawk
           # Fedora (used by maintainers as well as for packaging) has newer
           # md2man than in Ubuntu, so we have to install it from source.
           GOBIN=~/.local/bin go install github.com/cpuguy83/go-md2man/v2@latest
@@ -208,7 +208,7 @@ jobs:
       - name: install dependencies
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libyajl-dev libprotobuf-c-dev mawk
+          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libprotobuf-c-dev mawk
       - uses: lumaxis/shellcheck-problem-matchers@v2
       - name: shellcheck
         run: |

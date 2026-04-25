@@ -278,7 +278,7 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
 
   libcrun_handler_manager_print_feature_tags (libcrun_get_handler_manager (), stream);
 
-  fprintf (stream, "+YAJL\n");
+  fprintf (stream, "+YYJSON\n");
 }
 
 static error_t

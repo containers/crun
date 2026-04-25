@@ -352,7 +352,7 @@ void get_current_timestamp (char *out, size_t len);
 
 int set_blocking_fd (int fd, bool blocking, libcrun_error_t *err);
 
-int parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
+int parse_json_file (yyjson_doc **out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
 
 static inline int
 has_prefix (const char *str, const char *prefix)

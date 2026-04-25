@@ -70,13 +70,11 @@
 #include <linux/sched.h>
 #include <linux/magic.h>
 
-#include <yajl/yajl_tree.h>
-#include <yajl/yajl_gen.h>
+#include <yyjson.h>
+#include <ocispec/json_common.h>
 
 #include "mount_flags.h"
 #include "syscalls.h"
-
-#define YAJL_STR(x) ((const unsigned char *) (x))
 
 #ifndef RLIMIT_RTTIME
 #  define RLIMIT_RTTIME 15
@@ -3837,19 +3835,18 @@ libcrun_get_external_descriptors (libcrun_container_t *container)
 int
 libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
-  const unsigned char *buf = NULL;
-  yajl_gen gen = NULL;
+  const char *buf = NULL;
+  json_gen_ctx *gen = NULL;
   size_t buf_len;
   int ret;
   int i;
 
-  gen = yajl_gen_alloc (NULL);
-  if (gen == NULL)
-    return crun_make_error (err, 0, "yajl_gen_alloc");
+  if (! json_gen_init (&gen, NULL))
+    return crun_make_error (err, errno, "json_gen_init");
 
-  ret = yajl_gen_array_open (gen);
-  if (UNLIKELY (ret != yajl_gen_status_ok))
-    goto yajl_error;
+  ret = json_gen_array_open (gen);
+  if (UNLIKELY (ret != json_gen_status_ok))
+    goto json_error;
 
   /* Remember original stdin, stdout, stderr for container restore.  */
   for (i = 0; i < 3; i++)
@@ -3870,24 +3867,24 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
             }
           else
             {
-              yajl_gen_free (gen);
+              json_gen_free (gen);
               return crun_make_error (err, errno, "readlink `%s`", fd_path);
             }
         }
       link_path[ret] = 0;
 
-      ret = yajl_gen_string (gen, YAJL_STR (link_path), ret);
-      if (UNLIKELY (ret != yajl_gen_status_ok))
-        goto yajl_error;
+      ret = json_gen_string (gen, link_path, ret);
+      if (UNLIKELY (ret != json_gen_status_ok))
+        goto json_error;
     }
 
-  ret = yajl_gen_array_close (gen);
-  if (UNLIKELY (ret != yajl_gen_status_ok))
-    goto yajl_error;
+  ret = json_gen_array_close (gen);
+  if (UNLIKELY (ret != json_gen_status_ok))
+    goto json_error;
 
-  ret = yajl_gen_get_buf (gen, &buf, &buf_len);
-  if (UNLIKELY (ret != yajl_gen_status_ok))
-    goto yajl_error;
+  ret = json_gen_get_buf (gen, &buf, &buf_len);
+  if (UNLIKELY (ret != json_gen_status_ok))
+    goto json_error;
 
   if (buf)
     {
@@ -3897,14 +3894,14 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
       get_private_data (container)->external_descriptors = b;
     }
 
-  yajl_gen_free (gen);
+  json_gen_free (gen);
 
   return 0;
 
-yajl_error:
+json_error:
   if (gen)
-    yajl_gen_free (gen);
-  return yajl_error_to_crun_error (ret, err);
+    json_gen_free (gen);
+  return json_gen_error_to_crun_error (ret, err);
 }
 
 int

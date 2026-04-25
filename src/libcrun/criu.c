@@ -979,8 +979,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   {
     cleanup_free char *descriptors_path = NULL;
     cleanup_free char *buffer = NULL;
-    char err_buffer[256];
-    yajl_val tree;
+    yyjson_doc *doc = NULL;
+    yyjson_val *tree;
 
     ret = append_paths (&descriptors_path, err, cr_options->image_path, DESCRIPTORS_FILENAME, NULL);
     if (UNLIKELY (ret < 0))
@@ -996,28 +996,29 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
      * a pipe 'pipe:' we tell CRIU to reconnect that pipe
      * to the corresponding FD to have (especially) stdout
      * and stderr being correctly redirected. */
-    tree = yajl_tree_parse (buffer, err_buffer, sizeof (err_buffer));
-    if (UNLIKELY (tree == NULL))
+    doc = yyjson_read (buffer, strlen (buffer), 0);
+    if (UNLIKELY (doc == NULL))
       return crun_make_error (err, 0, "cannot parse descriptors file `%s`", DESCRIPTORS_FILENAME);
 
-    if (tree && YAJL_IS_ARRAY (tree))
+    tree = yyjson_doc_get_root (doc);
+    if (tree && yyjson_is_arr (tree))
       {
-        size_t i, len = tree->u.array.len;
+        size_t i, len = yyjson_arr_size (tree);
 
         /* len will probably always be 3 as crun is currently only
          * recording the destination of FD 0, 1 and 2. */
         for (i = 0; i < len; ++i)
           {
-            yajl_val s = tree->u.array.values[i];
-            if (s && YAJL_IS_STRING (s))
+            yyjson_val *s = yyjson_arr_get (tree, i);
+            if (s && yyjson_is_str (s))
               {
-                char *str = YAJL_GET_STRING (s);
+                const char *str = yyjson_get_str (s);
                 if (has_prefix (str, "pipe:"))
                   libcriu_wrapper->criu_add_inherit_fd (i, str);
               }
           }
       }
-    yajl_tree_free (tree);
+    yyjson_doc_free (doc);
   }
 
   /* work_dir is the place CRIU will put its logfiles. If not explicitly set,

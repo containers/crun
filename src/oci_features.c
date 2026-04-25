@@ -23,8 +23,8 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <yajl/yajl_tree.h>
-#include <yajl/yajl_gen.h>
+#include <yyjson.h>
+#include <ocispec/json_common.h>
 
 #include "crun.h"
 #include "libcrun/container.h"
@@ -36,7 +36,7 @@ static struct argp_option options[] = { { 0 } };
 
 static char args_doc[] = "features";
 
-const unsigned char *json_string;
+const char *json_string;
 
 size_t json_length;
 
@@ -54,21 +54,21 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 void
-add_string_to_json (yajl_gen json_gen, const char *key, char *value)
+add_string_to_json (json_gen_ctx *json_gen, const char *key, char *value)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) key, strlen (key));
-  yajl_gen_string (json_gen, (const unsigned char *) value, strlen (value));
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_string (json_gen, value, strlen (value));
 }
 
 void
-add_bool_to_json (yajl_gen json_gen, const char *key, int value)
+add_bool_to_json (json_gen_ctx *json_gen, const char *key, int value)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) key, strlen (key));
-  yajl_gen_bool (json_gen, value);
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_bool (json_gen, value);
 }
 
 void
-add_bool_str_to_json (yajl_gen json_gen, const char *key, int value)
+add_bool_str_to_json (json_gen_ctx *json_gen, const char *key, int value)
 {
   char *val = "";
   if (value)
@@ -80,66 +80,66 @@ add_bool_str_to_json (yajl_gen json_gen, const char *key, int value)
       val = "false";
     }
 
-  yajl_gen_string (json_gen, (const unsigned char *) key, strlen (key));
-  yajl_gen_string (json_gen, (const unsigned char *) val, strlen (val));
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_string (json_gen, val, strlen (val));
 }
 
 void
-add_array_to_json (yajl_gen json_gen, const char *key, char **array)
+add_array_to_json (json_gen_ctx *json_gen, const char *key, char **array)
 {
   size_t i;
-  yajl_gen_string (json_gen, (const unsigned char *) key, strlen (key));
-  yajl_gen_array_open (json_gen);
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_array_open (json_gen);
 
   for (i = 0; array[i] != NULL; i++)
-    yajl_gen_string (json_gen, (const unsigned char *) array[i], strlen (array[i]));
+    json_gen_string (json_gen, array[i], strlen (array[i]));
 
-  yajl_gen_array_close (json_gen);
+  json_gen_array_close (json_gen);
 }
 
 void
-crun_features_add_hooks (yajl_gen json_gen, char **hooks)
+crun_features_add_hooks (json_gen_ctx *json_gen, char **hooks)
 {
   add_array_to_json (json_gen, "hooks", hooks);
 }
 
 void
-crun_features_add_mount_options (yajl_gen json_gen, char **mount_options)
+crun_features_add_mount_options (json_gen_ctx *json_gen, char **mount_options)
 {
   add_array_to_json (json_gen, "mountOptions", mount_options);
 }
 
 void
-crun_features_add_namespaces (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_namespaces (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
   add_array_to_json (json_gen, "namespaces", linux->namespaces);
 }
 
 void
-crun_features_add_capabilities (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_capabilities (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
   add_array_to_json (json_gen, "capabilities", linux->capabilities);
 }
 
 void
-crun_features_add_cgroup_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_cgroup_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "cgroup", strlen ("cgroup"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "cgroup", strlen ("cgroup"));
+  json_gen_map_open (json_gen);
 
   add_bool_to_json (json_gen, "v1", linux->cgroup.v1);
   add_bool_to_json (json_gen, "v2", linux->cgroup.v2);
   add_bool_to_json (json_gen, "systemd", linux->cgroup.systemd);
   add_bool_to_json (json_gen, "systemdUser", linux->cgroup.systemd_user);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_seccomp_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_seccomp_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "seccomp", strlen ("seccomp"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "seccomp", strlen ("seccomp"));
+  json_gen_map_open (json_gen);
 
   add_bool_to_json (json_gen, "enabled", linux->seccomp.enabled);
   if (linux->seccomp.actions)
@@ -147,14 +147,14 @@ crun_features_add_seccomp_info (yajl_gen json_gen, const struct linux_info_s *li
   if (linux->seccomp.operators)
     add_array_to_json (json_gen, "operators", linux->seccomp.operators);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_mempolicy_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_mempolicy_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "memoryPolicy", strlen ("memoryPolicy"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "memoryPolicy", strlen ("memoryPolicy"));
+  json_gen_map_open (json_gen);
 
   if (linux->memory_policy.mode)
     add_array_to_json (json_gen, "modes", linux->memory_policy.mode);
@@ -162,68 +162,68 @@ crun_features_add_mempolicy_info (yajl_gen json_gen, const struct linux_info_s *
   if (linux->memory_policy.flags)
     add_array_to_json (json_gen, "flags", linux->memory_policy.flags);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_apparmor_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_apparmor_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "apparmor", strlen ("apparmor"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "apparmor", strlen ("apparmor"));
+  json_gen_map_open (json_gen);
 
   add_bool_to_json (json_gen, "enabled", linux->apparmor.enabled);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_selinux_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_selinux_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "selinux", strlen ("selinux"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "selinux", strlen ("selinux"));
+  json_gen_map_open (json_gen);
 
   add_bool_to_json (json_gen, "enabled", linux->selinux.enabled);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_mount_ext_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_mount_ext_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "mountExtensions", strlen ("mountExtensions"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "mountExtensions", strlen ("mountExtensions"));
+  json_gen_map_open (json_gen);
 
-  yajl_gen_string (json_gen, (const unsigned char *) "idmap", strlen ("idmap"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "idmap", strlen ("idmap"));
+  json_gen_map_open (json_gen);
   add_bool_to_json (json_gen, "enabled", linux->mount_ext.idmap.enabled);
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_intel_rdt (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_intel_rdt (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "intelRdt", strlen ("intelRdt"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "intelRdt", strlen ("intelRdt"));
+  json_gen_map_open (json_gen);
   add_bool_to_json (json_gen, "enabled", linux->intel_rdt.enabled);
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_net_devices (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_net_devices (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "netDevices", strlen ("netDevices"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "netDevices", strlen ("netDevices"));
+  json_gen_map_open (json_gen);
   add_bool_to_json (json_gen, "enabled", linux->net_devices.enabled);
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_linux_info (yajl_gen json_gen, const struct linux_info_s *linux)
+crun_features_add_linux_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "linux", strlen ("linux"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "linux", strlen ("linux"));
+  json_gen_map_open (json_gen);
 
   crun_features_add_namespaces (json_gen, linux);
   crun_features_add_capabilities (json_gen, linux);
@@ -236,14 +236,14 @@ crun_features_add_linux_info (yajl_gen json_gen, const struct linux_info_s *linu
   crun_features_add_net_devices (json_gen, linux);
   crun_features_add_mempolicy_info (json_gen, linux);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_annotations_info (yajl_gen json_gen, const struct annotations_info_s *annotation)
+crun_features_add_annotations_info (json_gen_ctx *json_gen, const struct annotations_info_s *annotation)
 {
-  yajl_gen_string (json_gen, (const unsigned char *) "annotations", strlen ("annotations"));
-  yajl_gen_map_open (json_gen);
+  json_gen_string (json_gen, "annotations", strlen ("annotations"));
+  json_gen_map_open (json_gen);
 
   if (! is_empty_string (annotation->io_github_seccomp_libseccomp_version))
     add_string_to_json (json_gen, "io.github.seccomp.libseccomp.version", annotation->io_github_seccomp_libseccomp_version);
@@ -256,11 +256,11 @@ crun_features_add_annotations_info (yajl_gen json_gen, const struct annotations_
 
   add_bool_str_to_json (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
 
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 }
 
 void
-crun_features_add_potentially_unsafe_config_annotations_info (yajl_gen json_gen, char **annotations)
+crun_features_add_potentially_unsafe_config_annotations_info (json_gen_ctx *json_gen, char **annotations)
 {
   add_array_to_json (json_gen, "potentiallyUnsafeConfigAnnotations", annotations);
 }
@@ -273,7 +273,7 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
   libcrun_context_t crun_context = {
     0,
   };
-  yajl_gen json_gen;
+  json_gen_ctx *json_gen;
 
   argp_parse (&run_argp, argc, argv, 0, 0, &options);
 
@@ -287,14 +287,13 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
     return ret;
 
   // Prepare the JSON output
-  json_gen = yajl_gen_alloc (NULL);
-  if (json_gen == NULL)
+  if (! json_gen_init (&json_gen, NULL))
     return libcrun_make_error (err, 0, "Failed to initialize json structure");
 
-  yajl_gen_config (json_gen, yajl_gen_beautify, 1); // Optional: Enable pretty formatting
+  json_gen_config (json_gen, json_gen_beautify, 1); // Optional: Enable pretty formatting
 
   // Start building the JSON
-  yajl_gen_map_open (json_gen);
+  json_gen_map_open (json_gen);
 
   // Add ociVersionMin field
   add_string_to_json (json_gen, "ociVersionMin", info->oci_version_min);
@@ -318,13 +317,13 @@ crun_command_features (struct crun_global_arguments *global_args, int argc, char
   crun_features_add_potentially_unsafe_config_annotations_info (json_gen, info->potentially_unsafe_annotations);
 
   // End building the JSON
-  yajl_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
 
-  yajl_gen_get_buf (json_gen, &json_string, &json_length);
+  json_gen_get_buf (json_gen, &json_string, &json_length);
 
-  printf ("%s", (const char *) json_string);
+  printf ("%s", json_string);
 
-  yajl_gen_free (json_gen);
+  json_gen_free (json_gen);
 
   return 0;
 }
