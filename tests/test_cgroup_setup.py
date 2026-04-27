@@ -1315,7 +1315,7 @@ def test_annotation_delegate_cgroup_dotdot():
         conf['annotations'] = {}
     conf['annotations']['run.oci.systemd.subgroup'] = 'mysubgroup'
 
-    for invalid in ["../../../victim", "../escape", "a/../b"]:
+    for invalid in ["..", "../../../victim", "../escape", "a/../b"]:
         conf['annotations']['run.oci.delegate-cgroup'] = invalid
         try:
             out, _ = run_and_get_output(conf, hide_stderr=True)
