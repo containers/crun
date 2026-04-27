@@ -404,6 +404,34 @@ is_empty_string (const char *s)
   return s == NULL || s[0] == '\0';
 }
 
+static inline bool
+path_has_dot_dot_component (const char *path)
+{
+  if (path == NULL)
+    return false;
+  cleanup_free char *npath = xstrdup (path);
+  char *cur, *it;
+
+  cur = npath;
+  it = strchr (cur, '/');
+  while (cur)
+    {
+      if (it)
+        *it = '\0';
+
+      if (strcmp (cur, "..") == 0)
+        return true;
+
+      if (it == NULL)
+        break;
+
+      cur = consume_slashes (it + 1);
+      *it = '/';
+      it = strchr (cur, '/');
+    }
+  return false;
+}
+
 static inline int
 waitpid_ignore_stopped (pid_t pid, int *status, int options)
 {
