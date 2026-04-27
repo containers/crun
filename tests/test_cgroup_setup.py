@@ -1298,6 +1298,39 @@ def test_annotation_delegate_cgroup():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_annotation_delegate_cgroup_dotdot():
+    """Test that run.oci.delegate-cgroup rejects '..' components."""
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if not running_on_systemd():
+        return (77, "requires systemd")
+    if get_cgroup_manager() != 'systemd':
+        return (77, "requires systemd cgroup manager")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'echo', 'hello']
+
+    if 'annotations' not in conf:
+        conf['annotations'] = {}
+    conf['annotations']['run.oci.systemd.subgroup'] = 'mysubgroup'
+
+    for invalid in ["../../../victim", "../escape", "a/../b"]:
+        conf['annotations']['run.oci.delegate-cgroup'] = invalid
+        try:
+            out, _ = run_and_get_output(conf, hide_stderr=True)
+            return -1
+        except Exception as e:
+            if hasattr(e, 'output') and e.output:
+                err = e.output.decode()
+                if "delegate-cgroup" in err:
+                    continue
+                logger.info("got error for delegate-cgroup '%s': %s", invalid, err)
+            else:
+                logger.info("got exception without output for delegate-cgroup '%s': %s", invalid, str(e))
+            return -1
+    return 0
+
 def test_annotation_systemd_force_cgroup_v1():
     """Test run.oci.systemd.force_cgroup_v1 annotation."""
     if not is_cgroup_v2_unified():
@@ -1544,6 +1577,7 @@ all_tests = {
     "cgroup-create-without-resources": test_cgroup_create_without_resources,
     "annotation-systemd-subgroup": test_annotation_systemd_subgroup,
     "annotation-delegate-cgroup": test_annotation_delegate_cgroup,
+    "annotation-delegate-cgroup-dotdot": test_annotation_delegate_cgroup_dotdot,
     "annotation-systemd-force-cgroup-v1": test_annotation_systemd_force_cgroup_v1,
     "cgroup-v2-mount-options": test_cgroup_v2_mount_options,
     "cgroup-subcgroup-cleanup": test_cgroup_subcgroup_cleanup,
