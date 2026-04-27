@@ -45,12 +45,31 @@ struct pid_stat
   unsigned long long starttime;
 };
 
-/* If ID is not NULL, then ennsure that it does not contain any slash.  */
+static inline bool
+is_valid_id_char (char c)
+{
+  if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
+    return true;
+  return c == '_' || c == '+' || c == '.' || c == '-';
+}
+
 static int
 validate_id (const char *id, libcrun_error_t *err)
 {
-  if (id && strchr (id, '/') != NULL)
-    return crun_make_error (err, 0, "invalid character `/` in the ID `%s`", id);
+  if (id == NULL)
+    return 0;
+
+  if (id[0] == '\0')
+    return crun_make_error (err, 0, "empty container ID");
+
+  if (id[0] == '.')
+    return crun_make_error (err, 0, "invalid container ID `%s`", id);
+
+  for (size_t i = 0; id[i]; i++)
+    {
+      if (! is_valid_id_char (id[i]))
+        return crun_make_error (err, 0, "invalid character `%c` in the container ID `%s`", id[i], id);
+    }
 
   return 0;
 }
