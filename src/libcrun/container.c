@@ -3870,7 +3870,7 @@ exec_process_entrypoint (libcrun_context_t *context,
     crun_error_release (err);
 
   TEMP_FAILURE_RETRY (execv (exec_path, process->args));
-  libcrun_fail_with_error (errno, "exec");
+  libcrun_fail_with_error (errno, "exec `%s`", exec_path);
 }
 
 int
