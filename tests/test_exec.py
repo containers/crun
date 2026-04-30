@@ -297,7 +297,7 @@ def test_exec_add_env():
     conf['process']['capabilities'] = {}
     cid = None
     env_args_list = []
-    env_dict_orig = {"HOME":"/", "PATH":"/bin"}
+    env_dict_orig = {"HOME":"/", "PATH":"/bin", "TERM":"xterm"}
     env_dict_new = {"HOME":"/tmp", "PATH":"/usr/bin","FOO":"BAR"}
     try:
         _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
@@ -320,6 +320,12 @@ def test_exec_add_env():
                                 "-e", env_args_list[2], \
                                 cid, "/init", "printenv", "PATH"])
         if env_dict_new["PATH"] not in out:
+            return -1
+
+        # --env must merge with, not replace, the container's default env:
+        # PATH from the spec must still be set when only an unrelated var is added.
+        out = run_crun_command(["exec", "--env", "FOO=BAR", cid, "/init", "printenv", "PATH"])
+        if env_dict_orig["PATH"] not in out:
             return -1
     finally:
         if cid is not None:

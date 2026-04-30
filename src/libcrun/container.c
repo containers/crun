@@ -3659,6 +3659,7 @@ exec_process_entrypoint (libcrun_context_t *context,
                          int seccomp_fd,
                          int seccomp_receiver_fd,
                          struct custom_handler_instance_s *custom_handler,
+                         bool merge_env,
                          libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema_process_capabilities *capabilities = NULL;
@@ -3692,13 +3693,7 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "clearenv");
 
-  if (process->env_len)
-    {
-      for (i = 0; i < process->env_len; i++)
-        if (putenv (process->env[i]) < 0)
-          return crun_make_error (err, errno, "putenv `%s`", process->env[i]);
-    }
-  else if (container->container_def->process->env_len)
+  if ((merge_env || ! process->env_len) && container->container_def->process && container->container_def->process->env_len)
     {
       char *e;
 
@@ -3708,6 +3703,12 @@ exec_process_entrypoint (libcrun_context_t *context,
           if (putenv (e) < 0)
             return crun_make_error (err, errno, "putenv `%s`", e);
         }
+    }
+  if (process->env_len)
+    {
+      for (i = 0; i < process->env_len; i++)
+        if (putenv (process->env[i]) < 0)
+          return crun_make_error (err, errno, "putenv `%s`", process->env[i]);
     }
 
   if (getenv ("HOME") == NULL)
@@ -4055,7 +4056,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       TEMP_FAILURE_RETRY (close (pipefd0));
       pipefd0 = -1;
 
-      exec_process_entrypoint (context, container, process, &pipefd1, seccomp_fd, seccomp_receiver_fd, custom_handler, err);
+      exec_process_entrypoint (context, container, process, &pipefd1, seccomp_fd, seccomp_receiver_fd, custom_handler, opts->merge_env, err);
       /* It gets here only on errors.  */
       if (*err)
         {
