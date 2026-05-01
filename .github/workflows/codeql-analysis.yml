@@ -37,7 +37,7 @@ jobs:
        sudo apt-get update
        sudo apt-get install -y make git gcc build-essential pkgconf libtool libsystemd-dev libcap-dev libseccomp-dev libyajl-dev go-md2man libtool autoconf python3 automake libprotobuf-c-dev
        ./autogen.sh
-       ./configure
+       ./configure --enable-embedded-blake3
        make -j $(nproc)
 
     - name: Perform CodeQL Analysis

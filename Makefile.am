@@ -39,8 +39,6 @@ endif
 libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/string_map.c \
 		src/libcrun/ring_buffer.c \
-		src/libcrun/blake3/blake3.c \
-		src/libcrun/blake3/blake3_portable.c \
 		src/libcrun/cgroup-cgroupfs.c \
 		src/libcrun/cgroup-resources.c \
 		src/libcrun/cgroup-setup.c \
@@ -83,6 +81,11 @@ endif
 
 libocispec/libocispec.la:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec libocispec.la
+
+if HAVE_EMBEDDED_BLAKE3
+libcrun_SOURCES += src/libcrun/blake3/blake3.c \
+		src/libcrun/blake3/blake3_portable.c
+endif
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src -fvisibility=hidden
@@ -170,6 +173,7 @@ endif
 
 EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec autogen.sh \
 	src/libcrun/blake3/blake3_impl.h src/libcrun/blake3/blake3.h \
+	src/libcrun/blake3/blake3.c src/libcrun/blake3/blake3_portable.c \
 	src/crun.h src/list.h src/run.h src/run_create.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/oci_features.h src/spec.h src/update.h src/ps.h src/mounts.h \
 	src/checkpoint.h src/restore.h src/libcrun/seccomp_notify.h src/libcrun/seccomp_notify_plugin.h \

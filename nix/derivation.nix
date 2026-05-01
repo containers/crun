@@ -36,7 +36,7 @@ with pkgs; stdenv.mkDerivation {
       libsystemd
       yajl
     ] ++ lib.optionals enableCriu [ criu ];
-  configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
+  configureFlags = [ "--enable-static" "--enable-embedded-blake3" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
   prePatch = let
     staticLibs =
       lib.optional enableCriu "${criu}/lib/libcriu.a"

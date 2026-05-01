@@ -9,7 +9,7 @@ set -e
 (
 cd /crun
 ./autogen.sh
-./configure CFLAGS='-Wall -Wextra -Werror'
+./configure --enable-embedded-blake3 CFLAGS='-Wall -Wextra -Werror'
 make -j "$(nproc)"
 cp crun /usr/bin/runc
 )
