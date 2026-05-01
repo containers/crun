@@ -1,5 +1,6 @@
 %global krun_opts %{nil}
 %global wasmedge_opts %{nil}
+%global blake3_opts --enable-embedded-blake3
 
 %if %{defined copr_username}
 %define copr_build 1
@@ -101,7 +102,7 @@ Recommends: wasmedge
 
 %build
 ./autogen.sh
-./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts}
+./configure --disable-silent-rules %{krun_opts} %{wasmedge_opts} %{blake3_opts}
 %make_build
 
 %install

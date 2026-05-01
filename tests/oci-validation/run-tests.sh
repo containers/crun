@@ -13,7 +13,7 @@ cd /crun
 git config --global --add safe.directory /crun
 git clean -fdx
 ./autogen.sh
-./configure
+./configure --enable-embedded-blake3
 make -j "$(nproc)"
 )
 
