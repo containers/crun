@@ -305,6 +305,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       process->terminal = exec_options.tty;
       process->env = exec_options.env;
       process->env_len = exec_options.env_size;
+      exec_opts.merge_env = true;
       process->user = make_oci_process_user (exec_options.user);
 
       if (exec_options.process_label != NULL)
