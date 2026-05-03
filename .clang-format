@@ -94,6 +94,7 @@ SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: true
 SpaceAfterTemplateKeyword: true
 SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: true
 SpaceBeforeParens: Always
 SpaceInEmptyBlock: false
 SpaceInEmptyParentheses: false
