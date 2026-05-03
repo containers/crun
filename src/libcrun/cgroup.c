@@ -390,6 +390,9 @@ libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_
   if (delegate_cgroup == NULL)
     return 0;
 
+  if (path_has_dot_dot_component (delegate_cgroup))
+    return crun_make_error (err, 0, "invalid `..` component in delegate-cgroup `%s`", delegate_cgroup);
+
   cgroup_mode = libcrun_get_cgroup_mode (err);
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
