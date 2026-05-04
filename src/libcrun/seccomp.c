@@ -19,7 +19,6 @@
 #define _GNU_SOURCE
 
 #include <config.h>
-#include "blake3/blake3.h"
 #include "seccomp.h"
 #include "linux.h"
 #include "utils.h"
@@ -37,6 +36,12 @@
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+
+#ifdef HAVE_BLAKE3
+#  include <blake3.h>
+#else
+#  include "blake3/blake3.h"
+#endif
 
 #if HAVE_STDATOMIC_H
 #  include <stdatomic.h>

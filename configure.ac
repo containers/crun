@@ -93,6 +93,29 @@ AC_SEARCH_LIBS(yajl_tree_get, [yajl], [AC_DEFINE([HAVE_YAJL], 1, [Define if liby
 PKG_CHECK_MODULES([YAJL], [yajl >= 2.0.0])
 ])
 
+dnl embedded blake3
+AC_ARG_ENABLE(embedded-blake3,
+AS_HELP_STRING([--enable-embedded-blake3], [Statically link a modified blake3 version]),
+[
+case "${enableval}" in
+	yes) embedded_blake3=true ;;
+	no)  embedded_blake3=false ;;
+	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-blake3) ;;
+esac],[embedded_blake3=false])
+
+AM_CONDITIONAL([HAVE_EMBEDDED_BLAKE3], [test x"$embedded_blake3" = xtrue])
+AM_COND_IF([HAVE_EMBEDDED_BLAKE3], [], [
+PKG_CHECK_MODULES([BLAKE3], [libblake3], [
+  AC_DEFINE([HAVE_BLAKE3], 1, [Define if libblake3 is available])
+  LIBS="$LIBS $BLAKE3_LIBS"
+  CPPFLAGS="$CPPFLAGS $BLAKE3_CFLAGS"
+], [
+  AC_SEARCH_LIBS(blake3_hasher_init, [blake3], [AC_DEFINE([HAVE_BLAKE3], 1, [Define if libblake3 is available])], [
+    AC_MSG_ERROR([*** libblake3 not found; install libblake3 or use --enable-embedded-blake3])
+  ])
+])
+])
+
 dnl libcap
 AC_ARG_ENABLE([caps],
 	AS_HELP_STRING([--disable-caps], [Ignore libcap and disable support]))

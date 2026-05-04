@@ -11,7 +11,7 @@ rm -rf /usr/bin/crun /usr/local/bin/crun-wasm /usr/bin/crun-wasm
 git config --global --add safe.directory /crun
 git clean -fdx
 ./autogen.sh
-./configure CFLAGS='-Wall -Wextra -Werror' --with-wasmedge --prefix=/usr
+./configure --enable-embedded-blake3 CFLAGS='-Wall -Wextra -Werror' --with-wasmedge --prefix=/usr
 make -j "$(nproc)"
 make install
 
