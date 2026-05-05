@@ -1520,7 +1520,13 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
     return tmpfsdirfd;
   targetfd = tmpfsdirfd;
 
-  ret = read_all_file (PROC_SELF_CGROUP, &content, NULL, err);
+  {
+    int procfd = get_procfd (get_private_data (container), err);
+    if (UNLIKELY (procfd < 0))
+      return procfd;
+
+    ret = read_all_file_at (procfd, SELF_CGROUP, &content, NULL, err);
+  }
   if (UNLIKELY (ret < 0))
     return ret;
 
