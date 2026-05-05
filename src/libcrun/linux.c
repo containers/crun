@@ -1085,17 +1085,21 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
 
   if (readonly)
     {
+      int procfd = get_procfd (get_private_data (container), err);
       proc_fd_path_t source_buffer;
       cleanup_close int mountfd = -1;
 
-      get_proc_self_fd_path (source_buffer, pathfd);
+      if (UNLIKELY (procfd < 0))
+        return procfd;
+
+      get_self_fd_path (source_buffer, pathfd);
 
       /* Try open_tree + mount_setattr to apply MS_RDONLY atomically.
          Only when keep_flags is false, since keep_flags needs statfs
          to inherit parent mount flags.  */
       if (! keep_flags)
         {
-          mountfd = get_bind_mount (-1, source_buffer, true, true, false, MS_PRIVATE, err);
+          mountfd = get_bind_mount (procfd, source_buffer, true, true, false, MS_PRIVATE, err);
           if (mountfd >= 0)
             ret = fs_move_mount_to (mountfd, pathfd, NULL);
           else
@@ -1107,21 +1111,29 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
 
       if (keep_flags || ret < 0)
         {
+          proc_fd_path_t abs_source;
+
           mount_flags = MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC;
           if (keep_flags)
             {
-              ret = statfs (source_buffer, &sfs);
+              cleanup_close int sfd = openat (procfd, source_buffer, O_PATH | O_CLOEXEC);
+              if (UNLIKELY (sfd < 0))
+                return crun_make_error (err, errno, "openat procfd for `%s`", rel_path);
+
+              ret = fstatfs (sfd, &sfs);
               if (UNLIKELY (ret < 0))
-                return crun_make_error (err, errno, "statfs `%s`", source_buffer);
+                return crun_make_error (err, errno, "fstatfs `%s`", rel_path);
               mount_flags = mount_flags | sfs.f_flags;
 
-              // Parent might contain `MS_REMOUNT` but the new readonly path is not
-              // actually mounted. Specifically in the case of `/proc` this will end
-              // up with EINVAL therefore remove `MS_REMOUNT` if it's getting
-              // inherited from the parent.
+              /* Parent might contain MS_REMOUNT but the new readonly path is not
+                 actually mounted.  Specifically in the case of /proc this will end
+                 up with EINVAL therefore remove MS_REMOUNT if it is getting
+                 inherited from the parent.  */
               mount_flags = mount_flags & ~MS_REMOUNT;
             }
-          ret = do_mount (container, source_buffer, pathfd, rel_path, NULL, mount_flags, NULL,
+
+          get_proc_self_fd_path (abs_source, pathfd);
+          ret = do_mount (container, abs_source, pathfd, rel_path, NULL, mount_flags, NULL,
                           LABEL_NONE, err);
           if (UNLIKELY (ret < 0))
             return ret;
