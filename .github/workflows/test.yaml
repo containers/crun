@@ -172,8 +172,7 @@ jobs:
               ;;
               checkpoint-restore)
                   ./configure
-                  make -j $(nproc)
-                  sudo python3 tests/test_checkpoint_restore.py
+                  sudo make tests/test_checkpoint_restore.trs
               ;;
               fuzzing)
                   sudo docker build -t crun-fuzzing tests/fuzzing
