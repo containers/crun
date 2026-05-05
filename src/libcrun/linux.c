@@ -2336,18 +2336,19 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
       proc_fd_path_t proc_buf;
       const char *path = mount->source;
 
-      /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
-      if (source_mountfd >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
-        {
-          get_proc_self_fd_path (proc_buf, source_mountfd);
-          path = proc_buf;
-        }
-
       if ((extra_flags & OPTION_COPY_SYMLINK) && (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_DEST_NOFOLLOW)))
         return crun_make_error (err, 0, "`copy-symlink` is mutually exclusive with `src-nofollow` and `dest-nofollow`");
 
-      /* Do not resolve the symlink only when src-nofollow and copy-symlink are used.  */
-      ret = get_file_type (&src_mode, (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_COPY_SYMLINK)) ? true : false, path);
+      /* If copy-symlink is provided, ignore the pre-opened file descriptor since its source was resolved.  */
+      if (source_mountfd >= 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
+        {
+          get_self_fd_path (proc_buf, source_mountfd);
+          path = proc_buf;
+
+          ret = get_file_type_at (source_mountfd, &src_mode, true, NULL);
+        }
+      else
+        ret = get_file_type (&src_mode, (extra_flags & (OPTION_SRC_NOFOLLOW | OPTION_COPY_SYMLINK)) ? true : false, path);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "cannot stat `%s`", path);
 
