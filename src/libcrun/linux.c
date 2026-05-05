@@ -1772,15 +1772,15 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (fd < 0))
             return fd;
 
-          get_proc_self_fd_path (fd_buffer, fd);
+          get_self_fd_path (fd_buffer, fd);
 
-          ret = chmod (fd_buffer, device->mode);
+          ret = fchmodat (get_private_data (container)->procfd, fd_buffer, device->mode, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chmod `%s`", device->path);
+            return crun_make_error (err, errno, "fchmod `%s`", device->path);
 
-          ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
+          ret = fchownat (get_private_data (container)->procfd, fd_buffer, device->uid, device->gid, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%s`", device->path);
+            return crun_make_error (err, errno, "fchown `%s`", device->path);
         }
       else
         {
@@ -1827,15 +1827,15 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (fd < 0))
             return crun_error_wrap (err, "openat `%s`", device->path);
 
-          get_proc_self_fd_path (fd_buffer, fd);
+          get_self_fd_path (fd_buffer, fd);
 
-          ret = chmod (fd_buffer, device->mode);
+          ret = fchmodat (get_private_data (container)->procfd, fd_buffer, device->mode, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chmod `%s`", device->path);
+            return crun_make_error (err, errno, "fchmod `%s`", device->path);
 
-          ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
+          ret = fchownat (get_private_data (container)->procfd, fd_buffer, device->uid, device->gid, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%s`", device->path);
+            return crun_make_error (err, errno, "fchown `%s`", device->path);
         }
     }
   return 0;
