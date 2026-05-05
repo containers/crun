@@ -137,6 +137,8 @@ struct private_data_s
   unsigned long rootfs_propagation;
   bool deny_setgroups;
 
+  int procfd;
+
   const char *rootfs;
   int rootfsfd;
 
@@ -170,6 +172,8 @@ cleanup_private_data (void *private_data)
 
   if (p->rootfsfd >= 0)
     TEMP_FAILURE_RETRY (close (p->rootfsfd));
+  if (p->procfd >= 0)
+    TEMP_FAILURE_RETRY (close (p->procfd));
   if (p->maskdir_fd >= 0)
     TEMP_FAILURE_RETRY (close (p->maskdir_fd));
   if (p->mount_fds)
@@ -193,6 +197,7 @@ get_private_data (struct libcrun_container_s *container)
       struct private_data_s *p = xmalloc0 (sizeof (*p));
       container->private_data = p;
       p->rootfsfd = -1;
+      p->procfd = -1;
       p->notify_socket_tree_fd = -1;
       p->maskdir_fd = -1;
       container->cleanup_private_data = cleanup_private_data;
@@ -889,6 +894,24 @@ fsopen_mount (const char *type, const char *labeltype, const char *label)
   errno = ENOSYS;
   return -1;
 #endif
+}
+
+static int
+get_procfd (struct private_data_s *data, libcrun_error_t *err)
+{
+  int fd;
+
+  if (data->procfd >= 0)
+    return data->procfd;
+
+  fd = fsopen_mount ("proc", NULL, NULL);
+  if (fd < 0)
+    fd = open ("/proc", O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `/proc`");
+
+  data->procfd = fd;
+  return fd;
 }
 
 static int
@@ -2981,6 +3004,7 @@ int
 libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
+
   if (get_private_data (container)->unshare_flags & CLONE_NEWNS)
     {
       if (no_pivot)
