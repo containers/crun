@@ -1320,12 +1320,17 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 #ifdef HAVE_FGETXATTR
           if (label_how == LABEL_XATTR)
             {
-              proc_fd_path_t proc_file;
+              int procfd = get_procfd (get_private_data (container), err);
+              if (procfd >= 0)
+                {
+                  proc_fd_path_t proc_self_path;
+                  cleanup_close int xfd = -1;
 
-              get_proc_self_fd_path (proc_file, fd);
-
-              /* We need to go through the proc_file since fd itself is opened as O_PATH.  */
-              (void) setxattr (proc_file, "security.selinux", label, strlen (label), 0);
+                  get_self_fd_path (proc_self_path, fd);
+                  xfd = openat (procfd, proc_self_path, O_RDONLY | O_CLOEXEC);
+                  if (xfd >= 0)
+                    (void) fsetxattr (xfd, "security.selinux", label, strlen (label), 0);
+                }
             }
 #endif
 
