@@ -278,6 +278,32 @@ syscall_pidfd_send_signal (int pidfd, int sig, siginfo_t *info, unsigned int fla
 #endif
 }
 
+/* Translate MS_* mount flags to MOUNT_ATTR_* values for mount_setattr().  */
+static uint64_t
+ms_flags_to_mount_attr (uint64_t ms_flags)
+{
+  uint64_t attr = 0;
+
+  if (ms_flags & MS_RDONLY)
+    attr |= MOUNT_ATTR_RDONLY;
+  if (ms_flags & MS_NOSUID)
+    attr |= MOUNT_ATTR_NOSUID;
+  if (ms_flags & MS_NODEV)
+    attr |= MOUNT_ATTR_NODEV;
+  if (ms_flags & MS_NOEXEC)
+    attr |= MOUNT_ATTR_NOEXEC;
+  if (ms_flags & MS_NOATIME)
+    attr |= MOUNT_ATTR_NOATIME;
+  if (ms_flags & MS_STRICTATIME)
+    attr |= MOUNT_ATTR_STRICTATIME;
+  if (ms_flags & MS_NODIRATIME)
+    attr |= MOUNT_ATTR_NODIRATIME;
+  if (ms_flags & MS_NOSYMFOLLOW)
+    attr |= MOUNT_ATTR_NOSYMFOLLOW;
+
+  return attr;
+}
+
 static int
 do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t clear, uint64_t set, libcrun_error_t *err)
 {
@@ -290,8 +316,11 @@ do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t cle
   clear &= ~MS_BIND;
 
   attr.propagation = set & ALL_PROPAGATIONS_NO_REC;
-  attr.attr_set = set & (~ALL_PROPAGATIONS);
-  attr.attr_clr = clear & (~ALL_PROPAGATIONS);
+  attr.attr_set = ms_flags_to_mount_attr (set & (~ALL_PROPAGATIONS));
+  attr.attr_clr = ms_flags_to_mount_attr (clear & (~ALL_PROPAGATIONS));
+
+  if (attr.attr_set & MOUNT_ATTR__ATIME)
+    attr.attr_clr |= MOUNT_ATTR__ATIME;
 
   ret = syscall_mount_setattr (targetfd, "", (recursive ? AT_RECURSIVE : 0) | AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
@@ -771,6 +800,13 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
 
   if (targetfd >= 0)
     {
+      unsigned long set_flags = flags & ~(MS_REMOUNT | MS_BIND);
+      unsigned long clear_flags = (MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC) & ~set_flags;
+      ret = do_mount_setattr (false, target, targetfd, clear_flags, flags & ~MS_REMOUNT, err);
+      if (LIKELY (ret == 0))
+        return 0;
+      crun_error_release (err);
+
       get_proc_self_fd_path (target_buffer, targetfd);
       real_target = target_buffer;
     }
