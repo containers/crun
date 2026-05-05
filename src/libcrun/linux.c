@@ -1752,6 +1752,9 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
   else
     {
       proc_fd_path_t fd_buffer;
+      int procfd = get_procfd (get_private_data (container), err);
+      if (UNLIKELY (procfd < 0))
+        return procfd;
 
       dev = makedev (device->major, device->minor);
 
@@ -1772,15 +1775,15 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (fd < 0))
             return fd;
 
-          get_proc_self_fd_path (fd_buffer, fd);
+          get_self_fd_path (fd_buffer, fd);
 
-          ret = chmod (fd_buffer, device->mode);
+          ret = fchmodat (procfd, fd_buffer, device->mode, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chmod `%s`", device->path);
+            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
 
-          ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
+          ret = fchownat (procfd, fd_buffer, device->uid, device->gid, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%s`", device->path);
+            return crun_make_error (err, errno, "fchownat `%s`", device->path);
         }
       else
         {
@@ -1827,15 +1830,15 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (fd < 0))
             return crun_error_wrap (err, "openat `%s`", device->path);
 
-          get_proc_self_fd_path (fd_buffer, fd);
+          get_self_fd_path (fd_buffer, fd);
 
-          ret = chmod (fd_buffer, device->mode);
+          ret = fchmodat (procfd, fd_buffer, device->mode, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chmod `%s`", device->path);
+            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
 
-          ret = chown (fd_buffer, device->uid, device->gid); /* lgtm [cpp/toctou-race-condition] */
+          ret = fchownat (procfd, fd_buffer, device->uid, device->gid, 0);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "chown `%s`", device->path);
+            return crun_make_error (err, errno, "fchownat `%s`", device->path);
         }
     }
   return 0;
