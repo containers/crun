@@ -979,6 +979,7 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
   struct private_data_s *private_data = get_private_data (container);
   cleanup_close int fd = -1;
   cleanup_free char *empty_dir_path = NULL;
+  proc_fd_path_t fd_path;
   int ret;
 
   /* Fast path: return cached proc fd path if already set up */
@@ -998,8 +999,8 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
   if (fd < 0)
     return crun_make_error (err, errno, "open directory `%s`", empty_dir_path);
 
-  /* Cache the /proc/self/fd path for fast mounting */
-  xasprintf (&private_data->maskdir_proc_path, "/proc/self/fd/%d", fd);
+  get_self_fd_path (fd_path, fd);
+  private_data->maskdir_proc_path = xstrdup (fd_path);
 
   private_data->maskdir_fd = fd;
   fd = -1; /* Don't auto-close */
@@ -1012,14 +1013,16 @@ static int
 mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_path, libcrun_error_t *err)
 {
   struct private_data_s *private_data = get_private_data (container);
+  cleanup_close int mountfd = -1;
+  proc_fd_path_t abs_source;
   char *proc_fd_path = NULL;
   libcrun_error_t tmp_err = NULL;
+  int procfd;
   int ret;
 
   if (private_data->maskdir_bind_failed)
     goto fallback_to_tmpfs;
 
-  /* Get cached /proc/self/fd path (fast after first call) */
   ret = get_shared_empty_dir_cached (container, &proc_fd_path, &tmp_err);
   if (ret < 0)
     {
@@ -1029,20 +1032,21 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
-  {
-    cleanup_close int mountfd = -1;
+  procfd = get_procfd (get_private_data (container), err);
+  if (UNLIKELY (procfd < 0))
+    return procfd;
 
-    mountfd = get_bind_mount (-1, proc_fd_path, false, true, false, MS_PRIVATE, &tmp_err);
-    if (mountfd >= 0)
-      {
-        ret = fs_move_mount_to (mountfd, pathfd, NULL);
-        if (LIKELY (ret == 0))
-          return 0;
-      }
-    crun_error_release (&tmp_err);
-  }
+  mountfd = get_bind_mount (procfd, proc_fd_path, false, true, false, MS_PRIVATE, &tmp_err);
+  if (mountfd >= 0)
+    {
+      ret = fs_move_mount_to (mountfd, pathfd, NULL);
+      if (LIKELY (ret == 0))
+        return 0;
+    }
+  crun_error_release (&tmp_err);
 
-  ret = do_mount (container, proc_fd_path, pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, &tmp_err);
+  get_proc_self_fd_path (abs_source, private_data->maskdir_fd);
+  ret = do_mount (container, abs_source, pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, &tmp_err);
   if (LIKELY (ret >= 0))
     return ret;
 
