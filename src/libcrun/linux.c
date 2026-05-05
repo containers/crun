@@ -769,16 +769,21 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
   proc_fd_path_t target_buffer;
   const char *real_target = target;
 
-  if (targetfd >= 0)
-    {
-      get_proc_self_fd_path (target_buffer, targetfd);
-      real_target = target_buffer;
-    }
-
   /* Older kernels (seen on 4.18) fail with EINVAL if data is set when
      setting MS_RDONLY.  */
   if (flags & (MS_REMOUNT | MS_RDONLY))
     data = NULL;
+
+  if (targetfd >= 0)
+    {
+      ret = do_mount_setattr (false, target, targetfd, 0, flags & ~MS_REMOUNT, err);
+      if (LIKELY (ret == 0))
+        return 0;
+      crun_error_release (err);
+
+      get_proc_self_fd_path (target_buffer, targetfd);
+      real_target = target_buffer;
+    }
 
   ret = mount (NULL, real_target, NULL, flags, data);
   if (UNLIKELY (ret < 0))
