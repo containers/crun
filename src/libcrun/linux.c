@@ -2910,9 +2910,12 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
       if (cgroup_mode == CGROUP_MODE_UNIFIED)
         {
           char *unified_cgroup_path = NULL;
+          int procfd = get_procfd (get_private_data (container), err);
+          if (UNLIKELY (procfd < 0))
+            return procfd;
 
           /* Read the cgroup path before we enter the cgroupns.  */
-          ret = libcrun_get_cgroup_process (0, &unified_cgroup_path, true, err);
+          ret = libcrun_get_cgroup_process_at (procfd, &unified_cgroup_path, true, err);
           if (UNLIKELY (ret < 0))
             return ret;
 

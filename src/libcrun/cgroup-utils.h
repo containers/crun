@@ -28,6 +28,8 @@ int libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err);
 
 int libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error_t *err);
 
+int libcrun_get_cgroup_process_at (int dirfd, char **path, bool absolute, libcrun_error_t *err);
+
 int libcrun_get_cgroup_mode (libcrun_error_t *err);
 
 int libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_cgroup, libcrun_error_t *err);
