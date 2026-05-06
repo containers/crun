@@ -147,6 +147,7 @@ struct private_data_s
 
   struct libcrun_fd_map *mount_fds;
   struct libcrun_fd_map *dev_fds;
+  struct libcrun_fd_map *needed_devs_fds;
 
   /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
    * and needed during restore. */
@@ -183,6 +184,8 @@ cleanup_private_data (void *private_data)
     cleanup_close_mapp (&(p->mount_fds));
   if (p->dev_fds)
     cleanup_close_mapp (&(p->dev_fds));
+  if (p->needed_devs_fds)
+    cleanup_close_mapp (&(p->needed_devs_fds));
 
   free (p->unified_cgroup_path);
   free (p->host_notify_socket_path);
@@ -2046,9 +2049,13 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   runtime_spec_schema_config_schema *def = container->container_def;
   const char *rootfs = get_private_data (container)->rootfs;
   cleanup_close_map struct libcrun_fd_map *dev_fds = NULL;
+  cleanup_close_map struct libcrun_fd_map *needed_fds = NULL;
 
   dev_fds = get_private_data (container)->dev_fds;
   get_private_data (container)->dev_fds = NULL;
+
+  needed_fds = get_private_data (container)->needed_devs_fds;
+  get_private_data (container)->needed_devs_fds = NULL;
 
   if (! def || ! def->linux)
     return 0;
@@ -2076,12 +2083,16 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
         return ret;
     }
 
-  for (it = needed_devs; it->path; it++)
+  for (it = needed_devs, i = 0; it->path; it++, i++)
     {
+      int srcfd = (needed_fds && i < needed_fds->nfds) ? needed_fds->fds[i] : -1;
+
       /* make sure the parent directory exists only on the first iteration.  */
-      ret = libcrun_create_dev (container, devfd, -1, it, binds, it == needed_devs, err);
+      ret = libcrun_create_dev (container, devfd, srcfd, it, binds, it == needed_devs, err);
       if (UNLIKELY (ret < 0))
         return ret;
+      if (srcfd >= 0)
+        needed_fds->fds[i] = -1;
     }
 
   for (i = 0; symlinks[i].target; i++)
@@ -4516,6 +4527,21 @@ get_devices_fd_map (libcrun_container_t *container)
   return dev_fds;
 }
 
+#define NUM_NEEDED_DEVS 6
+
+static struct libcrun_fd_map *
+get_needed_devs_fd_map (libcrun_container_t *container)
+{
+  struct libcrun_fd_map *fds = get_private_data (container)->needed_devs_fds;
+
+  if (fds == NULL)
+    {
+      fds = make_libcrun_fd_map (NUM_NEEDED_DEVS);
+      get_private_data (container)->needed_devs_fds = fds;
+    }
+  return fds;
+}
+
 static struct libcrun_fd_map *
 get_fd_map (libcrun_container_t *container)
 {
@@ -4976,6 +5002,33 @@ restore_mountns:
 }
 
 static int
+prepare_and_send_needed_dev_mounts (libcrun_container_t *container, int sync_socket_host, libcrun_error_t *err)
+{
+  cleanup_close_map struct libcrun_fd_map *fds = NULL;
+  bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
+  size_t how_many = 0;
+  size_t i;
+
+  fds = make_libcrun_fd_map (NUM_NEEDED_DEVS);
+
+  if (! has_userns || geteuid () > 0)
+    return send_mounts (sync_socket_host, fds, 0, NUM_NEEDED_DEVS, err);
+
+  for (i = 0; i < NUM_NEEDED_DEVS && needed_devs[i].path; i++)
+    {
+      int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
+                                  OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
+      if (fd >= 0)
+        {
+          fds->fds[i] = fd;
+          how_many++;
+        }
+    }
+
+  return send_mounts (sync_socket_host, fds, how_many, NUM_NEEDED_DEVS, err);
+}
+
+static int
 prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
   int ret;
@@ -4989,6 +5042,10 @@ prepare_and_send_mounts (libcrun_container_t *container, pid_t pid, int sync_soc
     return ret;
 
   ret = prepare_and_send_dev_mounts (container, sync_socket_host, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = prepare_and_send_needed_dev_mounts (container, sync_socket_host, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -5292,6 +5349,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
     return ret;
 
   ret = receive_mounts (get_devices_fd_map (container), sync_socket_container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = receive_mounts (get_needed_devs_fd_map (container), sync_socket_container, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
