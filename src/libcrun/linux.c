@@ -1918,6 +1918,28 @@ relative_path_under_dev (const char *path)
   return NULL;
 }
 
+static int
+mknod_and_set_attrs (int dirfd, const char *name, struct device_s *device, mode_t type, dev_t dev, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = mknodat (dirfd, name, device->mode | type, dev);
+  if (UNLIKELY (ret < 0 && errno == EEXIST))
+    return 0;
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "mknodat `%s`", device->path);
+
+  ret = fchmodat (dirfd, name, device->mode, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fchmod `%s`", device->path);
+
+  ret = fchownat (dirfd, name, device->uid, device->gid, AT_SYMLINK_NOFOLLOW);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fchown `%s`", device->path);
+
+  return 1;
+}
+
 int
 libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
                     struct device_s *device, bool binds, bool ensure_parent_dir,
@@ -1927,7 +1949,6 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
   dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
   const char *fullname = device->path;
-  cleanup_close int fd = -1;
   const char *rootfs = get_private_data (container)->rootfs;
   if (is_empty_string (fullname))
     return crun_make_error (err, EINVAL, "device path is empty");
@@ -1997,11 +2018,6 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
     }
   else
     {
-      proc_fd_path_t fd_buffer;
-      int procfd = get_procfd (get_private_data (container), err);
-      if (UNLIKELY (procfd < 0))
-        return procfd;
-
       dev = makedev (device->major, device->minor);
 
       /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
@@ -2010,26 +2026,9 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
       */
       if (rel_dev)
         {
-          ret = mknodat (devfd, rel_dev, device->mode | type, dev);
-          /* We don't fail when the file already exists.  */
-          if (UNLIKELY (ret < 0 && errno == EEXIST))
-            return 0;
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknodat `%s`", device->path);
-
-          fd = safe_openat (devfd, rootfs, rel_dev, O_PATH | O_CLOEXEC, 0, err);
-          if (UNLIKELY (fd < 0))
-            return fd;
-
-          get_self_fd_path (fd_buffer, fd);
-
-          ret = fchmodat (procfd, fd_buffer, device->mode, 0);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
-
-          ret = fchownat (procfd, fd_buffer, device->uid, device->gid, 0);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchownat `%s`", device->path);
+          ret = mknod_and_set_attrs (devfd, rel_dev, device, type, dev, err);
+          if (ret <= 0)
+            return ret;
         }
       else
         {
@@ -2064,27 +2063,9 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
                 return dirfd;
             }
 
-          ret = mknodat (dirfd, basename, device->mode | type, dev);
-
-          /* We don't fail when the file already exists.  */
-          if (UNLIKELY (ret < 0 && errno == EEXIST))
-            return 0;
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "mknodat `%s`", device->path);
-
-          fd = safe_openat (dirfd, rootfs, basename, O_PATH | O_CLOEXEC, 0, err);
-          if (UNLIKELY (fd < 0))
-            return crun_error_wrap (err, "openat `%s`", device->path);
-
-          get_self_fd_path (fd_buffer, fd);
-
-          ret = fchmodat (procfd, fd_buffer, device->mode, 0);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchmodat `%s`", device->path);
-
-          ret = fchownat (procfd, fd_buffer, device->uid, device->gid, 0);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "fchownat `%s`", device->path);
+          ret = mknod_and_set_attrs (dirfd, basename, device, type, dev, err);
+          if (ret <= 0)
+            return ret;
         }
     }
   return 0;
