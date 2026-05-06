@@ -1864,7 +1864,6 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
   dev_t dev;
   mode_t type = (device->type[0] == 'b') ? S_IFBLK : ((device->type[0] == 'p') ? S_IFIFO : S_IFCHR);
   const char *fullname = device->path;
-  cleanup_close int fd = -1;
   const char *rootfs = get_private_data (container)->rootfs;
   if (is_empty_string (fullname))
     return crun_make_error (err, EINVAL, "device path is empty");
@@ -1934,8 +1933,6 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
     }
   else
     {
-      proc_fd_path_t fd_buffer;
-
       dev = makedev (device->major, device->minor);
 
       /* Check whether the path is directly under /dev.  Since we already have an open fd to /dev and mknodat(2)
@@ -1951,17 +1948,11 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknodat `%s`", device->path);
 
-          fd = safe_openat (devfd, rootfs, rel_dev, O_PATH | O_CLOEXEC, 0, err);
-          if (UNLIKELY (fd < 0))
-            return fd;
-
-          get_self_fd_path (fd_buffer, fd);
-
-          ret = fchmodat (get_private_data (container)->procfd, fd_buffer, device->mode, 0);
+          ret = fchmodat (devfd, rel_dev, device->mode, AT_SYMLINK_NOFOLLOW);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmod `%s`", device->path);
 
-          ret = fchownat (get_private_data (container)->procfd, fd_buffer, device->uid, device->gid, 0);
+          ret = fchownat (devfd, rel_dev, device->uid, device->gid, AT_SYMLINK_NOFOLLOW);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchown `%s`", device->path);
         }
@@ -2006,17 +1997,11 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "mknodat `%s`", device->path);
 
-          fd = safe_openat (dirfd, rootfs, basename, O_PATH | O_CLOEXEC, 0, err);
-          if (UNLIKELY (fd < 0))
-            return crun_error_wrap (err, "openat `%s`", device->path);
-
-          get_self_fd_path (fd_buffer, fd);
-
-          ret = fchmodat (get_private_data (container)->procfd, fd_buffer, device->mode, 0);
+          ret = fchmodat (dirfd, basename, device->mode, AT_SYMLINK_NOFOLLOW);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchmod `%s`", device->path);
 
-          ret = fchownat (get_private_data (container)->procfd, fd_buffer, device->uid, device->gid, 0);
+          ret = fchownat (dirfd, basename, device->uid, device->gid, AT_SYMLINK_NOFOLLOW);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fchown `%s`", device->path);
         }
