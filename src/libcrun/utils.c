@@ -1915,16 +1915,39 @@ set_blocking_fd (int fd, bool blocking, libcrun_error_t *err)
 }
 
 int
-parse_json_file (yajl_val *out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
+parse_json_file (json_object **out, const char *jsondata, struct parser_context *ctx arg_unused, libcrun_error_t *err)
 {
-  char errbuf[1024];
+  struct json_tokener *tok;
+  enum json_tokener_error jerr;
 
   *err = NULL;
 
-  *out = yajl_tree_parse (jsondata, errbuf, sizeof (errbuf));
-  if (*out == NULL)
-    return crun_make_error (err, 0, "cannot parse the data: `%s`", errbuf);
+  if (UNLIKELY (jsondata == NULL))
+    return crun_make_error (err, 0, "JSON data is NULL");
 
+  tok = json_tokener_new ();
+  if (UNLIKELY (tok == NULL))
+    return crun_make_error (err, 0, "cannot allocate JSON tokener");
+
+  json_tokener_set_flags (tok, JSON_TOKENER_VALIDATE_UTF8);
+
+  *out = json_tokener_parse_ex (tok, jsondata, (int) strlen (jsondata));
+  jerr = json_tokener_get_error (tok);
+  if (*out == NULL || jerr != json_tokener_success)
+    {
+      int saved_pos = (int) tok->char_offset;
+
+      json_tokener_free (tok);
+      if (*out)
+        {
+          json_object_put (*out);
+          *out = NULL;
+        }
+      return crun_make_error (err, 0, "cannot parse the data: %s at position %d",
+                              json_tokener_error_desc (jerr), saved_pos);
+    }
+
+  json_tokener_free (tok);
   return 0;
 }
 

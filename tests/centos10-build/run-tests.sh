@@ -7,14 +7,13 @@ git config --global --add safe.directory /crun
 
 git clean -fdx
 ./autogen.sh
-./configure --enable-embedded-yajl CFLAGS='-Wall -Wextra -Werror'
+./configure CFLAGS='-Wall -Wextra -Werror'
 make -j "$(nproc)"
 
-make -j "$(nproc)" distcheck DISTCHECK_CONFIGURE_FLAGS="--enable-embedded-yajl"
-
+make -j "$(nproc)" distcheck
 git clean -fdx
 ./autogen.sh
-./configure --enable-embedded-yajl CFLAGS='-Wall -Wextra -Werror' --disable-systemd
+./configure CFLAGS='-Wall -Wextra -Werror' --disable-systemd
 make -j "$(nproc)"
 
-make -j "$(nproc)" distcheck DISTCHECK_CONFIGURE_FLAGS="--enable-embedded-yajl"
+make -j "$(nproc)" distcheck
