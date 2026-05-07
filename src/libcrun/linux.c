@@ -161,6 +161,7 @@ struct private_data_s
   char *maskdir_proc_path;
   bool maskdir_bind_failed;
   bool maskdir_warned;
+  bool joined_mount_ns;
 };
 
 struct linux_namespace_s
@@ -3083,7 +3084,7 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
       if (UNLIKELY (fstat (parentfd, &cur_st) < 0))
         return crun_make_error (err, errno, "fstat parent of `%s`", rootfs);
 
-      /* Reached the root of the filesystem: ".." points to itself.  */
+      /* Reached the root of the file system: ".." points to itself.  */
       if (cur_st.st_dev == prev_st.st_dev && cur_st.st_ino == prev_st.st_ino)
         break;
 
@@ -3323,6 +3324,13 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
   get_private_data (container)->rootfs_propagation = rootfs_propagation;
 
+  if (! get_private_data (container)->joined_mount_ns)
+    {
+      ret = unshare (CLONE_NEWNS);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "unshare `CLONE_NEWNS`");
+    }
+
   ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -3336,11 +3344,11 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
     return ret;
 
   /* Parse mount options once and use the result to:
-     - create detached mounts (fsopen) for non-bind filesystems,
+     - create detached mounts (fsopen) for non-bind file systems,
      - pre-read symlink targets for copy-symlink bind mounts,
      - pre-open bind mount sources.
      All of this must happen before pivot_root / setns, while the
-     host filesystem is still reachable.  */
+     host file system is still reachable.  */
   for (i = 0; i < def->mounts_len; i++)
     {
       cleanup_free char *mnt_data = NULL;
@@ -3486,6 +3494,14 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
     }
 
   get_old_root_fd (get_private_data (container));
+
+  /* Cache /proc fd while the host file system is still accessible.
+     After pivot_root/setns, fsopen("proc") fails with EPERM in
+     userns containers and /proc is not yet mounted.  */
+  ret = get_procfd (get_private_data (container), &tmp_err);
+  if (ret < 0)
+    crun_error_release (&tmp_err);
+
 
   /* Cache the user-namespace check while /proc/self/uid_map is still
      readable.  After pivot_root, /proc may not be mounted yet (e.g.
@@ -5535,10 +5551,10 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (init_status->namespaces_to_unshare & ~CLONE_NEWCGROUP)
+  if (init_status->namespaces_to_unshare & ~(CLONE_NEWCGROUP | CLONE_NEWNS))
     {
       /* New namespaces to create for the container.  */
-      ret = unshare (init_status->namespaces_to_unshare & ~CLONE_NEWCGROUP);
+      ret = unshare (init_status->namespaces_to_unshare & ~(CLONE_NEWCGROUP | CLONE_NEWNS));
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "unshare");
     }
@@ -5684,6 +5700,9 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
     return ret;
 
   get_private_data (container)->unshare_flags = init_status.all_namespaces;
+  get_private_data (container)->joined_mount_ns
+      = (init_status.all_namespaces & CLONE_NEWNS)
+        && ! (init_status.namespaces_to_unshare & CLONE_NEWNS);
   /* cgroup will be unshared later.  Once the process is in the correct cgroup.  */
   init_status.all_namespaces &= ~CLONE_NEWCGROUP;
   get_private_data (container)->unshare_cgroupns = init_status.namespaces_to_unshare & CLONE_NEWCGROUP;
@@ -5772,7 +5791,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   else if ((init_status.all_namespaces & CLONE_NEWUSER) == 0)
     {
       /* If it doesn't create a user namespace or need to join one, create the new requested namespaces now. */
-      first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME | CLONE_NEWCGROUP);
+      first_clone_args = init_status.namespaces_to_unshare & ~(CLONE_NEWTIME | CLONE_NEWCGROUP | CLONE_NEWNS);
     }
 
   init_status.namespaces_to_unshare &= ~first_clone_args;
