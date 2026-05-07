@@ -88,6 +88,10 @@
 #  define OPEN_TREE_CLOEXEC O_CLOEXEC
 #endif
 
+#ifndef OPEN_TREE_NAMESPACE
+#  define OPEN_TREE_NAMESPACE 2
+#endif
+
 #ifndef MOVE_MOUNT_F_EMPTY_PATH
 #  define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
 #endif
@@ -162,6 +166,8 @@ struct private_data_s
   bool maskdir_bind_failed;
   bool maskdir_warned;
   bool joined_mount_ns;
+  bool needs_pivot;
+  bool no_pivot;
 };
 
 struct linux_namespace_s
@@ -802,7 +808,7 @@ make_remount (int targetfd, const char *target, unsigned long flags, const char 
 static int
 do_remount (int targetfd, const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
 {
-  cleanup_free char *abs_target = NULL;
+  proc_fd_path_t target_buffer;
   int ret;
   const char *real_target = target;
 
@@ -818,11 +824,8 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
         return 0;
       crun_error_release (err);
 
-      if (target[0] != '/')
-        {
-          xasprintf (&abs_target, "/%s", target);
-          real_target = abs_target;
-        }
+      get_proc_self_fd_path (target_buffer, targetfd);
+      real_target = target_buffer;
     }
 
   ret = mount (NULL, real_target, NULL, flags, data);
@@ -912,7 +915,7 @@ open_mount_target (libcrun_container_t *container, const char *target_rel, libcr
 
 /* Attempt to open a mount of the specified type.  */
 static int
-fsopen_mount (const char *type, const char *labeltype, const char *label, const char *data)
+fsopen_mount (const char *type, const char *source_name, const char *labeltype, const char *label, const char *data)
 {
 #ifdef HAVE_NEW_MOUNT_API
   cleanup_close int fsfd = -1;
@@ -922,7 +925,7 @@ fsopen_mount (const char *type, const char *labeltype, const char *label, const 
   if (UNLIKELY (fsfd < 0))
     return fsfd;
 
-  (void) syscall_fsconfig (fsfd, FSCONFIG_SET_STRING, "source", type, 0);
+  (void) syscall_fsconfig (fsfd, FSCONFIG_SET_STRING, "source", source_name ? source_name : type, 0);
 
   if (labeltype)
     {
@@ -943,6 +946,7 @@ fsopen_mount (const char *type, const char *labeltype, const char *label, const 
           if (eq)
             {
               *eq = '\0';
+
               ret = syscall_fsconfig (fsfd, FSCONFIG_SET_STRING, token, eq + 1, 0);
             }
           else
@@ -960,6 +964,7 @@ fsopen_mount (const char *type, const char *labeltype, const char *label, const 
   return syscall_fsmount (fsfd, FSMOUNT_CLOEXEC, 0);
 #else
   (void) type;
+  (void) source_name;
   (void) data;
   errno = ENOSYS;
   return -1;
@@ -974,7 +979,7 @@ get_procfd (struct private_data_s *data, libcrun_error_t *err)
   if (data->procfd >= 0)
     return data->procfd;
 
-  fd = fsopen_mount ("proc", NULL, NULL, NULL);
+  fd = fsopen_mount ("proc", NULL, NULL, NULL, NULL);
   if (fd < 0)
     fd = open ("/proc", O_DIRECTORY | O_CLOEXEC);
   if (UNLIKELY (fd < 0))
@@ -1296,11 +1301,11 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           int label_how, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
-  cleanup_free char *abs_target = NULL;
   const char *context_type = NULL;
   cleanup_close int ms_move_fd = -1;
   const char *real_target = target;
   bool single_instance = false;
+  proc_fd_path_t target_buffer;
   bool needs_remount = false;
   cleanup_close int fd = -1;
   const char *label = NULL;
@@ -1313,13 +1318,8 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (targetfd >= 0)
     {
-      if (target[0] == '/')
-        real_target = target;
-      else
-        {
-          xasprintf (&abs_target, "/%s", target);
-          real_target = abs_target;
-        }
+      get_proc_self_fd_path (target_buffer, targetfd);
+      real_target = target_buffer;
 
       needs_remount = true;
     }
@@ -1388,7 +1388,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
             }
           else
             {
-              cleanup_close int newfs = fsopen_mount (fstype, context_type, label, data);
+              cleanup_close int newfs = fsopen_mount (fstype, source, context_type, label, data);
               if (newfs >= 0)
                 ret = fs_move_mount_to (newfs, targetfd, NULL);
             }
@@ -1491,18 +1491,8 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           /* We are replacing the rootfs, reopen it.  */
           if (is_empty_string (target))
             {
-              int procfd = get_procfd (get_private_data (container), err);
-              if (UNLIKELY (procfd < 0))
-                return procfd;
-
-              {
-                cleanup_close int nsfd = openat (procfd, "self/ns/mnt", O_RDONLY | O_CLOEXEC);
-                if (nsfd >= 0)
-                  setns (nsfd, CLONE_NEWNS);
-              }
-
               close_and_reset (&fd);
-              fd = openat (procfd, "self/root", O_PATH | O_CLOEXEC);
+              fd = open (get_private_data (container)->rootfs, O_PATH | O_CLOEXEC);
               if (UNLIKELY (fd < 0))
                 return crun_make_error (err, errno, "reopen rootfs after mount on /");
 
@@ -2709,6 +2699,25 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
               if (UNLIKELY (ret < 0))
                 return ret;
             }
+
+          if (is_empty_string (target))
+            {
+              cleanup_close int fd = -1;
+
+              fd = open (get_private_data (container)->rootfs, O_PATH | O_CLOEXEC);
+              if (UNLIKELY (fd < 0))
+                return crun_make_error (err, errno, "reopen rootfs after mount on /");
+
+              {
+                int tmp = dup (fd);
+                if (UNLIKELY (tmp < 0))
+                  return crun_make_error (err, errno, "dup");
+
+                TEMP_FAILURE_RETRY (close (get_private_data (container)->rootfsfd));
+                get_private_data (container)->rootfsfd = tmp;
+              }
+            }
+
           mounted = true;
         }
     }
@@ -3206,6 +3215,8 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
   return 0;
 }
 
+static int move_root (const char *rootfs, libcrun_error_t *err);
+
 int
 libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
@@ -3221,6 +3232,34 @@ libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun
     return crun_error_wrap (err, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_AFTER_MOUNTS");
 
   close_and_reset (&(get_private_data (container)->rootfsfd));
+
+  if (get_private_data (container)->needs_pivot)
+    {
+      get_private_data (container)->needs_pivot = false;
+
+      if (get_private_data (container)->no_pivot)
+        {
+          ret = move_root (rootfs, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else
+        {
+          ret = do_pivot (container, rootfs, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      ret = do_mount (container, NULL, -1, "/", NULL,
+                      get_private_data (container)->rootfs_propagation,
+                      NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = chdir ("/");
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "chdir to `/`");
+    }
 
   return 0;
 }
@@ -3305,13 +3344,63 @@ open_mount_type (const char *type, int *out_fd, libcrun_error_t *err)
   return 0;
 }
 
+static int
+maybe_open_tree_namespace (const char *rootfs, int *out_fd, libcrun_error_t *err)
+{
+  cleanup_close int rootfs_fd = -1;
+  int tree_fd;
+
+  *out_fd = -1;
+
+  rootfs_fd = open (rootfs, O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (rootfs_fd < 0))
+    return crun_make_error (err, errno, "open `%s`", rootfs);
+
+  tree_fd = syscall_open_tree (rootfs_fd, "",
+                               OPEN_TREE_NAMESPACE | OPEN_TREE_CLOEXEC
+                                   | AT_EMPTY_PATH | AT_RECURSIVE);
+  if (tree_fd < 0)
+    {
+      if (errno == EINVAL || errno == ENOSYS || errno == EPERM)
+        return 0;
+      return crun_make_error (err, errno, "open_tree `%s`", rootfs);
+    }
+
+  *out_fd = tree_fd;
+  return 0;
+}
+
 static struct libcrun_fd_map *get_fd_map (libcrun_container_t *container);
+
+static bool
+can_use_open_tree_namespace (libcrun_container_t *container)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  struct libcrun_fd_map *mount_fds;
+  bool has_hooks = def->hooks
+                   && (def->hooks->prestart_len || def->hooks->create_runtime_len);
+  bool has_userns = get_private_data (container)->unshare_flags & CLONE_NEWUSER;
+  size_t i;
+
+  if (has_hooks || has_userns)
+    return false;
+
+  mount_fds = get_fd_map (container);
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      if (mount_fds->fds[i] < 0)
+        return false;
+    }
+
+  return true;
+}
 
 static int
 setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **rootfs, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   unsigned long rootfs_propagation = 0;
+  cleanup_close int tree_fd = -1;
   libcrun_error_t tmp_err = NULL;
   size_t i;
   int ret;
@@ -3323,25 +3412,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
     rootfs_propagation = MS_REC | MS_PRIVATE;
 
   get_private_data (container)->rootfs_propagation = rootfs_propagation;
-
-  if (! get_private_data (container)->joined_mount_ns)
-    {
-      ret = unshare (CLONE_NEWNS);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "unshare `CLONE_NEWNS`");
-    }
-
-  ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, LABEL_MOUNT, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = make_parent_mount_private (*rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   /* Parse mount options once and use the result to:
      - create detached mounts (fsopen) for non-bind file systems,
@@ -3406,7 +3476,13 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           continue;
         }
 
+      /* Non-bind mounts are pre-created in the parent (prepare_and_send_mount_mounts)
+         to ensure mount IDs are allocated in array order alongside bind mounts.
+         Only create here as a fallback if the parent did not provide one.  */
       if (def->mounts[i]->type == NULL)
+        continue;
+
+      if (get_fd_map (container)->fds[i] >= 0)
         continue;
 
       {
@@ -3434,7 +3510,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
                                                   mnt_flags, &mnt_extra, &mnt_data,
                                                   &mnt_rec_clear, &mnt_rec_set);
 
-        fd = fsopen_mount (def->mounts[i]->type, label_type, label_val, mnt_data);
+        fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, label_type, label_val, mnt_data);
         if (fd < 0)
           continue;
 
@@ -3461,6 +3537,39 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
         get_fd_map (container)->fds[i] = fd;
       }
+    }
+
+  if (! get_private_data (container)->joined_mount_ns
+      && can_use_open_tree_namespace (container))
+    {
+      ret = maybe_open_tree_namespace (*rootfs, &tree_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (tree_fd < 0)
+    {
+      if (! get_private_data (container)->joined_mount_ns)
+        {
+          ret = unshare (CLONE_NEWNS);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "unshare `CLONE_NEWNS`");
+        }
+
+      ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = make_parent_mount_private (*rootfs, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      get_private_data (container)->needs_pivot = true;
+      get_private_data (container)->no_pivot = no_pivot;
     }
 
   /* Pre-open needed device fds for rootless containers.
@@ -3502,7 +3611,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
   if (ret < 0)
     crun_error_release (&tmp_err);
 
-
   /* Cache the user-namespace check while /proc/self/uid_map is still
      readable.  After pivot_root, /proc may not be mounted yet (e.g.
      when sysfs is listed before proc), and the check would return a
@@ -3517,22 +3625,27 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       get_private_data (container)->maskdir_bind_failed = true;
     }
 
-  if (no_pivot)
+  if (tree_fd >= 0)
     {
-      ret = move_root (*rootfs, err);
+      ret = setns (tree_fd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
-        return ret;
-    }
-  else
-    {
-      ret = do_pivot (container, *rootfs, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+        return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
 
-  ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, LABEL_MOUNT, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+      ret = mount (NULL, "/", NULL, MS_REMOUNT | MS_BIND, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "remount `/`");
+
+      ret = do_mount (container, NULL, -1, "/", NULL, MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = do_mount (container, NULL, -1, "/", NULL, rootfs_propagation, NULL, LABEL_MOUNT, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      free (*rootfs);
+      *rootfs = xstrdup ("/");
+    }
 
   return 0;
 }
@@ -3550,20 +3663,30 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, char **roo
       ret = setup_mount_namespace (container, no_pivot, rootfs, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      /* If setup_mount_namespace used OPEN_TREE_NAMESPACE, rootfs is
+         already set to "/".  Otherwise pivot_root is deferred until
+         after the mounts are created.  */
+      if (strcmp (*rootfs, "/") == 0)
+        {
+          ret = chdir ("/");
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "chdir to `/`");
+        }
     }
   else
     {
       ret = chroot (*rootfs);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chroot to `%s`", *rootfs);
+
+      ret = chdir ("/");
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "chdir to `/`");
+
+      free (*rootfs);
+      *rootfs = xstrdup ("/");
     }
-
-  ret = chdir ("/");
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "chdir to `/`");
-
-  free (*rootfs);
-  *rootfs = xstrdup ("/");
 
   return 0;
 }
@@ -5130,7 +5253,6 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       if (UNLIKELY (ret < 0))
         return ret;
 
-      /* Always pre-open bind mount sources in the parent so they are accessible after pivot_root.  */
       if (mount_fd < 0 && is_bind_mount (def->mounts[i], &recursive, &nofollow))
         {
           unsigned long propagation = 0;
@@ -5140,10 +5262,42 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
           if (propagation == 0)
             propagation = MS_PRIVATE;
 
-          /* If the bind mount failed, do not fail here, but attempt to create it from within the container.  */
           mount_fd = get_bind_mount (-1, def->mounts[i]->source, recursive, false, nofollow, propagation, err);
           if (UNLIKELY (mount_fd < 0))
             crun_error_release (err);
+        }
+      else if (mount_fd < 0 && def->mounts[i]->type != NULL)
+        {
+          cleanup_free char *mnt_data = NULL;
+          unsigned long mnt_flags = 0;
+          unsigned long mnt_extra = 0;
+          uint64_t mnt_rec_clear = 0, mnt_rec_set = 0;
+          const char *label_type = NULL;
+          const char *label_val = NULL;
+          size_t j;
+
+          for (j = 0; j < def->mounts[i]->options_len; j++)
+            mnt_flags |= get_mount_flags_or_option (def->mounts[i]->options[j],
+                                                    mnt_flags, &mnt_extra, &mnt_data,
+                                                    &mnt_rec_clear, &mnt_rec_set);
+
+          if (def->linux && def->linux->mount_label)
+            {
+              bool is_sysfs_or_proc = strcmp (def->mounts[i]->type, "sysfs") == 0
+                                      || strcmp (def->mounts[i]->type, "proc") == 0;
+              int label_how = get_mount_label_how (def->mounts[i]->type, is_sysfs_or_proc);
+              if (label_how == LABEL_MOUNT)
+                {
+                  label_type = get_selinux_context_type (container, err);
+                  if (label_type == NULL)
+                    crun_error_release (err);
+                  else
+                    label_val = def->linux->mount_label;
+                }
+            }
+
+          mount_fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source,
+                                   label_type, label_val, mnt_data);
         }
 
       if (mount_fd >= 0)
@@ -5225,7 +5379,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
         }
     }
 
-  devs_mountfd = fsopen_mount ("tmpfs", context_type, label, NULL);
+  devs_mountfd = fsopen_mount ("tmpfs", NULL, context_type, label, NULL);
   if (UNLIKELY (devs_mountfd < 0))
     {
       ret = crun_make_error (err, errno, "fsopen_mount `tmpfs`");
@@ -5497,9 +5651,9 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
              An error will be generated later if it is not possible to join the namespace.
           */
           if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
-            fd = fsopen_mount (def->mounts[i]->type, NULL, NULL, NULL);
+            fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            fd = fsopen_mount (def->mounts[i]->type, NULL, NULL, NULL);
+            fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
 
           if (fd >= 0)
             {
