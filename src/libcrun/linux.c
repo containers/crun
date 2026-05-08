@@ -4664,23 +4664,23 @@ get_idmapped_option (runtime_spec_schema_defs_mount *mnt, bool *recursive)
 }
 
 static int
-open_mount_of_type (runtime_spec_schema_defs_mount *mnt, int *out_fd, libcrun_error_t *err)
+open_mount_type (const char *type, int *out_fd, libcrun_error_t *err)
 {
   cleanup_close int fsopen_fd = -1;
   cleanup_close int newfs_fd = -1;
   int ret;
 
-  fsopen_fd = syscall_fsopen (mnt->type, FSOPEN_CLOEXEC);
+  fsopen_fd = syscall_fsopen (type, FSOPEN_CLOEXEC);
   if (UNLIKELY (fsopen_fd < 0))
-    return crun_make_error (err, errno, "fsopen `%s`", mnt->type);
+    return crun_make_error (err, errno, "fsopen `%s`", type);
 
   ret = syscall_fsconfig (fsopen_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "fsconfig create `%s`", mnt->type);
+    return crun_make_error (err, errno, "fsconfig create `%s`", type);
 
   newfs_fd = syscall_fsmount (fsopen_fd, FSMOUNT_CLOEXEC, 0);
   if (UNLIKELY (newfs_fd < 0))
-    return crun_make_error (err, errno, "fsmount `%s`", mnt->type);
+    return crun_make_error (err, errno, "fsmount `%s`", type);
 
   *out_fd = get_and_reset (&newfs_fd);
   return 0;
@@ -4748,7 +4748,7 @@ maybe_get_idmapped_mount (libcrun_container_t *container, runtime_spec_schema_co
     }
   else
     {
-      ret = open_mount_of_type (mnt, &newfs_fd, err);
+      ret = open_mount_type (mnt->type, &newfs_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -6785,7 +6785,7 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
             }
           else
             {
-              ret = open_mount_of_type (mounts[i], &(fds->fds[i]), err);
+              ret = open_mount_type (mounts[i]->type, &(fds->fds[i]), err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
