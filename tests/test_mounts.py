@@ -153,6 +153,8 @@ def test_mount_bind_to_rootfs():
     return 0
 
 def test_mount_tmpfs_to_rootfs():
+    # tmpcopyup on "/" is rejected: after pivot_root is moved before mounts,
+    # there is no original rootfs content to copy from.
     conf = base_config()
     conf['process']['args'] = ['/init', 'true']
     add_all_namespaces(conf)
@@ -161,8 +163,11 @@ def test_mount_tmpfs_to_rootfs():
         {"destination": "/", "type": "tmpfs", "source": "tmpfs", "options": ["tmpcopyup"]},
     ]
     conf['mounts'] = mounts + conf['mounts']
-    _, _ = run_and_get_output(conf, hide_stderr=True)
-    return 0
+    try:
+        _, _ = run_and_get_output(conf, hide_stderr=True)
+        return -1
+    except Exception as e:
+        return 0
 
 def test_ro_cgroup():
     for cgroupns in [True, False]:
@@ -1185,6 +1190,33 @@ def test_no_proc_sysfs_cgroup():
     run_and_get_output(conf, hide_stderr=True)
     return 0
 
+def test_rbind_with_bind_option():
+    """Verify rbind carries submounts even when 'bind' also appears in options."""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    mount_opt = {
+        "destination": "/mnt",
+        "type": "bind",
+        "source": "/sys",
+        "options": ["rbind", "rprivate", "rw", "bind"]
+    }
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    found_sub = False
+    for line in out.splitlines():
+        if ' /mnt/' in line:
+            found_sub = True
+            break
+    if not found_sub:
+        logger.info("/mnt/* submounts not found - rbind did not carry submounts")
+        logger.info("mountinfo output: %s", out)
+        return -1
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1230,6 +1262,7 @@ all_tests = {
     "mount-overlay-fs": test_mount_overlay_fs,
     "mount-no-proc": test_no_proc,
     "mount-no-proc-sysfs-cgroup": test_no_proc_sysfs_cgroup,
+    "mount-rbind-with-bind-option": test_rbind_with_bind_option,
 }
 
 if __name__ == "__main__":
