@@ -4313,7 +4313,7 @@ is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive, bool *src_n
   bool ret = false;
   size_t i;
 
-  if (src_nofollow == NULL)
+  if (src_nofollow != NULL)
     *src_nofollow = false;
 
   for (i = 0; i < mnt->options_len; i++)
