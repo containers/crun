@@ -149,6 +149,9 @@ struct private_data_s
   struct libcrun_fd_map *dev_fds;
   struct libcrun_fd_map *needed_devs_fds;
 
+  char **copy_symlink_targets;
+  size_t n_copy_symlink_targets;
+
   /* Used to save stdin, stdout, stderr during checkpointing to descriptors.json
    * and needed during restore. */
   char *external_descriptors;
@@ -187,6 +190,13 @@ cleanup_private_data (void *private_data)
   if (p->needed_devs_fds)
     cleanup_close_mapp (&(p->needed_devs_fds));
 
+  if (p->copy_symlink_targets)
+    {
+      size_t i;
+      for (i = 0; i < p->n_copy_symlink_targets; i++)
+        free (p->copy_symlink_targets[i]);
+      free (p->copy_symlink_targets);
+    }
   free (p->unified_cgroup_path);
   free (p->host_notify_socket_path);
   free (p->container_notify_socket_path);
@@ -2413,22 +2423,28 @@ safe_create_symlink (int rootfsfd, const char *rootfs, const char *target, const
 
 static int
 handle_copy_symlink (libcrun_container_t *container, const char *rootfs,
-                     runtime_spec_schema_defs_mount *mount, libcrun_error_t *err)
+                     runtime_spec_schema_defs_mount *mount,
+                     const char *link_target, libcrun_error_t *err)
 {
   cleanup_free char *target = NULL;
-  const char *source = mount->source;
-  int old_root_fd = get_old_root_fd (get_private_data (container));
-  ssize_t len;
 
-  if (old_root_fd >= 0 && source[0] == '/')
-    len = safe_readlinkat (old_root_fd, source + 1, &target, 0, err);
-  else
-    len = safe_readlinkat (AT_FDCWD, source, &target, 0, err);
-  if (UNLIKELY (len < 0))
-    return len;
+  if (link_target == NULL)
+    {
+      int old_root_fd = get_old_root_fd (get_private_data (container));
+      const char *source = mount->source;
+      ssize_t len;
+
+      if (old_root_fd >= 0 && source[0] == '/')
+        len = safe_readlinkat (old_root_fd, source + 1, &target, 0, err);
+      else
+        len = safe_readlinkat (AT_FDCWD, source, &target, 0, err);
+      if (UNLIKELY (len < 0))
+        return len;
+      link_target = target;
+    }
 
   return safe_create_symlink (get_private_data (container)->rootfsfd, rootfs,
-                              target, mount->destination, err);
+                              link_target, mount->destination, err);
 }
 
 static int
@@ -2573,6 +2589,14 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
           ret = get_file_type_at (source_mountfd, &src_mode, true, NULL);
         }
+      else if ((extra_flags & OPTION_COPY_SYMLINK)
+               && get_private_data (container)->copy_symlink_targets
+               && mount_index < get_private_data (container)->n_copy_symlink_targets
+               && get_private_data (container)->copy_symlink_targets[mount_index])
+        {
+          src_mode = S_IFLNK;
+          ret = 0;
+        }
       else if (path[0] == '/')
         {
           int old_root_fd = get_old_root_fd (get_private_data (container));
@@ -2611,7 +2635,13 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
   if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
     {
-      ret = handle_copy_symlink (container, rootfs, mount, err);
+      const char *cached_target = NULL;
+
+      if (get_private_data (container)->copy_symlink_targets
+          && mount_index < get_private_data (container)->n_copy_symlink_targets)
+        cached_target = get_private_data (container)->copy_symlink_targets[mount_index];
+
+      ret = handle_copy_symlink (container, rootfs, mount, cached_target, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -3305,12 +3335,49 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
   if (UNLIKELY (ret < 0))
     return ret;
 
-  /* Create detached mounts (fsopen) for non-bind filesystems and
-     pre-open bind mount sources, all before pivot_root while the
+  /* Parse mount options once and use the result to:
+     - create detached mounts (fsopen) for non-bind filesystems,
+     - pre-read symlink targets for copy-symlink bind mounts,
+     - pre-open bind mount sources.
+     All of this must happen before pivot_root / setns, while the
      host filesystem is still reachable.  */
   for (i = 0; i < def->mounts_len; i++)
     {
+      cleanup_free char *mnt_data = NULL;
+      unsigned long mnt_flags = 0;
+      unsigned long mnt_extra = 0;
+      uint64_t mnt_rec_clear = 0, mnt_rec_set = 0;
       bool recursive_bind, nofollow;
+      size_t j;
+
+      for (j = 0; j < def->mounts[i]->options_len; j++)
+        mnt_flags |= get_mount_flags_or_option (def->mounts[i]->options[j],
+                                                mnt_flags, &mnt_extra, &mnt_data,
+                                                &mnt_rec_clear, &mnt_rec_set);
+
+      if ((mnt_extra & OPTION_COPY_SYMLINK)
+          && def->mounts[i]->source != NULL
+          && def->mounts[i]->source[0] == '/')
+        {
+          cleanup_free char *target = NULL;
+          libcrun_error_t tmp_err = NULL;
+          ssize_t len;
+
+          len = safe_readlinkat (AT_FDCWD, def->mounts[i]->source, &target, 0, &tmp_err);
+          if (len >= 0)
+            {
+              if (get_private_data (container)->copy_symlink_targets == NULL)
+                {
+                  get_private_data (container)->copy_symlink_targets
+                      = xmalloc0 (def->mounts_len * sizeof (char *));
+                  get_private_data (container)->n_copy_symlink_targets = def->mounts_len;
+                }
+              get_private_data (container)->copy_symlink_targets[i] = target;
+              target = NULL;
+            }
+          else
+            crun_error_release (&tmp_err);
+        }
 
       if (is_bind_mount (def->mounts[i], &recursive_bind, &nofollow))
         {
@@ -3331,14 +3398,8 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           continue;
         }
 
-      if (def->mounts[i]->type != NULL)
-        {
-          cleanup_free char *mnt_data = NULL;
-          unsigned long mnt_flags = 0;
-          unsigned long mnt_extra = 0;
-          uint64_t mnt_rec_clear = 0, mnt_rec_set = 0;
-          size_t j;
-          int fd;
+      if (def->mounts[i]->type == NULL)
+        continue;
 
       {
         const char *label_type = NULL;
