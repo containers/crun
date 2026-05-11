@@ -385,9 +385,16 @@ safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mod
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "open `%s`", rootfs);
 
-      ret = check_fd_is_path (rootfs, fd, path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      /* Skip the readlink-based check when opening the root
+         directory itself (rootfs="/", path="").  open("/") can
+         only return the root, and after setns the /proc-based
+         readlink may not be reachable by path yet.  */
+      if (rootfs[0] != '/' || rootfs[1] != '\0')
+        {
+          ret = check_fd_is_path (rootfs, fd, path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = fd;
       fd = -1;
@@ -2323,8 +2330,10 @@ copy_recursive_fd_to_fd (int srcdirfd, int dfd, const char *srcname, const char 
         case S_IFIFO:
         case S_IFSOCK:
           ret = mknodat (destdirfd, de->d_name, mode, rdev);
-          if (UNLIKELY (ret < 0))
+          if (UNLIKELY (ret < 0 && errno != EPERM))
             return crun_make_error (err, errno, "mknodat `%s/%s`", destname, de->d_name);
+          if (ret < 0)
+            continue;
           break;
         }
 
