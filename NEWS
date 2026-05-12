@@ -15,6 +15,8 @@
   running containers with --read-only.
 - krun: add support for passt-based networking in microVMs via the
   krun.use_passt annotation.
+- krun: add support for nested virtualization in microVMs via the
+  krun.nested_virt annotation.
 - krun: ignore RAM configurations below 128MB.
 
 * crun-1.27
