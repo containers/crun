@@ -523,12 +523,32 @@ def test_invalid_id():
     except Exception as e:
         if hasattr(e, 'output') and e.output:
             err = e.output.decode()
-            if "invalid character `/` in the ID" in err:
+            if "invalid character" in err and "container ID" in err:
                 return 0
             logger.info("got error: %s", err)
         else:
             logger.info("got exception without output: %s", str(e))
         return -1
+    return 0
+
+def test_invalid_id_chars():
+    conf = base_config()
+    conf['process']['args'] = ['./init', 'echo', 'hello']
+    conf['process']['cwd'] = "/sbin"
+    add_all_namespaces(conf)
+    for invalid_id in [".", "..", ".foo", "foo bar", "foo/bar"]:
+        try:
+            out, _ = run_and_get_output(conf, id_container=invalid_id)
+            return -1
+        except Exception as e:
+            if hasattr(e, 'output') and e.output:
+                err = e.output.decode()
+                if "invalid" in err.lower():
+                    continue
+                logger.info("got error for id '%s': %s", invalid_id, err)
+            else:
+                logger.info("got exception without output for id '%s': %s", invalid_id, str(e))
+            return -1
     return 0
 
 def test_home_unknown_id():
@@ -610,6 +630,7 @@ all_tests = {
     "ioprio": test_ioprio,
     "run-keep": test_run_keep,
     "invalid-id": test_invalid_id,
+    "invalid-id-chars": test_invalid_id_chars,
     "home-unknown-id": test_home_unknown_id,
     "help": test_start_help,
     "systemd-cgroups-path-def-slice": test_systemd_cgroups_path_def_slice,
