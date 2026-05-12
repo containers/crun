@@ -2849,9 +2849,15 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
   /* prevent a potential infinite loop.  */
   while (n_slashes-- > 0)
     {
+      libcrun_error_t tmp_err = NULL;
       int ret;
       errno = 0;
       cleanup_close int parentfd = -1;
+
+      ret = do_mount_setattr (false, rootfs, rootfsfd, 0, MS_PRIVATE, &tmp_err);
+      if (ret == 0)
+        return 0;
+      crun_error_release (&tmp_err);
 
       get_proc_self_fd_path (proc_path, rootfsfd);
       ret = mount (NULL, proc_path, NULL, MS_PRIVATE, NULL);
