@@ -2791,25 +2791,22 @@ static int
 make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
 {
   cleanup_close int rootfsfd = -1;
+  struct stat prev_st;
   proc_fd_path_t proc_path;
-  size_t n_slashes = 1;
-  const char *it;
-
-  for (it = rootfs; *it; it++)
-    if (*it == '/')
-      n_slashes++;
 
   /* rootfs could be a relative path.  */
   rootfsfd = open (rootfs, O_PATH | O_CLOEXEC);
   if (UNLIKELY (rootfsfd < 0))
     return crun_make_error (err, errno, "open `%s`", rootfs);
 
-  /* prevent a potential infinite loop.  */
-  while (n_slashes-- > 0)
+  if (UNLIKELY (fstat (rootfsfd, &prev_st) < 0))
+    return crun_make_error (err, errno, "fstat `%s`", rootfs);
+
+  for (;;)
     {
+      struct stat cur_st;
       libcrun_error_t tmp_err = NULL;
       int ret;
-      errno = 0;
       cleanup_close int parentfd = -1;
 
       ret = do_mount_setattr (false, rootfs, rootfsfd, 0, MS_PRIVATE, &tmp_err);
@@ -2832,11 +2829,18 @@ make_parent_mount_private (const char *rootfs, libcrun_error_t *err)
           return crun_make_error (err, saved_errno, "make `%s` private: cannot open component", rootfs);
         }
 
+      if (UNLIKELY (fstat (parentfd, &cur_st) < 0))
+        return crun_make_error (err, errno, "fstat parent of `%s`", rootfs);
+
+      /* Reached the root of the filesystem: ".." points to itself.  */
+      if (cur_st.st_dev == prev_st.st_dev && cur_st.st_ino == prev_st.st_ino)
+        break;
+
+      prev_st = cur_st;
       close_and_reset (&rootfsfd);
       rootfsfd = get_and_reset (&parentfd);
     }
 
-  /* should never get this far.  */
   return crun_make_error (err, 0, "make `%s` private", rootfs);
 }
 
