@@ -1111,8 +1111,6 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
 
       if (keep_flags || ret < 0)
         {
-          proc_fd_path_t abs_source;
-
           mount_flags = MS_BIND | MS_PRIVATE | MS_RDONLY | MS_REC;
           if (keep_flags)
             {
@@ -1132,11 +1130,21 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
               mount_flags = mount_flags & ~MS_REMOUNT;
             }
 
-          get_proc_self_fd_path (abs_source, pathfd);
-          ret = do_mount (container, abs_source, pathfd, rel_path, NULL, mount_flags, NULL,
-                          LABEL_NONE, err);
+          close_and_reset (&mountfd);
+          mountfd = get_bind_mount (procfd, source_buffer, true, true, false, MS_PRIVATE, err);
+          if (UNLIKELY (mountfd < 0))
+            return mountfd;
+
+          if (keep_flags)
+            {
+              ret = do_mount_setattr (true, rel_path, mountfd, mount_flags & ~(MS_BIND | MS_PRIVATE), 0, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+
+          ret = fs_move_mount_to (mountfd, pathfd, NULL);
           if (UNLIKELY (ret < 0))
-            return ret;
+            return crun_make_error (err, errno, "move mount for readonly path `%s`", rel_path);
         }
     }
   else
