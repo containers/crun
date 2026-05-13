@@ -1146,7 +1146,7 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
 
           if (keep_flags)
             {
-              ret = do_mount_setattr (true, rel_path, mountfd, mount_flags & ~(MS_BIND | MS_PRIVATE), 0, err);
+              ret = do_mount_setattr (true, rel_path, mountfd, 0, mount_flags & ~(MS_BIND | MS_PRIVATE), err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
