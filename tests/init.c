@@ -692,6 +692,19 @@ main (int argc, char **argv)
       return 0;
     }
 
+  if (strcmp (argv[1], "isdir") == 0)
+    {
+      struct stat st;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'isdir' requires a path argument");
+      if (stat (argv[2], &st) < 0)
+        error (EXIT_FAILURE, errno, "stat %s", argv[2]);
+
+      printf ("%d\n", S_ISDIR (st.st_mode) ? 1 : 0);
+      return 0;
+    }
+
   if (strcmp (argv[1], "id") == 0)
     {
       int ret;

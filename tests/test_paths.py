@@ -55,12 +55,12 @@ def test_masked_paths_no_run_crun():
 
 def test_masked_dir_nlink():
     conf = base_config()
-    conf['process']['args'] = ['/init', 'nlink', '/proc/acpi']
+    conf['process']['args'] = ['/init', 'isdir', '/proc/acpi']
     conf['linux']['maskedPaths'] = ['/proc/acpi']
     add_all_namespaces(conf)
     out, _ = run_and_get_output(conf, hide_stderr=True)
-    nlink = int(out.strip())
-    if nlink < 2:
+    is_dir = int(out.strip())
+    if is_dir != 1:
         return -1
     return 0
 
