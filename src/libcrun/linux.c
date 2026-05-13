@@ -4908,7 +4908,6 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
           if (UNLIKELY (mount_fd < 0))
             crun_error_release (err);
         }
-
       if (mount_fd >= 0)
         how_many++;
 
