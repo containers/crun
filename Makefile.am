@@ -39,8 +39,6 @@ endif
 libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/string_map.c \
 		src/libcrun/ring_buffer.c \
-		src/libcrun/blake3/blake3.c \
-		src/libcrun/blake3/blake3_portable.c \
 		src/libcrun/cgroup-cgroupfs.c \
 		src/libcrun/cgroup-resources.c \
 		src/libcrun/cgroup-setup.c \
@@ -78,6 +76,11 @@ libcrun_SOURCES = src/libcrun/utils.c \
 
 libocispec/libocispec.la:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec libocispec.la
+
+if HAVE_EMBEDDED_BLAKE3
+libcrun_SOURCES += src/libcrun/blake3/blake3.c \
+		src/libcrun/blake3/blake3_portable.c
+endif
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
 libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden
@@ -183,6 +186,11 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	crun.1.md crun.1 libcrun.lds \
 	krun.1.md krun.1 \
 	lua/luacrun.rockspec
+
+if !HAVE_EMBEDDED_BLAKE3
+EXTRA_DIST += src/libcrun/blake3/blake3.c \
+		src/libcrun/blake3/blake3_portable.c
+endif
 
 if BUILD_TESTS
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify tests/tests_libcrun_cgroup

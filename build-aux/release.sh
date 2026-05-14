@@ -11,7 +11,7 @@ test -e Makefile && make distclean
 
 ./autogen.sh
 
-./configure
+./configure --enable-embedded-blake3
 
 make -j "$(nproc)"
 

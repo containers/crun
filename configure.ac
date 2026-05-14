@@ -79,6 +79,33 @@ case "${enableval}" in
 esac],[dynload_libcrun=false])
 AM_CONDITIONAL([DYNLOAD_LIBCRUN], [test x"$dynload_libcrun" = xtrue])
 
+dnl embedded blake3
+AC_ARG_ENABLE(embedded-blake3,
+AS_HELP_STRING([--enable-embedded-blake3], [Use embedded blake3 (yes/no, default: autodetect)]),
+[
+case "${enableval}" in
+	yes) embedded_blake3=yes ;;
+	no)  embedded_blake3=no ;;
+	*) AC_MSG_ERROR(bad value ${enableval} for --enable-embedded-blake3) ;;
+esac],[embedded_blake3=auto])
+
+AS_IF([test "x$embedded_blake3" != "xyes"], [
+  PKG_CHECK_MODULES([BLAKE3], [libblake3], [
+    AC_DEFINE([HAVE_BLAKE3], 1, [Define if libblake3 is available])
+    LIBS="$LIBS $BLAKE3_LIBS"
+    CPPFLAGS="$CPPFLAGS $BLAKE3_CFLAGS"
+    embedded_blake3=no
+  ], [
+    AS_IF([test "x$embedded_blake3" = "xno"], [
+      AC_MSG_ERROR([*** libblake3 not found; install libblake3 or use --enable-embedded-blake3])
+    ], [
+      embedded_blake3=yes
+    ])
+  ])
+])
+
+AM_CONDITIONAL([HAVE_EMBEDDED_BLAKE3], [test "x$embedded_blake3" = "xyes"])
+
 dnl libcap
 AC_ARG_ENABLE([caps],
 	AS_HELP_STRING([--disable-caps], [Ignore libcap and disable support]))
