@@ -41,6 +41,14 @@
 #  include <libkrun.h>
 #endif
 
+/* This allows us to build even with headers from older libkrun versions.
+ * If the installed version of libkrun doesn't support this feature,
+ * krun_add_net_unixstream() will return EINVAL.
+ */
+#ifndef NET_FLAG_DHCP_CLIENT
+#  define NET_FLAG_DHCP_CLIENT (1 << 1)
+#endif
+
 /* libkrun has a hard-limit of 16 vCPUs per microVM. */
 #define LIBKRUN_MAX_VCPUS 16
 
@@ -301,7 +309,9 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
         return crun_make_error (err, 0, "could not find symbol `krun_add_net_unixstream` in the krun library");
 
       uint8_t mac[] = { 0x5a, 0x94, 0xef, 0xe4, 0x0c, 0xee };
-      ret = krun_add_net_unixstream (ctx_id, NULL, kconf->passt_fds[PASST_FD_PARENT], &mac[0], COMPAT_NET_FEATURES, 0);
+      ret = krun_add_net_unixstream (ctx_id, NULL, kconf->passt_fds[PASST_FD_PARENT], &mac[0], COMPAT_NET_FEATURES, NET_FLAG_DHCP_CLIENT);
+      if (UNLIKELY (ret == -EINVAL))
+        ret = krun_add_net_unixstream (ctx_id, NULL, kconf->passt_fds[PASST_FD_PARENT], &mac[0], COMPAT_NET_FEATURES, 0);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "could not set krun net configuration");
     }
