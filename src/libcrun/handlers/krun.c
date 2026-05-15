@@ -248,7 +248,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
   runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
   int32_t (*krun_add_net_unixstream) (uint32_t ctx_id, const char *c_path, int fd, uint8_t *const c_mac, uint32_t features, uint32_t flags);
-  int cpus, ram_mib, gpu_flags, ret;
+  int cpus, ram_mib, gpu_flags, nested_virt, ret;
   cpu_set_t set;
 
   cpus = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.cpus", "cpus");
@@ -292,6 +292,25 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
       ret = libkrun_enable_virtio_gpu (kconf, gpu_flags);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "could not enable virtio gpu");
+    }
+
+  nested_virt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.nested_virt", "nested_virt");
+  if (nested_virt > 0)
+    {
+      int32_t (*krun_check_nested_virt) (void);
+      int32_t (*krun_set_nested_virt) (uint32_t ctx_id, bool enabled);
+
+      krun_check_nested_virt = dlsym (handle, "krun_check_nested_virt");
+      if (krun_check_nested_virt != NULL && krun_check_nested_virt () != 1)
+        libcrun_warning ("nested virtualization requested but may not be supported on this host");
+
+      krun_set_nested_virt = dlsym (handle, "krun_set_nested_virt");
+      if (krun_set_nested_virt == NULL)
+        return crun_make_error (err, 0, "could not find symbol `krun_set_nested_virt` in the krun library");
+
+      ret = krun_set_nested_virt (ctx_id, true);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "could not enable nested virtualization");
     }
 
   if (kconf->use_passt)
