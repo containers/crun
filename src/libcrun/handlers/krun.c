@@ -297,11 +297,13 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
   if (kconf->use_passt)
     {
       krun_add_net_unixstream = dlsym (handle, "krun_add_net_unixstream");
+      if (krun_add_net_unixstream == NULL)
+        return crun_make_error (err, 0, "could not find symbol `krun_add_net_unixstream` in the krun library");
 
       uint8_t mac[] = { 0x5a, 0x94, 0xef, 0xe4, 0x0c, 0xee };
       ret = krun_add_net_unixstream (ctx_id, NULL, kconf->passt_fds[PASST_FD_PARENT], &mac[0], COMPAT_NET_FEATURES, 0);
       if (UNLIKELY (ret < 0))
-        error (EXIT_FAILURE, -ret, "could not set krun net configuration");
+        return crun_make_error (err, -ret, "could not set krun net configuration");
     }
 
   if (kconf->config_tree != NULL)
