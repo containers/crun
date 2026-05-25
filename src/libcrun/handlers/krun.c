@@ -736,9 +736,9 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         }
     }
 
-  devfd = openat (rootfsfd, "dev", O_PATH | O_DIRECTORY | O_CLOEXEC);
+  devfd = safe_openat (rootfsfd, rootfs, "dev", O_PATH | O_DIRECTORY | O_CLOEXEC, 0, err);
   if (UNLIKELY (devfd < 0))
-    return crun_make_error (err, errno, "open /dev directory in `%s`", rootfs);
+    return devfd;
 
   ret = check_running_in_user_namespace (err);
   if (UNLIKELY (ret < 0))
