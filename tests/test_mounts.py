@@ -1166,6 +1166,25 @@ def test_mount_overlay_fs():
         shutil.rmtree(overlay_base, ignore_errors=True)
     return 0
 
+def test_no_proc():
+    """Container without /proc in the OCI spec should still work."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    conf['mounts'] = [m for m in conf['mounts'] if m.get('destination') != '/proc']
+    run_and_get_output(conf, hide_stderr=True)
+    return 0
+
+def test_no_proc_sysfs_cgroup():
+    """Container without /proc, /sys, or cgroup mounts should still work."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    skip = {'/proc', '/sys', '/sys/fs/cgroup'}
+    conf['mounts'] = [m for m in conf['mounts'] if m.get('destination') not in skip]
+    run_and_get_output(conf, hide_stderr=True)
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1209,6 +1228,8 @@ all_tests = {
     "mount-tmpfs-size": test_mount_tmpfs_size,
     "mount-tmpfs-size-userns": test_mount_tmpfs_size_userns,
     "mount-overlay-fs": test_mount_overlay_fs,
+    "mount-no-proc": test_no_proc,
+    "mount-no-proc-sysfs-cgroup": test_no_proc_sysfs_cgroup,
 }
 
 if __name__ == "__main__":
