@@ -567,7 +567,7 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
 {
   struct krun_config *kconf = (struct krun_config *) cookie;
   pid_t pid;
-  char *passt_argv[9];
+  char *passt_argv[10];
   char fd_as_str[16];
   int use_passt;
   int argv_idx;
@@ -597,6 +597,12 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
       passt_argv[argv_idx++] = (char *) "all";
       passt_argv[argv_idx++] = (char *) "--no-dhcp-dns";
     }
+
+  /* Set --no-map-gw. If the gateway for the network is also the DNS server
+   * we won't be able to query the DNS server without --no-map-gw.
+   * See discussion in https://github.com/containers/crun/pull/2099
+   */
+  passt_argv[argv_idx++] = (char *) "--no-map-gw";
 
   passt_argv[argv_idx++] = (char *) "--fd";
   passt_argv[argv_idx++] = fd_as_str;
