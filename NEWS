@@ -1,3 +1,32 @@
+* crun-1.28
+
+- CVE-2026-47766: do not follow rootfs /dev symlinks.  Open rootfs
+  /dev with safe_openat before creating default or handler-specific
+  devices, preventing rootfs-controlled /dev symlinks from redirecting
+  device setup outside the container rootfs.
+- build: replace YAJL with json-c (>= 0.14) for JSON parsing and
+  generation.
+- build: use system libblake3 if available.
+- status: restrict valid container ID names.  Allow only IDs that
+  match [a-zA-Z0-9_+-][a-zA-Z0-9_+.-]*, following the same
+  validation used by runc.
+- cgroup: reject ".." in delegate-cgroup annotation value to prevent
+  path traversal.
+- exec: use default environment variables with --env.  Previously
+  when crun exec --env was used, the environment from the container
+  spec was not set.
+- exec: more verbose error message, include the actual path that
+  failed to exec.
+- libcrun: use O_PATH where applicable so the kernel does not grant
+  read/write access on the inode when a file descriptor is only used
+  as a reference.
+- chroot_realpath: fix potential buffer overflows in destination
+  buffer when resolving symlink chains.
+- fix UID/GID mapping buffer offset for multi-line mappings.
+- krun: allow configuring the virtiofs device tag and shm_size.
+- krun: request enabling DHCP client when using passt.
+- krun: fix parsing optional fields from krun_vm.json.
+
 * crun-1.27.1
 
 - linux: fix bind mount propagation regression.  Mounts hot-plugged
