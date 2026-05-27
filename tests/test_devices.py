@@ -18,6 +18,7 @@
 import os
 import subprocess
 import shutil
+import json
 from tests_utils import *
 
 def test_mode_device():
@@ -368,6 +369,88 @@ def test_mknod_char_device():
         return -1
     return 0
 
+def test_dev_symlink_does_not_populate_outside_rootfs():
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    workdir = os.path.join(get_tests_root(), "dev-symlink")
+    bundle = os.path.join(workdir, "bundle")
+    rootfs = os.path.join(bundle, "rootfs")
+    outside_dev = os.path.join(workdir, "outside-dev")
+    runtime_root = os.path.join(workdir, "run")
+    shutil.rmtree(workdir, ignore_errors=True)
+    try:
+        os.makedirs(rootfs)
+        os.makedirs(outside_dev)
+        os.makedirs(runtime_root)
+        ptmx_marker = os.path.join(outside_dev, "ptmx")
+        with open(ptmx_marker, "w") as f:
+            f.write("outside marker\n")
+
+        os.symlink(outside_dev, os.path.join(rootfs, "dev"))
+        shutil.copy2(get_init_path(), os.path.join(rootfs, "init"))
+        os.chmod(os.path.join(rootfs, "init"), 0o755)
+
+        conf = {
+            "ociVersion": "1.0.2",
+            "process": {
+                "terminal": False,
+                "user": {"uid": 0, "gid": 0},
+                "args": ["/init", "true"],
+                "env": ["PATH=/bin"],
+                "cwd": "/",
+            },
+            "root": {
+                "path": "rootfs",
+                "readonly": True,
+            },
+            "mounts": [
+                {"destination": "/proc", "type": "proc", "source": "proc"},
+            ],
+            "linux": {
+                "namespaces": [
+                    {"type": "mount"},
+                    {"type": "pid"},
+                    {"type": "ipc"},
+                    {"type": "uts"},
+                ],
+            },
+        }
+        with open(os.path.join(bundle, "config.json"), "w") as f:
+            f.write(json.dumps(conf))
+
+        container_id = "test-dev-symlink"
+        crun = get_crun_path()
+
+        try:
+            subprocess.check_output([crun, "--root", runtime_root, "run", "-b", bundle, container_id],
+                                    stderr=subprocess.STDOUT)
+            logger.info("container unexpectedly started with rootfs /dev symlink")
+            return -1
+        except subprocess.CalledProcessError:
+            pass
+        finally:
+            subprocess.run([crun, "--root", runtime_root, "delete", "-f", container_id],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        outside_entries = sorted(os.listdir(outside_dev))
+        if outside_entries != ["ptmx"]:
+            logger.info("rootfs /dev symlink target was populated outside rootfs: %s", outside_entries)
+            return -1
+
+        if os.path.islink(ptmx_marker):
+            logger.info("rootfs /dev symlink target ptmx marker was replaced with a symlink")
+            return -1
+
+        with open(ptmx_marker) as f:
+            if f.read() != "outside marker\n":
+                logger.info("rootfs /dev symlink target ptmx marker content changed")
+                return -1
+
+        return 0
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
 def test_allow_device_read_only():
     if is_rootless():
         return (77, "requires root privileges")
@@ -425,6 +508,7 @@ def test_allow_device_read_only():
 all_tests = {
     "mknod-fifo-device": test_mknod_fifo_device,
     "mknod-char-device": test_mknod_char_device,
+    "dev-symlink-does-not-populate-outside-rootfs": test_dev_symlink_does_not_populate_outside_rootfs,
     "allow-device-read-only": test_allow_device_read_only,
     "owner-device" : test_owner_device,
     "deny-devices" : test_deny_devices,

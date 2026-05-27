@@ -1845,9 +1845,9 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   if (! def || ! def->linux)
     return 0;
 
-  devfd = openat (get_private_data (container)->rootfsfd, "dev", O_CLOEXEC | O_PATH | O_DIRECTORY);
+  devfd = safe_openat (get_private_data (container)->rootfsfd, rootfs, "dev", O_CLOEXEC | O_PATH | O_DIRECTORY, 0, err);
   if (UNLIKELY (devfd < 0))
-    return crun_make_error (err, errno, "open `/dev` directory in `%s`", rootfs);
+    return devfd;
 
   for (i = 0; i < def->linux->devices_len; i++)
     {
