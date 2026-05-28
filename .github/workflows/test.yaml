@@ -53,7 +53,7 @@ jobs:
 
             make -j $(nproc) clean
 
-            if ./configure --enable-embedded-blake3 CFLAGS='-Wall -Werror --enable-shared'; then
+            if ./configure --enable-embedded-blake3 --enable-shared CFLAGS='-Wall -Werror'; then
                         make -j $(nproc) -C libocispec libocispec.la
                         make git-version.h
                         make -j $(nproc) libcrun.la
@@ -68,6 +68,7 @@ jobs:
         include:
           - test: disable-systemd
           - test: check
+          - test: enable-shared
           - test: embedded-blake3
           - test: system-blake3
           - test: podman
@@ -166,6 +167,10 @@ jobs:
               clang-check)
                   sudo docker build -t crun-clang-check tests/clang-check
                   sudo docker run --privileged --rm -w /crun -v ${PWD}:/crun crun-clang-check
+              ;;
+              enable-shared)
+                  ./configure --enable-embedded-blake3 --enable-shared
+                  make -j $(nproc)
               ;;
               embedded-blake3)
                   ./configure --enable-embedded-blake3
