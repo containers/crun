@@ -6,5 +6,6 @@
         runtime_spec_*;
         free_runtime_spec_*;
         make_runtime_spec_*;
+        json_gen_*;
   local: *;
 };
