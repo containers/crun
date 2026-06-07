@@ -5451,7 +5451,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
   devs_mountfd = fsopen_mount ("tmpfs", NULL, context_type, label, NULL);
   if (UNLIKELY (devs_mountfd < 0))
     {
-      ret = crun_make_error (err, errno, "fsopen_mount `tmpfs`");
+      ret = send_mounts (sync_socket_host, dev_fds, 0, def->linux->devices_len, err);
       goto restore_mountns;
     }
 
