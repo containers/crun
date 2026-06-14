@@ -108,30 +108,49 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 }
 
 #ifdef HAVE_SECCOMP
-static unsigned long
-get_seccomp_operator (const char *name, libcrun_error_t *err)
+static int
+get_seccomp_operator (const char *name, enum scmp_compare *op, libcrun_error_t *err)
 {
   if (strcmp (name, "SCMP_CMP_NE") == 0)
-    return SCMP_CMP_NE;
+    {
+      *op = SCMP_CMP_NE;
+      return 0;
+    }
   if (strcmp (name, "SCMP_CMP_LT") == 0)
-    return SCMP_CMP_LT;
+    {
+      *op = SCMP_CMP_LT;
+      return 0;
+    }
   if (strcmp (name, "SCMP_CMP_LE") == 0)
-    return SCMP_CMP_LE;
+    {
+      *op = SCMP_CMP_LE;
+      return 0;
+    }
   if (strcmp (name, "SCMP_CMP_EQ") == 0)
-    return SCMP_CMP_EQ;
+    {
+      *op = SCMP_CMP_EQ;
+      return 0;
+    }
   if (strcmp (name, "SCMP_CMP_GE") == 0)
-    return SCMP_CMP_GE;
+    {
+      *op = SCMP_CMP_GE;
+      return 0;
+    }
   if (strcmp (name, "SCMP_CMP_GT") == 0)
-    return SCMP_CMP_GT;
+    {
+      *op = SCMP_CMP_GT;
+      return 0;
+    }
   if (strcmp (name, "SCMP_CMP_MASKED_EQ") == 0)
-    return SCMP_CMP_MASKED_EQ;
-
-  crun_make_error (err, 0, "seccomp get operator `%s`", name);
-  return 0;
+    {
+      *op = SCMP_CMP_MASKED_EQ;
+      return 0;
+    }
+  return crun_make_error (err, 0, "seccomp get operator `%s`", name);
 }
 
-static unsigned long long
-get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
+static int
+get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_error_t *err)
 {
   const char *p;
 
@@ -142,35 +161,61 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
   p += 9;
 
   if (strcmp (p, "ALLOW") == 0)
-    return SCMP_ACT_ALLOW;
-  else if (strcmp (p, "ERRNO") == 0)
-    return SCMP_ACT_ERRNO (errno_ret);
-  else if (strcmp (p, "KILL") == 0)
-    return SCMP_ACT_KILL;
+    {
+      *action = SCMP_ACT_ALLOW;
+      return 0;
+    }
+  if (strcmp (p, "ERRNO") == 0)
+    {
+      *action = SCMP_ACT_ERRNO (errno_ret);
+      return 0;
+    }
+  if (strcmp (p, "KILL") == 0)
+    {
+      *action = SCMP_ACT_KILL;
+      return 0;
+    }
 #  ifdef SCMP_ACT_LOG
-  else if (strcmp (p, "LOG") == 0)
-    return SCMP_ACT_LOG;
+  if (strcmp (p, "LOG") == 0)
+    {
+      *action = SCMP_ACT_LOG;
+      return 0;
+    }
 #  endif
-  else if (strcmp (p, "TRAP") == 0)
-    return SCMP_ACT_TRAP;
-  else if (strcmp (p, "TRACE") == 0)
-    return SCMP_ACT_TRACE (errno_ret);
+  if (strcmp (p, "TRAP") == 0)
+    {
+      *action = SCMP_ACT_TRAP;
+      return 0;
+    }
+  if (strcmp (p, "TRACE") == 0)
+    {
+      *action = SCMP_ACT_TRACE (errno_ret);
+      return 0;
+    }
 #  ifdef SCMP_ACT_KILL_PROCESS
-  else if (strcmp (p, "KILL_PROCESS") == 0)
-    return SCMP_ACT_KILL_PROCESS;
+  if (strcmp (p, "KILL_PROCESS") == 0)
+    {
+      *action = SCMP_ACT_KILL_PROCESS;
+      return 0;
+    }
 #  endif
 #  ifdef SCMP_ACT_KILL_THREAD
-  else if (strcmp (p, "KILL_THREAD") == 0)
-    return SCMP_ACT_KILL_THREAD;
+  if (strcmp (p, "KILL_THREAD") == 0)
+    {
+      *action = SCMP_ACT_KILL_THREAD;
+      return 0;
+    }
 #  endif
 #  ifdef SCMP_ACT_NOTIFY
-  else if (strcmp (p, "NOTIFY") == 0)
-    return SCMP_ACT_NOTIFY;
+  if (strcmp (p, "NOTIFY") == 0)
+    {
+      *action = SCMP_ACT_NOTIFY;
+      return 0;
+    }
 #  endif
 
 fail:
-  crun_make_error (err, 0, "seccomp get action `%s`", name);
-  return 0;
+  return crun_make_error (err, 0, "seccomp get action `%s`", name);
 }
 #endif
 
@@ -665,7 +710,8 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
   int ret;
   size_t i;
   cleanup_seccomp scmp_filter_ctx ctx = NULL;
-  int action, default_action, default_errno_value = EPERM;
+  int default_errno_value = EPERM;
+  uint32_t action, default_action;
   const char *def_action = NULL;
 
   /* The bpf filter was loaded from the cache, nothing to do here.  */
@@ -695,9 +741,9 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
       default_errno_value = seccomp->default_errno_ret;
     }
 
-  default_action = get_seccomp_action (def_action, default_errno_value, err);
-  if (UNLIKELY (err && *err != NULL))
-    return -1;
+  ret = get_seccomp_action (def_action, default_errno_value, &default_action, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ctx = seccomp_init (default_action);
   if (ctx == NULL)
@@ -740,9 +786,9 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
           errno_ret = seccomp->syscalls[i]->errno_ret;
         }
 
-      action = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, err);
-      if (UNLIKELY (err && *err != NULL))
-        return -1;
+      ret = get_seccomp_action (seccomp->syscalls[i]->action, errno_ret, &action, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       if (action == default_action)
         continue;
@@ -794,9 +840,9 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
                   char *op = seccomp->syscalls[i]->args[k]->op;
 
                   arg_cmp[k].arg = seccomp->syscalls[i]->args[k]->index;
-                  arg_cmp[k].op = get_seccomp_operator (op, err);
-                  if (arg_cmp[k].op == 0)
-                    return crun_make_error (err, 0, "get_seccomp_operator");
+                  ret = get_seccomp_operator (op, &(arg_cmp[k].op), err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
                   arg_cmp[k].datum_a = seccomp->syscalls[i]->args[k]->value;
                   arg_cmp[k].datum_b = seccomp->syscalls[i]->args[k]->value_two;
                 }
