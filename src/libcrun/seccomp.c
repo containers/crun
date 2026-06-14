@@ -107,10 +107,10 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
   return (int) syscall (__NR_seccomp, operation, flags, args);
 }
 
+#ifdef HAVE_SECCOMP
 static unsigned long
 get_seccomp_operator (const char *name, libcrun_error_t *err)
 {
-#ifdef HAVE_SECCOMP
   if (strcmp (name, "SCMP_CMP_NE") == 0)
     return SCMP_CMP_NE;
   if (strcmp (name, "SCMP_CMP_LT") == 0)
@@ -128,15 +128,11 @@ get_seccomp_operator (const char *name, libcrun_error_t *err)
 
   crun_make_error (err, 0, "seccomp get operator `%s`", name);
   return 0;
-#else
-  return 0;
-#endif
 }
 
 static unsigned long long
 get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
 {
-#ifdef HAVE_SECCOMP
   const char *p;
 
   p = name;
@@ -175,10 +171,8 @@ get_seccomp_action (const char *name, int errno_ret, libcrun_error_t *err)
 fail:
   crun_make_error (err, 0, "seccomp get action `%s`", name);
   return 0;
-#else
-  return 0;
-#endif
 }
+#endif
 
 static void
 make_lowercase (char *str)
