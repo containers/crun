@@ -188,8 +188,8 @@ crun [global options] delete [options] CONTAINER
 **--force**
 Delete the container even if it is still running.
 
-**--regex**=_REGEX_
-Delete all the containers that satisfy the specified regex.
+**--regex**
+Treat _CONTAINER_ as a regular expression and delete all matching containers.
 
 ## EXEC OPTIONS
 
@@ -253,8 +253,8 @@ crun [global options] kill [options] CONTAINER SIGNAL
 **--all**
 Kill all the processes in the container.
 
-**--regex**=_REGEX_
-Kill all the containers that satisfy the specified regex.
+**--regex**
+Treat _CONTAINER_ as a regular expression and send the specified signal to all matching containers.
 
 ## PS OPTIONS
 

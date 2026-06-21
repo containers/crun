@@ -232,8 +232,8 @@ crun [global options] delete [options] CONTAINER
 Delete the container even if it is still running.
 
 .PP
-\fB--regex\fP=\fIREGEX\fP
-Delete all the containers that satisfy the specified regex.
+\fB--regex\fP
+Treat \fICONTAINER\fP as a regular expression and delete all matching containers.
 
 .SH EXEC OPTIONS
 crun [global options] exec [options] CONTAINER CMD
@@ -311,8 +311,8 @@ crun [global options] kill [options] CONTAINER SIGNAL
 Kill all the processes in the container.
 
 .PP
-\fB--regex\fP=\fIREGEX\fP
-Kill all the containers that satisfy the specified regex.
+\fB--regex\fP
+Treat \fICONTAINER\fP as a regular expression and send the specified signal to all matching containers.
 
 .SH PS OPTIONS
 crun [global options] ps [options]
