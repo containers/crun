@@ -671,7 +671,7 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
           if (n_parts == parts_size - 1)
             {
               parts_size += 32;
-              parts = xrealloc (parts, parts_size);
+              parts = xrealloc (parts, sizeof (char *) * parts_size);
             }
           parts[n_parts] = NULL;
           if (next == NULL)
