@@ -108,10 +108,6 @@ Define the format of the log messages.  It can either be **text**, or
 Define the log level.  It can either be **debug**, **warning** or **error**.
 The default is **error**.
 
-**--no-pivot**
-Use `chroot(2)` instead of `pivot_root(2)` when creating the container.
-This option is not safe, and should be avoided.
-
 **--root**=_DIR_
 Defines where to store the state for crun containers.
 
@@ -149,6 +145,10 @@ the container.
 **--no-new-keyring**
 Keep the same session key
 
+**--no-pivot**
+Use `chroot(2)` instead of `pivot_root(2)` when creating the container.
+This option is not safe, and should be avoided.
+
 **--preserve-fds**=_N_
 Additional number of FDs to pass into the container.
 
@@ -171,6 +171,10 @@ the container.
 
 **--no-new-keyring**
 Keep the same session key.
+
+**--no-pivot**
+Use `chroot(2)` instead of `pivot_root(2)` when creating the container.
+This option is not safe, and should be avoided.
 
 **--preserve-fds**=_N_
 Additional number of FDs to pass into the container.
