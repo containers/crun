@@ -134,11 +134,6 @@ Define the log level.  It can either be \fBdebug\fP, \fBwarning\fP or \fBerror\f
 The default is \fBerror\fP\&.
 
 .PP
-\fB--no-pivot\fP
-Use \fBchroot(2)\fR instead of \fBpivot_root(2)\fR when creating the container.
-This option is not safe, and should be avoided.
-
-.PP
 \fB--root\fP=\fIDIR\fP
 Defines where to store the state for crun containers.
 
@@ -185,6 +180,11 @@ the container.
 Keep the same session key
 
 .PP
+\fB--no-pivot\fP
+Use \fBchroot(2)\fR instead of \fBpivot_root(2)\fR when creating the container.
+This option is not safe, and should be avoided.
+
+.PP
 \fB--preserve-fds\fP=\fIN\fP
 Additional number of FDs to pass into the container.
 
@@ -211,6 +211,11 @@ the container.
 .PP
 \fB--no-new-keyring\fP
 Keep the same session key.
+
+.PP
+\fB--no-pivot\fP
+Use \fBchroot(2)\fR instead of \fBpivot_root(2)\fR when creating the container.
+This option is not safe, and should be avoided.
 
 .PP
 \fB--preserve-fds\fP=\fIN\fP
