@@ -153,17 +153,21 @@ def test_mount_bind_to_rootfs():
     return 0
 
 def test_mount_tmpfs_to_rootfs():
+    # tmpcopyup on "/" is rejected: after pivot_root is moved before mounts,
+    # there is no original rootfs content to copy from.
     conf = base_config()
     conf['process']['args'] = ['/init', 'true']
     add_all_namespaces(conf)
-    tmpdir = tempfile.mkdtemp()
 
     mounts = [
         {"destination": "/", "type": "tmpfs", "source": "tmpfs", "options": ["tmpcopyup"]},
     ]
     conf['mounts'] = mounts + conf['mounts']
-    _, _ = run_and_get_output(conf, hide_stderr=True)
-    return 0
+    try:
+        _, _ = run_and_get_output(conf, hide_stderr=True)
+        return -1
+    except Exception as e:
+        return 0
 
 def test_ro_cgroup():
     for cgroupns in [True, False]:
@@ -1066,6 +1070,153 @@ def test_mount_propagation_slave():
     logger.info("mountinfo output: %s", out)
     return -1
 
+def test_mount_tmpfs_size():
+    """Verify tmpfs mounts with size= data option work via fsopen_mount."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    conf['mounts'].append({
+        "destination": "/sized-tmpfs",
+        "type": "tmpfs",
+        "source": "tmpfs",
+        "options": ["nosuid", "nodev", "size=64k"],
+    })
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
+        f.write(out)
+        f.flush()
+        t = libmount.Table(f.name)
+        m = t.find_target('/sized-tmpfs')
+        if m is None:
+            logger.info("tmpfs size test: /sized-tmpfs not found in mountinfo")
+            return -1
+        if m.fs_options is None or 'size=64k' not in m.fs_options:
+            logger.info("tmpfs size test: expected 'size=64k' in fs_options, got: %s", m.fs_options)
+            return -1
+    return 0
+
+def test_mount_tmpfs_size_userns():
+    """Verify tmpfs with data options works inside a user namespace.
+
+    This exercises the fsopen_mount pre-mount path: before pivot_root,
+    crun uses fsopen/fsconfig/fsmount to create a detached tmpfs with
+    the specified data, then moves it into place via move_mount.
+    """
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf, userns=True)
+    conf['mounts'].append({
+        "destination": "/sized-tmpfs",
+        "type": "tmpfs",
+        "source": "tmpfs",
+        "options": ["nosuid", "nodev", "mode=1777", "size=128k"],
+    })
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
+        f.write(out)
+        f.flush()
+        t = libmount.Table(f.name)
+        m = t.find_target('/sized-tmpfs')
+        if m is None:
+            logger.info("tmpfs userns test: /sized-tmpfs not found in mountinfo")
+            return -1
+        if m.fs_options is None or 'size=128k' not in m.fs_options:
+            logger.info("tmpfs userns test: expected 'size=128k' in fs_options, got: %s", m.fs_options)
+            return -1
+    return 0
+
+def test_mount_overlay_fs():
+    """Verify overlay mounts with lowerdir/upperdir/workdir work via fsopen_mount.
+
+    Creates overlay directories on the host and mounts them into the
+    container.  The premount loop in setup_mount_namespace uses
+    fsopen/fsconfig/fsmount to create a detached overlay before
+    pivot_root (while host paths are still reachable), then moves
+    the mount into place.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    overlay_base = tempfile.mkdtemp(prefix="crun-overlay-test-")
+    lower = os.path.join(overlay_base, "lower")
+    upper = os.path.join(overlay_base, "upper")
+    work = os.path.join(overlay_base, "work")
+    try:
+        for d in [lower, upper, work]:
+            os.makedirs(d, exist_ok=True)
+        with open(os.path.join(lower, "from-lower"), "w") as f:
+            f.write("lower-data")
+
+        def prepare(rootfs):
+            os.makedirs(os.path.join(rootfs, "overlay-mnt"), exist_ok=True)
+
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'cat', '/overlay-mnt/from-lower']
+        add_all_namespaces(conf)
+        conf['mounts'].append({
+            "destination": "/overlay-mnt",
+            "type": "overlay",
+            "source": "overlay",
+            "options": [
+                "lowerdir=%s" % lower,
+                "upperdir=%s" % upper,
+                "workdir=%s" % work,
+            ],
+        })
+        out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare)
+        if "lower-data" not in out:
+            logger.info("overlay test: expected 'lower-data', got: %s", out)
+            return -1
+    finally:
+        shutil.rmtree(overlay_base, ignore_errors=True)
+    return 0
+
+def test_no_proc():
+    """Container without /proc in the OCI spec should still work."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    conf['mounts'] = [m for m in conf['mounts'] if m.get('destination') != '/proc']
+    run_and_get_output(conf, hide_stderr=True)
+    return 0
+
+def test_no_proc_sysfs_cgroup():
+    """Container without /proc, /sys, or cgroup mounts should still work."""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    add_all_namespaces(conf)
+    skip = {'/proc', '/sys', '/sys/fs/cgroup'}
+    conf['mounts'] = [m for m in conf['mounts'] if m.get('destination') not in skip]
+    run_and_get_output(conf, hide_stderr=True)
+    return 0
+
+def test_rbind_with_bind_option():
+    """Verify rbind carries submounts even when 'bind' also appears in options."""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    mount_opt = {
+        "destination": "/mnt",
+        "type": "bind",
+        "source": "/sys",
+        "options": ["rbind", "rprivate", "rw", "bind"]
+    }
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    found_sub = False
+    for line in out.splitlines():
+        if ' /mnt/' in line:
+            found_sub = True
+            break
+    if not found_sub:
+        logger.info("/mnt/* submounts not found - rbind did not carry submounts")
+        logger.info("mountinfo output: %s", out)
+        return -1
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1106,6 +1257,12 @@ all_tests = {
     "mount-propagation-private": test_mount_propagation_private,
     "mount-no-leak-to-host": test_mount_no_leak_to_host,
     "mount-propagation-slave": test_mount_propagation_slave,
+    "mount-tmpfs-size": test_mount_tmpfs_size,
+    "mount-tmpfs-size-userns": test_mount_tmpfs_size_userns,
+    "mount-overlay-fs": test_mount_overlay_fs,
+    "mount-no-proc": test_no_proc,
+    "mount-no-proc-sysfs-cgroup": test_no_proc_sysfs_cgroup,
+    "mount-rbind-with-bind-option": test_rbind_with_bind_option,
 }
 
 if __name__ == "__main__":

@@ -54,8 +54,40 @@
 #  define MOUNT_ATTR_RDONLY 0x00000001 /* Mount read-only */
 #endif
 
+#ifndef MOUNT_ATTR_NOSUID
+#  define MOUNT_ATTR_NOSUID 0x00000002
+#endif
+
+#ifndef MOUNT_ATTR_NODEV
+#  define MOUNT_ATTR_NODEV 0x00000004
+#endif
+
+#ifndef MOUNT_ATTR_NOEXEC
+#  define MOUNT_ATTR_NOEXEC 0x00000008
+#endif
+
+#ifndef MOUNT_ATTR__ATIME
+#  define MOUNT_ATTR__ATIME 0x00000070
+#endif
+
+#ifndef MOUNT_ATTR_NOATIME
+#  define MOUNT_ATTR_NOATIME 0x00000010
+#endif
+
+#ifndef MOUNT_ATTR_STRICTATIME
+#  define MOUNT_ATTR_STRICTATIME 0x00000020
+#endif
+
+#ifndef MOUNT_ATTR_NODIRATIME
+#  define MOUNT_ATTR_NODIRATIME 0x00000080
+#endif
+
 #ifndef MOUNT_ATTR_IDMAP
 #  define MOUNT_ATTR_IDMAP 0x00100000 /* Idmap mount to @userns_fd in struct mount_attr. */
+#endif
+
+#ifndef MOUNT_ATTR_NOSYMFOLLOW
+#  define MOUNT_ATTR_NOSYMFOLLOW 0x00200000
 #endif
 
 /* close_range flags */
