@@ -27,6 +27,30 @@ Direct all security questions and vulnerability reports to:
 
 - **GitHub**: [Security Advisories](https://github.com/containers/crun/security)
 
+## **Security Scope**
+
+### What is considered a security vulnerability
+
+A security vulnerability is any issue where untrusted content can be used to escape the container sandbox, escalate privileges, or otherwise compromise the host. The primary source of untrusted content is the **container rootfs** — everything inside it (binaries, libraries, symlinks, device nodes, etc.) must be treated as potentially malicious. For example:
+
+- A crafted symlink or mount point inside the rootfs that tricks crun into writing or reading files on the host.
+- A malicious binary in the rootfs that exploits a parsing bug in crun to escape the container.
+- A specially crafted file system layout that causes crun to apply incorrect security policies.
+
+### What is NOT considered a security vulnerability
+
+The **OCI runtime configuration** (`config.json`) is expected to come from a trusted source, such as a container engine (e.g., Podman, CRI-O, containerd). Issues that require a malicious `config.json` to exploit are **not** considered security vulnerabilities, because an attacker who controls `config.json` already has the ability to configure arbitrary namespaces, mounts, and capabilities. For example, the following are **not** security issues:
+
+- A `config.json` that mounts sensitive host paths into the container.
+- A `config.json` that grants all capabilities or disables seccomp.
+- A `config.json` that sets a UID/GID mapping allowing root access.
+
+These are expected behaviors when the configuration explicitly requests them.
+
+### Annotations
+
+Some crun-specific annotations are marked as **potentially unsafe** and are listed in the output of `crun features` under `potentiallyUnsafeConfigAnnotations`. These annotations intentionally accept arbitrary values and modify container behavior in ways that may weaken isolation. It is the sole responsibility of the caller (the container engine or orchestrator) to validate these values before passing them to crun. A misconfigured unsafe annotation is not a crun security vulnerability.
+
 ## **Security Policy**
 
 ### Secure Development Practices
