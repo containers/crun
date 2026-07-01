@@ -5691,6 +5691,9 @@ libcrun_join_process (libcrun_context_t *context,
         return crun_make_error (err, errno, "set child subreaper");
     }
 
+  if (path_has_dot_dot_component (sub_cgroup))
+    return crun_make_error (err, 0, "invalid cgroup path `%s`: `..` components are not allowed", sub_cgroup);
+
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket_fd);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error creating socketpair");

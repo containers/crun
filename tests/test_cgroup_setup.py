@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import errno
 import os
 import subprocess
 import time
@@ -1006,6 +1007,105 @@ def test_cgroup_exec_into_running():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_cgroup_v1_exec_cgroup_subpath():
+    """Test cgroup v1 exec sub-cgroup movement stays below the container cgroup."""
+    if is_cgroup_v2_unified():
+        return (77, "requires cgroup v1")
+    if is_rootless():
+        return (77, "requires root for cgroup v1 manipulation")
+    if get_cgroup_manager() == 'systemd':
+        return (77, "test uses cgroupfs-style paths")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    parent = 'test-v1-exec-cgroup-%s' % os.getpid()
+    conf['linux']['cgroupsPath'] = '/%s/container' % parent
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    created_paths = []
+    target_subsystem = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        for subsystem in ['memory', 'pids', 'cpu,cpuacct', 'cpu', 'freezer']:
+            container_dir = os.path.join('/sys/fs/cgroup', subsystem, parent, 'container')
+            if os.path.isdir(container_dir):
+                target_subsystem = subsystem
+                break
+
+        if target_subsystem is None:
+            return (77, "no writable cgroup v1 subsystem found")
+
+        container_dir = os.path.join('/sys/fs/cgroup', target_subsystem, parent, 'container')
+        outside_dir = os.path.join('/sys/fs/cgroup', target_subsystem, parent, 'outside')
+        for path in [
+            os.path.join(container_dir, 'foo'),
+            os.path.join(container_dir, 'foo', 'bar'),
+            outside_dir,
+        ]:
+            try:
+                os.mkdir(path, 0o700)
+                created_paths.append(path)
+            except FileExistsError:
+                pass
+            except OSError as e:
+                if e.errno in (errno.EACCES, errno.EPERM, errno.EROFS):
+                    return (77, "cgroup v1 subsystem is not writable")
+                raise
+
+        out = run_crun_command(['exec', '--cgroup=foo', cid, '/init', 'cat', '/proc/self/cgroup'])
+        if '/foo' not in out:
+            logger.info("/foo not found in cgroup v1 exec output: %s", out)
+            return -1
+
+        invalid_cgroups = [
+            ('../outside', '`..` components are not allowed'),
+            ('./../outside', '`..` components are not allowed'),
+            ('./foo/../foo', '`..` components are not allowed'),
+            ('foo/..', '`..` components are not allowed'),
+            ('foo/../../outside', '`..` components are not allowed'),
+            ('foo/bar/..', '`..` components are not allowed'),
+            ('foo/bar/../../../outside', '`..` components are not allowed'),
+        ]
+        for sub_cgroup, expected_error in invalid_cgroups:
+            try:
+                run_crun_command_raw(['exec', '--cgroup=%s' % sub_cgroup, cid, '/init', 'true'])
+            except subprocess.CalledProcessError as e:
+                output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+                if expected_error in output and sub_cgroup in output:
+                    continue
+                logger.info("unexpected error for invalid v1 exec cgroup %s: %s", sub_cgroup, output)
+                return -1
+            logger.info("v1 exec accepted invalid cgroup path %s", sub_cgroup)
+            return -1
+
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "cgroup" in output.lower() or "mount" in output.lower() or "proc" in output.lower():
+            return (77, "cgroup v1 exec not available")
+        logger.info("test failed: %s", e)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        for path in reversed(created_paths):
+            try:
+                os.rmdir(path)
+            except OSError:
+                pass
+        if target_subsystem is not None:
+            try:
+                os.rmdir(os.path.join('/sys/fs/cgroup', target_subsystem, parent))
+            except OSError:
+                pass
+
+
 def test_cgroup_cpuset_multiple_cpus():
     """Test cpuset with multiple CPUs and memory nodes."""
     if is_rootless():
@@ -1572,6 +1672,7 @@ all_tests = {
     "cgroup-cpuset-multiple-cpus": test_cgroup_cpuset_multiple_cpus,
     "cgroup-enter-subsystem-memory": test_cgroup_enter_subsystem_memory,
     "cgroup-v1-subsystems": test_cgroup_v1_subsystems,
+    "cgroup-v1-exec-cgroup-subpath": test_cgroup_v1_exec_cgroup_subpath,
     "cgroup-deep-nested-path": test_cgroup_deep_nested_path,
     "cgroup-exec-multiple-times": test_cgroup_exec_multiple_times,
     "cgroup-create-without-resources": test_cgroup_create_without_resources,
