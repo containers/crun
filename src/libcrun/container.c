@@ -709,6 +709,8 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   if (! json_gen_init (&gen, NULL))
     return crun_make_error (err, 0, "json_gen_init failed");
 
+  json_gen_config (gen, json_gen_beautify, 0);
+
   r = json_gen_map_open (gen);
   if (UNLIKELY (r != json_gen_status_ok))
     goto gen_error;
