@@ -210,35 +210,13 @@ libcrun_get_cgroup_mode (libcrun_error_t *err)
   return cgroup_mode;
 }
 
-int
-libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error_t *err)
+static int
+get_cgroup_process_from_content (char *content, int cgroup_mode, char **path, bool absolute, libcrun_error_t *err)
 {
-  cleanup_free char *content = NULL;
-  char proc_cgroup_file[64];
   char *cg_path = NULL;
-  size_t content_size;
   char *controller;
   char *saveptr;
-  int cgroup_mode;
   bool has_data;
-  int ret;
-
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
-
-  if (pid == 0)
-    strcpy (proc_cgroup_file, PROC_SELF_CGROUP);
-  else
-    {
-      int len = snprintf (proc_cgroup_file, sizeof (proc_cgroup_file), "/proc/%d/cgroup", pid);
-      if (UNLIKELY (len >= (int) sizeof (proc_cgroup_file)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
-    }
-
-  ret = read_all_file (proc_cgroup_file, &content, &content_size, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   for (has_data = read_proc_cgroup (content, &saveptr, NULL, &controller, &cg_path);
        has_data;
@@ -264,6 +242,54 @@ found:
 
   *path = xstrdup (cg_path);
   return 0;
+}
+
+int
+libcrun_get_cgroup_process_at (int dirfd, char **path, bool absolute, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  size_t content_size;
+  int cgroup_mode;
+  int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  ret = read_all_file_at (dirfd, SELF_CGROUP, &content, &content_size, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return get_cgroup_process_from_content (content, cgroup_mode, path, absolute, err);
+}
+
+int
+libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  char proc_cgroup_file[64];
+  size_t content_size;
+  int cgroup_mode;
+  int ret;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (pid == 0)
+    strcpy (proc_cgroup_file, PROC_SELF_CGROUP);
+  else
+    {
+      int len = snprintf (proc_cgroup_file, sizeof (proc_cgroup_file), "/proc/%d/cgroup", pid);
+      if (UNLIKELY (len >= (int) sizeof (proc_cgroup_file)))
+        return crun_make_error (err, 0, "internal error: static buffer too small");
+    }
+
+  ret = read_all_file (proc_cgroup_file, &content, &content_size, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return get_cgroup_process_from_content (content, cgroup_mode, path, absolute, err);
 }
 
 static int

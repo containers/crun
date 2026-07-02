@@ -1341,11 +1341,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
-  ret = libcrun_set_mounts (entrypoint_args, container, rootfs, send_sync_cb, &sync_socket, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
   if (def->hooks && def->hooks->create_container_len)
     {
       libcrun_error_t tmp_err = NULL;
@@ -1358,6 +1353,15 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       if (UNLIKELY (ret != 0))
         return ret;
     }
+
+  ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, &rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
+  ret = libcrun_set_mounts (entrypoint_args, container, rootfs, send_sync_cb, &sync_socket, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_finalize_mounts (entrypoint_args, container, rootfs, err);
   if (UNLIKELY (ret < 0))
@@ -1377,13 +1381,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   ret = mark_or_close_fds_ge_than (container, entrypoint_args->context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
     crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
-
-  if (rootfs)
-    {
-      ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, rootfs, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
 
   ret = libcrun_reopen_dev_null (err);
   if (UNLIKELY (ret < 0))

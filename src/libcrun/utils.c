@@ -385,9 +385,17 @@ safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mod
       if (UNLIKELY (fd < 0))
         return crun_make_error (err, errno, "open `%s`", rootfs);
 
-      ret = check_fd_is_path (rootfs, fd, path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      /* Skip the readlink-based check when opening the root
+         directory itself (rootfs="/", path="").  After pivot_root,
+         "/" can only refer to the container root so the readlink
+         verification is redundant, and after setns the /proc-based
+         readlink may not be reachable by path yet.  */
+      if (rootfs[0] != '/' || rootfs[1] != '\0')
+        {
+          ret = check_fd_is_path (rootfs, fd, path, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       ret = fd;
       fd = -1;
