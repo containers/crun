@@ -19,6 +19,7 @@ import subprocess
 import sys
 import time
 import json
+import os
 from tests_utils import *
 import json
 
@@ -327,25 +328,148 @@ def test_resources_exec_cgroup():
 
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
-    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo']
+    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo', 'foo/bar']
     cid = None
     try:
         out, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
         # Give some time to pid 1 to move to the new cgroup
         time.sleep(2)
-        out = run_crun_command(["exec", "--cgroup=/foo", cid, "/init", "cat", "/proc/self/cgroup"])
-        for i in out.split("\n"):
-            if i == "":
-                continue
-            if "/foo" not in i:
-                logger.info("/foo not found in the output")
+        cgroup_cases = [
+            ("foo", "/foo"),
+            ("foo/bar", "/foo/bar"),
+        ]
+        for sub_cgroup, expected in cgroup_cases:
+            out = run_crun_command(["exec", "--cgroup=%s" % sub_cgroup, cid, "/init", "cat", "/proc/self/cgroup"])
+            found = False
+            for i in out.splitlines():
+                if not i.startswith("0::"):
+                    continue
+                found = True
+                if expected not in i:
+                    logger.info("%s not found in the output for --cgroup=%s", expected, sub_cgroup)
+                    return -1
+            if not found:
+                logger.info("unified cgroup not found in the output for --cgroup=%s: %s", sub_cgroup, out)
                 return -1
         return 0
     except Exception as e:
+        logger.info("test failed: %s", e)
         return -1
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
+    return 0
+
+
+def test_resources_exec_cgroup_with_initial_cpu_affinity():
+    if not is_cgroup_v2_unified() or is_rootless():
+        return (77, "requires cgroup v2 and root privileges")
+
+    cpus = sorted(os.sched_getaffinity(0))
+    if len(cpus) == 0:
+        return (77, "requires available CPUs")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo']
+    process_file = os.path.join(get_tests_root(), "process.json")
+    cid = None
+    try:
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        time.sleep(2)
+        with open(process_file, "w") as f:
+            json.dump({
+                "user": {
+                    "uid": 0,
+                    "gid": 0,
+                },
+                "terminal": False,
+                "cwd": "/",
+                "args": [
+                    "/init",
+                    "cat",
+                    "/proc/self/cgroup",
+                ],
+                "execCPUAffinity": {
+                    "initial": "%s" % cpus[0],
+                },
+            }, f)
+
+        out = run_crun_command(["exec", "--cgroup=foo", "--process", process_file, cid])
+        found = False
+        for i in out.splitlines():
+            if not i.startswith("0::"):
+                continue
+            found = True
+            if "/foo" not in i:
+                logger.info("/foo not found in the output for execCPUAffinity.initial")
+                return -1
+        if not found:
+            logger.info("unified cgroup not found in the output for execCPUAffinity.initial: %s", out)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
+def test_resources_exec_cgroup_reject_dotdot():
+    if not is_cgroup_v2_unified() or is_rootless():
+        return (77, "requires cgroup v2 and root privileges")
+    if get_cgroup_manager() == 'systemd':
+        return (77, "test uses cgroupfs-style paths")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    parent = "crun-test-exec-cgroup-%s" % os.getpid()
+    conf['linux']['cgroupsPath'] = "/%s/container" % parent
+    conf['process']['args'] = ['/init', 'create-sub-cgroup-and-wait', 'foo', 'foo/bar']
+    cid = None
+    outside = "/sys/fs/cgroup/%s/outside" % parent
+    parent_path = "/sys/fs/cgroup/%s" % parent
+    try:
+        out, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        time.sleep(2)
+        os.mkdir(outside, 0o700)
+        invalid_cgroups = [
+            "../outside",
+            "./../outside",
+            "./foo/../foo",
+            "foo/..",
+            "foo/../../outside",
+            "foo/bar/..",
+            "foo/bar/../../../outside",
+        ]
+        for sub_cgroup in invalid_cgroups:
+            try:
+                run_crun_command_raw(["exec", "--cgroup=%s" % sub_cgroup, cid, "/init", "true"])
+            except subprocess.CalledProcessError as e:
+                output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+                if "`..` components are not allowed" in output and sub_cgroup in output:
+                    continue
+                logger.info("unexpected error for invalid exec cgroup %s: %s", sub_cgroup, output)
+                return -1
+            logger.info("exec accepted invalid cgroup path %s", sub_cgroup)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        try:
+            os.rmdir(outside)
+        except OSError:
+            pass
+        try:
+            os.rmdir(parent_path)
+        except OSError:
+            pass
     return 0
 
 
@@ -357,6 +481,8 @@ all_tests = {
     "resources-unified-invalid-controller" : test_resources_unified_invalid_controller,
     "resources-unified-invalid-key" : test_resources_unified_invalid_key,
     "resources-unified-exec-cgroup" : test_resources_exec_cgroup,
+    "resources-unified-exec-cgroup-with-initial-cpu-affinity" : test_resources_exec_cgroup_with_initial_cpu_affinity,
+    "resources-unified-exec-cgroup-reject-dotdot" : test_resources_exec_cgroup_reject_dotdot,
     "resources-fail-with-enoent" : test_resources_fail_with_enoent,
     "resources-cpu-weight" : test_resources_cpu_weight,
     "resources-cpu-weight-systemd" : test_resources_cpu_weight_systemd,
