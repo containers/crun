@@ -1368,6 +1368,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           int label_how, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
+  const char *data_without_label = data;
   proc_fd_path_t target_buffer;
   const char *context_type = NULL;
   cleanup_close int ms_move_fd = -1;
@@ -1454,7 +1455,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
             }
           else
             {
-              cleanup_close int newfs = fsopen_mount (fstype, source, context_type, label, data);
+              cleanup_close int newfs = fsopen_mount (fstype, source, context_type, label, data_without_label);
               if (newfs >= 0)
                 ret = fs_move_mount_to (newfs, targetfd, NULL);
             }
