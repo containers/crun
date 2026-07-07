@@ -1368,6 +1368,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           int label_how, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
+  const char *data_without_label = data;
   proc_fd_path_t target_buffer;
   const char *context_type = NULL;
   cleanup_close int ms_move_fd = -1;
@@ -1454,7 +1455,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
             }
           else
             {
-              cleanup_close int newfs = fsopen_mount (fstype, source, context_type, label, data);
+              cleanup_close int newfs = fsopen_mount (fstype, source, context_type, label, data_without_label);
               if (newfs >= 0)
                 ret = fs_move_mount_to (newfs, targetfd, NULL);
             }
@@ -3495,6 +3496,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       cleanup_free char *dest_path = NULL;
       cleanup_close int mnt_fd = -1;
       bool recursive_bind, nofollow;
+      unsigned long mnt_flags = 0;
       struct stat st;
 
       if (mount_fds && mount_fds->fds[i] >= 0)
@@ -3505,7 +3507,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           && def->mounts[i]->source[0] == '/')
         {
           cleanup_free char *mnt_data = NULL;
-          unsigned long mnt_flags = 0;
           unsigned long mnt_extra = 0;
           uint64_t mnt_rec_clear = 0, mnt_rec_set = 0;
           size_t j;
@@ -3545,10 +3546,14 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           if (mount_fds && def->mounts[i]->source != NULL && ! has_cached_target)
             {
               libcrun_error_t tmp_err = NULL;
+              unsigned long propagation = MS_PRIVATE;
+
+              if (mnt_flags & (MS_SHARED | MS_SLAVE | MS_UNBINDABLE))
+                propagation = 0;
 
               mount_fds->fds[i] = get_bind_mount (AT_FDCWD, def->mounts[i]->source,
                                                   recursive_bind, false, nofollow,
-                                                  MS_PRIVATE, &tmp_err);
+                                                  propagation, &tmp_err);
               if (mount_fds->fds[i] < 0)
                 crun_error_release (&tmp_err);
             }
@@ -3597,6 +3602,42 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       ret = maybe_open_tree_namespace (*rootfs, &tree_fd, err);
       if (UNLIKELY (ret < 0))
         return ret;
+    }
+
+  /* Pre-open needed device fds and the notify socket while the host
+     file system is still reachable.  After setns(OPEN_TREE_NAMESPACE)
+     the host /dev is no longer accessible.  When tree_fd < 0 (no
+     OPEN_TREE_NAMESPACE), this is retried after unshare(CLONE_NEWNS)
+     below since open_tree needs CAP_SYS_ADMIN in the user namespace
+     that owns the mount namespace.  */
+  if (tree_fd >= 0)
+    {
+      if (get_private_data (container)->needed_devs_fds)
+        {
+          struct libcrun_fd_map *dev_fds = get_private_data (container)->needed_devs_fds;
+
+          for (i = 0; needed_devs[i].path; i++)
+            {
+              if (i < dev_fds->nfds && dev_fds->fds[i] >= 0)
+                continue;
+
+              int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
+                                          OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
+              if (fd >= 0 && i < dev_fds->nfds)
+                dev_fds->fds[i] = fd;
+              else if (fd >= 0)
+                close (fd);
+            }
+        }
+
+      if (get_private_data (container)->notify_socket_tree_fd < 0
+          && get_private_data (container)->host_notify_socket_path)
+        {
+          int fd = syscall_open_tree (AT_FDCWD, get_private_data (container)->host_notify_socket_path,
+                                      OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
+          if (fd >= 0)
+            get_private_data (container)->notify_socket_tree_fd = fd;
+        }
     }
 
   if (tree_fd >= 0)
@@ -3689,34 +3730,34 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
   close_and_reset (&get_private_data (container)->rootfsfd);
   get_private_data (container)->rootfs = NULL;
 
-  /* Pre-open needed device fds for rootless containers.
-     The parent skips open_tree for rootless (EPERM), but the child
-     has CAP_SYS_ADMIN in its user namespace.  */
-  if (get_private_data (container)->needed_devs_fds)
+  if (tree_fd < 0)
     {
-      struct libcrun_fd_map *dev_fds = get_private_data (container)->needed_devs_fds;
-
-      for (i = 0; needed_devs[i].path; i++)
+      if (get_private_data (container)->needed_devs_fds)
         {
-          if (i < dev_fds->nfds && dev_fds->fds[i] >= 0)
-            continue;
+          struct libcrun_fd_map *dev_fds = get_private_data (container)->needed_devs_fds;
 
-          int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
-                                      OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
-          if (fd >= 0 && i < dev_fds->nfds)
-            dev_fds->fds[i] = fd;
-          else if (fd >= 0)
-            close (fd);
+          for (i = 0; needed_devs[i].path; i++)
+            {
+              if (i < dev_fds->nfds && dev_fds->fds[i] >= 0)
+                continue;
+
+              int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
+                                          OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
+              if (fd >= 0 && i < dev_fds->nfds)
+                dev_fds->fds[i] = fd;
+              else if (fd >= 0)
+                close (fd);
+            }
         }
-    }
 
-  if (get_private_data (container)->notify_socket_tree_fd < 0
-      && get_private_data (container)->host_notify_socket_path)
-    {
-      int fd = syscall_open_tree (AT_FDCWD, get_private_data (container)->host_notify_socket_path,
-                                  OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
-      if (fd >= 0)
-        get_private_data (container)->notify_socket_tree_fd = fd;
+      if (get_private_data (container)->notify_socket_tree_fd < 0
+          && get_private_data (container)->host_notify_socket_path)
+        {
+          int fd = syscall_open_tree (AT_FDCWD, get_private_data (container)->host_notify_socket_path,
+                                      OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
+          if (fd >= 0)
+            get_private_data (container)->notify_socket_tree_fd = fd;
+        }
     }
 
   get_old_root_fd (get_private_data (container));
