@@ -776,7 +776,7 @@ libcrun_initialize_apparmor (libcrun_error_t *err)
       return crun_make_error (err, errno, "open `/sys/module/apparmor/parameters/enabled`");
     }
 
-  size = TEMP_FAILURE_RETRY (read (fd, &buf, 2));
+  size = TEMP_FAILURE_RETRY (read (fd, buf, 2));
 
   apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
 
