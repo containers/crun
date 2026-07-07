@@ -3496,6 +3496,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       cleanup_free char *dest_path = NULL;
       cleanup_close int mnt_fd = -1;
       bool recursive_bind, nofollow;
+      unsigned long mnt_flags = 0;
       struct stat st;
 
       if (mount_fds && mount_fds->fds[i] >= 0)
@@ -3506,7 +3507,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           && def->mounts[i]->source[0] == '/')
         {
           cleanup_free char *mnt_data = NULL;
-          unsigned long mnt_flags = 0;
           unsigned long mnt_extra = 0;
           uint64_t mnt_rec_clear = 0, mnt_rec_set = 0;
           size_t j;
@@ -3546,10 +3546,14 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           if (mount_fds && def->mounts[i]->source != NULL && ! has_cached_target)
             {
               libcrun_error_t tmp_err = NULL;
+              unsigned long propagation = MS_PRIVATE;
+
+              if (mnt_flags & (MS_SHARED | MS_SLAVE | MS_UNBINDABLE))
+                propagation = 0;
 
               mount_fds->fds[i] = get_bind_mount (AT_FDCWD, def->mounts[i]->source,
                                                   recursive_bind, false, nofollow,
-                                                  MS_PRIVATE, &tmp_err);
+                                                  propagation, &tmp_err);
               if (mount_fds->fds[i] < 0)
                 crun_error_release (&tmp_err);
             }

@@ -1070,6 +1070,77 @@ def test_mount_propagation_slave():
     logger.info("mountinfo output: %s", out)
     return -1
 
+def test_mount_propagation_shared():
+    """Verify rshared bind mounts preserve the source's shared peer group.
+
+    Regression test for https://github.com/containers/crun/issues/2122.
+    When pre-creating bind mounts via open_tree(OPEN_TREE_CLONE),
+    mount_setattr(MS_PRIVATE) removes the mount from the source's shared
+    peer group.  Passing propagation=0 instead preserves peer group
+    membership so host-to-container propagation works.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    source = "/usr"
+    host_peer = None
+    with open('/proc/self/mountinfo') as f:
+        for line in f:
+            fields = line.split()
+            if len(fields) >= 5 and fields[4] == source:
+                for field in fields[5:]:
+                    if field == '-':
+                        break
+                    if field.startswith('shared:'):
+                        host_peer = field
+                break
+        if host_peer is None:
+            for line in f:
+                pass
+            f.seek(0)
+            for line in f:
+                fields = line.split()
+                if len(fields) >= 5:
+                    root = fields[3]
+                    mountpoint = fields[4]
+                    if mountpoint == '/' or source.startswith(mountpoint + '/') or source == mountpoint:
+                        for field in fields[5:]:
+                            if field == '-':
+                                break
+                            if field.startswith('shared:'):
+                                host_peer = field
+                        if host_peer:
+                            break
+
+    if host_peer is None:
+        return (77, "source mount is not shared on host")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    mount_opt = {"destination": "/mnt", "type": "bind", "source": source,
+                 "options": ["bind", "rshared"]}
+    conf['mounts'].append(mount_opt)
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+    for line in out.splitlines():
+        fields = line.split()
+        if len(fields) < 5 or fields[4] != '/mnt':
+            continue
+        for field in fields[5:]:
+            if field == '-':
+                break
+            if field.startswith('shared:'):
+                if field == host_peer:
+                    return 0
+                logger.info("peer group mismatch: host has %s, container has %s", host_peer, field)
+                return -1
+        logger.info("bind mount at /mnt has no shared peer group")
+        logger.info("mountinfo line: %s", line)
+        return -1
+    logger.info("/mnt not found in mountinfo")
+    logger.info("mountinfo output: %s", out)
+    return -1
+
 def test_mount_tmpfs_size():
     """Verify tmpfs mounts with size= data option work via fsopen_mount."""
     conf = base_config()
@@ -1257,6 +1328,7 @@ all_tests = {
     "mount-propagation-private": test_mount_propagation_private,
     "mount-no-leak-to-host": test_mount_no_leak_to_host,
     "mount-propagation-slave": test_mount_propagation_slave,
+    "mount-propagation-shared": test_mount_propagation_shared,
     "mount-tmpfs-size": test_mount_tmpfs_size,
     "mount-tmpfs-size-userns": test_mount_tmpfs_size_userns,
     "mount-overlay-fs": test_mount_overlay_fs,
