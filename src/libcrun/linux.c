@@ -5368,6 +5368,16 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
   return 0;
 }
 
+static bool
+mount_option_exists (runtime_spec_schema_defs_mount *mnt, const char *option)
+{
+  size_t i;
+  for (i = 0; i < mnt->options_len; i++)
+    if (strcmp (mnt->options[i], option) == 0)
+      return true;
+  return false;
+}
+
 static int
 prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
@@ -5403,8 +5413,11 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       if (UNLIKELY (ret < 0))
         return ret;
 
-      /* If the mount has no mappings and there is not a different user namespace, create the mount later as part of the container setup.  */
-      if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow))
+      /* If the mount has no mappings and there is not a different user namespace, create the mount later as part of the container setup.
+         Skip copy-symlink mounts: open_tree follows the symlink, losing the
+         link itself; let process_single_mount handle them.  */
+      if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow)
+          && ! mount_option_exists (def->mounts[i], "copy-symlink"))
         {
           unsigned long propagation = 0;
 
