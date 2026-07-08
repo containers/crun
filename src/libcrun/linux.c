@@ -3449,6 +3449,14 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   if (has_hooks || has_userns)
     return false;
 
+  {
+    libcrun_error_t tmp_err = NULL;
+    int in_userns = check_running_in_user_namespace (&tmp_err);
+    crun_error_release (&tmp_err);
+    if (in_userns != 0)
+      return false;
+  }
+
   mount_fds = get_fd_map (container);
   for (i = 0; i < def->mounts_len; i++)
     {
