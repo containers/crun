@@ -1056,14 +1056,19 @@ enum
   /* Do not apply any label to the mount.  */
   LABEL_NONE = 0,
   /* Apply the label as a mount option.  */
-  LABEL_MOUNT,
+  LABEL_MOUNT = 1,
   /* Apply the label using setxattr.  */
-  LABEL_XATTR,
+  LABEL_XATTR = 2,
+
+  LABEL_MASK = 0x0f,
+
+  /* Do not defer a readonly remount — apply MS_RDONLY directly.  */
+  MOUNT_NO_DEFERRED_REMOUNT = 0x10,
 };
 
 static int do_mount (libcrun_container_t *container, const char *source, int targetfd,
                      const char *target, const char *fstype, unsigned long mountflags,
-                     const void *data, int label_how, libcrun_error_t *err);
+                     const void *data, int extra_flags, libcrun_error_t *err);
 
 static bool
 has_mount_for (libcrun_container_t *container, const char *destination)
@@ -1195,7 +1200,8 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
 
 fallback_to_tmpfs:
   libcrun_debug ("using tmpfs fallback for %s", rel_path);
-  return ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1", LABEL_MOUNT, err);
+  return do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1",
+                   LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
 }
 
 static int
@@ -1314,7 +1320,8 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
           if (mountfd < 0 || ret < 0)
             {
               crun_error_release (err);
-              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
+              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL,
+                              LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
             }
         }
       if (UNLIKELY (ret < 0))
@@ -1365,7 +1372,7 @@ diagnose_mount_failure (int ret, libcrun_error_t *err, libcrun_container_t *cont
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
-          int label_how, libcrun_error_t *err)
+          int extra_flags, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
   const char *data_without_label = data;
@@ -1382,7 +1389,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
   if (container->container_def->linux && container->container_def->linux->mount_label)
     label = container->container_def->linux->mount_label;
   else
-    label_how = LABEL_NONE;
+    extra_flags = (extra_flags & ~LABEL_MASK) | LABEL_NONE;
 
   if (targetfd >= 0)
     {
@@ -1391,7 +1398,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       needs_remount = true;
     }
 
-  if (label_how == LABEL_MOUNT)
+  if ((extra_flags & LABEL_MASK) == LABEL_MOUNT)
     {
       context_type = get_selinux_context_type (container, err);
       if (UNLIKELY (context_type == NULL))
@@ -1587,7 +1594,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
             }
 
 #ifdef HAVE_FGETXATTR
-          if (label_how == LABEL_XATTR)
+          if ((extra_flags & LABEL_MASK) == LABEL_XATTR)
             {
               int procfd = get_procfd (get_private_data (container), err);
               if (procfd >= 0)
@@ -1643,6 +1650,12 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
 
       if ((remount_flags & MS_RDONLY) == 0)
+        {
+          ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else if (extra_flags & MOUNT_NO_DEFERRED_REMOUNT)
         {
           ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
           if (UNLIKELY (ret < 0))
@@ -2790,9 +2803,9 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
         }
       else
         {
-          int label_how = get_mount_label_how (type, is_sysfs_or_proc);
+          int extra_flags = get_mount_label_how (type, is_sysfs_or_proc);
 
-          ret = do_mount (container, source, targetfd, target, type, flags, data, label_how, err);
+          ret = do_mount (container, source, targetfd, target, type, flags, data, extra_flags, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -3410,8 +3423,8 @@ open_mount_of_type (libcrun_container_t *container,
     {
       bool is_sysfs_or_proc = strcmp (fstype, "sysfs") == 0
                               || strcmp (fstype, "proc") == 0;
-      int label_how = get_mount_label_how (fstype, is_sysfs_or_proc);
-      if (label_how == LABEL_MOUNT)
+      int extra_flags = get_mount_label_how (fstype, is_sysfs_or_proc);
+      if (extra_flags == LABEL_MOUNT)
         {
           label_type = get_selinux_context_type (container, err);
           if (label_type == NULL)
