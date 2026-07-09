@@ -374,7 +374,9 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC
-                                        | OPEN_TREE_CLONE | recursive_flag | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
+                                        | OPEN_TREE_CLONE | recursive_flag
+                                        | (src[0] == '\0' ? AT_EMPTY_PATH : 0)
+                                        | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
   if (UNLIKELY (open_tree_fd < 0))
     return crun_make_error (err, errno, "open_tree `%s`", src);
 
@@ -1168,15 +1170,13 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
 {
   struct private_data_s *private_data = get_private_data (container);
   cleanup_close int mountfd = -1;
-  char *proc_fd_path = NULL;
   libcrun_error_t tmp_err = NULL;
-  int procfd;
   int ret;
 
   if (private_data->maskdir_bind_failed)
     goto fallback_to_tmpfs;
 
-  ret = get_shared_empty_dir_cached (container, &proc_fd_path, &tmp_err);
+  ret = get_shared_empty_dir_cached (container, NULL, &tmp_err);
   if (ret < 0)
     {
       private_data->maskdir_bind_failed = true;
@@ -1185,11 +1185,7 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
-  procfd = get_procfd (get_private_data (container), err);
-  if (UNLIKELY (procfd < 0))
-    return procfd;
-
-  mountfd = get_bind_mount (procfd, proc_fd_path, false, true, false, MS_PRIVATE, &tmp_err);
+  mountfd = get_bind_mount (private_data->maskdir_fd, "", false, true, false, MS_PRIVATE, &tmp_err);
   if (mountfd >= 0)
     {
       ret = fs_move_mount_to (mountfd, pathfd, NULL);
