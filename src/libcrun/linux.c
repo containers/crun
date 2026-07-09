@@ -368,6 +368,9 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
 
   attr.propagation = propagation;
 
+  if (dirfd < 0)
+    dirfd = AT_FDCWD;
+
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC
