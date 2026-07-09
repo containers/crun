@@ -1125,9 +1125,9 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
     return ret;
 
   /* Open directory and cache FD (once per container) */
-  fd = open (empty_dir_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+  fd = get_bind_mount (-1, empty_dir_path, true, true, false, MS_PRIVATE, err);
   if (fd < 0)
-    return crun_make_error (err, errno, "open directory `%s`", empty_dir_path);
+    return fd;
 
   get_self_fd_path (fd_path, fd);
   private_data->maskdir_proc_path = xstrdup (fd_path);
@@ -1138,31 +1138,6 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
   if (proc_fd_path)
     *proc_fd_path = private_data->maskdir_proc_path;
   return 0;
-}
-
-static void
-reclone_maskdir_fd (libcrun_container_t *container)
-{
-  struct private_data_s *pd = get_private_data (container);
-  cleanup_close int new_fd = -1;
-
-  if (pd->maskdir_fd < 0)
-    return;
-
-  new_fd = syscall_open_tree (pd->maskdir_fd, "",
-                              AT_EMPTY_PATH | OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
-  if (new_fd >= 0)
-    {
-      proc_fd_path_t fd_path;
-
-      close (pd->maskdir_fd);
-      pd->maskdir_fd = new_fd;
-      new_fd = -1;
-
-      get_self_fd_path (fd_path, pd->maskdir_fd);
-      free (pd->maskdir_proc_path);
-      pd->maskdir_proc_path = xstrdup (fd_path);
-    }
 }
 
 static int
@@ -1185,12 +1160,39 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
-  mountfd = get_bind_mount (private_data->maskdir_fd, "", false, true, false, MS_PRIVATE, &tmp_err);
+  mountfd = private_data->maskdir_fd;
   if (mountfd >= 0)
     {
+      int rootfsfd = get_private_data (container)->rootfsfd;
+      struct stat before, after;
+
+      ret = fstat (mountfd, &before);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fstat masked dir `%s`", rel_path);
+
       ret = fs_move_mount_to (mountfd, pathfd, NULL);
       if (LIKELY (ret == 0))
-        return 0;
+        {
+          mountfd = get_bind_mount (rootfsfd, rel_path, true, true, false, MS_PRIVATE, err);
+          if (UNLIKELY (mountfd < 0))
+            return mountfd;
+
+          ret = fstat (mountfd, &after);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "fstat masked dir `%s`", rel_path);
+
+          if (before.st_dev != after.st_dev || before.st_ino != after.st_ino)
+            return crun_make_error (err, 0, "race condition detected remounting masked path `/%s`", rel_path);
+
+          TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
+          private_data->maskdir_fd = mountfd;
+          mountfd = -1;
+
+          return 0;
+        }
+
+      TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
+      private_data->maskdir_fd = -1;
     }
 
   private_data->maskdir_bind_failed = true;
@@ -2294,8 +2296,6 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   ret = fchdir (oldrootfd);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fchdir `%s`", rootfs);
-
-  reclone_maskdir_fd (container);
 
   ret = do_mount (container, NULL, -1, ".", NULL, MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
@@ -3665,8 +3665,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       ret = setns (tree_fd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
-
-      reclone_maskdir_fd (container);
 
       ret = mount (NULL, "/", NULL, MS_REMOUNT | MS_BIND, NULL);
       if (UNLIKELY (ret < 0))
