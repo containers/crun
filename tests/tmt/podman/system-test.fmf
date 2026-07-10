@@ -1,7 +1,22 @@
-adjust:
-    duration: 10m
-    when: arch == aarch64
-
-summary: Run crun specific Podman tests
-test: bash ./system-test.sh
+summary: Run Podman system tests with crun
 tag: [ podman ]
+duration: 10m
+
+environment:
+    ROOTLESS_USER: testuser
+
+adjust:
+    - enabled: false
+      when: distro == centos-stream or distro == rhel
+    - duration: 15m
+      when: arch == aarch64
+
+/root:
+    tag+: [ root ]
+    summary: Run Podman system tests as root
+    test: bash ./system-test.sh
+
+/rootless:
+    tag+: [ rootless ]
+    summary: Run Podman system tests as rootless
+    test: bash ./system-test.sh rootless

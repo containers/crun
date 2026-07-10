@@ -368,10 +368,15 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
 
   attr.propagation = propagation;
 
+  if (dirfd < 0)
+    dirfd = AT_FDCWD;
+
   errno = 0;
   open_tree_fd = syscall_open_tree (dirfd, src,
                                     AT_NO_AUTOMOUNT | OPEN_TREE_CLOEXEC
-                                        | OPEN_TREE_CLONE | recursive_flag | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
+                                        | OPEN_TREE_CLONE | recursive_flag
+                                        | (src[0] == '\0' ? AT_EMPTY_PATH : 0)
+                                        | (nofollow ? AT_SYMLINK_NOFOLLOW : 0));
   if (UNLIKELY (open_tree_fd < 0))
     return crun_make_error (err, errno, "open_tree `%s`", src);
 
@@ -1056,14 +1061,19 @@ enum
   /* Do not apply any label to the mount.  */
   LABEL_NONE = 0,
   /* Apply the label as a mount option.  */
-  LABEL_MOUNT,
+  LABEL_MOUNT = 1,
   /* Apply the label using setxattr.  */
-  LABEL_XATTR,
+  LABEL_XATTR = 2,
+
+  LABEL_MASK = 0x0f,
+
+  /* Do not defer a readonly remount — apply MS_RDONLY directly.  */
+  MOUNT_NO_DEFERRED_REMOUNT = 0x10,
 };
 
 static int do_mount (libcrun_container_t *container, const char *source, int targetfd,
                      const char *target, const char *fstype, unsigned long mountflags,
-                     const void *data, int label_how, libcrun_error_t *err);
+                     const void *data, int extra_flags, libcrun_error_t *err);
 
 static bool
 has_mount_for (libcrun_container_t *container, const char *destination)
@@ -1115,9 +1125,9 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
     return ret;
 
   /* Open directory and cache FD (once per container) */
-  fd = open (empty_dir_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+  fd = get_bind_mount (-1, empty_dir_path, true, true, false, MS_PRIVATE, err);
   if (fd < 0)
-    return crun_make_error (err, errno, "open directory `%s`", empty_dir_path);
+    return fd;
 
   get_self_fd_path (fd_path, fd);
   private_data->maskdir_proc_path = xstrdup (fd_path);
@@ -1130,45 +1140,18 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
   return 0;
 }
 
-static void
-reclone_maskdir_fd (libcrun_container_t *container)
-{
-  struct private_data_s *pd = get_private_data (container);
-  cleanup_close int new_fd = -1;
-
-  if (pd->maskdir_fd < 0)
-    return;
-
-  new_fd = syscall_open_tree (pd->maskdir_fd, "",
-                              AT_EMPTY_PATH | OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
-  if (new_fd >= 0)
-    {
-      proc_fd_path_t fd_path;
-
-      close (pd->maskdir_fd);
-      pd->maskdir_fd = new_fd;
-      new_fd = -1;
-
-      get_self_fd_path (fd_path, pd->maskdir_fd);
-      free (pd->maskdir_proc_path);
-      pd->maskdir_proc_path = xstrdup (fd_path);
-    }
-}
-
 static int
 mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_path, libcrun_error_t *err)
 {
   struct private_data_s *private_data = get_private_data (container);
   cleanup_close int mountfd = -1;
-  char *proc_fd_path = NULL;
   libcrun_error_t tmp_err = NULL;
-  int procfd;
   int ret;
 
   if (private_data->maskdir_bind_failed)
     goto fallback_to_tmpfs;
 
-  ret = get_shared_empty_dir_cached (container, &proc_fd_path, &tmp_err);
+  ret = get_shared_empty_dir_cached (container, NULL, &tmp_err);
   if (ret < 0)
     {
       private_data->maskdir_bind_failed = true;
@@ -1177,16 +1160,39 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
-  procfd = get_procfd (get_private_data (container), err);
-  if (UNLIKELY (procfd < 0))
-    return procfd;
-
-  mountfd = get_bind_mount (procfd, proc_fd_path, false, true, false, MS_PRIVATE, &tmp_err);
+  mountfd = private_data->maskdir_fd;
   if (mountfd >= 0)
     {
+      int rootfsfd = get_private_data (container)->rootfsfd;
+      struct stat before, after;
+
+      ret = fstat (mountfd, &before);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fstat masked dir `%s`", rel_path);
+
       ret = fs_move_mount_to (mountfd, pathfd, NULL);
       if (LIKELY (ret == 0))
-        return 0;
+        {
+          mountfd = get_bind_mount (rootfsfd, rel_path, true, true, false, MS_PRIVATE, err);
+          if (UNLIKELY (mountfd < 0))
+            return mountfd;
+
+          ret = fstat (mountfd, &after);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "fstat masked dir `%s`", rel_path);
+
+          if (before.st_dev != after.st_dev || before.st_ino != after.st_ino)
+            return crun_make_error (err, 0, "race condition detected remounting masked path `/%s`", rel_path);
+
+          TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
+          private_data->maskdir_fd = mountfd;
+          mountfd = -1;
+
+          return 0;
+        }
+
+      TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
+      private_data->maskdir_fd = -1;
     }
 
   private_data->maskdir_bind_failed = true;
@@ -1195,7 +1201,8 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
 
 fallback_to_tmpfs:
   libcrun_debug ("using tmpfs fallback for %s", rel_path);
-  return ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1", LABEL_MOUNT, err);
+  return do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1",
+                   LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
 }
 
 static int
@@ -1314,7 +1321,8 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
           if (mountfd < 0 || ret < 0)
             {
               crun_error_release (err);
-              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL, LABEL_MOUNT, err);
+              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL,
+                              LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
             }
         }
       if (UNLIKELY (ret < 0))
@@ -1365,7 +1373,7 @@ diagnose_mount_failure (int ret, libcrun_error_t *err, libcrun_container_t *cont
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
-          int label_how, libcrun_error_t *err)
+          int extra_flags, libcrun_error_t *err)
 {
   cleanup_free char *data_with_label = NULL;
   const char *data_without_label = data;
@@ -1382,7 +1390,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
   if (container->container_def->linux && container->container_def->linux->mount_label)
     label = container->container_def->linux->mount_label;
   else
-    label_how = LABEL_NONE;
+    extra_flags = (extra_flags & ~LABEL_MASK) | LABEL_NONE;
 
   if (targetfd >= 0)
     {
@@ -1391,7 +1399,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       needs_remount = true;
     }
 
-  if (label_how == LABEL_MOUNT)
+  if ((extra_flags & LABEL_MASK) == LABEL_MOUNT)
     {
       context_type = get_selinux_context_type (container, err);
       if (UNLIKELY (context_type == NULL))
@@ -1587,7 +1595,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
             }
 
 #ifdef HAVE_FGETXATTR
-          if (label_how == LABEL_XATTR)
+          if ((extra_flags & LABEL_MASK) == LABEL_XATTR)
             {
               int procfd = get_procfd (get_private_data (container), err);
               if (procfd >= 0)
@@ -1643,6 +1651,12 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
 
       if ((remount_flags & MS_RDONLY) == 0)
+        {
+          ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+      else if (extra_flags & MOUNT_NO_DEFERRED_REMOUNT)
         {
           ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
           if (UNLIKELY (ret < 0))
@@ -2283,8 +2297,6 @@ do_pivot (libcrun_container_t *container, const char *rootfs, libcrun_error_t *e
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fchdir `%s`", rootfs);
 
-  reclone_maskdir_fd (container);
-
   ret = do_mount (container, NULL, -1, ".", NULL, MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -2790,9 +2802,9 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
         }
       else
         {
-          int label_how = get_mount_label_how (type, is_sysfs_or_proc);
+          int extra_flags = get_mount_label_how (type, is_sysfs_or_proc);
 
-          ret = do_mount (container, source, targetfd, target, type, flags, data, label_how, err);
+          ret = do_mount (container, source, targetfd, target, type, flags, data, extra_flags, err);
           if (UNLIKELY (ret < 0))
             return ret;
         }
@@ -3410,8 +3422,8 @@ open_mount_of_type (libcrun_container_t *container,
     {
       bool is_sysfs_or_proc = strcmp (fstype, "sysfs") == 0
                               || strcmp (fstype, "proc") == 0;
-      int label_how = get_mount_label_how (fstype, is_sysfs_or_proc);
-      if (label_how == LABEL_MOUNT)
+      int extra_flags = get_mount_label_how (fstype, is_sysfs_or_proc);
+      if (extra_flags == LABEL_MOUNT)
         {
           label_type = get_selinux_context_type (container, err);
           if (label_type == NULL)
@@ -3448,6 +3460,14 @@ can_use_open_tree_namespace (libcrun_container_t *container)
 
   if (has_hooks || has_userns)
     return false;
+
+  {
+    libcrun_error_t tmp_err = NULL;
+    int in_userns = check_running_in_user_namespace (&tmp_err);
+    crun_error_release (&tmp_err);
+    if (in_userns != 0)
+      return false;
+  }
 
   mount_fds = get_fd_map (container);
   for (i = 0; i < def->mounts_len; i++)
@@ -3645,8 +3665,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       ret = setns (tree_fd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
-
-      reclone_maskdir_fd (container);
 
       ret = mount (NULL, "/", NULL, MS_REMOUNT | MS_BIND, NULL);
       if (UNLIKELY (ret < 0))
@@ -5360,6 +5378,16 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
   return 0;
 }
 
+static bool
+mount_option_exists (runtime_spec_schema_defs_mount *mnt, const char *option)
+{
+  size_t i;
+  for (i = 0; i < mnt->options_len; i++)
+    if (strcmp (mnt->options[i], option) == 0)
+      return true;
+  return false;
+}
+
 static int
 prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sync_socket_host, libcrun_error_t *err)
 {
@@ -5395,8 +5423,11 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
       if (UNLIKELY (ret < 0))
         return ret;
 
-      /* If the mount has no mappings and there is not a different user namespace, create the mount later as part of the container setup.  */
-      if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow))
+      /* If the mount has no mappings and there is not a different user namespace, create the mount later as part of the container setup.
+         Skip copy-symlink mounts: open_tree follows the symlink, losing the
+         link itself; let process_single_mount handle them.  */
+      if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow)
+          && ! mount_option_exists (def->mounts[i], "copy-symlink"))
         {
           unsigned long propagation = 0;
 
