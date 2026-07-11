@@ -623,7 +623,7 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
                     goto retry_unlink;
                 }
             }
-          if (ret < 0 && errno == ENOTEMPTY)
+          else if (ret < 0 && errno == ENOTEMPTY)
             {
               cleanup_close int cfd = -1;
 
