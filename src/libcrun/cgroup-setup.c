@@ -209,10 +209,10 @@ enter_cgroup_v1_subsystem (pid_t pid, const char *subsystem, const char *path, b
       ret = crun_ensure_directory (cgroup_path, 0755, false, err);
       if (UNLIKELY (ret < 0))
         {
-          crun_error_release (err);
-          if (errno != EROFS)
-            return crun_make_error (err, errno, "creating cgroup directory `%s`", cgroup_path);
+          if (crun_error_get_errno (err) != EROFS)
+            return crun_error_wrap (err, "creating cgroup directory `%s`", cgroup_path);
 
+          crun_error_release (err);
           return 0;
         }
 
