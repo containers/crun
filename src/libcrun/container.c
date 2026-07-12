@@ -4560,7 +4560,7 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
-    return crun_make_error (err, errno, "the container `%s` is not running", id);
+    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
