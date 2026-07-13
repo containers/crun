@@ -6463,7 +6463,7 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
       if (UNLIKELY (fds[i] < 0))
         {
           /* If the namespace doesn't exist, just ignore it.  */
-          if (errno == ENOENT)
+          if (crun_error_get_errno (err) == ENOENT)
             {
               crun_error_release (err);
               continue;
