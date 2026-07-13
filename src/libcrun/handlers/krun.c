@@ -187,7 +187,7 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
   if (fd < 0)
     {
       // The configuration file is optional, don't generate an error if it's missing.
-      if (errno == ENOENT)
+      if (crun_error_get_errno (err) == ENOENT)
         {
           crun_error_release (err);
           return 0;
