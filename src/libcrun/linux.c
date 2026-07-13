@@ -1716,15 +1716,15 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
   ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data, LABEL_NONE, err);
   if (UNLIKELY (ret < 0))
     {
-      errno = crun_error_get_errno (err);
-      if (errno == EPERM || errno == EBUSY)
+      int saved_errno = crun_error_get_errno (err);
+      if (saved_errno == EPERM || saved_errno == EBUSY)
         {
           const char *unified_cgroup_path;
           const char *src_cgroup;
 
           crun_error_release (err);
 
-          if (errno == EBUSY)
+          if (saved_errno == EBUSY)
             {
               /* If we got EBUSY it means the cgroup file system is already mounted at the targetfd and we
                  cannot stack another one on top of it.  Attempt mounting a tmpfs below the cgroup mount.  */
