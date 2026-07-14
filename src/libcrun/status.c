@@ -636,6 +636,8 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
                 return ret;
 
               ret = unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
+              if (UNLIKELY (ret < 0 && errno != ENOENT))
+                return crun_make_error (err, errno, "cannot rm directory `%s`", de->d_name);
             }
         }
     }
