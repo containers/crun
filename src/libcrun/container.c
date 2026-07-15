@@ -1121,17 +1121,24 @@ resolve_rootfs_path (libcrun_container_t *container, char **rootfs, libcrun_erro
           if (def->root->path[0] == '/')
             {
               cleanup_free char *cwd = NULL;
+              cleanup_close int fd = -1;
               ssize_t len;
-              int ret;
 
-              ret = libcrun_open_proc_file (container, "self/cwd", O_RDONLY, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
+              fd = libcrun_open_proc_file (container, "self/cwd", O_RDONLY, err);
+              if (UNLIKELY (fd < 0))
+                return fd;
 
-              len = safe_readlinkat (ret, "", &cwd, 0, err);
-              close (ret);
+              len = safe_readlinkat (fd, "", &cwd, 0, err);
               if (UNLIKELY (len < 0))
-                return len;
+                {
+                  if (crun_error_get_errno (err) == ENOENT)
+                    {
+                      crun_error_release (err);
+                      return crun_make_error (err, errno, "the rootfs path `%s` does not exist", def->root->path);
+                    }
+
+                  return len;
+                }
 
               /* If the rootfs is under the current working directory, just use its relative path.  */
               if (has_prefix (def->root->path, cwd) && def->root->path[len] == '/')
