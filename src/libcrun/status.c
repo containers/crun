@@ -632,6 +632,10 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
                 return crun_make_error (err, errno, "cannot open directory `%s`", de->d_name);
 
               ret = rmdirfd (de->d_name, cfd, err);
+
+              /* rmdirfd owns CFD.  */
+              cfd = -1;
+
               if (UNLIKELY (ret < 0))
                 return ret;
 
