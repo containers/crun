@@ -1424,7 +1424,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       /* We need to reopen the path as the previous targetfd is underneath the new mountpoint.  */
       ms_move_fd = open_mount_target (container, target, err);
       if (UNLIKELY (ms_move_fd < 0))
-        return fd;
+        return ms_move_fd;
       targetfd = ms_move_fd;
     }
 
