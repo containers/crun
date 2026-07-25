@@ -3002,7 +3002,7 @@ do_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
     return 0;
 
   ret = libcrun_get_state_directory (&state_dir,
-                                     (container->context ? container->context->state_root : NULL),
+                                     container->context->state_root,
                                      container->context->id, err);
   if (UNLIKELY (ret < 0))
     return ret;
