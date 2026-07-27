@@ -152,7 +152,6 @@ name_to_index (int sock, const char *ifname, char *buffer, size_t buffer_size, l
   struct nlmsghdr *nlh;
   struct nl_req *req;
   uint32_t seq;
-  int index = 0;
   ssize_t len;
   int ret;
 
@@ -191,15 +190,11 @@ name_to_index (int sock, const char *ifname, char *buffer, size_t buffer_size, l
       if (nlh->nlmsg_type == RTM_NEWLINK)
         {
           struct ifinfomsg *ifi = NLMSG_DATA (nlh);
-          index = ifi->ifi_index;
-          return index;
+          return ifi->ifi_index;
         }
     }
 
-  if (index == 0)
-    return crun_make_error (err, 0, "could not find device `%s`", ifname);
-
-  return index;
+  return crun_make_error (err, 0, "could not find device `%s`", ifname);
 }
 
 static int
