@@ -70,16 +70,7 @@ add_bool_to_json (json_gen_ctx *json_gen, const char *key, int value)
 void
 add_bool_str_to_json (json_gen_ctx *json_gen, const char *key, int value)
 {
-  char *val = "";
-  if (value)
-    {
-      val = "true";
-    }
-  else
-    {
-      val = "false";
-    }
-
+  const char *val = value ? "true" : "false";
   json_gen_string (json_gen, key, strlen (key));
   json_gen_string (json_gen, val, strlen (val));
 }
