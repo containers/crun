@@ -240,7 +240,7 @@ Path to the file that will contain the new process PID.
 **-t** **--tty**
 Allocate a pseudo TTY.
 
-**-u _USERSPEC_ **--user**=_USERSPEC_
+**-u** _USERSPEC_ **--user**=_USERSPEC_
 Specify the user in the form UID[:GID].
 
 ## LIST OPTIONS
@@ -423,7 +423,7 @@ Valid context types are:
   defcontext
   rootcontext
 
-More information on how the context mount flags works see the `mount(8)` man page.
+More information on how the context mount flags work can be found in the `mount(8)` man page.
 
 ## `run.oci.seccomp.receiver=PATH`
 
@@ -600,7 +600,7 @@ rather than the file or directory the symbolic link points to.
 ## r$FLAG mount options
 
 If a `r$FLAG` mount option is specified then the flag `$FLAG` is set
-recursively for each children mount.
+recursively for each child mount.
 
 These flags are supported:
 
@@ -690,7 +690,7 @@ a case, there won't be any error reported.
 
 ## Automatically create user namespace
 
-When running as user different than root, an user namespace is
+When running as a user other than root, a user namespace is
 automatically created even if it is not specified in the config file.
 The current user is mapped to the ID 0 in the container, and any
 additional id specified in the files `/etc/subuid` and `/etc/subgid`

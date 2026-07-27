@@ -298,7 +298,7 @@ Path to the file that will contain the new process PID.
 Allocate a pseudo TTY.
 
 .PP
-**-u \fIUSERSPEC\fP \fB--user\fP=\fIUSERSPEC\fP
+\fB-u\fP \fIUSERSPEC\fP \fB--user\fP=\fIUSERSPEC\fP
 Specify the user in the form UID[:GID].
 
 .SH LIST OPTIONS
@@ -516,7 +516,7 @@ Valid context types are:
   rootcontext
 
 .PP
-More information on how the context mount flags works see the \fBmount(8)\fR man page.
+More information on how the context mount flags work can be found in the \fBmount(8)\fR man page.
 
 .SH \fBrun.oci.seccomp.receiver=PATH\fR
 If the annotation \fBrun.oci.seccomp.receiver=PATH\fR is specified, the
@@ -689,7 +689,7 @@ rather than the file or directory the symbolic link points to.
 
 .SH r$FLAG mount options
 If a \fBr$FLAG\fR mount option is specified then the flag \fB$FLAG\fR is set
-recursively for each children mount.
+recursively for each child mount.
 
 .PP
 These flags are supported:
@@ -810,7 +810,7 @@ mapping if it overlaps multiple ranges in the user namespace.  In such
 a case, there won't be any error reported.
 
 .SH Automatically create user namespace
-When running as user different than root, an user namespace is
+When running as a user other than root, a user namespace is
 automatically created even if it is not specified in the config file.
 The current user is mapped to the ID 0 in the container, and any
 additional id specified in the files \fB/etc/subuid\fR and \fB/etc/subgid\fR
