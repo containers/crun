@@ -65,6 +65,9 @@
 #ifndef __NR_openat2
 #  define __NR_openat2 437
 #endif
+#ifndef PROC_USER_INIT_INO
+#  define PROC_USER_INIT_INO ((ino_t) 0xEFFFFFFD)
+#endif
 
 #define MAX_READLINKS 32
 
@@ -687,31 +690,28 @@ crun_dir_p (const char *path, bool nofollow, libcrun_error_t *err)
 int
 check_running_in_user_namespace (libcrun_error_t *err)
 {
-  cleanup_free char *buffer = NULL;
   static int run_in_userns = -1;
-  size_t len;
+  struct stat st;
   int ret;
 
   ret = run_in_userns;
   if (ret >= 0)
     return ret;
 
-  ret = read_all_file ("/proc/self/uid_map", &buffer, &len, err);
+  ret = stat ("/proc/self/ns/user", &st);
   if (UNLIKELY (ret < 0))
     {
       /* If the file does not exist, then the kernel does not support user namespaces and we for sure aren't in one.  */
-      if (crun_error_get_errno (err) == ENOENT)
+      if (errno == ENOENT)
         {
-          crun_error_release (err);
           run_in_userns = 0;
           return run_in_userns;
         }
-      return ret;
+      return crun_make_error (err, errno, "stat `/proc/self/ns/user`");
     }
 
-  ret = strstr (buffer, "4294967295") ? 0 : 1;
-  run_in_userns = ret;
-  return ret;
+  run_in_userns = st.st_ino == PROC_USER_INIT_INO ? 0 : 1;
+  return run_in_userns;
 }
 
 static size_t
