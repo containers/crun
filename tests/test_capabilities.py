@@ -18,6 +18,7 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 from tests_utils import *
 
@@ -60,18 +61,14 @@ def test_unknown_caps():
     conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
     add_all_namespaces(conf)
     conf['process']['capabilities'] = {}
-    # unknown caps must be ignored
     for i in ['bounding', 'effective', 'inheritable', 'permitted', 'ambient']:
         conf['process']['capabilities'][i] = ['CAP_UNKNOWN', 'UNKNOWN_CAP']
-    out, _ = run_and_get_output(conf, hide_stderr=True)
-    proc_status = parse_proc_status(out)
-
-    for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
-        if proc_status.get(i, '') != "0000000000000000":
-            actual = proc_status.get(i, 'MISSING')
-            logger.info("%s capability check failed (unknown caps should be ignored): expected '0000000000000000', got '%s'", i, actual)
-            return -1
-    return 0
+    try:
+        run_and_get_output(conf, hide_stderr=True)
+        logger.info("unknown caps should be rejected")
+        return -1
+    except subprocess.CalledProcessError:
+        return 0
 
 def test_new_privs():
     conf = base_config()

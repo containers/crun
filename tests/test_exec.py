@@ -255,11 +255,6 @@ def test_exec_add_capability():
     add_all_namespaces(conf)
     conf['process']['capabilities'] = {}
     cid = None
-    cap_unknown_dict = {"CapInh":"0000000000000000", \
-                        "CapPrm":"0000000000000000", \
-                        "CapEff":"0000000000000000", \
-                        "CapBnd":"0000000000000000", \
-                        "CapAmb":"0000000000000000"}
     cap_kill_dict = {"CapInh":"0000000000000000", \
                      "CapPrm":"0000000000000020", \
                      "CapEff":"0000000000000020", \
@@ -270,8 +265,7 @@ def test_exec_add_capability():
                           "CapEff":"0000000000200000", \
                           "CapBnd":"0000000000200000", \
                           "CapAmb":"0000000000000000"}
-    cap_dict = {"CAP_UNKNOWN": cap_unknown_dict, \
-                "CAP_KILL": cap_kill_dict, \
+    cap_dict = {"CAP_KILL": cap_kill_dict, \
                 "CAP_SYS_ADMIN": cap_sys_admin_dict}
     try:
         _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
@@ -284,6 +278,13 @@ def test_exec_add_capability():
             for i in ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb']:
                 if proc_status[i] != value[i]:
                     return -1
+
+        try:
+            run_crun_command(["exec", "--cap", "CAP_UNKNOWN", cid, "/init", "cat", "/proc/self/status"])
+            logger.info("CAP_UNKNOWN should be rejected")
+            return -1
+        except subprocess.CalledProcessError:
+            pass
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
