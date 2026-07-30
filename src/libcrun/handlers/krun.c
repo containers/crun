@@ -294,7 +294,8 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
       if (access ("/dev/dri", F_OK) != 0)
         return crun_make_error (err, errno, "gpu requested but /dev/dri is not available");
 
-      if (access ("/usr/libexec/virgl_render_server", F_OK) != 0)
+      if ((gpu_flags & VIRGLRENDERER_RENDER_SERVER) != 0
+          && access ("/usr/libexec/virgl_render_server", F_OK) != 0)
         return crun_make_error (err, errno, "gpu requested but virgl_render_server is not available");
 
       ret = libkrun_enable_virtio_gpu (kconf, gpu_flags);

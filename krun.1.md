@@ -53,8 +53,9 @@ The following annotations are supported:
 
 **krun.gpu_flags**=*FLAGS*
 :   Enable virtio-gpu with the specified virgl flags. Requires
-    **/dev/dri** and **/usr/libexec/virgl_render_server** to be
-    available.
+    **/dev/dri** to be available. When *FLAGS* includes
+    **VIRGLRENDERER_RENDER_SERVER**, **/usr/libexec/virgl_render_server**
+    must also be available.
 
 **krun.use_passt**=*NUM*
 :   When set to a value greater than 0, enable passt-based networking

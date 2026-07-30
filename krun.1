@@ -30,6 +30,99 @@ Because of the additional isolation, sharing content with processes and other
 containers outside of the krun VM is more difficult.
 
 
+.SH CONFIGURATION
+The microVM can be configured through OCI annotations or a
+\fB\&.krun_vm.json\fP file placed at the root of the container image.
+When both are present, OCI annotations take precedence.
+
+.SH OCI Annotations
+OCI annotations can be passed at container creation time. For
+example, with podman:
+
+.EX
+podman run --runtime=krun --annotation krun.nested_virt=1 ...
+.EE
+
+.PP
+The following annotations are supported:
+.TP
+\fBkrun.cpus\fP=\fINUM\fP
+Number of vCPUs for the microVM (maximum 16). If not set, defaults
+to the number of CPUs available via the process CPU affinity.
+
+.TP
+\fBkrun.ram_mib\fP=\fINUM\fP
+Amount of RAM in MiB for the microVM. Values below 128 MiB are
+ignored. If not set, defaults to the OCI memory limit if present,
+otherwise 1024 MiB.
+
+.TP
+\fBkrun.gpu_flags\fP=\fIFLAGS\fP
+Enable virtio-gpu with the specified virgl flags. Requires
+\fB/dev/dri\fP to be available. When \fIFLAGS\fP includes
+\fBVIRGLRENDERER_RENDER_SERVER\fP, \fB/usr/libexec/virgl_render_server\fP
+must also be available.
+
+.TP
+\fBkrun.use_passt\fP=\fINUM\fP
+When set to a value greater than 0, enable passt-based networking
+in the microVM.
+
+.TP
+\fBkrun.nested_virt\fP=\fINUM\fP
+When set to a value greater than 0, enable nested virtualization
+in the microVM, exposing hardware virtualization support (VMX on
+Intel, SVM on AMD) to the guest. This requires nested
+virtualization to be enabled on the host (e.g.
+\fB/sys/module/kvm_intel/parameters/nested\fP or
+\fB/sys/module/kvm_amd/parameters/nested\fP must report \fBY\fP or
+\fB1\fP). A warning is emitted if the host does not appear to
+support nested virtualization.
+
+.TP
+\fBkrun.variant\fP=\fIVARIANT\fP
+Select an alternative libkrun variant. Supported values are
+\fBsev\fP (AMD SEV confidential workloads) and \fBaws-nitro\fP (AWS
+Nitro Enclaves).
+
+.SH VM Configuration File
+A \fB\&.krun_vm.json\fP file can be placed at the root of the container
+image to provide default VM settings. The file is a JSON object with
+the following optional fields:
+.IP \(bu 2
+\fBcpus\fP (integer): same as the \fBkrun.cpus\fP annotation.
+.IP \(bu 2
+\fBram_mib\fP (integer): same as the \fBkrun.ram_mib\fP annotation.
+.IP \(bu 2
+\fBgpu_flags\fP (integer): same as the \fBkrun.gpu_flags\fP annotation.
+.IP \(bu 2
+\fBuse_passt\fP (integer): same as the \fBkrun.use_passt\fP annotation.
+.IP \(bu 2
+\fBnested_virt\fP (integer): same as the \fBkrun.nested_virt\fP annotation.
+.IP \(bu 2
+\fBflavor\fP (string): same as the \fBkrun.variant\fP annotation.
+.IP \(bu 2
+\fBkernel_path\fP (string): path to an external kernel.
+.IP \(bu 2
+\fBkernel_format\fP (integer): kernel format identifier.
+.IP \(bu 2
+\fBinitrd_path\fP (string): path to an initrd image.
+.IP \(bu 2
+\fBkernel_cmdline\fP (string): kernel command line.
+.IP \(bu 2
+\fBvirtiofs_tag\fP (string): VirtioFS tag (defaults to \fB/dev/root\fP).
+.IP \(bu 2
+\fBvirtiofs_shm_size\fP (integer): VirtioFS DAX shared memory size in
+bytes (defaults to 512 MiB).
+
+.PP
+Example:
+
+.EX
+{"nested_virt": 1, "cpus": 4, "ram_mib": 2048}
+.EE
+
+
 .SH COMMANDS
 See crun.1 man page for the commands available to krun
 
