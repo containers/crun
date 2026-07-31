@@ -354,11 +354,20 @@ int set_blocking_fd (int fd, bool blocking, libcrun_error_t *err);
 
 int parse_json_file (json_object **out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
 
+/* Check that the string STR has the prefix PREFIX.  */
 static inline int
 has_prefix (const char *str, const char *prefix)
 {
   size_t prefix_len = strlen (prefix);
   return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
+}
+
+/* Check that the string STR has the prefix PREFIX/ (followed by a slash).  */
+static inline int
+has_dir_prefix (const char *str, const char *prefix)
+{
+  size_t prefix_len = strlen (prefix);
+  return strlen (str) > prefix_len && memcmp (str, prefix, prefix_len) == 0 && str[prefix_len] == '/';
 }
 
 int find_executable (char **exec_path, const char *executable_path, const char *cwd, libcrun_error_t *err);
