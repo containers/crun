@@ -1117,34 +1117,45 @@ resolve_rootfs_path (libcrun_container_t *container, char **rootfs, libcrun_erro
       *rootfs = realpath (def->root->path, NULL);
       if (UNLIKELY (*rootfs == NULL))
         {
+          int saved_errno = errno;
+
           /* If realpath failed for any reason, try the relative directory.  */
           if (def->root->path[0] == '/')
             {
               cleanup_free char *cwd = NULL;
+              libcrun_error_t tmp_err = NULL;
               ssize_t len;
-              int ret;
+              int proc_fd;
 
-              ret = libcrun_open_proc_file (container, "self/cwd", O_RDONLY, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-
-              len = safe_readlinkat (ret, "", &cwd, 0, err);
-              close (ret);
-              if (UNLIKELY (len < 0))
-                return len;
-
-              /* If the rootfs is under the current working directory, just use its relative path.  */
-              if (has_prefix (def->root->path, cwd) && def->root->path[len] == '/')
+              proc_fd = libcrun_get_cached_proc_fd (container, &tmp_err);
+              if (LIKELY (proc_fd >= 0))
                 {
-                  const char *it = consume_slashes (def->root->path + len);
-                  if (*it)
-                    *rootfs = xstrdup (it);
+                  len = safe_readlinkat (proc_fd, "self/cwd", &cwd, 0, &tmp_err);
+                  if (LIKELY (len > 0))
+                    {
+                      /* If the rootfs is under the current working directory, just use its relative path.  */
+                      if (has_dir_prefix (def->root->path, cwd))
+                        {
+                          const char *it = consume_slashes (def->root->path + len);
+                          if (LIKELY (*it))
+                            {
+                              int ret = faccessat (AT_FDCWD, it, F_OK, 0);
+                              if (LIKELY (ret == 0))
+                                *rootfs = xstrdup (it);
+                            }
+                        }
+                    }
                 }
+              crun_error_release (&tmp_err);
             }
 
-          /* If nothing else worked, just use the path as it is.  */
           if (*rootfs == NULL)
-            *rootfs = xstrdup (def->root->path);
+            {
+              if (saved_errno == ENOENT)
+                return crun_make_error (err, ENOENT, "the rootfs path `%s` does not exist", def->root->path);
+
+              *rootfs = xstrdup (def->root->path);
+            }
         }
     }
   return 0;
