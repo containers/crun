@@ -157,9 +157,13 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 				new_path = got_path_root;
 				*new_path++ = '/';
 			}
-			else
-				/* Otherwise back up over this component. */
+			else {
+				/* Otherwise back up over this component, keeping the
+				   separator, so that the expanded symlink is not
+				   concatenated to the parent directory name. */
 				while (*(--new_path) != '/');
+				new_path++;
+			}
 			/* Safe sex check. */
 			if (strlen(path) + n >= PATH_MAX - 2) {
 				__set_errno(ENAMETOOLONG);
