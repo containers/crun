@@ -3003,7 +3003,7 @@ do_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 
   ret = libcrun_get_state_directory (&state_dir,
                                      (container->context ? container->context->state_root : NULL),
-                                     container->context->id, err);
+                                     (container->context ? container->context->id : NULL), err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -5492,7 +5492,7 @@ prepare_and_send_dev_mounts (libcrun_container_t *container, int sync_socket_hos
 
   ret = libcrun_get_state_directory (&state_dir,
                                      (container->context ? container->context->state_root : NULL),
-                                     container->context->id, err);
+                                     (container->context ? container->context->id : NULL), err);
   if (UNLIKELY (ret < 0))
     return ret;
 
