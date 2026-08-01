@@ -332,22 +332,69 @@ close_and_replace (int *oldfd, int newfd)
 /* Defined in chroot_realpath.c  */
 char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
 
+/* DIRFD must be a file descriptor for ROOTFS itself: PATH is resolved
+   against ROOTFS and the result is then opened relatively to DIRFD.  */
 static int
 safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags,
                       int mode, libcrun_error_t *err)
 {
+  cleanup_free char *parent_path = NULL;
+  const char *last_component = NULL;
+  const char *orig_path = path;
   const char *path_in_chroot;
   cleanup_close int fd = -1;
+  char resolved[PATH_MAX];
   char buffer[PATH_MAX];
   size_t rootfs_len = strlen (rootfs);
   int ret;
 
+  /* chroot_realpath resolves the last component as well, so when O_NOFOLLOW
+     is requested resolve only the parent directory and let openat(2) deal
+     with the last component, otherwise a symlink would be followed even
+     though the caller asked not to.  */
+  if (flags & O_NOFOLLOW)
+    {
+      char *sep;
+
+      parent_path = xstrdup (path);
+      sep = strrchr (parent_path, '/');
+      if (sep == NULL)
+        {
+          /* No parent directory, the entire path is the last component.  */
+          last_component = path;
+          parent_path[0] = '\0';
+        }
+      else if (sep[1] != '\0')
+        {
+          *sep = '\0';
+          last_component = path + (sep - parent_path) + 1;
+        }
+      /* A trailing '/' forces the symlink to be resolved anyway, so in that
+         case keep resolving the entire path.  */
+
+      if (last_component)
+        path = parent_path;
+    }
+
   path_in_chroot = chroot_realpath (rootfs, path, buffer);
   if (path_in_chroot == NULL)
-    return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", path);
+    return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", orig_path);
 
-  path_in_chroot += rootfs_len;
+  /* When rootfs is "/", chroot_realpath returns the path unchanged, so drop
+     the prefix only when it is really there.  */
+  if (strncmp (path_in_chroot, rootfs, rootfs_len) == 0)
+    path_in_chroot += rootfs_len;
   path_in_chroot = consume_slashes (path_in_chroot);
+
+  if (last_component)
+    {
+      ret = snprintf (resolved, sizeof (resolved), "%s%s%s", path_in_chroot,
+                      path_in_chroot[0] == '\0' ? "" : "/", last_component);
+      if (UNLIKELY (ret >= (int) sizeof (resolved)))
+        return crun_make_error (err, ENAMETOOLONG, "resolve `%s` under rootfs", orig_path);
+
+      path_in_chroot = resolved;
+    }
 
   /* If the path is empty we are at the root, dup the dirfd itself.  */
   if (path_in_chroot[0] == '\0')
@@ -360,11 +407,11 @@ safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags
 
   ret = openat (dirfd, path_in_chroot, flags, mode);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "open `%s`", path);
+    return crun_make_error (err, errno, "open `%s`", orig_path);
 
   fd = ret;
 
-  ret = check_fd_under_path (rootfs, rootfs_len, fd, path, err);
+  ret = check_fd_under_path (rootfs, rootfs_len, fd, orig_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
