@@ -204,7 +204,7 @@ noinst_PROGRAMS = crun
 endif
 
 if BUILD_TESTS
-check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer
+check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer tests/no_openat2
 
 TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(JSON_C_LIBS)
 
@@ -212,6 +212,10 @@ tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
 tests_init_CFLAGS = -g -O2
 tests_init_SOURCES = tests/init.c
+
+tests_no_openat2_LDADD =
+tests_no_openat2_CFLAGS = -g -O2
+tests_no_openat2_SOURCES = tests/no_openat2.c
 
 tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
@@ -327,6 +331,14 @@ PYTHON_TESTS = tests/test_capabilities.py \
 
 if BUILD_TESTS
 TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
+
+# Run the whole test suite with openat2(2) forced to fail with ENOSYS.  This
+# exercises the safe_openat() fallback used on kernels older than 5.6 and
+# wherever a seccomp filter blocks openat2, which is otherwise never reached
+# on a modern kernel.  Run it as root: without CAP_SYS_ADMIN the helper must
+# set NO_NEW_PRIVS, which the test containers inherit.
+check-no-openat2: tests/no_openat2$(EXEEXT)
+	$(MAKE) $(AM_MAKEFLAGS) check TESTS_ENVIRONMENT='$(abs_top_builddir)/tests/no_openat2$(EXEEXT)'
 endif
 
 .version:
@@ -526,4 +538,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
