@@ -350,7 +350,7 @@ safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags
   cleanup_close int fd = -1;
   char resolved[PATH_MAX];
   char buffer[PATH_MAX];
-  size_t rootfs_len = strlen (rootfs);
+  size_t rootfs_len = is_empty_string (rootfs) ? 0 : strlen (rootfs);
   int ret;
 
   /* chroot_realpath resolves the last component as well, so when O_NOFOLLOW
@@ -385,9 +385,9 @@ safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags
   if (path_in_chroot == NULL)
     return crun_make_error (err, errno, "cannot resolve `%s` under rootfs", orig_path);
 
-  /* When rootfs is "/", chroot_realpath returns the path unchanged, so drop
-     the prefix only when it is really there.  */
-  if (strncmp (path_in_chroot, rootfs, rootfs_len) == 0)
+  /* When rootfs is "/" or not set, chroot_realpath returns the path
+     unchanged, so drop the prefix only when it is really there.  */
+  if (rootfs_len > 0 && strncmp (path_in_chroot, rootfs, rootfs_len) == 0)
     path_in_chroot += rootfs_len;
   path_in_chroot = consume_slashes (path_in_chroot);
 
@@ -406,7 +406,7 @@ safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags
     {
       ret = dup (dirfd);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "dup `%s`", rootfs);
+        return crun_make_error (err, errno, "dup `%s`", rootfs_len ? rootfs : "/");
       return ret;
     }
 
@@ -435,6 +435,10 @@ safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mod
   if (is_empty_string (path))
     {
       cleanup_close int fd = -1;
+
+      /* A container without a rootfs of its own uses the host root.  */
+      if (is_empty_string (rootfs))
+        rootfs = "/";
 
       fd = open (rootfs, flags, mode);
       if (UNLIKELY (fd < 0))

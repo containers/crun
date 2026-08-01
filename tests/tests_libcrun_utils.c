@@ -788,6 +788,29 @@ test_safe_openat_root ()
   return 0;
 }
 
+/* A NULL rootfs is used for containers without a rootfs of their own.  */
+static int
+test_safe_openat_null_rootfs ()
+{
+  libcrun_error_t err = NULL;
+  int rootfd, fd;
+
+  rootfd = open ("/", O_PATH | O_CLOEXEC);
+  if (rootfd < 0)
+    return -1;
+
+  fd = safe_openat (rootfd, NULL, "proc/self/status", O_RDONLY | O_CLOEXEC, 0, &err);
+  close (rootfd);
+  if (fd < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+  close (fd);
+
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -811,9 +834,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..19\n");
+  printf ("1..20\n");
 #else
-  printf ("1..16\n");
+  printf ("1..17\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -831,6 +854,7 @@ main ()
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
   RUN_TEST (test_format_default_id_mapping);
   RUN_TEST (test_safe_openat_root);
+  RUN_TEST (test_safe_openat_null_rootfs);
 #ifdef HAVE_SYSTEMD
   RUN_TEST (test_parse_sd_array);
   RUN_TEST (test_get_scope_path);
