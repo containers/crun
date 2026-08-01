@@ -308,6 +308,11 @@ check_fd_under_path (const char *rootfs, size_t rootfslen, int fd, const char *f
   char link[PATH_MAX];
   int ret;
 
+  /* Every path is under "/", there is nothing to verify.  The check below
+     would reject any path since it expects a '/' right after the rootfs.  */
+  if (rootfslen == 0 || (rootfslen == 1 && rootfs[0] == '/'))
+    return 0;
+
   get_proc_self_fd_path (fdpath, fd);
   ret = TEMP_FAILURE_RETRY (readlink (fdpath, link, sizeof (link)));
   if (UNLIKELY (ret < 0))
