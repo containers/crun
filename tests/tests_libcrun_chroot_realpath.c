@@ -20,6 +20,10 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 typedef int (*test) ();
 
@@ -213,6 +217,131 @@ test_deep_path ()
   return 0;
 }
 
+/* Create a temporary tree used by the symlink tests:
+
+     $root/file           a regular file
+     $root/link           -> file            (relative, top level)
+     $root/dir/file       a regular file
+     $root/dir/link       -> file            (relative, nested)
+     $root/dir/up         -> ../file         (relative, with "..")
+     $root/dir/abs        -> /file           (absolute, i.e. $root/file)
+
+   Return 0 on success and 77 to skip the test when the tree cannot be
+   created.  */
+static int
+make_symlink_tree (char *root, size_t root_size)
+{
+  char path[PATH_MAX];
+  char *tmpdir;
+  int fd;
+
+  if (snprintf (root, root_size, "%s/crun-chroot-realpath-XXXXXX",
+                getenv ("TMPDIR") ? getenv ("TMPDIR") : "/tmp")
+      >= (int) root_size)
+    return 77;
+
+  tmpdir = mkdtemp (root);
+  if (tmpdir == NULL)
+    return 77;
+
+  snprintf (path, sizeof (path), "%s/file", root);
+  fd = creat (path, 0600);
+  if (fd < 0)
+    return 77;
+  close (fd);
+
+  snprintf (path, sizeof (path), "%s/link", root);
+  if (symlink ("file", path) < 0)
+    return 77;
+
+  snprintf (path, sizeof (path), "%s/dir", root);
+  if (mkdir (path, 0700) < 0)
+    return 77;
+
+  snprintf (path, sizeof (path), "%s/dir/file", root);
+  fd = creat (path, 0600);
+  if (fd < 0)
+    return 77;
+  close (fd);
+
+  snprintf (path, sizeof (path), "%s/dir/link", root);
+  if (symlink ("file", path) < 0)
+    return 77;
+
+  snprintf (path, sizeof (path), "%s/dir/up", root);
+  if (symlink ("../file", path) < 0)
+    return 77;
+
+  snprintf (path, sizeof (path), "%s/dir/abs", root);
+  if (symlink ("/file", path) < 0)
+    return 77;
+
+  return 0;
+}
+
+static void
+cleanup_symlink_tree (const char *root)
+{
+  char path[PATH_MAX];
+  const char *files[] = { "dir/abs", "dir/up", "dir/link", "dir/file", "dir", "link", "file", NULL };
+  size_t i;
+
+  for (i = 0; files[i]; i++)
+    {
+      snprintf (path, sizeof (path), "%s/%s", root, files[i]);
+      if (remove (path) < 0)
+        continue;
+    }
+  rmdir (root);
+}
+
+/* Expanding a symlink must not drop the separator between the parent
+   directory and the symlink target.  */
+static int
+test_symlinks ()
+{
+  struct
+  {
+    const char *path;
+    const char *expected;
+  } cases[] = {
+    { "/link", "/file" },
+    { "/dir/link", "/dir/file" },
+    { "/dir/up", "/file" },
+    { "/dir/abs", "/file" },
+    { NULL, NULL },
+  };
+  char root[PATH_MAX];
+  char resolved[PATH_MAX];
+  char expected[PATH_MAX];
+  int ret = 0;
+  size_t i;
+
+  ret = make_symlink_tree (root, sizeof (root));
+  if (ret != 0)
+    return ret;
+
+  for (i = 0; cases[i].path; i++)
+    {
+      char *result = chroot_realpath (root, cases[i].path, resolved);
+      if (result == NULL)
+        {
+          ret = -1;
+          break;
+        }
+
+      snprintf (expected, sizeof (expected), "%s%s", root, cases[i].expected);
+      if (strcmp (resolved, expected) != 0)
+        {
+          ret = -1;
+          break;
+        }
+    }
+
+  cleanup_symlink_tree (root);
+  return ret;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -235,7 +364,7 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..10\n");
+  printf ("1..11\n");
   RUN_TEST (test_null_chroot);
   RUN_TEST (test_empty_chroot);
   RUN_TEST (test_root_chroot);
@@ -246,5 +375,6 @@ main ()
   RUN_TEST (test_simple_path);
   RUN_TEST (test_trailing_slash);
   RUN_TEST (test_deep_path);
+  RUN_TEST (test_symlinks);
   return 0;
 }

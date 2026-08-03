@@ -68,6 +68,7 @@ jobs:
         include:
           - test: disable-systemd
           - test: check
+          - test: check-no-openat2
           - test: enable-shared
           - test: embedded-blake3
           - test: system-blake3
@@ -128,6 +129,20 @@ jobs:
                   make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
                   echo run tests as rootless in a user namespace
                   unshare -r make check ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
+              ;;
+              check-no-openat2)
+                  # Run the test suite with openat2(2) forced to fail with
+                  # ENOSYS, so that the safe_openat() fallback used on kernels
+                  # older than 5.6 is exercised.  GitHub runners always have a
+                  # much newer kernel, so this path is otherwise never tested.
+                  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+                  ./configure --enable-embedded-blake3 --disable-dl
+                  make
+                  # Only the root run: without CAP_SYS_ADMIN the helper has to
+                  # set NO_NEW_PRIVS to install its seccomp filter, and that is
+                  # inherited by the test containers.
+                  echo run tests as root, openat2 blocked
+                  sudo make check-no-openat2 ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
               ;;
               podman)
                   sudo mkdir -p /var/lib/containers /var/tmp
