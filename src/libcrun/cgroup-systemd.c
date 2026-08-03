@@ -819,7 +819,7 @@ get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resource
           }
 
         errno = 0;
-        *value = (uint64_t) strtoll (resources->unified->values[i], &endptr, 10);
+        *value = strtoull (resources->unified->values[i], &endptr, 10);
         if (UNLIKELY (errno))
           return crun_make_error (err, errno, "invalid value for `%s`: %s", name,
                                   resources->unified->values[i]);
@@ -929,7 +929,7 @@ read_uint64_value (const char *str, uint64_t *value, libcrun_error_t *err)
   char *endptr = NULL;
 
   errno = 0;
-  *value = (uint64_t) strtoll (str, &endptr, 10);
+  *value = strtoull (str, &endptr, 10);
   if (UNLIKELY (errno))
     return crun_make_error (err, errno, "invalid value: %s", str);
   if (endptr && *endptr)
