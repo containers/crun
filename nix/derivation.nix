@@ -24,13 +24,10 @@ with pkgs; stdenv.mkDerivation {
     python3
     which
   ];
-  buildInputs =
-    (if stdenv.hostPlatform.isMusl then [
-      argp-standalone
-    ] else [
+  buildInputs = [
       glibc
       glibc.static
-    ]) ++ [
+    ] ++ [
       libcap
       libseccomp
       libsystemd
@@ -40,9 +37,7 @@ with pkgs; stdenv.mkDerivation {
   prePatch = let
     staticLibs =
       lib.optional enableCriu "${criu}/lib/libcriu.a"
-      ++ (if stdenv.hostPlatform.isMusl
-          then map (l: "${musl}/lib/${l}") [ "libc.a" "libpthread.a" "librt.a" ]
-          else map (l: "${glibc.static}/lib/${l}") [ "libc.a" "libpthread.a" "librt.a" ])
+      ++ map (l: "${glibc.static}/lib/${l}") [ "libc.a" "libpthread.a" "librt.a" ]
       ++ [
         "${lib.getLib libcap}/lib/libcap.a"
         "${lib.getLib libseccomp}/lib/libseccomp.a"
