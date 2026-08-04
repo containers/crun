@@ -1462,7 +1462,7 @@ static unsigned
 atou (char **s)
 {
   unsigned x;
-  for (x = 0; **s - '0' < 10; ++*s)
+  for (x = 0; **s >= '0' && **s <= '9'; ++*s)
     x = 10 * x + (**s - '0');
   return x;
 }
