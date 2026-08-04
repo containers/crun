@@ -154,7 +154,7 @@ To build the binaries by locally installing the nix package manager:
 ```console
 $ curl -L https://nixos.org/nix/install | sh
 $ git clone --recursive https://github.com/containers/crun.git && cd crun
-$ nix build -f nix/
+$ nix --extra-experimental-features "nix-command flakes" build "path:.#crun-static-amd64"
 $ ./result/bin/crun --version
 ```
 
