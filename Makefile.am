@@ -353,8 +353,7 @@ git-version.h:
 	fi
 
 nixpkgs:
-	@nix --extra-experimental-features nix-command run -f channel:nixpkgs-unstable nix-prefetch-git -- \
-		--no-deepClone https://github.com/nixos/nixpkgs > nix/nixpkgs.json
+	@nix --extra-experimental-features "nix-command flakes" flake update
 
 dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version

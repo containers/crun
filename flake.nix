@@ -30,7 +30,7 @@
         };
         s390x = {
           system = "x86_64-linux";
-          crossSystem.config = "s390x-unknown-linux-musl";
+          crossSystem.config = "s390x-unknown-linux-gnu";
           enableCriu = false;
         };
       };
