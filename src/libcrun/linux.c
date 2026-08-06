@@ -1226,6 +1226,8 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
       if (errno != ENOENT && errno != EACCES)
         return pathfd;
 
+      if (errno == EACCES)
+        libcrun_debug ("skipping inaccessible path `%s`", rel_path);
       crun_error_release (err);
       return 0;
     }
