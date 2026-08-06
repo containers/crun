@@ -3456,7 +3456,8 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   runtime_spec_schema_config_schema *def = container->container_def;
   struct libcrun_fd_map *mount_fds;
   bool has_hooks = def->hooks
-                   && (def->hooks->prestart_len || def->hooks->create_runtime_len);
+                   && (def->hooks->prestart_len || def->hooks->create_runtime_len
+                       || def->hooks->create_container_len);
   bool has_userns = get_private_data (container)->unshare_flags & CLONE_NEWUSER;
   size_t i;
 

@@ -280,6 +280,36 @@ def test_createContainer_hook():
         return -1
 
 
+def test_createContainer_hook_after_mounts():
+    """Test createContainer hook runs after mounts are set up (issue #2167).
+
+    Per the OCI runtime spec the createContainer hooks must be called after
+    the mount namespace has been set up but before pivot_root.  The hook runs
+    with the bundle as its working directory, so the container /proc mount is
+    visible at rootfs/proc.  rootfs/proc/self only exists once proc has been
+    mounted, so this fails if the hook runs before libcrun_set_mounts.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    hook = {
+        "path": "/bin/sh",
+        "args": ["/bin/sh", "-c", "test -e rootfs/proc/self"]
+    }
+    conf['hooks'] = {"createContainer": [hook]}
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        return 0
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
 def test_startContainer_hook():
     """Test startContainer hook (runs inside container namespace)."""
     conf = base_config()
@@ -572,6 +602,7 @@ all_tests = {
     "test-createRuntime-hook": test_createRuntime_hook,
     "test-createRuntime-hook-bundle-path": test_createRuntime_hook_bundle_path,
     "test-createContainer-hook": test_createContainer_hook,
+    "test-createContainer-hook-after-mounts": test_createContainer_hook_after_mounts,
     "test-startContainer-hook": test_startContainer_hook,
     "test-hook-with-timeout": test_hook_with_timeout,
     "test-hook-receives-state": test_hook_receives_state,

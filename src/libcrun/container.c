@@ -1352,6 +1352,19 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, &rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
+  ret = libcrun_set_mounts (entrypoint_args, container, rootfs, send_sync_cb, &sync_socket, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* The createContainer hooks MUST run after the mounts are set up but before
+     the pivot_root.  When these hooks are present can_use_open_tree_namespace()
+     forces the deferred-pivot path, so the actual pivot happens later in
+     libcrun_finalize_mounts().  */
   if (def->hooks && def->hooks->create_container_len)
     {
       libcrun_error_t tmp_err = NULL;
@@ -1364,15 +1377,6 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       if (UNLIKELY (ret != 0))
         return ret;
     }
-
-  ret = libcrun_do_pivot_root (container, entrypoint_args->context->no_pivot, &rootfs, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  /* sync 2 and 3 are sent as part of libcrun_set_mounts.  */
-  ret = libcrun_set_mounts (entrypoint_args, container, rootfs, send_sync_cb, &sync_socket, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = libcrun_finalize_mounts (entrypoint_args, container, rootfs, err);
   if (UNLIKELY (ret < 0))
