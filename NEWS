@@ -1,3 +1,28 @@
+* crun-1.29
+
+- linux: use the new mount API for more mount operations.
+- linux: use OPEN_TREE_NAMESPACE when possible.  It improves container
+  startup performance.
+- linux: use a trusted /proc file descriptor for more operations to
+  harden accesses under /proc.
+- linux: reject invalid capabilities in config.json.
+- utils: detect the initial user namespace by the inode of
+  /proc/self/ns/user instead of the uid_map layout, so an identity
+  uid_map created by systemd 260 is no longer mistaken for the initial
+  user namespace.
+- utils: honor O_NOFOLLOW in the safe_openat fallback used on kernels
+  without openat2(2), so a "dest-nofollow" bind mount whose destination
+  is a symlink is created on the symlink itself.
+- cgroup: reject a sub-cgroup that escapes the container cgroup.
+- status: check the unlinkat result when removing the state directory.
+- status: fix double-close.
+- hooks: restore the JSON configuration passed to OCI hooks to the
+  formatting used with YAJL (slashes not escaped, not prettified),
+  avoiding breakages introduced by the switch to json-c.
+- krun: require the virgl render server only when GPU support is
+  requested.
+- krun: passt, do not map the gateway address.
+
 * crun-1.28
 
 - CVE-2026-47766: do not follow rootfs /dev symlinks.  Open rootfs
