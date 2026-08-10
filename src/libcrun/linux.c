@@ -1190,6 +1190,9 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
           return 0;
         }
 
+      /* tmp_err is NULL here: get_shared_empty_dir_cached() succeeded and did not set it. */
+      crun_make_error (&tmp_err, errno, "move mount masked dir `%s`", rel_path);
+
       TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
       private_data->maskdir_fd = -1;
     }
