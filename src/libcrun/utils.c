@@ -963,9 +963,12 @@ libcrun_is_apparmor_enabled (libcrun_error_t *err)
 static int
 is_current_process_confined (libcrun_container_t *container, libcrun_error_t *err)
 {
+#define UNCONFINED "unconfined"
+#define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
   cleanup_free const char *attr_path = lsm_attr_path (container, "apparmor", "current", err);
   cleanup_close int fd = -1;
-  char buf[256];
+  /* Only the "unconfined" token plus one delimiter byte are inspected.  */
+  char buf[UNCONFINED_LEN + 1];
 
   if (UNLIKELY (attr_path == NULL))
     return -1;
@@ -981,9 +984,9 @@ is_current_process_confined (libcrun_container_t *container, libcrun_error_t *er
   if (UNLIKELY (bytes_read < 0))
     return crun_make_error (err, errno, "read from `%s`", attr_path);
 
-#define UNCONFINED "unconfined"
-#define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
   return bytes_read >= UNCONFINED_LEN && memcmp (buf, UNCONFINED, UNCONFINED_LEN);
+#undef UNCONFINED
+#undef UNCONFINED_LEN
 }
 
 int
