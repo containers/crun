@@ -980,11 +980,20 @@ is_current_process_confined (libcrun_container_t *container, libcrun_error_t *er
   if (UNLIKELY (check_proc_super_magic (fd, attr_path, err)))
     return -1;
 
-  ssize_t bytes_read = read (fd, buf, sizeof (buf) - 1);
+  ssize_t bytes_read = TEMP_FAILURE_RETRY (read (fd, buf, sizeof (buf)));
   if (UNLIKELY (bytes_read < 0))
     return crun_make_error (err, errno, "read from `%s`", attr_path);
 
-  return bytes_read >= UNCONFINED_LEN && memcmp (buf, UNCONFINED, UNCONFINED_LEN);
+  /* The process is unconfined only when the attribute is exactly the token
+     "unconfined", optionally followed by a delimiter.  Anything shorter (a
+     short read), or a longer profile name such as "unconfined_foo", means the
+     process is confined.  When in doubt default to confined, which is the safe
+     assumption for the caller.  */
+  if (bytes_read < UNCONFINED_LEN || memcmp (buf, UNCONFINED, UNCONFINED_LEN) != 0)
+    return 1;
+  if (bytes_read == UNCONFINED_LEN || buf[UNCONFINED_LEN] == '\n' || buf[UNCONFINED_LEN] == ' ')
+    return 0;
+  return 1;
 #undef UNCONFINED
 #undef UNCONFINED_LEN
 }
