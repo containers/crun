@@ -735,6 +735,7 @@ libcrun_cgroup_pause_unpause_path (const char *cgroup_path, const bool pause, li
 int
 cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 {
+  bool frozen = false;
   int ret;
   size_t i;
   cleanup_free pid_t *pids = NULL;
@@ -758,15 +759,20 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
       crun_error_release (err);
     }
 
+  /* Freeze the cgroup so that the processes cannot fork while they are being
+     killed.  Once frozen, make sure the cgroup is always thawed again on any
+     exit path, otherwise the container would be left frozen and unresponsive.  */
   ret = libcrun_cgroup_pause_unpause_path (path, true, err);
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
+  else
+    frozen = true;
 
   ret = libcrun_cgroup_read_pids_from_path (path, true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) != ENOENT)
-        return ret;
+        goto thaw;
 
       /* If the file doesn't exist then the container was already killed.  */
       crun_error_release (err);
@@ -776,14 +782,26 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
     {
       ret = kill (pids[i], signal);
       if (UNLIKELY (ret < 0 && errno != ESRCH))
-        return crun_make_error (err, errno, "kill process `%d`", pids[i]);
+        {
+          ret = crun_make_error (err, errno, "kill process `%d`", pids[i]);
+          goto thaw;
+        }
     }
 
-  ret = libcrun_cgroup_pause_unpause_path (path, false, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
+  ret = 0;
 
-  return 0;
+thaw:
+  if (frozen)
+    {
+      libcrun_error_t thaw_err = NULL;
+
+      /* Thawing is best-effort: do not clobber a pending error with a
+         thaw failure, but never leave the cgroup frozen.  */
+      if (libcrun_cgroup_pause_unpause_path (path, false, &thaw_err) < 0)
+        crun_error_release (&thaw_err);
+    }
+
+  return ret;
 }
 
 static int
