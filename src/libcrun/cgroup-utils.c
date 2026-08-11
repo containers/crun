@@ -305,7 +305,13 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
 
   tasksfd = openat (dfd, "cgroup.procs", O_RDONLY | O_CLOEXEC);
   if (tasksfd < 0)
-    return crun_make_error (err, errno, "open `cgroup.procs`");
+    {
+      /* The cgroup was removed concurrently (e.g. while killing the
+         container), there are no processes left to account for.  */
+      if (errno == ENOENT || errno == ENODEV)
+        return 0;
+      return crun_make_error (err, errno, "open `cgroup.procs`");
+    }
 
   ret = read_all_fd (tasksfd, "cgroup.procs", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
