@@ -135,6 +135,47 @@ def test_mount_tmpfs_permissions():
     logger.info("actual output: %s", out)
     return -1
 
+def test_mount_proc_mode():
+    # The procfs root inode mode is defined by the kernel (0555) and must
+    # not be overridden with the mode of the directory it is mounted over.
+    # Regression test for a bug where crun copied the mountpoint mode onto
+    # the mount root, turning /proc into 0755 and breaking the
+    # /proc/<pid>/fd magic-symlink path (used e.g. to publish O_TMPFILE via
+    # linkat).
+    def prepare_rootfs(rootfs):
+        path = os.path.join(rootfs, "proc")
+        if not os.path.exists(path):
+            os.mkdir(path)
+        os.chmod(path, 0o755)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'mode', '/proc']
+    add_all_namespaces(conf)
+    out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+    if out.strip() == "555":
+        return 0
+    logger.info("proc mode test failed: expected '555', got '%s'", out)
+    return -1
+
+def test_mount_tmpfs_explicit_mode():
+    # An explicit mode= option on a tmpfs mount must be honored and not
+    # overridden with the mode of the mountpoint directory.  Regression test
+    # for a tmpfs such as /dev/shm requested with mode=1777 ending up 0755.
+    def prepare_rootfs(rootfs):
+        path = os.path.join(rootfs, "test-tmpfs")
+        os.mkdir(path)
+        os.chmod(path, 0o700)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'mode', '/test-tmpfs']
+    add_all_namespaces(conf)
+    conf['mounts'].append({"destination": "/test-tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["mode=1777"]})
+    out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+    if out.strip() == "1777":
+        return 0
+    logger.info("tmpfs explicit mode test failed: expected '1777', got '%s'", out)
+    return -1
+
 def test_mount_bind_to_rootfs():
     if is_rootless():
         return (77, "requires root for bind mount to rootfs")
@@ -1322,6 +1363,8 @@ all_tests = {
     "mount-bind-mount-symlink-nofollow": test_bind_mount_symlink_nofollow,
     "mount-bind-mount-file-nofollow": test_bind_mount_file_nofollow,
     "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
+    "mount-proc-mode": test_mount_proc_mode,
+    "mount-tmpfs-explicit-mode": test_mount_tmpfs_explicit_mode,
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
