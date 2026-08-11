@@ -1074,13 +1074,16 @@ libcrun_migrate_all_pids_to_cgroup (pid_t init_pid, char *from, char *to, libcru
   if (cgroup_mode < 0)
     return cgroup_mode;
 
+  /* Freeze the source cgroup for a consistent view of its processes while they
+     are migrated, but make sure it is always thawed again on error, otherwise
+     it would be left frozen.  */
   ret = libcrun_cgroup_pause_unpause_path (from, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   ret = libcrun_cgroup_read_pids_from_path (from, true, &pids, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    goto thaw;
 
   from_len = strlen (from);
 
@@ -1091,18 +1094,34 @@ libcrun_migrate_all_pids_to_cgroup (pid_t init_pid, char *from, char *to, libcru
 
       ret = libcrun_get_cgroup_process (pids[i], &pid_path, false, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto thaw;
 
       /* Make sure the pid is in the cgroup we are migrating from.  */
       if (! has_prefix (pid_path, from))
-        return crun_make_error (err, 0, "error migrating pid %d.  It is not in the cgroup `%s`", pids[i], from);
+        {
+          ret = crun_make_error (err, 0, "error migrating pid %d.  It is not in the cgroup `%s`", pids[i], from);
+          goto thaw;
+        }
 
       /* Build the destination cgroup path, keeping the same hierarchy.  */
       xasprintf (&dest_cgroup, "%s%s", to, pid_path + from_len);
 
       ret = enter_cgroup (cgroup_mode, pids[i], init_pid, dest_cgroup, false, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto thaw;
+    }
+
+  ret = 0;
+
+thaw:
+  if (UNLIKELY (ret < 0))
+    {
+      libcrun_error_t thaw_err = NULL;
+
+      /* Best-effort thaw: keep the original error but never leave the cgroup frozen.  */
+      if (libcrun_cgroup_pause_unpause_path (from, false, &thaw_err) < 0)
+        crun_error_release (&thaw_err);
+      return ret;
     }
 
   ret = libcrun_cgroup_pause_unpause_path (from, false, err);
