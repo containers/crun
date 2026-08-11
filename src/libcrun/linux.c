@@ -3488,6 +3488,26 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   return true;
 }
 
+/* Only tmpfs mounts inherit the mode of the directory they are mounted
+   over, and only when the mount does not already request an explicit mode=
+   option.  This mirrors append_tmpfs_mode_if_missing() used by the fallback
+   mount() path.  File systems such as proc, sysfs and mqueue have a root
+   inode mode defined by the kernel that must not be overridden.  */
+static bool
+mount_inherits_mountpoint_mode (runtime_spec_schema_defs_mount *mount)
+{
+  size_t i;
+
+  if (mount->type == NULL || strcmp (mount->type, "tmpfs") != 0)
+    return false;
+
+  for (i = 0; i < mount->options_len; i++)
+    if (has_prefix (mount->options[i], "mode="))
+      return false;
+
+  return true;
+}
+
 static int
 setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **rootfs, libcrun_error_t *err)
 {
@@ -3593,7 +3613,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       ret = append_paths (&dest_path, err, *rootfs, def->mounts[i]->destination, NULL);
       if (UNLIKELY (ret < 0))
         return ret;
-      if (stat (dest_path, &st) == 0)
+      if (mount_inherits_mountpoint_mode (def->mounts[i]) && stat (dest_path, &st) == 0)
         {
           proc_fd_path_t fd_path;
           int procfd = get_procfd (get_private_data (container), err);
