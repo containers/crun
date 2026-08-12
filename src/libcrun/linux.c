@@ -1075,8 +1075,8 @@ static int do_mount (libcrun_container_t *container, const char *source, int tar
                      const char *target, const char *fstype, unsigned long mountflags,
                      const void *data, int extra_flags, libcrun_error_t *err);
 
-static bool
-has_mount_for (libcrun_container_t *container, const char *destination)
+static runtime_spec_schema_defs_mount *
+find_mount_for (libcrun_container_t *container, const char *destination)
 {
   size_t i;
   runtime_spec_schema_config_schema *def = container->container_def;
@@ -1084,9 +1084,9 @@ has_mount_for (libcrun_container_t *container, const char *destination)
   for (i = 0; i < def->mounts_len; i++)
     {
       if (strcmp (def->mounts[i]->destination, destination) == 0)
-        return true;
+        return def->mounts[i];
     }
-  return false;
+  return NULL;
 }
 
 static void
@@ -1514,7 +1514,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                       mountfd = get_bind_mount (AT_FDCWD, "/sys", true, false, false, MS_PRIVATE, err);
                     }
 
-                  if (! has_mount_for (container, "/sys/fs/cgroup"))
+                  if (find_mount_for (container, "/sys/fs/cgroup") == NULL)
                     {
                       if (mountfd >= 0)
                         {
@@ -1862,7 +1862,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
         return ret;
 
       /* if there is already a mount specified, do not add a default one.  */
-      if (has_mount_for (container, source_subsystem))
+      if (find_mount_for (container, source_subsystem) != NULL)
         continue;
 
       ret = append_paths (&source_path, err, source_subsystem, subpath, NULL);
