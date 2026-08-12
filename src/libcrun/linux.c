@@ -1144,7 +1144,7 @@ static int
 mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_path, libcrun_error_t *err)
 {
   struct private_data_s *private_data = get_private_data (container);
-  cleanup_close int mountfd = -1;
+  cleanup_close int newfd = -1;
   libcrun_error_t tmp_err = NULL;
   int ret;
 
@@ -1160,24 +1160,23 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
       goto fallback_to_tmpfs;
     }
 
-  mountfd = private_data->maskdir_fd;
-  if (mountfd >= 0)
+  if (private_data->maskdir_fd >= 0)
     {
-      int rootfsfd = get_private_data (container)->rootfsfd;
+      int rootfsfd = private_data->rootfsfd;
       struct stat before, after;
 
-      ret = fstat (mountfd, &before);
+      ret = fstat (private_data->maskdir_fd, &before);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "fstat masked dir `%s`", rel_path);
 
-      ret = fs_move_mount_to (mountfd, pathfd, NULL);
+      ret = fs_move_mount_to (private_data->maskdir_fd, pathfd, NULL);
       if (LIKELY (ret == 0))
         {
-          mountfd = get_bind_mount (rootfsfd, rel_path, true, true, false, MS_PRIVATE, err);
-          if (UNLIKELY (mountfd < 0))
-            return mountfd;
+          newfd = get_bind_mount (rootfsfd, rel_path, true, true, false, MS_PRIVATE, err);
+          if (UNLIKELY (newfd < 0))
+            return newfd;
 
-          ret = fstat (mountfd, &after);
+          ret = fstat (newfd, &after);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "fstat masked dir `%s`", rel_path);
 
@@ -1185,11 +1184,14 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
             return crun_make_error (err, 0, "race condition detected remounting masked path `/%s`", rel_path);
 
           TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
-          private_data->maskdir_fd = mountfd;
-          mountfd = -1;
+          private_data->maskdir_fd = newfd;
+          newfd = -1;
 
           return 0;
         }
+
+      /* tmp_err is NULL here: get_shared_empty_dir_cached() succeeded and did not set it. */
+      crun_make_error (&tmp_err, errno, "move mount masked dir `%s`", rel_path);
 
       TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
       private_data->maskdir_fd = -1;

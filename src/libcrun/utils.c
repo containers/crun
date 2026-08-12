@@ -815,7 +815,7 @@ libcrun_initialize_apparmor (libcrun_error_t *err)
 {
   cleanup_close int fd = -1;
   int size;
-  char buf[2];
+  char buf[1];
 
   if (apparmor_enabled >= 0)
     return apparmor_enabled;
@@ -832,7 +832,7 @@ libcrun_initialize_apparmor (libcrun_error_t *err)
       return crun_make_error (err, errno, "open `/sys/module/apparmor/parameters/enabled`");
     }
 
-  size = TEMP_FAILURE_RETRY (read (fd, buf, 2));
+  size = TEMP_FAILURE_RETRY (read (fd, buf, sizeof (buf)));
 
   apparmor_enabled = size > 0 && buf[0] == 'Y' ? 1 : 0;
 
@@ -963,9 +963,12 @@ libcrun_is_apparmor_enabled (libcrun_error_t *err)
 static int
 is_current_process_confined (libcrun_container_t *container, libcrun_error_t *err)
 {
+#define UNCONFINED "unconfined"
+#define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
   cleanup_free const char *attr_path = lsm_attr_path (container, "apparmor", "current", err);
   cleanup_close int fd = -1;
-  char buf[256];
+  /* Only the "unconfined" token plus one delimiter byte are inspected.  */
+  char buf[UNCONFINED_LEN + 1];
 
   if (UNLIKELY (attr_path == NULL))
     return -1;
@@ -977,13 +980,22 @@ is_current_process_confined (libcrun_container_t *container, libcrun_error_t *er
   if (UNLIKELY (check_proc_super_magic (fd, attr_path, err)))
     return -1;
 
-  ssize_t bytes_read = read (fd, buf, sizeof (buf) - 1);
+  ssize_t bytes_read = TEMP_FAILURE_RETRY (read (fd, buf, sizeof (buf)));
   if (UNLIKELY (bytes_read < 0))
     return crun_make_error (err, errno, "read from `%s`", attr_path);
 
-#define UNCONFINED "unconfined"
-#define UNCONFINED_LEN (ssize_t) (sizeof (UNCONFINED) - 1)
-  return bytes_read >= UNCONFINED_LEN && memcmp (buf, UNCONFINED, UNCONFINED_LEN);
+  /* The process is unconfined only when the attribute is exactly the token
+     "unconfined", optionally followed by a delimiter.  Anything shorter (a
+     short read), or a longer profile name such as "unconfined_foo", means the
+     process is confined.  When in doubt default to confined, which is the safe
+     assumption for the caller.  */
+  if (bytes_read < UNCONFINED_LEN || memcmp (buf, UNCONFINED, UNCONFINED_LEN) != 0)
+    return 1;
+  if (bytes_read == UNCONFINED_LEN || buf[UNCONFINED_LEN] == '\n' || buf[UNCONFINED_LEN] == ' ')
+    return 0;
+  return 1;
+#undef UNCONFINED
+#undef UNCONFINED_LEN
 }
 
 int
