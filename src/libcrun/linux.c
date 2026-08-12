@@ -1679,6 +1679,14 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 #endif
 
           targetfd = fd;
+
+          /* The bind mount shadowed the original targetfd, so refresh
+             real_target to point to the reopened mountpoint.  Otherwise the
+             classic mount(2) fallbacks below (used when mount_setattr is not
+             available, e.g. kernels < 5.12) operate on the shadowed path and
+             fail with EINVAL.  */
+          get_proc_self_fd_path (target_buffer, targetfd);
+          real_target = target_buffer;
         }
     }
 
