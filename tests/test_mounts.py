@@ -213,50 +213,62 @@ def test_mount_tmpfs_to_rootfs():
 def test_ro_cgroup():
     for cgroupns in [True, False]:
         for netns in [True, False]:
-            for has_cgroup_mount in [True, False]:
-                conf = base_config()
-                conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
-                add_all_namespaces(conf, cgroupns=cgroupns, netns=netns)
-                mounts = [
-                    {
-	                "destination": "/sys",
-	                "type": "sysfs",
-	                "source": "sysfs",
-	                "options": [
-		            "nosuid",
-		            "noexec",
-		            "nodev",
-		            "ro"
-	                ]
-	            },
-                    {
-	                "destination": "/proc",
-	                "type": "proc"
-	            }
-                ]
+            for userns in [True, False]:
+                for has_cgroup_mount in [True, False]:
+                    conf = base_config()
+                    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+                    add_all_namespaces(conf, cgroupns=cgroupns, netns=netns, userns=userns)
+                    mounts = [
+                        {
+	                    "destination": "/sys",
+	                    "type": "sysfs",
+	                    "source": "sysfs",
+	                    "options": [
+		                "nosuid",
+		                "noexec",
+		                "nodev",
+		                "ro"
+	                    ]
+	                },
+                        {
+	                    "destination": "/proc",
+	                    "type": "proc"
+	                }
+                    ]
 
-                if has_cgroup_mount:
-                    mounts.append({
-                        "destination": "/sys/fs/cgroup",
-                        "type": "cgroup",
-                        "source": "cgroup",
-                        "options": [
-                            "nosuid",
-                            "noexec",
-                            "nodev",
-                            "relatime",
-                            "ro"
-                        ]
-                    })
+                    if has_cgroup_mount:
+                        mounts.append({
+                            "destination": "/sys/fs/cgroup",
+                            "type": "cgroup",
+                            "source": "cgroup",
+                            "options": [
+                                "nosuid",
+                                "noexec",
+                                "nodev",
+                                "relatime",
+                                "ro"
+                            ]
+                        })
 
-                conf['mounts'] = mounts
-                out, _ = run_and_get_output(conf, hide_stderr=True)
-                for i in reversed(out.split("\n")):
-                    if i.find("/sys/fs/cgroup") >= 0:
-                        if i.find("ro,") < 0:
-                            logger.error("fail with cgroupns=%s, netns=%s and cgroup_mount=%s, got %s", cgroupns, netns, has_cgroup_mount, i)
-                            return -1
-                        break
+                    conf['mounts'] = mounts
+                    out, _ = run_and_get_output(conf, hide_stderr=True)
+                    for i in reversed(out.split("\n")):
+                        fields = i.split(" ")
+                        if len(fields) < 6:
+                            continue
+                        if fields[4] == "/sys/fs/cgroup":
+                            if "ro" not in fields[5].split(","):
+                                logger.error("fail with cgroupns=%s, netns=%s, userns=%s and cgroup_mount=%s, got=%s", cgroupns, netns, userns, has_cgroup_mount, i)
+                                return -1
+                            break
+
+                    for i in out.split("\n"):
+                        fields = i.split(" ")
+                        if len(fields) >= 6 and fields[4] == "/sys":
+                            if "ro" not in fields[5].split(","):
+                                logger.error("fail with cgroupns=%s, netns=%s, userns=%s and cgroup_mount=%s, /sys options: %s", cgroupns, netns, userns, has_cgroup_mount, fields[5])
+                                return -1
+                            break
     return 0
 
 def test_mount_symlink_not_existing():
