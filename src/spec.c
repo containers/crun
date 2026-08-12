@@ -26,6 +26,7 @@
 
 #include "crun.h"
 #include "libcrun/container.h"
+#include "libcrun/spec.h"
 #include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";

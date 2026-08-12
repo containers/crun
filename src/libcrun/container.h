@@ -298,8 +298,6 @@ LIBCRUN_PUBLIC int libcrun_container_update_intel_rdt (libcrun_context_t *contex
 LIBCRUN_PUBLIC int libcrun_container_get_features (libcrun_context_t *context, struct features_info_s **info,
                                                    libcrun_error_t *err);
 
-LIBCRUN_PUBLIC int libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err);
-
 LIBCRUN_PUBLIC int libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
