@@ -305,7 +305,13 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
 
   tasksfd = openat (dfd, "cgroup.procs", O_RDONLY | O_CLOEXEC);
   if (tasksfd < 0)
-    return crun_make_error (err, errno, "open `cgroup.procs`");
+    {
+      /* The cgroup was removed concurrently (e.g. while killing the
+         container), there are no processes left to account for.  */
+      if (errno == ENOENT || errno == ENODEV)
+        return 0;
+      return crun_make_error (err, errno, "open `cgroup.procs`");
+    }
 
   ret = read_all_fd (tasksfd, "cgroup.procs", &buffer, &len, err);
   if (UNLIKELY (ret < 0))
@@ -729,6 +735,7 @@ libcrun_cgroup_pause_unpause_path (const char *cgroup_path, const bool pause, li
 int
 cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 {
+  bool frozen = false;
   int ret;
   size_t i;
   cleanup_free pid_t *pids = NULL;
@@ -752,15 +759,20 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
       crun_error_release (err);
     }
 
+  /* Freeze the cgroup so that the processes cannot fork while they are being
+     killed.  Once frozen, make sure the cgroup is always thawed again on any
+     exit path, otherwise the container would be left frozen and unresponsive.  */
   ret = libcrun_cgroup_pause_unpause_path (path, true, err);
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
+  else
+    frozen = true;
 
   ret = libcrun_cgroup_read_pids_from_path (path, true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) != ENOENT)
-        return ret;
+        goto thaw;
 
       /* If the file doesn't exist then the container was already killed.  */
       crun_error_release (err);
@@ -770,14 +782,26 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
     {
       ret = kill (pids[i], signal);
       if (UNLIKELY (ret < 0 && errno != ESRCH))
-        return crun_make_error (err, errno, "kill process `%d`", pids[i]);
+        {
+          ret = crun_make_error (err, errno, "kill process `%d`", pids[i]);
+          goto thaw;
+        }
     }
 
-  ret = libcrun_cgroup_pause_unpause_path (path, false, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
+  ret = 0;
 
-  return 0;
+thaw:
+  if (frozen)
+    {
+      libcrun_error_t thaw_err = NULL;
+
+      /* Thawing is best-effort: do not clobber a pending error with a
+         thaw failure, but never leave the cgroup frozen.  */
+      if (libcrun_cgroup_pause_unpause_path (path, false, &thaw_err) < 0)
+        crun_error_release (&thaw_err);
+    }
+
+  return ret;
 }
 
 static int
@@ -1050,13 +1074,16 @@ libcrun_migrate_all_pids_to_cgroup (pid_t init_pid, char *from, char *to, libcru
   if (cgroup_mode < 0)
     return cgroup_mode;
 
+  /* Freeze the source cgroup for a consistent view of its processes while they
+     are migrated, but make sure it is always thawed again on error, otherwise
+     it would be left frozen.  */
   ret = libcrun_cgroup_pause_unpause_path (from, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   ret = libcrun_cgroup_read_pids_from_path (from, true, &pids, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    goto thaw;
 
   from_len = strlen (from);
 
@@ -1067,18 +1094,34 @@ libcrun_migrate_all_pids_to_cgroup (pid_t init_pid, char *from, char *to, libcru
 
       ret = libcrun_get_cgroup_process (pids[i], &pid_path, false, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto thaw;
 
       /* Make sure the pid is in the cgroup we are migrating from.  */
       if (! has_prefix (pid_path, from))
-        return crun_make_error (err, 0, "error migrating pid %d.  It is not in the cgroup `%s`", pids[i], from);
+        {
+          ret = crun_make_error (err, 0, "error migrating pid %d.  It is not in the cgroup `%s`", pids[i], from);
+          goto thaw;
+        }
 
       /* Build the destination cgroup path, keeping the same hierarchy.  */
       xasprintf (&dest_cgroup, "%s%s", to, pid_path + from_len);
 
       ret = enter_cgroup (cgroup_mode, pids[i], init_pid, dest_cgroup, false, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto thaw;
+    }
+
+  ret = 0;
+
+thaw:
+  if (UNLIKELY (ret < 0))
+    {
+      libcrun_error_t thaw_err = NULL;
+
+      /* Best-effort thaw: keep the original error but never leave the cgroup frozen.  */
+      if (libcrun_cgroup_pause_unpause_path (from, false, &thaw_err) < 0)
+        crun_error_release (&thaw_err);
+      return ret;
     }
 
   ret = libcrun_cgroup_pause_unpause_path (from, false, err);
