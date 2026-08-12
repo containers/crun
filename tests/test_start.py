@@ -587,18 +587,20 @@ def test_systemd_cgroups_path_def_slice():
 
     cid = None
     try:
-        _, cid = run_and_get_output(conf, hide_stderr=True, cgroup_manager="systemd", detach=True)
+        try:
+            _, cid = run_and_get_output(conf, hide_stderr=True, cgroup_manager="systemd", detach=True)
+        except subprocess.CalledProcessError:
+            return (77, "systemd cannot manage the container in this environment")
+
         state = run_crun_command(['state', cid])
         scope = json.loads(state)['systemd-scope']
 
-        want='system.slice'
-        if is_rootless():
-            want='user.slice'
+        want = 'user.slice' if is_rootless() else 'system.slice'
 
-        got = subprocess.check_output(['systemctl', 'show','-PSlice', scope], close_fds=False).decode().strip()
-        # try once more against the user manager, as if one exists, crun will prefer it; see bug #1197
+        got = systemctl_show(scope, 'Slice', user=is_rootless())
+        # try once more against the other manager
         if got != want:
-            got = subprocess.check_output(['systemctl', '--user', 'show','-PSlice', scope], close_fds=False).decode().strip()
+            got = systemctl_show(scope, 'Slice', user=not is_rootless())
 
         if got != want:
             logger.info("Got Slice %s, want %s", got, want)

@@ -846,7 +846,7 @@ def test_bind_mount_symlink_nofollow_procfs():
     conf['mounts'].append(mount_opt)
 
     try:
-        out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
         return -1
     except Exception as e:
         logger.info("error %s", e)
