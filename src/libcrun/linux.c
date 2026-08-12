@@ -1382,6 +1382,113 @@ diagnose_mount_failure (int ret, libcrun_error_t *err, libcrun_container_t *cont
   return ret;
 }
 
+/* When creating a fresh sysfs mount fails inside a user namespace, fall back to
+   bind mounting the host /sys.  Returns 0 when the fallback handled the mount,
+   > 0 when it does not apply (the caller must report the original failure),
+   < 0 on error.  */
+static int
+sysfs_userns_fallback (libcrun_container_t *container, const char *target,
+                       const char *real_target, int targetfd,
+                       unsigned long mountflags, const char *fstype,
+                       libcrun_error_t *err)
+{
+  unsigned long flags = mountflags & ~(ALL_PROPAGATIONS_NO_REC | MS_RDONLY);
+  int ret;
+
+  if (! ((mountflags & MS_RDONLY) && targetfd > 0 && fstype && strcmp (fstype, "sysfs") == 0))
+    return 1;
+
+  /* If we are running in an user namespace, just bind mount /sys if creating
+     sysfs failed.  */
+  ret = check_running_in_user_namespace (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret == 0)
+    return 1;
+
+  {
+    runtime_spec_schema_defs_mount *cgroup_mount = find_mount_for (container, "/sys/fs/cgroup");
+    cleanup_close int mountfd = -1;
+    cleanup_close int sysfd = -1;
+    int sys_old_root_fd = get_old_root_fd (get_private_data (container));
+    bool ro = flags & MS_RDONLY;
+
+    if (sys_old_root_fd >= 0)
+      mountfd = get_bind_mount (sys_old_root_fd, "sys", true, ro, false, MS_PRIVATE, err);
+    if (mountfd < 0)
+      {
+        crun_error_release (err);
+        mountfd = get_bind_mount (AT_FDCWD, "/sys", true, ro, false, MS_PRIVATE, err);
+      }
+
+    if (cgroup_mount == NULL)
+      {
+        if (mountfd >= 0)
+          {
+            ret = fs_move_mount_to (mountfd, targetfd, NULL);
+            if (UNLIKELY (ret < 0))
+              return crun_make_error (err, errno, "move mount `/sys` to `%s`", real_target);
+          }
+        else
+          {
+            crun_error_release (err);
+            if (sys_old_root_fd >= 0)
+              {
+                cleanup_free char *sys_path = NULL;
+                proc_fd_path_t sys_root_path;
+
+                get_proc_self_fd_path (sys_root_path, sys_old_root_fd);
+                xasprintf (&sys_path, "%s/sys", sys_root_path);
+                ret = mount (sys_path, real_target, NULL, MS_BIND | MS_REC, NULL);
+              }
+            else
+              ret = mount ("/sys", real_target, NULL, MS_BIND | MS_REC, NULL);
+            if (UNLIKELY (ret < 0))
+              return crun_make_error (err, errno, "bind mount `/sys` from the host");
+          }
+
+        sysfd = open_mount_target (container, target, err);
+        if (UNLIKELY (sysfd < 0))
+          return sysfd;
+
+        ret = do_remount (sysfd, target,
+                          MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
+                          NULL, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        return do_masked_or_readonly_path (container, "/sys/fs/cgroup", true, false, err);
+      }
+
+    if (UNLIKELY (mountfd < 0))
+      return mountfd;
+
+    ret = fs_move_mount_to (mountfd, targetfd, NULL);
+    if (UNLIKELY (ret < 0))
+      return crun_make_error (err, errno, "move mount to `%s`", real_target);
+
+    sysfd = open_mount_target (container, target, err);
+    if (UNLIKELY (sysfd < 0))
+      return sysfd;
+
+    ret = do_remount (sysfd, target,
+                      MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
+                      NULL, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    if (mount_option_exists (cgroup_mount, "ro") || mount_option_exists (cgroup_mount, "rro"))
+      {
+        ret = do_masked_or_readonly_path (container, "/sys/fs/cgroup", true, false, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+      }
+
+    return 0;
+  }
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1503,97 +1610,14 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
         {
           int saved_errno = errno;
 
-          if ((mountflags & MS_RDONLY) && targetfd > 0 && fstype && strcmp (fstype, "sysfs") == 0)
-            {
-              /* If we are running in an user namespace, just bind mount /sys if creating
-                 sysfs failed.  */
-              ret = check_running_in_user_namespace (err);
-              if (UNLIKELY (ret < 0))
-                return ret;
+          ret = sysfs_userns_fallback (container, target, real_target, targetfd,
+                                       mountflags, fstype, err);
+          if (ret == 0)
+            return 0;
+          if (UNLIKELY (ret < 0))
+            return ret;
 
-              if (ret > 0)
-                {
-                  runtime_spec_schema_defs_mount *cgroup_mount = find_mount_for (container, "/sys/fs/cgroup");
-                  cleanup_close int mountfd = -1;
-                  cleanup_close int sysfd = -1;
-                  int sys_old_root_fd = get_old_root_fd (get_private_data (container));
-                  bool ro = flags & MS_RDONLY;
-
-                  if (sys_old_root_fd >= 0)
-                    mountfd = get_bind_mount (sys_old_root_fd, "sys", true, ro, false, MS_PRIVATE, err);
-                  if (mountfd < 0)
-                    {
-                      crun_error_release (err);
-                      mountfd = get_bind_mount (AT_FDCWD, "/sys", true, ro, false, MS_PRIVATE, err);
-                    }
-
-                  if (cgroup_mount == NULL)
-                    {
-                      if (mountfd >= 0)
-                        {
-                          ret = fs_move_mount_to (mountfd, targetfd, NULL);
-                          if (UNLIKELY (ret < 0))
-                            return crun_make_error (err, errno, "move mount `/sys` to `%s`", real_target);
-                        }
-                      else
-                        {
-                          crun_error_release (err);
-                          if (sys_old_root_fd >= 0)
-                            {
-                              cleanup_free char *sys_path = NULL;
-                              proc_fd_path_t sys_root_path;
-
-                              get_proc_self_fd_path (sys_root_path, sys_old_root_fd);
-                              xasprintf (&sys_path, "%s/sys", sys_root_path);
-                              ret = mount (sys_path, real_target, NULL, MS_BIND | MS_REC, NULL);
-                            }
-                          else
-                            ret = mount ("/sys", real_target, NULL, MS_BIND | MS_REC, NULL);
-                          if (UNLIKELY (ret < 0))
-                            return crun_make_error (err, errno, "bind mount `/sys` from the host");
-                        }
-
-                      sysfd = open_mount_target (container, target, err);
-                      if (UNLIKELY (sysfd < 0))
-                        return sysfd;
-
-                      ret = do_remount (sysfd, target,
-                                        MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
-                                        NULL, err);
-                      if (UNLIKELY (ret < 0))
-                        return ret;
-
-                      return do_masked_or_readonly_path (container, "/sys/fs/cgroup", true, false, err);
-                    }
-
-                  if (UNLIKELY (mountfd < 0))
-                    return mountfd;
-
-                  ret = fs_move_mount_to (mountfd, targetfd, NULL);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, errno, "move mount to `%s`", real_target);
-
-                  sysfd = open_mount_target (container, target, err);
-                  if (UNLIKELY (sysfd < 0))
-                    return sysfd;
-
-                  ret = do_remount (sysfd, target,
-                                    MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
-                                    NULL, err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-
-                  if (mount_option_exists (cgroup_mount, "ro") || mount_option_exists (cgroup_mount, "rro"))
-                    {
-                      ret = do_masked_or_readonly_path (container, "/sys/fs/cgroup", true, false, err);
-                      if (UNLIKELY (ret < 0))
-                        return ret;
-                    }
-
-                  return 0;
-                }
-            }
-
+          /* ret > 0: the fallback does not apply, report the original failure.  */
           ret = crun_make_error (err, saved_errno, "mount `%s` to `%s`", source, target);
 
           return diagnose_mount_failure (ret, err, container, fstype);
