@@ -1075,6 +1075,16 @@ static int do_mount (libcrun_container_t *container, const char *source, int tar
                      const char *target, const char *fstype, unsigned long mountflags,
                      const void *data, int extra_flags, libcrun_error_t *err);
 
+static bool
+mount_option_exists (runtime_spec_schema_defs_mount *mnt, const char *option)
+{
+  size_t i;
+  for (i = 0; i < mnt->options_len; i++)
+    if (strcmp (mnt->options[i], option) == 0)
+      return true;
+  return false;
+}
+
 static runtime_spec_schema_defs_mount *
 find_mount_for (libcrun_container_t *container, const char *destination)
 {
@@ -1503,18 +1513,21 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
               if (ret > 0)
                 {
+                  runtime_spec_schema_defs_mount *cgroup_mount = find_mount_for (container, "/sys/fs/cgroup");
                   cleanup_close int mountfd = -1;
+                  cleanup_close int sysfd = -1;
                   int sys_old_root_fd = get_old_root_fd (get_private_data (container));
+                  bool ro = flags & MS_RDONLY;
 
                   if (sys_old_root_fd >= 0)
-                    mountfd = get_bind_mount (sys_old_root_fd, "sys", true, false, false, MS_PRIVATE, err);
+                    mountfd = get_bind_mount (sys_old_root_fd, "sys", true, ro, false, MS_PRIVATE, err);
                   if (mountfd < 0)
                     {
                       crun_error_release (err);
-                      mountfd = get_bind_mount (AT_FDCWD, "/sys", true, false, false, MS_PRIVATE, err);
+                      mountfd = get_bind_mount (AT_FDCWD, "/sys", true, ro, false, MS_PRIVATE, err);
                     }
 
-                  if (find_mount_for (container, "/sys/fs/cgroup") == NULL)
+                  if (cgroup_mount == NULL)
                     {
                       if (mountfd >= 0)
                         {
@@ -1539,7 +1552,18 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                           if (UNLIKELY (ret < 0))
                             return crun_make_error (err, errno, "bind mount `/sys` from the host");
                         }
-                      return do_masked_or_readonly_path (container, "/sys/fs/cgroup", false, false, err);
+
+                      sysfd = open_mount_target (container, target, err);
+                      if (UNLIKELY (sysfd < 0))
+                        return sysfd;
+
+                      ret = do_remount (sysfd, target,
+                                        MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
+                                        NULL, err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+
+                      return do_masked_or_readonly_path (container, "/sys/fs/cgroup", true, false, err);
                     }
 
                   if (UNLIKELY (mountfd < 0))
@@ -1548,6 +1572,23 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
                   ret = fs_move_mount_to (mountfd, targetfd, NULL);
                   if (UNLIKELY (ret < 0))
                     return crun_make_error (err, errno, "move mount to `%s`", real_target);
+
+                  sysfd = open_mount_target (container, target, err);
+                  if (UNLIKELY (sysfd < 0))
+                    return sysfd;
+
+                  ret = do_remount (sysfd, target,
+                                    MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
+                                    NULL, err);
+                  if (UNLIKELY (ret < 0))
+                    return ret;
+
+                  if (mount_option_exists (cgroup_mount, "ro") || mount_option_exists (cgroup_mount, "rro"))
+                    {
+                      ret = do_masked_or_readonly_path (container, "/sys/fs/cgroup", true, false, err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+                    }
 
                   return 0;
                 }
@@ -5398,16 +5439,6 @@ send_mounts (int sync_socket_host, struct libcrun_fd_map *fds, size_t how_many, 
         }
     }
   return 0;
-}
-
-static bool
-mount_option_exists (runtime_spec_schema_defs_mount *mnt, const char *option)
-{
-  size_t i;
-  for (i = 0; i < mnt->options_len; i++)
-    if (strcmp (mnt->options[i], option) == 0)
-      return true;
-  return false;
 }
 
 static int
