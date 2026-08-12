@@ -39,6 +39,7 @@ logger = logging.getLogger('crun.tests')
 __all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'run_crun_command_raw',
            'parse_proc_status', 'add_all_namespaces', 'tests_main', 'is_rootless',
            'is_cgroup_v2_unified', 'is_sched_deadline_available', 'get_crun_feature_string', 'running_on_systemd',
+           'systemctl_show',
            'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path',
            'get_cgroup_manager', 'get_test_environment']
 
@@ -463,6 +464,13 @@ def run_crun_command_raw(args):
 def running_on_systemd():
     with open('/proc/1/comm') as f:
         return "systemd" in f.readline()
+
+def systemctl_show(unit, prop, user=False):
+    cmd = ['systemctl'] + (['--user'] if user else []) + ['show', '-P', prop, unit]
+    try:
+        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL, close_fds=False).decode().strip()
+    except Exception:
+        return None
 
 def tests_main(all_tests):
     os.environ["LANG"] = "C"
