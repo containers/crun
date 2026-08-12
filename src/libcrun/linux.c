@@ -2044,9 +2044,15 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
 
       if (srcfd >= 0)
         {
-          ret = syscall_move_mount (srcfd, "", fd, "", MOVE_MOUNT_T_EMPTY_PATH | MOVE_MOUNT_F_EMPTY_PATH);
-          if (LIKELY (ret >= 0))
-            return 0;
+          ret = do_mount_setattr (false, normalized_path, srcfd, 0, MS_NOSUID | MS_NOEXEC, err);
+          if (LIKELY (ret == 0))
+            {
+              ret = syscall_move_mount (srcfd, "", fd, "", MOVE_MOUNT_T_EMPTY_PATH | MOVE_MOUNT_F_EMPTY_PATH);
+              if (LIKELY (ret >= 0))
+                return 0;
+            }
+          else
+            crun_error_release (err);
         }
 
       {

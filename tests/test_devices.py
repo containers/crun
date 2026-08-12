@@ -369,6 +369,36 @@ def test_mknod_char_device():
         return -1
     return 0
 
+def test_userns_precreated_devices_flags():
+    conf = base_config()
+    add_all_namespaces(conf, userns=True)
+    if not is_rootless():
+        fullMapping = [{"containerID": 0, "hostID": 0, "size": 4294967295}]
+        conf['linux']['uidMappings'] = fullMapping
+        conf['linux']['gidMappings'] = fullMapping
+
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+
+    devices = ["/dev/null", "/dev/zero", "/dev/full", "/dev/tty",
+               "/dev/random", "/dev/urandom"]
+
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+
+    found = set()
+    for line in out.split("\n"):
+        fields = line.split(" ")
+        if len(fields) < 6 or fields[4] not in devices:
+            continue
+        found.add(fields[4])
+        opts = fields[5].split(",")
+        if "nosuid" not in opts or "noexec" not in opts:
+            logger.error("device %s missing nosuid,noexec: %s", fields[4], fields[5])
+            return -1
+
+    if not found:
+        return (77, "no precreated device mounts (mknod path taken)")
+    return 0
+
 def test_dev_symlink_does_not_populate_outside_rootfs():
     if is_rootless():
         return (77, "requires root privileges")
@@ -509,6 +539,7 @@ all_tests = {
     "mknod-fifo-device": test_mknod_fifo_device,
     "mknod-char-device": test_mknod_char_device,
     "dev-symlink-does-not-populate-outside-rootfs": test_dev_symlink_does_not_populate_outside_rootfs,
+    "userns-precreated-devices-flags": test_userns_precreated_devices_flags,
     "allow-device-read-only": test_allow_device_read_only,
     "owner-device" : test_owner_device,
     "deny-devices" : test_deny_devices,
