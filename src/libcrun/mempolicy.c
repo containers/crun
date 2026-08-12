@@ -130,7 +130,7 @@ libcrun_set_mempolicy (runtime_spec_schema_config_schema *def, libcrun_error_t *
     }
 
   /* kernel will take care of validating the nodes */
-  if (memory_policy->nodes)
+  if (! is_empty_string (memory_policy->nodes))
     {
       cleanup_free char *bitmask = NULL;
       size_t bitmask_size;
