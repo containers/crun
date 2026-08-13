@@ -895,6 +895,20 @@ make_oci_spec_dev (const char *type, dev_t device, bool allow, const char *acces
   return dev;
 }
 
+/* stat an optional device: on ENOENT clear *PRESENT, any other error fails.  */
+static int
+stat_optional_device (const char *path, struct stat *st, bool *present, libcrun_error_t *err)
+{
+  int ret = stat (path, st);
+  if (UNLIKELY (ret < 0))
+    {
+      if (errno != ENOENT)
+        return crun_make_error (err, errno, "stat `%s`", path);
+      *present = false;
+    }
+  return 0;
+}
+
 static int
 libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *context arg_unused,
                                   runtime_spec_schema_config_schema *def,
@@ -909,29 +923,17 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
 
   /* Always allow the /dev/kvm device.  */
 
-  ret = stat ("/dev/kvm", &st_kvm);
+  ret = stat_optional_device ("/dev/kvm", &st_kvm, &has_kvm, err);
   if (UNLIKELY (ret < 0))
-    {
-      if (errno != ENOENT)
-        return crun_make_error (err, errno, "stat `/dev/kvm`");
-      has_kvm = false;
-    }
+    return ret;
 
-  ret = stat ("/dev/sev", &st_sev);
+  ret = stat_optional_device ("/dev/sev", &st_sev, &has_sev, err);
   if (UNLIKELY (ret < 0))
-    {
-      if (errno != ENOENT)
-        return crun_make_error (err, errno, "stat `/dev/sev`");
-      has_sev = false;
-    }
+    return ret;
 
-  ret = stat ("/dev/nitro_enclaves", &st_awsnitro);
+  ret = stat_optional_device ("/dev/nitro_enclaves", &st_awsnitro, &has_awsnitro, err);
   if (UNLIKELY (ret < 0))
-    {
-      if (errno != ENOENT)
-        return crun_make_error (err, errno, "stat `/dev/nitro_enclaves`");
-      has_awsnitro = false;
-    }
+    return ret;
 
   kconf->has_kvm = has_kvm;
   kconf->has_awsnitro = has_awsnitro;
