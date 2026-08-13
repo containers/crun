@@ -3276,24 +3276,11 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
     }
 
   {
-    cleanup_free char *config_file = NULL;
     cleanup_container libcrun_container_t *container = NULL;
-    cleanup_free char *dir = NULL;
 
-    ret = libcrun_get_state_directory (&dir, state_root, id, err);
+    ret = read_container_config_from_state (&container, state_root, id, err);
     if (UNLIKELY (ret < 0))
       goto exit;
-
-    ret = append_paths (&config_file, err, dir, "config.json", NULL);
-    if (UNLIKELY (ret < 0))
-      goto exit;
-
-    container = libcrun_container_load_from_file (config_file, err);
-    if (UNLIKELY (container == NULL))
-      {
-        ret = -1;
-        goto exit;
-      }
 
     if (container->container_def->annotations && container->container_def->annotations->len)
       GEN_OR_FAIL (gen_annotations (gen, container->container_def->annotations));
@@ -3592,9 +3579,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   cleanup_close int terminal_fd = -1;
   cleanup_close int seccomp_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
-  cleanup_free char *config_file = NULL;
   cleanup_container libcrun_container_t *container = NULL;
-  cleanup_free char *dir = NULL;
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
@@ -3616,17 +3601,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     return ret;
   container_status = ret;
 
-  ret = libcrun_get_state_directory (&dir, state_root, id, err);
+  ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = append_paths (&config_file, err, dir, "config.json", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  container = libcrun_container_load_from_file (config_file, err);
-  if (UNLIKELY (container == NULL))
-    return -1;
 
   container->context = context;
 
@@ -4652,21 +4629,11 @@ int
 libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, struct libcrun_intel_rdt_update *update, libcrun_error_t *err)
 {
   cleanup_container libcrun_container_t *container = NULL;
-  cleanup_free char *config_file = NULL;
-  cleanup_free char *dir = NULL;
   int ret;
 
-  ret = libcrun_get_state_directory (&dir, context->state_root, id, err);
+  ret = read_container_config_from_state (&container, context->state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = append_paths (&config_file, err, dir, "config.json", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  container = libcrun_container_load_from_file (config_file, err);
-  if (UNLIKELY (container == NULL))
-    return -1;
 
   return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, update->schemata, err);
 }
