@@ -153,25 +153,14 @@ libcrun_get_state_directory (char **out, const char *state_root, const char *id,
 static int
 get_state_directory_status_file (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *root = NULL;
-  cleanup_free char *path = NULL;
+  cleanup_free char *dir = NULL;
   int ret;
 
-  ret = validate_id (id, err);
+  ret = libcrun_get_state_directory (&dir, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = get_run_directory (&root, state_root, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&path, err, root, id, "status", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  STEAL_POINTER (out, path);
-
-  return 0;
+  return append_paths (out, err, dir, "status", NULL);
 }
 
 static int
