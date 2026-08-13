@@ -1491,6 +1491,36 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
   }
 }
 
+/* Apply the propagation flags (MS_SHARED, MS_SLAVE, ...) to a mount,
+   preferring mount_setattr when a target fd is available and falling
+   back to mount(2).  */
+static int
+apply_propagation_flags (const char *target, int targetfd, const char *real_target,
+                         unsigned long mountflags, libcrun_error_t *err)
+{
+  bool propagation_done = false;
+  int ret;
+
+  if (targetfd >= 0)
+    {
+      libcrun_error_t tmp_err = NULL;
+      ret = do_mount_setattr (false, target, targetfd, 0, mountflags & ALL_PROPAGATIONS, &tmp_err);
+      if (LIKELY (ret == 0))
+        propagation_done = true;
+      else
+        crun_error_release (&tmp_err);
+    }
+
+  if (! propagation_done)
+    {
+      ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set propagation for `%s`", target);
+    }
+
+  return 0;
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1694,24 +1724,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (mountflags & ALL_PROPAGATIONS_NO_REC)
     {
-      bool propagation_done = false;
-
-      if (targetfd >= 0)
-        {
-          libcrun_error_t tmp_err = NULL;
-          ret = do_mount_setattr (false, target, targetfd, 0, mountflags & ALL_PROPAGATIONS, &tmp_err);
-          if (LIKELY (ret == 0))
-            propagation_done = true;
-          else
-            crun_error_release (&tmp_err);
-        }
-
-      if (! propagation_done)
-        {
-          ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for `%s`", target);
-        }
+      ret = apply_propagation_flags (target, targetfd, real_target, mountflags, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (mountflags & (MS_BIND | MS_RDONLY))
