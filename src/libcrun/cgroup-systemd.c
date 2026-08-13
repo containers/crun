@@ -1728,6 +1728,21 @@ verify_ebpf_device_filter_installed (const char *cgroup_path, libcrun_error_t *e
   return 0;
 }
 
+/* Release the sd-bus objects used by a D-Bus call and return RET.  */
+static int
+cleanup_sd_bus_and_return (sd_bus *bus, sd_bus_message *m, sd_bus_message *reply,
+                           sd_bus_error *error, int ret)
+{
+  if (bus)
+    sd_bus_unref (bus);
+  if (m)
+    sd_bus_message_unref (m);
+  if (reply)
+    sd_bus_message_unref (reply);
+  sd_bus_error_free (error);
+  return ret;
+}
+
 static int
 enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                             int cgroup_mode,
@@ -1932,14 +1947,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   ret = systemd_check_job_status (bus, &job_data, object, "creating", err);
 
 exit:
-  if (bus)
-    sd_bus_unref (bus);
-  if (m)
-    sd_bus_message_unref (m);
-  if (reply)
-    sd_bus_message_unref (reply);
-  sd_bus_error_free (&error);
-  return ret;
+  return cleanup_sd_bus_and_return (bus, m, reply, &error, ret);
 }
 
 static int
@@ -1998,14 +2006,7 @@ libcrun_destroy_systemd_cgroup_scope (struct libcrun_cgroup_status *cgroup_statu
   reset_failed_unit (bus, scope);
 
 exit:
-  if (bus)
-    sd_bus_unref (bus);
-  if (m)
-    sd_bus_message_unref (m);
-  if (reply)
-    sd_bus_message_unref (reply);
-  sd_bus_error_free (&error);
-  return ret;
+  return cleanup_sd_bus_and_return (bus, m, reply, &error, ret);
 }
 
 static const char *
@@ -2262,14 +2263,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   ret = 0;
 
 exit:
-  if (bus)
-    sd_bus_unref (bus);
-  if (m)
-    sd_bus_message_unref (m);
-  if (reply)
-    sd_bus_message_unref (reply);
-  sd_bus_error_free (&error);
-  return ret;
+  return cleanup_sd_bus_and_return (bus, m, reply, &error, ret);
 }
 
 #else
