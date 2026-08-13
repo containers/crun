@@ -731,18 +731,26 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
   return 0; /* stopped */
 }
 
-int
-libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+static int
+get_exec_fifo_path (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *state_dir = NULL;
-  cleanup_free char *fifo_path = NULL;
-  int ret, fd = -1;
+  int ret;
 
   ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  return append_paths (out, err, state_dir, "exec.fifo", NULL);
+}
+
+int
+libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *fifo_path = NULL;
+  int ret, fd = -1;
+
+  ret = get_exec_fifo_path (&fifo_path, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -761,7 +769,6 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
 int
 libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   char buffer[1] = {
     0,
@@ -769,11 +776,7 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
   cleanup_close int fd = -1;
   int ret;
 
-  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  ret = get_exec_fifo_path (&fifo_path, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -795,15 +798,10 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 int
 libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   int ret;
 
-  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  ret = get_exec_fifo_path (&fifo_path, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
