@@ -579,6 +579,29 @@ evict_cache (int root_dfd, libcrun_error_t *err)
   return 0;
 }
 
+/* Open the run-directory dirfd and build the "<id>/seccomp.bpf" path
+   relative to it.  Returns the (caller-owned) dirfd or a negative error.  */
+static int
+open_seccomp_bpf_dirfd (libcrun_container_t *container, char **rel_path, libcrun_error_t *err)
+{
+  int ret;
+  int dirfd;
+
+  dirfd = open_rundir_dirfd (container->context ? container->context->state_root : NULL, err);
+  if (UNLIKELY (dirfd < 0))
+    return dirfd;
+
+  /* relative path to dirfd.  */
+  ret = append_paths (rel_path, err, container->context->id, "seccomp.bpf", NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      TEMP_FAILURE_RETRY (close (dirfd));
+      return ret;
+    }
+
+  return dirfd;
+}
+
 static int
 store_seccomp_cache (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_error_t *err)
 {
@@ -594,14 +617,9 @@ store_seccomp_cache (struct libcrun_seccomp_gen_ctx_s *ctx, libcrun_error_t *err
   if (is_empty_string (ctx->checksum))
     return 0;
 
-  dirfd = open_rundir_dirfd ((container->context ? container->context->state_root : NULL), err);
+  dirfd = open_seccomp_bpf_dirfd (container, &src_path, err);
   if (UNLIKELY (dirfd < 0))
     return dirfd;
-
-  /* relative path to dirfd.  */
-  ret = append_paths (&src_path, err, container->context->id, "seccomp.bpf", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = append_paths (&dest_path, err, SECCOMP_CACHE_DIR, ctx->checksum, NULL);
   if (UNLIKELY (ret < 0))
@@ -879,14 +897,9 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
   if (container == NULL || container->context == NULL)
     return crun_make_error (err, EINVAL, "invalid internal state");
 
-  dirfd = open_rundir_dirfd ((container->context ? container->context->state_root : NULL), err);
+  dirfd = open_seccomp_bpf_dirfd (container, &dest_path, err);
   if (UNLIKELY (dirfd < 0))
     return dirfd;
-
-  /* relative path to dirfd.  */
-  ret = append_paths (&dest_path, err, container->context->id, "seccomp.bpf", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   if (ctx->create)
     {
