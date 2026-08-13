@@ -21,6 +21,14 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
     fi
 done
 
+# Remove generated intermediates on exit so they do not linger after a
+# successful run or a failure.  OUTDIR is left untouched for inspection.
+cleanup() {
+    rm -rf result
+    rm -f .tarball-git-version.h
+}
+trap cleanup EXIT
+
 test -e Makefile && make distclean
 
 ./autogen.sh
