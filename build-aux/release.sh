@@ -9,6 +9,18 @@ NIX_IMAGE=${NIX_IMAGE:-docker.io/nixos/nix:2.35.1}
 
 ARCHES=(amd64 arm64 ppc64le riscv64 s390x)
 
+# Fail fast if a required tool is missing, before the long build starts.
+REQUIRED_TOOLS=("${RUNTIME:-podman}" git make)
+if test "$SKIP_GPG" = ""; then
+    REQUIRED_TOOLS+=(gpg2)
+fi
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "required tool not found: $tool" >&2
+        exit 1
+    fi
+done
+
 test -e Makefile && make distclean
 
 ./autogen.sh
