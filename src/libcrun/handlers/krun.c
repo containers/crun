@@ -641,6 +641,18 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
   return 0;
 }
 
+/* Return true if the spec already declares a device with the given PATH.  */
+static bool
+spec_has_device (runtime_spec_schema_config_schema *def, const char *path)
+{
+  size_t i;
+
+  for (i = 0; i < def->linux->devices_len; i++)
+    if (strcmp (def->linux->devices[i]->path, path) == 0)
+      return true;
+  return false;
+}
+
 /* libkrun_create_kvm_device: explicitly adds kvm device.  */
 static int
 libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
@@ -648,7 +660,6 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
                              const char *rootfs, libcrun_error_t *err)
 {
   int ret, rootfsfd;
-  size_t i;
   struct krun_config *kconf = (struct krun_config *) cookie;
   struct device_s kvm_device = { "/dev/kvm", "c", 10, 232, 0666, 0, 0 };
   struct device_s sev_device = { "/dev/sev", "c", 10, 124, 0666, 0, 0 };
@@ -711,37 +722,14 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
     return crun_make_error (err, errno, "start passt");
 
   /* Do nothing if /dev/kvm is already present in spec */
-  for (i = 0; i < def->linux->devices_len; i++)
-    {
-      if (strcmp (def->linux->devices[i]->path, "/dev/kvm") == 0)
-        return 0;
-    }
+  if (spec_has_device (def, "/dev/kvm"))
+    return 0;
 
   if (kconf->handle_sev != NULL)
-    {
-      create_sev = true;
-      for (i = 0; i < def->linux->devices_len; i++)
-        {
-          if (strcmp (def->linux->devices[i]->path, "/dev/sev") == 0)
-            {
-              create_sev = false;
-              break;
-            }
-        }
-    }
+    create_sev = ! spec_has_device (def, "/dev/sev");
 
   if (kconf->handle_awsnitro != NULL)
-    {
-      create_awsnitro = true;
-      for (i = 0; i < def->linux->devices_len; i++)
-        {
-          if (strcmp (def->linux->devices[i]->path, "/dev/nitro_enclaves") == 0)
-            {
-              create_awsnitro = false;
-              break;
-            }
-        }
-    }
+    create_awsnitro = ! spec_has_device (def, "/dev/nitro_enclaves");
 
   devfd = safe_openat (rootfsfd, rootfs, "dev", O_PATH | O_DIRECTORY | O_CLOEXEC, 0, err);
   if (UNLIKELY (devfd < 0))
