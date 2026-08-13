@@ -36,6 +36,7 @@ python_crun.run(ctx, ctr)
 #include <Python.h>
 #include <libcrun/container.h>
 #include <libcrun/status.h>
+#include <libcrun/spec.h>
 #include <libcrun/utils.h>
 #include <libcrun/error.h>
 
