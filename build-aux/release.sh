@@ -31,7 +31,11 @@ make -j "$(nproc)"
 
 VERSION="$("$(dirname "$0")/git-version-gen" --prefix "" .)"
 if test "$SKIP_CHECKS" = ""; then
-    grep "$VERSION" NEWS
+    if ! grep -Fqx -- "* crun-$VERSION" NEWS; then
+        echo "no '* crun-$VERSION' entry found in NEWS" >&2
+        echo "(add the release notes, or commit a tag if the version is '-dirty')" >&2
+        exit 1
+    fi
 fi
 
 OUTDIR=${OUTDIR:-release-$VERSION}
