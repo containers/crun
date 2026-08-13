@@ -300,6 +300,18 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
   return 0;
 }
 
+/* Build PATH from the cgroup slice FROM, appending SUFFIX when set.  */
+static int
+compute_finalized_path (char **path, const char *from, const char *suffix, libcrun_error_t *err)
+{
+  if (suffix == NULL)
+    {
+      *path = xstrdup (from);
+      return 0;
+    }
+  return append_paths (path, err, from, suffix, NULL);
+}
+
 static int
 systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)
@@ -344,15 +356,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
       if (UNLIKELY (to == NULL))
         return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
       *to = '\0';
-      if (suffix == NULL)
-        path = xstrdup (from);
-      else
-        {
-          ret = append_paths (&path, err, from, suffix, NULL);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = compute_finalized_path (&path, from, suffix, err);
       *to = '\n';
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       if (geteuid ())
         return 0;
@@ -411,15 +418,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         if (UNLIKELY (to == NULL))
           return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
         *to = '\0';
-        if (suffix == NULL)
-          path = xstrdup (from);
-        else
-          {
-            ret = append_paths (&path, err, from, suffix, NULL);
-            if (UNLIKELY (ret < 0))
-              return ret;
-          }
+        ret = compute_finalized_path (&path, from, suffix, err);
         *to = '\n';
+        if (UNLIKELY (ret < 0))
+          return ret;
 
         ret = append_paths (&dir, err, CGROUP_ROOT, path, NULL);
         if (UNLIKELY (ret < 0))
