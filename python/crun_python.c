@@ -480,8 +480,6 @@ static PyMethodDef CrunMethods[] = {
    "Create a context object."},
   {"set_verbosity", set_verbosity, METH_VARARGS, "Set the logging verbosity."},
   {"get_verbosity", get_verbosity, METH_NOARGS, "Get the logging verbosity."},
-  {"spec", container_spec, METH_VARARGS,
-   "Generate a new configuration file."},
   {NULL, NULL, 0, NULL}
 };
 
