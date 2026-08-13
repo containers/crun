@@ -1491,6 +1491,44 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
   }
 }
 
+/* After a mount replaced the rootfs (target is empty), the current
+   targetfd sits underneath the new mount.  Re-enter the mount namespace
+   and reopen the rootfs, refreshing both *fd and the cached rootfsfd.  */
+static int
+do_mount_replace_rootfs (libcrun_container_t *container, int *fd, libcrun_error_t *err)
+{
+  int procfd = get_procfd (get_private_data (container), err);
+  int tmp;
+  int ret;
+
+  if (UNLIKELY (procfd < 0))
+    return procfd;
+
+  {
+    cleanup_close int nsfd = openat (procfd, "self/ns/mnt", O_RDONLY | O_CLOEXEC);
+    if (UNLIKELY (nsfd < 0))
+      return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
+
+    ret = setns (nsfd, CLONE_NEWNS);
+    if (UNLIKELY (ret < 0))
+      return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
+  }
+
+  close_and_reset (fd);
+  *fd = open (get_private_data (container)->rootfs, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (*fd < 0))
+    return crun_make_error (err, errno, "reopen rootfs after mount on /");
+
+  tmp = dup (*fd);
+  if (UNLIKELY (tmp < 0))
+    return crun_make_error (err, errno, "dup");
+
+  TEMP_FAILURE_RETRY (close (get_private_data (container)->rootfsfd));
+  get_private_data (container)->rootfsfd = tmp;
+
+  return 0;
+}
+
 /* Apply the propagation flags (MS_SHARED, MS_SLAVE, ...) to a mount,
    preferring mount_setattr when a target fd is available and falling
    back to mount(2).  */
@@ -1665,32 +1703,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           /* We are replacing the rootfs, reopen it.  */
           if (is_empty_string (target))
             {
-              int procfd = get_procfd (get_private_data (container), err);
-              int tmp;
-              if (UNLIKELY (procfd < 0))
-                return procfd;
-
-              {
-                cleanup_close int nsfd = openat (procfd, "self/ns/mnt", O_RDONLY | O_CLOEXEC);
-                if (UNLIKELY (nsfd < 0))
-                  return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
-
-                ret = setns (nsfd, CLONE_NEWNS);
-                if (UNLIKELY (ret < 0))
-                  return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
-              }
-
-              close_and_reset (&fd);
-              fd = open (get_private_data (container)->rootfs, O_PATH | O_CLOEXEC);
-              if (UNLIKELY (fd < 0))
-                return crun_make_error (err, errno, "reopen rootfs after mount on /");
-
-              tmp = dup (fd);
-              if (UNLIKELY (tmp < 0))
-                return crun_make_error (err, errno, "dup");
-
-              TEMP_FAILURE_RETRY (close (get_private_data (container)->rootfsfd));
-              get_private_data (container)->rootfsfd = tmp;
+              ret = do_mount_replace_rootfs (container, &fd, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
             }
 
 #ifdef HAVE_FGETXATTR
