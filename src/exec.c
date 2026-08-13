@@ -89,25 +89,24 @@ static struct argp_option options[]
 static char args_doc[] = "exec CONTAINER cmd";
 
 static void
+append_to_string_array (char ***arr, size_t *size, const char *arg)
+{
+  *arr = xrealloc (*arr, (*size + 2) * sizeof (**arr));
+  (*arr)[*size + 1] = NULL;
+  (*arr)[*size] = xstrdup (arg);
+  (*size)++;
+}
+
+static void
 append_env (const char *arg)
 {
-  exec_options.env = realloc (exec_options.env, (exec_options.env_size + 2) * sizeof (*exec_options.env));
-  if (exec_options.env == NULL)
-    error (EXIT_FAILURE, errno, "cannot allocate memory");
-  exec_options.env[exec_options.env_size + 1] = NULL;
-  exec_options.env[exec_options.env_size] = xstrdup (arg);
-  exec_options.env_size++;
+  append_to_string_array (&exec_options.env, &exec_options.env_size, arg);
 }
 
 static void
 append_cap (const char *arg)
 {
-  exec_options.cap = realloc (exec_options.cap, (exec_options.cap_size + 2) * sizeof (*exec_options.cap));
-  if (exec_options.cap == NULL)
-    error (EXIT_FAILURE, errno, "cannot allocate memory");
-  exec_options.cap[exec_options.cap_size + 1] = NULL;
-  exec_options.cap[exec_options.cap_size] = xstrdup (arg);
-  exec_options.cap_size++;
+  append_to_string_array (&exec_options.cap, &exec_options.cap_size, arg);
 }
 
 static char **
