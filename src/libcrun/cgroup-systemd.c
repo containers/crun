@@ -1326,9 +1326,6 @@ append_devices (sd_bus_message *m,
         return ret;
     }
 
-  if (resources == NULL)
-    return 0;
-
   for (i = find_first_rule_no_default (resources->devices, resources->devices_len); i < resources->devices_len; i++)
     {
       runtime_spec_schema_defs_linux_device_cgroup *d = resources->devices[i];
