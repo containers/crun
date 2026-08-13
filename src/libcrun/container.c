@@ -2832,6 +2832,18 @@ force_delete_container_status (libcrun_context_t *context, runtime_spec_schema_c
   crun_error_release (&tmp_err);
 }
 
+/* Serialize ERR to FD as an int errno followed by a NUL-terminated message.
+   Used by forked children to report a failure to the parent process.  */
+static void
+write_error_to_pipe (int fd, libcrun_error_t *err)
+{
+  const char *msg = (*err)->msg;
+  int errcode = crun_error_get_errno (err);
+
+  TEMP_FAILURE_RETRY (write (fd, &errcode, sizeof (errcode)));
+  TEMP_FAILURE_RETRY (write (fd, msg, strlen (msg) + 1));
+}
+
 int
 libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options,
                        libcrun_error_t *err)
@@ -2935,8 +2947,7 @@ fail:
     force_delete_container_status (context, def);
   if (tmp_err)
     {
-      TEMP_FAILURE_RETRY (write (pipefd1, &(tmp_err->status), sizeof (tmp_err->status)));
-      TEMP_FAILURE_RETRY (write (pipefd1, tmp_err->msg, strlen (tmp_err->msg) + 1));
+      write_error_to_pipe (pipefd1, &tmp_err);
       crun_error_release (&tmp_err);
     }
 
@@ -3745,10 +3756,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
           else
             {
-              const char *msg = (*err)->msg;
-              ret = crun_error_get_errno (err);
-              TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-              TEMP_FAILURE_RETRY (write (pipefd1, msg, strlen (msg) + 1));
+              write_error_to_pipe (pipefd1, err);
               TEMP_FAILURE_RETRY (close (pipefd1));
               pipefd1 = -1;
             }
