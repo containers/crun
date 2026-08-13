@@ -19,7 +19,9 @@
 #ifndef STRING_MAP_H
 #define STRING_MAP_H
 
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+#  define _GNU_SOURCE
+#endif
 
 #include <config.h>
 
