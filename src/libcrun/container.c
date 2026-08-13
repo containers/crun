@@ -512,6 +512,29 @@ initialize_security (libcrun_container_t *container, runtime_spec_schema_config_
   return 0;
 }
 
+/* Emit the "annotations" map.  Returns a json_gen_status; callers can wrap
+   the call with GEN_OR_FAIL.  */
+static int
+gen_annotations (json_gen_ctx *gen, json_map_string_string *annotations)
+{
+  size_t i;
+  int r;
+
+  GEN_KEY (gen, "annotations");
+  GEN_OR_FAIL (json_gen_map_open (gen));
+
+  for (i = 0; i < annotations->len; i++)
+    {
+      GEN_STR (gen, annotations->keys[i]);
+      GEN_STR (gen, annotations->values[i]);
+    }
+
+  return json_gen_map_close (gen);
+
+gen_error:
+  return r;
+}
+
 static int
 do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *cwd,
           const char *status, hook **hooks, size_t hooks_len, int out_fd, int err_fd, bool can_ignore_chdir_errors, libcrun_error_t *err)
@@ -556,20 +579,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   GEN_STR (gen, status);
 
   if (def && def->annotations && def->annotations->len)
-    {
-      GEN_KEY (gen, "annotations");
-      GEN_OR_FAIL (json_gen_map_open (gen));
-
-      for (i = 0; i < def->annotations->len; i++)
-        {
-          const char *key = def->annotations->keys[i];
-          const char *val = def->annotations->values[i];
-
-          GEN_STR (gen, key);
-          GEN_STR (gen, val);
-        }
-      GEN_OR_FAIL (json_gen_map_close (gen));
-    }
+    GEN_OR_FAIL (gen_annotations (gen, def->annotations));
 
   GEN_OR_FAIL (json_gen_map_close (gen));
 
@@ -705,22 +715,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
     }
 
   if (def->annotations && def->annotations->len)
-    {
-      size_t i;
-
-      GEN_KEY (gen, "annotations");
-      GEN_OR_FAIL (json_gen_map_open (gen));
-
-      for (i = 0; i < def->annotations->len; i++)
-        {
-          const char *key = def->annotations->keys[i];
-          const char *val = def->annotations->values[i];
-
-          GEN_STR (gen, key);
-          GEN_STR (gen, val);
-        }
-      GEN_OR_FAIL (json_gen_map_close (gen));
-    }
+    GEN_OR_FAIL (gen_annotations (gen, def->annotations));
 
   GEN_OR_FAIL (json_gen_map_close (gen));
   /* End state.  */
@@ -3275,7 +3270,6 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
     }
 
   {
-    size_t i;
     cleanup_free char *config_file = NULL;
     cleanup_container libcrun_container_t *container = NULL;
     cleanup_free char *dir = NULL;
@@ -3296,18 +3290,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
       }
 
     if (container->container_def->annotations && container->container_def->annotations->len)
-      {
-        GEN_KEY (gen, "annotations");
-        GEN_OR_FAIL (json_gen_map_open (gen));
-        for (i = 0; i < container->container_def->annotations->len; i++)
-          {
-            const char *key = container->container_def->annotations->keys[i];
-            const char *val = container->container_def->annotations->values[i];
-            GEN_STR (gen, key);
-            GEN_STR (gen, val);
-          }
-        GEN_OR_FAIL (json_gen_map_close (gen));
-      }
+      GEN_OR_FAIL (gen_annotations (gen, container->container_def->annotations));
   }
 
   GEN_OR_FAIL (json_gen_map_close (gen));
