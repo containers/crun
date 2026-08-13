@@ -468,6 +468,7 @@ static PyMethodDef CrunMethods[] = {
   {"create", container_create, METH_VARARGS, "Create a container."},
   {"delete", container_delete, METH_VARARGS, "Delete a container."},
   {"kill", container_kill, METH_VARARGS, "Kill a container."},
+  {"start", container_start, METH_VARARGS, "Start a container."},
   {"list", containers_list, METH_VARARGS, "List the containers."},
   {"status", container_status, METH_VARARGS,
    "Get the status of a container."},
