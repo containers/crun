@@ -139,6 +139,10 @@ jobs:
             capture && /^\* crun-/ { exit }
             capture { print }
           ' NEWS > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "no '* crun-${GITHUB_REF_NAME}' section found in NEWS" >&2
+            exit 1
+          fi
           cat release-notes.md
 
       - name: Create draft release
