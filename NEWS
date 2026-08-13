@@ -1,3 +1,32 @@
+* crun-1.29.1
+
+- linux: do not clobber the mount root mode for proc, sysfs and mqueue.
+  A 1.29 regression copied the mountpoint directory mode onto the root
+  inode of freshly created typed mounts, breaking the /proc/<pid>/fd
+  magic-symlink path (e.g. rpm-ostree failing with "Operation not
+  supported") and a tmpfs /dev/shm created with mode=1777 ("could not
+  open shared memory segment: Permission denied").
+- linux: fix read-only /sys regression in the userns sysfs fallback.  A
+  spec asking for a read-only /sys silently got a writable one when the
+  container has a user namespace.  It is not a security issue since the
+  user namespace has no write access to /sys anyway.
+- linux: restore nosuid,noexec on precreated devices in a user namespace.
+- linux: refresh the mount target after reopening it, fixing a
+  "set propagation: Invalid argument" failure of the mount(2) fallback
+  on kernels without mount_setattr() (< 5.12).
+- linux: report the real reason when moving the masked directory mount
+  fails instead of always logging "unknown error".
+- cgroup: always thaw the cgroup on error paths in kill and pid
+  migration, so a failed teardown can no longer leave the container
+  permanently frozen and unresponsive.
+- cgroup: tolerate a cgroup removed concurrently while killing or
+  migrating its processes instead of failing the whole enumeration.
+- utils: harden the AppArmor confined check so a short read, a profile
+  named like "unconfined_foo", or an interrupted read no longer
+  mis-report the process as unconfined.
+- mempolicy: handle an empty memoryPolicy.nodes string, avoiding an
+  undefined memcpy() from a NULL pointer.
+
 * crun-1.29
 
 - linux: use the new mount API for more mount operations.
