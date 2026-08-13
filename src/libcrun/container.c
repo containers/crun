@@ -1826,6 +1826,16 @@ struct wait_for_process_args
 };
 
 static int
+write_pid_file (const char *pid_file, pid_t pid, libcrun_error_t *err)
+{
+  char buf[32];
+  int buf_len = snprintf (buf, sizeof (buf), "%d", pid);
+  if (UNLIKELY (buf_len >= (int) sizeof (buf)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+  return write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, pid_file, buf, buf_len, err);
+}
+
+static int
 wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
   cleanup_channel_fd_pair struct channel_fd_pair *from_terminal = NULL;
@@ -1858,11 +1868,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 
   if (args->context->pid_file)
     {
-      char buf[32];
-      int buf_len = snprintf (buf, sizeof (buf), "%d", args->pid);
-      if (UNLIKELY (buf_len >= (int) sizeof (buf)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
-      ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, args->context->pid_file, buf, buf_len, err);
+      ret = write_pid_file (args->context->pid_file, args->pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -4511,12 +4517,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
 
   if (context->pid_file)
     {
-      char buf[32];
-      int buf_len = snprintf (buf, sizeof (buf), "%d", status.pid);
-      if (UNLIKELY (buf_len >= (int) sizeof (buf)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
-
-      ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, context->pid_file, buf, buf_len, err);
+      ret = write_pid_file (context->pid_file, status.pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
