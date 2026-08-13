@@ -369,7 +369,7 @@ luacrun_ctx_run (lua_State *S)
         lua_pushnil (S);
         return luacrun_error (S, &crun_err) + 1;
       } else {
-        luaL_error(S, "failed to run container");
+        return luaL_error (S, "failed to run container");
       }
     }
   else
