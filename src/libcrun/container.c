@@ -192,6 +192,24 @@ static char *potentially_unsafe_annotations[] = {
 
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
 
+/* Helpers to reduce the boilerplate around the json_gen_* API.  Each macro
+   evaluates a json_gen_* call, stores the result in the local variable `r`
+   and jumps to the `gen_error` label when the call fails.  A function using
+   them must declare `int r;` and provide a `gen_error:` label.  */
+#define GEN_OR_FAIL(EXPR)                     \
+  do                                          \
+    {                                         \
+      r = (EXPR);                             \
+      if (UNLIKELY (r != json_gen_status_ok)) \
+        goto gen_error;                       \
+  } while (0)
+
+/* Emit a string literal (typically a map key).  */
+#define GEN_KEY(GEN, LIT) GEN_OR_FAIL (json_gen_string ((GEN), (LIT), sizeof (LIT) - 1))
+
+/* Emit a runtime string value.  */
+#define GEN_STR(GEN, STR) GEN_OR_FAIL (json_gen_string ((GEN), (STR), strlen (STR)))
+
 static int
 sync_socket_write_msg (int fd, int verbosity, int err_value, const char *log_msg)
 {
@@ -517,93 +535,45 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   json_gen_config (gen, json_gen_beautify, 0);
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, "1.0");
 
-  r = json_gen_string (gen, "1.0", strlen ("1.0"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "id");
+  GEN_STR (gen, id);
 
-  r = json_gen_string (gen, "id", strlen ("id"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, pid));
 
-  r = json_gen_string (gen, id, strlen (id));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "root");
+  GEN_STR (gen, rootfs);
 
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "bundle");
+  GEN_STR (gen, cwd);
 
-  r = map_int (gen, pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "root", strlen ("root"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, rootfs, strlen (rootfs));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "bundle", strlen ("bundle"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, cwd, strlen (cwd));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "status", strlen ("status"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, status, strlen (status));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "status");
+  GEN_STR (gen, status);
 
   if (def && def->annotations && def->annotations->len)
     {
-      r = json_gen_string (gen, "annotations", strlen ("annotations"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
-
-      r = json_gen_map_open (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
+      GEN_KEY (gen, "annotations");
+      GEN_OR_FAIL (json_gen_map_open (gen));
 
       for (i = 0; i < def->annotations->len; i++)
         {
           const char *key = def->annotations->keys[i];
           const char *val = def->annotations->values[i];
 
-          r = json_gen_string (gen, key, strlen (key));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto gen_error;
-
-          r = json_gen_string (gen, val, strlen (val));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto gen_error;
+          GEN_STR (gen, key);
+          GEN_STR (gen, val);
         }
-      r = json_gen_map_close (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
+      GEN_OR_FAIL (json_gen_map_close (gen));
     }
 
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
-  r = json_gen_get_buf (gen, (const char **) &stdin, &stdin_len);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_get_buf (gen, (const char **) &stdin, &stdin_len));
 
   ret = 0;
 
@@ -684,41 +654,19 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
 
   json_gen_config (gen, json_gen_beautify, 1);
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, OCI_VERSION);
 
-  r = json_gen_string (gen, OCI_VERSION, strlen (OCI_VERSION));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "fds");
+  GEN_OR_FAIL (json_gen_array_open (gen));
 
-  r = json_gen_string (gen, "fds", strlen ("fds"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "seccompFd");
+  GEN_OR_FAIL (json_gen_array_close (gen));
 
-  r = json_gen_array_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "seccompFd", strlen ("seccompFd"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_array_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = map_int (gen, own_pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, own_pid));
 
   if (def && def->linux && def->linux->seccomp)
     {
@@ -726,113 +674,62 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
 
       if (metadata)
         {
-          r = json_gen_string (gen, "metadata", strlen ("metadata"));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
-
-          r = json_gen_string (gen, metadata, strlen (metadata));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
+          GEN_KEY (gen, "metadata");
+          GEN_STR (gen, metadata);
         }
     }
 
   /* State.  */
-  r = json_gen_string (gen, "state", strlen ("state"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "state");
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, OCI_VERSION, strlen (OCI_VERSION));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, OCI_VERSION);
 
   if (container->context && container->context->id)
     {
-      r = json_gen_string (gen, "id", strlen ("id"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      r = json_gen_string (gen, container->context->id, strlen (container->context->id));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
+      GEN_KEY (gen, "id");
+      GEN_STR (gen, container->context->id);
     }
 
-  r = json_gen_string (gen, "status", strlen ("status"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "status");
+  GEN_STR (gen, status);
 
-  r = json_gen_string (gen, status, strlen (status));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = map_int (gen, own_pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, own_pid));
 
   if (container->context && container->context->bundle)
     {
-      r = json_gen_string (gen, "bundle", strlen ("bundle"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      r = json_gen_string (gen, container->context->bundle, strlen (container->context->bundle));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
+      GEN_KEY (gen, "bundle");
+      GEN_STR (gen, container->context->bundle);
     }
 
   if (def->annotations && def->annotations->len)
     {
       size_t i;
 
-      r = json_gen_string (gen, "annotations", strlen ("annotations"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      r = json_gen_map_open (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
+      GEN_KEY (gen, "annotations");
+      GEN_OR_FAIL (json_gen_map_open (gen));
 
       for (i = 0; i < def->annotations->len; i++)
         {
           const char *key = def->annotations->keys[i];
           const char *val = def->annotations->values[i];
 
-          r = json_gen_string (gen, key, strlen (key));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
-
-          r = json_gen_string (gen, val, strlen (val));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
+          GEN_STR (gen, key);
+          GEN_STR (gen, val);
         }
-      r = json_gen_map_close (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
+      GEN_OR_FAIL (json_gen_map_close (gen));
     }
 
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_OR_FAIL (json_gen_map_close (gen));
   /* End state.  */
 
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
   r = get_json_gen_result (gen, seccomp_fd_payload, seccomp_fd_payload_len);
 
-exit:
+gen_error:
   json_gen_free (gen);
 
   return json_gen_error_to_crun_error (r, err);
@@ -3325,6 +3222,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   json_gen_ctx *gen = NULL;
   const char *buf;
   int ret = 0;
+  int r = json_gen_status_ok;
   int running;
   size_t len;
 
@@ -3342,38 +3240,38 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   json_gen_config (gen, json_gen_beautify, 1);
 
-  json_gen_map_open (gen);
-  json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  json_gen_string (gen, OCI_CONFIG_VERSION, strlen (OCI_CONFIG_VERSION));
+  GEN_OR_FAIL (json_gen_map_open (gen));
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, OCI_CONFIG_VERSION);
 
-  json_gen_string (gen, "id", strlen ("id"));
-  json_gen_string (gen, id, strlen (id));
+  GEN_KEY (gen, "id");
+  GEN_STR (gen, id);
 
-  json_gen_string (gen, "pid", strlen ("pid"));
-  map_int (gen, running ? status.pid : 0);
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, running ? status.pid : 0));
 
-  json_gen_string (gen, "status", strlen ("status"));
-  json_gen_string (gen, container_status, strlen (container_status));
+  GEN_KEY (gen, "status");
+  GEN_STR (gen, container_status);
 
-  json_gen_string (gen, "bundle", strlen ("bundle"));
-  json_gen_string (gen, status.bundle, strlen (status.bundle));
+  GEN_KEY (gen, "bundle");
+  GEN_STR (gen, status.bundle);
 
-  json_gen_string (gen, "rootfs", strlen ("rootfs"));
-  json_gen_string (gen, status.rootfs, strlen (status.rootfs));
+  GEN_KEY (gen, "rootfs");
+  GEN_STR (gen, status.rootfs);
 
-  json_gen_string (gen, "created", strlen ("created"));
-  json_gen_string (gen, status.created, strlen (status.created));
+  GEN_KEY (gen, "created");
+  GEN_STR (gen, status.created);
 
   if (status.scope)
     {
-      json_gen_string (gen, "systemd-scope", strlen ("systemd-scope"));
-      json_gen_string (gen, status.scope, strlen (status.scope));
+      GEN_KEY (gen, "systemd-scope");
+      GEN_STR (gen, status.scope);
     }
 
   if (status.owner)
     {
-      json_gen_string (gen, "owner", strlen ("owner"));
-      json_gen_string (gen, status.owner, strlen (status.owner));
+      GEN_KEY (gen, "owner");
+      GEN_STR (gen, status.owner);
     }
 
   {
@@ -3399,26 +3297,22 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
     if (container->container_def->annotations && container->container_def->annotations->len)
       {
-        json_gen_string (gen, "annotations", strlen ("annotations"));
-        json_gen_map_open (gen);
+        GEN_KEY (gen, "annotations");
+        GEN_OR_FAIL (json_gen_map_open (gen));
         for (i = 0; i < container->container_def->annotations->len; i++)
           {
             const char *key = container->container_def->annotations->keys[i];
             const char *val = container->container_def->annotations->values[i];
-            json_gen_string (gen, key, strlen (key));
-            json_gen_string (gen, val, strlen (val));
+            GEN_STR (gen, key);
+            GEN_STR (gen, val);
           }
-        json_gen_map_close (gen);
+        GEN_OR_FAIL (json_gen_map_close (gen));
       }
   }
 
-  json_gen_map_close (gen);
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
-  if (json_gen_get_buf (gen, &buf, &len) != json_gen_status_ok)
-    {
-      ret = crun_make_error (err, 0, "error generating JSON");
-      goto exit;
-    }
+  GEN_OR_FAIL (json_gen_get_buf (gen, &buf, &len));
 
   fprintf (out, "%s\n", buf);
 
@@ -3427,6 +3321,10 @@ exit:
     json_gen_free (gen);
   libcrun_free_container_status (&status);
   return ret;
+
+gen_error:
+  ret = json_gen_error_to_crun_error (r, err);
+  goto exit;
 }
 
 int
