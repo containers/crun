@@ -104,3 +104,49 @@ jobs:
         with:
           name: CHECKSUMS
           path: /tmp/artifact/CHECKSUMS
+
+  release:
+    needs: artifact
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Assemble release assets
+        run: |
+          set -ex
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p release
+          for ARCH in amd64 arm64 ppc64le riscv64 s390x; do
+            mv "artifacts/crun-linux-${ARCH}" "release/crun-${VERSION}-linux-${ARCH}"
+            mv "artifacts/crun-linux-${ARCH}-disable-systemd" "release/crun-${VERSION}-linux-${ARCH}-disable-systemd"
+          done
+          mv artifacts/crun.tar.gz "release/crun-${VERSION}.tar.gz"
+          mv artifacts/crun.tar.zst "release/crun-${VERSION}.tar.zst"
+          (cd release && sha256sum -- * > CHECKSUMS)
+
+      - name: Extract release notes from NEWS
+        run: |
+          awk -v hdr="* crun-${GITHUB_REF_NAME}" '
+            $0 == hdr { capture = 1; next }
+            capture && /^\* crun-/ { exit }
+            capture { print }
+          ' NEWS > release-notes.md
+          cat release-notes.md
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --draft \
+            --title "crun ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            release/*
