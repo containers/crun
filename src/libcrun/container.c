@@ -4195,22 +4195,35 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   return 0;
 }
 
-int
-libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
+/* Read the container status and fail if the container is not running.  */
+static int
+read_status_require_running (libcrun_context_t *context, const char *id,
+                             libcrun_container_status_t *status, libcrun_error_t *err)
 {
   int ret;
-  const char *state_root = context->state_root;
-  libcrun_container_status_t status = {};
 
-  ret = libcrun_read_container_status (&status, state_root, id, err);
+  ret = libcrun_read_container_status (status, context->state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_is_container_running (&status, err);
+  ret = libcrun_is_container_running (status, err);
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
     return crun_make_error (err, 0, "the container `%s` is not running", id);
+
+  return 0;
+}
+
+int
+libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
+{
+  int ret;
+  libcrun_container_status_t status = {};
+
+  ret = read_status_require_running (context, id, &status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return libcrun_container_pause_linux (&status, err);
 }
@@ -4219,18 +4232,11 @@ int
 libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
   int ret;
-  const char *state_root = context->state_root;
   libcrun_container_status_t status = {};
 
-  ret = libcrun_read_container_status (&status, state_root, id, err);
+  ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = libcrun_is_container_running (&status, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret == 0)
-    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   return libcrun_container_unpause_linux (&status, err);
 }
@@ -4244,15 +4250,9 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   libcrun_container_status_t status = {};
   cleanup_container libcrun_container_t *container = NULL;
 
-  ret = libcrun_read_container_status (&status, state_root, id, err);
+  ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = libcrun_is_container_running (&status, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret == 0)
-    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
