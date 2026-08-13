@@ -3345,6 +3345,35 @@ cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
     (void) free_runtime_spec_schema_config_schema_process (process);
 }
 
+/* Build the seccomp receiver payload (when needed), apply the seccomp profile and
+   close the seccomp file descriptors.  Used from exec_process_entrypoint both before
+   and after the capabilities are set, depending on process->no_new_privileges.  */
+static int
+apply_seccomp_for_exec (libcrun_container_t *container, pid_t own_pid, int seccomp_fd,
+                        int seccomp_receiver_fd, char **seccomp_flags, size_t seccomp_flags_len,
+                        libcrun_error_t *err)
+{
+  cleanup_free char *seccomp_fd_payload = NULL;
+  size_t seccomp_fd_payload_len = 0;
+  int ret;
+
+  if (seccomp_receiver_fd >= 0)
+    {
+      ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
+                               seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  close_and_reset (&seccomp_fd);
+  close_and_reset (&seccomp_receiver_fd);
+  return 0;
+}
+
 static int
 exec_process_entrypoint (libcrun_context_t *context,
                          libcrun_container_t *container,
@@ -3456,23 +3485,10 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (! process->no_new_privileges)
     {
-      cleanup_free char *seccomp_fd_payload = NULL;
-      size_t seccomp_fd_payload_len = 0;
-
-      if (seccomp_receiver_fd >= 0)
-        {
-          ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
-                                   seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+      ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
+                                    seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      close_and_reset (&seccomp_fd);
-      close_and_reset (&seccomp_receiver_fd);
     }
 
   ret = libcrun_container_setgroups (container, process, err);
@@ -3515,22 +3531,10 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (process->no_new_privileges)
     {
-      cleanup_free char *seccomp_fd_payload = NULL;
-      size_t seccomp_fd_payload_len = 0;
-
-      if (seccomp_receiver_fd >= 0)
-        {
-          ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
-                                   seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+      ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
+                                    seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      close_and_reset (&seccomp_fd);
-      close_and_reset (&seccomp_receiver_fd);
     }
 
   if (process->user)
