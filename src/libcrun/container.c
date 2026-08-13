@@ -3913,7 +3913,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
                                                               def,
                                                               err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto cleanup;
     }
 
   ret = libcrun_linux_container_update (&status, state_root, resources, err);
