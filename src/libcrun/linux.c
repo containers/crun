@@ -1587,6 +1587,36 @@ apply_propagation_flags (const char *target, int targetfd, const char *real_targ
   return 0;
 }
 
+/* Perform (or defer) the remount needed to apply bind/read-only/single
+   instance flags.  A read-write remount and MOUNT_NO_DEFERRED_REMOUNT are
+   done immediately; otherwise the remount is queued to run later.  *fd is
+   consumed when the remount is deferred.  */
+static int
+schedule_or_do_remount (libcrun_container_t *container, int *fd, int targetfd,
+                        const char *target, const char *real_target,
+                        bool single_instance, unsigned long mountflags,
+                        const void *data, int extra_flags, libcrun_error_t *err)
+{
+  unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
+  struct remount_s *r;
+
+  if ((remount_flags & MS_RDONLY) == 0 || (extra_flags & MOUNT_NO_DEFERRED_REMOUNT))
+    return do_remount (*fd >= 0 ? *fd : targetfd, real_target, remount_flags, data, err);
+
+  if (*fd < 0)
+    {
+      *fd = dup (targetfd);
+      if (UNLIKELY (*fd < 0))
+        return crun_make_error (err, errno, "dup `%d`", targetfd);
+    }
+
+  /* The remount owns the fd.  */
+  r = make_remount (get_and_reset (fd), target, remount_flags, data, get_private_data (container)->remounts);
+  get_private_data (container)->remounts = r;
+
+  return 0;
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1770,34 +1800,10 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (needs_remount)
     {
-      unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
-
-      if ((remount_flags & MS_RDONLY) == 0)
-        {
-          ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else if (extra_flags & MOUNT_NO_DEFERRED_REMOUNT)
-        {
-          ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else
-        {
-          struct remount_s *r;
-          if (fd < 0)
-            {
-              fd = dup (targetfd);
-              if (UNLIKELY (fd < 0))
-                return crun_make_error (err, errno, "dup `%d`", targetfd);
-            }
-
-          /* The remount owns the fd.  */
-          r = make_remount (get_and_reset (&fd), target, remount_flags, data, get_private_data (container)->remounts);
-          get_private_data (container)->remounts = r;
-        }
+      ret = schedule_or_do_remount (container, &fd, targetfd, target, real_target,
+                                    single_instance, mountflags, data, extra_flags, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   return ret;
