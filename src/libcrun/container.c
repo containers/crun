@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include "container.h"
 #include "utils.h"
+#include "json_gen_utils.h"
 #include "seccomp.h"
 #include "mempolicy.h"
 #ifdef HAVE_SECCOMP
@@ -191,32 +192,6 @@ static char *potentially_unsafe_annotations[] = {
 };
 
 #define SYNC_SOCKET_MESSAGE_LEN(x, l) (offsetof (struct sync_socket_message_s, message) + l)
-
-/* Helpers to reduce the boilerplate around the json_gen_* API.  Each macro
-   evaluates a json_gen_* call, stores the result in the local variable `r`
-   and jumps to the `gen_error` label when the call fails.  A function using
-   them must declare `int r;` and provide a `gen_error:` label.  */
-#define GEN_OR_FAIL(EXPR)                     \
-  do                                          \
-    {                                         \
-      r = (EXPR);                             \
-      if (UNLIKELY (r != json_gen_status_ok)) \
-        goto gen_error;                       \
-  } while (0)
-
-/* Emit a string literal (typically a map key).  */
-#define GEN_KEY(GEN, LIT) GEN_OR_FAIL (json_gen_string ((GEN), (LIT), sizeof (LIT) - 1))
-
-/* Emit a runtime string value.  */
-#define GEN_STR(GEN, STR) GEN_OR_FAIL (json_gen_string ((GEN), (STR), strlen (STR)))
-
-static inline void
-cleanup_json_genp (json_gen_ctx **p)
-{
-  if (*p)
-    json_gen_free (*p);
-}
-#define cleanup_json_gen __attribute__ ((cleanup (cleanup_json_genp)))
 
 static int
 sync_socket_write_msg (int fd, int verbosity, int err_value, const char *log_msg)
