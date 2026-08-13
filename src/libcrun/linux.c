@@ -4140,6 +4140,63 @@ is_single_mapping (runtime_spec_schema_defs_id_mapping **mappings, size_t len,
   return 1;
 }
 
+static int
+write_id_map (libcrun_container_t *container, pid_t pid, const char *map_name,
+              int (*idmap_helper) (pid_t, const char *, libcrun_error_t *), const char *helper_name,
+              bool warn_on_failure, const char *map, size_t map_len,
+              runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len,
+              uint32_t host_id, uint32_t container_id, bool skip_if_setgroups_denied,
+              libcrun_error_t *err)
+{
+  int ret = 0;
+
+  if (container->host_uid)
+    ret = idmap_helper (pid, map, err);
+  if (container->host_uid == 0 || ret < 0)
+    {
+      cleanup_close int fd = -1;
+
+      if (ret < 0)
+        {
+          if (warn_on_failure)
+            libcrun_warning ("unable to invoke `%s`, will try creating a user namespace with single mapping as an alternative", helper_name);
+          crun_error_release (err);
+        }
+
+      fd = libcrun_open_proc_pid_file (container, pid, map_name, O_WRONLY, err);
+      if (UNLIKELY (fd < 0))
+        return fd;
+
+      ret = safe_write (fd, map_name, map, map_len, err);
+      if (ret < 0 && (! mappings_len || is_single_mapping (mappings, mappings_len, host_id, container_id)))
+        {
+          size_t single_mapping_len;
+          cleanup_free char *single_mapping = NULL;
+          crun_error_release (err);
+
+          if (! skip_if_setgroups_denied || ! get_private_data (container)->deny_setgroups)
+            {
+              ret = deny_setgroups (container, pid, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+
+          ret = format_mount_mapping (&single_mapping, container_id, host_id, 1, &single_mapping_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          close_and_reset (&fd);
+
+          fd = libcrun_open_proc_pid_file (container, pid, map_name, O_WRONLY, err);
+          if (UNLIKELY (fd < 0))
+            return fd;
+
+          ret = safe_write (fd, map_name, single_mapping, single_mapping_len, err);
+        }
+    }
+  return ret;
+}
+
 int
 libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
@@ -4197,94 +4254,17 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
         }
     }
 
-  if (container->host_uid)
-    ret = newgidmap (pid, gid_map, err);
-  if (container->host_uid == 0 || ret < 0)
-    {
-      if (ret < 0)
-        {
-          if (! def->linux->uid_mappings_len)
-            libcrun_warning ("unable to invoke `newgidmap`, will try creating a user namespace with single mapping as an alternative");
-          crun_error_release (err);
-        }
-
-      cleanup_close int gid_fd = -1;
-
-      gid_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
-      if (UNLIKELY (gid_fd < 0))
-        return gid_fd;
-
-      ret = safe_write (gid_fd, "gid_map", gid_map, gid_map_len, err);
-      if (ret < 0 && (! def->linux->gid_mappings_len || is_single_mapping (def->linux->gid_mappings, def->linux->gid_mappings_len, container->host_gid, container->container_gid)))
-        {
-          size_t single_mapping_len;
-          cleanup_free char *single_mapping = NULL;
-          crun_error_release (err);
-
-          ret = deny_setgroups (container, pid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = format_mount_mapping (&single_mapping, container->container_gid, container->host_gid, 1, &single_mapping_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          close_and_reset (&gid_fd);
-
-          gid_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
-          if (UNLIKELY (gid_fd < 0))
-            return gid_fd;
-
-          ret = safe_write (gid_fd, "gid_map", single_mapping, single_mapping_len, err);
-        }
-    }
+  ret = write_id_map (container, pid, "gid_map", newgidmap, "newgidmap",
+                      ! def->linux->uid_mappings_len, gid_map, gid_map_len,
+                      def->linux->gid_mappings, def->linux->gid_mappings_len,
+                      container->host_gid, container->container_gid, /* skip_if_setgroups_denied */ false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (container->host_uid)
-    ret = newuidmap (pid, uid_map, err);
-  if (container->host_uid == 0 || ret < 0)
-    {
-      if (ret < 0)
-        {
-          if (! def->linux->uid_mappings_len)
-            libcrun_warning ("unable to invoke `newuidmap`, will try creating a user namespace with single mapping as an alternative");
-          crun_error_release (err);
-        }
-
-      cleanup_close int uid_fd = -1;
-
-      uid_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
-      if (UNLIKELY (uid_fd < 0))
-        return uid_fd;
-
-      ret = safe_write (uid_fd, "uid_map", uid_map, uid_map_len, err);
-      if (ret < 0 && (! def->linux->uid_mappings_len || is_single_mapping (def->linux->uid_mappings, def->linux->uid_mappings_len, container->host_uid, container->container_uid)))
-        {
-          size_t single_mapping_len;
-          cleanup_free char *single_mapping = NULL;
-          crun_error_release (err);
-
-          if (! get_private_data (container)->deny_setgroups)
-            {
-              ret = deny_setgroups (container, pid, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-
-          ret = format_mount_mapping (&single_mapping, container->container_uid, container->host_uid, 1, &single_mapping_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          close_and_reset (&uid_fd);
-
-          uid_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
-          if (UNLIKELY (uid_fd < 0))
-            return uid_fd;
-
-          ret = safe_write (uid_fd, "uid_map", single_mapping, single_mapping_len, err);
-        }
-    }
+  ret = write_id_map (container, pid, "uid_map", newuidmap, "newuidmap",
+                      ! def->linux->uid_mappings_len, uid_map, uid_map_len,
+                      def->linux->uid_mappings, def->linux->uid_mappings_len,
+                      container->host_uid, container->container_uid, /* skip_if_setgroups_denied */ true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
