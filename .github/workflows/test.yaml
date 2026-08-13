@@ -81,6 +81,7 @@ jobs:
           #- test: centos10-build
           - test: clang-format
           - test: clang-check
+          - test: bindings
           - test: checkpoint-restore
           - test: fuzzing
           - test: codespell
@@ -97,7 +98,7 @@ jobs:
 
           sudo add-apt-repository -y ppa:criu/ppa
           # add-apt-repository runs apt-get update so we don't have to.
-          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget libsystemd-dev gperf clang-format libjson-c-dev containerd runc libasan6 libprotobuf-c-dev mawk
+          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget libsystemd-dev gperf clang-format libjson-c-dev containerd runc libasan6 libprotobuf-c-dev mawk python3-dev lua5.4 liblua5.4-dev
           # Fedora (used by maintainers as well as for packaging) has newer
           # md2man than in Ubuntu, so we have to install it from source.
           GOBIN=~/.local/bin go install github.com/cpuguy83/go-md2man/v2@latest
@@ -186,6 +187,18 @@ jobs:
               enable-shared)
                   ./configure --enable-embedded-blake3 --enable-shared
                   make -j $(nproc)
+              ;;
+              bindings)
+                  # Build the Python and Lua bindings and load each freshly
+                  # built module.  The bindings link against internal libcrun
+                  # symbols, so a build here catches API drift and missing
+                  # exports (e.g. libcrun_container_spec, parse_json_file)
+                  # before it reaches a release.
+                  ./configure --enable-embedded-blake3 --enable-shared --with-python-bindings --with-lua-bindings CFLAGS='-Wall -Werror'
+                  make -j $(nproc)
+                  export LD_LIBRARY_PATH="$PWD/.libs:$LD_LIBRARY_PATH"
+                  PYTHONPATH="$PWD/.libs" python3 python/test_python_bindings.py
+                  LUA_CPATH="$PWD/.libs/?.so;;" lua5.4 lua/test_lua_bindings.lua
               ;;
               embedded-blake3)
                   ./configure --enable-embedded-blake3

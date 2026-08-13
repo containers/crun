@@ -186,7 +186,8 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/syscalls.h \
 	crun.1.md crun.1 libcrun.lds \
 	krun.1.md krun.1 \
-	lua/luacrun.rockspec
+	lua/luacrun.rockspec lua/test_lua_bindings.lua \
+	python/test_python_bindings.py
 
 if !HAVE_EMBEDDED_BLAKE3
 EXTRA_DIST += src/libcrun/blake3/blake3.c \
