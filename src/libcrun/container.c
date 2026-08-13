@@ -210,6 +210,14 @@ static char *potentially_unsafe_annotations[] = {
 /* Emit a runtime string value.  */
 #define GEN_STR(GEN, STR) GEN_OR_FAIL (json_gen_string ((GEN), (STR), strlen (STR)))
 
+static inline void
+cleanup_json_genp (json_gen_ctx **p)
+{
+  if (*p)
+    json_gen_free (*p);
+}
+#define cleanup_json_gen __attribute__ ((cleanup (cleanup_json_genp)))
+
 static int
 sync_socket_write_msg (int fd, int verbosity, int err_value, const char *log_msg)
 {
@@ -544,7 +552,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   char *stdin = NULL;
   cleanup_free char *cwd_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
-  json_gen_ctx *gen = NULL;
+  cleanup_json_gen json_gen_ctx *gen = NULL;
 
   if (cwd == NULL)
     {
@@ -619,14 +627,9 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
         }
     }
 
-  if (gen)
-    json_gen_free (gen);
-
   return ret;
 
 gen_error:
-  if (gen)
-    json_gen_free (gen);
   return json_gen_error_to_crun_error (r, err);
 }
 
