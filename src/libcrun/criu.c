@@ -317,6 +317,36 @@ register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_co
   return 0;
 }
 
+/* Parse one /proc/self/cgroup LINE into its subsystem, normalizing the name and
+   stripping any "name=" prefix.  When SUBPATH_OUT is not NULL, the in-hierarchy
+   path is stored there.  Returns the subsystem, or NULL if the line carries no
+   controller and should be skipped.  LINE is modified in place.  */
+static char *
+parse_cgroup_subsystem (char *line, char **subpath_out)
+{
+  char *subsystem, *subpath, *it;
+
+  subsystem = strchr (line, ':') + 1;
+  subpath = strchr (subsystem, ':') + 1;
+  *(subpath - 1) = '\0';
+
+  if (subsystem[0] == '\0')
+    return NULL;
+
+  it = strstr (subsystem, "name=");
+  if (it)
+    subsystem = it + 5;
+
+  if (strcmp (subsystem, "net_prio,net_cls") == 0)
+    subsystem = "net_cls,net_prio";
+  if (strcmp (subsystem, "cpuacct,cpu") == 0)
+    subsystem = "cpu,cpuacct";
+
+  if (subpath_out)
+    *subpath_out = subpath;
+  return subsystem;
+}
+
 static int
 restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
@@ -362,23 +392,10 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
       cleanup_free char *source = NULL;
       char *subsystem;
       char *subpath;
-      char *it;
 
-      subsystem = strchr (from, ':') + 1;
-      subpath = strchr (subsystem, ':') + 1;
-      *(subpath - 1) = '\0';
-
-      if (subsystem[0] == '\0')
+      subsystem = parse_cgroup_subsystem (from, &subpath);
+      if (subsystem == NULL)
         continue;
-
-      it = strstr (subsystem, "name=");
-      if (it)
-        subsystem = it + 5;
-
-      if (strcmp (subsystem, "net_prio,net_cls") == 0)
-        subsystem = "net_cls,net_prio";
-      if (strcmp (subsystem, "cpuacct,cpu") == 0)
-        subsystem = "cpu,cpuacct";
 
       ret = append_paths (&source, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
@@ -431,24 +448,10 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
     {
       cleanup_free char *source_path = NULL;
       char *subsystem;
-      char *subpath;
-      char *it;
 
-      subsystem = strchr (from, ':') + 1;
-      subpath = strchr (subsystem, ':') + 1;
-      *(subpath - 1) = '\0';
-
-      if (subsystem[0] == '\0')
+      subsystem = parse_cgroup_subsystem (from, NULL);
+      if (subsystem == NULL)
         continue;
-
-      it = strstr (subsystem, "name=");
-      if (it)
-        subsystem = it + 5;
-
-      if (strcmp (subsystem, "net_prio,net_cls") == 0)
-        subsystem = "net_cls,net_prio";
-      if (strcmp (subsystem, "cpuacct,cpu") == 0)
-        subsystem = "cpu,cpuacct";
 
       ret = append_paths (&source_path, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
