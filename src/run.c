@@ -87,7 +87,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_PRESERVE_FDS:
-      crun_context.preserve_fds = parse_int_or_fail (argp_mandatory_argument (arg, state), "preserve-fds");
+      crun_context.preserve_fds = parse_id_or_fail (argp_mandatory_argument (arg, state), NULL, "preserve-fds");
       break;
 
     case OPTION_NO_SUBREAPER:

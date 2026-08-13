@@ -96,7 +96,7 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
   crun_context->bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     {
-      crun_context->listen_fds = parse_int_or_fail (getenv ("LISTEN_FDS"), "LISTEN_FDS");
+      crun_context->listen_fds = parse_id_or_fail (getenv ("LISTEN_FDS"), NULL, "LISTEN_FDS");
       crun_context->preserve_fds += crun_context->listen_fds;
     }
   return container_run_create_func (crun_context, container, options, err);

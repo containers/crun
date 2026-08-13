@@ -151,7 +151,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_PRESERVE_FDS:
-      exec_options.preserve_fds = parse_int_or_fail (argp_mandatory_argument (arg, state), "preserve-fds");
+      exec_options.preserve_fds = parse_id_or_fail (argp_mandatory_argument (arg, state), NULL, "preserve-fds");
       break;
 
     case OPTION_CGROUP:
@@ -204,38 +204,21 @@ make_oci_process_user (const char *userspec)
   runtime_spec_schema_config_schema_process_user *u;
   char *endptr = NULL;
   char *gidstr = NULL;
-  long long l;
 
   if (userspec == NULL)
     return NULL;
 
   u = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_user));
-  errno = 0;
-  l = strtoll (userspec, &endptr, 10);
-  if (endptr == userspec)
-    libcrun_fail_with_error (0, "invalid UID specified");
-  if (errno == ERANGE)
-    libcrun_fail_with_error (0, "invalid UID specified");
-  if (l < INT_MIN || l > INT_MAX)
-    libcrun_fail_with_error (0, "invalid UID specified");
-  u->uid = (int) l;
+  u->uid = parse_id_or_fail (userspec, &endptr, "UID");
   if (*endptr == '\0')
     return u;
   if (*endptr != ':')
     libcrun_fail_with_error (0, "invalid USERSPEC specified");
 
-  errno = 0;
   gidstr = endptr + 1;
-  l = strtoll (gidstr, &endptr, 10);
-  if (endptr == gidstr)
-    libcrun_fail_with_error (0, "invalid GID specified");
-  if (errno == ERANGE)
-    libcrun_fail_with_error (0, "invalid GID specified");
-  if (l < INT_MIN || l > INT_MAX)
-    libcrun_fail_with_error (0, "invalid GID specified");
+  u->gid = parse_id_or_fail (gidstr, &endptr, "GID");
   if (*endptr != '\0')
     libcrun_fail_with_error (0, "invalid USERSPEC specified");
-  u->gid = (int) l;
   return u;
 }
 
