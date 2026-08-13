@@ -1491,6 +1491,34 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
   }
 }
 
+#ifdef HAVE_FGETXATTR
+/* Best-effort application of the SELinux security.selinux xattr to a
+   freshly mounted target when LABEL_XATTR labeling is requested.  */
+static void
+apply_selinux_xattr (libcrun_container_t *container, int fd, int extra_flags, const char *label)
+{
+  libcrun_error_t tmp_err = NULL;
+  int procfd;
+
+  if ((extra_flags & LABEL_MASK) != LABEL_XATTR)
+    return;
+
+  /* Best-effort: swallow any error so it does not leak into the caller.  */
+  procfd = get_procfd (get_private_data (container), &tmp_err);
+  if (procfd >= 0)
+    {
+      proc_fd_path_t proc_self_path;
+      cleanup_close int xfd = -1;
+
+      get_self_fd_path (proc_self_path, fd);
+      xfd = openat (procfd, proc_self_path, O_RDONLY | O_CLOEXEC);
+      if (xfd >= 0)
+        (void) fsetxattr (xfd, "security.selinux", label, strlen (label), 0);
+    }
+  crun_error_release (&tmp_err);
+}
+#endif
+
 /* After a mount replaced the rootfs (target is empty), the current
    targetfd sits underneath the new mount.  Re-enter the mount namespace
    and reopen the rootfs, refreshing both *fd and the cached rootfsfd.  */
@@ -1709,20 +1737,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
             }
 
 #ifdef HAVE_FGETXATTR
-          if ((extra_flags & LABEL_MASK) == LABEL_XATTR)
-            {
-              int procfd = get_procfd (get_private_data (container), err);
-              if (procfd >= 0)
-                {
-                  proc_fd_path_t proc_self_path;
-                  cleanup_close int xfd = -1;
-
-                  get_self_fd_path (proc_self_path, fd);
-                  xfd = openat (procfd, proc_self_path, O_RDONLY | O_CLOEXEC);
-                  if (xfd >= 0)
-                    (void) fsetxattr (xfd, "security.selinux", label, strlen (label), 0);
-                }
-            }
+          apply_selinux_xattr (container, fd, extra_flags, label);
 #endif
 
           targetfd = fd;
