@@ -450,7 +450,7 @@ waitpid_ignore_stopped (pid_t pid, int *status, int options)
       ret = TEMP_FAILURE_RETRY (waitpid (pid, &s, options));
       if (ret < 0)
         return ret;
-  } while (WIFSTOPPED (s) | WIFCONTINUED (s));
+  } while (WIFSTOPPED (s) || WIFCONTINUED (s));
 
   if (status)
     *status = s;
