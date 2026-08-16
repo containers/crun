@@ -352,7 +352,9 @@ void get_current_timestamp (char *out, size_t len);
 
 int set_blocking_fd (int fd, bool blocking, libcrun_error_t *err);
 
-int parse_json_file (json_object **out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
+/* Exported for the language bindings (python/, lua/), which parse a
+   process JSON blob before calling libcrun_container_exec.  */
+LIBCRUN_PUBLIC int parse_json_file (json_object **out, const char *jsondata, struct parser_context *ctx, libcrun_error_t *err);
 
 /* Check that the string STR has the prefix PREFIX.  */
 static inline int

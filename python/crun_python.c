@@ -36,6 +36,7 @@ python_crun.run(ctx, ctr)
 #include <Python.h>
 #include <libcrun/container.h>
 #include <libcrun/status.h>
+#include <libcrun/spec.h>
 #include <libcrun/utils.h>
 #include <libcrun/error.h>
 
@@ -105,13 +106,23 @@ container_load_from_memory (PyObject *self arg_unused, PyObject *args)
 }
 
 static void
-free_context (void *ptr)
+free_context (PyObject *ptr)
 {
-  libcrun_context_t *ctx = ptr;
-  char *id = (char *) ctx->id;
-  free (ctx->state_root);
-  free (ctx->notify_socket);
+  libcrun_context_t *ctx = PyCapsule_GetPointer (ptr, CONTEXT_OBJ_TAG);
+  void *id, *bundle, *state_root, *notify_socket;
+
+  if (ctx == NULL)
+    return;
+
+  id = (void *) ctx->id;
+  bundle = (void *) ctx->bundle;
+  state_root = (void *) ctx->state_root;
+  notify_socket = (void *) ctx->notify_socket;
+
   free (id);
+  free (bundle);
+  free (state_root);
+  free (notify_socket);
   free (ctx);
 }
 
@@ -134,13 +145,16 @@ make_context (PyObject *self arg_unused, PyObject *args, PyObject *kwargs)
   if (!PyArg_ParseTupleAndKeywords
       (args, kwargs, "s|ssbsbbbb", kwlist, &id, &bundle, &state_root,
        &ctx->systemd_cgroup, &notify_socket, &ctx->detach, &ctx->no_new_keyring, &ctx->force_no_cgroup, &ctx->no_pivot))
-    return NULL;
+    {
+      free (ctx);
+      return NULL;
+    }
 
   ctx->id = xstrdup (id);
   ctx->bundle = xstrdup (bundle ? bundle : ".");
   ctx->state_root = xstrdup (state_root);
   ctx->notify_socket = xstrdup (notify_socket);
-  return PyCapsule_New (ctx, CONTEXT_OBJ_TAG, NULL);
+  return PyCapsule_New (ctx, CONTEXT_OBJ_TAG, free_context);
 }
 
 static PyObject *
@@ -328,7 +342,6 @@ container_status (PyObject *self arg_unused, PyObject *args)
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
   char *id = NULL;
-  libcrun_container_status_t status;
   cleanup_free char *buffer = NULL;
   FILE *memfile;
   int ret;
@@ -413,10 +426,6 @@ static PyObject *
 container_spec (PyObject *self arg_unused, PyObject *args arg_unused)
 {
   libcrun_error_t err = NULL;
-  PyObject *ctx_obj = NULL;
-  libcrun_context_t *ctx;
-  char *id = NULL;
-  libcrun_container_status_t status;
   cleanup_free char *buffer = NULL;
   FILE *memfile;
   int ret;
@@ -446,9 +455,6 @@ get_verbosity (PyObject *self arg_unused, PyObject *args)
 static PyObject *
 set_verbosity (PyObject *self arg_unused, PyObject *args)
 {
-  libcrun_error_t err;
-  PyObject *ctx_obj = NULL;
-  libcrun_context_t *ctx;
   int verbosity;
 
   if (!PyArg_ParseTuple (args, "i", &verbosity))
@@ -467,6 +473,7 @@ static PyMethodDef CrunMethods[] = {
   {"create", container_create, METH_VARARGS, "Create a container."},
   {"delete", container_delete, METH_VARARGS, "Delete a container."},
   {"kill", container_kill, METH_VARARGS, "Kill a container."},
+  {"start", container_start, METH_VARARGS, "Start a container."},
   {"list", containers_list, METH_VARARGS, "List the containers."},
   {"status", container_status, METH_VARARGS,
    "Get the status of a container."},
@@ -478,8 +485,6 @@ static PyMethodDef CrunMethods[] = {
    "Create a context object."},
   {"set_verbosity", set_verbosity, METH_VARARGS, "Set the logging verbosity."},
   {"get_verbosity", get_verbosity, METH_NOARGS, "Get the logging verbosity."},
-  {"spec", container_spec, METH_VARARGS,
-   "Generate a new configuration file."},
   {NULL, NULL, 0, NULL}
 };
 

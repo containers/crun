@@ -2,6 +2,8 @@
   global:
         /* Not all the libcrun_ functions are exported, only those marked LIBCRUN_PUBLIC.  */
         libcrun_*;
+        /* Utility used by the language bindings (python/, lua/).  */
+        parse_json_file;
         /* libocispec functions */
         runtime_spec_*;
         free_runtime_spec_*;
