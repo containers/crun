@@ -15,7 +15,8 @@ local-checks-to-skip = \
     sc_cast_of_x_alloc_return_value \
     sc_indent \
     sc_prohibit_always-defined_macros \
-    sc_prohibit_gnu_make_extensions
+    sc_prohibit_gnu_make_extensions \
+    sc_two_space_separator_in_usage
 
 sc_prohibit_sprintf:
 	@prohibit='\<sprintf *\('					\
