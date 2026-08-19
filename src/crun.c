@@ -389,20 +389,29 @@ argp_mandatory_argument (char *arg, struct argp_state *state)
   return state->argv[state->next++];
 }
 
+/* Parse a numeric value from STR, aborting on an out-of-range or malformed
+   value.  KIND names the field for error messages.  If ENDPTR is not NULL it
+   is set past the parsed number (so the caller can continue parsing, e.g. a
+   "UID:GID" pair); otherwise the whole string must be a valid number.  */
 int
-parse_int_or_fail (const char *str, const char *kind)
+parse_id_or_fail (const char *str, char **endptr, const char *kind)
 {
-  char *endptr = NULL;
+  char *end = NULL;
   long long l;
 
   errno = 0;
-  l = strtoll (str, &endptr, 10);
-  if (errno != 0)
-    libcrun_fail_with_error (errno, "invalid value for `%s`", kind);
-  if (endptr != NULL && *endptr != '\0')
-    libcrun_fail_with_error (EINVAL, "invalid value for `%s`", kind);
+  l = strtoll (str, &end, 10);
+  if (end == str)
+    libcrun_fail_with_error (0, "invalid %s specified", kind);
+  if (errno == ERANGE)
+    libcrun_fail_with_error (0, "invalid %s specified", kind);
   if (l < INT_MIN || l > INT_MAX)
-    libcrun_fail_with_error (ERANGE, "invalid value for `%s`", kind);
+    libcrun_fail_with_error (0, "invalid %s specified", kind);
+
+  if (endptr)
+    *endptr = end;
+  else if (*end != '\0')
+    libcrun_fail_with_error (0, "invalid %s specified", kind);
 
   return (int) l;
 }

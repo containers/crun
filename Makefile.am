@@ -182,6 +182,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec au
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/mempolicy.h src/libcrun/status.h src/libcrun/terminal.h \
 	src/libcrun/mount_flags.h src/libcrun/intelrdt.h src/libcrun/ring_buffer.h src/libcrun/string_map.h \
+	src/libcrun/json_gen_utils.h \
 	src/libcrun/net_device.h src/libcrun/spec.h \
 	src/libcrun/syscalls.h \
 	crun.1.md crun.1 libcrun.lds \

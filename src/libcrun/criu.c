@@ -317,6 +317,36 @@ register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_co
   return 0;
 }
 
+/* Parse one /proc/self/cgroup LINE into its subsystem, normalizing the name and
+   stripping any "name=" prefix.  When SUBPATH_OUT is not NULL, the in-hierarchy
+   path is stored there.  Returns the subsystem, or NULL if the line carries no
+   controller and should be skipped.  LINE is modified in place.  */
+static char *
+parse_cgroup_subsystem (char *line, char **subpath_out)
+{
+  char *subsystem, *subpath, *it;
+
+  subsystem = strchr (line, ':') + 1;
+  subpath = strchr (subsystem, ':') + 1;
+  *(subpath - 1) = '\0';
+
+  if (subsystem[0] == '\0')
+    return NULL;
+
+  it = strstr (subsystem, "name=");
+  if (it)
+    subsystem = it + 5;
+
+  if (strcmp (subsystem, "net_prio,net_cls") == 0)
+    subsystem = "net_cls,net_prio";
+  if (strcmp (subsystem, "cpuacct,cpu") == 0)
+    subsystem = "cpu,cpuacct";
+
+  if (subpath_out)
+    *subpath_out = subpath;
+  return subsystem;
+}
+
 static int
 restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
 {
@@ -362,23 +392,10 @@ restore_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_error_t
       cleanup_free char *source = NULL;
       char *subsystem;
       char *subpath;
-      char *it;
 
-      subsystem = strchr (from, ':') + 1;
-      subpath = strchr (subsystem, ':') + 1;
-      *(subpath - 1) = '\0';
-
-      if (subsystem[0] == '\0')
+      subsystem = parse_cgroup_subsystem (from, &subpath);
+      if (subsystem == NULL)
         continue;
-
-      it = strstr (subsystem, "name=");
-      if (it)
-        subsystem = it + 5;
-
-      if (strcmp (subsystem, "net_prio,net_cls") == 0)
-        subsystem = "net_cls,net_prio";
-      if (strcmp (subsystem, "cpuacct,cpu") == 0)
-        subsystem = "cpu,cpuacct";
 
       ret = append_paths (&source, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
@@ -431,24 +448,10 @@ checkpoint_cgroup_v1_mount (runtime_spec_schema_config_schema *def, libcrun_erro
     {
       cleanup_free char *source_path = NULL;
       char *subsystem;
-      char *subpath;
-      char *it;
 
-      subsystem = strchr (from, ':') + 1;
-      subpath = strchr (subsystem, ':') + 1;
-      *(subpath - 1) = '\0';
-
-      if (subsystem[0] == '\0')
+      subsystem = parse_cgroup_subsystem (from, NULL);
+      if (subsystem == NULL)
         continue;
-
-      it = strstr (subsystem, "name=");
-      if (it)
-        subsystem = it + 5;
-
-      if (strcmp (subsystem, "net_prio,net_cls") == 0)
-        subsystem = "net_cls,net_prio";
-      if (strcmp (subsystem, "cpuacct,cpu") == 0)
-        subsystem = "cpu,cpuacct";
 
       ret = append_paths (&source_path, err, CGROUP_ROOT, subsystem, NULL);
       if (UNLIKELY (ret < 0))
@@ -545,6 +548,33 @@ show_criu_log (const char *work_path, const char *log)
   libcrun_error (0, "--- end of excerpt");
 }
 
+/* work_dir is the place CRIU will put its logfiles.  If not explicitly set, CRIU
+ * will put the logfiles into the images_dir.  When set, create and open it and
+ * hand the fd to CRIU; ownership of the returned fd stays with the caller.  */
+static int
+setup_criu_work_dir (libcrun_checkpoint_restore_t *cr_options, int *work_fd_out, libcrun_error_t *err)
+{
+  int work_fd;
+
+  if (cr_options->work_path == NULL)
+    {
+      /* This is only for the error message later. */
+      cr_options->work_path = cr_options->image_path;
+      return 0;
+    }
+
+  if (UNLIKELY ((mkdir (cr_options->work_path, 0700) == -1) && (errno != EEXIST)))
+    return crun_make_error (err, errno, "error creating CRIU work directory `%s`", cr_options->work_path);
+
+  work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (work_fd == -1))
+    return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
+
+  libcriu_wrapper->criu_set_work_dir_fd (work_fd);
+  *work_fd_out = work_fd;
+  return 0;
+}
+
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, libcrun_container_t *container,
                                          libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err)
@@ -619,26 +649,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
    * and all of its children. */
   libcriu_wrapper->criu_set_pid (status->pid);
 
-  /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
-   * CRIU will put the logfiles into the images_dir from above. No need for
-   * crun to set it if the user has not selected a specific directory. */
-  if (cr_options->work_path != NULL)
-    {
-      ret = mkdir (cr_options->work_path, 0700);
-      if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-        return crun_make_error (err, errno, "error creating CRIU work directory `%s`", cr_options->work_path);
-
-      work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
-      if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
-
-      libcriu_wrapper->criu_set_work_dir_fd (work_fd);
-    }
-  else
-    {
-      /* This is only for the error message later. */
-      cr_options->work_path = cr_options->image_path;
-    }
+  ret = setup_criu_work_dir (cr_options, &work_fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
 #  ifdef CRIU_PRE_DUMP_SUPPORT
 
@@ -1019,26 +1032,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     json_object_put (doc);
   }
 
-  /* work_dir is the place CRIU will put its logfiles. If not explicitly set,
-   * CRIU will put the logfiles into the images_dir from above. No need for
-   * crun to set it if the user has not selected a specific directory. */
-  if (cr_options->work_path != NULL)
-    {
-      ret = mkdir (cr_options->work_path, 0700);
-      if (UNLIKELY ((ret == -1) && (errno != EEXIST)))
-        return crun_make_error (err, errno, "error creating CRIU work directory `%s`", cr_options->work_path);
-
-      work_fd = open (cr_options->work_path, O_DIRECTORY | O_CLOEXEC);
-      if (UNLIKELY (work_fd == -1))
-        return crun_make_error (err, errno, "error opening CRIU work directory `%s`", cr_options->work_path);
-
-      libcriu_wrapper->criu_set_work_dir_fd (work_fd);
-    }
-  else
-    {
-      /* This is only for the error message later. */
-      cr_options->work_path = cr_options->image_path;
-    }
+  ret = setup_criu_work_dir (cr_options, &work_fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (cr_options->lsm_profile != NULL)
     {

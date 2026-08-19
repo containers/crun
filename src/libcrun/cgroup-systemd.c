@@ -300,6 +300,18 @@ setup_cpuset_for_systemd_v1 (runtime_spec_schema_config_linux_resources *resourc
   return 0;
 }
 
+/* Build PATH from the cgroup slice FROM, appending SUFFIX when set.  */
+static int
+compute_finalized_path (char **path, const char *from, const char *suffix, libcrun_error_t *err)
+{
+  if (suffix == NULL)
+    {
+      *path = xstrdup (from);
+      return 0;
+    }
+  return append_paths (path, err, from, suffix, NULL);
+}
+
 static int
 systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
                   int cgroup_mode, const char *suffix, libcrun_error_t *err)
@@ -344,15 +356,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
       if (UNLIKELY (to == NULL))
         return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
       *to = '\0';
-      if (suffix == NULL)
-        path = xstrdup (from);
-      else
-        {
-          ret = append_paths (&path, err, from, suffix, NULL);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
+      ret = compute_finalized_path (&path, from, suffix, err);
       *to = '\n';
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       if (geteuid ())
         return 0;
@@ -411,15 +418,10 @@ systemd_finalize (struct libcrun_cgroup_args *args, char **path_out,
         if (UNLIKELY (to == NULL))
           return crun_make_error (err, 0, "cannot parse `%s`", PROC_SELF_CGROUP);
         *to = '\0';
-        if (suffix == NULL)
-          path = xstrdup (from);
-        else
-          {
-            ret = append_paths (&path, err, from, suffix, NULL);
-            if (UNLIKELY (ret < 0))
-              return ret;
-          }
+        ret = compute_finalized_path (&path, from, suffix, err);
         *to = '\n';
+        if (UNLIKELY (ret < 0))
+          return ret;
 
         ret = append_paths (&dir, err, CGROUP_ROOT, path, NULL);
         if (UNLIKELY (ret < 0))
@@ -1326,9 +1328,6 @@ append_devices (sd_bus_message *m,
         return ret;
     }
 
-  if (resources == NULL)
-    return 0;
-
   for (i = find_first_rule_no_default (resources->devices, resources->devices_len); i < resources->devices_len; i++)
     {
       runtime_spec_schema_defs_linux_device_cgroup *d = resources->devices[i];
@@ -1729,6 +1728,21 @@ verify_ebpf_device_filter_installed (const char *cgroup_path, libcrun_error_t *e
   return 0;
 }
 
+/* Release the sd-bus objects used by a D-Bus call and return RET.  */
+static int
+cleanup_sd_bus_and_return (sd_bus *bus, sd_bus_message *m, sd_bus_message *reply,
+                           sd_bus_error *error, int ret)
+{
+  if (bus)
+    sd_bus_unref (bus);
+  if (m)
+    sd_bus_message_unref (m);
+  if (reply)
+    sd_bus_message_unref (reply);
+  sd_bus_error_free (error);
+  return ret;
+}
+
 static int
 enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resources,
                             int cgroup_mode,
@@ -1933,14 +1947,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
   ret = systemd_check_job_status (bus, &job_data, object, "creating", err);
 
 exit:
-  if (bus)
-    sd_bus_unref (bus);
-  if (m)
-    sd_bus_message_unref (m);
-  if (reply)
-    sd_bus_message_unref (reply);
-  sd_bus_error_free (&error);
-  return ret;
+  return cleanup_sd_bus_and_return (bus, m, reply, &error, ret);
 }
 
 static int
@@ -1999,14 +2006,7 @@ libcrun_destroy_systemd_cgroup_scope (struct libcrun_cgroup_status *cgroup_statu
   reset_failed_unit (bus, scope);
 
 exit:
-  if (bus)
-    sd_bus_unref (bus);
-  if (m)
-    sd_bus_message_unref (m);
-  if (reply)
-    sd_bus_message_unref (reply);
-  sd_bus_error_free (&error);
-  return ret;
+  return cleanup_sd_bus_and_return (bus, m, reply, &error, ret);
 }
 
 static const char *
@@ -2263,14 +2263,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   ret = 0;
 
 exit:
-  if (bus)
-    sd_bus_unref (bus);
-  if (m)
-    sd_bus_message_unref (m);
-  if (reply)
-    sd_bus_message_unref (reply);
-  sd_bus_error_free (&error);
-  return ret;
+  return cleanup_sd_bus_and_return (bus, m, reply, &error, ret);
 }
 
 #else

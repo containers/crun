@@ -1491,6 +1491,132 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
   }
 }
 
+#ifdef HAVE_FGETXATTR
+/* Best-effort application of the SELinux security.selinux xattr to a
+   freshly mounted target when LABEL_XATTR labeling is requested.  */
+static void
+apply_selinux_xattr (libcrun_container_t *container, int fd, int extra_flags, const char *label)
+{
+  libcrun_error_t tmp_err = NULL;
+  int procfd;
+
+  if ((extra_flags & LABEL_MASK) != LABEL_XATTR)
+    return;
+
+  /* Best-effort: swallow any error so it does not leak into the caller.  */
+  procfd = get_procfd (get_private_data (container), &tmp_err);
+  if (procfd >= 0)
+    {
+      proc_fd_path_t proc_self_path;
+      cleanup_close int xfd = -1;
+
+      get_self_fd_path (proc_self_path, fd);
+      xfd = openat (procfd, proc_self_path, O_RDONLY | O_CLOEXEC);
+      if (xfd >= 0)
+        (void) fsetxattr (xfd, "security.selinux", label, strlen (label), 0);
+    }
+  crun_error_release (&tmp_err);
+}
+#endif
+
+/* After a mount replaced the rootfs (target is empty), the current
+   targetfd sits underneath the new mount.  Re-enter the mount namespace
+   and reopen the rootfs, refreshing both *fd and the cached rootfsfd.  */
+static int
+do_mount_replace_rootfs (libcrun_container_t *container, int *fd, libcrun_error_t *err)
+{
+  int procfd = get_procfd (get_private_data (container), err);
+  int tmp;
+  int ret;
+
+  if (UNLIKELY (procfd < 0))
+    return procfd;
+
+  {
+    cleanup_close int nsfd = openat (procfd, "self/ns/mnt", O_RDONLY | O_CLOEXEC);
+    if (UNLIKELY (nsfd < 0))
+      return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
+
+    ret = setns (nsfd, CLONE_NEWNS);
+    if (UNLIKELY (ret < 0))
+      return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
+  }
+
+  close_and_reset (fd);
+  *fd = open (get_private_data (container)->rootfs, O_PATH | O_CLOEXEC);
+  if (UNLIKELY (*fd < 0))
+    return crun_make_error (err, errno, "reopen rootfs after mount on /");
+
+  tmp = dup (*fd);
+  if (UNLIKELY (tmp < 0))
+    return crun_make_error (err, errno, "dup");
+
+  TEMP_FAILURE_RETRY (close (get_private_data (container)->rootfsfd));
+  get_private_data (container)->rootfsfd = tmp;
+
+  return 0;
+}
+
+/* Apply the propagation flags (MS_SHARED, MS_SLAVE, ...) to a mount,
+   preferring mount_setattr when a target fd is available and falling
+   back to mount(2).  */
+static int
+apply_propagation_flags (const char *target, int targetfd, const char *real_target,
+                         unsigned long mountflags, libcrun_error_t *err)
+{
+  bool propagation_done = false;
+  int ret;
+
+  if (targetfd >= 0)
+    {
+      libcrun_error_t tmp_err = NULL;
+      ret = do_mount_setattr (false, target, targetfd, 0, mountflags & ALL_PROPAGATIONS, &tmp_err);
+      if (LIKELY (ret == 0))
+        propagation_done = true;
+      else
+        crun_error_release (&tmp_err);
+    }
+
+  if (! propagation_done)
+    {
+      ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "set propagation for `%s`", target);
+    }
+
+  return 0;
+}
+
+/* Perform (or defer) the remount needed to apply bind/read-only/single
+   instance flags.  A read-write remount and MOUNT_NO_DEFERRED_REMOUNT are
+   done immediately; otherwise the remount is queued to run later.  *fd is
+   consumed when the remount is deferred.  */
+static int
+schedule_or_do_remount (libcrun_container_t *container, int *fd, int targetfd,
+                        const char *target, const char *real_target,
+                        bool single_instance, unsigned long mountflags,
+                        const void *data, int extra_flags, libcrun_error_t *err)
+{
+  unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
+  struct remount_s *r;
+
+  if ((remount_flags & MS_RDONLY) == 0 || (extra_flags & MOUNT_NO_DEFERRED_REMOUNT))
+    return do_remount (*fd >= 0 ? *fd : targetfd, real_target, remount_flags, data, err);
+
+  if (*fd < 0)
+    {
+      *fd = dup (targetfd);
+      if (UNLIKELY (*fd < 0))
+        return crun_make_error (err, errno, "dup `%d`", targetfd);
+    }
+
+  /* The remount owns the fd.  */
+  r = make_remount (get_and_reset (fd), target, remount_flags, data, get_private_data (container)->remounts);
+  get_private_data (container)->remounts = r;
+
+  return 0;
+}
+
 static int
 do_mount (libcrun_container_t *container, const char *source, int targetfd,
           const char *target, const char *fstype, unsigned long mountflags, const void *data,
@@ -1635,49 +1761,13 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
           /* We are replacing the rootfs, reopen it.  */
           if (is_empty_string (target))
             {
-              int procfd = get_procfd (get_private_data (container), err);
-              int tmp;
-              if (UNLIKELY (procfd < 0))
-                return procfd;
-
-              {
-                cleanup_close int nsfd = openat (procfd, "self/ns/mnt", O_RDONLY | O_CLOEXEC);
-                if (UNLIKELY (nsfd < 0))
-                  return crun_make_error (err, errno, "open `/proc/self/ns/mnt`");
-
-                ret = setns (nsfd, CLONE_NEWNS);
-                if (UNLIKELY (ret < 0))
-                  return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
-              }
-
-              close_and_reset (&fd);
-              fd = open (get_private_data (container)->rootfs, O_PATH | O_CLOEXEC);
-              if (UNLIKELY (fd < 0))
-                return crun_make_error (err, errno, "reopen rootfs after mount on /");
-
-              tmp = dup (fd);
-              if (UNLIKELY (tmp < 0))
-                return crun_make_error (err, errno, "dup");
-
-              TEMP_FAILURE_RETRY (close (get_private_data (container)->rootfsfd));
-              get_private_data (container)->rootfsfd = tmp;
+              ret = do_mount_replace_rootfs (container, &fd, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
             }
 
 #ifdef HAVE_FGETXATTR
-          if ((extra_flags & LABEL_MASK) == LABEL_XATTR)
-            {
-              int procfd = get_procfd (get_private_data (container), err);
-              if (procfd >= 0)
-                {
-                  proc_fd_path_t proc_self_path;
-                  cleanup_close int xfd = -1;
-
-                  get_self_fd_path (proc_self_path, fd);
-                  xfd = openat (procfd, proc_self_path, O_RDONLY | O_CLOEXEC);
-                  if (xfd >= 0)
-                    (void) fsetxattr (xfd, "security.selinux", label, strlen (label), 0);
-                }
-            }
+          apply_selinux_xattr (container, fd, extra_flags, label);
 #endif
 
           targetfd = fd;
@@ -1694,24 +1784,9 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (mountflags & ALL_PROPAGATIONS_NO_REC)
     {
-      bool propagation_done = false;
-
-      if (targetfd >= 0)
-        {
-          libcrun_error_t tmp_err = NULL;
-          ret = do_mount_setattr (false, target, targetfd, 0, mountflags & ALL_PROPAGATIONS, &tmp_err);
-          if (LIKELY (ret == 0))
-            propagation_done = true;
-          else
-            crun_error_release (&tmp_err);
-        }
-
-      if (! propagation_done)
-        {
-          ret = mount (NULL, real_target, NULL, mountflags & ALL_PROPAGATIONS, NULL);
-          if (UNLIKELY (ret < 0))
-            return crun_make_error (err, errno, "set propagation for `%s`", target);
-        }
+      ret = apply_propagation_flags (target, targetfd, real_target, mountflags, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   if (mountflags & (MS_BIND | MS_RDONLY))
@@ -1725,34 +1800,10 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (needs_remount)
     {
-      unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
-
-      if ((remount_flags & MS_RDONLY) == 0)
-        {
-          ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else if (extra_flags & MOUNT_NO_DEFERRED_REMOUNT)
-        {
-          ret = do_remount (fd >= 0 ? fd : targetfd, real_target, remount_flags, data, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      else
-        {
-          struct remount_s *r;
-          if (fd < 0)
-            {
-              fd = dup (targetfd);
-              if (UNLIKELY (fd < 0))
-                return crun_make_error (err, errno, "dup `%d`", targetfd);
-            }
-
-          /* The remount owns the fd.  */
-          r = make_remount (get_and_reset (&fd), target, remount_flags, data, get_private_data (container)->remounts);
-          get_private_data (container)->remounts = r;
-        }
+      ret = schedule_or_do_remount (container, &fd, targetfd, target, real_target,
+                                    single_instance, mountflags, data, extra_flags, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   return ret;
@@ -2034,6 +2085,44 @@ struct device_s needed_devs[] = { { "/dev/null", "c", 1, 3, 0666, 0, 0 },
                                   { "/dev/random", "c", 1, 8, 0666, 0, 0 },
                                   { "/dev/urandom", "c", 1, 9, 0666, 0, 0 },
                                   {} };
+
+/* Pre-open (via open_tree) the needed device fds and the notify socket
+   while the host file system is still reachable.  Failures are ignored:
+   the fds are optional optimizations and a later mount(2) fallback
+   handles the missing entries.  */
+static void
+preopen_needed_devs_and_notify (libcrun_container_t *container)
+{
+  struct private_data_s *private_data = get_private_data (container);
+  size_t i;
+
+  if (private_data->needed_devs_fds)
+    {
+      struct libcrun_fd_map *dev_fds = private_data->needed_devs_fds;
+
+      for (i = 0; needed_devs[i].path; i++)
+        {
+          if (i < dev_fds->nfds && dev_fds->fds[i] >= 0)
+            continue;
+
+          int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
+                                      OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
+          if (fd >= 0 && i < dev_fds->nfds)
+            dev_fds->fds[i] = fd;
+          else if (fd >= 0)
+            close (fd);
+        }
+    }
+
+  if (private_data->notify_socket_tree_fd < 0
+      && private_data->host_notify_socket_path)
+    {
+      int fd = syscall_open_tree (AT_FDCWD, private_data->host_notify_socket_path,
+                                  OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
+      if (fd >= 0)
+        private_data->notify_socket_tree_fd = fd;
+    }
+}
 
 /* Check if the specified path is a direct child of /dev.  If it is
  return a pointer to the basename.  */
@@ -3735,34 +3824,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
      below since open_tree needs CAP_SYS_ADMIN in the user namespace
      that owns the mount namespace.  */
   if (tree_fd >= 0)
-    {
-      if (get_private_data (container)->needed_devs_fds)
-        {
-          struct libcrun_fd_map *dev_fds = get_private_data (container)->needed_devs_fds;
-
-          for (i = 0; needed_devs[i].path; i++)
-            {
-              if (i < dev_fds->nfds && dev_fds->fds[i] >= 0)
-                continue;
-
-              int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
-                                          OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
-              if (fd >= 0 && i < dev_fds->nfds)
-                dev_fds->fds[i] = fd;
-              else if (fd >= 0)
-                close (fd);
-            }
-        }
-
-      if (get_private_data (container)->notify_socket_tree_fd < 0
-          && get_private_data (container)->host_notify_socket_path)
-        {
-          int fd = syscall_open_tree (AT_FDCWD, get_private_data (container)->host_notify_socket_path,
-                                      OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
-          if (fd >= 0)
-            get_private_data (container)->notify_socket_tree_fd = fd;
-        }
-    }
+    preopen_needed_devs_and_notify (container);
 
   if (tree_fd >= 0)
     {
@@ -3853,34 +3915,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
   get_private_data (container)->rootfs = NULL;
 
   if (tree_fd < 0)
-    {
-      if (get_private_data (container)->needed_devs_fds)
-        {
-          struct libcrun_fd_map *dev_fds = get_private_data (container)->needed_devs_fds;
-
-          for (i = 0; needed_devs[i].path; i++)
-            {
-              if (i < dev_fds->nfds && dev_fds->fds[i] >= 0)
-                continue;
-
-              int fd = syscall_open_tree (AT_FDCWD, needed_devs[i].path,
-                                          OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC);
-              if (fd >= 0 && i < dev_fds->nfds)
-                dev_fds->fds[i] = fd;
-              else if (fd >= 0)
-                close (fd);
-            }
-        }
-
-      if (get_private_data (container)->notify_socket_tree_fd < 0
-          && get_private_data (container)->host_notify_socket_path)
-        {
-          int fd = syscall_open_tree (AT_FDCWD, get_private_data (container)->host_notify_socket_path,
-                                      OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC);
-          if (fd >= 0)
-            get_private_data (container)->notify_socket_tree_fd = fd;
-        }
-    }
+    preopen_needed_devs_and_notify (container);
 
   get_old_root_fd (get_private_data (container));
 
@@ -4140,6 +4175,63 @@ is_single_mapping (runtime_spec_schema_defs_id_mapping **mappings, size_t len,
   return 1;
 }
 
+static int
+write_id_map (libcrun_container_t *container, pid_t pid, const char *map_name,
+              int (*idmap_helper) (pid_t, const char *, libcrun_error_t *), const char *helper_name,
+              bool warn_on_failure, const char *map, size_t map_len,
+              runtime_spec_schema_defs_id_mapping **mappings, size_t mappings_len,
+              uint32_t host_id, uint32_t container_id, bool skip_if_setgroups_denied,
+              libcrun_error_t *err)
+{
+  int ret = 0;
+
+  if (container->host_uid)
+    ret = idmap_helper (pid, map, err);
+  if (container->host_uid == 0 || ret < 0)
+    {
+      cleanup_close int fd = -1;
+
+      if (ret < 0)
+        {
+          if (warn_on_failure)
+            libcrun_warning ("unable to invoke `%s`, will try creating a user namespace with single mapping as an alternative", helper_name);
+          crun_error_release (err);
+        }
+
+      fd = libcrun_open_proc_pid_file (container, pid, map_name, O_WRONLY, err);
+      if (UNLIKELY (fd < 0))
+        return fd;
+
+      ret = safe_write (fd, map_name, map, map_len, err);
+      if (ret < 0 && (! mappings_len || is_single_mapping (mappings, mappings_len, host_id, container_id)))
+        {
+          size_t single_mapping_len;
+          cleanup_free char *single_mapping = NULL;
+          crun_error_release (err);
+
+          if (! skip_if_setgroups_denied || ! get_private_data (container)->deny_setgroups)
+            {
+              ret = deny_setgroups (container, pid, err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+            }
+
+          ret = format_mount_mapping (&single_mapping, container_id, host_id, 1, &single_mapping_len, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          close_and_reset (&fd);
+
+          fd = libcrun_open_proc_pid_file (container, pid, map_name, O_WRONLY, err);
+          if (UNLIKELY (fd < 0))
+            return fd;
+
+          ret = safe_write (fd, map_name, single_mapping, single_mapping_len, err);
+        }
+    }
+  return ret;
+}
+
 int
 libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
 {
@@ -4197,94 +4289,17 @@ libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_er
         }
     }
 
-  if (container->host_uid)
-    ret = newgidmap (pid, gid_map, err);
-  if (container->host_uid == 0 || ret < 0)
-    {
-      if (ret < 0)
-        {
-          if (! def->linux->uid_mappings_len)
-            libcrun_warning ("unable to invoke `newgidmap`, will try creating a user namespace with single mapping as an alternative");
-          crun_error_release (err);
-        }
-
-      cleanup_close int gid_fd = -1;
-
-      gid_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
-      if (UNLIKELY (gid_fd < 0))
-        return gid_fd;
-
-      ret = safe_write (gid_fd, "gid_map", gid_map, gid_map_len, err);
-      if (ret < 0 && (! def->linux->gid_mappings_len || is_single_mapping (def->linux->gid_mappings, def->linux->gid_mappings_len, container->host_gid, container->container_gid)))
-        {
-          size_t single_mapping_len;
-          cleanup_free char *single_mapping = NULL;
-          crun_error_release (err);
-
-          ret = deny_setgroups (container, pid, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          ret = format_mount_mapping (&single_mapping, container->container_gid, container->host_gid, 1, &single_mapping_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          close_and_reset (&gid_fd);
-
-          gid_fd = libcrun_open_proc_pid_file (container, pid, "gid_map", O_WRONLY, err);
-          if (UNLIKELY (gid_fd < 0))
-            return gid_fd;
-
-          ret = safe_write (gid_fd, "gid_map", single_mapping, single_mapping_len, err);
-        }
-    }
+  ret = write_id_map (container, pid, "gid_map", newgidmap, "newgidmap",
+                      ! def->linux->uid_mappings_len, gid_map, gid_map_len,
+                      def->linux->gid_mappings, def->linux->gid_mappings_len,
+                      container->host_gid, container->container_gid, /* skip_if_setgroups_denied */ false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (container->host_uid)
-    ret = newuidmap (pid, uid_map, err);
-  if (container->host_uid == 0 || ret < 0)
-    {
-      if (ret < 0)
-        {
-          if (! def->linux->uid_mappings_len)
-            libcrun_warning ("unable to invoke `newuidmap`, will try creating a user namespace with single mapping as an alternative");
-          crun_error_release (err);
-        }
-
-      cleanup_close int uid_fd = -1;
-
-      uid_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
-      if (UNLIKELY (uid_fd < 0))
-        return uid_fd;
-
-      ret = safe_write (uid_fd, "uid_map", uid_map, uid_map_len, err);
-      if (ret < 0 && (! def->linux->uid_mappings_len || is_single_mapping (def->linux->uid_mappings, def->linux->uid_mappings_len, container->host_uid, container->container_uid)))
-        {
-          size_t single_mapping_len;
-          cleanup_free char *single_mapping = NULL;
-          crun_error_release (err);
-
-          if (! get_private_data (container)->deny_setgroups)
-            {
-              ret = deny_setgroups (container, pid, err);
-              if (UNLIKELY (ret < 0))
-                return ret;
-            }
-
-          ret = format_mount_mapping (&single_mapping, container->container_uid, container->host_uid, 1, &single_mapping_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-
-          close_and_reset (&uid_fd);
-
-          uid_fd = libcrun_open_proc_pid_file (container, pid, "uid_map", O_WRONLY, err);
-          if (UNLIKELY (uid_fd < 0))
-            return uid_fd;
-
-          ret = safe_write (uid_fd, "uid_map", single_mapping, single_mapping_len, err);
-        }
-    }
+  ret = write_id_map (container, pid, "uid_map", newuidmap, "newuidmap",
+                      ! def->linux->uid_mappings_len, uid_map, uid_map_len,
+                      def->linux->uid_mappings, def->linux->uid_mappings_len,
+                      container->host_uid, container->container_uid, /* skip_if_setgroups_denied */ true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

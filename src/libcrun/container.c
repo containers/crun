@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include "container.h"
 #include "utils.h"
+#include "json_gen_utils.h"
 #include "seccomp.h"
 #include "mempolicy.h"
 #ifdef HAVE_SECCOMP
@@ -494,6 +495,29 @@ initialize_security (libcrun_container_t *container, runtime_spec_schema_config_
   return 0;
 }
 
+/* Emit the "annotations" map.  Returns a json_gen_status; callers can wrap
+   the call with GEN_OR_FAIL.  */
+static int
+gen_annotations (json_gen_ctx *gen, json_map_string_string *annotations)
+{
+  size_t i;
+  int r;
+
+  GEN_KEY (gen, "annotations");
+  GEN_OR_FAIL (json_gen_map_open (gen));
+
+  for (i = 0; i < annotations->len; i++)
+    {
+      GEN_STR (gen, annotations->keys[i]);
+      GEN_STR (gen, annotations->values[i]);
+    }
+
+  return json_gen_map_close (gen);
+
+gen_error:
+  return r;
+}
+
 static int
 do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *cwd,
           const char *status, hook **hooks, size_t hooks_len, int out_fd, int err_fd, bool can_ignore_chdir_errors, libcrun_error_t *err)
@@ -503,7 +527,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   char *stdin = NULL;
   cleanup_free char *cwd_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
-  json_gen_ctx *gen = NULL;
+  cleanup_json_gen json_gen_ctx *gen = NULL;
 
   if (cwd == NULL)
     {
@@ -517,93 +541,32 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
 
   json_gen_config (gen, json_gen_beautify, 0);
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, "1.0");
 
-  r = json_gen_string (gen, "1.0", strlen ("1.0"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "id");
+  GEN_STR (gen, id);
 
-  r = json_gen_string (gen, "id", strlen ("id"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, pid));
 
-  r = json_gen_string (gen, id, strlen (id));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "root");
+  GEN_STR (gen, rootfs);
 
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "bundle");
+  GEN_STR (gen, cwd);
 
-  r = map_int (gen, pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "root", strlen ("root"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, rootfs, strlen (rootfs));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "bundle", strlen ("bundle"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, cwd, strlen (cwd));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "status", strlen ("status"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, status, strlen (status));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "status");
+  GEN_STR (gen, status);
 
   if (def && def->annotations && def->annotations->len)
-    {
-      r = json_gen_string (gen, "annotations", strlen ("annotations"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
+    GEN_OR_FAIL (gen_annotations (gen, def->annotations));
 
-      r = json_gen_map_open (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
-      for (i = 0; i < def->annotations->len; i++)
-        {
-          const char *key = def->annotations->keys[i];
-          const char *val = def->annotations->values[i];
-
-          r = json_gen_string (gen, key, strlen (key));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto gen_error;
-
-          r = json_gen_string (gen, val, strlen (val));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto gen_error;
-        }
-      r = json_gen_map_close (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
-    }
-
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_get_buf (gen, (const char **) &stdin, &stdin_len);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_get_buf (gen, (const char **) &stdin, &stdin_len));
 
   ret = 0;
 
@@ -639,14 +602,9 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
         }
     }
 
-  if (gen)
-    json_gen_free (gen);
-
   return ret;
 
 gen_error:
-  if (gen)
-    json_gen_free (gen);
   return json_gen_error_to_crun_error (r, err);
 }
 
@@ -684,41 +642,19 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
 
   json_gen_config (gen, json_gen_beautify, 1);
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, OCI_VERSION);
 
-  r = json_gen_string (gen, OCI_VERSION, strlen (OCI_VERSION));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "fds");
+  GEN_OR_FAIL (json_gen_array_open (gen));
 
-  r = json_gen_string (gen, "fds", strlen ("fds"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "seccompFd");
+  GEN_OR_FAIL (json_gen_array_close (gen));
 
-  r = json_gen_array_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "seccompFd", strlen ("seccompFd"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_array_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = map_int (gen, own_pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, own_pid));
 
   if (def && def->linux && def->linux->seccomp)
     {
@@ -726,113 +662,47 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
 
       if (metadata)
         {
-          r = json_gen_string (gen, "metadata", strlen ("metadata"));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
-
-          r = json_gen_string (gen, metadata, strlen (metadata));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
+          GEN_KEY (gen, "metadata");
+          GEN_STR (gen, metadata);
         }
     }
 
   /* State.  */
-  r = json_gen_string (gen, "state", strlen ("state"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "state");
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, OCI_VERSION, strlen (OCI_VERSION));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, OCI_VERSION);
 
   if (container->context && container->context->id)
     {
-      r = json_gen_string (gen, "id", strlen ("id"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      r = json_gen_string (gen, container->context->id, strlen (container->context->id));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
+      GEN_KEY (gen, "id");
+      GEN_STR (gen, container->context->id);
     }
 
-  r = json_gen_string (gen, "status", strlen ("status"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "status");
+  GEN_STR (gen, status);
 
-  r = json_gen_string (gen, status, strlen (status));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
-
-  r = map_int (gen, own_pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, own_pid));
 
   if (container->context && container->context->bundle)
     {
-      r = json_gen_string (gen, "bundle", strlen ("bundle"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      r = json_gen_string (gen, container->context->bundle, strlen (container->context->bundle));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
+      GEN_KEY (gen, "bundle");
+      GEN_STR (gen, container->context->bundle);
     }
 
   if (def->annotations && def->annotations->len)
-    {
-      size_t i;
+    GEN_OR_FAIL (gen_annotations (gen, def->annotations));
 
-      r = json_gen_string (gen, "annotations", strlen ("annotations"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      r = json_gen_map_open (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-
-      for (i = 0; i < def->annotations->len; i++)
-        {
-          const char *key = def->annotations->keys[i];
-          const char *val = def->annotations->values[i];
-
-          r = json_gen_string (gen, key, strlen (key));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
-
-          r = json_gen_string (gen, val, strlen (val));
-          if (UNLIKELY (r != json_gen_status_ok))
-            goto exit;
-        }
-      r = json_gen_map_close (gen);
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto exit;
-    }
-
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_OR_FAIL (json_gen_map_close (gen));
   /* End state.  */
 
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto exit;
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
   r = get_json_gen_result (gen, seccomp_fd_payload, seccomp_fd_payload_len);
 
-exit:
+gen_error:
   json_gen_free (gen);
 
   return json_gen_error_to_crun_error (r, err);
@@ -1934,6 +1804,16 @@ struct wait_for_process_args
 };
 
 static int
+write_pid_file (const char *pid_file, pid_t pid, libcrun_error_t *err)
+{
+  char buf[32];
+  int buf_len = snprintf (buf, sizeof (buf), "%d", pid);
+  if (UNLIKELY (buf_len >= (int) sizeof (buf)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+  return write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, pid_file, buf, buf_len, err);
+}
+
+static int
 wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
   cleanup_channel_fd_pair struct channel_fd_pair *from_terminal = NULL;
@@ -1966,11 +1846,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 
   if (args->context->pid_file)
     {
-      char buf[32];
-      int buf_len = snprintf (buf, sizeof (buf), "%d", args->pid);
-      if (UNLIKELY (buf_len >= (int) sizeof (buf)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
-      ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, args->context->pid_file, buf, buf_len, err);
+      ret = write_pid_file (args->context->pid_file, args->pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -2934,6 +2810,18 @@ force_delete_container_status (libcrun_context_t *context, runtime_spec_schema_c
   crun_error_release (&tmp_err);
 }
 
+/* Serialize ERR to FD as an int errno followed by a NUL-terminated message.
+   Used by forked children to report a failure to the parent process.  */
+static void
+write_error_to_pipe (int fd, libcrun_error_t *err)
+{
+  const char *msg = (*err)->msg;
+  int errcode = crun_error_get_errno (err);
+
+  TEMP_FAILURE_RETRY (write (fd, &errcode, sizeof (errcode)));
+  TEMP_FAILURE_RETRY (write (fd, msg, strlen (msg) + 1));
+}
+
 int
 libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container, unsigned int options,
                        libcrun_error_t *err)
@@ -3037,8 +2925,7 @@ fail:
     force_delete_container_status (context, def);
   if (tmp_err)
     {
-      TEMP_FAILURE_RETRY (write (pipefd1, &(tmp_err->status), sizeof (tmp_err->status)));
-      TEMP_FAILURE_RETRY (write (pipefd1, tmp_err->msg, strlen (tmp_err->msg) + 1));
+      write_error_to_pipe (pipefd1, &tmp_err);
       crun_error_release (&tmp_err);
     }
 
@@ -3325,6 +3212,7 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
   json_gen_ctx *gen = NULL;
   const char *buf;
   int ret = 0;
+  int r = json_gen_status_ok;
   int running;
   size_t len;
 
@@ -3342,83 +3230,54 @@ libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, 
 
   json_gen_config (gen, json_gen_beautify, 1);
 
-  json_gen_map_open (gen);
-  json_gen_string (gen, "ociVersion", strlen ("ociVersion"));
-  json_gen_string (gen, OCI_CONFIG_VERSION, strlen (OCI_CONFIG_VERSION));
+  GEN_OR_FAIL (json_gen_map_open (gen));
+  GEN_KEY (gen, "ociVersion");
+  GEN_STR (gen, OCI_CONFIG_VERSION);
 
-  json_gen_string (gen, "id", strlen ("id"));
-  json_gen_string (gen, id, strlen (id));
+  GEN_KEY (gen, "id");
+  GEN_STR (gen, id);
 
-  json_gen_string (gen, "pid", strlen ("pid"));
-  map_int (gen, running ? status.pid : 0);
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, running ? status.pid : 0));
 
-  json_gen_string (gen, "status", strlen ("status"));
-  json_gen_string (gen, container_status, strlen (container_status));
+  GEN_KEY (gen, "status");
+  GEN_STR (gen, container_status);
 
-  json_gen_string (gen, "bundle", strlen ("bundle"));
-  json_gen_string (gen, status.bundle, strlen (status.bundle));
+  GEN_KEY (gen, "bundle");
+  GEN_STR (gen, status.bundle);
 
-  json_gen_string (gen, "rootfs", strlen ("rootfs"));
-  json_gen_string (gen, status.rootfs, strlen (status.rootfs));
+  GEN_KEY (gen, "rootfs");
+  GEN_STR (gen, status.rootfs);
 
-  json_gen_string (gen, "created", strlen ("created"));
-  json_gen_string (gen, status.created, strlen (status.created));
+  GEN_KEY (gen, "created");
+  GEN_STR (gen, status.created);
 
   if (status.scope)
     {
-      json_gen_string (gen, "systemd-scope", strlen ("systemd-scope"));
-      json_gen_string (gen, status.scope, strlen (status.scope));
+      GEN_KEY (gen, "systemd-scope");
+      GEN_STR (gen, status.scope);
     }
 
   if (status.owner)
     {
-      json_gen_string (gen, "owner", strlen ("owner"));
-      json_gen_string (gen, status.owner, strlen (status.owner));
+      GEN_KEY (gen, "owner");
+      GEN_STR (gen, status.owner);
     }
 
   {
-    size_t i;
-    cleanup_free char *config_file = NULL;
     cleanup_container libcrun_container_t *container = NULL;
-    cleanup_free char *dir = NULL;
 
-    ret = libcrun_get_state_directory (&dir, state_root, id, err);
+    ret = read_container_config_from_state (&container, state_root, id, err);
     if (UNLIKELY (ret < 0))
       goto exit;
-
-    ret = append_paths (&config_file, err, dir, "config.json", NULL);
-    if (UNLIKELY (ret < 0))
-      goto exit;
-
-    container = libcrun_container_load_from_file (config_file, err);
-    if (UNLIKELY (container == NULL))
-      {
-        ret = -1;
-        goto exit;
-      }
 
     if (container->container_def->annotations && container->container_def->annotations->len)
-      {
-        json_gen_string (gen, "annotations", strlen ("annotations"));
-        json_gen_map_open (gen);
-        for (i = 0; i < container->container_def->annotations->len; i++)
-          {
-            const char *key = container->container_def->annotations->keys[i];
-            const char *val = container->container_def->annotations->values[i];
-            json_gen_string (gen, key, strlen (key));
-            json_gen_string (gen, val, strlen (val));
-          }
-        json_gen_map_close (gen);
-      }
+      GEN_OR_FAIL (gen_annotations (gen, container->container_def->annotations));
   }
 
-  json_gen_map_close (gen);
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
-  if (json_gen_get_buf (gen, &buf, &len) != json_gen_status_ok)
-    {
-      ret = crun_make_error (err, 0, "error generating JSON");
-      goto exit;
-    }
+  GEN_OR_FAIL (json_gen_get_buf (gen, &buf, &len));
 
   fprintf (out, "%s\n", buf);
 
@@ -3427,6 +3286,10 @@ exit:
     json_gen_free (gen);
   libcrun_free_container_status (&status);
   return ret;
+
+gen_error:
+  ret = json_gen_error_to_crun_error (r, err);
+  goto exit;
 }
 
 int
@@ -3462,6 +3325,35 @@ cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
   runtime_spec_schema_config_schema_process *process = *p;
   if (process)
     (void) free_runtime_spec_schema_config_schema_process (process);
+}
+
+/* Build the seccomp receiver payload (when needed), apply the seccomp profile and
+   close the seccomp file descriptors.  Used from exec_process_entrypoint both before
+   and after the capabilities are set, depending on process->no_new_privileges.  */
+static int
+apply_seccomp_for_exec (libcrun_container_t *container, pid_t own_pid, int seccomp_fd,
+                        int seccomp_receiver_fd, char **seccomp_flags, size_t seccomp_flags_len,
+                        libcrun_error_t *err)
+{
+  cleanup_free char *seccomp_fd_payload = NULL;
+  size_t seccomp_fd_payload_len = 0;
+  int ret;
+
+  if (seccomp_receiver_fd >= 0)
+    {
+      ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
+                               seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  close_and_reset (&seccomp_fd);
+  close_and_reset (&seccomp_receiver_fd);
+  return 0;
 }
 
 static int
@@ -3575,23 +3467,10 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (! process->no_new_privileges)
     {
-      cleanup_free char *seccomp_fd_payload = NULL;
-      size_t seccomp_fd_payload_len = 0;
-
-      if (seccomp_receiver_fd >= 0)
-        {
-          ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
-                                   seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+      ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
+                                    seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      close_and_reset (&seccomp_fd);
-      close_and_reset (&seccomp_receiver_fd);
     }
 
   ret = libcrun_container_setgroups (container, process, err);
@@ -3634,22 +3513,10 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (process->no_new_privileges)
     {
-      cleanup_free char *seccomp_fd_payload = NULL;
-      size_t seccomp_fd_payload_len = 0;
-
-      if (seccomp_receiver_fd >= 0)
-        {
-          ret = get_seccomp_receiver_fd_payload (container, "running", own_pid, &seccomp_fd_payload, &seccomp_fd_payload_len, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-      ret = libcrun_apply_seccomp (seccomp_fd, seccomp_receiver_fd, seccomp_fd_payload,
-                                   seccomp_fd_payload_len, seccomp_flags, seccomp_flags_len, err);
+      ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
+                                    seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      close_and_reset (&seccomp_fd);
-      close_and_reset (&seccomp_receiver_fd);
     }
 
   if (process->user)
@@ -3701,9 +3568,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   cleanup_close int terminal_fd = -1;
   cleanup_close int seccomp_fd = -1;
   cleanup_terminal void *orig_terminal = NULL;
-  cleanup_free char *config_file = NULL;
   cleanup_container libcrun_container_t *container = NULL;
-  cleanup_free char *dir = NULL;
   int container_ret_status[2];
   cleanup_close int pipefd0 = -1;
   cleanup_close int pipefd1 = -1;
@@ -3725,17 +3590,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     return ret;
   container_status = ret;
 
-  ret = libcrun_get_state_directory (&dir, state_root, id, err);
+  ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = append_paths (&config_file, err, dir, "config.json", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  container = libcrun_container_load_from_file (config_file, err);
-  if (UNLIKELY (container == NULL))
-    return -1;
 
   container->context = context;
 
@@ -3877,10 +3734,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
             libcrun_fail_with_error ((*err)->status, "%s", (*err)->msg);
           else
             {
-              const char *msg = (*err)->msg;
-              ret = crun_error_get_errno (err);
-              TEMP_FAILURE_RETRY (write (pipefd1, &ret, sizeof (ret)));
-              TEMP_FAILURE_RETRY (write (pipefd1, msg, strlen (msg) + 1));
+              write_error_to_pipe (pipefd1, err);
               TEMP_FAILURE_RETRY (close (pipefd1));
               pipefd1 = -1;
             }
@@ -4034,7 +3888,7 @@ libcrun_container_update (libcrun_context_t *context, const char *id, const char
                                                               def,
                                                               err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto cleanup;
     }
 
   ret = libcrun_linux_container_update (&status, state_root, resources, err);
@@ -4304,22 +4158,35 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   return 0;
 }
 
-int
-libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
+/* Read the container status and fail if the container is not running.  */
+static int
+read_status_require_running (libcrun_context_t *context, const char *id,
+                             libcrun_container_status_t *status, libcrun_error_t *err)
 {
   int ret;
-  const char *state_root = context->state_root;
-  libcrun_container_status_t status = {};
 
-  ret = libcrun_read_container_status (&status, state_root, id, err);
+  ret = libcrun_read_container_status (status, context->state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_is_container_running (&status, err);
+  ret = libcrun_is_container_running (status, err);
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret == 0)
     return crun_make_error (err, 0, "the container `%s` is not running", id);
+
+  return 0;
+}
+
+int
+libcrun_container_pause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
+{
+  int ret;
+  libcrun_container_status_t status = {};
+
+  ret = read_status_require_running (context, id, &status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return libcrun_container_pause_linux (&status, err);
 }
@@ -4328,18 +4195,11 @@ int
 libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err)
 {
   int ret;
-  const char *state_root = context->state_root;
   libcrun_container_status_t status = {};
 
-  ret = libcrun_read_container_status (&status, state_root, id, err);
+  ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = libcrun_is_container_running (&status, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret == 0)
-    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   return libcrun_container_unpause_linux (&status, err);
 }
@@ -4353,15 +4213,9 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   libcrun_container_status_t status = {};
   cleanup_container libcrun_container_t *container = NULL;
 
-  ret = libcrun_read_container_status (&status, state_root, id, err);
+  ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = libcrun_is_container_running (&status, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret == 0)
-    return crun_make_error (err, 0, "the container `%s` is not running", id);
 
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -4626,12 +4480,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
 
   if (context->pid_file)
     {
-      char buf[32];
-      int buf_len = snprintf (buf, sizeof (buf), "%d", status.pid);
-      if (UNLIKELY (buf_len >= (int) sizeof (buf)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
-
-      ret = write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, context->pid_file, buf, buf_len, err);
+      ret = write_pid_file (context->pid_file, status.pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
@@ -4766,21 +4615,11 @@ int
 libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, struct libcrun_intel_rdt_update *update, libcrun_error_t *err)
 {
   cleanup_container libcrun_container_t *container = NULL;
-  cleanup_free char *config_file = NULL;
-  cleanup_free char *dir = NULL;
   int ret;
 
-  ret = libcrun_get_state_directory (&dir, context->state_root, id, err);
+  ret = read_container_config_from_state (&container, context->state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  ret = append_paths (&config_file, err, dir, "config.json", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  container = libcrun_container_load_from_file (config_file, err);
-  if (UNLIKELY (container == NULL))
-    return -1;
 
   return libcrun_update_intel_rdt (id, container, update->l3_cache_schema, update->mem_bw_schema, update->schemata, err);
 }

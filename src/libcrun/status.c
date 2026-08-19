@@ -20,6 +20,7 @@
 #include <config.h>
 #include "status.h"
 #include "utils.h"
+#include "json_gen_utils.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -152,25 +153,14 @@ libcrun_get_state_directory (char **out, const char *state_root, const char *id,
 static int
 get_state_directory_status_file (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *root = NULL;
-  cleanup_free char *path = NULL;
+  cleanup_free char *dir = NULL;
   int ret;
 
-  ret = validate_id (id, err);
+  ret = libcrun_get_state_directory (&dir, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = get_run_directory (&root, state_root, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&path, err, root, id, "status", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  STEAL_POINTER (out, path);
-
-  return 0;
+  return append_paths (out, err, dir, "status", NULL);
 }
 
 static int
@@ -250,7 +240,7 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   const char *buf = NULL;
   struct pid_stat st;
   const char *tmp;
-  json_gen_ctx *gen = NULL;
+  cleanup_json_gen json_gen_ctx *gen = NULL;
 
   ret = get_state_directory_status_file (&file, state_root, id, err);
   if (UNLIKELY (ret < 0))
@@ -272,133 +262,62 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
 
   json_gen_config (gen, json_gen_beautify, 1);
 
-  r = json_gen_map_open (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_map_open (gen));
 
-  r = json_gen_string (gen, "pid", strlen ("pid"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "pid");
+  GEN_OR_FAIL (map_int (gen, status->pid));
 
-  r = map_int (gen, status->pid);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "process-start-time");
+  GEN_OR_FAIL (map_uint (gen, status->process_start_time));
 
-  r = json_gen_string (gen, "process-start-time", strlen ("process-start-time"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = map_uint (gen, status->process_start_time);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "cgroup-path", strlen ("cgroup-path"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
+  GEN_KEY (gen, "cgroup-path");
   tmp = status->cgroup_path ? status->cgroup_path : "";
-  r = json_gen_string (gen, tmp, strlen (tmp));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_STR (gen, tmp);
 
-  r = json_gen_string (gen, "scope", strlen ("scope"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
+  GEN_KEY (gen, "scope");
   tmp = status->scope ? status->scope : "";
-  r = json_gen_string (gen, tmp, strlen (tmp));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_STR (gen, tmp);
 
-  r = json_gen_string (gen, "rootfs", strlen ("rootfs"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "rootfs");
+  GEN_STR (gen, status->rootfs);
 
-  r = json_gen_string (gen, status->rootfs, strlen (status->rootfs));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "systemd-cgroup");
+  GEN_OR_FAIL (json_gen_bool (gen, status->systemd_cgroup));
 
-  r = json_gen_string (gen, "systemd-cgroup", strlen ("systemd-cgroup"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "bundle");
+  GEN_STR (gen, status->bundle);
 
-  r = json_gen_bool (gen, status->systemd_cgroup);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "bundle", strlen ("bundle"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, status->bundle, strlen (status->bundle));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, "created", strlen ("created"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_string (gen, status->created, strlen (status->created));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "created");
+  GEN_STR (gen, status->created);
 
   if (status->owner)
     {
-      r = json_gen_string (gen, "owner", strlen ("owner"));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
-
-      r = json_gen_string (gen, status->owner, strlen (status->owner));
-      if (UNLIKELY (r != json_gen_status_ok))
-        goto gen_error;
+      GEN_KEY (gen, "owner");
+      GEN_STR (gen, status->owner);
     }
 
-  r = json_gen_string (gen, "detached", strlen ("detached"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "detached");
+  GEN_OR_FAIL (json_gen_bool (gen, status->detached));
 
-  r = json_gen_bool (gen, status->detached);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_KEY (gen, "external_descriptors");
+  GEN_STR (gen, status->external_descriptors);
 
-  r = json_gen_string (gen, "external_descriptors", strlen ("external_descriptors"));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_map_close (gen));
 
-  r = json_gen_string (gen, status->external_descriptors, strlen (status->external_descriptors));
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_map_close (gen);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
-
-  r = json_gen_get_buf (gen, &buf, &len);
-  if (UNLIKELY (r != json_gen_status_ok))
-    goto gen_error;
+  GEN_OR_FAIL (json_gen_get_buf (gen, &buf, &len));
 
   ret = safe_write (fd_write, "status file", buf, len, err);
   if (UNLIKELY (ret < 0))
-    goto exit;
+    return ret;
 
   close_and_reset (&fd_write);
 
   if (UNLIKELY (rename (file_tmp, file) < 0))
-    {
-      ret = crun_make_error (err, errno, "cannot rename status file");
-      goto exit;
-    }
+    return crun_make_error (err, errno, "cannot rename status file");
 
-exit:
-  if (gen)
-    json_gen_free (gen);
-
-  return ret;
+  return 0;
 
 gen_error:
-  if (gen)
-    json_gen_free (gen);
-
   return json_gen_error_to_crun_error (r, err);
 }
 
@@ -812,18 +731,26 @@ libcrun_is_container_running (libcrun_container_status_t *status, libcrun_error_
   return 0; /* stopped */
 }
 
-int
-libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+static int
+get_exec_fifo_path (char **out, const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_free char *state_dir = NULL;
-  cleanup_free char *fifo_path = NULL;
-  int ret, fd = -1;
+  int ret;
 
   ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  return append_paths (out, err, state_dir, "exec.fifo", NULL);
+}
+
+int
+libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
+{
+  cleanup_free char *fifo_path = NULL;
+  int ret, fd = -1;
+
+  ret = get_exec_fifo_path (&fifo_path, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -842,7 +769,6 @@ libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun
 int
 libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   char buffer[1] = {
     0,
@@ -850,11 +776,7 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
   cleanup_close int fd = -1;
   int ret;
 
-  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  ret = get_exec_fifo_path (&fifo_path, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -876,15 +798,10 @@ libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_
 int
 libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err)
 {
-  cleanup_free char *state_dir = NULL;
   cleanup_free char *fifo_path = NULL;
   int ret;
 
-  ret = libcrun_get_state_directory (&state_dir, state_root, id, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = append_paths (&fifo_path, err, state_dir, "exec.fifo", NULL);
+  ret = get_exec_fifo_path (&fifo_path, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
