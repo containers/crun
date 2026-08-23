@@ -564,7 +564,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
 }
 
 static int
-libkrun_start_passt (void *cookie, libcrun_container_t *container)
+libkrun_configure_network (void *cookie, libcrun_container_t *container)
 {
   struct krun_config *kconf = (struct krun_config *) cookie;
   pid_t pid;
@@ -717,9 +717,9 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
     return 0;
 
-  ret = libkrun_start_passt (cookie, container);
+  ret = libkrun_configure_network (cookie, container);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "start passt");
+    return crun_make_error (err, errno, "configure krun network");
 
   /* Do nothing if /dev/kvm is already present in spec */
   if (spec_has_device (def, "/dev/kvm"))
