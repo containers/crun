@@ -96,6 +96,7 @@ struct krun_config
   json_object *config_doc;
   json_object *config_tree;
   bool use_passt;
+  const char *tap_name;
 };
 
 /* libkrun handler.  */
@@ -251,11 +252,43 @@ libkrun_parse_resource_configuration (json_object *config_tree, libcrun_containe
 }
 
 static int
+libkrun_parse_string_configuration (json_object *config_tree, libcrun_container_t *container,
+                                    const char *annotation, const char *key,
+                                    const char **value, libcrun_error_t *err)
+{
+  const char *val;
+  json_object *val_json = NULL;
+
+  *value = NULL;
+
+  val = find_annotation (container, annotation);
+  if (val != NULL)
+    {
+      *value = val;
+      return 0;
+    }
+
+  if (config_tree == NULL)
+    return 0;
+
+  val_json = json_object_object_get (config_tree, key);
+  if (val_json == NULL)
+    return 0;
+
+  if (! json_object_is_type (val_json, json_type_string))
+    return crun_make_error (err, 0, ".krun_vm.json %s value is not a string", key);
+
+  *value = json_object_get_string (val_json);
+  return 0;
+}
+
+static int
 libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, libcrun_container_t *container, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_vm_config) (uint32_t ctx_id, uint8_t num_vcpus, uint32_t ram_mib);
   int32_t (*krun_add_net_unixstream) (uint32_t ctx_id, const char *c_path, int fd, uint8_t *const c_mac, uint32_t features, uint32_t flags);
+  int32_t (*krun_add_net_tap) (uint32_t ctx_id, const char *c_tap_name, const uint8_t *c_mac, uint32_t features, uint32_t flags);
   int cpus, ram_mib, gpu_flags, nested_virt, ret;
   cpu_set_t set;
 
@@ -322,7 +355,18 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
         return crun_make_error (err, -ret, "could not enable nested virtualization");
     }
 
-  if (kconf->use_passt)
+  if (kconf->tap_name != NULL)
+    {
+      krun_add_net_tap = dlsym (handle, "krun_add_net_tap");
+      if (krun_add_net_tap == NULL)
+        return crun_make_error (err, 0, "could not find symbol `krun_add_net_tap` in the krun library");
+
+      uint8_t mac[] = { 0x5a, 0x94, 0xef, 0xe4, 0x0c, 0xee };
+      ret = krun_add_net_tap (ctx_id, kconf->tap_name, &mac[0], COMPAT_NET_FEATURES, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "could not add krun TAP interface `%s`", kconf->tap_name);
+    }
+  else if (kconf->use_passt)
     {
       krun_add_net_unixstream = dlsym (handle, "krun_add_net_unixstream");
       if (krun_add_net_unixstream == NULL)
@@ -564,7 +608,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
 }
 
 static int
-libkrun_configure_network (void *cookie, libcrun_container_t *container)
+libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun_error_t *err)
 {
   struct krun_config *kconf = (struct krun_config *) cookie;
   pid_t pid;
@@ -576,9 +620,24 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container)
   int null;
   int ret;
 
+  ret = libkrun_parse_string_configuration (kconf->config_tree, container,
+                                            "krun.tap_name", "tap_name",
+                                            &kconf->tap_name, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (kconf->tap_name != NULL && kconf->tap_name[0] == '\0')
+    return crun_make_error (err, 0, "krun.tap_name cannot be empty");
+
   use_passt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.use_passt", "use_passt");
+
   if (use_passt > 0)
-    kconf->use_passt = 1;
+    {
+      if (kconf->tap_name != NULL)
+        return crun_make_error (err, 0, "krun.tap_name and krun.use_passt are mutually exclusive");
+
+      kconf->use_passt = 1;
+    }
   else
     return 0;
 
@@ -717,9 +776,9 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
     return 0;
 
-  ret = libkrun_configure_network (cookie, container);
+  ret = libkrun_configure_network (cookie, container, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "configure krun network");
+    return ret;
 
   /* Do nothing if /dev/kvm is already present in spec */
   if (spec_has_device (def, "/dev/kvm"))

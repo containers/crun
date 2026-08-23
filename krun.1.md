@@ -61,6 +61,13 @@ The following annotations are supported:
 :   When set to a value greater than 0, enable passt-based networking
     in the microVM.
 
+**krun.tap_name**=*NAME*
+:   Attach the microVM to an existing TAP interface *NAME* through a
+    virtio-net device, disabling the default TSI (Transparent Socket
+    Impersonation) networking. Requires a libkrun built with
+    virtio-net support. This option is mutually exclusive with
+    **krun.use_passt**.
+
 **krun.nested_virt**=*NUM*
 :   When set to a value greater than 0, enable nested virtualization
     in the microVM, exposing hardware virtualization support (VMX on
@@ -86,6 +93,7 @@ the following optional fields:
 - **ram_mib** (integer): same as the **krun.ram_mib** annotation.
 - **gpu_flags** (integer): same as the **krun.gpu_flags** annotation.
 - **use_passt** (integer): same as the **krun.use_passt** annotation.
+- **tap_name** (string): same as the **krun.tap_name** annotation.
 - **nested_virt** (integer): same as the **krun.nested_virt** annotation.
 - **flavor** (string): same as the **krun.variant** annotation.
 - **kernel_path** (string): path to an external kernel.
