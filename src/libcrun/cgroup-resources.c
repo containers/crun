@@ -106,6 +106,9 @@ is_rwm (const char *str, libcrun_error_t *err)
   bool w = false;
   bool m = false;
 
+  if (str == NULL)
+    str = "";
+
   for (it = str; *it; it++)
     switch (*it)
       {
