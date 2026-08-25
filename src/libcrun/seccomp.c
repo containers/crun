@@ -111,49 +111,33 @@ syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 static int
 get_seccomp_operator (const char *name, enum scmp_compare *op, libcrun_error_t *err)
 {
-  const char *p;
+  static const struct
+  {
+    const char *name;
+    enum scmp_compare op;
+  } operators[] = {
+    { "NE", SCMP_CMP_NE },
+    { "LT", SCMP_CMP_LT },
+    { "LE", SCMP_CMP_LE },
+    { "EQ", SCMP_CMP_EQ },
+    { "GE", SCMP_CMP_GE },
+    { "GT", SCMP_CMP_GT },
+    { "MASKED_EQ", SCMP_CMP_MASKED_EQ },
+  };
+  const char *p = name;
+  size_t i;
 
-  p = name;
-  if (strncmp (p, "SCMP_CMP_", 9))
+  if (! has_prefix (p, "SCMP_CMP_"))
     goto fail;
 
-  p += 9;
+  p += sizeof ("SCMP_CMP_") - 1;
 
-  if (strcmp (p, "NE") == 0)
-    {
-      *op = SCMP_CMP_NE;
-      return 0;
-    }
-  if (strcmp (p, "LT") == 0)
-    {
-      *op = SCMP_CMP_LT;
-      return 0;
-    }
-  if (strcmp (p, "LE") == 0)
-    {
-      *op = SCMP_CMP_LE;
-      return 0;
-    }
-  if (strcmp (p, "EQ") == 0)
-    {
-      *op = SCMP_CMP_EQ;
-      return 0;
-    }
-  if (strcmp (p, "GE") == 0)
-    {
-      *op = SCMP_CMP_GE;
-      return 0;
-    }
-  if (strcmp (p, "GT") == 0)
-    {
-      *op = SCMP_CMP_GT;
-      return 0;
-    }
-  if (strcmp (p, "MASKED_EQ") == 0)
-    {
-      *op = SCMP_CMP_MASKED_EQ;
-      return 0;
-    }
+  for (i = 0; i < sizeof (operators) / sizeof (operators[0]); i++)
+    if (strcmp (p, operators[i].name) == 0)
+      {
+        *op = operators[i].op;
+        return 0;
+      }
 
 fail:
   return crun_make_error (err, 0, "seccomp get operator `%s`", name);
@@ -162,39 +146,39 @@ fail:
 static int
 get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_error_t *err)
 {
-  const char *p;
+  static const struct
+  {
+    const char *name;
+    uint32_t action;
+  } actions[] = {
+    { "ALLOW", SCMP_ACT_ALLOW },
+    { "KILL", SCMP_ACT_KILL },
+    { "TRAP", SCMP_ACT_TRAP },
+#  ifdef SCMP_ACT_LOG
+    { "LOG", SCMP_ACT_LOG },
+#  endif
+#  ifdef SCMP_ACT_KILL_PROCESS
+    { "KILL_PROCESS", SCMP_ACT_KILL_PROCESS },
+#  endif
+#  ifdef SCMP_ACT_KILL_THREAD
+    { "KILL_THREAD", SCMP_ACT_KILL_THREAD },
+#  endif
+#  ifdef SCMP_ACT_NOTIFY
+    { "NOTIFY", SCMP_ACT_NOTIFY },
+#  endif
+  };
+  const char *p = name;
+  size_t i;
 
-  p = name;
-  if (strncmp (p, "SCMP_ACT_", 9))
+  if (! has_prefix (p, "SCMP_ACT_"))
     goto fail;
 
-  p += 9;
+  p += sizeof ("SCMP_ACT_") - 1;
 
-  if (strcmp (p, "ALLOW") == 0)
-    {
-      *action = SCMP_ACT_ALLOW;
-      return 0;
-    }
+  /* These two embed errno_ret, so they cannot be looked up in the table.  */
   if (strcmp (p, "ERRNO") == 0)
     {
       *action = SCMP_ACT_ERRNO (errno_ret);
-      return 0;
-    }
-  if (strcmp (p, "KILL") == 0)
-    {
-      *action = SCMP_ACT_KILL;
-      return 0;
-    }
-#  ifdef SCMP_ACT_LOG
-  if (strcmp (p, "LOG") == 0)
-    {
-      *action = SCMP_ACT_LOG;
-      return 0;
-    }
-#  endif
-  if (strcmp (p, "TRAP") == 0)
-    {
-      *action = SCMP_ACT_TRAP;
       return 0;
     }
   if (strcmp (p, "TRACE") == 0)
@@ -202,32 +186,18 @@ get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_e
       *action = SCMP_ACT_TRACE (errno_ret);
       return 0;
     }
-#  ifdef SCMP_ACT_KILL_PROCESS
-  if (strcmp (p, "KILL_PROCESS") == 0)
-    {
-      *action = SCMP_ACT_KILL_PROCESS;
-      return 0;
-    }
-#  endif
-#  ifdef SCMP_ACT_KILL_THREAD
-  if (strcmp (p, "KILL_THREAD") == 0)
-    {
-      *action = SCMP_ACT_KILL_THREAD;
-      return 0;
-    }
-#  endif
-#  ifdef SCMP_ACT_NOTIFY
-  if (strcmp (p, "NOTIFY") == 0)
-    {
-      *action = SCMP_ACT_NOTIFY;
-      return 0;
-    }
-#  endif
+
+  for (i = 0; i < sizeof (actions) / sizeof (actions[0]); i++)
+    if (strcmp (p, actions[i].name) == 0)
+      {
+        *action = actions[i].action;
+        return 0;
+      }
 
 fail:
   return crun_make_error (err, 0, "seccomp get action `%s`", name);
 }
-#endif
+#endif /* HAVE_SECCOMP */
 
 static void
 make_lowercase (char *str)
