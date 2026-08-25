@@ -167,6 +167,11 @@ setup_rt_runtime (runtime_spec_schema_config_linux_resources *resources,
   if (resources == NULL || resources->cpu == NULL)
     return 0;
 
+  /* Without a cgroup path append_paths() below would end up at the cgroup
+     root, so refuse rather than change the root cgroup settings.  */
+  if (is_empty_string (path))
+    return crun_make_error (err, 0, "cannot set the RT runtime without a cgroup");
+
   if (has_suffix (path, ".scope"))
     need_set_parent = false;
 
@@ -2117,6 +2122,9 @@ get_cgroup_scope_path (const char *cgroup_path, const char *scope)
 {
   char *path_to_scope = NULL;
   char *cur;
+
+  if (is_empty_string (cgroup_path))
+    return NULL;
 
   path_to_scope = xstrdup (cgroup_path);
 

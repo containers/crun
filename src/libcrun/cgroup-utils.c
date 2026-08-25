@@ -545,6 +545,12 @@ destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err)
   const int max_attempts = 500;
   int ret;
 
+  /* Without a path there is nothing to destroy.  Bail out early, since
+     append_paths() stops at the first NULL argument and would otherwise
+     be left pointing at the cgroup root.  */
+  if (is_empty_string (path))
+    return 0;
+
   do
     {
       repeat = false;
