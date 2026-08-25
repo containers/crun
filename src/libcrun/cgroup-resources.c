@@ -586,8 +586,10 @@ write_devices_resources_v1 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
           FMT_DEV (devs[i]->minor, fmt_buf_minor);
 #undef FMT_DEV
 
+          /* `access` is optional, and libocispec leaves it NULL when it is not
+             specified.  Printing a NULL pointer with %s is undefined.  */
           len = snprintf (fmt_buf, FMT_BUF_LEN, "%s %s:%s %s", devs[i]->type, fmt_buf_major, fmt_buf_minor,
-                          devs[i]->access);
+                          devs[i]->access ? devs[i]->access : "");
           if (UNLIKELY (len >= FMT_BUF_LEN))
             return crun_make_error (err, 0, "internal error: static buffer too small");
         }
