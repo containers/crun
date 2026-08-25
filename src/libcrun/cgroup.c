@@ -558,10 +558,10 @@ libcrun_cgroup_make_status (libcrun_container_status_t *status)
 
   ret = xmalloc0 (sizeof *ret);
 
-  if (status->cgroup_path)
+  if (! is_empty_string (status->cgroup_path))
     ret->path = xstrdup (status->cgroup_path);
 
-  if (status->scope)
+  if (! is_empty_string (status->scope))
     ret->scope = xstrdup (status->scope);
 
   if (is_empty_string (status->cgroup_path) && is_empty_string (status->scope))
