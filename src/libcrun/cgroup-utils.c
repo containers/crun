@@ -83,9 +83,12 @@ maybe_make_cgroup_threaded (const char *path, libcrun_error_t *err)
   char *it;
   int ret;
 
+  if (path == NULL)
+    return 0;
+
   path = consume_slashes (path);
 
-  if (path == NULL || path[0] == '\0')
+  if (path[0] == '\0')
     return 0;
 
   ret = append_paths (&cgroup_path_type, err, CGROUP_ROOT, path, "cgroup.type", NULL);
