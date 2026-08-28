@@ -1813,6 +1813,8 @@ write_pid_file (const char *pid_file, pid_t pid, libcrun_error_t *err)
   return write_file_at_with_flags (AT_FDCWD, O_CREAT | O_TRUNC, 0700, pid_file, buf, buf_len, err);
 }
 
+#define MAX_EVENTS 10
+
 static int
 wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
@@ -1821,13 +1823,12 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   int ret, container_exit_code = 0, last_process;
   cleanup_close int terminal_fd_from = -1;
   cleanup_close int terminal_fd_to = -1;
-  const size_t max_events = 10;
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
   sigset_t mask;
-  int in_fds[max_events];
+  int in_fds[MAX_EVENTS];
   int in_fds_len = 0;
-  int out_fds[max_events];
+  int out_fds[MAX_EVENTS];
   int out_fds_len = 0;
   size_t i;
 
@@ -1838,7 +1839,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   if (args == NULL || args->context == NULL)
     return crun_make_error (err, 0, "internal error: context is empty");
 
-  for (i = 0; i < max_events; i++)
+  for (i = 0; i < MAX_EVENTS; i++)
     {
       in_fds[i] = -1;
       out_fds[i] = -1;
@@ -1953,13 +1954,13 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 
   while (1)
     {
-      struct epoll_event events[max_events];
+      struct epoll_event events[MAX_EVENTS];
       struct signalfd_siginfo si;
       struct winsize ws;
       int i, nr_events;
       ssize_t res;
 
-      nr_events = TEMP_FAILURE_RETRY (epoll_wait (epollfd, events, max_events, -1));
+      nr_events = TEMP_FAILURE_RETRY (epoll_wait (epollfd, events, MAX_EVENTS, -1));
       if (UNLIKELY (nr_events < 0))
         return crun_make_error (err, errno, "epoll_wait");
 
