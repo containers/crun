@@ -308,8 +308,9 @@ sd_notify ()
     error (EXIT_FAILURE, errno, "socket");
 
   notify_socket_unix_name.sun_family = AF_UNIX;
-  strncpy (notify_socket_unix_name.sun_path, notify_socket_name,
-           sizeof (notify_socket_unix_name.sun_path));
+  if (strlen (notify_socket_name) >= sizeof (notify_socket_unix_name.sun_path))
+    error (EXIT_FAILURE, 0, "NOTIFY_SOCKET is too long");
+  strcpy (notify_socket_unix_name.sun_path, notify_socket_name);
 
   ret = sendto (notify_socket_fd, ready_data, ready_data_len, 0,
                 (struct sockaddr *) &notify_socket_unix_name, sizeof (notify_socket_unix_name));
@@ -441,7 +442,7 @@ dump_net_interface (const char *ifname)
             error (EXIT_FAILURE, 0, "netlink error");
 
           ifa = NLMSG_DATA (nlh);
-          if (ifa->ifa_index != ifindex)
+          if (ifa->ifa_index != (unsigned int) ifindex)
             continue;
 
           rta_it = IFA_RTA (ifa);
