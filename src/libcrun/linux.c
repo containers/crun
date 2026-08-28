@@ -4911,19 +4911,19 @@ read_error_from_sync_socket (int sync_socket_fd, int *error, char **str)
 {
   cleanup_free char *b = NULL;
   size_t size;
-  int code;
+  int code = 0;
   int ret;
 
   if (*error == 0)
     {
       ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &code, sizeof (code)));
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret != (int) sizeof (code)))
         return false;
       *error = code;
     }
 
   ret = TEMP_FAILURE_RETRY (read (sync_socket_fd, &size, sizeof (size)));
-  if (UNLIKELY (ret < 0))
+  if (UNLIKELY (ret != (int) sizeof (size)))
     return false;
 
   if (size == 0)
