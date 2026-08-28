@@ -2445,7 +2445,7 @@ safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_er
   size_t written = 0;
   while (written < count)
     {
-      ssize_t w = write (fd, buf + written, count - written);
+      ssize_t w = write (fd, (const char *) buf + written, count - written);
       if (UNLIKELY (w < 0))
         {
           if (errno == EINTR || errno == EAGAIN)
