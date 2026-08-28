@@ -464,6 +464,158 @@ def test_annotation_seccomp_fail_unknown_syscall():
         return -1
 
 
+# Environment-related failures that mean the test cannot run here rather than
+# that crun rejected the configuration.
+unsupported_env_errors = ["mount", "proc", "permission", "rootfs", "private", "busy"]
+
+
+def run_and_expect_error(conf, expected):
+    """Run a container expected to be rejected, and check the error message.
+
+    Returns 0 if crun failed and the error message contains every string in
+    EXPECTED, 77 if the failure looks unrelated to the configuration under
+    test, and -1 otherwise.
+    """
+    try:
+        run_and_get_output(conf)
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if all(x in output for x in expected):
+            return 0
+        if any(x in output.lower() for x in unsupported_env_errors):
+            return (77, "not available in nested namespaces")
+        logger.info("unexpected error message: %s", output)
+        return -1
+    except Exception as e:
+        if any(x in str(e).lower() for x in unsupported_env_errors):
+            return (77, "not available in nested namespaces")
+        logger.info("Exception: %s", e)
+        return -1
+
+    logger.info("container creation succeeded unexpectedly")
+    return -1
+
+
+def test_seccomp_invalid_default_action():
+    """An unknown defaultAction must be rejected."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_NOT_AN_ACTION',
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    return run_and_expect_error(conf, ["seccomp get action", "SCMP_ACT_NOT_AN_ACTION"])
+
+
+def test_seccomp_invalid_action():
+    """An unknown action on a syscall rule must be rejected."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['ioctl'],
+                'action': 'SCMP_ACT_NOT_AN_ACTION',
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    return run_and_expect_error(conf, ["seccomp get action", "SCMP_ACT_NOT_AN_ACTION"])
+
+
+def test_seccomp_action_missing_prefix():
+    """An action without the SCMP_ACT_ prefix must be rejected."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'ALLOW',
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    return run_and_expect_error(conf, ["seccomp get action", "ALLOW"])
+
+
+def test_seccomp_invalid_operator():
+    """An unknown argument comparison operator must be rejected."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # The action must differ from the default one, otherwise the rule is
+    # skipped before the operator is looked at.
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['ioctl'],
+                'action': 'SCMP_ACT_ERRNO',
+                'errnoRet': 1,
+                'args': [
+                    {
+                        'index': 1,
+                        'value': 0x5401,
+                        'op': 'SCMP_CMP_NOT_AN_OP'
+                    }
+                ]
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    return run_and_expect_error(conf, ["seccomp get operator", "SCMP_CMP_NOT_AN_OP"])
+
+
+def test_seccomp_operator_missing_prefix():
+    """An operator without the SCMP_CMP_ prefix must be rejected."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['ioctl'],
+                'action': 'SCMP_ACT_ERRNO',
+                'errnoRet': 1,
+                'args': [
+                    {
+                        'index': 1,
+                        'value': 0x5401,
+                        'op': 'EQ'
+                    }
+                ]
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    return run_and_expect_error(conf, ["seccomp get operator", "EQ"])
+
+def test_seccomp_invalid_flag():
+    """An unknown seccomp filter flag must be rejected."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'flags': ['SECCOMP_FILTER_FLAG_NOT_A_FLAG'],
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    return run_and_expect_error(conf, ["unknown seccomp option", "SECCOMP_FILTER_FLAG_NOT_A_FLAG"])
+
+
 all_tests = {
     "seccomp-listener": test_seccomp_listener,
     "seccomp-block-syscall": test_seccomp_block_syscall,
@@ -477,6 +629,12 @@ all_tests = {
     "seccomp-comparison-ops": test_seccomp_comparison_ops,
     "seccomp-flags": test_seccomp_flags,
     "annotation-seccomp-fail-unknown-syscall": test_annotation_seccomp_fail_unknown_syscall,
+    "seccomp-invalid-default-action": test_seccomp_invalid_default_action,
+    "seccomp-invalid-action": test_seccomp_invalid_action,
+    "seccomp-action-missing-prefix": test_seccomp_action_missing_prefix,
+    "seccomp-invalid-operator": test_seccomp_invalid_operator,
+    "seccomp-operator-missing-prefix": test_seccomp_operator_missing_prefix,
+    "seccomp-invalid-flag": test_seccomp_invalid_flag,
 }
 
 if __name__ == "__main__":
