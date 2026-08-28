@@ -45,7 +45,7 @@ jobs:
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
             ./autogen.sh
-            ./configure --enable-embedded-blake3 CFLAGS='-Wall -Werror' || { cat config.log; exit 1; }
+            ./configure --enable-embedded-blake3 --enable-werror || { cat config.log; exit 1; }
             make -j $(nproc) -C libocispec libocispec.la
             make git-version.h
             make -j $(nproc) libcrun.la
@@ -53,7 +53,7 @@ jobs:
 
             make -j $(nproc) clean
 
-            if ./configure --enable-embedded-blake3 --enable-shared CFLAGS='-Wall -Werror'; then
+            if ./configure --enable-embedded-blake3 --enable-shared --enable-werror; then
                         make -j $(nproc) -C libocispec libocispec.la
                         make git-version.h
                         make -j $(nproc) libcrun.la
@@ -194,7 +194,7 @@ jobs:
                   # symbols, so a build here catches API drift and missing
                   # exports (e.g. libcrun_container_spec, parse_json_file)
                   # before it reaches a release.
-                  ./configure --enable-embedded-blake3 --enable-shared --with-python-bindings --with-lua-bindings CFLAGS='-Wall -Werror'
+                  ./configure --enable-embedded-blake3 --enable-shared --with-python-bindings --with-lua-bindings --enable-werror
                   make -j $(nproc)
                   export LD_LIBRARY_PATH="$PWD/.libs:$LD_LIBRARY_PATH"
                   PYTHONPATH="$PWD/.libs" python3 python/test_python_bindings.py
