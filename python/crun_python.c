@@ -447,7 +447,7 @@ container_spec (PyObject *self arg_unused, PyObject *args arg_unused)
 }
 
 static PyObject *
-get_verbosity (PyObject *self arg_unused, PyObject *args)
+get_verbosity (PyObject *self arg_unused, PyObject *args arg_unused)
 {
   return PyLong_FromLong (libcrun_get_verbosity());
 }
@@ -481,7 +481,7 @@ static PyMethodDef CrunMethods[] = {
    "Update the constraints of a container."},
   {"spec", container_spec, METH_VARARGS,
    "Generate a new configuration file."},
-  {"make_context", (PyCFunction) make_context, METH_VARARGS | METH_KEYWORDS,
+  {"make_context", (PyCFunction) (void (*) (void)) make_context, METH_VARARGS | METH_KEYWORDS,
    "Create a context object."},
   {"set_verbosity", set_verbosity, METH_VARARGS, "Set the logging verbosity."},
   {"get_verbosity", get_verbosity, METH_NOARGS, "Get the logging verbosity."},
@@ -495,6 +495,10 @@ struct PyModuleDef crun_mod =
    NULL,
    0,
    CrunMethods,
+   NULL,
+   NULL,
+   NULL,
+   NULL,
   };
 
 PyMODINIT_FUNC
