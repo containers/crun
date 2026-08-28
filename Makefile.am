@@ -437,6 +437,21 @@ shellcheck:
 shfmt:
 	$(LIST_SH_FILES) | xargs shfmt -w
 
+# Static analysis with cppcheck.  Files copied into the source tree are not
+# analyzed.  varFuncNullUB is suppressed since a bare NULL is used as the
+# sentinel of the variadic helpers, and __has_attribute() is defined since
+# cppcheck cannot evaluate it.
+CPPCHECK_FLAGS = \
+	--quiet --force --inline-suppr --error-exitcode=1 \
+	--enable=warning,performance,portability \
+	--suppress=varFuncNullUB \
+	-D__has_attribute\(x\)=0 \
+	-i $(srcdir)/src/libcrun/blake3 \
+	-I $(builddir) -I $(srcdir)/src -I $(srcdir)/libocispec/src -I $(srcdir)/libocispec
+
+cppcheck:
+	cppcheck $(CPPCHECK_FLAGS) $(srcdir)/src $(srcdir)/tests/*.c $(srcdir)/contrib/*.c
+
 # Code coverage targets
 if ENABLE_COVERAGE
 
@@ -547,4 +562,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
