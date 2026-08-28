@@ -5455,8 +5455,8 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   runtime_spec_schema_defs_linux_device *device;
-  uid_t uid = get_overflow_uid ();
-  gid_t gid = get_overflow_gid ();
+  uid_t uid;
+  gid_t gid;
   char name[64];
   mode_t type;
   dev_t dev;
@@ -5475,11 +5475,8 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "mknod `%s`", device->path);
 
-  if (def->linux)
-    {
-      uid = get_id_in_user_namespace (device->uid, true, def);
-      gid = get_id_in_user_namespace (device->gid, false, def);
-    }
+  uid = get_id_in_user_namespace (device->uid, true, def);
+  gid = get_id_in_user_namespace (device->gid, false, def);
 
   ret = fchownat (devs_dirfd, name, uid, gid, 0); /* lgtm [cpp/toctou-race-condition] */
   if (UNLIKELY (ret < 0))
