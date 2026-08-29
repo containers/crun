@@ -94,7 +94,7 @@ if ! crun list; then
     exit 1
 fi
 
-if ! (crun run $CNAME &); then
+if ! crun run --detach $CNAME; then
     exit 1
 fi
 
@@ -102,14 +102,15 @@ if ! crun list; then
     exit 1
 fi
 
-# make sure the container is running state
-sleep 2
-
 if ! ret=$(crun exec $CNAME echo 'ok') || [[ "$ret" != 'ok' ]]; then
     exit 1
 fi
 
 if ! crun kill $CNAME; then
+    exit 1
+fi
+
+if ! crun delete --force $CNAME; then
     exit 1
 fi
 
