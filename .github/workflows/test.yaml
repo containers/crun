@@ -231,6 +231,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: install shfmt
+        env:
+          VERSION: v3.14.0
+          BASEURL: https://github.com/mvdan/sh/releases/download
+          SHA256: fe42021c7272ef2d67ea36cbc3031683c625d0badec733ef3a57b567246a0b66
+        run: |
+          mkdir -p ~/.local/bin
+          curl -sSfL --retry 5 -o ~/.local/bin/shfmt \
+            $BASEURL/$VERSION/shfmt_${VERSION}_linux_amd64
+          sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shfmt"
+          chmod +x ~/.local/bin/shfmt
       - name: install shellcheck
         env:
           VERSION: v0.11.0
@@ -254,3 +265,7 @@ jobs:
           ./autogen.sh
           ./configure --enable-embedded-blake3
           make shellcheck
+      - name: shfmt
+        run: |
+          make shfmt
+          git diff --ignore-submodules --exit-code

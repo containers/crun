@@ -434,6 +434,9 @@ LIST_SH_FILES = git ls-files '*.sh'
 shellcheck:
 	$(LIST_SH_FILES) | xargs shellcheck
 
+shfmt:
+	$(LIST_SH_FILES) | xargs shfmt -w
+
 # Code coverage targets
 if ENABLE_COVERAGE
 
@@ -544,4 +547,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
