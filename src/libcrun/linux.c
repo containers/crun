@@ -449,7 +449,8 @@ parse_idmapped_mount_option (runtime_spec_schema_config_schema *def, bool is_uid
           mappings = is_uids ? def->linux->uid_mappings : def->linux->gid_mappings;
 
           for (i = 0; i < mappings_len; i++)
-            if (value[1] >= mappings[i]->container_id && value[1] < mappings[i]->container_id + mappings[i]->size)
+            if (value[1] >= (int64_t) mappings[i]->container_id
+                && value[1] < (int64_t) mappings[i]->container_id + (int64_t) mappings[i]->size)
               break;
 
           if (i == mappings_len)
@@ -7281,25 +7282,15 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
   return 0;
 }
 
+/* Run the callback in the namespace referred to by PIDFD.  It is done in a
+   separate function so that no variable of the caller is live across the
+   vfork.  */
 static int
-run_in_container_namespace (libcrun_container_status_t *status, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
+run_callback_in_namespace (int pidfd, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
 {
-  cleanup_close int pidfd = -1;
-  pid_t pid = status->pid;
   int wait_status = 0;
+  pid_t pid;
   int ret;
-
-  pidfd = syscall_pidfd_open (pid, 0);
-  if (UNLIKELY (pidfd < 0))
-    return crun_make_error (err, errno, "pidfd_open");
-
-  /* Check if the container is still running after opening the pidfd.  */
-  ret = libcrun_is_container_running (status, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  if (ret == 0)
-    return crun_make_error (err, 0, "container not running");
 
   /* must be vfork to propagate the error from the child proc.  */
   pid = vfork ();
@@ -7337,6 +7328,28 @@ run_in_container_namespace (libcrun_container_status_t *status, int (*callback) 
      object populated by the child is available to the parent.
      Do not call crun_make_error() here. */
   return get_process_exit_status (wait_status);
+}
+
+static int
+run_in_container_namespace (libcrun_container_status_t *status, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
+{
+  cleanup_close int pidfd = -1;
+  pid_t pid = status->pid;
+  int ret;
+
+  pidfd = syscall_pidfd_open (pid, 0);
+  if (UNLIKELY (pidfd < 0))
+    return crun_make_error (err, errno, "pidfd_open");
+
+  /* Check if the container is still running after opening the pidfd.  */
+  ret = libcrun_is_container_running (status, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (ret == 0)
+    return crun_make_error (err, 0, "container not running");
+
+  return run_callback_in_namespace (pidfd, callback, arg, err);
 }
 
 struct umount_in_a_container_args
