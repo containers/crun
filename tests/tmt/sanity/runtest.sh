@@ -6,6 +6,9 @@ TEMPDIR=$(mktemp -d)
 TESTIMG="quay.io/libpod/busybox"
 CNAME="mycont-$RANDOM"
 
+# Do not leave the container and the bundle behind if a check below fails.
+trap 'crun delete --force "$CNAME" 2>/dev/null || :; rm -rf "$TEMPDIR"' EXIT
+
 cat /etc/redhat-release
 uname -r
 rpm -q crun criu
