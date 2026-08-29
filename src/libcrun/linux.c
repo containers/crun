@@ -5910,6 +5910,12 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       for (i = 0; i < def->mounts_len; i++)
         {
           int fd = -1;
+
+          /* The mount type is optional in the OCI configuration, e.g. bind mounts
+             are usually specified without it.  */
+          if (def->mounts[i]->type == NULL)
+            continue;
+
           /* If for any reason the mount cannot be opened, ignore errors and continue.
              An error will be generated later if it is not possible to join the namespace.
           */
