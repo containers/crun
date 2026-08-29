@@ -4,17 +4,17 @@ set -e
 set -x
 
 if test "$(id -u)" != 0; then
-	echo "run as root"
-	exit 1
+    echo "run as root"
+    exit 1
 fi
 
 (
-cd /crun
-git config --global --add safe.directory /crun
-git clean -fdx
-./autogen.sh
-./configure --enable-embedded-blake3
-make -j "$(nproc)"
+    cd /crun
+    git config --global --add safe.directory /crun
+    git clean -fdx
+    ./autogen.sh
+    ./configure --enable-embedded-blake3
+    make -j "$(nproc)"
 )
 
 # Install and run runtime-tools' validation tests

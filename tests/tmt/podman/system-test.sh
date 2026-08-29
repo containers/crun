@@ -13,15 +13,15 @@ rpm -q conmon containers-common crun podman podman-tests
 ROOTLESS_USER=${ROOTLESS_USER:-testuser}
 
 TESTS=(
-/usr/share/podman/test/system/030-run.bats
-/usr/share/podman/test/system/060-mount.bats
-/usr/share/podman/test/system/075-exec.bats
-/usr/share/podman/test/system/170-run-userns.bats
-/usr/share/podman/test/system/200-pod.bats
-/usr/share/podman/test/system/280-update.bats
-/usr/share/podman/test/system/400-unprivileged-access.bats
-/usr/share/podman/test/system/420-cgroups.bats
-/usr/share/podman/test/system/520-checkpoint.bats
+    /usr/share/podman/test/system/030-run.bats
+    /usr/share/podman/test/system/060-mount.bats
+    /usr/share/podman/test/system/075-exec.bats
+    /usr/share/podman/test/system/170-run-userns.bats
+    /usr/share/podman/test/system/200-pod.bats
+    /usr/share/podman/test/system/280-update.bats
+    /usr/share/podman/test/system/400-unprivileged-access.bats
+    /usr/share/podman/test/system/420-cgroups.bats
+    /usr/share/podman/test/system/520-checkpoint.bats
 )
 
 # Filter out test files that do not exist in the installed version.
