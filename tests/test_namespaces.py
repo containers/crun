@@ -624,6 +624,57 @@ def test_domainname_with_uts_namespace():
         return -1
 
 
+def test_join_namespaces_mount_without_type():
+    """A mount without an explicit "type" must not crash when joining namespaces.
+
+    Reproduces the "pod with a userns + CDI device" case: the container joins
+    the user and IPC namespaces of another container and has a bind mount with
+    no "type" specified, which is optional in the OCI spec.
+
+    See https://github.com/containers/crun/issues/1948
+    """
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, userns=True)
+
+    try:
+        _, first_id = run_and_get_output(conf, detach=True)
+    except subprocess.CalledProcessError:
+        return (77, "user namespace not available in nested namespaces")
+
+    try:
+        state = json.loads(run_crun_command(["state", first_id]))
+        ns_path = "/proc/%d/ns" % state['pid']
+
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'echo', 'hello']
+        add_all_namespaces(conf, userns=True)
+        for ns in conf['linux']['namespaces']:
+            if ns['type'] in ('user', 'ipc'):
+                ns['path'] = os.path.join(ns_path, ns['type'])
+
+        # a bind mount with no "type"
+        conf['mounts'].append({
+            "destination": "/var/file",
+            "source": get_init_path(),
+            "options": ["bind", "ro"],
+        })
+
+        out, _ = run_and_get_output(conf)
+        if "hello" not in out:
+            return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if is_nested_namespace_error(output):
+            return (77, "namespace not available in nested namespaces")
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        run_crun_command(["delete", "-f", first_id])
+    return 0
+
+
 all_tests = {
     "pid-namespace": test_pid_namespace,
     "network-namespace": test_network_namespace,
@@ -639,6 +690,7 @@ all_tests = {
     "namespace-path-sharing": test_namespace_path_sharing,
     "hostname-without-uts": test_hostname_without_uts_namespace,
     "domainname-with-uts": test_domainname_with_uts_namespace,
+    "join-namespaces-mount-without-type": test_join_namespaces_mount_without_type,
 }
 
 if __name__ == "__main__":
