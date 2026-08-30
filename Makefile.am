@@ -427,8 +427,15 @@ clang-format:
 # do not format files that were copied into the source directory.
 	git ls-files contrib src tests | grep -E "\\.[hc]" | grep -v "blake3\|chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
+# Only files with a .sh suffix: the extension-less scripts in build-aux are
+# imported from gnulib and are not ours to fix.
+LIST_SH_FILES = git ls-files '*.sh'
+
 shellcheck:
-	shellcheck autogen.sh build-aux/release.sh tests/run_all_tests.sh tests/*/*.sh contrib/*.sh
+	$(LIST_SH_FILES) | xargs shellcheck
+
+shfmt:
+	$(LIST_SH_FILES) | xargs shfmt -w
 
 # Code coverage targets
 if ENABLE_COVERAGE
@@ -540,4 +547,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env

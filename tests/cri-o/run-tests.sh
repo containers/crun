@@ -1,19 +1,19 @@
 #!/bin/sh
 
 if test "$(id -u)" != 0; then
-	echo "run as root"
-	exit 1
+    echo "run as root"
+    exit 1
 fi
 set -e
 
 (
-cd /crun
-git config --global --add safe.directory /crun
-git clean -fdx
-./autogen.sh
-./configure --enable-embedded-blake3 CFLAGS='-Wall -Wextra -Werror' --prefix=/usr
-make -j "$(nproc)"
-make install
+    cd /crun
+    git config --global --add safe.directory /crun
+    git clean -fdx
+    ./autogen.sh
+    ./configure --enable-embedded-blake3 CFLAGS='-Wall -Wextra -Werror' --prefix=/usr
+    make -j "$(nproc)"
+    make install
 )
 
 # make sure runc is not used

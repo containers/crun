@@ -11,6 +11,6 @@ intercept-build make
 
 echo -e "\n\n----------------------------- clang-check -------------------------------\n\n"
 
-git ls-files src | grep -E "\\.[c]" |                             \
-        grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c" | \
-        xargs clang-check --analyze
+git ls-files src | grep -E "\\.[c]" |
+    grep -v "chroot_realpath.c\|cloned_binary.c\|signals.c" |
+    xargs clang-check --analyze
