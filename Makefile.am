@@ -88,19 +88,23 @@ libcrun_SOURCES += src/libcrun/blake3/blake3.c \
 endif
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
-libcrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden
+libcrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 if ENABLE_COVERAGE
 libcrun_la_CFLAGS += $(COVERAGE_CFLAGS)
-libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(COVERAGE_LDFLAGS)
+libcrun_la_LDFLAGS = -version-info 1:0:0 -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(COVERAGE_LDFLAGS)
 else
-libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+libcrun_la_LDFLAGS = -version-info 1:0:0 -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+endif
+
+if ENABLE_LIBCRUN
+include_HEADERS = src/libcrun/libcrun.h
 endif
 libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(JSON_C_LIBS)
 
 # build a version with all the symbols visible for testing
 if BUILD_TESTS
 libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
-libcrun_testing_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default
+libcrun_testing_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 if ENABLE_COVERAGE
 libcrun_testing_la_CFLAGS += $(COVERAGE_CFLAGS)
 libcrun_testing_la_LDFLAGS = $(COVERAGE_LDFLAGS)
@@ -416,8 +420,8 @@ coverity:
 	$(MAKE) $(AM_MAKEFLAGS) -C libocispec
 	$(MAKE) $(AM_MAKEFLAGS) crun
 
-libcrun.rs: src/libcrun/container.h
-	bindgen src/libcrun/container.h -- -I$(abs_builddir) -I$(abs_builddir)/libocispec/src  > $@
+libcrun.rs: src/libcrun/libcrun.h
+	bindgen src/libcrun/libcrun.h -- -I$(abs_top_srcdir)/src  > $@
 
 generate-rust-bindings: libcrun.rs
 
