@@ -112,6 +112,10 @@ LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, vo
 
 LIBCRUN_PUBLIC int libcrun_error_release (libcrun_error_t *err);
 
+LIBCRUN_PUBLIC int libcrun_error_get_status (libcrun_error_t err);
+
+LIBCRUN_PUBLIC const char *libcrun_error_get_message (libcrun_error_t err);
+
 int json_gen_error_to_crun_error (int gen_status, libcrun_error_t *err);
 
 enum

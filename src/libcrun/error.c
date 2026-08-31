@@ -117,6 +117,22 @@ libcrun_error_release (libcrun_error_t *err)
   return crun_error_release (err);
 }
 
+int
+libcrun_error_get_status (libcrun_error_t err)
+{
+  if (err == NULL)
+    return 0;
+  return err->status;
+}
+
+const char *
+libcrun_error_get_message (libcrun_error_t err)
+{
+  if (err == NULL)
+    return NULL;
+  return err->msg;
+}
+
 void
 crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
 {
