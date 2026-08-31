@@ -495,6 +495,17 @@ libcrun_context_new (const char *id, const char *state_root, libcrun_error_t *er
       return NULL;
     }
 
+#ifdef CRUN_LIBDIR
+  if (access (CRUN_LIBDIR "/handlers", F_OK) == 0)
+    {
+      if (libcrun_handler_manager_load_directory (ctx->handler_manager, CRUN_LIBDIR "/handlers", err) < 0)
+        {
+          libcrun_context_free (ctx);
+          return NULL;
+        }
+    }
+#endif
+
   return ctx;
 }
 
