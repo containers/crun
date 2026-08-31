@@ -928,6 +928,12 @@ libcrun_container_get_state_string (libcrun_context_t *context, const char *id, 
 }
 
 int
+libcrun_get_state_dir (char **out, const char *state_root, const char *id, libcrun_error_t *err)
+{
+  return libcrun_get_state_directory (out, state_root, id, err);
+}
+
+int
 libcrun_container_list (libcrun_context_t *context, libcrun_container_list_t **out, libcrun_error_t *err)
 {
   return libcrun_get_containers_list (out, context->state_root, err);
