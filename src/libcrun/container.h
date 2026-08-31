@@ -269,6 +269,9 @@ LIBCRUN_PUBLIC int libcrun_container_start (libcrun_context_t *context, const ch
 LIBCRUN_PUBLIC int libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out,
                                             libcrun_error_t *err);
 
+LIBCRUN_PUBLIC int libcrun_container_state_json (libcrun_context_t *context, const char *id, char **out,
+                                                 libcrun_error_t *err);
+
 int libcrun_container_notify_handler (struct container_entrypoint_s *args,
                                       enum handler_configure_phase phase,
                                       libcrun_container_t *container, const char *rootfs,

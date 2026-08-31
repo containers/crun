@@ -3385,6 +3385,30 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 }
 
 int
+libcrun_container_state_json (libcrun_context_t *context, const char *id, char **out, libcrun_error_t *err)
+{
+  char *buffer = NULL;
+  size_t len = 0;
+  FILE *f;
+  int ret;
+
+  f = open_memstream (&buffer, &len);
+  if (f == NULL)
+    return crun_make_error (err, errno, "open_memstream");
+
+  ret = libcrun_container_state (context, id, f, err);
+  fclose (f);
+  if (UNLIKELY (ret < 0))
+    {
+      free (buffer);
+      return ret;
+    }
+
+  *out = buffer;
+  return 0;
+}
+
+int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
   const char *const OCI_CONFIG_VERSION = "1.0.0";
