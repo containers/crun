@@ -96,6 +96,8 @@ LIBCRUN_PUBLIC const char *libcrun_status_get_owner (libcrun_status_t *st);
 LIBCRUN_PUBLIC const char *libcrun_status_get_external_descriptors (libcrun_status_t *st);
 LIBCRUN_PUBLIC int libcrun_container_get_state_string (libcrun_context_t *context, const char *id, const char **out,
                                                        int *running, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_get_state_dir (char **out, const char *state_root, const char *id, libcrun_error_t *err);
+
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
