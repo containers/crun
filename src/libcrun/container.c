@@ -410,6 +410,44 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   return make_container (container_def, path, NULL);
 }
 
+const char *
+libcrun_container_get_config_json (libcrun_container_t *container)
+{
+  struct parser_context ctx = { 0, stderr };
+  parser_error gen_err = NULL;
+
+  if (container == NULL)
+    return NULL;
+
+  if (container->config_file_content == NULL && container->container_def)
+    {
+      container->config_file_content = runtime_spec_schema_config_schema_generate_json (container->container_def, &ctx, &gen_err);
+      free (gen_err);
+    }
+
+  return container->config_file_content;
+}
+
+const char *
+libcrun_container_get_annotation (libcrun_container_t *container, const char *key)
+{
+  if (container == NULL)
+    return NULL;
+  return find_string_map_value (container->annotations, key);
+}
+
+uid_t
+libcrun_container_get_uid (libcrun_container_t *container)
+{
+  return container->host_uid;
+}
+
+gid_t
+libcrun_container_get_gid (libcrun_container_t *container)
+{
+  return container->host_gid;
+}
+
 void
 libcrun_container_free (libcrun_container_t *ctr)
 {

@@ -226,6 +226,11 @@ LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_memory (const ch
 
 LIBCRUN_PUBLIC void libcrun_container_free (libcrun_container_t *);
 
+LIBCRUN_PUBLIC const char *libcrun_container_get_config_json (libcrun_container_t *container);
+LIBCRUN_PUBLIC const char *libcrun_container_get_annotation (libcrun_container_t *container, const char *key);
+LIBCRUN_PUBLIC uid_t libcrun_container_get_uid (libcrun_container_t *container);
+LIBCRUN_PUBLIC gid_t libcrun_container_get_gid (libcrun_container_t *container);
+
 LIBCRUN_PUBLIC libcrun_context_t *libcrun_context_new (const char *id, const char *state_root, libcrun_error_t *err);
 LIBCRUN_PUBLIC void libcrun_context_free (libcrun_context_t *ctx);
 
