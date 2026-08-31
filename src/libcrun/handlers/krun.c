@@ -550,7 +550,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
     {
       int errcode = crun_error_get_errno (&err);
       libcrun_error_t *tmp_err = &err;
-      libcrun_error_write_warning_and_release (NULL, &tmp_err);
+      libcrun_error_report_and_release (tmp_err);
       error (EXIT_FAILURE, errcode, "could not configure krun vm");
     }
 

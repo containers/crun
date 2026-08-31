@@ -1258,7 +1258,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   ret = mark_or_close_fds_ge_than (container, entrypoint_args->context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
+    libcrun_error_report_and_release (err);
 
   ret = libcrun_reopen_dev_null (err);
   if (UNLIKELY (ret < 0))
@@ -1642,7 +1642,8 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 }
 
 static int
-run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, runtime_spec_schema_config_schema *def,
+run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *container,
+                    runtime_spec_schema_config_schema *def,
                     libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_container libcrun_container_t *container_cleanup = NULL;
@@ -1683,7 +1684,7 @@ run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, 
       if (UNLIKELY (ret != 0))
         {
           if (ret < 0)
-            crun_error_write_warning_and_release (context->output_handler_arg, &err);
+            libcrun_error_report_and_release (err);
           else
             libcrun_error (0, "poststop hook failed with exit code: %d", ret);
         }
@@ -1794,19 +1795,19 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
     {
       ret = libcrun_destroy_intelrdt (id, def, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+        libcrun_error_report_and_release (err);
     }
 
   if (status.cgroup_path)
     {
       ret = libcrun_cgroup_destroy (cgroup_status, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+        libcrun_error_report_and_release (err);
     }
 
   ret = run_poststop_hooks (context, container, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (context->output_handler_arg, &err);
+    libcrun_error_report_and_release (err);
 
   return libcrun_container_delete_status (state_root, id, err);
 }
@@ -4817,7 +4818,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
                                                 &running, err);
       if (UNLIKELY (ret < 0))
         {
-          libcrun_error_write_warning_and_release (stderr, &err);
+          libcrun_error_report_and_release (err);
           continue;
         }
 
