@@ -163,6 +163,19 @@ libcrun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
   return crun_error_write_warning_and_release (out, err);
 }
 
+void
+libcrun_error_report_and_release (libcrun_error_t *err)
+{
+  libcrun_error_t ref;
+
+  if (err == NULL || *err == NULL)
+    return;
+
+  ref = *err;
+  libcrun_error (ref->status, "%s", ref->msg);
+  crun_error_release (err);
+}
+
 int
 crun_error_get_errno (libcrun_error_t *err)
 {

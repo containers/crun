@@ -613,6 +613,12 @@ libcrun_context_set_output_handler (libcrun_context_t *ctx, crun_output_handler 
   ctx->output_handler_arg = arg;
 }
 
+int
+libcrun_context_init_logging (libcrun_context_t *ctx, const char *log, libcrun_error_t *err)
+{
+  return libcrun_init_logging (&ctx->output_handler, &ctx->output_handler_arg, ctx->id, log, err);
+}
+
 static int
 block_signals (libcrun_error_t *err)
 {
