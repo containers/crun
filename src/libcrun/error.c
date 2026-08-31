@@ -163,6 +163,19 @@ libcrun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
   return crun_error_write_warning_and_release (out, err);
 }
 
+void
+libcrun_error_report_and_release (libcrun_error_t *err)
+{
+  libcrun_error_t ref;
+
+  if (err == NULL || *err == NULL)
+    return;
+
+  ref = *err;
+  libcrun_error (ref->status, "%s", ref->msg);
+  crun_error_release (err);
+}
+
 int
 crun_error_get_errno (libcrun_error_t *err)
 {
@@ -186,6 +199,20 @@ get_timestamp (timestamp_t *timestamp, const char *suffix)
   gmtime_r (&tv.tv_sec, &now);
   written = strftime (buffer, buffer_size, "%Y-%m-%dT%H:%M:%S", &now);
   snprintf (buffer + written, buffer_size - written, ".%06lldZ%.8s", (long long int) tv.tv_usec, suffix);
+}
+
+/* Neither openlog(3) nor the journald handler copy the identifier they are
+   given, and the global output handler outlives the caller's strings (e.g.
+   the context is freed while errors are still reported through it), so keep
+   an owned copy alive for as long as the handler can use it.  */
+static char *log_id;
+
+static const char *
+set_log_id (const char *id, char **old_id)
+{
+  *old_id = log_id;
+  log_id = id ? xstrdup (id) : NULL;
+  return log_id;
 }
 
 static void *
@@ -227,6 +254,9 @@ int
 libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output_handler_arg, const char *id,
                       const char *log, libcrun_error_t *err)
 {
+  /* Released only after the new handler is installed.  */
+  cleanup_free char *old_log_id = NULL;
+
   if (log == NULL)
     {
       *new_output_handler = log_write_to_stderr;
@@ -252,13 +282,13 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
           break;
 
         case LOG_TYPE_SYSLOG:
-          *new_output_handler_arg = init_syslog (arg[0] ? arg : id);
+          *new_output_handler_arg = init_syslog (set_log_id (arg[0] ? arg : id, &old_log_id));
           *new_output_handler = log_write_to_syslog;
           break;
 
         case LOG_TYPE_JOURNALD:
           *new_output_handler = log_write_to_journald;
-          *new_output_handler_arg = (void *) id;
+          *new_output_handler_arg = (void *) set_log_id (id, &old_log_id);
           break;
         }
     }
