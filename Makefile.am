@@ -115,7 +115,7 @@ endif
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
 python_crun_la_SOURCES = python/crun_python.c
-python_crun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src $(PYTHON_CFLAGS)
+python_crun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/src $(PYTHON_CFLAGS)
 python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS)
 python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS) $(JSON_C_LIBS)
 endif
