@@ -252,8 +252,8 @@ LIBCRUN_PUBLIC void libcrun_context_set_output_handler (libcrun_context_t *ctx, 
 LIBCRUN_PUBLIC int libcrun_container_run (libcrun_context_t *context, libcrun_container_t *container,
                                           unsigned int options, libcrun_error_t *error);
 
-LIBCRUN_PUBLIC int libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
-                                             const char *id, bool force, libcrun_error_t *err);
+LIBCRUN_PUBLIC int libcrun_container_delete (libcrun_context_t *context, const char *id, bool force,
+                                             libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_kill (libcrun_context_t *context, const char *id, const char *signal,
                                            libcrun_error_t *err);

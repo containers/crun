@@ -1806,10 +1806,9 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
 }
 
 int
-libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id,
-                          bool force, libcrun_error_t *err)
+libcrun_container_delete (libcrun_context_t *context, const char *id, bool force, libcrun_error_t *err)
 {
-  return container_delete_internal (context, def, id, force, true, err);
+  return container_delete_internal (context, NULL, id, force, true, err);
 }
 
 int
@@ -3191,7 +3190,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
       libcrun_debug ("Exit code is `%d`, deleting container", exit_code);
       libcrun_error_t tmp_err = NULL;
-      libcrun_container_delete (context, def, context->id, true, &tmp_err);
+      container_delete_internal (context, def, context->id, true, true, &tmp_err);
       crun_error_release (&tmp_err);
       return crun_make_error (err, 0, "error creating container");
     }
