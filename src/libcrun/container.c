@@ -4937,13 +4937,15 @@ libcrun_container_read_pids (libcrun_context_t *context, const char *id, bool re
 }
 
 int
-libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err)
+libcrun_container_list_json (libcrun_context_t *context, char **out, libcrun_error_t *err)
 {
   libcrun_container_list_t *list = NULL, *it;
   const char *content = NULL;
   json_gen_ctx *gen = NULL;
   size_t len;
   int ret;
+
+  *out = NULL;
 
   ret = libcrun_get_containers_list (&list, context->state_root, err);
   if (UNLIKELY (ret < 0))
@@ -5007,18 +5009,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       goto exit;
     }
 
-  while (len)
-    {
-      size_t written = fwrite (content, 1, len, out);
-      if (ferror (out))
-        {
-          ret = libcrun_make_error (err, errno, "error writing to file");
-          goto exit;
-        }
-      len -= written;
-      content += written;
-    }
-
+  *out = xstrdup (content);
   ret = 0;
 
 exit:
@@ -5028,6 +5019,24 @@ exit:
     json_gen_free (gen);
 
   return ret;
+}
+
+int
+libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  size_t len;
+  int ret;
+
+  ret = libcrun_container_list_json (context, &content, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  len = strlen (content);
+  if (len && fwrite (content, 1, len, out) != len)
+    return crun_make_error (err, errno, "error writing to file");
+
+  return 0;
 }
 
 int

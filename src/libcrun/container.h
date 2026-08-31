@@ -363,6 +363,8 @@ LIBCRUN_PUBLIC int libcrun_container_read_pids (libcrun_context_t *context, cons
 
 LIBCRUN_PUBLIC int libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err);
 
+LIBCRUN_PUBLIC int libcrun_container_list_json (libcrun_context_t *context, char **out, libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_add_mounts_from_file (libcrun_context_t *context, const char *id, const char *file,
                                                            libcrun_error_t *err);
 
