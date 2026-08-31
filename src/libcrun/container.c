@@ -4420,6 +4420,163 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   return 0;
 }
 
+static void
+features_add_string (json_gen_ctx *json_gen, const char *key, const char *value)
+{
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_string (json_gen, value, strlen (value));
+}
+
+static void
+features_add_bool (json_gen_ctx *json_gen, const char *key, int value)
+{
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_bool (json_gen, value);
+}
+
+static void
+features_add_bool_str (json_gen_ctx *json_gen, const char *key, int value)
+{
+  features_add_string (json_gen, key, value ? "true" : "false");
+}
+
+static void
+features_add_array (json_gen_ctx *json_gen, const char *key, char **array)
+{
+  size_t i;
+
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_array_open (json_gen);
+  if (array)
+    for (i = 0; array[i] != NULL; i++)
+      json_gen_string (json_gen, array[i], strlen (array[i]));
+  json_gen_array_close (json_gen);
+}
+
+static void
+features_add_linux_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
+{
+  json_gen_string (json_gen, "linux", strlen ("linux"));
+  json_gen_map_open (json_gen);
+
+  features_add_array (json_gen, "namespaces", linux->namespaces);
+  features_add_array (json_gen, "capabilities", linux->capabilities);
+
+  json_gen_string (json_gen, "cgroup", strlen ("cgroup"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "v1", linux->cgroup.v1);
+  features_add_bool (json_gen, "v2", linux->cgroup.v2);
+  features_add_bool (json_gen, "systemd", linux->cgroup.systemd);
+  features_add_bool (json_gen, "systemdUser", linux->cgroup.systemd_user);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "seccomp", strlen ("seccomp"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->seccomp.enabled);
+  if (linux->seccomp.actions)
+    features_add_array (json_gen, "actions", linux->seccomp.actions);
+  if (linux->seccomp.operators)
+    features_add_array (json_gen, "operators", linux->seccomp.operators);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "apparmor", strlen ("apparmor"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->apparmor.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "selinux", strlen ("selinux"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->selinux.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "mountExtensions", strlen ("mountExtensions"));
+  json_gen_map_open (json_gen);
+  json_gen_string (json_gen, "idmap", strlen ("idmap"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->mount_ext.idmap.enabled);
+  json_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "intelRdt", strlen ("intelRdt"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->intel_rdt.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "netDevices", strlen ("netDevices"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->net_devices.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "memoryPolicy", strlen ("memoryPolicy"));
+  json_gen_map_open (json_gen);
+  if (linux->memory_policy.mode)
+    features_add_array (json_gen, "modes", linux->memory_policy.mode);
+  if (linux->memory_policy.flags)
+    features_add_array (json_gen, "flags", linux->memory_policy.flags);
+  json_gen_map_close (json_gen);
+
+  json_gen_map_close (json_gen);
+}
+
+static void
+features_add_annotations_info (json_gen_ctx *json_gen, const struct annotations_info_s *annotation)
+{
+  json_gen_string (json_gen, "annotations", strlen ("annotations"));
+  json_gen_map_open (json_gen);
+
+  if (! is_empty_string (annotation->io_github_seccomp_libseccomp_version))
+    features_add_string (json_gen, "io.github.seccomp.libseccomp.version", annotation->io_github_seccomp_libseccomp_version);
+
+  features_add_bool_str (json_gen, "org.opencontainers.runc.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
+  features_add_bool_str (json_gen, "run.oci.crun.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
+
+  features_add_string (json_gen, "run.oci.crun.commit", annotation->run_oci_crun_commit);
+  features_add_string (json_gen, "run.oci.crun.version", annotation->run_oci_crun_version);
+
+  features_add_bool_str (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
+
+  json_gen_map_close (json_gen);
+}
+
+int
+libcrun_container_get_features_json (libcrun_context_t *context, char **out, libcrun_error_t *err)
+{
+  cleanup_struct_features struct features_info_s *info = NULL;
+  const char *buffer = NULL;
+  json_gen_ctx *json_gen;
+  size_t buffer_len;
+  int ret;
+
+  *out = NULL;
+
+  ret = libcrun_container_get_features (context, &info, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! json_gen_init (&json_gen, NULL))
+    return crun_make_error (err, 0, "cannot initialize JSON generator");
+
+  json_gen_config (json_gen, json_gen_beautify, 1);
+
+  json_gen_map_open (json_gen);
+
+  features_add_string (json_gen, "ociVersionMin", info->oci_version_min);
+  features_add_string (json_gen, "ociVersionMax", info->oci_version_max);
+  features_add_array (json_gen, "hooks", info->hooks);
+  features_add_array (json_gen, "mountOptions", info->mount_options);
+  features_add_linux_info (json_gen, &info->linux);
+  features_add_annotations_info (json_gen, &info->annotations);
+  features_add_array (json_gen, "potentiallyUnsafeConfigAnnotations", info->potentially_unsafe_annotations);
+
+  json_gen_map_close (json_gen);
+
+  json_gen_get_buf (json_gen, &buffer, &buffer_len);
+  *out = xstrdup (buffer);
+  json_gen_free (json_gen);
+
+  return 0;
+}
+
 /* Read the container status and fail if the container is not running.  */
 static int
 read_status_require_running (libcrun_context_t *context, const char *id,
