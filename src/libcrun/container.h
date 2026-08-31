@@ -220,6 +220,49 @@ struct libcrun_checkpoint_restore_s
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 
+/* Public checkpoint/restore options.  Mirror of the definition in
+   <libcrun.h>; keep the two in sync.  */
+enum libcrun_cr_cgroups_mode
+{
+  LIBCRUN_CR_CG_MODE_DEFAULT = 0, /* soft, matching runc */
+  LIBCRUN_CR_CG_MODE_SOFT,
+  LIBCRUN_CR_CG_MODE_IGNORE,
+  LIBCRUN_CR_CG_MODE_FULL,
+  LIBCRUN_CR_CG_MODE_STRICT,
+};
+
+enum libcrun_cr_network_lock_method
+{
+  LIBCRUN_CR_NETWORK_LOCK_DEFAULT = 0, /* iptables */
+  LIBCRUN_CR_NETWORK_LOCK_IPTABLES,
+  LIBCRUN_CR_NETWORK_LOCK_NFTABLES,
+  LIBCRUN_CR_NETWORK_LOCK_SKIP,
+};
+
+struct libcrun_checkpoint_restore_options_s
+{
+  size_t struct_size;
+
+  const char *image_path;
+  const char *work_path;
+  const char *parent_path;
+  const char *console_socket;
+  const char *lsm_profile;
+  const char *lsm_mount_context;
+
+  bool leave_running;
+  bool tcp_established;
+  bool tcp_close;
+  bool ext_unix_sk;
+  bool shell_job;
+  bool file_locks;
+  bool pre_dump;
+  bool detach;
+
+  int manage_cgroups_mode; /* enum libcrun_cr_cgroups_mode */
+  int network_lock_method; /* enum libcrun_cr_network_lock_method */
+};
+
 LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_file (const char *path, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC libcrun_container_t *libcrun_container_load_from_memory (const char *json, libcrun_error_t *err);
@@ -358,10 +401,12 @@ LIBCRUN_PUBLIC int libcrun_container_pause (libcrun_context_t *context, const ch
 LIBCRUN_PUBLIC int libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
-                                                 libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err);
+                                                 struct libcrun_checkpoint_restore_options_s *cr_options,
+                                                 libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_restore (libcrun_context_t *context, const char *id,
-                                              libcrun_checkpoint_restore_t *cr_options, libcrun_error_t *err);
+                                              struct libcrun_checkpoint_restore_options_s *cr_options,
+                                              libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_container_read_pids (libcrun_context_t *context, const char *id, bool recurse, pid_t **pids, libcrun_error_t *err);
 
