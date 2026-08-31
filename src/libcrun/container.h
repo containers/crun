@@ -242,6 +242,9 @@ LIBCRUN_PUBLIC void libcrun_context_set_pid_file (libcrun_context_t *ctx, const 
 LIBCRUN_PUBLIC void libcrun_context_set_notify_socket (libcrun_context_t *ctx, const char *value);
 LIBCRUN_PUBLIC void libcrun_context_set_handler (libcrun_context_t *ctx, const char *value);
 LIBCRUN_PUBLIC void libcrun_context_set_preserve_fds (libcrun_context_t *ctx, int preserve_fds);
+LIBCRUN_PUBLIC int libcrun_context_get_preserve_fds (libcrun_context_t *ctx);
+LIBCRUN_PUBLIC void libcrun_context_set_listen_fds (libcrun_context_t *ctx, int listen_fds);
+LIBCRUN_PUBLIC void libcrun_context_set_args (libcrun_context_t *ctx, int argc, char **argv);
 LIBCRUN_PUBLIC void libcrun_context_set_systemd_cgroup (libcrun_context_t *ctx, bool value);
 LIBCRUN_PUBLIC void libcrun_context_set_detach (libcrun_context_t *ctx, bool value);
 LIBCRUN_PUBLIC void libcrun_context_set_no_new_keyring (libcrun_context_t *ctx, bool value);

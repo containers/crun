@@ -576,6 +576,25 @@ libcrun_context_set_preserve_fds (libcrun_context_t *ctx, int preserve_fds)
   ctx->preserve_fds = preserve_fds;
 }
 
+int
+libcrun_context_get_preserve_fds (libcrun_context_t *ctx)
+{
+  return ctx->preserve_fds;
+}
+
+void
+libcrun_context_set_listen_fds (libcrun_context_t *ctx, int listen_fds)
+{
+  ctx->listen_fds = listen_fds;
+}
+
+void
+libcrun_context_set_args (libcrun_context_t *ctx, int argc, char **argv)
+{
+  ctx->argc = argc;
+  ctx->argv = argv;
+}
+
 void
 libcrun_context_set_systemd_cgroup (libcrun_context_t *ctx, bool value)
 {
