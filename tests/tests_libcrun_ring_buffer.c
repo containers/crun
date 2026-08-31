@@ -25,6 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <limits.h>
 
 typedef int (*test) ();
 
@@ -490,6 +491,488 @@ test_ring_buffer_no_reserved_byte_access ()
   return 0;
 }
 
+static unsigned char
+stream_byte (size_t i)
+{
+  return (unsigned char) ((i * 7 + 3) & 0xFF);
+}
+
+static int
+rb_test_write_all (int fd, const unsigned char *buf, size_t n)
+{
+  size_t off = 0;
+  while (off < n)
+    {
+      ssize_t r = write (fd, buf + off, n - off);
+      if (r <= 0)
+        return -1;
+      off += (size_t) r;
+    }
+  return 0;
+}
+
+static int
+rb_test_read_all (int fd, unsigned char *buf, size_t n)
+{
+  size_t off = 0;
+  while (off < n)
+    {
+      ssize_t r = read (fd, buf + off, n - off);
+      if (r <= 0)
+        return -1;
+      off += (size_t) r;
+    }
+  return 0;
+}
+
+/* discard `n` bytes from fd using `scratch` (size `scratch_size`) as a bounce buffer */
+static int
+rb_test_discard (int fd, size_t n, unsigned char *scratch, size_t scratch_size)
+{
+  while (n > 0)
+    {
+      size_t chunk = n > scratch_size ? scratch_size : n;
+      if (rb_test_read_all (fd, scratch, chunk) < 0)
+        return -1;
+      n -= chunk;
+    }
+  return 0;
+}
+
+/*
+ * Regression test for https://github.com/containers/crun/issues/2207.
+ *
+ * A partial drain leaves head in the middle of the buffer; the next write has
+ * to wrap around the reserved byte.  A faulty off-by-one in the iov arithmetic
+ * used to skip the reserved byte, corrupting the FIFO stream (garbled terminal
+ * output).  This drives that exact sequence and checks the data round-trips.
+ *
+ * The scenario is scaled above PIPE_BUF (4096) so a partial writev out of the
+ * ring buffer can be forced deterministically by controlling how much free
+ * space the destination pipe has (writev of <= PIPE_BUF bytes to a pipe is
+ * atomic, larger ones are allowed to be partial).
+ */
+static int
+test_ring_buffer_wraparound_partial_drain ()
+{
+  const size_t rb_size = 8192;
+  const size_t want = rb_size / 2; /* how much to partially drain */
+  size_t scratch_size = 1 << 16;
+  cleanup_free unsigned char *scratch = xmalloc (scratch_size);
+  cleanup_free unsigned char *produced = xmalloc (2 * rb_size);
+  size_t produced_n = 0, consumed_n = 0, src_pos = 0;
+  libcrun_error_t err = NULL;
+  int fds_to_close[5] = {
+    -1,
+  };
+  int fds_to_close_n = 0;
+  cleanup_close_vec int *autocleanup_fds = fds_to_close;
+  cleanup_ring_buffer struct ring_buffer *rb = NULL;
+  int src[2], dst[2];
+  int src_pipe_cap, pipe_cap;
+  size_t prefill;
+  bool is_eagain;
+  int ret;
+
+  if (pipe2 (src, O_NONBLOCK) < 0)
+    {
+      fprintf (stderr, "failed to create pipe\n");
+      return 1;
+    }
+  fds_to_close[fds_to_close_n++] = src[0];
+  fds_to_close[fds_to_close_n++] = src[1];
+
+  if (pipe2 (dst, O_NONBLOCK) < 0)
+    {
+      fprintf (stderr, "failed to create pipe\n");
+      return 1;
+    }
+  fds_to_close[fds_to_close_n++] = dst[0];
+  fds_to_close[fds_to_close_n++] = dst[1];
+  fds_to_close[fds_to_close_n++] = -1;
+
+  if (fcntl (src[1], F_SETPIPE_SZ, (int) (4 * rb_size)) < 0
+      || fcntl (dst[1], F_SETPIPE_SZ, (int) (4 * rb_size)) < 0)
+    {
+      fprintf (stderr, "failed to set pipe capacity\n");
+      return 1;
+    }
+
+  src_pipe_cap = fcntl (src[1], F_GETPIPE_SZ);
+  if (src_pipe_cap < 0 || (size_t) src_pipe_cap < rb_size)
+    {
+      fprintf (stderr, "source pipe capacity too small\n");
+      return 1;
+    }
+
+  /* We need the destination pipe to hold the prefill plus the drained data. */
+  pipe_cap = fcntl (dst[1], F_GETPIPE_SZ);
+  if (pipe_cap < 0 || (size_t) pipe_cap <= want)
+    {
+      fprintf (stderr, "pipe capacity too small\n");
+      return 1;
+    }
+  prefill = (size_t) pipe_cap - want;
+
+  rb = ring_buffer_make (rb_size);
+
+  /* Step 1: fill the ring buffer completely.  */
+  for (size_t i = 0; i < rb_size; i++)
+    scratch[i] = stream_byte (src_pos++);
+  if (rb_test_write_all (src[1], scratch, rb_size) < 0)
+    {
+      fprintf (stderr, "step1: failed to write source data\n");
+      return 1;
+    }
+  ret = ring_buffer_read (rb, src[0], &is_eagain, &err);
+  if (ret < 0)
+    {
+      libcrun_error_release (&err);
+      fprintf (stderr, "step1: ring_buffer_read failed\n");
+      return 1;
+    }
+  if ((size_t) ret != rb_size)
+    {
+      fprintf (stderr, "step1: read %d bytes instead of %zu\n", ret, rb_size);
+      return 1;
+    }
+  for (int i = 0; i < ret; i++)
+    produced[produced_n++] = scratch[i];
+
+  /* Step 2: partially drain `want` bytes so head ends up in the middle.  */
+  memset (scratch, '.', scratch_size);
+  for (size_t off = 0; off < prefill;)
+    {
+      size_t chunk = prefill - off;
+      if (chunk > scratch_size)
+        chunk = scratch_size;
+      if (rb_test_write_all (dst[1], scratch, chunk) < 0)
+        {
+          fprintf (stderr, "step2: prefill failed\n");
+          return 1;
+        }
+      off += chunk;
+    }
+  ret = ring_buffer_write (rb, dst[1], &is_eagain, &err);
+  if (ret < 0)
+    {
+      libcrun_error_release (&err);
+      fprintf (stderr, "step2: ring_buffer_write failed\n");
+      return 1;
+    }
+  if ((size_t) ret != want)
+    {
+      fprintf (stderr, "step2: partial drain wrote %d bytes instead of %zu\n", ret, want);
+      return 1;
+    }
+  if (rb_test_discard (dst[0], prefill, scratch, scratch_size) < 0)
+    {
+      fprintf (stderr, "step2: failed to discard prefill\n");
+      return 1;
+    }
+  if (rb_test_read_all (dst[0], scratch, ret) < 0)
+    {
+      fprintf (stderr, "step2: failed to read drained data\n");
+      return 1;
+    }
+  for (int i = 0; i < ret; i++)
+    {
+      if (scratch[i] != produced[consumed_n])
+        {
+          fprintf (stderr, "step2: mismatch at byte %zu: got %02x want %02x\n",
+                   consumed_n, scratch[i], produced[consumed_n]);
+          return 1;
+        }
+      consumed_n++;
+    }
+
+  /* Step 3: write more data; it must wrap around the reserved byte.  */
+  {
+    size_t space = ring_buffer_get_space_available (rb);
+    for (size_t i = 0; i < space; i++)
+      scratch[i] = stream_byte (src_pos++);
+    if (rb_test_write_all (src[1], scratch, space) < 0)
+      {
+        fprintf (stderr, "step3: failed to write source data\n");
+        return 1;
+      }
+    ret = ring_buffer_read (rb, src[0], &is_eagain, &err);
+    if (ret < 0)
+      {
+        libcrun_error_release (&err);
+        fprintf (stderr, "step3: ring_buffer_read failed\n");
+        return 1;
+      }
+    if ((size_t) ret != space)
+      {
+        fprintf (stderr, "step3: read %d bytes but %zu of space was available\n", ret, space);
+        return 1;
+      }
+    for (int i = 0; i < ret; i++)
+      produced[produced_n++] = scratch[i];
+  }
+
+  /* Step 4: drain everything left and verify FIFO order is intact.  */
+  for (;;)
+    {
+      ret = ring_buffer_write (rb, dst[1], &is_eagain, &err);
+      if (ret < 0)
+        {
+          libcrun_error_release (&err);
+          fprintf (stderr, "step4: ring_buffer_write failed\n");
+          return 1;
+        }
+      if (ret == 0)
+        break;
+      if (rb_test_read_all (dst[0], scratch, ret) < 0)
+        {
+          fprintf (stderr, "step4: failed to read drained data\n");
+          return 1;
+        }
+      for (int i = 0; i < ret; i++)
+        {
+          if (consumed_n >= produced_n)
+            {
+              fprintf (stderr, "step4: drained more bytes than produced\n");
+              return 1;
+            }
+          if (scratch[i] != produced[consumed_n])
+            {
+              fprintf (stderr, "step4: mismatch at byte %zu: got %02x want %02x\n",
+                       consumed_n, scratch[i], produced[consumed_n]);
+              return 1;
+            }
+          consumed_n++;
+        }
+    }
+
+  if (consumed_n != produced_n)
+    {
+      fprintf (stderr, "consumed %zu bytes but produced %zu\n", consumed_n, produced_n);
+      return 1;
+    }
+
+  return 0;
+}
+
+/*
+ * Randomized FIFO-integrity stress for the fix in issue #2207.
+ *
+ * Unlike test_ring_buffer_read_write, which fully drains every iteration and so
+ * always returns the buffer to the empty state, this keeps the buffer partially
+ * filled: it feeds a random amount and drains a random (often partial) amount
+ * each iteration, so head/tail visit arbitrary positions and writes repeatedly
+ * wrap around the reserved byte.  The whole stream is checked to round-trip in
+ * order.
+ *
+ * The capacities are all above PIPE_BUF so that a partial writev out of the ring
+ * buffer of any size can be forced by controlling the destination pipe's free
+ * space (writev of <= PIPE_BUF bytes to a pipe is atomic, larger ones may be
+ * partial).
+ */
+static int
+do_stress_ring_buffer_partial_drain (size_t cap)
+{
+  const int iterations = 600;
+  const size_t scratch_size = 1 << 16;
+  const size_t page = (size_t) sysconf (_SC_PAGESIZE);
+  cleanup_free unsigned char *scratch = xmalloc (scratch_size);
+  libcrun_error_t err = NULL;
+  int fds_to_close[5] = {
+    -1,
+  };
+  int fds_to_close_n = 0;
+  cleanup_close_vec int *autocleanup_fds = fds_to_close;
+  cleanup_ring_buffer struct ring_buffer *rb = NULL;
+  size_t prod_pos = 0; /* stream index fed into the ring buffer */
+  size_t cons_pos = 0; /* stream index drained and verified */
+  int src[2], dst[2];
+  int src_pipe_cap, pipe_cap;
+  bool is_eagain;
+  int ret;
+
+  if (pipe2 (src, O_NONBLOCK) < 0)
+    {
+      fprintf (stderr, "failed to create pipe\n");
+      return 1;
+    }
+  fds_to_close[fds_to_close_n++] = src[0];
+  fds_to_close[fds_to_close_n++] = src[1];
+
+  if (pipe2 (dst, O_NONBLOCK) < 0)
+    {
+      fprintf (stderr, "failed to create pipe\n");
+      return 1;
+    }
+  fds_to_close[fds_to_close_n++] = dst[0];
+  fds_to_close[fds_to_close_n++] = dst[1];
+  fds_to_close[fds_to_close_n++] = -1;
+
+  if (fcntl (src[1], F_SETPIPE_SZ, (int) (4 * cap)) < 0
+      || fcntl (dst[1], F_SETPIPE_SZ, (int) (4 * cap)) < 0)
+    {
+      fprintf (stderr, "cap=%zu: failed to set pipe capacity\n", cap);
+      return 1;
+    }
+
+  src_pipe_cap = fcntl (src[1], F_GETPIPE_SZ);
+  if (src_pipe_cap < 0 || (size_t) src_pipe_cap < cap)
+    {
+      fprintf (stderr, "cap=%zu: source pipe capacity too small\n", cap);
+      return 1;
+    }
+
+  pipe_cap = fcntl (dst[1], F_GETPIPE_SZ);
+  if (pipe_cap < 0 || (size_t) pipe_cap <= cap)
+    {
+      fprintf (stderr, "cap=%zu: pipe capacity too small\n", cap);
+      return 1;
+    }
+
+  rb = ring_buffer_make (cap);
+
+  for (int iter = 0; iter < iterations; iter++)
+    {
+      size_t space = ring_buffer_get_space_available (rb);
+      size_t avail;
+
+      /* Feed a random amount, bounded by free space so ring_buffer_read
+       * consumes it all and the source pipe empties.  */
+      if (space > 0)
+        {
+          size_t feed = 1 + ((size_t) rand () % space);
+          if (feed > scratch_size)
+            feed = scratch_size;
+          for (size_t i = 0; i < feed; i++)
+            scratch[i] = stream_byte (prod_pos + i);
+          if (rb_test_write_all (src[1], scratch, feed) < 0)
+            {
+              fprintf (stderr, "cap=%zu: failed to write source data\n", cap);
+              return 1;
+            }
+          ret = ring_buffer_read (rb, src[0], &is_eagain, &err);
+          if (ret < 0)
+            {
+              libcrun_error_release (&err);
+              fprintf (stderr, "cap=%zu: ring_buffer_read failed\n", cap);
+              return 1;
+            }
+          if ((size_t) ret != feed)
+            {
+              fprintf (stderr, "cap=%zu: read %d bytes instead of %zu\n", cap, ret, feed);
+              return 1;
+            }
+          prod_pos += (size_t) ret;
+        }
+
+      /* Drain from the buffer.  To force an exact partial drain we leave only
+       * `want` bytes free in the destination pipe and rely on a writev larger
+       * than PIPE_BUF being allowed to write partially.  A pipe buffers data in
+       * page-sized slots, so the free space must be a whole number of empty
+       * slots: `want` is a page multiple.  When fewer than a page is buffered we
+       * simply drain it all to the (empty) destination pipe.  Either way `dst`
+       * is empty again at the end of the iteration.  */
+      avail = ring_buffer_get_data_available (rb);
+      if (avail > page && (size_t) pipe_cap > page)
+        {
+          size_t want = (1 + ((size_t) rand () % (avail / page))) * page;
+          size_t prefill = (size_t) pipe_cap - want;
+
+          memset (scratch, '.', scratch_size);
+          for (size_t off = 0; off < prefill;)
+            {
+              size_t chunk = prefill - off;
+              if (chunk > scratch_size)
+                chunk = scratch_size;
+              if (rb_test_write_all (dst[1], scratch, chunk) < 0)
+                {
+                  fprintf (stderr, "cap=%zu: prefill failed\n", cap);
+                  return 1;
+                }
+              off += chunk;
+            }
+
+          ret = ring_buffer_write (rb, dst[1], &is_eagain, &err);
+          if (ret < 0)
+            {
+              libcrun_error_release (&err);
+              fprintf (stderr, "cap=%zu: ring_buffer_write failed\n", cap);
+              return 1;
+            }
+          if ((size_t) ret != want)
+            {
+              fprintf (stderr, "cap=%zu: drained %d bytes instead of %zu\n", cap, ret, want);
+              return 1;
+            }
+
+          if (rb_test_discard (dst[0], prefill, scratch, scratch_size) < 0)
+            {
+              fprintf (stderr, "cap=%zu: failed to discard prefill\n", cap);
+              return 1;
+            }
+        }
+      else if (avail > 0)
+        {
+          ret = ring_buffer_write (rb, dst[1], &is_eagain, &err);
+          if (ret < 0)
+            {
+              libcrun_error_release (&err);
+              fprintf (stderr, "cap=%zu: ring_buffer_write failed\n", cap);
+              return 1;
+            }
+          if ((size_t) ret != avail)
+            {
+              fprintf (stderr, "cap=%zu: drained %d bytes instead of %zu\n", cap, ret, avail);
+              return 1;
+            }
+        }
+      else
+        continue;
+
+      if (rb_test_read_all (dst[0], scratch, (size_t) ret) < 0)
+        {
+          fprintf (stderr, "cap=%zu: failed to read drained data\n", cap);
+          return 1;
+        }
+      for (int i = 0; i < ret; i++)
+        {
+          if (scratch[i] != stream_byte (cons_pos))
+            {
+              fprintf (stderr, "cap=%zu: mismatch at byte %zu: got %02x want %02x\n",
+                       cap, cons_pos, scratch[i], stream_byte (cons_pos));
+              return 1;
+            }
+          cons_pos++;
+        }
+    }
+
+  return 0;
+}
+
+static int
+test_ring_buffer_stress_partial_drain ()
+{
+  long page_size = sysconf (_SC_PAGESIZE);
+
+  if (page_size < 0)
+    {
+      fprintf (stderr, "failed to get page size\n");
+      return 1;
+    }
+
+  size_t caps[] = { 4097, 6000, 8192, 8193, 12000, 16384,
+                    (size_t) page_size, (size_t) page_size + 1 };
+  size_t i;
+
+  for (i = 0; i < sizeof (caps) / sizeof (caps[0]); i++)
+    {
+      int ret = do_stress_ring_buffer_partial_drain (caps[i]);
+      if (ret != 0)
+        return ret;
+    }
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -512,11 +995,13 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..4\n");
+  printf ("1..6\n");
 
   RUN_TEST (test_ring_buffer_read_write);
   RUN_TEST (test_ring_buffer_wraparound_data_integrity);
   RUN_TEST (test_ring_buffer_reserved_byte_boundary);
   RUN_TEST (test_ring_buffer_no_reserved_byte_access);
+  RUN_TEST (test_ring_buffer_wraparound_partial_drain);
+  RUN_TEST (test_ring_buffer_stress_partial_drain);
   return 0;
 }
