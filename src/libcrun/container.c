@@ -432,6 +432,149 @@ libcrun_container_free (libcrun_container_t *ctr)
   free (ctr);
 }
 
+libcrun_context_t *
+libcrun_context_new (const char *id, const char *state_root, libcrun_error_t *err)
+{
+  libcrun_context_t *ctx = xmalloc0 (sizeof (*ctx));
+
+  if (id)
+    ctx->id = xstrdup (id);
+  if (state_root)
+    ctx->state_root = xstrdup (state_root);
+  ctx->fifo_exec_wait_fd = -1;
+  ctx->bundle = xstrdup (".");
+
+  if (libcrun_init_logging (&ctx->output_handler, &ctx->output_handler_arg, id, NULL, err) < 0)
+    {
+      libcrun_context_free (ctx);
+      return NULL;
+    }
+
+  ctx->handler_manager = libcrun_handler_manager_create (err);
+  if (ctx->handler_manager == NULL)
+    {
+      libcrun_context_free (ctx);
+      return NULL;
+    }
+
+  return ctx;
+}
+
+void
+libcrun_context_free (libcrun_context_t *ctx)
+{
+  if (ctx == NULL)
+    return;
+
+  free (ctx->owned_state_root);
+  free (ctx->owned_id);
+  free (ctx->owned_bundle);
+  free (ctx->owned_console_socket);
+  free (ctx->owned_pid_file);
+  free (ctx->owned_notify_socket);
+  free (ctx->owned_handler);
+
+  if (ctx->handler_manager)
+    handler_manager_free (ctx->handler_manager);
+
+  free (ctx);
+}
+
+#define LIBCRUN_CONTEXT_SET_STRING(field)                  \
+  do                                                       \
+    {                                                      \
+      free (ctx->owned_##field);                           \
+      ctx->owned_##field = value ? xstrdup (value) : NULL; \
+      ctx->field = ctx->owned_##field;                     \
+  } while (0)
+
+void
+libcrun_context_set_id (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (id);
+}
+
+void
+libcrun_context_set_state_root (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (state_root);
+}
+
+void
+libcrun_context_set_bundle (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (bundle);
+}
+
+void
+libcrun_context_set_console_socket (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (console_socket);
+}
+
+void
+libcrun_context_set_pid_file (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (pid_file);
+}
+
+void
+libcrun_context_set_notify_socket (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (notify_socket);
+}
+
+void
+libcrun_context_set_handler (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (handler);
+}
+
+#undef LIBCRUN_CONTEXT_SET_STRING
+
+void
+libcrun_context_set_preserve_fds (libcrun_context_t *ctx, int preserve_fds)
+{
+  ctx->preserve_fds = preserve_fds;
+}
+
+void
+libcrun_context_set_systemd_cgroup (libcrun_context_t *ctx, bool value)
+{
+  ctx->systemd_cgroup = value;
+}
+
+void
+libcrun_context_set_detach (libcrun_context_t *ctx, bool value)
+{
+  ctx->detach = value;
+}
+
+void
+libcrun_context_set_no_new_keyring (libcrun_context_t *ctx, bool value)
+{
+  ctx->no_new_keyring = value;
+}
+
+void
+libcrun_context_set_no_pivot (libcrun_context_t *ctx, bool value)
+{
+  ctx->no_pivot = value;
+}
+
+void
+libcrun_context_set_force_no_cgroup (libcrun_context_t *ctx, bool value)
+{
+  ctx->force_no_cgroup = value;
+}
+
+void
+libcrun_context_set_output_handler (libcrun_context_t *ctx, crun_output_handler handler, void *arg)
+{
+  ctx->output_handler = handler;
+  ctx->output_handler_arg = arg;
+}
+
 static int
 block_signals (libcrun_error_t *err)
 {
