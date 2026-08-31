@@ -411,18 +411,33 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 }
 
 const char *
-libcrun_container_get_config_json (libcrun_container_t *container)
+libcrun_container_get_config_json (libcrun_container_t *container, libcrun_error_t *err)
 {
   struct parser_context ctx = { 0, stderr };
   parser_error gen_err = NULL;
 
   if (container == NULL)
-    return NULL;
+    {
+      crun_make_error (err, EINVAL, "no container specified");
+      return NULL;
+    }
 
   if (container->config_file_content == NULL && container->container_def)
     {
       container->config_file_content = runtime_spec_schema_config_schema_generate_json (container->container_def, &ctx, &gen_err);
+      if (container->config_file_content == NULL)
+        {
+          crun_make_error (err, 0, "cannot generate the configuration JSON: %s", gen_err ?: "unknown error");
+          free (gen_err);
+          return NULL;
+        }
       free (gen_err);
+    }
+
+  if (container->config_file_content == NULL)
+    {
+      crun_make_error (err, 0, "the container has no configuration");
+      return NULL;
     }
 
   return container->config_file_content;
