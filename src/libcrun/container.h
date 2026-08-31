@@ -294,6 +294,20 @@ LIBCRUN_PUBLIC int libcrun_container_exec_with_options (libcrun_context_t *conte
 LIBCRUN_PUBLIC int libcrun_container_exec (libcrun_context_t *context, const char *id,
                                            runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
 
+struct libcrun_exec_options_s
+{
+  size_t struct_size;
+  const char *process_json; /* OCI Process JSON */
+  const char *cgroup;
+};
+
+LIBCRUN_PUBLIC int libcrun_container_exec_json (libcrun_context_t *context, const char *id, const char *process_json,
+                                                libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_container_exec_with_options_json (libcrun_context_t *context, const char *id,
+                                                             const struct libcrun_exec_options_s *opts,
+                                                             libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_exec_process_file (libcrun_context_t *context, const char *id, const char *path,
                                                         libcrun_error_t *err);
 

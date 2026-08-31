@@ -3499,6 +3499,56 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
   return libcrun_container_exec_with_options (context, id, &opts, err);
 }
 
+static int
+exec_from_process_json (libcrun_context_t *context, const char *id, const char *process_json, const char *cgroup,
+                        libcrun_error_t *err)
+{
+  struct parser_context parser_ctx = { .options = 0, .errfile = stderr };
+  struct libcrun_container_exec_options_s opts;
+  runtime_spec_schema_config_schema_process *process;
+  parser_error parser_err = NULL;
+  json_object *doc = NULL;
+  int ret;
+
+  ret = parse_json_file (&doc, process_json, &parser_ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  process = make_runtime_spec_schema_config_schema_process (doc, &parser_ctx, &parser_err);
+  json_object_put (doc);
+  if (process == NULL)
+    {
+      ret = crun_make_error (err, 0, "cannot parse process: `%s`", parser_err ? parser_err : "unknown error");
+      free (parser_err);
+      return ret;
+    }
+
+  memset (&opts, 0, sizeof (opts));
+  opts.struct_size = sizeof (opts);
+  opts.process = process;
+  opts.cgroup = cgroup;
+
+  ret = libcrun_container_exec_with_options (context, id, &opts, err);
+  free_runtime_spec_schema_config_schema_process (process);
+  return ret;
+}
+
+int
+libcrun_container_exec_json (libcrun_context_t *context, const char *id, const char *process_json, libcrun_error_t *err)
+{
+  return exec_from_process_json (context, id, process_json, NULL, err);
+}
+
+int
+libcrun_container_exec_with_options_json (libcrun_context_t *context, const char *id,
+                                          const struct libcrun_exec_options_s *opts, libcrun_error_t *err)
+{
+  if (opts == NULL || opts->struct_size == 0)
+    return crun_make_error (err, EINVAL, "invalid exec options");
+
+  return exec_from_process_json (context, id, opts->process_json, opts->cgroup, err);
+}
+
 #define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
 
 static inline void
