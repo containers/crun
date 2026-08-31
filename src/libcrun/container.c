@@ -451,6 +451,26 @@ libcrun_container_get_annotation (libcrun_container_t *container, const char *ke
   return find_string_map_value (container->annotations, key);
 }
 
+size_t
+libcrun_container_get_annotations_len (libcrun_container_t *container)
+{
+  if (container == NULL || container->annotations == NULL)
+    return 0;
+  return string_map_size (container->annotations);
+}
+
+int
+libcrun_container_get_annotation_at (libcrun_container_t *container, size_t index, const char **key,
+                                     const char **value)
+{
+  if (container == NULL)
+    {
+      errno = ERANGE;
+      return -1;
+    }
+  return string_map_get_at (container->annotations, index, key, value);
+}
+
 uid_t
 libcrun_container_get_uid (libcrun_container_t *container)
 {
@@ -599,6 +619,14 @@ libcrun_context_set_handler (libcrun_context_t *ctx, const char *value)
 }
 
 #undef LIBCRUN_CONTEXT_SET_STRING
+
+const char *
+libcrun_context_get_state_root (libcrun_context_t *ctx)
+{
+  if (ctx == NULL)
+    return NULL;
+  return ctx->state_root;
+}
 
 void
 libcrun_context_set_preserve_fds (libcrun_context_t *ctx, int preserve_fds)

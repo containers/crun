@@ -112,6 +112,7 @@ void libcrun_context_free (libcrun_context_t *ctx);
 
 void libcrun_context_set_id (libcrun_context_t *ctx, const char *value);
 void libcrun_context_set_state_root (libcrun_context_t *ctx, const char *value);
+const char *libcrun_context_get_state_root (libcrun_context_t *ctx);
 void libcrun_context_set_bundle (libcrun_context_t *ctx, const char *value);
 void libcrun_context_set_console_socket (libcrun_context_t *ctx, const char *value);
 void libcrun_context_set_pid_file (libcrun_context_t *ctx, const char *value);
@@ -139,6 +140,14 @@ void libcrun_container_free (libcrun_container_t *container);
    CONTAINER and must not race with other users of the same handle.  */
 const char *libcrun_container_get_config_json (libcrun_container_t *container, libcrun_error_t *err);
 const char *libcrun_container_get_annotation (libcrun_container_t *container, const char *key);
+
+/* Enumerate the annotations of container.  libcrun_container_get_annotation_at
+   returns 0 and sets *key and *value (both owned by container) for an index
+   below libcrun_container_get_annotations_len, -1 otherwise.  */
+size_t libcrun_container_get_annotations_len (libcrun_container_t *container);
+int libcrun_container_get_annotation_at (libcrun_container_t *container, size_t index, const char **key,
+                                         const char **value);
+
 uid_t libcrun_container_get_uid (libcrun_container_t *container);
 gid_t libcrun_container_get_gid (libcrun_container_t *container);
 
@@ -181,12 +190,22 @@ int libcrun_container_status_load (libcrun_context_t *ctx, const char *id, libcr
                                    libcrun_error_t *err);
 void libcrun_container_status_free (libcrun_status_t *st);
 
-libcrun_container_state_t libcrun_status_get_state (libcrun_status_t *st);
+/* Resolve the live state of the container described by st, by probing it
+   (cgroup/fifo/pid).  The result is cached in st, so this costs at most one
+   probe per status object.  state and running can be NULL.  */
+int libcrun_status_get_state (libcrun_status_t *st, libcrun_container_state_t *state, int *running,
+                              libcrun_error_t *err);
+
+/* Return the OCI name of state ("creating"/"created"/"running"/"stopped"/"paused"),
+   as a static string (do not free).  */
+const char *libcrun_container_state_to_string (libcrun_container_state_t state);
+
 pid_t libcrun_status_get_pid (libcrun_status_t *st);
 const char *libcrun_status_get_bundle (libcrun_status_t *st);
 const char *libcrun_status_get_rootfs (libcrun_status_t *st);
 const char *libcrun_status_get_created (libcrun_status_t *st);
 const char *libcrun_status_get_owner (libcrun_status_t *st);
+const char *libcrun_status_get_scope (libcrun_status_t *st);
 const char *libcrun_status_get_external_descriptors (libcrun_status_t *st);
 
 /* Live status string ("creating"/"created"/"running"/"stopped"/"paused"), obtained by

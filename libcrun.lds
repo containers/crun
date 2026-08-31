@@ -22,6 +22,7 @@ LIBCRUN_1.0 {
         libcrun_context_free;
         libcrun_context_set_id;
         libcrun_context_set_state_root;
+        libcrun_context_get_state_root;
         libcrun_context_set_bundle;
         libcrun_context_set_console_socket;
         libcrun_context_set_pid_file;
@@ -44,6 +45,8 @@ LIBCRUN_1.0 {
         libcrun_container_free;
         libcrun_container_get_config_json;
         libcrun_container_get_annotation;
+        libcrun_container_get_annotations_len;
+        libcrun_container_get_annotation_at;
         libcrun_container_get_uid;
         libcrun_container_get_gid;
 
@@ -71,11 +74,13 @@ LIBCRUN_1.0 {
         libcrun_container_status_load;
         libcrun_container_status_free;
         libcrun_status_get_state;
+        libcrun_container_state_to_string;
         libcrun_status_get_pid;
         libcrun_status_get_bundle;
         libcrun_status_get_rootfs;
         libcrun_status_get_created;
         libcrun_status_get_owner;
+        libcrun_status_get_scope;
         libcrun_status_get_external_descriptors;
         libcrun_container_get_state_string;
         libcrun_get_state_dir;

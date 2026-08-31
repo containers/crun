@@ -274,6 +274,9 @@ LIBCRUN_PUBLIC void libcrun_container_free (libcrun_container_t *);
    CONTAINER and must not race with other users of the same handle.  */
 LIBCRUN_PUBLIC const char *libcrun_container_get_config_json (libcrun_container_t *container, libcrun_error_t *err);
 LIBCRUN_PUBLIC const char *libcrun_container_get_annotation (libcrun_container_t *container, const char *key);
+LIBCRUN_PUBLIC size_t libcrun_container_get_annotations_len (libcrun_container_t *container);
+LIBCRUN_PUBLIC int libcrun_container_get_annotation_at (libcrun_container_t *container, size_t index,
+                                                        const char **key, const char **value);
 LIBCRUN_PUBLIC uid_t libcrun_container_get_uid (libcrun_container_t *container);
 LIBCRUN_PUBLIC gid_t libcrun_container_get_gid (libcrun_container_t *container);
 
@@ -282,6 +285,7 @@ LIBCRUN_PUBLIC void libcrun_context_free (libcrun_context_t *ctx);
 
 LIBCRUN_PUBLIC void libcrun_context_set_id (libcrun_context_t *ctx, const char *value);
 LIBCRUN_PUBLIC void libcrun_context_set_state_root (libcrun_context_t *ctx, const char *value);
+LIBCRUN_PUBLIC const char *libcrun_context_get_state_root (libcrun_context_t *ctx);
 LIBCRUN_PUBLIC void libcrun_context_set_bundle (libcrun_context_t *ctx, const char *value);
 LIBCRUN_PUBLIC void libcrun_context_set_console_socket (libcrun_context_t *ctx, const char *value);
 LIBCRUN_PUBLIC void libcrun_context_set_pid_file (libcrun_context_t *ctx, const char *value);

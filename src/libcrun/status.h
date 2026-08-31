@@ -87,12 +87,18 @@ typedef struct libcrun_status_s libcrun_status_t;
 LIBCRUN_PUBLIC int libcrun_container_status_load (libcrun_context_t *context, const char *id, libcrun_status_t **out,
                                                   libcrun_error_t *err);
 LIBCRUN_PUBLIC void libcrun_container_status_free (libcrun_status_t *st);
-LIBCRUN_PUBLIC libcrun_container_state_t libcrun_status_get_state (libcrun_status_t *st);
+/* Resolve the live state of the container described by ST.  The state is
+   probed on the first call and cached afterwards; STATE and RUNNING can be
+   NULL.  */
+LIBCRUN_PUBLIC int libcrun_status_get_state (libcrun_status_t *st, libcrun_container_state_t *state, int *running,
+                                             libcrun_error_t *err);
+LIBCRUN_PUBLIC const char *libcrun_container_state_to_string (libcrun_container_state_t state);
 LIBCRUN_PUBLIC pid_t libcrun_status_get_pid (libcrun_status_t *st);
 LIBCRUN_PUBLIC const char *libcrun_status_get_bundle (libcrun_status_t *st);
 LIBCRUN_PUBLIC const char *libcrun_status_get_rootfs (libcrun_status_t *st);
 LIBCRUN_PUBLIC const char *libcrun_status_get_created (libcrun_status_t *st);
 LIBCRUN_PUBLIC const char *libcrun_status_get_owner (libcrun_status_t *st);
+LIBCRUN_PUBLIC const char *libcrun_status_get_scope (libcrun_status_t *st);
 LIBCRUN_PUBLIC const char *libcrun_status_get_external_descriptors (libcrun_status_t *st);
 LIBCRUN_PUBLIC int libcrun_container_get_state_string (libcrun_context_t *context, const char *id, const char **out,
                                                        int *running, libcrun_error_t *err);
