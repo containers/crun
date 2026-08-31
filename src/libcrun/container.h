@@ -307,6 +307,7 @@ struct libcrun_exec_options_s
   size_t struct_size;
   const char *process_json; /* OCI Process JSON */
   const char *cgroup;
+  bool merge_env;
 };
 
 LIBCRUN_PUBLIC int libcrun_container_exec_json (libcrun_context_t *context, const char *id, const char *process_json,

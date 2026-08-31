@@ -3550,7 +3550,7 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
 
 static int
 exec_from_process_json (libcrun_context_t *context, const char *id, const char *process_json, const char *cgroup,
-                        libcrun_error_t *err)
+                        bool merge_env, libcrun_error_t *err)
 {
   struct parser_context parser_ctx = { .options = 0, .errfile = stderr };
   struct libcrun_container_exec_options_s opts;
@@ -3576,6 +3576,7 @@ exec_from_process_json (libcrun_context_t *context, const char *id, const char *
   opts.struct_size = sizeof (opts);
   opts.process = process;
   opts.cgroup = cgroup;
+  opts.merge_env = merge_env;
 
   ret = libcrun_container_exec_with_options (context, id, &opts, err);
   free_runtime_spec_schema_config_schema_process (process);
@@ -3585,7 +3586,7 @@ exec_from_process_json (libcrun_context_t *context, const char *id, const char *
 int
 libcrun_container_exec_json (libcrun_context_t *context, const char *id, const char *process_json, libcrun_error_t *err)
 {
-  return exec_from_process_json (context, id, process_json, NULL, err);
+  return exec_from_process_json (context, id, process_json, NULL, false, err);
 }
 
 int
@@ -3595,7 +3596,7 @@ libcrun_container_exec_with_options_json (libcrun_context_t *context, const char
   if (opts == NULL || opts->struct_size == 0)
     return crun_make_error (err, EINVAL, "invalid exec options");
 
-  return exec_from_process_json (context, id, opts->process_json, opts->cgroup, err);
+  return exec_from_process_json (context, id, opts->process_json, opts->cgroup, opts->merge_env, err);
 }
 
 #define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
