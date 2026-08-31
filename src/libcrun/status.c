@@ -926,3 +926,41 @@ libcrun_container_get_state_string (libcrun_context_t *context, const char *id, 
     *running = local_running;
   return 0;
 }
+
+int
+libcrun_container_list (libcrun_context_t *context, libcrun_container_list_t **out, libcrun_error_t *err)
+{
+  return libcrun_get_containers_list (out, context->state_root, err);
+}
+
+libcrun_container_iter_t *
+libcrun_container_list_iter (libcrun_container_list_t *l)
+{
+  libcrun_container_iter_t *it = xmalloc0 (sizeof (*it));
+  it->cur = l;
+  return it;
+}
+
+bool
+libcrun_container_iter_next (libcrun_container_iter_t *it, const char **id)
+{
+  if (it == NULL || it->cur == NULL)
+    return false;
+
+  if (id)
+    *id = it->cur->name;
+  it->cur = it->cur->next;
+  return true;
+}
+
+void
+libcrun_container_iter_free (libcrun_container_iter_t *it)
+{
+  free (it);
+}
+
+void
+libcrun_container_list_free (libcrun_container_list_t *l)
+{
+  libcrun_free_containers_list (l);
+}
