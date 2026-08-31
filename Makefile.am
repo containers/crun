@@ -123,7 +123,7 @@ endif
 if LUA_BINDINGS
 luaexec_LTLIBRARIES = luacrun.la
 luacrun_la_SOURCES = lua/lua_crun.c
-luacrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src $(LUA_INCLUDE)
+luacrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/src $(LUA_INCLUDE)
 luacrun_la_LDFLAGS = -avoid-version -module
 luacrun_la_LIBADD = libcrun.la $(LUA_LIB) $(FOUND_LIBS)
 
