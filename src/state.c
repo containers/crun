@@ -25,8 +25,6 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
 
@@ -72,16 +70,22 @@ int
 crun_command_state (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg = 0, ret;
-  libcrun_context_t crun_context = {
-    0,
-  };
+  cleanup_context libcrun_context_t *crun_context = NULL;
+  cleanup_free char *state = NULL;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &state_options);
   crun_assert_n_args (argc - first_arg, 1, 1);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return libcrun_container_state (&crun_context, argv[first_arg], stdout, err);
+  ret = libcrun_container_state_json (crun_context, argv[first_arg], &state, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  fputs (state, stdout);
+  return 0;
 }

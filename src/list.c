@@ -25,9 +25,6 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
-#include "libcrun/status.h"
 
 static char doc[] = "OCI runtime";
 
@@ -77,7 +74,7 @@ parse_opt (int key, char *arg, struct argp_state *state arg_unused)
       else if (strcmp (arg, "json") == 0)
         list_options.format = LIST_JSON;
       else
-        error (EXIT_FAILURE, 0, "invalid format `%s`", arg);
+        libcrun_fail_with_error (0, "invalid format `%s`", arg);
       break;
 
     default:
@@ -94,74 +91,89 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
 {
   int first_arg;
   int ret, max_length = 4;
-  libcrun_context_t crun_context = {
-    0,
-  };
-  libcrun_container_list_t *list = NULL, *it;
+  cleanup_context libcrun_context_t *crun_context = NULL;
+  libcrun_container_list_t *list = NULL;
+  libcrun_container_iter_t *it;
+  const char *name;
 
   list_options.format = LIST_TABLE;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &list_options);
   crun_assert_n_args (argc - first_arg, 0, 0);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (list_options.format == LIST_JSON)
-    return libcrun_write_json_containers_list (&crun_context, stdout, err);
+    {
+      cleanup_free char *json = NULL;
 
-  ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
+      ret = libcrun_container_list_json (crun_context, &json, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      fputs (json, stdout);
+      return 0;
+    }
+
+  ret = libcrun_container_list (crun_context, &list, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  for (it = list; it; it = it->next)
+  for (it = libcrun_container_list_iter (list); libcrun_container_iter_next (it, &name);)
     {
-      int l = strlen (it->name);
+      int l = strlen (name);
       if (l > max_length)
         max_length = l;
     }
+  libcrun_container_iter_free (it);
 
   max_length++;
 
   if (! list_options.quiet)
     printf ("%-*s%-10s%-8s %-39s %-30s %s\n", max_length, "NAME", "PID", "STATUS", "BUNDLE PATH", "CREATED", "OWNER");
 
-  for (it = list; it; it = it->next)
+  for (it = libcrun_container_list_iter (list); libcrun_container_iter_next (it, &name);)
     {
-      libcrun_container_status_t status;
+      libcrun_status_t *status = NULL;
 
-      ret = libcrun_read_container_status (&status, crun_context.state_root, it->name, err);
+      ret = libcrun_container_status_load (crun_context, name, &status, err);
       if (UNLIKELY (ret < 0))
         {
-          libcrun_error_write_warning_and_release (stderr, &err);
+          libcrun_error_report_and_release (err);
           continue;
         }
       if (list_options.quiet)
-        printf ("%s\n", it->name);
+        printf ("%s\n", name);
       else
         {
           int running = 0;
-          int pid = status.pid;
+          int pid = libcrun_status_get_pid (status);
           const char *container_status = NULL;
 
-          ret = libcrun_get_container_state_string (it->name, &status, crun_context.state_root, &container_status,
-                                                    &running, err);
+          ret = libcrun_container_get_state_string (crun_context, name, &container_status, &running, err);
           if (UNLIKELY (ret < 0))
             {
-              libcrun_error_write_warning_and_release (stderr, &err);
+              libcrun_error_report_and_release (err);
+              libcrun_container_status_free (status);
               continue;
             }
 
           if (! running)
             pid = 0;
 
-          printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, it->name, pid, container_status, status.bundle, status.created, status.owner);
+          printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, name, pid, container_status,
+                  libcrun_status_get_bundle (status), libcrun_status_get_created (status),
+                  libcrun_status_get_owner (status));
         }
 
-      libcrun_free_container_status (&status);
+      libcrun_container_status_free (status);
     }
+  libcrun_container_iter_free (it);
 
-  libcrun_free_containers_list (list);
+  libcrun_container_list_free (list);
   return ret >= 0 ? 0 : ret;
 }
