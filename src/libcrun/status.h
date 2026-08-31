@@ -59,6 +59,30 @@ LIBCRUN_PUBLIC int libcrun_container_delete_status (const char *state_root, cons
 LIBCRUN_PUBLIC int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root,
                                                 libcrun_error_t *err);
 
+typedef enum
+{
+  LIBCRUN_CONTAINER_STATUS_CREATING = 0,
+  LIBCRUN_CONTAINER_STATUS_CREATED,
+  LIBCRUN_CONTAINER_STATUS_RUNNING,
+  LIBCRUN_CONTAINER_STATUS_STOPPED,
+  LIBCRUN_CONTAINER_STATUS_PAUSED,
+} libcrun_container_state_t;
+
+struct libcrun_status_s;
+typedef struct libcrun_status_s libcrun_status_t;
+
+LIBCRUN_PUBLIC int libcrun_container_status_load (libcrun_context_t *context, const char *id, libcrun_status_t **out,
+                                                  libcrun_error_t *err);
+LIBCRUN_PUBLIC void libcrun_container_status_free (libcrun_status_t *st);
+LIBCRUN_PUBLIC libcrun_container_state_t libcrun_status_get_state (libcrun_status_t *st);
+LIBCRUN_PUBLIC pid_t libcrun_status_get_pid (libcrun_status_t *st);
+LIBCRUN_PUBLIC const char *libcrun_status_get_bundle (libcrun_status_t *st);
+LIBCRUN_PUBLIC const char *libcrun_status_get_rootfs (libcrun_status_t *st);
+LIBCRUN_PUBLIC const char *libcrun_status_get_created (libcrun_status_t *st);
+LIBCRUN_PUBLIC const char *libcrun_status_get_owner (libcrun_status_t *st);
+LIBCRUN_PUBLIC const char *libcrun_status_get_external_descriptors (libcrun_status_t *st);
+LIBCRUN_PUBLIC int libcrun_container_get_state_string (libcrun_context_t *context, const char *id, const char **out,
+                                                       int *running, libcrun_error_t *err);
 int libcrun_status_check_directories (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_create_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);
 int libcrun_status_write_exec_fifo (const char *state_root, const char *id, libcrun_error_t *err);

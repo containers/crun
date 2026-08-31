@@ -807,3 +807,122 @@ libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcr
 
   return crun_path_exists (fifo_path, err);
 }
+
+struct libcrun_status_s
+{
+  libcrun_container_status_t status;
+  libcrun_container_state_t state;
+};
+
+int
+libcrun_container_status_load (libcrun_context_t *context, const char *id, libcrun_status_t **out, libcrun_error_t *err)
+{
+  const char *state_string = NULL;
+  libcrun_status_t *st;
+  int running;
+  int ret;
+
+  st = xmalloc0 (sizeof (*st));
+
+  ret = libcrun_read_container_status (&st->status, context->state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    {
+      free (st);
+      return ret;
+    }
+
+  ret = libcrun_get_container_state_string (id, &st->status, context->state_root, &state_string, &running, err);
+  if (UNLIKELY (ret < 0))
+    {
+      libcrun_container_status_free (st);
+      return ret;
+    }
+
+  if (state_string == NULL)
+    st->state = LIBCRUN_CONTAINER_STATUS_STOPPED;
+  else if (strcmp (state_string, "creating") == 0)
+    st->state = LIBCRUN_CONTAINER_STATUS_CREATING;
+  else if (strcmp (state_string, "created") == 0)
+    st->state = LIBCRUN_CONTAINER_STATUS_CREATED;
+  else if (strcmp (state_string, "running") == 0)
+    st->state = LIBCRUN_CONTAINER_STATUS_RUNNING;
+  else if (strcmp (state_string, "paused") == 0)
+    st->state = LIBCRUN_CONTAINER_STATUS_PAUSED;
+  else
+    st->state = LIBCRUN_CONTAINER_STATUS_STOPPED;
+
+  *out = st;
+  return 0;
+}
+
+void
+libcrun_container_status_free (libcrun_status_t *st)
+{
+  if (st == NULL)
+    return;
+  libcrun_free_container_status (&st->status);
+  free (st);
+}
+
+libcrun_container_state_t
+libcrun_status_get_state (libcrun_status_t *st)
+{
+  return st->state;
+}
+
+pid_t
+libcrun_status_get_pid (libcrun_status_t *st)
+{
+  return st->status.pid;
+}
+
+const char *
+libcrun_status_get_bundle (libcrun_status_t *st)
+{
+  return st->status.bundle;
+}
+
+const char *
+libcrun_status_get_rootfs (libcrun_status_t *st)
+{
+  return st->status.rootfs;
+}
+
+const char *
+libcrun_status_get_created (libcrun_status_t *st)
+{
+  return st->status.created;
+}
+
+const char *
+libcrun_status_get_owner (libcrun_status_t *st)
+{
+  return st->status.owner;
+}
+
+const char *
+libcrun_status_get_external_descriptors (libcrun_status_t *st)
+{
+  return st->status.external_descriptors;
+}
+
+int
+libcrun_container_get_state_string (libcrun_context_t *context, const char *id, const char **out, int *running,
+                                    libcrun_error_t *err)
+{
+  cleanup_container_status libcrun_container_status_t status = {};
+  int local_running;
+  int ret;
+
+  ret = libcrun_read_container_status (&status, context->state_root, id, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_get_container_state_string (id, &status, context->state_root, out, &local_running, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (running)
+    *running = local_running;
+  return 0;
+}
