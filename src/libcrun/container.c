@@ -4643,14 +4643,41 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
   return libcrun_container_unpause_linux (&status, err);
 }
 
+/* Translate the public options struct into the internal representation used by
+   the linux/CRIU layer.  Strings are borrowed (not copied).  */
+static void
+cr_options_from_public (libcrun_checkpoint_restore_t *dst, struct libcrun_checkpoint_restore_options_s *src)
+{
+  memset (dst, 0, sizeof (*dst));
+  dst->image_path = (char *) src->image_path;
+  dst->work_path = (char *) src->work_path;
+  dst->parent_path = (char *) src->parent_path;
+  dst->console_socket = src->console_socket;
+  dst->lsm_profile = (char *) src->lsm_profile;
+  dst->lsm_mount_context = (char *) src->lsm_mount_context;
+  dst->leave_running = src->leave_running;
+  dst->tcp_established = src->tcp_established;
+  dst->tcp_close = src->tcp_close;
+  dst->ext_unix_sk = src->ext_unix_sk;
+  dst->shell_job = src->shell_job;
+  dst->file_locks = src->file_locks;
+  dst->pre_dump = src->pre_dump;
+  dst->detach = src->detach;
+  dst->manage_cgroups_mode = src->manage_cgroups_mode;
+  dst->network_lock_method = src->network_lock_method;
+}
+
 int
-libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
-                              libcrun_error_t *err)
+libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
+                              struct libcrun_checkpoint_restore_options_s *cr_options, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;
   libcrun_container_status_t status = {};
+  libcrun_checkpoint_restore_t cr;
   cleanup_container libcrun_container_t *container = NULL;
+
+  cr_options_from_public (&cr, cr_options);
 
   ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
@@ -4659,7 +4686,7 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-  ret = libcrun_container_checkpoint_linux (&status, container, cr_options, err);
+  ret = libcrun_container_checkpoint_linux (&status, container, &cr, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4722,8 +4749,8 @@ restore_proxy_process (int *proxy_pid_pipe, int cgroup_manager, libcrun_error_t 
 }
 
 int
-libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
-                           libcrun_error_t *err)
+libcrun_container_restore (libcrun_context_t *context, const char *id,
+                           struct libcrun_checkpoint_restore_options_s *cr_options, libcrun_error_t *err)
 {
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_container libcrun_container_t *container = NULL;
@@ -4731,12 +4758,15 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   cleanup_close int proxy_pid_pipe1 = -1;
   runtime_spec_schema_config_schema *def;
   libcrun_container_status_t status = {};
+  libcrun_checkpoint_restore_t cr;
   cleanup_pid pid_t proxy_pid = -1;
   int proxy_pid_pipe[2];
   int cgroup_manager;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
   int ret;
+
+  cr_options_from_public (&cr, cr_options);
 
   container = libcrun_container_load_from_file ("config.json", err);
   if (container == NULL)
@@ -4816,7 +4846,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
         /* Restore the container directly in the desired cgroup.  */
         status.cgroup_path = cgroup_path;
 
-        ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        ret = libcrun_container_restore_linux (&status, container, &cr, err);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -4892,7 +4922,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
         /* Restore the container in the same cgroup where the dummy process was.  */
         status.cgroup_path = target_cgroup;
 
-        ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        ret = libcrun_container_restore_linux (&status, container, &cr, err);
         if (UNLIKELY (ret < 0))
           return ret;
 

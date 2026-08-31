@@ -56,7 +56,7 @@ static const char *bundle = NULL;
 
 static libcrun_context_t crun_context;
 
-static libcrun_checkpoint_restore_t cr_options;
+static struct libcrun_checkpoint_restore_options_s cr_options;
 
 static struct argp_option options[]
     = { { "bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0 },
@@ -166,6 +166,8 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
   int first_arg;
   int ret;
 
+  cr_options.struct_size = sizeof (cr_options);
+
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
 
@@ -195,8 +197,6 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
-
-  cr_options.manage_cgroups_mode = -1;
 
   if (cr_options.image_path == NULL)
     {
