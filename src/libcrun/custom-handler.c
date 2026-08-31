@@ -231,6 +231,34 @@ libcrun_handler_manager_print_feature_tags (struct custom_handler_manager_s *man
       fprintf (out, "+%s ", manager->handlers[i]->feature_string);
 }
 
+char **
+libcrun_context_get_handler_feature_tags (libcrun_context_t *ctx, libcrun_error_t *err arg_unused)
+{
+  struct custom_handler_manager_s *manager;
+  char **out;
+  size_t i, n = 0;
+
+  if (ctx == NULL || ctx->handler_manager == NULL)
+    return NULL;
+
+  manager = ctx->handler_manager;
+
+  for (i = 0; i < manager->handlers_len; i++)
+    if (manager->handlers[i]->feature_string)
+      n++;
+
+  if (n == 0)
+    return NULL;
+
+  out = xmalloc0 ((n + 1) * sizeof (char *));
+  n = 0;
+  for (i = 0; i < manager->handlers_len; i++)
+    if (manager->handlers[i]->feature_string)
+      out[n++] = xstrdup (manager->handlers[i]->feature_string);
+
+  return out;
+}
+
 static inline struct custom_handler_instance_s *
 make_custom_handler_instance_s (struct custom_handler_s *vtable)
 {
