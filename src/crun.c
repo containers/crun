@@ -30,9 +30,6 @@
 #endif
 
 #include "crun.h"
-#include "libcrun/utils.h"
-#include "libcrun/custom-handler.h"
-#include "libcrun/status.h"
 
 /* Commands.  */
 #include "run.h"
@@ -55,35 +52,6 @@
 
 static struct crun_global_arguments arguments;
 
-static struct custom_handler_manager_s *handler_manager;
-
-static struct custom_handler_manager_s *
-libcrun_get_handler_manager ()
-{
-  if (handler_manager == NULL)
-    {
-      cleanup_free char *handlers_path = NULL;
-      libcrun_error_t err;
-      int ret;
-
-      handler_manager = libcrun_handler_manager_create (&err);
-      if (UNLIKELY (handler_manager == NULL))
-        libcrun_fail_with_error (err->status, "%s", err->msg);
-
-      handlers_path = strdup (CRUN_LIBDIR "/handlers");
-      if (UNLIKELY (handlers_path == NULL))
-        OOM ();
-
-      if (access (handlers_path, F_OK) == 0)
-        {
-          ret = libcrun_handler_manager_load_directory (handler_manager, handlers_path, &err);
-          if (UNLIKELY (ret < 0))
-            libcrun_fail_with_error (err->status, "%s", err->msg);
-        }
-    }
-  return handler_manager;
-}
-
 struct commands_s
 {
   int value;
@@ -96,19 +64,17 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
 {
   int ret;
 
-  con->id = id;
-  con->state_root = glob->root;
-  con->systemd_cgroup = glob->option_systemd_cgroup;
-  con->force_no_cgroup = glob->option_force_no_cgroup;
-  con->notify_socket = getenv ("NOTIFY_SOCKET");
-  con->fifo_exec_wait_fd = -1;
-  con->argc = glob->argc;
-  con->argv = glob->argv;
+  libcrun_context_set_id (con, id);
+  libcrun_context_set_state_root (con, glob->root);
+  libcrun_context_set_systemd_cgroup (con, glob->option_systemd_cgroup);
+  libcrun_context_set_force_no_cgroup (con, glob->option_force_no_cgroup);
+  libcrun_context_set_notify_socket (con, getenv ("NOTIFY_SOCKET"));
+  libcrun_context_set_args (con, glob->argc, glob->argv);
 
   /* Check if global handler is configured and pass it down to crun context */
-  con->handler = glob->handler;
+  libcrun_context_set_handler (con, glob->handler);
 
-  ret = libcrun_init_logging (&con->output_handler, &con->output_handler_arg, id, glob->log, err);
+  ret = libcrun_context_init_logging (con, glob->log, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -122,12 +88,22 @@ init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global
   libcrun_set_verbosity (glob->verbosity);
   libcrun_debug ("Using debug verbosity");
 
-  if (con->bundle == NULL)
-    con->bundle = ".";
-
-  con->handler_manager = libcrun_get_handler_manager ();
-
   return 0;
+}
+
+/* Allocate a public libcrun context (with handlers loaded) for a subcommand.
+   Terminates the process on failure.  */
+libcrun_context_t *
+new_libcrun_context (struct crun_global_arguments *glob)
+{
+  libcrun_error_t err = NULL;
+  libcrun_context_t *con;
+
+  con = libcrun_context_new (NULL, glob->root, &err);
+  if (UNLIKELY (con == NULL))
+    libcrun_fail_with_error (libcrun_error_get_status (err), "%s", libcrun_error_get_message (err));
+
+  return con;
 }
 
 enum
@@ -245,12 +221,14 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
 {
   libcrun_error_t err = NULL;
   cleanup_free char *rundir = NULL;
+  libcrun_context_t *ctx;
+  char **tags;
   int ret;
 
   fprintf (stream, "%s version %s\n", PACKAGE_NAME, PACKAGE_VERSION);
   fprintf (stream, "commit: %s\n", GIT_VERSION);
 
-  ret = libcrun_get_state_directory (&rundir, arguments.root, NULL, &err);
+  ret = libcrun_get_state_dir (&rundir, arguments.root, NULL, &err);
   if (LIKELY (ret == 0))
     fprintf (stream, "rundir: %s\n", rundir);
   else
@@ -276,7 +254,25 @@ print_version (FILE *stream, struct argp_state *state arg_unused)
   fprintf (stream, "+CRIU ");
 #endif
 
-  libcrun_handler_manager_print_feature_tags (libcrun_get_handler_manager (), stream);
+  ctx = libcrun_context_new (NULL, arguments.root, &err);
+  if (ctx)
+    {
+      tags = libcrun_context_get_handler_feature_tags (ctx, &err);
+      if (tags)
+        {
+          for (size_t i = 0; tags[i]; i++)
+            {
+              fprintf (stream, "+%s ", tags[i]);
+              free (tags[i]);
+            }
+          free (tags);
+        }
+      else
+        libcrun_error_release (&err);
+      libcrun_context_free (ctx);
+    }
+  else
+    libcrun_error_release (&err);
 
   fprintf (stream, "+JSON_C\n");
 }
@@ -376,9 +372,9 @@ void
 crun_assert_n_args (int n, int min, int max)
 {
   if (min >= 0 && n < min)
-    error (EXIT_FAILURE, 0, "`%s` requires a minimum of %d arguments", command->name, min);
+    libcrun_fail_with_error (0, "`%s` requires a minimum of %d arguments", command->name, min);
   if (max >= 0 && n > max)
-    error (EXIT_FAILURE, 0, "`%s` requires a maximum of %d arguments", command->name, max);
+    libcrun_fail_with_error (0, "`%s` requires a maximum of %d arguments", command->name, max);
 }
 
 char *
@@ -431,7 +427,7 @@ fill_handler_from_argv0 (char *argv0, struct crun_global_arguments *args)
       return;
     }
 #endif
-  if (has_prefix (b, "crun-") && b[5] != '\0')
+  if (strncmp (b, "crun-", 5) == 0 && b[5] != '\0')
     args->handler = b + 5;
 }
 
@@ -458,11 +454,11 @@ main (int argc, char **argv)
   if (ensure_cloned_binary () < 0)
     {
       fprintf (stderr, "Failed to re-execute libcrun via memory file descriptor\n");
-      _safe_exit (EXIT_FAILURE);
+      exit (EXIT_FAILURE);
     }
   /* Resolve all libcrun weak dependencies.  */
   if (dlopen ("libcrun.so", RTLD_GLOBAL | RTLD_DEEPBIND | RTLD_LAZY) == NULL)
-    error (EXIT_FAILURE, 0, "could not load `libcrun.so`: `%s`", dlerror ());
+    libcrun_fail_with_error (0, "could not load `libcrun.so`: `%s`", dlerror ());
 #endif
 
   fill_handler_from_argv0 (argv[0], &arguments);
@@ -478,7 +474,7 @@ main (int argc, char **argv)
 
   ret = command->handler (&arguments, command_argc, command_argv, &err);
   if (ret && err)
-    libcrun_fail_with_error (err->status, "%s", err->msg);
+    libcrun_fail_with_error (libcrun_error_get_status (err), "%s", libcrun_error_get_message (err));
 
   return ret;
 }

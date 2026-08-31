@@ -27,9 +27,6 @@
 #include <regex.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/status.h"
-#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
 
@@ -89,15 +86,14 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
 {
   int first_arg = 0, ret;
   const char *signal;
-
-  libcrun_context_t crun_context = {
-    0,
-  };
+  cleanup_context libcrun_context_t *crun_context = NULL;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &kill_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -108,31 +104,34 @@ crun_command_kill (struct crun_global_arguments *global_args, int argc, char **a
   if (kill_options.regex)
     {
       regex_t re;
-      libcrun_container_list_t *list, *it;
+      libcrun_container_list_t *list;
+      libcrun_container_iter_t *it;
+      const char *name;
 
       ret = regcomp (&re, argv[first_arg], REG_EXTENDED | REG_NOSUB);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error (0, "invalid regular expression %s", argv[first_arg]);
 
-      ret = libcrun_get_containers_list (&list, crun_context.state_root, err);
+      ret = libcrun_container_list (crun_context, &list, err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error (0, "cannot read containers list");
 
-      for (it = list; it; it = it->next)
-        if (regexec (&re, it->name, 0, NULL, 0) == 0)
+      for (it = libcrun_container_list_iter (list); libcrun_container_iter_next (it, &name);)
+        if (regexec (&re, name, 0, NULL, 0) == 0)
           {
-            ret = libcrun_container_kill (&crun_context, it->name, signal, err);
+            ret = libcrun_container_kill (crun_context, name, signal, err);
             if (UNLIKELY (ret < 0))
-              libcrun_error_write_warning_and_release (stderr, &err);
+              libcrun_error_report_and_release (err);
           }
 
-      libcrun_free_containers_list (list);
+      libcrun_container_iter_free (it);
+      libcrun_container_list_free (list);
       regfree (&re);
       return 0;
     }
 
   if (kill_options.all)
-    return libcrun_container_killall (&crun_context, argv[first_arg], signal, err);
+    return libcrun_container_killall (crun_context, argv[first_arg], signal, err);
 
-  return libcrun_container_kill (&crun_context, argv[first_arg], signal, err);
+  return libcrun_container_kill (crun_context, argv[first_arg], signal, err);
 }

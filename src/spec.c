@@ -25,9 +25,6 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/spec.h"
-#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
 
@@ -85,18 +82,20 @@ int
 crun_command_spec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg;
-  libcrun_context_t crun_context = {
-    0,
-  };
+  cleanup_context libcrun_context_t *crun_context = NULL;
   cleanup_file FILE *f = NULL;
   cleanup_free char *bundle_cleanup = NULL;
+  cleanup_free char *spec = NULL;
   const char *where;
   int ret;
+  int close_ret;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &spec_options);
   crun_assert_n_args (argc - first_arg, 0, 0);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -128,7 +127,20 @@ crun_command_spec (struct crun_global_arguments *global_args, int argc, char **a
   if (f == NULL)
     return libcrun_make_error (err, errno, "cannot open `%s`", where);
 
-  ret = libcrun_container_spec (! spec_options.rootless, f, err);
+  ret = libcrun_container_spec_json (! spec_options.rootless, &spec, err);
+  if (UNLIKELY (ret < 0))
+    goto out;
 
-  return ret >= 0 ? 0 : ret;
+  if (fputs (spec, f) == EOF)
+    ret = libcrun_make_error (err, errno, "cannot write to `%s`", where);
+  else
+    ret = 0;
+
+out:
+  close_ret = fclose (f);
+  f = NULL;
+  if (close_ret < 0 && ret >= 0)
+    return libcrun_make_error (err, errno, "cannot close `%s`", where);
+
+  return ret;
 }

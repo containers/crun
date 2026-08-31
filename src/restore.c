@@ -29,9 +29,6 @@
 
 #include "crun.h"
 #include "checkpoint.h"
-#include "libcrun/container.h"
-#include "libcrun/status.h"
-#include "libcrun/utils.h"
 
 enum
 {
@@ -54,7 +51,7 @@ static char doc[] = "OCI runtime";
 
 static const char *bundle = NULL;
 
-static libcrun_context_t crun_context;
+static libcrun_context_t *crun_context;
 
 static struct libcrun_checkpoint_restore_options_s cr_options;
 
@@ -130,7 +127,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_PID_FILE:
-      crun_context.pid_file = argp_mandatory_argument (arg, state);
+      libcrun_context_set_pid_file (crun_context, argp_mandatory_argument (arg, state));
       break;
 
     case OPTION_MANAGE_CGROUPS_MODE:
@@ -166,6 +163,7 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
   int first_arg;
   int ret;
 
+  crun_context = new_libcrun_context (global_args);
   cr_options.struct_size = sizeof (cr_options);
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
@@ -194,9 +192,12 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
         libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      libcrun_context_free (crun_context);
+      return ret;
+    }
 
   if (cr_options.image_path == NULL)
     {
@@ -212,6 +213,8 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
       cr_options.image_path = cr_path;
     }
 
-  crun_context.bundle = bundle;
-  return libcrun_container_restore (&crun_context, argv[first_arg], &cr_options, err);
+  libcrun_context_set_bundle (crun_context, bundle);
+  ret = libcrun_container_restore (crun_context, argv[first_arg], &cr_options, err);
+  libcrun_context_free (crun_context);
+  return ret;
 }
