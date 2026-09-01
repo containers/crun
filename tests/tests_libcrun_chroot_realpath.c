@@ -248,6 +248,8 @@ test_deep_path ()
   return ret;
 }
 
+static void cleanup_symlink_tree (const char *root);
+
 /* Create a temporary tree used by the symlink tests:
 
      $root/file           a regular file
@@ -263,58 +265,57 @@ static int
 make_symlink_tree (char *root, size_t root_size)
 {
   char path[PATH_MAX];
-  char *tmpdir;
   int fd;
+  int ret;
 
-  if (snprintf (root, root_size, "%s/crun-chroot-realpath-XXXXXX",
-                getenv ("TMPDIR") ? getenv ("TMPDIR") : "/tmp")
-      >= (int) root_size)
-    return 77;
-
-  tmpdir = mkdtemp (root);
-  if (tmpdir == NULL)
-    return 77;
+  ret = make_temp_root (root, root_size);
+  if (ret != 0)
+    return ret;
 
   if (snprintf (path, sizeof (path), "%s/file", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   fd = creat (path, 0600);
   if (fd < 0)
-    return 77;
+    goto fail;
   close (fd);
 
   if (snprintf (path, sizeof (path), "%s/link", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("file", path) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (mkdir (path, 0700) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir/file", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   fd = creat (path, 0600);
   if (fd < 0)
-    return 77;
+    goto fail;
   close (fd);
 
   if (snprintf (path, sizeof (path), "%s/dir/link", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("file", path) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir/up", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("../file", path) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir/abs", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("/file", path) < 0)
-    return 77;
+    goto fail;
 
   return 0;
+
+fail:
+  cleanup_symlink_tree (root);
+  return 77;
 }
 
 static void
