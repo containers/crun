@@ -813,54 +813,65 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
           else
             {
               size_t k;
-              struct scmp_arg_cmp arg_cmp[6];
               bool multiple_args = false;
               uint32_t count[6] = {};
 
-              for (k = 0; k < seccomp->syscalls[i]->args_len && k < 6; k++)
+              for (k = 0; k < seccomp->syscalls[i]->args_len; k++)
                 {
                   uint32_t index;
 
                   index = seccomp->syscalls[i]->args[k]->index;
                   if (index >= 6)
-                    return crun_make_error (err, 0, "invalid seccomp index `%zu`", i);
+                    return crun_make_error (err, 0, "invalid seccomp index `%u`", index);
 
                   count[index]++;
                   if (count[index] > 1)
-                    {
-                      multiple_args = true;
-                      break;
-                    }
+                    multiple_args = true;
                 }
 
-              for (k = 0; k < seccomp->syscalls[i]->args_len && k < 6; k++)
-                {
-                  char *op = seccomp->syscalls[i]->args[k]->op;
-
-                  arg_cmp[k].arg = seccomp->syscalls[i]->args[k]->index;
-                  ret = get_seccomp_operator (op, &(arg_cmp[k].op), err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-                  arg_cmp[k].datum_a = seccomp->syscalls[i]->args[k]->value;
-                  arg_cmp[k].datum_b = seccomp->syscalls[i]->args[k]->value_two;
-                }
-
-              if (! multiple_args)
-                {
-                  ret = seccomp_rule_add_array (ctx, action, syscall, k, arg_cmp);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, -ret, "seccomp_rule_add_array");
-                }
-              else
+              /* If multiple rules refer to the same argument, treat the rules are in OR.  */
+              if (multiple_args)
                 {
                   size_t r;
 
-                  for (r = 0; r < k; r++)
+                  for (r = 0; r < seccomp->syscalls[i]->args_len; r++)
                     {
-                      ret = seccomp_rule_add_array (ctx, action, syscall, 1, &arg_cmp[r]);
+                      struct scmp_arg_cmp arg_cmp;
+                      char *op = seccomp->syscalls[i]->args[r]->op;
+
+                      arg_cmp.arg = seccomp->syscalls[i]->args[r]->index;
+                      ret = get_seccomp_operator (op, &arg_cmp.op, err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+                      arg_cmp.datum_a = seccomp->syscalls[i]->args[r]->value;
+                      arg_cmp.datum_b = seccomp->syscalls[i]->args[r]->value_two;
+
+                      ret = seccomp_rule_add_array (ctx, action, syscall, 1, &arg_cmp);
                       if (UNLIKELY (ret < 0))
                         return crun_make_error (err, -ret, "seccomp_rule_add_array");
                     }
+                }
+              else
+                {
+                  /* No index is repeated, so there are at most 6 distinct arguments.  */
+                  const size_t args_len = seccomp->syscalls[i]->args_len;
+                  struct scmp_arg_cmp arg_cmp[6];
+
+                  for (k = 0; k < args_len; k++)
+                    {
+                      char *op = seccomp->syscalls[i]->args[k]->op;
+
+                      arg_cmp[k].arg = seccomp->syscalls[i]->args[k]->index;
+                      ret = get_seccomp_operator (op, &(arg_cmp[k].op), err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+                      arg_cmp[k].datum_a = seccomp->syscalls[i]->args[k]->value;
+                      arg_cmp[k].datum_b = seccomp->syscalls[i]->args[k]->value_two;
+                    }
+
+                  ret = seccomp_rule_add_array (ctx, action, syscall, args_len, arg_cmp);
+                  if (UNLIKELY (ret < 0))
+                    return crun_make_error (err, -ret, "seccomp_rule_add_array");
                 }
             }
         }

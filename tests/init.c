@@ -501,6 +501,20 @@ main (int argc, char **argv)
       exit (0);
     }
 
+  if (strcmp (argv[1], "socket") == 0)
+    {
+      int fd;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'socket' requires an argument");
+
+      fd = socket (atoi (argv[2]), SOCK_DGRAM, 0);
+      if (fd < 0)
+        error (EXIT_FAILURE, errno, "socket");
+      close (fd);
+      return 0;
+    }
+
   if (strcmp (argv[1], "printenv") == 0)
     {
       const char *value;
