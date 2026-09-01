@@ -34,6 +34,20 @@ build() {
     group build make -j "$(nproc)"
 }
 
+# Build the container image for the current test from tests/<test>/Dockerfile
+# and run it with the repository bind mounted at /crun.  Any extra docker run
+# arguments come from "$@".
+run_container() {
+    local image="crun-$test_name"
+
+    group "docker build" sudo docker build -t "$image" "tests/$test_name"
+    sudo docker run --rm -v "${PWD}":/crun "$@" "$image"
+}
+
+# The docker run arguments needed by a test that itself runs containers: it
+# has to share the host cgroup namespace and see the host cgroup tree.
+privileged=(--cgroupns=host --privileged -v "/sys/fs/cgroup:/sys/fs/cgroup:rw,rslave")
+
 case "$test_name" in
 disable-systemd)
     build --disable-systemd
@@ -96,48 +110,33 @@ check-systemd)
     group "tests as rootless, systemd cgroup manager" \
         ./tests/run_rootless_systemd.sh
     ;;
-podman)
+podman | centos10-build)
     sudo mkdir -p /var/lib/containers /var/tmp
-    group "docker build" sudo docker build -t crun-podman tests/podman
-    sudo docker run --cgroupns=host --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-podman
+    run_container "${privileged[@]}" \
+        -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw
     ;;
 #cri-o)
 #    sudo mkdir -p /var/lib/var-crio/tmp /var/lib/tmp-crio /var/lib/var-tmp-crio
-#    group "docker build" sudo docker build -t crun-cri-o tests/cri-o
-#    sudo docker run --cgroupns=host  --net host --privileged --rm -v /dev/zero:/sys/module/apparmor/parameters/enabled -v /var/lib/tmp-crio:/tmp:rw -v /var/lib/var-tmp-crio:/var/tmp -v /var/lib/var-crio:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-cri-o
+#    run_container "${privileged[@]}" --net host \
+#        -v /dev/zero:/sys/module/apparmor/parameters/enabled \
+#        -v /var/lib/tmp-crio:/tmp:rw -v /var/lib/var-tmp-crio:/var/tmp \
+#        -v /var/lib/var-crio:/var/lib/containers:rw
 #    ;;
 containerd)
     sudo mkdir -p /var/lib/var-containerd
-    group "docker build" sudo docker build -t crun-containerd tests/containerd
-    sudo docker run --cgroupns=host --privileged --net host --rm -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave -v "${PWD}":/crun crun-containerd
+    # Not "${privileged[@]}": this one wants all of /sys, not just the
+    # cgroup tree.
+    run_container --cgroupns=host --privileged --net host \
+        -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave
     ;;
-oci-validation)
-    group "docker build" sudo docker build -t crun-oci-validation tests/oci-validation
-    sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-oci-validation
+oci-validation | alpine-build | centos9-build)
+    run_container "${privileged[@]}"
     ;;
-alpine-build)
-    group "docker build" sudo docker build -t crun-alpine-build tests/alpine-build
-    sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-alpine-build
-    ;;
-centos9-build)
-    group "docker build" sudo docker build -t crun-centos9-build tests/centos9-build
-    sudo docker run --cgroupns=host --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-centos9-build
-    ;;
-centos10-build)
-    group "docker build" sudo docker build -t crun-centos10-build tests/centos10-build
-    sudo docker run --cgroupns=host --privileged --rm -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-centos10-build
-    ;;
-clang-format)
-    group "docker build" sudo docker build -t crun-clang-format tests/clang-format
-    sudo docker run --rm -w /crun -v "${PWD}":/crun crun-clang-format
+clang-format | cppcheck)
+    run_container -w /crun
     ;;
 clang-check)
-    group "docker build" sudo docker build -t crun-clang-check tests/clang-check
-    sudo docker run --privileged --rm -w /crun -v "${PWD}":/crun crun-clang-check
-    ;;
-cppcheck)
-    group "docker build" sudo docker build -t crun-cppcheck tests/cppcheck
-    sudo docker run --rm -w /crun -v "${PWD}":/crun crun-cppcheck
+    run_container --privileged -w /crun
     ;;
 enable-shared)
     build --enable-shared
@@ -157,8 +156,7 @@ embedded-blake3)
     build
     ;;
 system-blake3)
-    group "docker build" sudo docker build -t crun-system-blake3 tests/system-blake3
-    sudo docker run --rm -v "${PWD}":/crun crun-system-blake3
+    run_container
     ;;
 checkpoint-restore)
     build
@@ -169,15 +167,17 @@ checkpoint-restore)
         sudo make check-am TESTS=tests/test_checkpoint_restore.py || dump_log
     ;;
 fuzzing)
-    group "docker build" sudo docker build -t crun-fuzzing tests/fuzzing
-    sudo docker run --cgroupns=host -e RUN_TIME=300 --privileged --rm -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -v "${PWD}":/crun crun-fuzzing
+    run_container "${privileged[@]}" -e RUN_TIME=300
     ;;
 codespell)
     group "install codespell" pip install --break-system-packages codespell==v2.4.1 # Use known version
     codespell
     ;;
 wasmedge-build)
-    group "docker build" sudo docker build -t wasmedge tests/wasmedge-build
-    sudo docker run --privileged --cgroupns=host --rm -v containers:/var/lib/containers:rw -v /sys/fs/cgroup:/sys/fs/cgroup:rw,rslave -w /crun -v "${PWD}":/crun wasmedge
+    run_container "${privileged[@]}" -v containers:/var/lib/containers:rw -w /crun
+    ;;
+*)
+    echo "unknown test: $test_name" >&2
+    exit 1
     ;;
 esac
