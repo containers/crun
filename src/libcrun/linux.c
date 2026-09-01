@@ -1571,7 +1571,7 @@ apply_propagation_flags (const char *target, int targetfd, const char *real_targ
   if (targetfd >= 0)
     {
       libcrun_error_t tmp_err = NULL;
-      ret = do_mount_setattr (false, target, targetfd, 0, mountflags & ALL_PROPAGATIONS, &tmp_err);
+      ret = do_mount_setattr ((mountflags & MS_REC) != 0, target, targetfd, 0, mountflags & ALL_PROPAGATIONS, &tmp_err);
       if (LIKELY (ret == 0))
         propagation_done = true;
       else
