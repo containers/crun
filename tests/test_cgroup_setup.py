@@ -1418,7 +1418,9 @@ def test_annotation_delegate_cgroup_dotdot():
     for invalid in ["..", "../../../victim", "../escape", "a/../b"]:
         conf['annotations']['run.oci.delegate-cgroup'] = invalid
         try:
-            out, _ = run_and_get_output(conf, hide_stderr=True)
+            # Do not hide stderr: the error message crun prints there is
+            # exactly what this test needs to look at.
+            out, _ = run_and_get_output(conf)
             return -1
         except Exception as e:
             if hasattr(e, 'output') and e.output:
