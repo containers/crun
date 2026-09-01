@@ -306,11 +306,13 @@ test_append_paths ()
 
 #define EXPECT_STRING(exp)         \
   {                                \
-    if (ret < 0 || out == NULL)    \
+    if (ret < 0)                   \
       {                            \
         crun_error_release (&err); \
         return ret;                \
       }                            \
+    if (out == NULL)               \
+      return -1;                   \
     if (strcmp (out, exp))         \
       return -1;                   \
   }
