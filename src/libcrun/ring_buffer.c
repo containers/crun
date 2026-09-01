@@ -54,7 +54,7 @@ ring_buffer_get_read_iov (struct ring_buffer *rb, struct iovec *iov)
   else
     {
       iov[iov_count].iov_base = rb->buffer + rb->head;
-      iov[iov_count].iov_len = rb->size - rb->head - 1; /* Don't read from reserved byte */
+      iov[iov_count].iov_len = rb->size - rb->head;
       iov_count++;
 
       if (rb->tail > 0)
@@ -92,7 +92,7 @@ ring_buffer_get_write_iov (struct ring_buffer *rb, struct iovec *iov)
   else
     {
       iov[iov_count].iov_base = rb->buffer + rb->tail;
-      iov[iov_count].iov_len = rb->size - rb->tail - 1; /* Don't write to reserved byte */
+      iov[iov_count].iov_len = rb->head == 0 ? rb->size - rb->tail - 1 : rb->size - rb->tail;
       iov_count++;
 
       if (rb->head > 1)
