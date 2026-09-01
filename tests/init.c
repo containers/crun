@@ -344,27 +344,25 @@ do_pause ()
 static int
 memhog (int megabytes)
 {
+  size_t page_size, size, pos;
   char *buf;
-  int pos = 0;
 
   if (megabytes < 1)
     error (EXIT_FAILURE, 0, "memhog argument needs to be at least 1");
 
-  buf = malloc (megabytes * 1024 * 1024);
+  page_size = (size_t) sysconf (_SC_PAGESIZE);
+  size = (size_t) megabytes * 1024 * 1024;
+
+  buf = malloc (size);
   if (buf == NULL)
     error (EXIT_FAILURE, 0, "malloc");
 
   close (1);
   close (2);
 
-  while (1)
-    {
-      /* write each page once */
-      buf[pos] = 'c';
-      pos += sysconf (_SC_PAGESIZE);
-      if (pos > megabytes * 1024 * 1024)
-        break;
-    }
+  /* write each page once */
+  for (pos = 0; pos < size; pos += page_size)
+    buf[pos] = 'c';
 
   pos = 0;
 
@@ -373,8 +371,8 @@ memhog (int megabytes)
       /* change one page each 0.1 seconds */
       nanosleep ((const struct timespec[]) { { 0, 100000000L } }, NULL);
       buf[pos] = 'c';
-      pos += sysconf (_SC_PAGESIZE);
-      if (pos > megabytes * 1024 * 1024)
+      pos += page_size;
+      if (pos >= size)
         pos = 0;
     }
 
