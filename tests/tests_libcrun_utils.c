@@ -30,10 +30,26 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <stdlib.h>
 
 typedef int (*test) ();
 
 extern int cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err);
+
+static int
+make_temp_dir (char *path, size_t size)
+{
+  if (snprintf (path, size, "%s/crun-test-XXXXXX",
+                getenv ("TMPDIR") ? getenv ("TMPDIR") : "/tmp")
+      >= (int) size)
+    return -1;
+
+  if (mkdtemp (path) == NULL)
+    return -1;
+
+  return 0;
+}
 
 static int
 test_socket_pair ()
@@ -207,13 +223,17 @@ test_write_read_file ()
 {
   libcrun_error_t err = NULL;
   cleanup_free char *name = NULL;
+  char dir[PATH_MAX];
   size_t len;
   size_t i;
   int ret, failed = 0;
   size_t max = 1 << 10;
   cleanup_free char *written = xmalloc (max);
 
-  xasprintf (&name, "tests/write-file-%i", getpid ());
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  xasprintf (&name, "%s/write-file", dir);
 
   for (i = 0; i < max; i++)
     written[i] = i;
@@ -250,6 +270,7 @@ test_write_read_file ()
     }
 
   unlink (name);
+  rmdir (dir);
   return failed ? -1 : 0;
 }
 
@@ -615,15 +636,20 @@ test_crun_ensure_directory ()
 {
   libcrun_error_t err = NULL;
   cleanup_free char *path = NULL;
+  char dir[PATH_MAX];
   int ret;
 
-  xasprintf (&path, "/tmp/crun-test-dir-%d", getpid ());
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  xasprintf (&path, "%s/subdir", dir);
 
   /* Create directory */
   ret = crun_ensure_directory (path, 0755, false, &err);
   if (ret < 0)
     {
       crun_error_release (&err);
+      rmdir (dir);
       return -1;
     }
 
@@ -632,6 +658,7 @@ test_crun_ensure_directory ()
   if (ret <= 0)
     {
       rmdir (path);
+      rmdir (dir);
       crun_error_release (&err);
       return -1;
     }
@@ -641,12 +668,14 @@ test_crun_ensure_directory ()
   if (ret < 0)
     {
       rmdir (path);
+      rmdir (dir);
       crun_error_release (&err);
       return -1;
     }
 
   /* Cleanup */
   rmdir (path);
+  rmdir (dir);
   return 0;
 }
 
