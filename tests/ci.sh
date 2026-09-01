@@ -38,7 +38,11 @@ build() {
 # configure arguments in "$@".  Returns 2, rather than 1, when configure
 # itself fails, so that the caller can tell that apart from a build failure.
 cross_configure() {
-    ./configure --enable-embedded-blake3 --enable-werror "$@" || return 2
+    # --disable-maintainer-mode: the workflow runs autogen.sh natively before
+    # entering the emulated container, and make must never decide to rerun the
+    # autotools here, where they are very slow.
+    ./configure --disable-maintainer-mode --enable-embedded-blake3 \
+        --enable-werror "$@" || return 2
 }
 
 # Build just the crun binary, for the emulated cross architecture builds.
@@ -197,8 +201,6 @@ wasmedge-build)
     run_container "${privileged[@]}" -v containers:/var/lib/containers:rw -w /crun
     ;;
 cross)
-    ./autogen.sh
-
     group "static build" cross_build || {
         cat config.log
         exit 1

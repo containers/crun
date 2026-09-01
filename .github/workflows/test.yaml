@@ -29,6 +29,14 @@ jobs:
           submodules: true
           set-safe-directory: true
 
+      # Running autoreconf natively is much faster than under emulation.
+      # The generated files are architecture independent.
+      - name: Generate the configure script
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config
+          ./autogen.sh
+
       - uses: uraimo/run-on-arch-action@v3.2.0
         name: Build
         id: build
@@ -40,7 +48,7 @@ jobs:
 
           install: |
             apt-get update -y
-            apt-get install -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev clang mawk
+            apt-get install -y libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev clang mawk
 
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
