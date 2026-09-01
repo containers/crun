@@ -215,7 +215,9 @@ cross-static)
 cross-shared)
     # A shared build that cannot be configured is not treated as a failure,
     # which is what the exit status of 2 from cross_configure means here.
-    cross_build --enable-shared || test $? -eq 2
+    # --disable-static: without it libtool compiles every object twice, PIC
+    # and non-PIC, and the non-PIC ones are the static job's business.
+    cross_build --enable-shared --disable-static || test $? -eq 2
     ;;
 *)
     echo "unknown test: $test_name" >&2
