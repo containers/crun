@@ -200,6 +200,8 @@ libcrun_handler_manager_load_directory (struct custom_handler_manager_s *manager
     }
   return 0;
 #else
+  (void) manager;
+  (void) path;
   return crun_make_error (err, ENOTSUP, "dlopen not available");
 #endif
 }

@@ -482,8 +482,14 @@ test_ring_buffer_no_reserved_byte_access ()
             }
           if (ret > 0)
             {
-              char drain_buf[10];
-              read (fd_r[0], drain_buf, ret); /* Consume the output */
+              char drain_buf[10]; /* rb_size is 2, so ret always fits */
+
+              /* Consume the output.  */
+              if (read (fd_r[0], drain_buf, ret) < 0)
+                {
+                  fprintf (stderr, "cycle %d: drain read failed\n", cycle);
+                  return 1;
+                }
             }
       } while (! is_eagain && ret > 0);
     }
