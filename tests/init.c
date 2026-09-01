@@ -503,9 +503,14 @@ main (int argc, char **argv)
 
   if (strcmp (argv[1], "printenv") == 0)
     {
+      const char *value;
+
       if (argc < 3)
         error (EXIT_FAILURE, 0, "'printenv' requires an argument");
-      fputs (getenv (argv[2]), stdout);
+      value = getenv (argv[2]);
+      if (value == NULL)
+        error (EXIT_FAILURE, 0, "environment variable `%s` is not set", argv[2]);
+      fputs (value, stdout);
       exit (0);
     }
 
@@ -769,7 +774,7 @@ main (int argc, char **argv)
 
   if (strcmp (argv[1], "ip") == 0)
     {
-      if (argc < 2)
+      if (argc < 3)
         error (EXIT_FAILURE, 0, "'ip' requires an argument");
       dump_net_interface (argv[2]);
       exit (EXIT_SUCCESS);
@@ -777,7 +782,7 @@ main (int argc, char **argv)
 
   if (strcmp (argv[1], "write") == 0)
     {
-      if (argc < 3)
+      if (argc < 4)
         error (EXIT_FAILURE, 0, "'write' requires two arguments");
       write_to (argv[2], argv[3]);
       exit (EXIT_SUCCESS);
