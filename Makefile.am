@@ -292,6 +292,13 @@ tests_tests_libcrun_cgroup_LDFLAGS = $(crun_LDFLAGS)
 endif
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
+
+# The cgroup manager the Python tests tell crun to use.  Override it on the
+# command line to exercise a different backend, e.g. "make check
+# CGROUP_MANAGER=systemd" (see the check-systemd target below).
+CGROUP_MANAGER = cgroupfs
+AM_TESTS_ENVIRONMENT = CGROUP_MANAGER='$(CGROUP_MANAGER)'; export CGROUP_MANAGER;
+
 PY_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
 
@@ -346,6 +353,12 @@ TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
 # set NO_NEW_PRIVS, which the test containers inherit.
 check-no-openat2: tests/no_openat2$(EXEEXT)
 	$(MAKE) $(AM_MAKEFLAGS) check TESTS_ENVIRONMENT='$(abs_top_builddir)/tests/no_openat2$(EXEEXT)'
+
+# Run the whole test suite with the systemd cgroup manager.  The tests already
+# know which of them are specific to one manager or the other, but without this
+# they only ever run with the cgroupfs one.
+check-systemd:
+	$(MAKE) $(AM_MAKEFLAGS) check CGROUP_MANAGER=systemd
 endif
 
 .version:
@@ -366,7 +379,7 @@ dist-hook:
 	$(AM_V_GEN)echo $(VERSION) > $(distdir)/.tarball-version
 	$(AM__GEN)cp git-version.h $(distdir)/.tarball-git-version.h
 
-EXTRA_DIST += $(PYTHON_TESTS) tests/tests_utils.py build-aux/git-version-gen src/libcrun/signals.perf src/libcrun/mount_flags.perf
+EXTRA_DIST += $(PYTHON_TESTS) tests/run_rootless_systemd.sh tests/tests_utils.py build-aux/git-version-gen src/libcrun/signals.perf src/libcrun/mount_flags.perf
 BUILT_SOURCES = .version git-version.h
 
 CLEANFILES = crun.spec .version git-version.h $(LUACRUN_ROCKSPEC)
@@ -566,4 +579,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: check-no-openat2 coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 check-systemd coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env

@@ -73,6 +73,7 @@ jobs:
           - test: disable-systemd
           - test: check
           - test: check-no-openat2
+          - test: check-systemd
           - test: enable-shared
           - test: embedded-blake3
           - test: system-blake3
@@ -162,6 +163,38 @@ jobs:
                   # inherited by the test containers.
                   group "tests as root, openat2 blocked" \
                       sudo make check-no-openat2 ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
+              ;;
+              check-systemd)
+                  # Run the test suite with the systemd cgroup manager.  The
+                  # tests know which of them are specific to one cgroup manager
+                  # or the other, but by default they only ever exercise the
+                  # cgroupfs one.
+                  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+                  group configure ./configure --enable-embedded-blake3 --disable-dl
+                  group build make
+
+                  group "tests as root, systemd cgroup manager" \
+                      sudo make check-systemd ASAN_OPTIONS=detect_leaks=false || (cat test-suite.log; exit 1)
+
+                  # The rootless run needs a systemd user session, since that
+                  # is what rootless crun asks to create the container scope.
+                  # The runner user never logs in, so nothing starts one:
+                  # install the session bus, then enable lingering to bring
+                  # user@$UID.service up, and point the run at its bus.  Ending
+                  # up in the right cgroup is up to the script, see the comment
+                  # in tests/run_rootless_systemd.sh.
+                  group "install dbus-user-session" sudo apt-get install -q -y dbus-user-session
+                  sudo loginctl enable-linger "$(id -un)"
+                  XDG_RUNTIME_DIR="/run/user/$(id -u)"
+                  DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+                  export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+                  for _ in $(seq 30); do
+                      test -S "$XDG_RUNTIME_DIR/bus" && break
+                      sleep 1
+                  done
+
+                  group "tests as rootless, systemd cgroup manager" \
+                      ./tests/run_rootless_systemd.sh
               ;;
               podman)
                   sudo mkdir -p /var/lib/containers /var/tmp
