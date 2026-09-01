@@ -81,6 +81,7 @@ jobs:
           #- test: centos10-build
           - test: clang-format
           - test: clang-check
+          - test: cppcheck
           - test: bindings
           - test: checkpoint-restore
           - test: fuzzing
@@ -183,6 +184,10 @@ jobs:
               clang-check)
                   sudo docker build -t crun-clang-check tests/clang-check
                   sudo docker run --privileged --rm -w /crun -v ${PWD}:/crun crun-clang-check
+              ;;
+              cppcheck)
+                  sudo docker build -t crun-cppcheck tests/cppcheck
+                  sudo docker run --rm -w /crun -v ${PWD}:/crun crun-cppcheck
               ;;
               enable-shared)
                   ./configure --enable-embedded-blake3 --enable-shared

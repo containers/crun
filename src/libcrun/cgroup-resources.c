@@ -485,7 +485,7 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
   int ret;
   if (net->class_id)
     {
-      len = snprintf (fmt_buf, sizeof (fmt_buf), "%d", net->class_id);
+      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIu32, net->class_id);
       if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
         return crun_make_error (err, 0, "internal error: static buffer too small");
 
@@ -503,7 +503,8 @@ write_network_resources (int dirfd_netclass, int dirfd_netprio, runtime_spec_sch
 
       for (i = 0; i < net->priorities_len; i++)
         {
-          len = snprintf (fmt_buf, sizeof (fmt_buf), "%s %d\n", net->priorities[i]->name, net->priorities[i]->priority);
+          len = snprintf (fmt_buf, sizeof (fmt_buf), "%s %" PRIu32 "\n", net->priorities[i]->name,
+                          net->priorities[i]->priority);
           if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
             return crun_make_error (err, 0, "internal error: static buffer too small");
 

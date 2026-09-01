@@ -21,6 +21,7 @@
 #include "utils.h"
 #include "ring_buffer.h"
 #include <stdarg.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
@@ -1679,7 +1680,7 @@ format_default_id_mapping (char **out, uid_t container_id, uid_t host_uid, uid_t
   if (container_id > 0)
     {
       uint32_t used = MIN (container_id, available);
-      ret = snprintf (buffer + written, remaining, "%d %d %d\n", 0, from, used);
+      ret = snprintf (buffer + written, remaining, "%d %" PRIu32 " %" PRIu32 "\n", 0, from, used);
       if (UNLIKELY (ret >= remaining))
         return crun_make_error (err, 0, "internal error: allocated buffer too small");
 
@@ -1700,7 +1701,7 @@ format_default_id_mapping (char **out, uid_t container_id, uid_t host_uid, uid_t
   /* Last mapping: use any id that is left.  */
   if (available)
     {
-      ret = snprintf (buffer + written, remaining, "%d %d %d\n", container_id + 1, from, available);
+      ret = snprintf (buffer + written, remaining, "%d %" PRIu32 " %" PRIu32 "\n", container_id + 1, from, available);
       if (UNLIKELY (ret >= remaining))
         return crun_make_error (err, 0, "internal error: allocated buffer too small");
       written += ret;
@@ -2444,7 +2445,7 @@ safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_er
   size_t written = 0;
   while (written < count)
     {
-      ssize_t w = write (fd, buf + written, count - written);
+      ssize_t w = write (fd, (const char *) buf + written, count - written);
       if (UNLIKELY (w < 0))
         {
           if (errno == EINTR || errno == EAGAIN)
