@@ -191,13 +191,14 @@ test_run_process ()
 static int
 test_dir_p ()
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   if (crun_dir_p ("/usr", false, &err) <= 0)
     return -1;
   if (crun_dir_p ("/dev/zero", false, &err) != 0)
     return -1;
   if (crun_dir_p ("/hopefully/does/not/really/exist", false, &err) >= 0)
     return -1;
+  crun_error_release (&err);
   return 0;
 }
 
@@ -490,12 +491,15 @@ test_cpuset_string_to_bitmask ()
 
   if (cpuset_string_to_bitmask ("a", &mask, &mask_size, &err) == 0)
     return -1;
+  crun_error_release (&err);
 
   if (cpuset_string_to_bitmask ("-1", &mask, &mask_size, &err) == 0)
     return -1;
+  crun_error_release (&err);
 
   if (cpuset_string_to_bitmask ("0-", &mask, &mask_size, &err) == 0)
     return -1;
+  crun_error_release (&err);
 
   if (cpuset_string_to_bitmask ("0-2,4-6", &mask, &mask_size, &err) < 0)
     return -1;
