@@ -49,7 +49,10 @@ test_intelrdt_clean_l3_cache_schema ()
   do                                                  \
     {                                                 \
       char *res = intelrdt_clean_l3_cache_schema (X); \
-      int r = strcmp (res, Y);                        \
+      int r;                                          \
+      if (res == NULL)                                \
+        return 1;                                     \
+      r = strcmp (res, Y);                            \
       free (res);                                     \
       if (r)                                          \
         return 1;                                     \
@@ -84,6 +87,8 @@ test_get_rdt_value ()
     {                                                    \
       char *result = NULL;                               \
       int r = get_rdt_value (&result, L3, MB, SCHEMATA); \
+      if (r < 0 || result == NULL)                       \
+        return 1;                                        \
       if (strlen (result) != (size_t) r)                 \
         return 1;                                        \
       int cmp = strcmp (result, EXPECTED);               \
