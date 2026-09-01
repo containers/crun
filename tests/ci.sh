@@ -34,6 +34,27 @@ build() {
     group build make -j "$(nproc)"
 }
 
+# Configure for one of the emulated cross architecture builds, with any extra
+# configure arguments in "$@".  Returns 2, rather than 1, when configure
+# itself fails, so that the caller can tell that apart from a build failure.
+cross_configure() {
+    ./configure --enable-embedded-blake3 --enable-werror "$@" || return 2
+}
+
+# Build just the crun binary, for the emulated cross architecture builds.
+# Everything is roughly 20x slower under emulation, so nothing else is built,
+# and a plain "make crun" does not do: the generated headers are not among
+# its prerequisites, so they have to be made first.
+cross_build() {
+    # The status of each command is checked explicitly: "set -e" does not
+    # apply inside a function whose caller looks at its exit status.
+    cross_configure "$@" || return
+    make -j "$(nproc)" -C libocispec libocispec.la &&
+        make git-version.h &&
+        make -j "$(nproc)" libcrun.la &&
+        make -j "$(nproc)" crun
+}
+
 # Build the container image for the current test from tests/<test>/Dockerfile
 # and run it with the repository bind mounted at /crun.  Any extra docker run
 # arguments come from "$@".
@@ -174,6 +195,20 @@ codespell)
     ;;
 wasmedge-build)
     run_container "${privileged[@]}" -v containers:/var/lib/containers:rw -w /crun
+    ;;
+cross)
+    ./autogen.sh
+
+    group "static build" cross_build || {
+        cat config.log
+        exit 1
+    }
+
+    make -j "$(nproc)" clean
+
+    # A shared build that cannot be configured is not treated as a failure,
+    # which is what the exit status of 2 from cross_configure means here.
+    group "shared build" cross_build --enable-shared || test $? -eq 2
     ;;
 *)
     echo "unknown test: $test_name" >&2

@@ -44,25 +44,7 @@ jobs:
 
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
-            ./autogen.sh
-            echo "::group::static build"
-            ./configure --enable-embedded-blake3 --enable-werror || { echo "::endgroup::"; cat config.log; exit 1; }
-            make -j $(nproc) -C libocispec libocispec.la
-            make git-version.h
-            make -j $(nproc) libcrun.la
-            make -j $(nproc) crun
-            echo "::endgroup::"
-
-            make -j $(nproc) clean
-
-            echo "::group::shared build"
-            if ./configure --enable-embedded-blake3 --enable-shared --enable-werror; then
-                        make -j $(nproc) -C libocispec libocispec.la
-                        make git-version.h
-                        make -j $(nproc) libcrun.la
-                        make -j $(nproc) crun
-            fi
-            echo "::endgroup::"
+            ./tests/ci.sh cross
 
   Test:
     runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
