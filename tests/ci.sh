@@ -129,14 +129,16 @@ containerd)
     run_container --cgroupns=host --privileged --net host \
         -v /tmp:/tmp:rw -v /var/lib/var-containerd:/var/lib:rw -v /sys:/sys:rw,rslave
     ;;
-oci-validation | alpine-build | centos9-build)
+oci-validation)
     run_container "${privileged[@]}"
     ;;
-clang-format | cppcheck)
-    run_container -w /crun
+alpine-build | centos9-build | system-blake3)
+    # These only build crun, they never run a container, so they need
+    # none of the privileges the tests above do.
+    run_container
     ;;
-clang-check)
-    run_container --privileged -w /crun
+clang-format | clang-check | cppcheck)
+    run_container -w /crun
     ;;
 enable-shared)
     build --enable-shared
@@ -154,9 +156,6 @@ bindings)
     ;;
 embedded-blake3)
     build
-    ;;
-system-blake3)
-    run_container
     ;;
 checkpoint-restore)
     build
