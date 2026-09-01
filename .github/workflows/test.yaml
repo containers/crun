@@ -216,7 +216,10 @@ jobs:
               checkpoint-restore)
                   ./configure --enable-embedded-blake3
                   make -j $(nproc)
-                  sudo python3 tests/test_checkpoint_restore.py
+                  # Use check-am (not "make tests/*.trs", which always exits 0
+                  # regardless of the test result, and not "make check", which
+                  # recurses into libocispec with the TESTS override).
+                  sudo make check-am TESTS=tests/test_checkpoint_restore.py || (cat test-suite.log; exit 1)
               ;;
               fuzzing)
                   sudo docker build -t crun-fuzzing tests/fuzzing
