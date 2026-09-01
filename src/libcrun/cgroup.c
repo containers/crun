@@ -117,7 +117,7 @@ libcrun_cgroup_is_container_paused (struct libcrun_cgroup_status *status, bool *
   int cgroup_mode;
   int ret;
 
-  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+  if (cgroup_path == NULL)
     return 0;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
@@ -558,10 +558,10 @@ libcrun_cgroup_make_status (libcrun_container_status_t *status)
 
   ret = xmalloc0 (sizeof *ret);
 
-  if (status->cgroup_path)
+  if (! is_empty_string (status->cgroup_path))
     ret->path = xstrdup (status->cgroup_path);
 
-  if (status->scope)
+  if (! is_empty_string (status->scope))
     ret->scope = xstrdup (status->scope);
 
   if (is_empty_string (status->cgroup_path) && is_empty_string (status->scope))

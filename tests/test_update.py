@@ -18,6 +18,7 @@
 import json
 import os
 import subprocess
+import tempfile
 import time
 from tests_utils import *
 
@@ -555,6 +556,67 @@ def test_update_unified_resources():
             run_crun_command(["delete", "-f", cid])
 
 
+def run_crun_expect_failure(args):
+    """Run a crun command that must fail, returning (returncode, output).
+
+    Unlike run_crun_command() the output includes stderr, and a command
+    killed by a signal is reported instead of raising.
+    """
+    cmd = [get_crun_path(), "--root", get_tests_root_status()] + args
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          close_fds=False)
+    return proc.returncode, proc.stdout.decode('utf-8', errors='ignore')
+
+
+def check_update_without_cgroup(resources_args):
+    """Update a container running without cgroups and expect a clean refusal."""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, command='run', detach=True,
+                                    cgroup_manager='disabled', hide_stderr=True)
+
+        code, out = run_crun_expect_failure(['--cgroup-manager=disabled', 'update']
+                                            + resources_args + [cid])
+        if code < 0:
+            logger.info("crun update was killed by signal %d", -code)
+            return -1
+        if code == 0:
+            logger.info("crun update unexpectedly succeeded")
+            return -1
+        if "cannot set limits without cgroups" not in out:
+            logger.info("unexpected error message: %s", out)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_update_without_cgroup_memory():
+    """Updating a limit without cgroups must fail with a clear message."""
+    return check_update_without_cgroup(['--memory', '104857600'])
+
+
+def test_update_without_cgroup_device_no_access():
+    """A device rule without `access` must not crash the no-cgroup path."""
+    resources = {'devices': [{'allow': True, 'type': 'c', 'major': 1, 'minor': 3}]}
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(resources, f)
+        resources_file = f.name
+
+    try:
+        return check_update_without_cgroup(['-r', resources_file])
+    finally:
+        os.unlink(resources_file)
+
 all_tests = {
     "update-memory-limit": test_update_memory_limit,
     "update-cpu-shares": test_update_cpu_shares,
@@ -569,6 +631,8 @@ all_tests = {
     "update-cpuset-mems": test_update_cpuset_mems,
     "update-multiple-resources": test_update_multiple_resources,
     "update-unified-resources": test_update_unified_resources,
+    "update-without-cgroup-memory": test_update_without_cgroup_memory,
+    "update-without-cgroup-device-no-access": test_update_without_cgroup_device_no_access,
 }
 
 if __name__ == "__main__":
