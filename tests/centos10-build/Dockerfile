@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream10-development
+FROM quay.io/centos/centos:stream10
 
 RUN yum  --enablerepo='appstream'  --enablerepo='baseos' --enablerepo='crb' install -y make \
     automake autoconf gettext criu-devel libtool gcc libcap-devel systemd-devel \
