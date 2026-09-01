@@ -1386,7 +1386,7 @@ has_bpf_fs ()
 {
   struct statfs stat;
 
-  return statfs (SYS_FS_BPF, &stat) == 0 && (stat.f_type == BPF_FS_MAGIC);
+  return statfs (SYS_FS_BPF, &stat) == 0 && (stat.f_type == (typeof (stat.f_type)) BPF_FS_MAGIC);
 }
 
 static int

@@ -2,6 +2,10 @@ DIST_SUBDIRS = libocispec
 SUBDIRS = libocispec
 ACLOCAL_AMFLAGS = -I m4
 
+# The warning flags detected by configure.  automake puts AM_CFLAGS before
+# CFLAGS, so the user can still override any of them.
+AM_CFLAGS = $(WARN_CFLAGS)
+
 WD := $(shell pwd)
 # outdir is needed by the make_srpm build type on Fedora copr
 # https://docs.pagure.org/copr.copr/user_documentation.html#make-srpm
@@ -84,7 +88,7 @@ libcrun_SOURCES += src/libcrun/blake3/blake3.c \
 endif
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
-libcrun_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden
+libcrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden
 if ENABLE_COVERAGE
 libcrun_la_CFLAGS += $(COVERAGE_CFLAGS)
 libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(COVERAGE_LDFLAGS)
@@ -96,7 +100,7 @@ libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(JSON_C_LIBS)
 # build a version with all the symbols visible for testing
 if BUILD_TESTS
 libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
-libcrun_testing_la_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default
+libcrun_testing_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default
 if ENABLE_COVERAGE
 libcrun_testing_la_CFLAGS += $(COVERAGE_CFLAGS)
 libcrun_testing_la_LDFLAGS = $(COVERAGE_LDFLAGS)
@@ -107,7 +111,7 @@ endif
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
 python_crun_la_SOURCES = python/crun_python.c
-python_crun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src $(PYTHON_CFLAGS)
+python_crun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src $(PYTHON_CFLAGS)
 python_crun_la_LDFLAGS = -avoid-version -module $(PYTHON_LDFLAGS)
 python_crun_la_LIBADD = libcrun.la $(PYTHON_LIBS) $(FOUND_LIBS) $(JSON_C_LIBS)
 endif
@@ -115,7 +119,7 @@ endif
 if LUA_BINDINGS
 luaexec_LTLIBRARIES = luacrun.la
 luacrun_la_SOURCES = lua/lua_crun.c
-luacrun_la_CFLAGS = -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src $(LUA_INCLUDE)
+luacrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/libocispec/src -I $(abs_top_builddir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src $(LUA_INCLUDE)
 luacrun_la_LDFLAGS = -avoid-version -module
 luacrun_la_LIBADD = libcrun.la $(LUA_LIB) $(FOUND_LIBS)
 
@@ -144,7 +148,7 @@ dist-luarock: $(LUACRUN_ROCK)
 
 endif
 
-crun_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
+crun_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
 if ENABLE_COVERAGE
 crun_CFLAGS += $(COVERAGE_CFLAGS)
 endif
@@ -213,74 +217,74 @@ TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(JSON_C_LIBS)
 
 tests_init_LDADD =
 tests_init_LDFLAGS = -static-libgcc -all-static
-tests_init_CFLAGS = -g -O2
+tests_init_CFLAGS = $(WARN_CFLAGS) -g -O2
 tests_init_SOURCES = tests/init.c
 
 tests_no_openat2_LDADD =
-tests_no_openat2_CFLAGS = -g -O2
+tests_no_openat2_CFLAGS = $(WARN_CFLAGS) -g -O2
 tests_no_openat2_SOURCES = tests/no_openat2.c
 
-tests_tests_libcrun_utils_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_utils_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_utils_SOURCES = tests/tests_libcrun_utils.c
 tests_tests_libcrun_utils_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_utils_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_ring_buffer_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_ring_buffer_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_ring_buffer_SOURCES = tests/tests_libcrun_ring_buffer.c
 tests_tests_libcrun_ring_buffer_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_ring_buffer_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_intelrdt_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_intelrdt_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_intelrdt_SOURCES = tests/tests_libcrun_intelrdt.c
 tests_tests_libcrun_intelrdt_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_intelrdt_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_fuzzer_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_fuzzer_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_fuzzer_SOURCES = tests/tests_libcrun_fuzzer.c
 tests_tests_libcrun_fuzzer_LDADD = $(TESTS_LDADD) libocispec/libocispec.la $(JSON_C_LIBS)
 tests_tests_libcrun_fuzzer_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_errors_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_errors_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_errors_SOURCES = tests/tests_libcrun_errors.c
 tests_tests_libcrun_errors_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_errors_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_terminal_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_terminal_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_terminal_SOURCES = tests/tests_libcrun_terminal.c
 tests_tests_libcrun_terminal_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_terminal_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_custom_handler_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_custom_handler_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_custom_handler_SOURCES = tests/tests_libcrun_custom_handler.c
 tests_tests_libcrun_custom_handler_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_custom_handler_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_linux_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_linux_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_linux_SOURCES = tests/tests_libcrun_linux.c
 tests_tests_libcrun_linux_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_linux_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_signals_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_signals_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_signals_SOURCES = tests/tests_libcrun_signals.c
 tests_tests_libcrun_signals_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_signals_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_mount_flags_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_mount_flags_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_mount_flags_SOURCES = tests/tests_libcrun_mount_flags.c
 tests_tests_libcrun_mount_flags_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_mount_flags_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_chroot_realpath_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_chroot_realpath_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_chroot_realpath_SOURCES = tests/tests_libcrun_chroot_realpath.c
 tests_tests_libcrun_chroot_realpath_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_chroot_realpath_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_seccomp_notify_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_seccomp_notify_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_seccomp_notify_SOURCES = tests/tests_libcrun_seccomp_notify.c
 tests_tests_libcrun_seccomp_notify_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_seccomp_notify_LDFLAGS = $(crun_LDFLAGS)
 
-tests_tests_libcrun_cgroup_CFLAGS = -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_cgroup_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
 tests_tests_libcrun_cgroup_SOURCES = tests/tests_libcrun_cgroup.c
 tests_tests_libcrun_cgroup_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_cgroup_LDFLAGS = $(crun_LDFLAGS)

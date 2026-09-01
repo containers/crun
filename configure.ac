@@ -22,6 +22,36 @@ AC_PROG_SED
 AC_PROG_CC
 AM_PATH_PYTHON(3)
 
+dnl Compiler warnings.  They are not added to CFLAGS, which belongs to the
+dnl user, but to WARN_CFLAGS, that automake puts before CFLAGS so that the
+dnl user can still override any of them.
+AC_ARG_ENABLE([werror],
+	AS_HELP_STRING([--enable-werror], [treat compiler warnings as errors]))
+
+WARN_CFLAGS=
+crun_save_CFLAGS="$CFLAGS"
+for crun_flag in \
+	-Wall \
+	-Wextra \
+	-Wvla \
+	-Walloca \
+	-Wduplicated-cond \
+	-Wduplicated-branches \
+	-Winit-self \
+	-Wshift-overflow=2 ; do
+	AC_MSG_CHECKING([whether $CC accepts $crun_flag])
+	dnl -Werror is needed as clang only warns about the flags it does not know.
+	CFLAGS="$crun_save_CFLAGS $crun_flag -Werror"
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])],
+			  [AC_MSG_RESULT([yes])
+			   WARN_CFLAGS="$WARN_CFLAGS $crun_flag"],
+			  [AC_MSG_RESULT([no])])
+done
+CFLAGS="$crun_save_CFLAGS"
+
+AS_IF([test "x$enable_werror" = "xyes"], [WARN_CFLAGS="$WARN_CFLAGS -Werror"])
+AC_SUBST([WARN_CFLAGS])
+
 AC_PATH_PROG(MD2MAN, go-md2man)
 
 AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])

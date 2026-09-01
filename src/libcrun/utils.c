@@ -2457,10 +2457,11 @@ safe_write (int fd, const char *fname, const void *buf, size_t count, libcrun_er
   return 0;
 }
 
+#define MAX_PARTS 32
+
 int
 append_paths (char **out, libcrun_error_t *err, ...)
 {
-  const size_t MAX_PARTS = 32;
   const char *parts[MAX_PARTS];
   size_t sizes[MAX_PARTS];
   size_t total_len = 0;

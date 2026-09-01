@@ -244,35 +244,42 @@ make_symlink_tree (char *root, size_t root_size)
   if (tmpdir == NULL)
     return 77;
 
-  snprintf (path, sizeof (path), "%s/file", root);
+  if (snprintf (path, sizeof (path), "%s/file", root) >= (int) sizeof (path))
+    return 77;
   fd = creat (path, 0600);
   if (fd < 0)
     return 77;
   close (fd);
 
-  snprintf (path, sizeof (path), "%s/link", root);
+  if (snprintf (path, sizeof (path), "%s/link", root) >= (int) sizeof (path))
+    return 77;
   if (symlink ("file", path) < 0)
     return 77;
 
-  snprintf (path, sizeof (path), "%s/dir", root);
+  if (snprintf (path, sizeof (path), "%s/dir", root) >= (int) sizeof (path))
+    return 77;
   if (mkdir (path, 0700) < 0)
     return 77;
 
-  snprintf (path, sizeof (path), "%s/dir/file", root);
+  if (snprintf (path, sizeof (path), "%s/dir/file", root) >= (int) sizeof (path))
+    return 77;
   fd = creat (path, 0600);
   if (fd < 0)
     return 77;
   close (fd);
 
-  snprintf (path, sizeof (path), "%s/dir/link", root);
+  if (snprintf (path, sizeof (path), "%s/dir/link", root) >= (int) sizeof (path))
+    return 77;
   if (symlink ("file", path) < 0)
     return 77;
 
-  snprintf (path, sizeof (path), "%s/dir/up", root);
+  if (snprintf (path, sizeof (path), "%s/dir/up", root) >= (int) sizeof (path))
+    return 77;
   if (symlink ("../file", path) < 0)
     return 77;
 
-  snprintf (path, sizeof (path), "%s/dir/abs", root);
+  if (snprintf (path, sizeof (path), "%s/dir/abs", root) >= (int) sizeof (path))
+    return 77;
   if (symlink ("/file", path) < 0)
     return 77;
 
@@ -288,7 +295,8 @@ cleanup_symlink_tree (const char *root)
 
   for (i = 0; files[i]; i++)
     {
-      snprintf (path, sizeof (path), "%s/%s", root, files[i]);
+      if (snprintf (path, sizeof (path), "%s/%s", root, files[i]) >= (int) sizeof (path))
+        continue;
       if (remove (path) < 0)
         continue;
     }

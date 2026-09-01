@@ -84,7 +84,7 @@ test_get_rdt_value ()
     {                                                    \
       char *result = NULL;                               \
       int r = get_rdt_value (&result, L3, MB, SCHEMATA); \
-      if (strlen (result) != r)                          \
+      if (strlen (result) != (size_t) r)                 \
         return 1;                                        \
       int cmp = strcmp (result, EXPECTED);               \
       free (result);                                     \
