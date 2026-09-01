@@ -843,7 +843,10 @@ main (int argc, char **argv)
           if (pid < 0)
             error (EXIT_FAILURE, errno, "fork");
           if (pid == 0)
-            sleep (100);
+            {
+              sleep (100);
+              _exit (EXIT_SUCCESS);
+            }
         }
 
       return 0;
