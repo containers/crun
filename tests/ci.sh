@@ -49,14 +49,20 @@ cross_configure() {
 # Everything is roughly 20x slower under emulation, so nothing else is built,
 # and a plain "make crun" does not do: the generated headers are not among
 # its prerequisites, so they have to be made first.
-cross_build() {
-    # The status of each command is checked explicitly: "set -e" does not
-    # apply inside a function whose caller looks at its exit status.
-    cross_configure "$@" || return
+cross_make() {
     make -j "$(nproc)" -C libocispec libocispec.la &&
         make git-version.h &&
         make -j "$(nproc)" libcrun.la &&
         make -j "$(nproc)" crun
+}
+
+# The cross architecture counterpart of build(), with any extra configure
+# arguments in "$@".
+cross_build() {
+    # The status of each command is checked explicitly: "set -e" does not
+    # apply inside a function whose caller looks at its exit status.
+    group configure cross_configure "$@" || return
+    group build cross_make
 }
 
 # Build the container image for the current test from tests/<test>/Dockerfile
@@ -200,17 +206,16 @@ codespell)
 wasmedge-build)
     run_container "${privileged[@]}" -v containers:/var/lib/containers:rw -w /crun
     ;;
-cross)
-    group "static build" cross_build || {
+cross-static)
+    cross_build || {
         cat config.log
         exit 1
     }
-
-    make -j "$(nproc)" clean
-
+    ;;
+cross-shared)
     # A shared build that cannot be configured is not treated as a failure,
     # which is what the exit status of 2 from cross_configure means here.
-    group "shared build" cross_build --enable-shared || test $? -eq 2
+    cross_build --enable-shared || test $? -eq 2
     ;;
 *)
     echo "unknown test: $test_name" >&2
