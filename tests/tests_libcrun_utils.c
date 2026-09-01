@@ -24,6 +24,9 @@
 #include <libcrun/cgroup-systemd.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
+#include <sys/wait.h>
+#include <errno.h>
+#include <signal.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
@@ -102,8 +105,11 @@ test_send_receive_fd ()
       cleanup_close int pipefd1 = -1;
       char buffer[256];
       const char *test_string = "TEST STRING";
+      int result = -1;
+      int status;
+
       if (pipe (pipes) < 0)
-        return -1;
+        goto reap_child;
 
       pipefd0 = pipes[0];
       pipefd1 = pipes[1];
@@ -112,19 +118,24 @@ test_send_receive_fd ()
       fd0 = -1;
 
       if (send_fd_to_socket (fd1, pipefd0, &err) < 0)
-        return -1;
+        goto reap_child;
 
       if (write (pipefd1, test_string, strlen (test_string) + 1) < 0)
-        return -1;
+        goto reap_child;
 
       ret = read (fd1, buffer, sizeof (buffer));
-      if (ret < 0)
-        return -1;
-
       if (ret != (int) strlen (test_string) + 1)
-        return -1;
+        goto reap_child;
 
-      return strcmp (buffer, test_string);
+      result = strcmp (buffer, test_string);
+
+    reap_child:
+      /* The child is either done or stuck waiting for data that is not
+         going to arrive.  */
+      kill (pid, SIGKILL);
+      while (waitpid (pid, &status, 0) < 0 && errno == EINTR)
+        ;
+      return result;
     }
   else
     {
@@ -138,9 +149,9 @@ test_send_receive_fd ()
 
       ret = read (fd, buffer, sizeof (buffer));
       if (ret <= 0)
-        return -1;
+        _exit (1);
       if (write (fd0, buffer, ret) < 0)
-        return -1;
+        _exit (1);
 
       _exit (0);
     }
