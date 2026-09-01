@@ -245,7 +245,7 @@ test_ring_buffer_read_write ()
   for (i = 0; i < sizeof (max_data_sizes) / sizeof (max_data_sizes[0]); i++)
     {
       ret = do_test_ring_buffer_read_write (max_data_sizes[i], rb_sizes[i]);
-      if (ret < 0)
+      if (ret != 0)
         {
           fprintf (stderr, "test failed with data_size=%zu, rb_size=%zu\n", max_data_sizes[i], rb_sizes[i]);
           return ret;

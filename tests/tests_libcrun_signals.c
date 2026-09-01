@@ -27,40 +27,40 @@ static int
 test_str2sig_common_signals ()
 {
   /* Test common signals without SIG prefix */
-  if (str2sig ("TERM") != 15)
+  if (str2sig ("TERM") != SIGTERM)
     return -1;
 
-  if (str2sig ("KILL") != 9)
+  if (str2sig ("KILL") != SIGKILL)
     return -1;
 
-  if (str2sig ("INT") != 2)
+  if (str2sig ("INT") != SIGINT)
     return -1;
 
-  if (str2sig ("HUP") != 1)
+  if (str2sig ("HUP") != SIGHUP)
     return -1;
 
-  if (str2sig ("QUIT") != 3)
+  if (str2sig ("QUIT") != SIGQUIT)
     return -1;
 
-  if (str2sig ("USR1") != 10)
+  if (str2sig ("USR1") != SIGUSR1)
     return -1;
 
-  if (str2sig ("USR2") != 12)
+  if (str2sig ("USR2") != SIGUSR2)
     return -1;
 
-  if (str2sig ("PIPE") != 13)
+  if (str2sig ("PIPE") != SIGPIPE)
     return -1;
 
-  if (str2sig ("ALRM") != 14)
+  if (str2sig ("ALRM") != SIGALRM)
     return -1;
 
-  if (str2sig ("CHLD") != 17)
+  if (str2sig ("CHLD") != SIGCHLD)
     return -1;
 
-  if (str2sig ("CONT") != 18)
+  if (str2sig ("CONT") != SIGCONT)
     return -1;
 
-  if (str2sig ("STOP") != 19)
+  if (str2sig ("STOP") != SIGSTOP)
     return -1;
 
   return 0;
@@ -70,40 +70,40 @@ static int
 test_str2sig_with_sig_prefix ()
 {
   /* Test signals with SIG prefix - should return same values as without */
-  if (str2sig ("SIGTERM") != 15)
+  if (str2sig ("SIGTERM") != SIGTERM)
     return -1;
 
-  if (str2sig ("SIGKILL") != 9)
+  if (str2sig ("SIGKILL") != SIGKILL)
     return -1;
 
-  if (str2sig ("SIGINT") != 2)
+  if (str2sig ("SIGINT") != SIGINT)
     return -1;
 
-  if (str2sig ("SIGHUP") != 1)
+  if (str2sig ("SIGHUP") != SIGHUP)
     return -1;
 
-  if (str2sig ("SIGQUIT") != 3)
+  if (str2sig ("SIGQUIT") != SIGQUIT)
     return -1;
 
-  if (str2sig ("SIGUSR1") != 10)
+  if (str2sig ("SIGUSR1") != SIGUSR1)
     return -1;
 
-  if (str2sig ("SIGUSR2") != 12)
+  if (str2sig ("SIGUSR2") != SIGUSR2)
     return -1;
 
-  if (str2sig ("SIGPIPE") != 13)
+  if (str2sig ("SIGPIPE") != SIGPIPE)
     return -1;
 
-  if (str2sig ("SIGALRM") != 14)
+  if (str2sig ("SIGALRM") != SIGALRM)
     return -1;
 
-  if (str2sig ("SIGCHLD") != 17)
+  if (str2sig ("SIGCHLD") != SIGCHLD)
     return -1;
 
-  if (str2sig ("SIGCONT") != 18)
+  if (str2sig ("SIGCONT") != SIGCONT)
     return -1;
 
-  if (str2sig ("SIGSTOP") != 19)
+  if (str2sig ("SIGSTOP") != SIGSTOP)
     return -1;
 
   return 0;
@@ -183,7 +183,9 @@ test_str2sig_invalid_names ()
 static int
 test_str2sig_realtime_signals ()
 {
-  /* Test real-time signals */
+  /* Test real-time signals.  These are compared against the fixed values
+     from signals.perf, as the first usable real time signal depends on
+     how many of them the C library reserves for itself.  */
   if (str2sig ("RTMIN") != 34)
     return -1;
 
@@ -252,61 +254,63 @@ static int
 test_str2sig_all_standard_signals ()
 {
   /* Test all standard signals defined in the hash table */
-  if (str2sig ("ILL") != 4)
+  if (str2sig ("ILL") != SIGILL)
     return -1;
 
-  if (str2sig ("TRAP") != 5)
+  if (str2sig ("TRAP") != SIGTRAP)
     return -1;
 
-  if (str2sig ("ABRT") != 6)
+  if (str2sig ("ABRT") != SIGABRT)
     return -1;
 
-  if (str2sig ("BUS") != 7)
+  if (str2sig ("BUS") != SIGBUS)
     return -1;
 
-  if (str2sig ("FPE") != 8)
+  if (str2sig ("FPE") != SIGFPE)
     return -1;
 
-  if (str2sig ("SEGV") != 11)
+  if (str2sig ("SEGV") != SIGSEGV)
     return -1;
 
-  if (str2sig ("STKFLT") != 16)
+#ifdef SIGSTKFLT
+  if (str2sig ("STKFLT") != SIGSTKFLT)
+    return -1;
+#endif
+
+  if (str2sig ("TSTP") != SIGTSTP)
     return -1;
 
-  if (str2sig ("TSTP") != 20)
+  if (str2sig ("TTIN") != SIGTTIN)
     return -1;
 
-  if (str2sig ("TTIN") != 21)
+  if (str2sig ("TTOU") != SIGTTOU)
     return -1;
 
-  if (str2sig ("TTOU") != 22)
+  if (str2sig ("URG") != SIGURG)
     return -1;
 
-  if (str2sig ("URG") != 23)
+  if (str2sig ("XCPU") != SIGXCPU)
     return -1;
 
-  if (str2sig ("XCPU") != 24)
+  if (str2sig ("XFSZ") != SIGXFSZ)
     return -1;
 
-  if (str2sig ("XFSZ") != 25)
+  if (str2sig ("VTALRM") != SIGVTALRM)
     return -1;
 
-  if (str2sig ("VTALRM") != 26)
+  if (str2sig ("PROF") != SIGPROF)
     return -1;
 
-  if (str2sig ("PROF") != 27)
+  if (str2sig ("WINCH") != SIGWINCH)
     return -1;
 
-  if (str2sig ("WINCH") != 28)
+  if (str2sig ("IO") != SIGIO)
     return -1;
 
-  if (str2sig ("IO") != 29)
+  if (str2sig ("PWR") != SIGPWR)
     return -1;
 
-  if (str2sig ("PWR") != 30)
-    return -1;
-
-  if (str2sig ("SYS") != 31)
+  if (str2sig ("SYS") != SIGSYS)
     return -1;
 
   return 0;
@@ -316,61 +320,63 @@ static int
 test_str2sig_all_standard_signals_with_prefix ()
 {
   /* Test all standard signals with SIG prefix */
-  if (str2sig ("SIGILL") != 4)
+  if (str2sig ("SIGILL") != SIGILL)
     return -1;
 
-  if (str2sig ("SIGTRAP") != 5)
+  if (str2sig ("SIGTRAP") != SIGTRAP)
     return -1;
 
-  if (str2sig ("SIGABRT") != 6)
+  if (str2sig ("SIGABRT") != SIGABRT)
     return -1;
 
-  if (str2sig ("SIGBUS") != 7)
+  if (str2sig ("SIGBUS") != SIGBUS)
     return -1;
 
-  if (str2sig ("SIGFPE") != 8)
+  if (str2sig ("SIGFPE") != SIGFPE)
     return -1;
 
-  if (str2sig ("SIGSEGV") != 11)
+  if (str2sig ("SIGSEGV") != SIGSEGV)
     return -1;
 
-  if (str2sig ("SIGSTKFLT") != 16)
+#ifdef SIGSTKFLT
+  if (str2sig ("SIGSTKFLT") != SIGSTKFLT)
+    return -1;
+#endif
+
+  if (str2sig ("SIGTSTP") != SIGTSTP)
     return -1;
 
-  if (str2sig ("SIGTSTP") != 20)
+  if (str2sig ("SIGTTIN") != SIGTTIN)
     return -1;
 
-  if (str2sig ("SIGTTIN") != 21)
+  if (str2sig ("SIGTTOU") != SIGTTOU)
     return -1;
 
-  if (str2sig ("SIGTTOU") != 22)
+  if (str2sig ("SIGURG") != SIGURG)
     return -1;
 
-  if (str2sig ("SIGURG") != 23)
+  if (str2sig ("SIGXCPU") != SIGXCPU)
     return -1;
 
-  if (str2sig ("SIGXCPU") != 24)
+  if (str2sig ("SIGXFSZ") != SIGXFSZ)
     return -1;
 
-  if (str2sig ("SIGXFSZ") != 25)
+  if (str2sig ("SIGVTALRM") != SIGVTALRM)
     return -1;
 
-  if (str2sig ("SIGVTALRM") != 26)
+  if (str2sig ("SIGPROF") != SIGPROF)
     return -1;
 
-  if (str2sig ("SIGPROF") != 27)
+  if (str2sig ("SIGWINCH") != SIGWINCH)
     return -1;
 
-  if (str2sig ("SIGWINCH") != 28)
+  if (str2sig ("SIGIO") != SIGIO)
     return -1;
 
-  if (str2sig ("SIGIO") != 29)
+  if (str2sig ("SIGPWR") != SIGPWR)
     return -1;
 
-  if (str2sig ("SIGPWR") != 30)
-    return -1;
-
-  if (str2sig ("SIGSYS") != 31)
+  if (str2sig ("SIGSYS") != SIGSYS)
     return -1;
 
   return 0;

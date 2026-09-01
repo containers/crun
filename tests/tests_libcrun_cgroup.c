@@ -191,9 +191,9 @@ test_convert_shares_to_weight ()
   if (weight < 90 || weight > 110)
     return -1;
 
-  /* Test intermediate value */
+  /* Test intermediate valid value */
   weight = convert_shares_to_weight (512);
-  if (weight == 0 || weight > 10000)
+  if (weight < 1 || weight > 10000)
     return -1;
 
   return 0;
@@ -205,14 +205,16 @@ test_convert_shares_boundary ()
 {
   uint64_t weight;
 
-  /* Value just above 2 should not return 1 */
+  /* Value just above minimum shares (2) should return
+   * close to but not less than minimum weight (1). */
   weight = convert_shares_to_weight (3);
-  if (weight == 0)
+  if (weight < 1 || weight > 3)
     return -1;
 
-  /* Value just below 262144 should not return 10000 */
+  /* Value just below maximum shares (262144) should return
+   * close to but not more than maximum weight (10000). */
   weight = convert_shares_to_weight (262143);
-  if (weight == 0 || weight > 10000)
+  if (weight < 9995 || weight > 10000)
     return -1;
 
   /* Ensure monotonicity: higher shares should give higher weight */

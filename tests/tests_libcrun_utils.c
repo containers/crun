@@ -24,13 +24,32 @@
 #include <libcrun/cgroup-systemd.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
+#include <sys/wait.h>
+#include <errno.h>
+#include <signal.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <stdlib.h>
 
 typedef int (*test) ();
 
 extern int cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err);
+
+static int
+make_temp_dir (char *path, size_t size)
+{
+  if (snprintf (path, size, "%s/crun-test-XXXXXX",
+                getenv ("TMPDIR") ? getenv ("TMPDIR") : "/tmp")
+      >= (int) size)
+    return -1;
+
+  if (mkdtemp (path) == NULL)
+    return -1;
+
+  return 0;
+}
 
 static int
 test_socket_pair ()
@@ -102,8 +121,11 @@ test_send_receive_fd ()
       cleanup_close int pipefd1 = -1;
       char buffer[256];
       const char *test_string = "TEST STRING";
+      int result = -1;
+      int status;
+
       if (pipe (pipes) < 0)
-        return -1;
+        goto reap_child;
 
       pipefd0 = pipes[0];
       pipefd1 = pipes[1];
@@ -112,19 +134,24 @@ test_send_receive_fd ()
       fd0 = -1;
 
       if (send_fd_to_socket (fd1, pipefd0, &err) < 0)
-        return -1;
+        goto reap_child;
 
       if (write (pipefd1, test_string, strlen (test_string) + 1) < 0)
-        return -1;
+        goto reap_child;
 
       ret = read (fd1, buffer, sizeof (buffer));
-      if (ret < 0)
-        return -1;
-
       if (ret != (int) strlen (test_string) + 1)
-        return -1;
+        goto reap_child;
 
-      return strcmp (buffer, test_string);
+      result = strcmp (buffer, test_string);
+
+    reap_child:
+      /* The child is either done or stuck waiting for data that is not
+         going to arrive.  */
+      kill (pid, SIGKILL);
+      while (waitpid (pid, &status, 0) < 0 && errno == EINTR)
+        ;
+      return result;
     }
   else
     {
@@ -138,9 +165,9 @@ test_send_receive_fd ()
 
       ret = read (fd, buffer, sizeof (buffer));
       if (ret <= 0)
-        return -1;
+        _exit (1);
       if (write (fd0, buffer, ret) < 0)
-        return -1;
+        _exit (1);
 
       _exit (0);
     }
@@ -180,13 +207,14 @@ test_run_process ()
 static int
 test_dir_p ()
 {
-  libcrun_error_t err;
+  libcrun_error_t err = NULL;
   if (crun_dir_p ("/usr", false, &err) <= 0)
     return -1;
   if (crun_dir_p ("/dev/zero", false, &err) != 0)
     return -1;
   if (crun_dir_p ("/hopefully/does/not/really/exist", false, &err) >= 0)
     return -1;
+  crun_error_release (&err);
   return 0;
 }
 
@@ -195,13 +223,17 @@ test_write_read_file ()
 {
   libcrun_error_t err = NULL;
   cleanup_free char *name = NULL;
+  char dir[PATH_MAX];
   size_t len;
   size_t i;
   int ret, failed = 0;
   size_t max = 1 << 10;
   cleanup_free char *written = xmalloc (max);
 
-  xasprintf (&name, "tests/write-file-%i", getpid ());
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  xasprintf (&name, "%s/write-file", dir);
 
   for (i = 0; i < max; i++)
     written[i] = i;
@@ -238,6 +270,7 @@ test_write_read_file ()
     }
 
   unlink (name);
+  rmdir (dir);
   return failed ? -1 : 0;
 }
 
@@ -295,11 +328,13 @@ test_append_paths ()
 
 #define EXPECT_STRING(exp)         \
   {                                \
-    if (ret < 0 || out == NULL)    \
+    if (ret < 0)                   \
       {                            \
         crun_error_release (&err); \
         return ret;                \
       }                            \
+    if (out == NULL)               \
+      return -1;                   \
     if (strcmp (out, exp))         \
       return -1;                   \
   }
@@ -477,12 +512,15 @@ test_cpuset_string_to_bitmask ()
 
   if (cpuset_string_to_bitmask ("a", &mask, &mask_size, &err) == 0)
     return -1;
+  crun_error_release (&err);
 
   if (cpuset_string_to_bitmask ("-1", &mask, &mask_size, &err) == 0)
     return -1;
+  crun_error_release (&err);
 
   if (cpuset_string_to_bitmask ("0-", &mask, &mask_size, &err) == 0)
     return -1;
+  crun_error_release (&err);
 
   if (cpuset_string_to_bitmask ("0-2,4-6", &mask, &mask_size, &err) < 0)
     return -1;
@@ -598,15 +636,20 @@ test_crun_ensure_directory ()
 {
   libcrun_error_t err = NULL;
   cleanup_free char *path = NULL;
+  char dir[PATH_MAX];
   int ret;
 
-  xasprintf (&path, "/tmp/crun-test-dir-%d", getpid ());
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  xasprintf (&path, "%s/subdir", dir);
 
   /* Create directory */
   ret = crun_ensure_directory (path, 0755, false, &err);
   if (ret < 0)
     {
       crun_error_release (&err);
+      rmdir (dir);
       return -1;
     }
 
@@ -615,6 +658,7 @@ test_crun_ensure_directory ()
   if (ret <= 0)
     {
       rmdir (path);
+      rmdir (dir);
       crun_error_release (&err);
       return -1;
     }
@@ -624,12 +668,14 @@ test_crun_ensure_directory ()
   if (ret < 0)
     {
       rmdir (path);
+      rmdir (dir);
       crun_error_release (&err);
       return -1;
     }
 
   /* Cleanup */
   rmdir (path);
+  rmdir (dir);
   return 0;
 }
 

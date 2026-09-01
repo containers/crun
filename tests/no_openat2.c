@@ -52,10 +52,36 @@
 #  define SECCOMP_SET_MODE_FILTER 1
 #endif
 
+/* The architecture this helper is built for.  A seccomp filter sees the
+   syscalls issued for every architecture the kernel supports, and the
+   numbers are not the same there, so the filter has to check it.  When
+   the architecture is not known here the check is left out, which is
+   what the filter did before.  */
+#if defined __x86_64__ && defined AUDIT_ARCH_X86_64
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_X86_64
+#elif defined __i386__ && defined AUDIT_ARCH_I386
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_I386
+#elif defined __aarch64__ && defined AUDIT_ARCH_AARCH64
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_AARCH64
+#elif defined __arm__ && defined AUDIT_ARCH_ARM
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_ARM
+#elif defined __powerpc64__ && defined __LITTLE_ENDIAN__ && defined AUDIT_ARCH_PPC64LE
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_PPC64LE
+#elif defined __s390x__ && defined AUDIT_ARCH_S390X
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_S390X
+#elif defined __riscv && __riscv_xlen == 64 && defined AUDIT_ARCH_RISCV64
+#  define FILTER_AUDIT_ARCH AUDIT_ARCH_RISCV64
+#endif
+
 static int
 install_filter (void)
 {
   struct sock_filter filter[] = {
+#ifdef FILTER_AUDIT_ARCH
+    /* Allow everything issued for a different architecture.  */
+    BPF_STMT (BPF_LD | BPF_W | BPF_ABS, offsetof (struct seccomp_data, arch)),
+    BPF_JUMP (BPF_JMP | BPF_JEQ | BPF_K, FILTER_AUDIT_ARCH, 0, 3),
+#endif
     /* Load the syscall number.  */
     BPF_STMT (BPF_LD | BPF_W | BPF_ABS, offsetof (struct seccomp_data, nr)),
     /* If it is not openat2, allow it.  */

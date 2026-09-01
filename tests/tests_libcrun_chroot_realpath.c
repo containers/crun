@@ -117,53 +117,84 @@ test_with_chroot_prefix ()
   return 0;
 }
 
+/* Create an empty directory to be used as a chroot.  A directory of our
+   own is needed because chroot_realpath expands the symbolic links it
+   finds, so a shared directory such as /tmp gives results that depend on
+   what else happens to be there.
+
+   Return 0 on success and 77 to skip the test when it cannot be
+   created.  */
+static int
+make_temp_root (char *root, size_t root_size)
+{
+  if (snprintf (root, root_size, "%s/crun-chroot-realpath-XXXXXX",
+                getenv ("TMPDIR") ? getenv ("TMPDIR") : "/tmp")
+      >= (int) root_size)
+    return 77;
+
+  if (mkdtemp (root) == NULL)
+    return 77;
+
+  return 0;
+}
+
+/* Check that chroot_realpath (root, path) is root + expected.  */
+static int
+check_resolved (const char *root, const char *path, const char *expected)
+{
+  char resolved[PATH_MAX];
+  char full[PATH_MAX];
+
+  if (chroot_realpath (root, path, resolved) == NULL)
+    return -1;
+
+  if (snprintf (full, sizeof (full), "%s%s", root, expected) >= (int) sizeof (full))
+    return -1;
+
+  return strcmp (resolved, full) == 0 ? 0 : -1;
+}
+
 /* Test dot components . and .. using real existing paths */
 static int
 test_dot_components ()
 {
-  char resolved[PATH_MAX];
-  char *result;
+  char root[PATH_MAX];
+  int ret;
 
-  /* Use /tmp as chroot since it exists on most systems */
+  ret = make_temp_root (root, sizeof (root));
+  if (ret != 0)
+    return ret;
+
   /* Test single dot - should be ignored */
-  result = chroot_realpath ("/tmp", "/./file", resolved);
-  if (result == NULL)
-    return -1;
-  if (strcmp (resolved, "/tmp/file") != 0)
-    return -1;
+  ret = check_resolved (root, "/./file", "/file");
 
   /* Test double dot at root - should stay at root of chroot */
-  result = chroot_realpath ("/tmp", "/../file", resolved);
-  if (result == NULL)
-    return -1;
-  if (strcmp (resolved, "/tmp/file") != 0)
-    return -1;
+  if (ret == 0)
+    ret = check_resolved (root, "/../file", "/file");
 
   /* Test multiple .. at root */
-  result = chroot_realpath ("/tmp", "/../../../file", resolved);
-  if (result == NULL)
-    return -1;
-  if (strcmp (resolved, "/tmp/file") != 0)
-    return -1;
+  if (ret == 0)
+    ret = check_resolved (root, "/../../../file", "/file");
 
-  return 0;
+  rmdir (root);
+  return ret;
 }
 
 /* Test multiple slashes in path */
 static int
 test_multiple_slashes ()
 {
-  char resolved[PATH_MAX];
-  char *result;
+  char root[PATH_MAX];
+  int ret;
 
-  /* Use /tmp as chroot since it exists */
-  result = chroot_realpath ("/tmp", "///file", resolved);
-  if (result == NULL)
-    return -1;
-  if (strcmp (resolved, "/tmp/file") != 0)
-    return -1;
+  ret = make_temp_root (root, sizeof (root));
+  if (ret != 0)
+    return ret;
 
-  return 0;
+  ret = check_resolved (root, "///file", "/file");
+
+  rmdir (root);
+  return ret;
 }
 
 /* Test simple relative-like path handling */
@@ -204,18 +235,20 @@ test_trailing_slash ()
 static int
 test_deep_path ()
 {
-  char resolved[PATH_MAX];
-  char *result;
+  char root[PATH_MAX];
+  int ret;
 
-  /* Use /tmp which is accessible to all users, unlike /root */
-  result = chroot_realpath ("/tmp", "/a/b/c/d/e/f/g/h/i/j", resolved);
-  if (result == NULL)
-    return -1;
-  if (strcmp (resolved, "/tmp/a/b/c/d/e/f/g/h/i/j") != 0)
-    return -1;
+  ret = make_temp_root (root, sizeof (root));
+  if (ret != 0)
+    return ret;
 
-  return 0;
+  ret = check_resolved (root, "/a/b/c/d/e/f/g/h/i/j", "/a/b/c/d/e/f/g/h/i/j");
+
+  rmdir (root);
+  return ret;
 }
+
+static void cleanup_symlink_tree (const char *root);
 
 /* Create a temporary tree used by the symlink tests:
 
@@ -232,58 +265,57 @@ static int
 make_symlink_tree (char *root, size_t root_size)
 {
   char path[PATH_MAX];
-  char *tmpdir;
   int fd;
+  int ret;
 
-  if (snprintf (root, root_size, "%s/crun-chroot-realpath-XXXXXX",
-                getenv ("TMPDIR") ? getenv ("TMPDIR") : "/tmp")
-      >= (int) root_size)
-    return 77;
-
-  tmpdir = mkdtemp (root);
-  if (tmpdir == NULL)
-    return 77;
+  ret = make_temp_root (root, root_size);
+  if (ret != 0)
+    return ret;
 
   if (snprintf (path, sizeof (path), "%s/file", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   fd = creat (path, 0600);
   if (fd < 0)
-    return 77;
+    goto fail;
   close (fd);
 
   if (snprintf (path, sizeof (path), "%s/link", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("file", path) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (mkdir (path, 0700) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir/file", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   fd = creat (path, 0600);
   if (fd < 0)
-    return 77;
+    goto fail;
   close (fd);
 
   if (snprintf (path, sizeof (path), "%s/dir/link", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("file", path) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir/up", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("../file", path) < 0)
-    return 77;
+    goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir/abs", root) >= (int) sizeof (path))
-    return 77;
+    goto fail;
   if (symlink ("/file", path) < 0)
-    return 77;
+    goto fail;
 
   return 0;
+
+fail:
+  cleanup_symlink_tree (root);
+  return 77;
 }
 
 static void
