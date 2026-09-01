@@ -403,6 +403,7 @@ dump_net_interface (const char *ifname)
   if (buffer == NULL)
     error (EXIT_FAILURE, errno, "malloc");
 
+  memset (&sa, 0, sizeof (sa));
   sa.nl_family = AF_NETLINK;
 
   if (bind (sock, (struct sockaddr *) &sa, sizeof (sa)) < 0)
@@ -453,10 +454,11 @@ dump_net_interface (const char *ifname)
               rta_it = RTA_NEXT (rta_it, rta_len);
             }
 
-          if (rta[IFA_ADDRESS])
+          if (rta[IFA_LOCAL] || rta[IFA_ADDRESS])
             {
+              struct rtattr *attr = rta[IFA_LOCAL] ? rta[IFA_LOCAL] : rta[IFA_ADDRESS];
               char addr[INET_ADDRSTRLEN];
-              inet_ntop (AF_INET, RTA_DATA (rta[IFA_LOCAL]), addr, sizeof (addr));
+              inet_ntop (AF_INET, RTA_DATA (attr), addr, sizeof (addr));
               printf ("address: %s/%d\n", addr, ifa->ifa_prefixlen);
             }
           if (rta[IFA_BROADCAST])
