@@ -117,7 +117,7 @@ libcrun_cgroup_is_container_paused (struct libcrun_cgroup_status *status, bool *
   int cgroup_mode;
   int ret;
 
-  if (cgroup_path == NULL || cgroup_path[0] == '\0')
+  if (cgroup_path == NULL)
     return 0;
 
   cgroup_mode = libcrun_get_cgroup_mode (err);
