@@ -101,7 +101,7 @@ def _get_cmdline(cid, tests_root):
 def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'checkpoint')
-    work_dir = 'work-dir'
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
     try:
         logger.info("run_cr_test: starting container")
         _, cid = run_and_get_output(
@@ -199,7 +199,7 @@ def test_cr_pre_dump():
 
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'pre-dump')
-    work_dir = 'work-dir'
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
     try:
         _, cid = run_and_get_output(
             conf,
