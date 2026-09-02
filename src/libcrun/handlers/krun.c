@@ -643,7 +643,7 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
 
   ret = socketpair (AF_UNIX, SOCK_STREAM, 0, kconf->passt_fds);
   if (UNLIKELY (ret < 0))
-    return ret;
+    return crun_make_error (err, errno, "create passt socketpair");
   snprintf (fd_as_str, sizeof (fd_as_str), "%d", kconf->passt_fds[PASST_FD_CHILD]);
 
   argv_idx = 0;
@@ -670,7 +670,7 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
 
   pid = fork ();
   if (pid < 0)
-    return pid;
+    return crun_make_error (err, errno, "fork passt");
   else if (pid == 0)
     {
       close (kconf->passt_fds[PASST_FD_PARENT]);
@@ -695,7 +695,7 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
   // Wait for passt to daemonize itself.
   waitpid (pid, &status, 0);
   if (! (WIFEXITED (status)) || WEXITSTATUS (status) != 0)
-    return -1;
+    return crun_make_error (err, 0, "start passt");
 
   return 0;
 }
