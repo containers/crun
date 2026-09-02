@@ -21,6 +21,7 @@
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <argp.h>
 #include "error.h"
@@ -413,6 +414,13 @@ static inline bool
 is_empty_string (const char *s)
 {
   return s == NULL || s[0] == '\0';
+}
+
+/* Like strlen(), but a NULL string has length 0.  */
+static inline size_t
+safe_strlen (const char *s)
+{
+  return s == NULL ? 0 : strlen (s);
 }
 
 static inline bool

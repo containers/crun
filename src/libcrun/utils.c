@@ -351,7 +351,7 @@ safe_openat_fallback (int dirfd, const char *rootfs, const char *path, int flags
   cleanup_close int fd = -1;
   char resolved[PATH_MAX];
   char buffer[PATH_MAX];
-  size_t rootfs_len = is_empty_string (rootfs) ? 0 : strlen (rootfs);
+  size_t rootfs_len = safe_strlen (rootfs);
   int ret;
 
   /* chroot_realpath resolves the last component as well, so when O_NOFOLLOW
