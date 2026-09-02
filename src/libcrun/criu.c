@@ -711,7 +711,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file (descriptors_path, status->external_descriptors, strlen (status->external_descriptors), err);
+  ret = write_file (descriptors_path, status->external_descriptors, safe_strlen (status->external_descriptors), err);
   if (UNLIKELY (ret < 0))
     return crun_error_wrap (err, "error saving CRIU descriptors file");
 
