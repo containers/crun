@@ -1196,6 +1196,7 @@ struct custom_handler_s handler_libkrun = {
   .name = "krun",
   .alias = NULL,
   .feature_string = "LIBKRUN",
+  .supports_open_tree_namespace = false,
   .load = libkrun_load,
   .unload = libkrun_unload,
   .run_func = libkrun_exec,

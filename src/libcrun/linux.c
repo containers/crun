@@ -3962,6 +3962,9 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   if (mounts_hit_pinned_mount_namespace (def))
     return false;
 
+  if (container->context->no_open_tree_namespace)
+    return false;
+
   {
     libcrun_error_t tmp_err = NULL;
     int in_userns = check_running_in_user_namespace (&tmp_err);

@@ -290,6 +290,7 @@ struct custom_handler_s handler_wasmtime = {
   .name = "wasmtime",
   .alias = "wasm",
   .feature_string = "WASM:wasmtime",
+  .supports_open_tree_namespace = false,
   .load = libwasmtime_load,
   .unload = libwasmtime_unload,
   .run_func = libwasmtime_exec,

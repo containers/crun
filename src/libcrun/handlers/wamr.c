@@ -246,6 +246,7 @@ struct custom_handler_s handler_wamr = {
   .name = "wamr",
   .alias = "wasm",
   .feature_string = "WASM:wamr",
+  .supports_open_tree_namespace = false,
   .load = libwamr_load,
   .unload = libwamr_unload,
   .run_func = libwamr_exec,

@@ -111,6 +111,7 @@ struct custom_handler_s handler_spin = {
   .name = "spin",
   .alias = NULL,
   .feature_string = "WASM:spin",
+  .supports_open_tree_namespace = false,
   .load = spin_load,
   .unload = spin_unload,
   .run_func = spin_exec,

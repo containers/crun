@@ -30,6 +30,8 @@ struct custom_handler_s
 
   const char *alias;
 
+  const bool supports_open_tree_namespace;
+
   int (*load) (void **cookie, libcrun_error_t *err);
   int (*unload) (void *cookie, libcrun_error_t *err);
 

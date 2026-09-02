@@ -234,6 +234,7 @@ struct custom_handler_s handler_wasmedge = {
   .name = "wasmedge",
   .alias = "wasm",
   .feature_string = "WASM:wasmedge",
+  .supports_open_tree_namespace = false,
   .load = libwasmedge_load,
   .unload = libwasmedge_unload,
   .run_func = libwasmedge_exec,

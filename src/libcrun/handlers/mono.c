@@ -164,6 +164,7 @@ struct custom_handler_s handler_mono = {
   .name = "dotnet",
   .alias = NULL,
   .feature_string = ".NET:mono",
+  .supports_open_tree_namespace = false,
   .load = mono_load,
   .unload = mono_unload,
   .run_func = mono_exec,

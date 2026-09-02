@@ -270,6 +270,7 @@ struct custom_handler_s handler_wasmer = {
   .name = "wasmer",
   .alias = "wasm",
   .feature_string = "WASM:wasmer",
+  .supports_open_tree_namespace = false,
   .load = libwasmer_load,
   .unload = libwasmer_unload,
   .run_func = libwasmer_exec,
