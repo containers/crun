@@ -1123,6 +1123,103 @@ def test_mount_propagation_slave():
     logger.info("mountinfo output: %s", out)
     return -1
 
+def helper_shared_peer_group(mountpoint):
+    """Return the "shared:N" optional field of a mount of the calling process."""
+    found = None
+    with open('/proc/self/mountinfo') as f:
+        for line in f:
+            fields = line.split()
+            if len(fields) < 5 or fields[4] != mountpoint:
+                continue
+            for field in fields[5:]:
+                if field == '-':
+                    break
+                if field.startswith('shared:'):
+                    found = field
+    return found
+
+def test_mount_propagation_slave_recursive():
+    """Verify that rslave propagation is applied to nested submounts too.
+
+    Regression test for https://github.com/containers/crun/issues/2197.
+    A mount with the "rslave" option must take the whole subtree out of the
+    host peer groups.  When only the top level mount is converted, a submount
+    below it stays in the host peer group, so a mount created by the container
+    under it (a devpts below a bind mounted /dev, for instance) propagates
+    back to the host and clobbers the host mount.
+
+    rootfsPropagation is set to rshared so that the peer groups of the source
+    are still visible inside the container: with the default rprivate the
+    whole tree is detached from them before the mount options are applied and
+    there is nothing left to observe.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    source_dir = os.path.join(get_tests_root(), "test-rslave-recursive")
+    nested_dir = os.path.join(source_dir, "nested")
+    mounted = []
+    try:
+        os.makedirs(source_dir, exist_ok=True)
+        if subprocess.call(["mount", "-t", "tmpfs", "tmpfs", source_dir]) != 0:
+            return (77, "cannot mount a tmpfs on the host")
+        mounted.append(source_dir)
+        if subprocess.call(["mount", "--make-shared", source_dir]) != 0:
+            return (77, "cannot make the host mount shared")
+
+        os.makedirs(nested_dir, exist_ok=True)
+        # The submount inherits the shared propagation from its parent.
+        if subprocess.call(["mount", "-t", "tmpfs", "tmpfs", nested_dir]) != 0:
+            return (77, "cannot mount a tmpfs on the host")
+        mounted.append(nested_dir)
+
+        host_peer = helper_shared_peer_group(nested_dir)
+        if host_peer is None:
+            return (77, "the nested host mount is not shared")
+        expected_master = "master:" + host_peer.split(':')[1]
+
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+        add_all_namespaces(conf)
+        conf['linux']['rootfsPropagation'] = 'rshared'
+        mount_opt = {"destination": "/mnt", "type": "bind", "source": source_dir,
+                     "options": ["rbind", "rslave"]}
+        conf['mounts'].append(mount_opt)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+
+        optional = {}
+        for line in out.splitlines():
+            fields = line.split()
+            if len(fields) < 5 or fields[4] not in ("/mnt", "/mnt/nested"):
+                continue
+            sep_idx = fields.index('-') if '-' in fields else len(fields)
+            optional[fields[4]] = fields[5:sep_idx]
+
+        for mountpoint in ("/mnt", "/mnt/nested"):
+            if mountpoint not in optional:
+                logger.info("%s not found in mountinfo", mountpoint)
+                logger.info("mountinfo output: %s", out)
+                return -1
+
+        for mountpoint, host_group in (("/mnt", helper_shared_peer_group(source_dir)),
+                                       ("/mnt/nested", host_peer)):
+            fields = optional[mountpoint]
+            if host_group is not None and host_group in fields:
+                logger.info("%s is still in the host peer group %s: %s",
+                            mountpoint, host_group, ' '.join(fields))
+                return -1
+
+        if expected_master not in optional["/mnt/nested"]:
+            logger.info("submount /mnt/nested has %s, expected %s",
+                        ' '.join(optional["/mnt/nested"]), expected_master)
+            return -1
+        return 0
+    finally:
+        for m in reversed(mounted):
+            subprocess.call(["umount", "-l", m])
+        shutil.rmtree(source_dir, ignore_errors=True)
+
+
 def test_mount_propagation_shared():
     """Verify rshared bind mounts preserve the source's shared peer group.
 
@@ -1383,6 +1480,7 @@ all_tests = {
     "mount-propagation-private": test_mount_propagation_private,
     "mount-no-leak-to-host": test_mount_no_leak_to_host,
     "mount-propagation-slave": test_mount_propagation_slave,
+    "mount-propagation-slave-recursive": test_mount_propagation_slave_recursive,
     "mount-propagation-shared": test_mount_propagation_shared,
     "mount-tmpfs-size": test_mount_tmpfs_size,
     "mount-tmpfs-size-userns": test_mount_tmpfs_size_userns,
