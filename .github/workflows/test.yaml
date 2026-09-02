@@ -65,7 +65,7 @@ jobs:
           - test: oci-validation
           - test: alpine-build
           - test: centos9-build
-          #- test: centos10-build
+          - test: centos10-build
           - test: clang-format
           - test: clang-check
           - test: cppcheck
