@@ -153,7 +153,7 @@ containerd)
 oci-validation)
     run_container "${privileged[@]}"
     ;;
-alpine-build | centos9-build | system-blake3)
+alpine-build | centos9-build | system-blake3 | krun-build)
     # These only build crun, they never run a container, so they need
     # none of the privileges the tests above do.
     run_container

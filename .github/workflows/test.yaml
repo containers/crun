@@ -74,6 +74,7 @@ jobs:
           - test: fuzzing
           - test: codespell
           - test: wasmedge-build
+          - test: krun-build
     steps:
       - name: checkout
         uses: actions/checkout@v7
