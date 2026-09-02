@@ -564,7 +564,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
 }
 
 static int
-libkrun_start_passt (void *cookie, libcrun_container_t *container)
+libkrun_start_passt (void *cookie, libcrun_container_t *container, libcrun_error_t *err)
 {
   struct krun_config *kconf = (struct krun_config *) cookie;
   pid_t pid;
@@ -584,7 +584,7 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
 
   ret = socketpair (AF_UNIX, SOCK_STREAM, 0, kconf->passt_fds);
   if (UNLIKELY (ret < 0))
-    return ret;
+    return crun_make_error (err, errno, "socketpair");
   snprintf (fd_as_str, sizeof (fd_as_str), "%d", kconf->passt_fds[PASST_FD_CHILD]);
 
   argv_idx = 0;
@@ -611,7 +611,7 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
 
   pid = fork ();
   if (pid < 0)
-    return pid;
+    return crun_make_error (err, errno, "fork");
   else if (pid == 0)
     {
       close (kconf->passt_fds[PASST_FD_PARENT]);
@@ -634,9 +634,11 @@ libkrun_start_passt (void *cookie, libcrun_container_t *container)
   close (kconf->passt_fds[PASST_FD_CHILD]);
 
   // Wait for passt to daemonize itself.
-  waitpid (pid, &status, 0);
-  if (! (WIFEXITED (status)) || WEXITSTATUS (status) != 0)
-    return -1;
+  ret = TEMP_FAILURE_RETRY (waitpid (pid, &status, 0));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "waitpid for passt");
+  if (! WIFEXITED (status) || WEXITSTATUS (status) != 0)
+    return crun_make_error (err, 0, "could not start passt, please make sure it is installed on the host");
 
   return 0;
 }
@@ -717,9 +719,9 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
   if (phase != HANDLER_CONFIGURE_AFTER_MOUNTS)
     return 0;
 
-  ret = libkrun_start_passt (cookie, container);
+  ret = libkrun_start_passt (cookie, container, err);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "start passt");
+    return ret;
 
   /* Do nothing if /dev/kvm is already present in spec */
   if (spec_has_device (def, "/dev/kvm"))
