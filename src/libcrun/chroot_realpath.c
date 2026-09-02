@@ -83,11 +83,10 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	path = copy_path;
 	max_path = copy_path + PATH_MAX - chroot_len - 3;
 
-	/* Start with the chroot path. */
+	/* Start with the chroot path.  It is copied verbatim so that the
+	   result is always prefixed by CHROOT and callers can strip it. */
 	strcpy(new_path, chroot);
 	new_path += chroot_len;
-	while (*new_path == '/' && new_path > got_path)
-		new_path--;
 	got_path_root = new_path;
 	*new_path++ = '/';
 
