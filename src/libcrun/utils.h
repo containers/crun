@@ -361,7 +361,12 @@ LIBCRUN_PUBLIC int parse_json_file (json_object **out, const char *jsondata, str
 static inline int
 has_prefix (const char *str, const char *prefix)
 {
-  size_t prefix_len = strlen (prefix);
+  size_t prefix_len;
+
+  if (! str || ! prefix)
+    return 0;
+
+  prefix_len = strlen (prefix);
   return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
 }
 
@@ -369,7 +374,12 @@ has_prefix (const char *str, const char *prefix)
 static inline int
 has_dir_prefix (const char *str, const char *prefix)
 {
-  size_t prefix_len = strlen (prefix);
+  size_t prefix_len;
+
+  if (! str || ! prefix)
+    return 0;
+
+  prefix_len = strlen (prefix);
   return strlen (str) > prefix_len && memcmp (str, prefix, prefix_len) == 0 && str[prefix_len] == '/';
 }
 
