@@ -26,6 +26,7 @@
 #include <libcrun/status.h>
 #include <libcrun/seccomp.h>
 #include <libcrun/ebpf.h>
+#include <libcrun/scheduler.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -430,6 +431,13 @@ run_one_test (int mode, uint8_t *buf, size_t len)
         size_t len;
 
         cpuset_string_to_bitmask (a, &out, &len, &err);
+        crun_error_release (&err);
+
+        /* Also exercise the only caller of the parser.  The cpu set is
+           allocated and filled in before sched_setaffinity is reached, so
+           the pid does not have to exist: use one that cannot, to be sure
+           no process on the system has its affinity changed.  */
+        libcrun_set_cpu_affinity_from_string (INT_MAX, a, &err);
         crun_error_release (&err);
 #endif
       }
