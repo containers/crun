@@ -97,6 +97,21 @@ check)
     group "tests as rootless in a user namespace" \
         unshare -r make check ASAN_OPTIONS=detect_leaks=false || dump_log
     ;;
+check-sanitizers)
+    # Run the test suite against a build with the address and undefined
+    # behaviour sanitizers.  The run as root and the rootless one reach
+    # different code -- cgroup setup, the mount handling and the user
+    # namespace paths above all -- so both are worth doing under them.
+    sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    build --disable-dl --enable-sanitizers
+
+    group "tests as root, sanitizers" \
+        sudo make check ASAN_OPTIONS=detect_leaks=false \
+        UBSAN_OPTIONS=print_stacktrace=1 || dump_log
+    group "tests as rootless, sanitizers" \
+        make check ASAN_OPTIONS=detect_leaks=false \
+        UBSAN_OPTIONS=print_stacktrace=1 || dump_log
+    ;;
 check-no-openat2)
     # Run the test suite with openat2(2) forced to fail with
     # ENOSYS, so that the safe_openat() fallback used on kernels
