@@ -363,6 +363,12 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
   int recursive_flag = (recursive ? AT_RECURSIVE : 0);
   int ret;
 
+  /* Several callers pass a source straight from the configuration, where it
+     is optional, so it can be missing altogether.  Callers that mean the
+     directory referred to by dirfd pass an empty string, never NULL.  */
+  if (UNLIKELY (src == NULL))
+    return crun_make_error (err, EINVAL, "mount source is not specified");
+
   if (rdonly)
     attr.attr_set = MS_RDONLY;
 
