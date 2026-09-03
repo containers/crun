@@ -15,7 +15,13 @@ CORPUS=${CORPUS:=/testcases}
 git config --global --add safe.directory /crun
 git clean -fdx
 ./autogen.sh
-./configure --enable-embedded-blake3 HFUZZ_CC_UBSAN=1 HFUZZ_CC_ASAN=1 CC=hfuzz-clang CPPFLAGS="-D FUZZER" CFLAGS="-ggdb3 -fsanitize-coverage=trace-pc-guard,trace-cmp,trace-div,indirect-calls"
+# hfuzz-clang decides whether to add the sanitizers by looking these up with
+# getenv(2) as it compiles, so they have to be in the environment of the
+# build.  Passed to configure instead, they only ever reached configure
+# itself, and the sanitizers were silently left out of the whole build.
+export HFUZZ_CC_ASAN=1 HFUZZ_CC_UBSAN=1
+
+./configure --enable-embedded-blake3 CC=hfuzz-clang CPPFLAGS="-D FUZZER" CFLAGS="-ggdb3 -fsanitize-coverage=trace-pc-guard,trace-cmp,trace-div,indirect-calls"
 make -j "$(nproc)"
 make -j "$(nproc)" tests/tests_libcrun_fuzzer
 
