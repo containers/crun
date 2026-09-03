@@ -455,6 +455,24 @@ AS_IF([test "x$enable_coverage" = "xyes"], [
 
 AM_CONDITIONAL([ENABLE_COVERAGE], [test "x$enable_coverage" = "xyes"])
 
+dnl address and undefined behaviour sanitizers
+AC_ARG_ENABLE([sanitizers],
+	AS_HELP_STRING([--enable-sanitizers], [Build with the address and undefined behaviour sanitizers (for testing only)]),
+	[enable_sanitizers=$enableval], [enable_sanitizers=no])
+
+AS_IF([test "x$enable_sanitizers" = "xyes"], [
+	dnl Without -fno-sanitize-recover the undefined behaviour sanitizer only
+	dnl prints what it finds and lets the program carry on, so a test suite
+	dnl run would stay green no matter what it reported.
+	SANITIZER_CFLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g"
+	SANITIZER_LDFLAGS="-fsanitize=address -fsanitize=undefined"
+])
+
+dnl Substituted unconditionally, and empty unless --enable-sanitizers was
+dnl given, so that the flags can simply be appended where they are needed.
+AC_SUBST([SANITIZER_CFLAGS])
+AC_SUBST([SANITIZER_LDFLAGS])
+
 AC_SEARCH_LIBS([argp_parse], [argp], [], [AC_MSG_ERROR([*** argp functions not found - install libargp or argp_standalone])])
 
 AM_CONDITIONAL([PYTHON_BINDINGS], [test "x$with_python_bindings" = "xyes"])
