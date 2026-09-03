@@ -253,7 +253,7 @@ libcrun_set_cpu_affinity_from_string (pid_t pid, const char *str, libcrun_error_
 
   alloc_size = CPU_ALLOC_SIZE (bitmask_size * CHAR_BIT);
 
-  cpuset = CPU_ALLOC (alloc_size);
+  cpuset = CPU_ALLOC (bitmask_size * CHAR_BIT);
   if (UNLIKELY (cpuset == NULL))
     OOM ();
 
