@@ -5,29 +5,38 @@ on: [push, pull_request]
 jobs:
   build_job:
     runs-on: ubuntu-latest
-    name: Build on ${{ matrix.arch }}
+    name: Build ${{ matrix.build }} on ${{ matrix.arch }}
     permissions:
       contents: read
       packages: write
 
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - arch: armv7
-            distro: ubuntu_latest
-#          - arch: aarch64
-#            distro: ubuntu_latest
-#          - arch: s390x
-#            distro: ubuntu_latest
-#          - arch: ppc64le
-#            distro: ubuntu_latest
-          - arch: riscv64
-            distro: ubuntu_latest
+        # The static and the shared build are separate jobs: under emulation
+        # each one takes tens of minutes, so running them in parallel roughly
+        # halves the wall clock time.
+        build: [static, shared]
+        arch:
+          - armv7
+#          - aarch64
+#          - s390x
+#          - ppc64le
+          - riscv64
+        distro: [ubuntu_latest]
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: true
           set-safe-directory: true
+
+      # Running autoreconf natively is much faster than under emulation.
+      # The generated files are architecture independent.
+      - name: Generate the configure script
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config
+          ./autogen.sh
 
       - uses: uraimo/run-on-arch-action@v3.2.0
         name: Build
@@ -40,11 +49,11 @@ jobs:
 
           install: |
             apt-get update -y
-            apt-get install -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev clang mawk
+            apt-get install -y libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev clang mawk
 
           run: |
             find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
-            ./tests/ci.sh cross
+            ./tests/ci.sh cross-${{ matrix.build }}
 
   Test:
     runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
