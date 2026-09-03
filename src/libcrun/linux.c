@@ -1235,6 +1235,11 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   int ret;
   mode_t mode;
 
+  /* The paths come from linux.maskedPaths and linux.readonlyPaths, so a null
+     entry in either array reaches us as a NULL pointer.  */
+  if (UNLIKELY (rel_path == NULL))
+    return crun_make_error (err, EINVAL, "invalid null path in `maskedPaths` or `readonlyPaths`");
+
   if (rel_path[0] == '/')
     rel_path++;
 
