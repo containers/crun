@@ -445,7 +445,7 @@ run_one_test (int mode, uint8_t *buf, size_t len)
 
       /* ALL mode.  */
     case -1:
-      for (i = 0; i <= 8; i++)
+      for (i = 0; i <= 9; i++)
         run_one_test (i, buf, len);
       break;
 
