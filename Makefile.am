@@ -88,22 +88,24 @@ libcrun_SOURCES += src/libcrun/blake3/blake3.c \
 endif
 
 libcrun_la_SOURCES = $(libcrun_SOURCES)
-libcrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden
+libcrun_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=hidden $(SANITIZER_CFLAGS)
 if ENABLE_COVERAGE
 libcrun_la_CFLAGS += $(COVERAGE_CFLAGS)
-libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(COVERAGE_LDFLAGS)
+libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(COVERAGE_LDFLAGS) $(SANITIZER_LDFLAGS)
 else
-libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds
+libcrun_la_LDFLAGS = -Wl,--version-script=$(abs_top_srcdir)/libcrun.lds $(SANITIZER_LDFLAGS)
 endif
 libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(JSON_C_LIBS)
 
 # build a version with all the symbols visible for testing
 if BUILD_TESTS
 libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
-libcrun_testing_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default
+libcrun_testing_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default $(SANITIZER_CFLAGS)
 if ENABLE_COVERAGE
 libcrun_testing_la_CFLAGS += $(COVERAGE_CFLAGS)
-libcrun_testing_la_LDFLAGS = $(COVERAGE_LDFLAGS)
+libcrun_testing_la_LDFLAGS = $(COVERAGE_LDFLAGS) $(SANITIZER_LDFLAGS)
+else
+libcrun_testing_la_LDFLAGS = $(SANITIZER_LDFLAGS)
 endif
 libcrun_testing_la_LIBADD = libocispec/libocispec.la $(JSON_C_LIBS)
 endif
@@ -148,7 +150,7 @@ dist-luarock: $(LUACRUN_ROCK)
 
 endif
 
-crun_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\""
+crun_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\"" $(SANITIZER_CFLAGS)
 if ENABLE_COVERAGE
 crun_CFLAGS += $(COVERAGE_CFLAGS)
 endif
@@ -158,16 +160,16 @@ crun_SOURCES = src/crun.c src/run.c src/delete.c src/kill.c src/pause.c src/unpa
 
 if DYNLOAD_LIBCRUN
 if ENABLE_COVERAGE
-crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS)
+crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS) $(SANITIZER_LDFLAGS)
 else
-crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS)
+crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS) $(SANITIZER_LDFLAGS)
 endif
 else
 crun_LDADD = libcrun.la $(FOUND_LIBS) $(JSON_C_LIBS)
 if ENABLE_COVERAGE
-crun_LDFLAGS = $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS)
+crun_LDFLAGS = $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS) $(SANITIZER_LDFLAGS)
 else
-crun_LDFLAGS = $(CRUN_LDFLAGS)
+crun_LDFLAGS = $(CRUN_LDFLAGS) $(SANITIZER_LDFLAGS)
 endif
 endif
 

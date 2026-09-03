@@ -64,6 +64,7 @@ jobs:
           - test: disable-systemd
           - test: check
           - test: check-no-openat2
+          - test: check-sanitizers
           - test: check-systemd
           - test: enable-shared
           - test: embedded-blake3
@@ -96,7 +97,7 @@ jobs:
 
           sudo add-apt-repository -y ppa:criu/ppa
           # add-apt-repository runs apt-get update so we don't have to.
-          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget libsystemd-dev gperf clang-format libjson-c-dev containerd runc libasan6 libprotobuf-c-dev mawk python3-dev lua5.4 liblua5.4-dev
+          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget libsystemd-dev gperf clang-format libjson-c-dev containerd runc libasan6 libubsan1 libprotobuf-c-dev mawk python3-dev lua5.4 liblua5.4-dev
           # Fedora (used by maintainers as well as for packaging) has newer
           # md2man than in Ubuntu, so we have to install it from source.
           GOBIN=~/.local/bin go install github.com/cpuguy83/go-md2man/v2@latest

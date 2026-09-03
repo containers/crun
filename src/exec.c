@@ -299,7 +299,7 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       if (exec_options.cap_size > 0)
         {
           runtime_spec_schema_config_schema_process_capabilities *capabilities
-              = xmalloc (sizeof (runtime_spec_schema_config_schema_process_capabilities));
+              = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_capabilities));
 
           capabilities->effective = exec_options.cap;
           capabilities->effective_len = exec_options.cap_size;
