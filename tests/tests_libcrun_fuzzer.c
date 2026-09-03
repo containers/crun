@@ -32,8 +32,10 @@
 #include <string.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <limits.h>
 #include <sys/prctl.h>
+#include <sys/wait.h>
 
 static int test_mode = -1;
 
@@ -312,6 +314,32 @@ test_parse_idmapped_mounts (uint8_t *buf, size_t len)
   return 0;
 }
 
+/* The harness is a subreaper, so everything the container leaves behind is
+   reparented here.  Reap it before returning: a process that outlives its
+   iteration has its death attributed to whatever input runs next, which
+   makes the artifacts point at the wrong test case.  Bounded, because a
+   container process is under no obligation to ever exit.  */
+static void
+reap_children (void)
+{
+  int i;
+
+  for (i = 0; i < 1000; i++)
+    {
+      int status;
+      pid_t pid;
+
+      pid = waitpid (-1, &status, WNOHANG);
+      if (pid > 0)
+        continue;
+      if (pid < 0 && errno == ECHILD)
+        return;
+
+      /* Children exist, none has exited yet.  */
+      usleep (1000);
+    }
+}
+
 static int
 run_one_container (uint8_t *buf, size_t len, bool detach)
 {
@@ -360,6 +388,8 @@ run_one_container (uint8_t *buf, size_t len, bool detach)
     crun_error_release (&err);
   if (libcrun_container_delete (&ctx, container->container_def, id, true, &err) < 0)
     crun_error_release (&err);
+
+  reap_children ();
   return 0;
 }
 
@@ -470,16 +500,6 @@ LLVMFuzzerTestOneInput (uint8_t *buf, size_t len)
   return 0;
 }
 
-static void
-sig_chld (int sig arg_unused)
-{
-  int status;
-  pid_t p;
-  do
-    p = waitpid (-1, &status, WNOHANG);
-  while (p > 0);
-}
-
 int
 main (int argc, char **argv)
 {
@@ -489,7 +509,10 @@ main (int argc, char **argv)
 
   if (prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) < 0)
     libcrun_fail_with_error (1, "%s", "cannot set subreaper");
-  signal (SIGCHLD, sig_chld);
+
+  /* Children are reaped synchronously by reap_children(), not from a
+     SIGCHLD handler: the handler used to consume the status of the very
+     processes libcrun_container_run() is waiting for.  */
 
   if (argc > 1)
     {
