@@ -78,19 +78,26 @@ syscall_sched_setattr (pid_t pid, struct sched_attr_s *attr, unsigned int flags)
 #endif
 }
 
+/* Maximum number of CPUs the reset mask can cover.  The mask passed to
+   sched_setaffinity is truncated by the kernel to its own cpumask size, so
+   using a mask larger than the number of CPUs on the system is safe, while a
+   mask that is too small fails with EINVAL when the target cgroup only allows
+   CPUs outside of it.  */
+#define MAX_CPU_MASK_BITS (64 * 1024)
+
 int
 libcrun_reset_cpu_affinity_mask (pid_t pid, libcrun_error_t *err)
 {
+  cpu_set_t mask[MAX_CPU_MASK_BITS / (CHAR_BIT * sizeof (cpu_set_t))];
   int ret;
-  cpu_set_t mask;
 
   /* Reset the inherited cpu affinity. Old kernels do that automatically, but
      new kernels remember the affinity that was set before the cgroup move.
      This is undesirable, because it inherits the systemd affinity when the container
      should really move to the container space cpus.
      See: https://issues.redhat.com/browse/OCPBUGS-15102   */
-  memset (&mask, 0xFF, sizeof (cpu_set_t));
-  ret = sched_setaffinity (pid, sizeof (mask), &mask);
+  memset (mask, 0xFF, sizeof (mask));
+  ret = sched_setaffinity (pid, sizeof (mask), mask);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "sched_setaffinity");
   return 0;
@@ -246,7 +253,7 @@ libcrun_set_cpu_affinity_from_string (pid_t pid, const char *str, libcrun_error_
 
   alloc_size = CPU_ALLOC_SIZE (bitmask_size * CHAR_BIT);
 
-  cpuset = CPU_ALLOC (alloc_size);
+  cpuset = CPU_ALLOC (bitmask_size * CHAR_BIT);
   if (UNLIKELY (cpuset == NULL))
     OOM ();
 
