@@ -47,6 +47,16 @@
 
 #define MAX_READLINKS 32
 
+/* Resolve PATH as if CHROOT was the root directory, storing the result in
+   RESOLVED_PATH (which must be at least PATH_MAX bytes long).
+
+   On success the returned path is prefixed by CHROOT, except in the trivial
+   case where CHROOT is NULL, empty, or "/", where PATH is returned unchanged.
+   A component of PATH that does not exist is not an error: the part that
+   could be resolved is returned with the rest of PATH appended to it.
+
+   On failure NULL is returned and errno is set to either ENAMETOOLONG or
+   ELOOP, or to any error readlink(2) can report except ENOENT and EINVAL. */
 char *chroot_realpath(const char *chroot, const char *path, char resolved_path[])
 {
 	char copy_path[PATH_MAX];
@@ -83,11 +93,10 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 	path = copy_path;
 	max_path = copy_path + PATH_MAX - chroot_len - 3;
 
-	/* Start with the chroot path. */
+	/* Start with the chroot path.  It is copied verbatim so that the
+	   result is always prefixed by CHROOT and callers can strip it. */
 	strcpy(new_path, chroot);
 	new_path += chroot_len;
-	while (*new_path == '/' && new_path > got_path)
-		new_path--;
 	got_path_root = new_path;
 	*new_path++ = '/';
 

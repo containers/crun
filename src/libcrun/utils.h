@@ -21,6 +21,7 @@
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <argp.h>
 #include "error.h"
@@ -360,7 +361,12 @@ LIBCRUN_PUBLIC int parse_json_file (json_object **out, const char *jsondata, str
 static inline int
 has_prefix (const char *str, const char *prefix)
 {
-  size_t prefix_len = strlen (prefix);
+  size_t prefix_len;
+
+  if (! str || ! prefix)
+    return 0;
+
+  prefix_len = strlen (prefix);
   return strlen (str) >= prefix_len && memcmp (str, prefix, prefix_len) == 0;
 }
 
@@ -368,7 +374,12 @@ has_prefix (const char *str, const char *prefix)
 static inline int
 has_dir_prefix (const char *str, const char *prefix)
 {
-  size_t prefix_len = strlen (prefix);
+  size_t prefix_len;
+
+  if (! str || ! prefix)
+    return 0;
+
+  prefix_len = strlen (prefix);
   return strlen (str) > prefix_len && memcmp (str, prefix, prefix_len) == 0 && str[prefix_len] == '/';
 }
 
@@ -413,6 +424,13 @@ static inline bool
 is_empty_string (const char *s)
 {
   return s == NULL || s[0] == '\0';
+}
+
+/* Like strlen(), but a NULL string has length 0.  */
+static inline size_t
+safe_strlen (const char *s)
+{
+  return s == NULL ? 0 : strlen (s);
 }
 
 static inline bool

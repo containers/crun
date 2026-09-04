@@ -299,8 +299,11 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   GEN_KEY (gen, "detached");
   GEN_OR_FAIL (json_gen_bool (gen, status->detached));
 
-  GEN_KEY (gen, "external_descriptors");
-  GEN_STR (gen, status->external_descriptors);
+  if (status->external_descriptors)
+    {
+      GEN_KEY (gen, "external_descriptors");
+      GEN_STR (gen, status->external_descriptors);
+    }
 
   GEN_OR_FAIL (json_gen_map_close (gen));
 

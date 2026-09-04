@@ -711,7 +711,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file (descriptors_path, status->external_descriptors, strlen (status->external_descriptors), err);
+  ret = write_file (descriptors_path, status->external_descriptors, safe_strlen (status->external_descriptors), err);
   if (UNLIKELY (ret < 0))
     return crun_error_wrap (err, "error saving CRIU descriptors file");
 
@@ -750,14 +750,12 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
           dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
           if (UNLIKELY (dest_in_root == NULL))
-            {
-              if (errno != ENOENT)
-                return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
-              else
-                dest_in_root = def->mounts[i]->destination;
-            }
-          else
-            dest_in_root += strlen (status->rootfs);
+            return crun_make_error (err, errno, "unable to resolve external bind mount `%s` under rootfs", def->mounts[i]->destination);
+
+          /* When the rootfs is "/" or not set, chroot_realpath returns the
+             path unchanged, so strip the prefix only when it is there.  */
+          if (has_prefix (dest_in_root, status->rootfs))
+            dest_in_root += safe_strlen (status->rootfs);
 
           ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, dest_in_root);
           if (UNLIKELY (ret < 0))
@@ -1065,13 +1063,12 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
           dest_in_root = chroot_realpath (status->rootfs, def->mounts[i]->destination, buf);
           if (UNLIKELY (dest_in_root == NULL))
-            {
-              if (errno != ENOENT)
-                return crun_make_error (err, errno, "unable to resolve external bind mount destination `%s` under rootfs", def->mounts[i]->destination);
-              dest_in_root = def->mounts[i]->destination;
-            }
-          else
-            dest_in_root += strlen (status->rootfs);
+            return crun_make_error (err, errno, "unable to resolve external bind mount destination `%s` under rootfs", def->mounts[i]->destination);
+
+          /* When the rootfs is "/" or not set, chroot_realpath returns the
+             path unchanged, so strip the prefix only when it is there.  */
+          if (has_prefix (dest_in_root, status->rootfs))
+            dest_in_root += safe_strlen (status->rootfs);
 
           ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, def->mounts[i]->source);
           if (UNLIKELY (ret < 0))

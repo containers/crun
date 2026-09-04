@@ -4576,7 +4576,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       json_gen_string (gen, "created", strlen ("created"));
       json_gen_string (gen, status.created, strlen (status.created));
       json_gen_string (gen, "owner", strlen ("owner"));
-      json_gen_string (gen, status.owner, strlen (status.owner));
+      json_gen_string (gen, status.owner, safe_strlen (status.owner));
       json_gen_map_close (gen);
 
       libcrun_free_container_status (&status);
