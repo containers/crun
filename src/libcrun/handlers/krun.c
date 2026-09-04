@@ -645,7 +645,7 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (kconf->tap_name != NULL && kconf->tap_name[0] == '\0')
+  if (kconf->tap_name != NULL && is_empty_string (kconf->tap_name))
     return crun_make_error (err, 0, "krun.tap_name cannot be empty");
 
   use_passt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.use_passt", "use_passt");
