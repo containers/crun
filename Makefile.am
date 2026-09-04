@@ -36,9 +36,7 @@ else
 noinst_LTLIBRARIES = libcrun.la
 endif
 
-if BUILD_TESTS
 check_LTLIBRARIES = libcrun_testing.la
-endif
 
 libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/string_map.c \
@@ -98,7 +96,6 @@ endif
 libcrun_la_LIBADD = libocispec/libocispec.la $(FOUND_LIBS) $(JSON_C_LIBS)
 
 # build a version with all the symbols visible for testing
-if BUILD_TESTS
 libcrun_testing_la_SOURCES = $(libcrun_SOURCES)
 libcrun_testing_la_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -fvisibility=default
 if ENABLE_COVERAGE
@@ -106,7 +103,6 @@ libcrun_testing_la_CFLAGS += $(COVERAGE_CFLAGS)
 libcrun_testing_la_LDFLAGS = $(COVERAGE_LDFLAGS)
 endif
 libcrun_testing_la_LIBADD = libocispec/libocispec.la $(JSON_C_LIBS)
-endif
 
 if PYTHON_BINDINGS
 pyexec_LTLIBRARIES = python_crun.la
@@ -199,9 +195,7 @@ EXTRA_DIST += src/libcrun/blake3/blake3.c \
 		src/libcrun/blake3/blake3_portable.c
 endif
 
-if BUILD_TESTS
 UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify tests/tests_libcrun_cgroup
-endif
 
 if ENABLE_CRUN
 bin_PROGRAMS = crun
@@ -210,8 +204,13 @@ else
 noinst_PROGRAMS = crun
 endif
 
-if BUILD_TESTS
-check_PROGRAMS = tests/init $(UNIT_TESTS) tests/tests_libcrun_fuzzer tests/no_openat2
+check_PROGRAMS = $(UNIT_TESTS) tests/tests_libcrun_fuzzer tests/no_openat2
+
+# tests/init is the container init the python tests run; it is the one thing
+# here that has to be linked statically.
+if BUILD_STATIC_TESTS
+check_PROGRAMS += tests/init
+endif
 
 TESTS_LDADD = libcrun_testing.la $(FOUND_LIBS) $(JSON_C_LIBS)
 
@@ -289,7 +288,6 @@ tests_tests_libcrun_cgroup_SOURCES = tests/tests_libcrun_cgroup.c
 tests_tests_libcrun_cgroup_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_cgroup_LDFLAGS = $(crun_LDFLAGS)
 
-endif
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
 
@@ -343,8 +341,12 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_error_handling.py \
 	tests/test_custom_handler.py
 
-if BUILD_TESTS
+if BUILD_STATIC_TESTS
 TESTS = $(PYTHON_TESTS) $(UNIT_TESTS)
+else
+# Without tests/init the python tests cannot run; the unit tests still can.
+TESTS = $(UNIT_TESTS)
+endif
 
 # Run the whole test suite with openat2(2) forced to fail with ENOSYS.  This
 # exercises the safe_openat() fallback used on kernels older than 5.6 and
@@ -359,7 +361,6 @@ check-no-openat2: tests/no_openat2$(EXEEXT)
 # they only ever run with the cgroupfs one.
 check-systemd:
 	$(MAKE) $(AM_MAKEFLAGS) check CGROUP_MANAGER=systemd
-endif
 
 .version:
 	$(AM_V_GEN)echo $(VERSION) > $@-t && mv $@-t $@

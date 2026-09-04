@@ -363,6 +363,12 @@ get_bind_mount (int dirfd, const char *src, bool recursive, bool rdonly, bool no
   int recursive_flag = (recursive ? AT_RECURSIVE : 0);
   int ret;
 
+  /* Several callers pass a source straight from the configuration, where it
+     is optional, so it can be missing altogether.  Callers that mean the
+     directory referred to by dirfd pass an empty string, never NULL.  */
+  if (UNLIKELY (src == NULL))
+    return crun_make_error (err, EINVAL, "mount source is not specified");
+
   if (rdonly)
     attr.attr_set = MS_RDONLY;
 
@@ -1228,6 +1234,11 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
   struct statfs sfs;
   int ret;
   mode_t mode;
+
+  /* The paths come from linux.maskedPaths and linux.readonlyPaths, so a null
+     entry in either array reaches us as a NULL pointer.  */
+  if (UNLIKELY (rel_path == NULL))
+    return crun_make_error (err, EINVAL, "invalid null path in `maskedPaths` or `readonlyPaths`");
 
   if (rel_path[0] == '/')
     rel_path++;

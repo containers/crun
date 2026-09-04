@@ -77,7 +77,13 @@ kv_cmp (const void *p1, const void *p2)
   const struct key_value *kv1 = p1;
   const struct key_value *kv2 = p2;
 
-  return kv1->key - kv2->key;
+  /* Not a subtraction: the keys are parsed out of the configuration, so two
+     of them far enough apart make the difference overflow.  */
+  if (kv1->key < kv2->key)
+    return -1;
+  if (kv1->key > kv2->key)
+    return 1;
+  return 0;
 }
 
 static int

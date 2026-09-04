@@ -64,15 +64,19 @@ AC_CHECK_FUNCS(eaccess hsearch_r copy_file_range fgetxattr statx fgetpwent_r iss
 
 AC_CHECK_HEADER([error.h], [AC_CHECK_FUNC([error], AC_DEFINE([HAVE_ERROR_H], [1], [Define if error.h is usable]))])
 
+dnl tests/init, the container init used by the python tests, is the only thing
+dnl that has to be linked statically.  The unit tests and the fuzzing harness
+dnl do not care, so a compiler that cannot link statically -- honggfuzz's
+dnl hfuzz-clang, for one -- costs us the python tests, not the whole suite.
 case "${lt_cv_prog_compiler_static_works}" in
-	yes) build_tests=true ;;
+	yes) build_static_tests=true ;;
 	no)
-		AC_MSG_WARN([Static compilation not working. Test suite cannot be built / executed. Make sure to install glibc-static or equivalent.])
-		build_tests=false
+		AC_MSG_WARN([Static compilation not working. tests/init cannot be built, so the tests needing it are skipped. Make sure to install glibc-static or equivalent.])
+		build_static_tests=false
 		;;
 	*) ;;
 esac
-AM_CONDITIONAL([BUILD_TESTS], [test "x${build_tests}" = xtrue])
+AM_CONDITIONAL([BUILD_STATIC_TESTS], [test "x${build_static_tests}" = xtrue])
 
 AC_ARG_ENABLE(crun,
 AS_HELP_STRING([--enable-crun], [Include crun executable in installation (default: yes)]),
