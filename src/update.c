@@ -25,14 +25,10 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
 
 static char *resources = NULL;
-
-static libcrun_context_t crun_context;
 
 enum
 {
@@ -181,24 +177,27 @@ int
 crun_command_update (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg = 0, ret;
+  cleanup_context libcrun_context_t *crun_context = NULL;
 
-  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
+  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, NULL);
   crun_assert_n_args (argc - first_arg, 1, 1);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (resources == NULL)
     {
-      ret = libcrun_container_update_from_values (&crun_context, argv[first_arg], values, values_len, err);
+      ret = libcrun_container_update_from_values (crun_context, argv[first_arg], values, values_len, err);
       free (values);
       if (ret < 0)
         return ret;
     }
   else
     {
-      ret = libcrun_container_update_from_file (&crun_context, argv[first_arg], resources, err);
+      ret = libcrun_container_update_from_file (crun_context, argv[first_arg], resources, err);
       if (ret < 0)
         return ret;
     }
@@ -210,7 +209,7 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
         .mem_bw_schema = mem_bw_schema,
       };
 
-      ret = libcrun_container_update_intel_rdt (&crun_context, argv[first_arg], &update, err);
+      ret = libcrun_container_update_intel_rdt (crun_context, argv[first_arg], &update, err);
       if (ret < 0)
         return ret;
     }

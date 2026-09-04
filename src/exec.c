@@ -26,9 +26,6 @@
 #include <limits.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
-#include "libcrun/linux.h"
 
 static char doc[] = "OCI runtime";
 
@@ -109,22 +106,6 @@ append_cap (const char *arg)
   append_to_string_array (&exec_options.cap, &exec_options.cap_size, arg);
 }
 
-static char **
-dup_array (char **arr, size_t len)
-{
-  size_t i;
-  char **ret;
-
-  ret = malloc (sizeof (char *) * (len + 1));
-  if (ret == NULL)
-    error (EXIT_FAILURE, errno, "cannot allocate memory");
-  for (i = 0; i < len; i++)
-    ret[i] = xstrdup (arr[i]);
-
-  ret[i] = NULL;
-  return ret;
-}
-
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
@@ -198,136 +179,284 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
 static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
-static runtime_spec_schema_config_schema_process_user *
-make_oci_process_user (const char *userspec)
+/* Minimal growable string buffer used to assemble the OCI Process JSON.  The
+   binary is a pure consumer of the public API, so it builds the process as a
+   JSON string rather than reaching for the internal ocispec types.  */
+struct strbuf
 {
-  runtime_spec_schema_config_schema_process_user *u;
-  char *endptr = NULL;
-  char *gidstr = NULL;
+  char *buf;
+  size_t len;
+  size_t cap;
+};
 
-  if (userspec == NULL)
-    return NULL;
-
-  u = xmalloc0 (sizeof (runtime_spec_schema_config_schema_process_user));
-  u->uid = parse_id_or_fail (userspec, &endptr, "UID");
-  if (*endptr == '\0')
-    return u;
-  if (*endptr != ':')
-    libcrun_fail_with_error (0, "invalid USERSPEC specified");
-
-  gidstr = endptr + 1;
-  u->gid = parse_id_or_fail (gidstr, &endptr, "GID");
-  if (*endptr != '\0')
-    libcrun_fail_with_error (0, "invalid USERSPEC specified");
-  return u;
+static void
+sb_ensure (struct strbuf *sb, size_t extra)
+{
+  if (sb->len + extra + 1 > sb->cap)
+    {
+      size_t ncap = sb->cap ? sb->cap : 256;
+      while (ncap < sb->len + extra + 1)
+        ncap *= 2;
+      sb->buf = xrealloc (sb->buf, ncap);
+      sb->cap = ncap;
+    }
 }
 
-#define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
-
-#ifdef SHARED_LIBCRUN
-void __attribute__ ((weak)) free_runtime_spec_schema_config_schema_process (runtime_spec_schema_config_schema_process *ptr);
-#endif
-
-static inline void
-cleanup_process_schemap (runtime_spec_schema_config_schema_process **p)
+static void
+sb_puts (struct strbuf *sb, const char *s)
 {
-  runtime_spec_schema_config_schema_process *process = *p;
-  if (process)
-    (void) free_runtime_spec_schema_config_schema_process (process);
+  size_t l = strlen (s);
+  sb_ensure (sb, l);
+  memcpy (sb->buf + sb->len, s, l);
+  sb->len += l;
+  sb->buf[sb->len] = '\0';
+}
+
+static void
+sb_putc (struct strbuf *sb, char c)
+{
+  sb_ensure (sb, 1);
+  sb->buf[sb->len++] = c;
+  sb->buf[sb->len] = '\0';
+}
+
+/* Append S as a quoted, escaped JSON string.  */
+static void
+sb_put_json_string (struct strbuf *sb, const char *s)
+{
+  sb_putc (sb, '"');
+  for (; *s; s++)
+    {
+      unsigned char c = (unsigned char) *s;
+      switch (c)
+        {
+        case '"':
+          sb_puts (sb, "\\\"");
+          break;
+        case '\\':
+          sb_puts (sb, "\\\\");
+          break;
+        case '\b':
+          sb_puts (sb, "\\b");
+          break;
+        case '\f':
+          sb_puts (sb, "\\f");
+          break;
+        case '\n':
+          sb_puts (sb, "\\n");
+          break;
+        case '\r':
+          sb_puts (sb, "\\r");
+          break;
+        case '\t':
+          sb_puts (sb, "\\t");
+          break;
+        default:
+          if (c < 0x20)
+            {
+              char tmp[8];
+              snprintf (tmp, sizeof (tmp), "\\u%04x", c);
+              sb_puts (sb, tmp);
+            }
+          else
+            sb_putc (sb, c);
+        }
+    }
+  sb_putc (sb, '"');
+}
+
+static void
+sb_put_json_string_array (struct strbuf *sb, char **arr, size_t len)
+{
+  size_t i;
+  sb_putc (sb, '[');
+  for (i = 0; i < len; i++)
+    {
+      if (i)
+        sb_putc (sb, ',');
+      sb_put_json_string (sb, arr[i]);
+    }
+  sb_putc (sb, ']');
+}
+
+/* Read the whole file at PATH into a NUL-terminated string.  */
+static char *
+read_file_to_string (const char *path, libcrun_error_t *err)
+{
+  cleanup_file FILE *f = NULL;
+  struct strbuf sb = { 0 };
+  char chunk[4096];
+  size_t n;
+
+  f = fopen (path, "re");
+  if (f == NULL)
+    {
+      libcrun_make_error (err, errno, "cannot open `%s`", path);
+      return NULL;
+    }
+
+  while ((n = fread (chunk, 1, sizeof (chunk), f)) > 0)
+    {
+      sb_ensure (&sb, n);
+      memcpy (sb.buf + sb.len, chunk, n);
+      sb.len += n;
+      sb.buf[sb.len] = '\0';
+    }
+  if (ferror (f))
+    {
+      free (sb.buf);
+      libcrun_make_error (err, errno, "cannot read `%s`", path);
+      return NULL;
+    }
+
+  if (sb.buf == NULL)
+    sb.buf = xstrdup ("");
+  return sb.buf;
+}
+
+/* Build the OCI Process JSON from the CLI options.  */
+static char *
+build_process_json (struct crun_global_arguments *global_args arg_unused, char **args, size_t args_len)
+{
+  struct strbuf sb = { 0 };
+
+  sb_putc (&sb, '{');
+
+  sb_puts (&sb, "\"args\":");
+  sb_put_json_string_array (&sb, args, args_len);
+
+  /* cwd is a required field in the OCI process schema; the exec path treats a
+     missing value as "/".  */
+  sb_puts (&sb, ",\"cwd\":");
+  sb_put_json_string (&sb, exec_options.cwd ? exec_options.cwd : "/");
+
+  sb_puts (&sb, ",\"terminal\":");
+  sb_puts (&sb, exec_options.tty ? "true" : "false");
+
+  if (exec_options.env_size > 0)
+    {
+      sb_puts (&sb, ",\"env\":");
+      sb_put_json_string_array (&sb, exec_options.env, exec_options.env_size);
+    }
+
+  if (exec_options.user)
+    {
+      char *endptr = NULL;
+      char *gidstr;
+      int uid, gid = 0;
+      char tmp[32];
+
+      uid = parse_id_or_fail (exec_options.user, &endptr, "UID");
+      if (*endptr == ':')
+        {
+          gidstr = endptr + 1;
+          gid = parse_id_or_fail (gidstr, &endptr, "GID");
+          if (*endptr != '\0')
+            libcrun_fail_with_error (0, "invalid USERSPEC specified");
+        }
+      else if (*endptr != '\0')
+        libcrun_fail_with_error (0, "invalid USERSPEC specified");
+
+      sb_puts (&sb, ",\"user\":{\"uid\":");
+      snprintf (tmp, sizeof (tmp), "%d", uid);
+      sb_puts (&sb, tmp);
+      sb_puts (&sb, ",\"gid\":");
+      snprintf (tmp, sizeof (tmp), "%d", gid);
+      sb_puts (&sb, tmp);
+      sb_putc (&sb, '}');
+    }
+
+  if (exec_options.process_label != NULL)
+    {
+      sb_puts (&sb, ",\"selinuxLabel\":");
+      sb_put_json_string (&sb, exec_options.process_label);
+    }
+
+  if (exec_options.apparmor != NULL)
+    {
+      sb_puts (&sb, ",\"apparmorProfile\":");
+      sb_put_json_string (&sb, exec_options.apparmor);
+    }
+
+  if (exec_options.cap_size > 0)
+    {
+      sb_puts (&sb, ",\"capabilities\":{");
+      sb_puts (&sb, "\"effective\":");
+      sb_put_json_string_array (&sb, exec_options.cap, exec_options.cap_size);
+      sb_puts (&sb, ",\"bounding\":");
+      sb_put_json_string_array (&sb, exec_options.cap, exec_options.cap_size);
+      sb_puts (&sb, ",\"ambient\":");
+      sb_put_json_string_array (&sb, exec_options.cap, exec_options.cap_size);
+      sb_puts (&sb, ",\"permitted\":");
+      sb_put_json_string_array (&sb, exec_options.cap, exec_options.cap_size);
+      sb_putc (&sb, '}');
+    }
+
+  /* noNewPrivileges remains at the config default unless explicitly requested.  */
+  if (exec_options.no_new_privs)
+    sb_puts (&sb, ",\"noNewPrivileges\":true");
+
+  sb_putc (&sb, '}');
+
+  return sb.buf;
 }
 
 int
 crun_command_exec (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg = 0, ret = 0;
-  libcrun_context_t crun_context = {
-    0,
-  };
-  cleanup_process_schema runtime_spec_schema_config_schema_process *process = NULL;
-  struct libcrun_container_exec_options_s exec_opts;
+  cleanup_context libcrun_context_t *crun_context = NULL;
+  cleanup_free char *process_json = NULL;
+  struct libcrun_exec_options_s exec_opts;
 
   memset (&exec_opts, 0, sizeof (exec_opts));
   exec_opts.struct_size = sizeof (exec_opts);
 
-  crun_context.preserve_fds = 0;
-  crun_context.listen_fds = 0;
-
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
   crun_assert_n_args (argc - first_arg, exec_options.process ? 1 : 2, -1);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  crun_context.detach = exec_options.detach;
-  crun_context.console_socket = exec_options.console_socket;
-  crun_context.pid_file = exec_options.pid_file;
-  crun_context.preserve_fds = exec_options.preserve_fds;
+  libcrun_context_set_detach (crun_context, exec_options.detach);
+  libcrun_context_set_console_socket (crun_context, exec_options.console_socket);
+  libcrun_context_set_pid_file (crun_context, exec_options.pid_file);
+  libcrun_context_set_preserve_fds (crun_context, exec_options.preserve_fds);
 
   if (getenv ("LISTEN_FDS"))
     {
-      crun_context.listen_fds = strtoll (getenv ("LISTEN_FDS"), NULL, 10);
-      crun_context.preserve_fds += crun_context.listen_fds;
+      int listen_fds = strtoll (getenv ("LISTEN_FDS"), NULL, 10);
+      libcrun_context_set_listen_fds (crun_context, listen_fds);
+      libcrun_context_set_preserve_fds (crun_context, exec_options.preserve_fds + listen_fds);
     }
 
   if (exec_options.process)
-    exec_opts.path = exec_options.process;
+    {
+      process_json = read_file_to_string (exec_options.process, err);
+      if (process_json == NULL)
+        return -1;
+      exec_opts.merge_env = false;
+    }
   else
     {
-      process = xmalloc0 (sizeof (*process));
-      int i;
+      cleanup_free char **args = NULL;
+      size_t args_len = argc - first_arg - 1;
+      size_t i;
 
-      process->args_len = argc;
-      process->args = xmalloc0 ((argc + 1) * sizeof (*process->args));
-      for (i = 0; i < argc - first_arg; i++)
-        process->args[i] = xstrdup (argv[first_arg + i + 1]);
-      process->args[i] = NULL;
-      if (exec_options.cwd)
-        process->cwd = exec_options.cwd;
-      process->terminal = exec_options.tty;
-      process->env = exec_options.env;
-      process->env_len = exec_options.env_size;
+      args = xmalloc0 ((args_len + 1) * sizeof (*args));
+      for (i = 0; i < args_len; i++)
+        args[i] = argv[first_arg + i + 1];
+      args[i] = NULL;
+
+      process_json = build_process_json (global_args, args, args_len);
       exec_opts.merge_env = true;
-      process->user = make_oci_process_user (exec_options.user);
-
-      if (exec_options.process_label != NULL)
-        process->selinux_label = xstrdup (exec_options.process_label);
-
-      if (exec_options.apparmor != NULL)
-        process->apparmor_profile = xstrdup (exec_options.apparmor);
-
-      if (exec_options.cap_size > 0)
-        {
-          runtime_spec_schema_config_schema_process_capabilities *capabilities
-              = xmalloc (sizeof (runtime_spec_schema_config_schema_process_capabilities));
-
-          capabilities->effective = exec_options.cap;
-          capabilities->effective_len = exec_options.cap_size;
-
-          capabilities->inheritable = NULL;
-          capabilities->inheritable_len = 0;
-
-          capabilities->bounding = dup_array (exec_options.cap, exec_options.cap_size);
-          capabilities->bounding_len = exec_options.cap_size;
-
-          capabilities->ambient = dup_array (exec_options.cap, exec_options.cap_size);
-          capabilities->ambient_len = exec_options.cap_size;
-
-          capabilities->permitted = dup_array (exec_options.cap, exec_options.cap_size);
-          capabilities->permitted_len = exec_options.cap_size;
-
-          process->capabilities = capabilities;
-        }
-
-      // noNewPriviledges will remain `false` if basespec has `false` unless specified
-      // Default is always `true` in generated basespec config
-      if (exec_options.no_new_privs)
-        process->no_new_privileges = 1;
-
-      exec_opts.process = process;
     }
 
+  exec_opts.process_json = process_json;
   exec_opts.cgroup = exec_options.cgroup;
 
-  return libcrun_container_exec_with_options (&crun_context, argv[first_arg], &exec_opts, err);
+  return libcrun_container_exec_with_options_json (crun_context, argv[first_arg], &exec_opts, err);
 }

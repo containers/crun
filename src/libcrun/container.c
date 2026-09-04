@@ -410,6 +410,44 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   return make_container (container_def, path, NULL);
 }
 
+const char *
+libcrun_container_get_config_json (libcrun_container_t *container)
+{
+  struct parser_context ctx = { 0, stderr };
+  parser_error gen_err = NULL;
+
+  if (container == NULL)
+    return NULL;
+
+  if (container->config_file_content == NULL && container->container_def)
+    {
+      container->config_file_content = runtime_spec_schema_config_schema_generate_json (container->container_def, &ctx, &gen_err);
+      free (gen_err);
+    }
+
+  return container->config_file_content;
+}
+
+const char *
+libcrun_container_get_annotation (libcrun_container_t *container, const char *key)
+{
+  if (container == NULL)
+    return NULL;
+  return find_string_map_value (container->annotations, key);
+}
+
+uid_t
+libcrun_container_get_uid (libcrun_container_t *container)
+{
+  return container->host_uid;
+}
+
+gid_t
+libcrun_container_get_gid (libcrun_container_t *container)
+{
+  return container->host_gid;
+}
+
 void
 libcrun_container_free (libcrun_container_t *ctr)
 {
@@ -430,6 +468,185 @@ libcrun_container_free (libcrun_container_t *ctr)
   free (ctr->config_file_content);
   free (ctr->config_file);
   free (ctr);
+}
+
+libcrun_context_t *
+libcrun_context_new (const char *id, const char *state_root, libcrun_error_t *err)
+{
+  libcrun_context_t *ctx = xmalloc0 (sizeof (*ctx));
+
+  if (id)
+    ctx->id = xstrdup (id);
+  if (state_root)
+    ctx->state_root = xstrdup (state_root);
+  ctx->fifo_exec_wait_fd = -1;
+  ctx->bundle = xstrdup (".");
+
+  if (libcrun_init_logging (&ctx->output_handler, &ctx->output_handler_arg, id, NULL, err) < 0)
+    {
+      libcrun_context_free (ctx);
+      return NULL;
+    }
+
+  ctx->handler_manager = libcrun_handler_manager_create (err);
+  if (ctx->handler_manager == NULL)
+    {
+      libcrun_context_free (ctx);
+      return NULL;
+    }
+
+#ifdef CRUN_LIBDIR
+  if (access (CRUN_LIBDIR "/handlers", F_OK) == 0)
+    {
+      if (libcrun_handler_manager_load_directory (ctx->handler_manager, CRUN_LIBDIR "/handlers", err) < 0)
+        {
+          libcrun_context_free (ctx);
+          return NULL;
+        }
+    }
+#endif
+
+  return ctx;
+}
+
+void
+libcrun_context_free (libcrun_context_t *ctx)
+{
+  if (ctx == NULL)
+    return;
+
+  free (ctx->owned_state_root);
+  free (ctx->owned_id);
+  free (ctx->owned_bundle);
+  free (ctx->owned_console_socket);
+  free (ctx->owned_pid_file);
+  free (ctx->owned_notify_socket);
+  free (ctx->owned_handler);
+
+  if (ctx->handler_manager)
+    handler_manager_free (ctx->handler_manager);
+
+  free (ctx);
+}
+
+#define LIBCRUN_CONTEXT_SET_STRING(field)                  \
+  do                                                       \
+    {                                                      \
+      free (ctx->owned_##field);                           \
+      ctx->owned_##field = value ? xstrdup (value) : NULL; \
+      ctx->field = ctx->owned_##field;                     \
+  } while (0)
+
+void
+libcrun_context_set_id (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (id);
+}
+
+void
+libcrun_context_set_state_root (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (state_root);
+}
+
+void
+libcrun_context_set_bundle (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (bundle);
+}
+
+void
+libcrun_context_set_console_socket (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (console_socket);
+}
+
+void
+libcrun_context_set_pid_file (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (pid_file);
+}
+
+void
+libcrun_context_set_notify_socket (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (notify_socket);
+}
+
+void
+libcrun_context_set_handler (libcrun_context_t *ctx, const char *value)
+{
+  LIBCRUN_CONTEXT_SET_STRING (handler);
+}
+
+#undef LIBCRUN_CONTEXT_SET_STRING
+
+void
+libcrun_context_set_preserve_fds (libcrun_context_t *ctx, int preserve_fds)
+{
+  ctx->preserve_fds = preserve_fds;
+}
+
+int
+libcrun_context_get_preserve_fds (libcrun_context_t *ctx)
+{
+  return ctx->preserve_fds;
+}
+
+void
+libcrun_context_set_listen_fds (libcrun_context_t *ctx, int listen_fds)
+{
+  ctx->listen_fds = listen_fds;
+}
+
+void
+libcrun_context_set_args (libcrun_context_t *ctx, int argc, char **argv)
+{
+  ctx->argc = argc;
+  ctx->argv = argv;
+}
+
+void
+libcrun_context_set_systemd_cgroup (libcrun_context_t *ctx, bool value)
+{
+  ctx->systemd_cgroup = value;
+}
+
+void
+libcrun_context_set_detach (libcrun_context_t *ctx, bool value)
+{
+  ctx->detach = value;
+}
+
+void
+libcrun_context_set_no_new_keyring (libcrun_context_t *ctx, bool value)
+{
+  ctx->no_new_keyring = value;
+}
+
+void
+libcrun_context_set_no_pivot (libcrun_context_t *ctx, bool value)
+{
+  ctx->no_pivot = value;
+}
+
+void
+libcrun_context_set_force_no_cgroup (libcrun_context_t *ctx, bool value)
+{
+  ctx->force_no_cgroup = value;
+}
+
+void
+libcrun_context_set_output_handler (libcrun_context_t *ctx, crun_output_handler handler, void *arg)
+{
+  ctx->output_handler = handler;
+  ctx->output_handler_arg = arg;
+}
+
+int
+libcrun_context_init_logging (libcrun_context_t *ctx, const char *log, libcrun_error_t *err)
+{
+  return libcrun_init_logging (&ctx->output_handler, &ctx->output_handler_arg, ctx->id, log, err);
 }
 
 static int
@@ -1071,7 +1288,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
 
   ret = mark_or_close_fds_ge_than (container, entrypoint_args->context->preserve_fds + 3, false, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (entrypoint_args->context->output_handler_arg, &err);
+    libcrun_error_report_and_release (err);
 
   ret = libcrun_reopen_dev_null (err);
   if (UNLIKELY (ret < 0))
@@ -1455,7 +1672,8 @@ read_container_config_from_state (libcrun_container_t **container, const char *s
 }
 
 static int
-run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, runtime_spec_schema_config_schema *def,
+run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *container,
+                    runtime_spec_schema_config_schema *def,
                     libcrun_container_status_t *status, const char *state_root, const char *id, libcrun_error_t *err)
 {
   cleanup_container libcrun_container_t *container_cleanup = NULL;
@@ -1496,7 +1714,7 @@ run_poststop_hooks (libcrun_context_t *context, libcrun_container_t *container, 
       if (UNLIKELY (ret != 0))
         {
           if (ret < 0)
-            crun_error_write_warning_and_release (context->output_handler_arg, &err);
+            libcrun_error_report_and_release (err);
           else
             libcrun_error (0, "poststop hook failed with exit code: %d", ret);
         }
@@ -1607,28 +1825,27 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
     {
       ret = libcrun_destroy_intelrdt (id, def, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+        libcrun_error_report_and_release (err);
     }
 
   if (status.cgroup_path)
     {
       ret = libcrun_cgroup_destroy (cgroup_status, err);
       if (UNLIKELY (ret < 0))
-        crun_error_write_warning_and_release (context->output_handler_arg, &err);
+        libcrun_error_report_and_release (err);
     }
 
   ret = run_poststop_hooks (context, container, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
-    crun_error_write_warning_and_release (context->output_handler_arg, &err);
+    libcrun_error_report_and_release (err);
 
   return libcrun_container_delete_status (state_root, id, err);
 }
 
 int
-libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id,
-                          bool force, libcrun_error_t *err)
+libcrun_container_delete (libcrun_context_t *context, const char *id, bool force, libcrun_error_t *err)
 {
-  return container_delete_internal (context, def, id, force, true, err);
+  return container_delete_internal (context, NULL, id, force, true, err);
 }
 
 int
@@ -3010,7 +3227,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
 
       libcrun_debug ("Exit code is `%d`, deleting container", exit_code);
       libcrun_error_t tmp_err = NULL;
-      libcrun_container_delete (context, def, context->id, true, &tmp_err);
+      container_delete_internal (context, def, context->id, true, true, &tmp_err);
       crun_error_release (&tmp_err);
       return crun_make_error (err, 0, "error creating container");
     }
@@ -3204,6 +3421,30 @@ libcrun_get_container_state_string (const char *id, libcrun_container_status_t *
 }
 
 int
+libcrun_container_state_json (libcrun_context_t *context, const char *id, char **out, libcrun_error_t *err)
+{
+  char *buffer = NULL;
+  size_t len = 0;
+  FILE *f;
+  int ret;
+
+  f = open_memstream (&buffer, &len);
+  if (f == NULL)
+    return crun_make_error (err, errno, "open_memstream");
+
+  ret = libcrun_container_state (context, id, f, err);
+  fclose (f);
+  if (UNLIKELY (ret < 0))
+    {
+      free (buffer);
+      return ret;
+    }
+
+  *out = buffer;
+  return 0;
+}
+
+int
 libcrun_container_state (libcrun_context_t *context, const char *id, FILE *out, libcrun_error_t *err)
 {
   const char *const OCI_CONFIG_VERSION = "1.0.0";
@@ -3316,6 +3557,57 @@ libcrun_container_exec_process_file (libcrun_context_t *context, const char *id,
   opts.path = path;
 
   return libcrun_container_exec_with_options (context, id, &opts, err);
+}
+
+static int
+exec_from_process_json (libcrun_context_t *context, const char *id, const char *process_json, const char *cgroup,
+                        bool merge_env, libcrun_error_t *err)
+{
+  struct parser_context parser_ctx = { .options = 0, .errfile = stderr };
+  struct libcrun_container_exec_options_s opts;
+  runtime_spec_schema_config_schema_process *process;
+  parser_error parser_err = NULL;
+  json_object *doc = NULL;
+  int ret;
+
+  ret = parse_json_file (&doc, process_json, &parser_ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  process = make_runtime_spec_schema_config_schema_process (doc, &parser_ctx, &parser_err);
+  json_object_put (doc);
+  if (process == NULL)
+    {
+      ret = crun_make_error (err, 0, "cannot parse process: `%s`", parser_err ? parser_err : "unknown error");
+      free (parser_err);
+      return ret;
+    }
+
+  memset (&opts, 0, sizeof (opts));
+  opts.struct_size = sizeof (opts);
+  opts.process = process;
+  opts.cgroup = cgroup;
+  opts.merge_env = merge_env;
+
+  ret = libcrun_container_exec_with_options (context, id, &opts, err);
+  free_runtime_spec_schema_config_schema_process (process);
+  return ret;
+}
+
+int
+libcrun_container_exec_json (libcrun_context_t *context, const char *id, const char *process_json, libcrun_error_t *err)
+{
+  return exec_from_process_json (context, id, process_json, NULL, false, err);
+}
+
+int
+libcrun_container_exec_with_options_json (libcrun_context_t *context, const char *id,
+                                          const struct libcrun_exec_options_s *opts, libcrun_error_t *err)
+{
+  if (opts == NULL || opts->struct_size == 0)
+    return crun_make_error (err, EINVAL, "invalid exec options");
+
+  return exec_from_process_json (context, id, opts->process_json, opts->cgroup, opts->merge_env, err);
 }
 
 #define cleanup_process_schema __attribute__ ((cleanup (cleanup_process_schemap)))
@@ -4159,6 +4451,163 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   return 0;
 }
 
+static void
+features_add_string (json_gen_ctx *json_gen, const char *key, const char *value)
+{
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_string (json_gen, value, strlen (value));
+}
+
+static void
+features_add_bool (json_gen_ctx *json_gen, const char *key, int value)
+{
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_bool (json_gen, value);
+}
+
+static void
+features_add_bool_str (json_gen_ctx *json_gen, const char *key, int value)
+{
+  features_add_string (json_gen, key, value ? "true" : "false");
+}
+
+static void
+features_add_array (json_gen_ctx *json_gen, const char *key, char **array)
+{
+  size_t i;
+
+  json_gen_string (json_gen, key, strlen (key));
+  json_gen_array_open (json_gen);
+  if (array)
+    for (i = 0; array[i] != NULL; i++)
+      json_gen_string (json_gen, array[i], strlen (array[i]));
+  json_gen_array_close (json_gen);
+}
+
+static void
+features_add_linux_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
+{
+  json_gen_string (json_gen, "linux", strlen ("linux"));
+  json_gen_map_open (json_gen);
+
+  features_add_array (json_gen, "namespaces", linux->namespaces);
+  features_add_array (json_gen, "capabilities", linux->capabilities);
+
+  json_gen_string (json_gen, "cgroup", strlen ("cgroup"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "v1", linux->cgroup.v1);
+  features_add_bool (json_gen, "v2", linux->cgroup.v2);
+  features_add_bool (json_gen, "systemd", linux->cgroup.systemd);
+  features_add_bool (json_gen, "systemdUser", linux->cgroup.systemd_user);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "seccomp", strlen ("seccomp"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->seccomp.enabled);
+  if (linux->seccomp.actions)
+    features_add_array (json_gen, "actions", linux->seccomp.actions);
+  if (linux->seccomp.operators)
+    features_add_array (json_gen, "operators", linux->seccomp.operators);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "apparmor", strlen ("apparmor"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->apparmor.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "selinux", strlen ("selinux"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->selinux.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "mountExtensions", strlen ("mountExtensions"));
+  json_gen_map_open (json_gen);
+  json_gen_string (json_gen, "idmap", strlen ("idmap"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->mount_ext.idmap.enabled);
+  json_gen_map_close (json_gen);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "intelRdt", strlen ("intelRdt"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->intel_rdt.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "netDevices", strlen ("netDevices"));
+  json_gen_map_open (json_gen);
+  features_add_bool (json_gen, "enabled", linux->net_devices.enabled);
+  json_gen_map_close (json_gen);
+
+  json_gen_string (json_gen, "memoryPolicy", strlen ("memoryPolicy"));
+  json_gen_map_open (json_gen);
+  if (linux->memory_policy.mode)
+    features_add_array (json_gen, "modes", linux->memory_policy.mode);
+  if (linux->memory_policy.flags)
+    features_add_array (json_gen, "flags", linux->memory_policy.flags);
+  json_gen_map_close (json_gen);
+
+  json_gen_map_close (json_gen);
+}
+
+static void
+features_add_annotations_info (json_gen_ctx *json_gen, const struct annotations_info_s *annotation)
+{
+  json_gen_string (json_gen, "annotations", strlen ("annotations"));
+  json_gen_map_open (json_gen);
+
+  if (! is_empty_string (annotation->io_github_seccomp_libseccomp_version))
+    features_add_string (json_gen, "io.github.seccomp.libseccomp.version", annotation->io_github_seccomp_libseccomp_version);
+
+  features_add_bool_str (json_gen, "org.opencontainers.runc.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
+  features_add_bool_str (json_gen, "run.oci.crun.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
+
+  features_add_string (json_gen, "run.oci.crun.commit", annotation->run_oci_crun_commit);
+  features_add_string (json_gen, "run.oci.crun.version", annotation->run_oci_crun_version);
+
+  features_add_bool_str (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
+
+  json_gen_map_close (json_gen);
+}
+
+int
+libcrun_container_get_features_json (libcrun_context_t *context, char **out, libcrun_error_t *err)
+{
+  cleanup_struct_features struct features_info_s *info = NULL;
+  const char *buffer = NULL;
+  json_gen_ctx *json_gen;
+  size_t buffer_len;
+  int ret;
+
+  *out = NULL;
+
+  ret = libcrun_container_get_features (context, &info, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! json_gen_init (&json_gen, NULL))
+    return crun_make_error (err, 0, "cannot initialize JSON generator");
+
+  json_gen_config (json_gen, json_gen_beautify, 1);
+
+  json_gen_map_open (json_gen);
+
+  features_add_string (json_gen, "ociVersionMin", info->oci_version_min);
+  features_add_string (json_gen, "ociVersionMax", info->oci_version_max);
+  features_add_array (json_gen, "hooks", info->hooks);
+  features_add_array (json_gen, "mountOptions", info->mount_options);
+  features_add_linux_info (json_gen, &info->linux);
+  features_add_annotations_info (json_gen, &info->annotations);
+  features_add_array (json_gen, "potentiallyUnsafeConfigAnnotations", info->potentially_unsafe_annotations);
+
+  json_gen_map_close (json_gen);
+
+  json_gen_get_buf (json_gen, &buffer, &buffer_len);
+  *out = xstrdup (buffer);
+  json_gen_free (json_gen);
+
+  return 0;
+}
+
 /* Read the container status and fail if the container is not running.  */
 static int
 read_status_require_running (libcrun_context_t *context, const char *id,
@@ -4205,14 +4654,41 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
   return libcrun_container_unpause_linux (&status, err);
 }
 
+/* Translate the public options struct into the internal representation used by
+   the linux/CRIU layer.  Strings are borrowed (not copied).  */
+static void
+cr_options_from_public (libcrun_checkpoint_restore_t *dst, struct libcrun_checkpoint_restore_options_s *src)
+{
+  memset (dst, 0, sizeof (*dst));
+  dst->image_path = (char *) src->image_path;
+  dst->work_path = (char *) src->work_path;
+  dst->parent_path = (char *) src->parent_path;
+  dst->console_socket = src->console_socket;
+  dst->lsm_profile = (char *) src->lsm_profile;
+  dst->lsm_mount_context = (char *) src->lsm_mount_context;
+  dst->leave_running = src->leave_running;
+  dst->tcp_established = src->tcp_established;
+  dst->tcp_close = src->tcp_close;
+  dst->ext_unix_sk = src->ext_unix_sk;
+  dst->shell_job = src->shell_job;
+  dst->file_locks = src->file_locks;
+  dst->pre_dump = src->pre_dump;
+  dst->detach = src->detach;
+  dst->manage_cgroups_mode = src->manage_cgroups_mode;
+  dst->network_lock_method = src->network_lock_method;
+}
+
 int
-libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
-                              libcrun_error_t *err)
+libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
+                              struct libcrun_checkpoint_restore_options_s *cr_options, libcrun_error_t *err)
 {
   int ret;
   const char *state_root = context->state_root;
   libcrun_container_status_t status = {};
+  libcrun_checkpoint_restore_t cr;
   cleanup_container libcrun_container_t *container = NULL;
+
+  cr_options_from_public (&cr, cr_options);
 
   ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
@@ -4221,7 +4697,7 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
   ret = read_container_config_from_state (&container, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
-  ret = libcrun_container_checkpoint_linux (&status, container, cr_options, err);
+  ret = libcrun_container_checkpoint_linux (&status, container, &cr, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4284,8 +4760,8 @@ restore_proxy_process (int *proxy_pid_pipe, int cgroup_manager, libcrun_error_t 
 }
 
 int
-libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
-                           libcrun_error_t *err)
+libcrun_container_restore (libcrun_context_t *context, const char *id,
+                           struct libcrun_checkpoint_restore_options_s *cr_options, libcrun_error_t *err)
 {
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_container libcrun_container_t *container = NULL;
@@ -4293,12 +4769,15 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   cleanup_close int proxy_pid_pipe1 = -1;
   runtime_spec_schema_config_schema *def;
   libcrun_container_status_t status = {};
+  libcrun_checkpoint_restore_t cr;
   cleanup_pid pid_t proxy_pid = -1;
   int proxy_pid_pipe[2];
   int cgroup_manager;
   uid_t root_uid = -1;
   gid_t root_gid = -1;
   int ret;
+
+  cr_options_from_public (&cr, cr_options);
 
   container = libcrun_container_load_from_file ("config.json", err);
   if (container == NULL)
@@ -4378,7 +4857,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
         /* Restore the container directly in the desired cgroup.  */
         status.cgroup_path = cgroup_path;
 
-        ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        ret = libcrun_container_restore_linux (&status, container, &cr, err);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -4454,7 +4933,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
         /* Restore the container in the same cgroup where the dummy process was.  */
         status.cgroup_path = target_cgroup;
 
-        ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        ret = libcrun_container_restore_linux (&status, container, &cr, err);
         if (UNLIKELY (ret < 0))
           return ret;
 
@@ -4519,13 +4998,15 @@ libcrun_container_read_pids (libcrun_context_t *context, const char *id, bool re
 }
 
 int
-libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err)
+libcrun_container_list_json (libcrun_context_t *context, char **out, libcrun_error_t *err)
 {
   libcrun_container_list_t *list = NULL, *it;
   const char *content = NULL;
   json_gen_ctx *gen = NULL;
   size_t len;
   int ret;
+
+  *out = NULL;
 
   ret = libcrun_get_containers_list (&list, context->state_root, err);
   if (UNLIKELY (ret < 0))
@@ -4557,7 +5038,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
                                                 &running, err);
       if (UNLIKELY (ret < 0))
         {
-          libcrun_error_write_warning_and_release (stderr, &err);
+          libcrun_error_report_and_release (err);
           continue;
         }
 
@@ -4589,18 +5070,7 @@ libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcr
       goto exit;
     }
 
-  while (len)
-    {
-      size_t written = fwrite (content, 1, len, out);
-      if (ferror (out))
-        {
-          ret = libcrun_make_error (err, errno, "error writing to file");
-          goto exit;
-        }
-      len -= written;
-      content += written;
-    }
-
+  *out = xstrdup (content);
   ret = 0;
 
 exit:
@@ -4610,6 +5080,24 @@ exit:
     json_gen_free (gen);
 
   return ret;
+}
+
+int
+libcrun_write_json_containers_list (libcrun_context_t *context, FILE *out, libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  size_t len;
+  int ret;
+
+  ret = libcrun_container_list_json (context, &content, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  len = strlen (content);
+  if (len && fwrite (content, 1, len, out) != len)
+    return crun_make_error (err, errno, "error writing to file");
+
+  return 0;
 }
 
 int

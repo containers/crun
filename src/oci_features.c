@@ -23,22 +23,13 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <json-c/json.h>
-#include <ocispec/json_common.h>
-
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
 
 static struct argp_option options[] = { { 0 } };
 
 static char args_doc[] = "features";
-
-const char *json_string;
-
-size_t json_length;
 
 static error_t
 parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
@@ -53,268 +44,26 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 
 static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
-void
-add_string_to_json (json_gen_ctx *json_gen, const char *key, char *value)
-{
-  json_gen_string (json_gen, key, strlen (key));
-  json_gen_string (json_gen, value, strlen (value));
-}
-
-void
-add_bool_to_json (json_gen_ctx *json_gen, const char *key, int value)
-{
-  json_gen_string (json_gen, key, strlen (key));
-  json_gen_bool (json_gen, value);
-}
-
-void
-add_bool_str_to_json (json_gen_ctx *json_gen, const char *key, int value)
-{
-  const char *val = value ? "true" : "false";
-  json_gen_string (json_gen, key, strlen (key));
-  json_gen_string (json_gen, val, strlen (val));
-}
-
-void
-add_array_to_json (json_gen_ctx *json_gen, const char *key, char **array)
-{
-  size_t i;
-  json_gen_string (json_gen, key, strlen (key));
-  json_gen_array_open (json_gen);
-
-  for (i = 0; array[i] != NULL; i++)
-    json_gen_string (json_gen, array[i], strlen (array[i]));
-
-  json_gen_array_close (json_gen);
-}
-
-void
-crun_features_add_hooks (json_gen_ctx *json_gen, char **hooks)
-{
-  add_array_to_json (json_gen, "hooks", hooks);
-}
-
-void
-crun_features_add_mount_options (json_gen_ctx *json_gen, char **mount_options)
-{
-  add_array_to_json (json_gen, "mountOptions", mount_options);
-}
-
-void
-crun_features_add_namespaces (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  add_array_to_json (json_gen, "namespaces", linux->namespaces);
-}
-
-void
-crun_features_add_capabilities (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  add_array_to_json (json_gen, "capabilities", linux->capabilities);
-}
-
-void
-crun_features_add_cgroup_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "cgroup", strlen ("cgroup"));
-  json_gen_map_open (json_gen);
-
-  add_bool_to_json (json_gen, "v1", linux->cgroup.v1);
-  add_bool_to_json (json_gen, "v2", linux->cgroup.v2);
-  add_bool_to_json (json_gen, "systemd", linux->cgroup.systemd);
-  add_bool_to_json (json_gen, "systemdUser", linux->cgroup.systemd_user);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_seccomp_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "seccomp", strlen ("seccomp"));
-  json_gen_map_open (json_gen);
-
-  add_bool_to_json (json_gen, "enabled", linux->seccomp.enabled);
-  if (linux->seccomp.actions)
-    add_array_to_json (json_gen, "actions", linux->seccomp.actions);
-  if (linux->seccomp.operators)
-    add_array_to_json (json_gen, "operators", linux->seccomp.operators);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_mempolicy_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "memoryPolicy", strlen ("memoryPolicy"));
-  json_gen_map_open (json_gen);
-
-  if (linux->memory_policy.mode)
-    add_array_to_json (json_gen, "modes", linux->memory_policy.mode);
-
-  if (linux->memory_policy.flags)
-    add_array_to_json (json_gen, "flags", linux->memory_policy.flags);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_apparmor_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "apparmor", strlen ("apparmor"));
-  json_gen_map_open (json_gen);
-
-  add_bool_to_json (json_gen, "enabled", linux->apparmor.enabled);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_selinux_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "selinux", strlen ("selinux"));
-  json_gen_map_open (json_gen);
-
-  add_bool_to_json (json_gen, "enabled", linux->selinux.enabled);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_mount_ext_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "mountExtensions", strlen ("mountExtensions"));
-  json_gen_map_open (json_gen);
-
-  json_gen_string (json_gen, "idmap", strlen ("idmap"));
-  json_gen_map_open (json_gen);
-  add_bool_to_json (json_gen, "enabled", linux->mount_ext.idmap.enabled);
-  json_gen_map_close (json_gen);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_intel_rdt (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "intelRdt", strlen ("intelRdt"));
-  json_gen_map_open (json_gen);
-  add_bool_to_json (json_gen, "enabled", linux->intel_rdt.enabled);
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_net_devices (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "netDevices", strlen ("netDevices"));
-  json_gen_map_open (json_gen);
-  add_bool_to_json (json_gen, "enabled", linux->net_devices.enabled);
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_linux_info (json_gen_ctx *json_gen, const struct linux_info_s *linux)
-{
-  json_gen_string (json_gen, "linux", strlen ("linux"));
-  json_gen_map_open (json_gen);
-
-  crun_features_add_namespaces (json_gen, linux);
-  crun_features_add_capabilities (json_gen, linux);
-  crun_features_add_cgroup_info (json_gen, linux);
-  crun_features_add_seccomp_info (json_gen, linux);
-  crun_features_add_apparmor_info (json_gen, linux);
-  crun_features_add_selinux_info (json_gen, linux);
-  crun_features_add_mount_ext_info (json_gen, linux);
-  crun_features_add_intel_rdt (json_gen, linux);
-  crun_features_add_net_devices (json_gen, linux);
-  crun_features_add_mempolicy_info (json_gen, linux);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_annotations_info (json_gen_ctx *json_gen, const struct annotations_info_s *annotation)
-{
-  json_gen_string (json_gen, "annotations", strlen ("annotations"));
-  json_gen_map_open (json_gen);
-
-  if (! is_empty_string (annotation->io_github_seccomp_libseccomp_version))
-    add_string_to_json (json_gen, "io.github.seccomp.libseccomp.version", annotation->io_github_seccomp_libseccomp_version);
-
-  add_bool_str_to_json (json_gen, "org.opencontainers.runc.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
-  add_bool_str_to_json (json_gen, "run.oci.crun.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
-
-  add_string_to_json (json_gen, "run.oci.crun.commit", annotation->run_oci_crun_commit);
-  add_string_to_json (json_gen, "run.oci.crun.version", annotation->run_oci_crun_version);
-
-  add_bool_str_to_json (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
-
-  json_gen_map_close (json_gen);
-}
-
-void
-crun_features_add_potentially_unsafe_config_annotations_info (json_gen_ctx *json_gen, char **annotations)
-{
-  add_array_to_json (json_gen, "potentiallyUnsafeConfigAnnotations", annotations);
-}
-
 int
 crun_command_features (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  cleanup_struct_features struct features_info_s *info = NULL;
+  cleanup_free char *json = NULL;
   int first_arg = 0, ret = 0;
-  libcrun_context_t crun_context = {
-    0,
-  };
-  json_gen_ctx *json_gen;
+  cleanup_context libcrun_context_t *crun_context = NULL;
 
   argp_parse (&run_argp, argc, argv, 0, 0, &options);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  // Call the function in features.c to gather the feature information
-  ret = libcrun_container_get_features (&crun_context, &info, err);
+  ret = libcrun_container_get_features_json (crun_context, &json, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  // Prepare the JSON output
-  if (! json_gen_init (&json_gen, NULL))
-    return libcrun_make_error (err, 0, "Failed to initialize json structure");
-
-  json_gen_config (json_gen, json_gen_beautify, 1); // Optional: Enable pretty formatting
-
-  // Start building the JSON
-  json_gen_map_open (json_gen);
-
-  // Add ociVersionMin field
-  add_string_to_json (json_gen, "ociVersionMin", info->oci_version_min);
-
-  // Add ociVersionMax field
-  add_string_to_json (json_gen, "ociVersionMax", info->oci_version_max);
-
-  // Add hooks array
-  crun_features_add_hooks (json_gen, info->hooks);
-
-  // Add mountOptions array
-  crun_features_add_mount_options (json_gen, info->mount_options);
-
-  // Add linux struct info
-  crun_features_add_linux_info (json_gen, &info->linux);
-
-  // Add annotations struct info
-  crun_features_add_annotations_info (json_gen, &info->annotations);
-
-  // Add potentially unsafe config annotatinos info
-  crun_features_add_potentially_unsafe_config_annotations_info (json_gen, info->potentially_unsafe_annotations);
-
-  // End building the JSON
-  json_gen_map_close (json_gen);
-
-  json_gen_get_buf (json_gen, &json_string, &json_length);
-
-  printf ("%s", json_string);
-
-  json_gen_free (json_gen);
+  printf ("%s", json);
 
   return 0;
 }

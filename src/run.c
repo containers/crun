@@ -39,7 +39,7 @@ static const char *bundle = NULL;
 
 static bool keep = false;
 
-static libcrun_context_t crun_context;
+static libcrun_context_t *crun_context;
 
 static struct argp_option options[]
     = { { "bundle", 'b', "DIR", 0, "container bundle (default \".\")", 0 },
@@ -67,7 +67,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
   switch (key)
     {
     case 'd':
-      crun_context.detach = true;
+      libcrun_context_set_detach (crun_context, true);
       break;
 
     case 'f':
@@ -75,7 +75,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case 'b':
-      bundle = crun_context.bundle = argp_mandatory_argument (arg, state);
+      bundle = argp_mandatory_argument (arg, state);
       break;
 
     case OPTION_KEEP:
@@ -83,26 +83,26 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
 
     case OPTION_CONSOLE_SOCKET:
-      crun_context.console_socket = argp_mandatory_argument (arg, state);
+      libcrun_context_set_console_socket (crun_context, argp_mandatory_argument (arg, state));
       break;
 
     case OPTION_PRESERVE_FDS:
-      crun_context.preserve_fds = parse_id_or_fail (argp_mandatory_argument (arg, state), NULL, "preserve-fds");
+      libcrun_context_set_preserve_fds (crun_context, parse_id_or_fail (argp_mandatory_argument (arg, state), NULL, "preserve-fds"));
       break;
 
     case OPTION_NO_SUBREAPER:
       break;
 
     case OPTION_NO_NEW_KEYRING:
-      crun_context.no_new_keyring = true;
+      libcrun_context_set_no_new_keyring (crun_context, true);
       break;
 
     case OPTION_PID_FILE:
-      crun_context.pid_file = argp_mandatory_argument (arg, state);
+      libcrun_context_set_pid_file (crun_context, argp_mandatory_argument (arg, state));
       break;
 
     case OPTION_NO_PIVOT:
-      crun_context.no_pivot = true;
+      libcrun_context_set_no_pivot (crun_context, true);
       break;
 
     case ARGP_KEY_NO_ARGS:
@@ -126,5 +126,10 @@ get_options ()
 int
 crun_command_run (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
-  return crun_run_create_internal (global_args, argc, argv, libcrun_container_run, get_options, &crun_context, &run_argp, &config_file, &bundle, err);
+  int ret;
+
+  crun_context = new_libcrun_context (global_args);
+  ret = crun_run_create_internal (global_args, argc, argv, libcrun_container_run, get_options, crun_context, &run_argp, &config_file, &bundle, err);
+  libcrun_context_free (crun_context);
+  return ret;
 }

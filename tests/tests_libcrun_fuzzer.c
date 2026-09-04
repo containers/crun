@@ -384,9 +384,9 @@ run_one_container (uint8_t *buf, size_t len, bool detach)
 
   libcrun_free_container_status (&status);
 
-  if (libcrun_container_delete (&ctx, container->container_def, id, false, &err) < 0)
+  if (libcrun_container_delete (&ctx, id, false, &err) < 0)
     crun_error_release (&err);
-  if (libcrun_container_delete (&ctx, container->container_def, id, true, &err) < 0)
+  if (libcrun_container_delete (&ctx, id, true, &err) < 0)
     crun_error_release (&err);
 
   reap_children ();

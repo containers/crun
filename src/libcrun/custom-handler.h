@@ -61,6 +61,7 @@ LIBCRUN_PUBLIC void handler_manager_free (struct custom_handler_manager_s *manag
 
 LIBCRUN_PUBLIC struct custom_handler_s *handler_by_name (struct custom_handler_manager_s *manager, const char *name);
 LIBCRUN_PUBLIC void libcrun_handler_manager_print_feature_tags (struct custom_handler_manager_s *manager, FILE *out);
+LIBCRUN_PUBLIC char **libcrun_context_get_handler_feature_tags (libcrun_context_t *ctx, libcrun_error_t *err);
 
 struct custom_handler_instance_s
 {
