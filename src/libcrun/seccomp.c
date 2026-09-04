@@ -403,16 +403,40 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
   blake3_hasher_init (&hasher);
 
-#define PROCESS_STRING(X)                                  \
-  do                                                       \
-    {                                                      \
-      if (X)                                               \
-        blake3_hasher_update (&hasher, (X), strlen ((X))); \
+  /* Every field is framed so that distinct configurations cannot hash to the
+     same value: strings carry a presence byte and an explicit length, arrays
+     carry their element count, and optional scalars carry a presence byte.
+     Everything that influences the generated filter MUST be included here,
+     otherwise a stale filter could be served from the cache.  */
+#define PROCESS_STRING(X)                                           \
+  do                                                                \
+    {                                                               \
+      const char *str_ = (X);                                       \
+      unsigned char present_ = str_ ? 1 : 0;                        \
+      size_t len_ = str_ ? strlen (str_) : 0;                       \
+      blake3_hasher_update (&hasher, &present_, sizeof (present_)); \
+      blake3_hasher_update (&hasher, &len_, sizeof (len_));         \
+      if (str_)                                                     \
+        blake3_hasher_update (&hasher, str_, len_);                 \
   } while (0)
 #define PROCESS_DATA(X)                                   \
   do                                                      \
     {                                                     \
       blake3_hasher_update (&hasher, &(X), sizeof ((X))); \
+  } while (0)
+#define PROCESS_OPTIONAL_DATA(PRESENT, X)                           \
+  do                                                                \
+    {                                                               \
+      unsigned char present_ = (PRESENT) ? 1 : 0;                   \
+      blake3_hasher_update (&hasher, &present_, sizeof (present_)); \
+      if (PRESENT)                                                  \
+        blake3_hasher_update (&hasher, &(X), sizeof ((X)));         \
+  } while (0)
+#define PROCESS_COUNT(X)                                        \
+  do                                                            \
+    {                                                           \
+      size_t count_ = (X);                                      \
+      blake3_hasher_update (&hasher, &count_, sizeof (count_)); \
   } while (0)
 
   PROCESS_STRING (PACKAGE_VERSION);
@@ -438,28 +462,40 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
   PROCESS_DATA (seccomp_gen_options);
 
-  PROCESS_DATA (seccomp->default_errno_ret);
+  /* default_errno_ret is only honoured when present (absent defaults to EPERM).  */
+  PROCESS_OPTIONAL_DATA (seccomp->default_errno_ret_present, seccomp->default_errno_ret);
   PROCESS_STRING (seccomp->default_action);
+
+  PROCESS_COUNT (seccomp->flags_len);
   for (i = 0; i < seccomp->flags_len; i++)
     PROCESS_STRING (seccomp->flags[i]);
+
+  PROCESS_COUNT (seccomp->architectures_len);
   for (i = 0; i < seccomp->architectures_len; i++)
     PROCESS_STRING (seccomp->architectures[i]);
+
+  PROCESS_COUNT (seccomp->syscalls_len);
   for (i = 0; i < seccomp->syscalls_len; i++)
     {
       size_t j;
 
-      if (seccomp->syscalls[i]->action)
-        PROCESS_STRING (seccomp->syscalls[i]->action);
+      PROCESS_STRING (seccomp->syscalls[i]->action);
+
+      /* errno_ret is only honoured when present (absent defaults to EPERM).  */
+      PROCESS_OPTIONAL_DATA (seccomp->syscalls[i]->errno_ret_present, seccomp->syscalls[i]->errno_ret);
+
+      PROCESS_COUNT (seccomp->syscalls[i]->names_len);
       for (j = 0; j < seccomp->syscalls[i]->names_len; j++)
         PROCESS_STRING (seccomp->syscalls[i]->names[j]);
+
+      PROCESS_COUNT (seccomp->syscalls[i]->args_len);
       for (j = 0; j < seccomp->syscalls[i]->args_len; j++)
         {
-          if (seccomp->syscalls[i]->args[j]->index_present)
-            PROCESS_DATA (seccomp->syscalls[i]->args[j]->index);
-          if (seccomp->syscalls[i]->args[j]->value_present)
-            PROCESS_DATA (seccomp->syscalls[i]->args[j]->value);
-          if (seccomp->syscalls[i]->args[j]->value_two_present)
-            PROCESS_DATA (seccomp->syscalls[i]->args[j]->value_two);
+          /* index, value and value_two are used unconditionally by the
+             generator (absent fields are 0), so hash them in fixed positions.  */
+          PROCESS_DATA (seccomp->syscalls[i]->args[j]->index);
+          PROCESS_DATA (seccomp->syscalls[i]->args[j]->value);
+          PROCESS_DATA (seccomp->syscalls[i]->args[j]->value_two);
           PROCESS_STRING (seccomp->syscalls[i]->args[j]->op);
         }
     }
@@ -477,6 +513,8 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
 #undef PROCESS_STRING
 #undef PROCESS_DATA
+#undef PROCESS_OPTIONAL_DATA
+#undef PROCESS_COUNT
   return 1;
 }
 
