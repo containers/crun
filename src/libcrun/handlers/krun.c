@@ -282,6 +282,24 @@ libkrun_parse_string_configuration (json_object *config_tree, libcrun_container_
   return 0;
 }
 
+static void
+libkrun_make_tap_mac (const char *id, uint8_t mac[6])
+{
+  uint64_t hash = 14695981039346656037ULL;
+  size_t i;
+
+  for (; *id != '\0'; id++)
+    {
+      hash ^= (uint8_t) *id;
+      hash *= 1099511628211ULL;
+    }
+
+  for (i = 0; i < 6; i++)
+    mac[i] = (uint8_t) (hash >> (i * 8));
+
+  mac[0] = (mac[0] & 0xfe) | 0x02;
+}
+
 static int
 libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -361,7 +379,8 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
       if (krun_add_net_tap == NULL)
         return crun_make_error (err, 0, "could not find symbol `krun_add_net_tap` in the krun library");
 
-      uint8_t mac[] = { 0x5a, 0x94, 0xef, 0xe4, 0x0c, 0xee };
+      uint8_t mac[6];
+      libkrun_make_tap_mac (container->context->id, mac);
       ret = krun_add_net_tap (ctx_id, kconf->tap_name, &mac[0], COMPAT_NET_FEATURES, 0);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, -ret, "could not add krun TAP interface `%s`", kconf->tap_name);
