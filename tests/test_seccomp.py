@@ -275,6 +275,42 @@ def test_seccomp_syscall_args():
         return -1
 
 
+def test_seccomp_more_than_six_syscall_args():
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['socket'],
+                'action': 'SCMP_ACT_ERRNO',
+                'errnoRet': 1,
+                'args': [
+                    {'index': 0, 'value': value, 'op': 'SCMP_CMP_EQ'}
+                    for value in [0, 1, 3, 4, 5, 6, 7, 2]
+                ]
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'socket', '2']
+
+    try:
+        run_and_get_output(conf)
+    except subprocess.CalledProcessError as e:
+        if e.output is not None and b'Operation not permitted' in e.output:
+            return 0
+        logger.info("socket was not blocked by seccomp")
+        return -1
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+
+    logger.info("socket was not blocked by seccomp")
+    return -1
+
+
 def test_seccomp_multiple_syscalls():
     """Test seccomp with multiple syscalls in one rule."""
     conf = base_config()
@@ -624,6 +660,7 @@ all_tests = {
     "seccomp-log-action": test_seccomp_log_action,
     "seccomp-kill-action": test_seccomp_kill_action,
     "seccomp-syscall-args": test_seccomp_syscall_args,
+    "seccomp-more-than-six-syscall-args": test_seccomp_more_than_six_syscall_args,
     "seccomp-multiple-syscalls": test_seccomp_multiple_syscalls,
     "seccomp-errno-default": test_seccomp_errno_default,
     "seccomp-comparison-ops": test_seccomp_comparison_ops,

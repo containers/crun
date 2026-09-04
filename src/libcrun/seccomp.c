@@ -403,16 +403,40 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
   blake3_hasher_init (&hasher);
 
-#define PROCESS_STRING(X)                                  \
-  do                                                       \
-    {                                                      \
-      if (X)                                               \
-        blake3_hasher_update (&hasher, (X), strlen ((X))); \
+  /* Every field is framed so that distinct configurations cannot hash to the
+     same value: strings carry a presence byte and an explicit length, arrays
+     carry their element count, and optional scalars carry a presence byte.
+     Everything that influences the generated filter MUST be included here,
+     otherwise a stale filter could be served from the cache.  */
+#define PROCESS_STRING(X)                                           \
+  do                                                                \
+    {                                                               \
+      const char *str_ = (X);                                       \
+      unsigned char present_ = str_ ? 1 : 0;                        \
+      size_t len_ = str_ ? strlen (str_) : 0;                       \
+      blake3_hasher_update (&hasher, &present_, sizeof (present_)); \
+      blake3_hasher_update (&hasher, &len_, sizeof (len_));         \
+      if (str_)                                                     \
+        blake3_hasher_update (&hasher, str_, len_);                 \
   } while (0)
 #define PROCESS_DATA(X)                                   \
   do                                                      \
     {                                                     \
       blake3_hasher_update (&hasher, &(X), sizeof ((X))); \
+  } while (0)
+#define PROCESS_OPTIONAL_DATA(PRESENT, X)                           \
+  do                                                                \
+    {                                                               \
+      unsigned char present_ = (PRESENT) ? 1 : 0;                   \
+      blake3_hasher_update (&hasher, &present_, sizeof (present_)); \
+      if (PRESENT)                                                  \
+        blake3_hasher_update (&hasher, &(X), sizeof ((X)));         \
+  } while (0)
+#define PROCESS_COUNT(X)                                        \
+  do                                                            \
+    {                                                           \
+      size_t count_ = (X);                                      \
+      blake3_hasher_update (&hasher, &count_, sizeof (count_)); \
   } while (0)
 
   PROCESS_STRING (PACKAGE_VERSION);
@@ -438,28 +462,40 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
   PROCESS_DATA (seccomp_gen_options);
 
-  PROCESS_DATA (seccomp->default_errno_ret);
+  /* default_errno_ret is only honoured when present (absent defaults to EPERM).  */
+  PROCESS_OPTIONAL_DATA (seccomp->default_errno_ret_present, seccomp->default_errno_ret);
   PROCESS_STRING (seccomp->default_action);
+
+  PROCESS_COUNT (seccomp->flags_len);
   for (i = 0; i < seccomp->flags_len; i++)
     PROCESS_STRING (seccomp->flags[i]);
+
+  PROCESS_COUNT (seccomp->architectures_len);
   for (i = 0; i < seccomp->architectures_len; i++)
     PROCESS_STRING (seccomp->architectures[i]);
+
+  PROCESS_COUNT (seccomp->syscalls_len);
   for (i = 0; i < seccomp->syscalls_len; i++)
     {
       size_t j;
 
-      if (seccomp->syscalls[i]->action)
-        PROCESS_STRING (seccomp->syscalls[i]->action);
+      PROCESS_STRING (seccomp->syscalls[i]->action);
+
+      /* errno_ret is only honoured when present (absent defaults to EPERM).  */
+      PROCESS_OPTIONAL_DATA (seccomp->syscalls[i]->errno_ret_present, seccomp->syscalls[i]->errno_ret);
+
+      PROCESS_COUNT (seccomp->syscalls[i]->names_len);
       for (j = 0; j < seccomp->syscalls[i]->names_len; j++)
         PROCESS_STRING (seccomp->syscalls[i]->names[j]);
+
+      PROCESS_COUNT (seccomp->syscalls[i]->args_len);
       for (j = 0; j < seccomp->syscalls[i]->args_len; j++)
         {
-          if (seccomp->syscalls[i]->args[j]->index_present)
-            PROCESS_DATA (seccomp->syscalls[i]->args[j]->index);
-          if (seccomp->syscalls[i]->args[j]->value_present)
-            PROCESS_DATA (seccomp->syscalls[i]->args[j]->value);
-          if (seccomp->syscalls[i]->args[j]->value_two_present)
-            PROCESS_DATA (seccomp->syscalls[i]->args[j]->value_two);
+          /* index, value and value_two are used unconditionally by the
+             generator (absent fields are 0), so hash them in fixed positions.  */
+          PROCESS_DATA (seccomp->syscalls[i]->args[j]->index);
+          PROCESS_DATA (seccomp->syscalls[i]->args[j]->value);
+          PROCESS_DATA (seccomp->syscalls[i]->args[j]->value_two);
           PROCESS_STRING (seccomp->syscalls[i]->args[j]->op);
         }
     }
@@ -477,6 +513,8 @@ calculate_seccomp_checksum (runtime_spec_schema_config_linux_seccomp *seccomp, u
 
 #undef PROCESS_STRING
 #undef PROCESS_DATA
+#undef PROCESS_OPTIONAL_DATA
+#undef PROCESS_COUNT
   return 1;
 }
 
@@ -813,54 +851,65 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
           else
             {
               size_t k;
-              struct scmp_arg_cmp arg_cmp[6];
               bool multiple_args = false;
               uint32_t count[6] = {};
 
-              for (k = 0; k < seccomp->syscalls[i]->args_len && k < 6; k++)
+              for (k = 0; k < seccomp->syscalls[i]->args_len; k++)
                 {
                   uint32_t index;
 
                   index = seccomp->syscalls[i]->args[k]->index;
                   if (index >= 6)
-                    return crun_make_error (err, 0, "invalid seccomp index `%zu`", i);
+                    return crun_make_error (err, 0, "invalid seccomp index `%u`", index);
 
                   count[index]++;
                   if (count[index] > 1)
-                    {
-                      multiple_args = true;
-                      break;
-                    }
+                    multiple_args = true;
                 }
 
-              for (k = 0; k < seccomp->syscalls[i]->args_len && k < 6; k++)
-                {
-                  char *op = seccomp->syscalls[i]->args[k]->op;
-
-                  arg_cmp[k].arg = seccomp->syscalls[i]->args[k]->index;
-                  ret = get_seccomp_operator (op, &(arg_cmp[k].op), err);
-                  if (UNLIKELY (ret < 0))
-                    return ret;
-                  arg_cmp[k].datum_a = seccomp->syscalls[i]->args[k]->value;
-                  arg_cmp[k].datum_b = seccomp->syscalls[i]->args[k]->value_two;
-                }
-
-              if (! multiple_args)
-                {
-                  ret = seccomp_rule_add_array (ctx, action, syscall, k, arg_cmp);
-                  if (UNLIKELY (ret < 0))
-                    return crun_make_error (err, -ret, "seccomp_rule_add_array");
-                }
-              else
+              /* If multiple rules refer to the same argument, treat the rules are in OR.  */
+              if (multiple_args)
                 {
                   size_t r;
 
-                  for (r = 0; r < k; r++)
+                  for (r = 0; r < seccomp->syscalls[i]->args_len; r++)
                     {
-                      ret = seccomp_rule_add_array (ctx, action, syscall, 1, &arg_cmp[r]);
+                      struct scmp_arg_cmp arg_cmp;
+                      char *op = seccomp->syscalls[i]->args[r]->op;
+
+                      arg_cmp.arg = seccomp->syscalls[i]->args[r]->index;
+                      ret = get_seccomp_operator (op, &arg_cmp.op, err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+                      arg_cmp.datum_a = seccomp->syscalls[i]->args[r]->value;
+                      arg_cmp.datum_b = seccomp->syscalls[i]->args[r]->value_two;
+
+                      ret = seccomp_rule_add_array (ctx, action, syscall, 1, &arg_cmp);
                       if (UNLIKELY (ret < 0))
                         return crun_make_error (err, -ret, "seccomp_rule_add_array");
                     }
+                }
+              else
+                {
+                  /* No index is repeated, so there are at most 6 distinct arguments.  */
+                  const size_t args_len = seccomp->syscalls[i]->args_len;
+                  struct scmp_arg_cmp arg_cmp[6];
+
+                  for (k = 0; k < args_len; k++)
+                    {
+                      char *op = seccomp->syscalls[i]->args[k]->op;
+
+                      arg_cmp[k].arg = seccomp->syscalls[i]->args[k]->index;
+                      ret = get_seccomp_operator (op, &(arg_cmp[k].op), err);
+                      if (UNLIKELY (ret < 0))
+                        return ret;
+                      arg_cmp[k].datum_a = seccomp->syscalls[i]->args[k]->value;
+                      arg_cmp[k].datum_b = seccomp->syscalls[i]->args[k]->value_two;
+                    }
+
+                  ret = seccomp_rule_add_array (ctx, action, syscall, args_len, arg_cmp);
+                  if (UNLIKELY (ret < 0))
+                    return crun_make_error (err, -ret, "seccomp_rule_add_array");
                 }
             }
         }
