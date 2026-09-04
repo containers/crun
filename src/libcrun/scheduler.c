@@ -132,14 +132,14 @@ diagnose_scheduler_failure (libcrun_error_t *err, runtime_spec_schema_config_sch
       const uint64_t min = 1024;
       const uint64_t max = 1ULL << 63;
 
-      if (attr->sched_runtime < min || attr->sched_runtime > max)
-        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` runtime (%" PRIu64 ") must be between %" PRIu64 " and %" PRIu64,
+      if (attr->sched_runtime < min || attr->sched_runtime >= max)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` runtime (%" PRIu64 ") must be >= %" PRIu64 " and <= %" PRIu64,
                                 attr->sched_runtime, min, max);
-      if (attr->sched_deadline < min || attr->sched_deadline > max)
-        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` deadline (%" PRIu64 ") must be between %" PRIu64 " and %" PRIu64,
+      if (attr->sched_deadline < min || attr->sched_deadline >= max)
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` deadline (%" PRIu64 ") must be >= %" PRIu64 " and <= %" PRIu64,
                                 attr->sched_deadline, min, max);
-      if (attr->sched_period != 0 && (attr->sched_period < min || attr->sched_period > max))
-        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` period (%" PRIu64 ") must be between %" PRIu64 " and %" PRIu64,
+      if (attr->sched_period != 0 && (attr->sched_period < min || attr->sched_period >= max))
+        return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` period (%" PRIu64 ") must be >= %" PRIu64 " and <= %" PRIu64,
                                 attr->sched_period, min, max);
 
       return crun_make_error (err, errno, "sched_setattr: invalid `SCHED_DEADLINE` parameters (runtime=%" PRIu64 ", deadline=%" PRIu64 ", period=%" PRIu64 ")",

@@ -491,7 +491,7 @@ def test_scheduler_deadline_too_small_runtime():
 
     except subprocess.CalledProcessError as e:
         output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be between " in output:
+        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be >= 1024 and <= " in output:
             return 0  # Expected validation error
         logger.info("unexpected error: %s", output)
         return -1
@@ -512,7 +512,7 @@ def test_scheduler_deadline_too_big_runtime():
 
     conf['process']['scheduler'] = {
         'policy': 'SCHED_DEADLINE',
-        'runtime': 9223372036854775809,
+        'runtime': 9223372036854775809,  # 2^63 + 1
         'deadline': 9223372036854775810,
     }
 
@@ -525,8 +525,42 @@ def test_scheduler_deadline_too_big_runtime():
 
     except subprocess.CalledProcessError as e:
         output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be between " in output:
+        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be >= 1024 and <= " in output:
             return 0  # Expected validation error
+        logger.info("unexpected error: %s", output)
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
+def test_scheduler_deadline_2pow63_rejected():
+    """Test SCHED_DEADLINE validation rejects exactly 2^63 (issue #2190)."""
+    if is_rootless():
+        return (77, "SCHED_DEADLINE requires root")
+    if not is_sched_deadline_available():
+        return (77, "SCHED_DEADLINE not available in kernel")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    # Test that exactly 2^63 is rejected by crun's range check
+    conf['process']['scheduler'] = {
+        'policy': 'SCHED_DEADLINE',
+        'runtime': 9223372036854775808,  # exactly 2^63 (invalid)
+        'deadline': 9223372036854775809,
+    }
+
+    conf['process']['args'] = ['/init', 'true']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=False)
+        return -1
+
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "sched_setattr: `SCHED_DEADLINE` runtime " in output and " must be >= 1024 and <= " in output:
+            return 0
         logger.info("unexpected error: %s", output)
         return -1
     except Exception as e:
@@ -551,6 +585,7 @@ all_tests = {
     "scheduler-deadline-invalid-deadline-period": test_scheduler_deadline_invalid_deadline_period,
     "scheduler-deadline-too-small-runtime": test_scheduler_deadline_too_small_runtime,
     "scheduler-deadline-too-big-runtime": test_scheduler_deadline_too_big_runtime,
+    "scheduler-deadline-2pow63-rejected": test_scheduler_deadline_2pow63_rejected,
 }
 
 if __name__ == "__main__":
