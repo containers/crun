@@ -130,7 +130,7 @@ diagnose_scheduler_failure (libcrun_error_t *err, runtime_spec_schema_config_sch
       /* sched(7) says "under the current implementation, all of the parameter values
        * must be at least 1024 <...> and less than 2^63". */
       const uint64_t min = 1024;
-      const uint64_t max = 1ULL << 63;
+      const uint64_t max = (1ULL << 63) - 1;
 
       if (attr->sched_runtime < min || attr->sched_runtime > max)
         return crun_make_error (err, errno, "sched_setattr: `SCHED_DEADLINE` runtime (%" PRIu64 ") must be between %" PRIu64 " and %" PRIu64,
