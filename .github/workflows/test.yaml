@@ -110,6 +110,54 @@ jobs:
       - name: run test
         run: ./tests/ci.sh "${{ matrix.test }}"
 
+  runc-integration:
+    runs-on: ubuntu-24.04
+    name: runc integration tests${{ matrix.rootless && ' (rootless)' || '' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        rootless: ["", "rootless"]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: checkout runc
+        uses: actions/checkout@v7
+        with:
+          # TODO: switch back to opencontainers/runc once
+          # https://github.com/opencontainers/runc/pull/5455 is merged.
+          repository: kolyshkin/runc
+          ref: rootless-env-list
+          path: runc
+
+      # For the runc test helpers (tests/cmd in runc).
+      - name: install go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: install dependencies
+        run: |
+          sudo add-apt-repository -y ppa:criu/ppa
+          # add-apt-repository runs apt-get update so we don't have to.
+          sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev pkg-config gcc libsystemd-dev gperf libjson-c-dev libprotobuf-c-dev mawk sshfs uidmap
+
+      - name: install bats
+        uses: bats-core/bats-action@4.0.0
+        with:
+          bats-version: 1.12.0
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
+
+      - name: run autogen.sh
+        run: ./autogen.sh
+
+      - name: run test
+        run: ./tests/ci.sh runc-integration${{ matrix.rootless && '-rootless' || '' }}
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
