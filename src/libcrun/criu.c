@@ -27,6 +27,7 @@
 #  include <sched.h>
 #  include <sys/stat.h>
 #  include <sys/mount.h>
+#  include <sys/prctl.h>
 #  include <fcntl.h>
 
 #  include "container.h"
@@ -969,18 +970,58 @@ prepare_restore_mounts_internal (runtime_spec_schema_config_schema *def, char *r
   return 0;
 }
 
-/* Move the current process back to CGROUPS, as read from /proc/self/cgroup.
-   A failure is not fatal, so only warn about it.  */
-static void
-move_back_to_cgroups (const char *cgroups)
-{
-  libcrun_error_t tmp_err = NULL;
+/* Ask CRIU to restore, from a child process that first joins CGROUP_PATH so
+   that the tasks CRIU creates are placed there.  It is needed in the "ignore"
+   cgroup mode, where CRIU does not deal with cgroups at all, and does not hurt
+   otherwise.  Using a throw-away process means there is nothing to undo once
+   the restore is over.
 
-  if (UNLIKELY (libcrun_move_self_to_cgroups (cgroups, &tmp_err) < 0))
+   The restored process tree is a sibling of CRIU, hence a child of the process
+   calling criu_restore_child(); the caller must be a subreaper to inherit it
+   once this child is gone.
+
+   This is a separate function so that no variable of the caller is live across
+   the vfork.  */
+static int
+criu_restore_child_in_cgroup (const char *cgroup_path, int *criu_ret, libcrun_error_t *err)
+{
+  int wait_status = 0;
+  pid_t pid;
+  int ret;
+
+  *criu_ret = -1;
+
+  /* Must be vfork: the child shares our memory space, so both *criu_ret and
+     the error it creates are visible here once it is gone.  */
+  pid = vfork ();
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "vfork");
+
+  if (pid == 0)
     {
-      libcrun_warning ("cannot move back to the original cgroup: %s", tmp_err->msg);
-      crun_error_release (&tmp_err);
+      ret = libcrun_move_process_to_cgroup (0, 0, cgroup_path, false, err);
+      if (UNLIKELY (ret < 0))
+        _safe_exit (EXIT_FAILURE);
+
+      *criu_ret = libcriu_wrapper->criu_restore_child ();
+      _safe_exit (EXIT_SUCCESS);
     }
+
+  ret = waitpid_ignore_stopped (pid, &wait_status, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "waitpid for the CRIU restore process");
+
+  ret = get_process_exit_status (wait_status);
+  if (UNLIKELY (ret != EXIT_SUCCESS))
+    {
+      /* The child creates the error in the shared memory space, do not
+         overwrite it with crun_make_error().  */
+      if (*err == NULL)
+        return crun_make_error (err, 0, "the CRIU restore process exited with status %d", ret);
+      return -1;
+    }
+
+  return 0;
 }
 
 /* Recreate the mountpoints which do not exist in the container rootfs
@@ -1031,8 +1072,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
   cleanup_free char *bundle_cleanup = NULL;
-  cleanup_free char *own_cgroups = NULL;
   cleanup_close int work_fd = -1;
+  int criu_ret;
   int ret_out;
   size_t i;
   int ret;
@@ -1363,33 +1404,32 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       goto out_umount;
     }
 
-  /* Like runc does, put CRIU into the container cgroup for the time of
-   * restore, so the restored tasks are created there. It is necessary in
-   * the "ignore" mode, where CRIU does not deal with cgroups at all, and
-   * does not hurt otherwise. As CRIU is our child, do it by moving
-   * ourselves there, and move back once the restore is done. */
-  if (! is_empty_string (status->cgroup_path))
-    {
-      ret = read_all_file (PROC_SELF_CGROUP, &own_cgroups, NULL, err);
-      if (UNLIKELY (ret < 0))
-        goto out_umount;
-
-      ret = libcrun_move_process_to_cgroup (0, 0, status->cgroup_path, false, err);
-      if (UNLIKELY (ret < 0))
-        {
-          /* Some of the cgroups might have been joined already.  */
-          move_back_to_cgroups (own_cgroups);
-          goto out_umount;
-        }
-    }
-
   /* criu_restore() returns the PID of the process of the restored process
    * tree. This PID will not be the same as status->pid if the container is
    * running in a PID namespace. But it will always be > 0. */
-  ret = libcriu_wrapper->criu_restore_child ();
+  if (is_empty_string (status->cgroup_path))
+    ret = libcriu_wrapper->criu_restore_child ();
+  else
+    {
+      /* The restored tree is created by, and thus a child of, the process
+       * calling criu_restore_child().  Become a subreaper so that it is
+       * reparented to us, and not to init, once that process is gone. */
+      if (! cr_options->detach)
+        {
+          ret = prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+          if (UNLIKELY (ret < 0))
+            {
+              ret = crun_make_error (err, errno, "prctl set child subreaper");
+              goto out_umount;
+            }
+        }
 
-  if (own_cgroups)
-    move_back_to_cgroups (own_cgroups);
+      ret = criu_restore_child_in_cgroup (status->cgroup_path, &criu_ret, err);
+      if (UNLIKELY (ret < 0))
+        goto out_umount;
+
+      ret = criu_ret;
+    }
 
   if (UNLIKELY (ret <= 0))
     {
