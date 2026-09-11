@@ -166,6 +166,98 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
     return 0
 
 
+def _get_ppid(pid):
+    with open('/proc/%s/stat' % pid) as f:
+        return int(f.read().rsplit(')', 1)[1].split()[1])
+
+
+def _wait_running(cid):
+    for _ in range(100):
+        try:
+            s = json.loads(run_crun_command(["state", cid]))
+            if s['status'] == "running":
+                return s['pid']
+        except Exception:
+            pass
+        time.sleep(0.1)
+    return 0
+
+
+# A restore without --detach must keep the restored init as a child of crun,
+# so that crun can wait for it and report its exit status.
+def test_cr_restore_foreground():
+    if r := _check_cr_requirements():
+        return r
+
+    cid = None
+    cr_dir = os.path.join(get_tests_root(), 'checkpoint-foreground')
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    try:
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True
+        )
+
+        if _wait_running(cid) == 0:
+            logger.info("test_cr_restore_foreground: the container did not start")
+            return -1
+
+        run_crun_command([
+            "checkpoint",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            cid
+        ])
+
+        bundle = os.path.join(get_tests_root(), cid.split('-')[1])
+        crun = subprocess.Popen([
+            get_crun_path(),
+            "--root", get_tests_root_status(),
+            "restore",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            "--bundle=%s" % bundle,
+            cid
+        ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE, close_fds=False)
+
+        pid = _wait_running(cid)
+        if pid == 0:
+            crun.kill()
+            logger.info("test_cr_restore_foreground: the container was not restored: %s",
+                        crun.stderr.read().decode())
+            return -1
+
+        ppid = _get_ppid(pid)
+        if ppid != crun.pid:
+            logger.info("test_cr_restore_foreground: init %d has ppid %d, expected crun %d",
+                        pid, ppid, crun.pid)
+            crun.kill()
+            return -1
+
+        run_crun_command(["kill", cid, "KILL"])
+        try:
+            ret = crun.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            crun.kill()
+            logger.info("test_cr_restore_foreground: crun did not exit with the container")
+            return -1
+
+        if ret != 137:
+            logger.info("test_cr_restore_foreground: crun exited with %d, expected 137: %s",
+                        ret, crun.stderr.read().decode())
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
 def test_cr_pre_dump():
     if r := _check_cr_requirements(min_criu_version=31700):
         return r
@@ -420,6 +512,7 @@ all_tests = {
     "checkpoint-restore": test_cr,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
+    "checkpoint-restore-foreground": test_cr_restore_foreground,
     "checkpoint-restore-pre-dump": test_cr_pre_dump,
     "checkpoint-restore-with-runc-config": test_cr_with_runc_config,
     "checkpoint-restore-with-crun-config": test_cr_with_crun_config,
