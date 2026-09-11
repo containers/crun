@@ -24,8 +24,6 @@
 
 int libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, const char *path, bool create_if_missing, libcrun_error_t *err);
 
-int libcrun_move_self_to_cgroups (const char *content, libcrun_error_t *err);
-
 int libcrun_cgroups_create_symlinks (int dirfd, libcrun_error_t *err);
 
 int libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error_t *err);

@@ -1084,66 +1084,6 @@ libcrun_move_process_to_cgroup (pid_t pid, pid_t init_pid, const char *path, boo
   return enter_cgroup (cgroup_mode, pid, init_pid, path, create_if_missing, err);
 }
 
-/* Move the current process to the cgroups listed in CONTENT, as read from
-   /proc/self/cgroup earlier.  Used to undo libcrun_move_process_to_cgroup.  */
-int
-libcrun_move_self_to_cgroups (const char *content, libcrun_error_t *err)
-{
-  cleanup_free char *buf = xstrdup (content);
-  char *saveptr = NULL;
-  char *controller;
-  char *path;
-  int cgroup_mode;
-  bool has_data;
-  int ret;
-
-  cgroup_mode = libcrun_get_cgroup_mode (err);
-  if (UNLIKELY (cgroup_mode < 0))
-    return cgroup_mode;
-
-  for (has_data = read_proc_cgroup (buf, &saveptr, NULL, &controller, &path);
-       has_data;
-       has_data = read_proc_cgroup (NULL, &saveptr, NULL, &controller, &path))
-    {
-      const char *subsystem = NULL;
-
-      if (cgroup_mode == CGROUP_MODE_UNIFIED)
-        {
-          /* Ignore named v1 hierarchies, if any.  */
-          if (controller[0] != '\0')
-            continue;
-        }
-      else
-        {
-          cleanup_free char *subsystem_path = NULL;
-
-          /* Use the same names as enter_cgroup_v1 does.  */
-          if (has_prefix (controller, "name="))
-            controller += 5;
-          subsystem = controller[0] == '\0' ? "unified" : controller;
-          if (strcmp (subsystem, "net_prio,net_cls") == 0)
-            subsystem = "net_cls,net_prio";
-          if (strcmp (subsystem, "cpuacct,cpu") == 0)
-            subsystem = "cpu,cpuacct";
-
-          ret = append_paths (&subsystem_path, err, CGROUP_ROOT, subsystem, NULL);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          ret = crun_path_exists (subsystem_path, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          if (ret == 0)
-            continue;
-        }
-
-      ret = move_process_to_cgroup (0, subsystem, path, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
-  return 0;
-}
-
 int
 libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *sub_cgroup, libcrun_error_t *err)
 {
