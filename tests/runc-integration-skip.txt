@@ -1,0 +1,148 @@
+# The runc integration tests (see runc/tests/integration) which currently
+# fail with crun, and so are skipped by tests/ci.sh (runc-integration).
+#
+# Format: <file>.bats: <test name>
+#     or: <file>.bats
+#
+# The latter is for the whole file, e.g. for a feature crun does not have.
+#
+# The list is expected to shrink, as either crun or the tests get fixed.
+# Remove an entry once the test passes; an entry which does not match any
+# test (for example, because it was renamed or removed) is an error.
+
+# Features crun does not have, and runc specific tests.
+# "crun events" is not implemented.
+events.bats
+# Checks the output of runc --debug, which is runc specific.
+debug.bats
+# "-h" is not implemented, only "--help".
+help.bats
+# --pidfd-socket is not implemented.
+pidfd-socket.bats
+# Checks the output format of "runc --version", which is runc specific.
+version.bats
+
+# Individual tests.
+capabilities.bats: runc run with unknown capability
+capabilities.bats: runc exec --cap [ambient is set from spec]
+capabilities.bats: runc run [ambient caps not set in inheritable result in a warning]
+cgroup_delegation.bats: runc exec (cgroup v2, ro cgroupfs, new cgroupns) does not chown cgroup
+cgroups.bats: runc create (rootless + limits + no cgrouppath + no permission) fails with informative error
+cgroups.bats: runc create (limits + cgrouppath + permission on the cgroup dir) succeeds
+cgroups.bats: runc run (per-device multiple iops via unified)
+cgroups.bats: runc run (cpu.idle)
+cgroups.bats: runc run (hugetlb limits)
+cgroups.bats: runc run (pids.limit=0 means 1)
+cgroups.bats: runc run (cgroup v2 resources.unified only)
+cgroups.bats: runc run (cgroup v2 resources.unified override)
+# --ignore-paused is not implemented.
+cgroups.bats: runc exec --ignore-paused
+cgroups.bats: runc run/create should error for a non-empty cgroup
+# --lazy-pages not implemented.
+checkpoint.bats: checkpoint --lazy-pages and restore
+cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
+cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.json]
+cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
+cpu_affinity.bats: runc run [CPU affinity should reset]
+cpu_affinity.bats: runc run [CPU affinity should reset to cgroup cpuset]
+create.bats: runc create[detect fd leak as comprehensively as possible]
+create.bats: runc create exec
+create.bats: runc create --pid-file with new CWD
+create.bats: runc create [shared pidns + rootless]
+delete.bats: runc delete [host pidns + init gone]
+delete.bats: runc delete --force [host pidns + init gone]
+delete.bats: runc delete --force in cgroupv2 with subcgroups
+delete.bats: runc delete removes failed systemd unit
+env.bats: non-empty HOME env is used
+env.bats: empty HOME env var is overridden
+env.bats: empty HOME env var is overridden with multiple overrides
+env.bats: env var override
+exec.bats: runc exec --additional-gids
+exec.bats: runc --debug exec
+exec.bats: runc --debug --log exec
+exec.bats: runc exec --cgroup subcgroup [v2]
+exec.bats: runc exec [init changes cgroup]
+hooks.bats: runc run [hook's argv is preserved]
+hooks_so.bats: runc run (hooks library tests)
+host-mntns.bats: runc run [host mount ns + hooks]
+# crun keeps all idmapped mount source fds open at once (EMFILE with a low RLIMIT_NOFILE).
+idmap.bats: Check mount source fds are cleaned up with idmapped mounts [userns]
+# crun makes idmapped mounts private, even if another propagation is requested.
+idmap.bats: idmap mount with propagation flag [userns]
+ioprio.bats: ioprio_set is applied to process group
+kill.bats: kill detached busybox
+kill.bats: kill KILL [host pidns]
+kill.bats: kill KILL [host pidns + init gone]
+kill.bats: kill KILL [shared pidns]
+list.bats: list
+list.bats: list with non-existent root fails
+mask.bats: mask paths [duplicate paths]
+mask.bats: mask paths [directories share tmpfs]
+memorypolicy.bats: runc run memory policy interleave without flags
+memorypolicy.bats: runc run memory policy bind static
+memorypolicy.bats: runc run and exec memory policy prefer relative
+memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
+mounts.bats: runc run [setgid / + mkdirall]
+mounts.bats: runc run [tmpfs mount mode= inherit]
+mounts.bats: runc run [tmpfs mount explicit mode=]
+mounts.bats: runc run [tmpfs mount mode=1777 default]
+mounts.bats: runc run [mount order, container bind-mount source]
+mounts.bats: runc run [mount order, container bind-mount source] (userns)
+mounts.bats: runc run [mount order, container idmap source]
+mounts.bats: runc run [mount order, container idmap source] (userns)
+mounts.bats: runc run [bind mount through a dangling symlink component]
+mounts.bats: runc run [bind mount through a trailing dangling symlink]
+mounts_propagation.bats: runc run [rootfsPropagation shared]
+mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
+mounts_recursive.bats: runc run [ check rbind,r*atime mounts]
+mounts_sshfs.bats: runc run [mount(8)-unlike behaviour: --bind with clearing flag]
+mounts_sshfs.bats: runc run [implied-rw bind mount of a ro fuse sshfs mount]
+mounts_sshfs.bats: runc run [explicit-rw bind mount of a ro fuse sshfs mount]
+mounts_sshfs.bats: runc run [dev,exec,suid,atime bind mount of a nodev,nosuid,noexec,noatime fuse sshfs mount]
+mounts_sshfs.bats: runc run [ro bind mount of a nodev,nosuid,noexec fuse sshfs mount]
+mounts_sshfs.bats: runc run [ro,symfollow bind mount of a rw,nodev,nosymfollow fuse sshfs mount]
+mounts_sshfs.bats: runc run [ro,noexec bind mount of a nosuid,noatime fuse sshfs mount]
+mounts_sshfs.bats: runc run [bind mount {no,rel,strict}atime semantics]
+ps.bats: ps
+ps.bats: ps -e -x
+ps.bats: ps after the container stopped
+rlimits.bats: runc run with RLIMIT_NOFILE(The same as system's hard value)
+rlimits.bats: runc run with RLIMIT_NOFILE(Bigger than system's hard value)
+rlimits.bats: runc run with RLIMIT_NOFILE(Smaller than system's hard value)
+rlimits.bats: runc exec with RLIMIT_NOFILE(The same as system's hard value)
+rlimits.bats: runc exec with RLIMIT_NOFILE(Bigger than system's hard value)
+rlimits.bats: runc exec with RLIMIT_NOFILE(Smaller than system's hard value)
+run.bats: runc run with tmpfs
+run.bats: runc run with tmpfs perms
+run.bats: runc run [/proc/self/exe clone]
+run.bats: runc run [joining existing container namespaces]
+run.bats: runc run check default home
+scheduler.bats: scheduler is applied
+scheduler.bats: scheduler vs cpus
+seccomp.bats: runc run [seccomp -ENOSYS handling]
+seccomp.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_*)
+# crun reports the hook exit code, not the signal ("bad system call").
+seccomp.bats: runc run [seccomp] (startContainer hook)
+seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
+seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
+start_detached.bats: runc run detached --pid-file with new CWD
+timens.bats: runc run [timens with no offsets]
+timens.bats: runc run [simple timens]
+timens.bats: runc run [simple timens + userns]
+tty.bats: runc run [stdin not a tty]
+tty.bats: runc exec [stdin not a tty]
+update.bats: update cgroup v1/v2 common limits
+update.bats: update cgroup cpu limits
+update.bats: update pids.limit
+update.bats: cpu burst
+update.bats: set cpu period with no quota
+update.bats: set cpu quota with no period
+update.bats: update cpu period with no previous period/quota set
+update.bats: update cpu quota with no previous period/quota set
+update.bats: update cgroup cpu.idle
+update.bats: update cgroup cpu.idle via systemd v252+
+update.bats: update cgroup v2 resources via unified map
+update.bats: update cpuset parameters via resources.CPU
+update.bats: update cpuset parameters via v2 unified map
+update.bats: update memory vs CheckBeforeUpdate
+update.bats: update per-device iops/bps values
