@@ -71,24 +71,10 @@ def _check_cr_requirements(min_criu_version=0):
     return None
 
 
-def _get_cmdline(cid, tests_root):
-    s = {}
-    for _ in range(50):
-        try:
-            if os.path.exists(os.path.join(tests_root, 'root/%s/status' % cid)):
-                s = json.loads(run_crun_command(["state", cid]))
-                break
-            else:
-                time.sleep(0.1)
-        except Exception as e:
-            time.sleep(0.1)
-
-    if len(s) == 0:
-        logger.info("_get_cmdline: no state found for container %s", cid)
-        return ""
-
-    if s['status'] != "running":
-        logger.info("_get_cmdline: container %s status is '%s', expected 'running'", cid, s['status'])
+def _get_cmdline(cid):
+    s = wait_for_state(cid)
+    if s is None:
+        logger.info("_get_cmdline: container %s is not running", cid)
         return ""
     if s['id'] != cid:
         logger.info("_get_cmdline: container id mismatch: got '%s', expected '%s'", s['id'], cid)
@@ -112,7 +98,7 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
         )
         logger.info("run_cr_test: container started with id=%s", cid)
 
-        first_cmdline = _get_cmdline(cid, get_tests_root())
+        first_cmdline = _get_cmdline(cid)
         logger.info("run_cr_test: first_cmdline='%s'", first_cmdline)
         if first_cmdline == "":
             logger.info("run_cr_test: FAILED - first_cmdline is empty")
@@ -150,7 +136,7 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
         ])
         logger.info("run_cr_test: restore completed")
 
-        second_cmdline = _get_cmdline(cid, get_tests_root())
+        second_cmdline = _get_cmdline(cid)
         logger.info("run_cr_test: second_cmdline='%s'", second_cmdline)
         if first_cmdline != second_cmdline:
             logger.info("run_cr_test: FAILED - cmdline mismatch: first='%s' second='%s'", first_cmdline, second_cmdline)
@@ -208,7 +194,7 @@ def test_cr_pre_dump():
             detach=True
         )
 
-        first_cmdline = _get_cmdline(cid, get_tests_root())
+        first_cmdline = _get_cmdline(cid)
         if first_cmdline == "":
             logger.info("test_cr_pre_dump: failed to get first cmdline")
             return -1
@@ -260,7 +246,7 @@ def test_cr_pre_dump():
             cid
         ])
 
-        second_cmdline = _get_cmdline(cid, get_tests_root())
+        second_cmdline = _get_cmdline(cid)
         if first_cmdline != second_cmdline:
             logger.info("test_cr_pre_dump: cmdline mismatch after restore")
             return -1

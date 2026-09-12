@@ -95,13 +95,8 @@ def test_kill_signal():
         # Send SIGKILL
         run_crun_command(['kill', cid, 'SIGKILL'])
 
-        # Wait for container to stop
-        time.sleep(0.5)
-
-        # Verify container is stopped
-        state = json.loads(run_crun_command(['state', cid]))
-        if state['status'] != 'stopped':
-            logger.info("container not stopped after SIGKILL: %s", state['status'])
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("container not stopped after SIGKILL")
             return -1
 
         return 0
@@ -128,13 +123,8 @@ def test_kill_signal_number():
         # Send signal 9 (SIGKILL)
         run_crun_command(['kill', cid, '9'])
 
-        # Wait for container to stop
-        time.sleep(0.5)
-
-        # Verify container is stopped
-        state = json.loads(run_crun_command(['state', cid]))
-        if state['status'] != 'stopped':
-            logger.info("container not stopped after signal 9: %s", state['status'])
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("container not stopped after signal 9")
             return -1
 
         return 0
@@ -309,13 +299,8 @@ def test_kill_all():
         # Kill all processes in container
         run_crun_command(['kill', '--all', cid, 'SIGKILL'])
 
-        # Wait for container to stop
-        time.sleep(0.5)
-
-        # Verify container is stopped
-        state = json.loads(run_crun_command(['state', cid]))
-        if state['status'] != 'stopped':
-            logger.info("container not stopped after kill --all: %s", state['status'])
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("container not stopped after kill --all")
             return -1
 
         return 0
@@ -482,22 +467,8 @@ def test_state_created_container():
         proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
 
         # Wait for container to be ready (create is async with use_popen=True)
-        state = None
-        for i in range(50):
-            try:
-                output = run_crun_command(['state', cid])
-                state = json.loads(output)
-                break
-            except Exception:
-                time.sleep(0.1)
-
-        if state is None:
-            logger.info("test_state_created_container: container never became ready")
-            return -1
-
-        # Verify container is in created state
-        if state['status'] != 'created':
-            logger.info("test_state_created_container: expected 'created', got '%s'", state['status'])
+        if wait_for_state(cid, 'created') is None:
+            logger.info("test_state_created_container: container not in created state")
             return -1
 
         return 0
@@ -674,32 +645,16 @@ def test_start_command():
         proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
 
         # Wait for container to be ready (create is async with use_popen=True)
-        state = None
-        for i in range(50):
-            try:
-                state = json.loads(run_crun_command(['state', cid]))
-                break
-            except Exception:
-                time.sleep(0.1)
-
-        if state is None:
-            logger.info("test_start_command: container never became ready")
-            return -1
-
-        if state['status'] != 'created':
-            logger.info("test_start_command: container not in created state, got '%s'", state['status'])
+        if wait_for_state(cid, 'created') is None:
+            logger.info("test_start_command: container not in created state")
             return -1
 
         # Start the container
         run_crun_command(['start', cid])
 
-        # Wait for container to finish
-        time.sleep(0.1)
-
         # Verify container is stopped (since /init true exits immediately)
-        state = json.loads(run_crun_command(['state', cid]))
-        if state['status'] != 'stopped':
-            logger.info("test_start_command: container not stopped after start, status=%s", state['status'])
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("test_start_command: container not stopped after start")
             return -1
 
         return 0

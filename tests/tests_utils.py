@@ -41,7 +41,7 @@ __all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'r
            'is_cgroup_v2_unified', 'is_sched_deadline_available', 'get_crun_feature_string', 'running_on_systemd',
            'systemctl_show',
            'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path',
-           'get_cgroup_manager', 'get_test_environment']
+           'get_cgroup_manager', 'get_test_environment', 'wait_for_state']
 
 base_conf = """
 {
@@ -460,6 +460,31 @@ def run_crun_command_raw(args):
         logger.error("crun command failed: %s", ' '.join(cmd_args))
         logger.error("Return code: %d", e.returncode)
         raise
+
+def wait_for_state(cid, states='running', timeout=5):
+    """Wait for the container to be in one of the given states.
+
+    states is either a single state or a tuple of states.  Return the state of
+    the container once it is in one of them, or None if that did not happen
+    within timeout seconds.
+    """
+    if isinstance(states, str):
+        states = (states,)
+    status_file = os.path.join(get_tests_root_status(), cid, "status")
+    args = [get_crun_path(), "--root", get_tests_root_status(), "state", cid]
+    deadline = time.monotonic() + timeout
+    while True:
+        # Only ask crun once the container is known to it, as it logs an error
+        # for every state command for a container which does not exist yet.
+        if os.path.exists(status_file):
+            r = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, close_fds=False)
+            if r.returncode == 0:
+                state = json.loads(r.stdout)
+                if state['status'] in states:
+                    return state
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(0.1)
 
 def running_on_systemd():
     with open('/proc/1/comm') as f:
