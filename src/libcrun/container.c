@@ -4400,6 +4400,14 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
         if (UNLIKELY (ret < 0))
           return ret;
 
+        /* Now that the container is restored, keep any signal for it, so that
+           it is forwarded to the init by wait_for_process, rather than acted
+           upon by crun.  This cannot be done earlier, as CRIU, which is run as
+           a child process, would inherit the blocked signals.  */
+        ret = block_signals (err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
         /* Use the container first process PID to setup the cgroup.  The
            restored processes are already in the cgroup, as CRIU was run
            there, and the controllers were enabled by precreate_cgroup.  */
@@ -4476,6 +4484,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
         status.cgroup_path = target_cgroup;
 
         ret = libcrun_container_restore_linux (&status, container, cr_options, err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
+        /* See the comment for the other libcrun_container_restore_linux call.  */
+        ret = block_signals (err);
         if (UNLIKELY (ret < 0))
           return ret;
 
