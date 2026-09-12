@@ -28,6 +28,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <time.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -325,6 +326,16 @@ static int
 syscall_seccomp (unsigned int operation, unsigned int flags, void *args)
 {
   return (int) syscall (__NR_seccomp, operation, flags, args);
+}
+
+/* Exit status used by the "exit-on-signal" mode below.  */
+#define SIGNAL_EXIT_STATUS 42
+
+static void
+handle_signal (int signum)
+{
+  (void) signum;
+  _exit (SIGNAL_EXIT_STATUS);
 }
 
 static void
@@ -803,6 +814,15 @@ main (int argc, char **argv)
     }
   if (strcmp (argv[1], "pause") == 0)
     {
+      do_pause ();
+    }
+  if (strcmp (argv[1], "exit-on-signal") == 0)
+    {
+      /* Exit with a distinctive status once SIGUSR1 is received.  Unlike a
+         signal with a default disposition, this works for a PID 1 as well,
+         since the kernel does not apply the default disposition to it.  */
+      if (signal (SIGUSR1, handle_signal) == SIG_ERR)
+        error (EXIT_FAILURE, errno, "signal SIGUSR1");
       do_pause ();
     }
   if (strcmp (argv[1], "memhog") == 0)

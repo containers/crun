@@ -41,7 +41,8 @@ __all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'r
            'is_cgroup_v2_unified', 'is_sched_deadline_available', 'get_crun_feature_string', 'running_on_systemd',
            'systemctl_show',
            'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path',
-           'get_cgroup_manager', 'get_test_environment', 'wait_for_state']
+           'get_cgroup_manager', 'get_test_environment', 'wait_for_state',
+           'wait_for_signal_handler']
 
 base_conf = """
 {
@@ -484,6 +485,25 @@ def wait_for_state(cid, states='running', timeout=5):
                     return state
         if time.monotonic() >= deadline:
             return None
+        time.sleep(0.1)
+
+def wait_for_signal_handler(pid, sig, timeout=5):
+    """Wait until the process has a handler for the signal.
+
+    Return False if that did not happen within timeout seconds, or if the
+    process is gone.
+    """
+    bit = 1 << (sig - 1)
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with open("/proc/%d/status" % pid) as f:
+                if int(parse_proc_status(f.read())['SigCgt'], 16) & bit:
+                    return True
+        except FileNotFoundError:
+            return False
+        if time.monotonic() >= deadline:
+            return False
         time.sleep(0.1)
 
 def running_on_systemd():
