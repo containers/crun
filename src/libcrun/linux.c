@@ -1208,6 +1208,29 @@ get_shared_empty_dir_cached (libcrun_container_t *container, char **proc_fd_path
   return 0;
 }
 
+static bool
+is_dev_null (const struct stat *st)
+{
+  /* 1:3 is the null device, see Documentation/admin-guide/devices.txt.  */
+  return S_ISCHR (st->st_mode) && st->st_rdev == makedev (1, 3);
+}
+
+/* Check that fd refers to the null device.  Once the root is the container
+   rootfs, /dev/null is whatever the rootfs provides there.  */
+static int
+ensure_dev_null (int fd, libcrun_error_t *err)
+{
+  struct stat st;
+
+  if (UNLIKELY (fstat (fd, &st) < 0))
+    return crun_make_error (err, errno, "stat `/dev/null`");
+
+  if (UNLIKELY (! is_dev_null (&st)))
+    return crun_make_error (err, 0, "`/dev/null` is not the null device");
+
+  return 0;
+}
+
 static int
 mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_path, libcrun_error_t *err)
 {
@@ -1389,16 +1412,30 @@ do_masked_or_readonly_path (libcrun_container_t *container, const char *rel_path
         ret = mount_masked_dir (container, pathfd, rel_path, err);
       else
         {
+          cleanup_close int nullfd = -1;
           cleanup_close int mountfd = -1;
 
-          mountfd = get_bind_mount (-1, "/dev/null", false, true, false, MS_PRIVATE, err);
+          /* If the root is already the container rootfs, this is its
+             /dev/null: mask with it only if it is the null device.  */
+          nullfd = open ("/dev/null", O_PATH | O_CLOEXEC);
+          if (UNLIKELY (nullfd < 0))
+            return crun_make_error (err, errno, "open `/dev/null`");
+
+          ret = ensure_dev_null (nullfd, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          mountfd = get_bind_mount (nullfd, "", false, true, false, MS_PRIVATE, err);
           if (mountfd >= 0)
             ret = fs_move_mount_to (mountfd, pathfd, NULL);
 
           if (mountfd < 0 || ret < 0)
             {
+              proc_fd_path_t null_path;
+
               crun_error_release (err);
-              ret = do_mount (container, "/dev/null", pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL,
+              get_proc_self_fd_path (null_path, nullfd);
+              ret = do_mount (container, null_path, pathfd, rel_path, NULL, MS_BIND | MS_RDONLY, NULL,
                               LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
             }
         }
@@ -4038,20 +4075,15 @@ libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, char **roo
   return 0;
 }
 
-/* Device number of the null device, as documented in
- * Documentation/admin-guide/devices.txt.  */
-#define DEV_NULL_MAJOR 1
-#define DEV_NULL_MINOR 3
-
 /* If one of stdin, stdout, stderr are pointing to /dev/null on
  * the outside of the container, this moves it to /dev/null inside
  * of the container. This needs to run after pivot/chroot-ing. */
 int
 libcrun_reopen_dev_null (libcrun_error_t *err)
 {
-  struct stat dev_null;
   struct stat statbuf;
   cleanup_close int fd;
+  int ret;
   int i;
 
   /* Open /dev/null inside of the container. */
@@ -4059,17 +4091,15 @@ libcrun_reopen_dev_null (libcrun_error_t *err)
   if (UNLIKELY (fd == -1))
     return crun_make_error (err, errno, "open `/dev/null`");
 
-  if (UNLIKELY (fstat (fd, &dev_null) == -1))
-    return crun_make_error (err, errno, "stat `/dev/null`");
-
-  if (UNLIKELY (! S_ISCHR (dev_null.st_mode) || dev_null.st_rdev != makedev (DEV_NULL_MAJOR, DEV_NULL_MINOR)))
-    return crun_make_error (err, 0, "`/dev/null` is not the null device");
+  ret = ensure_dev_null (fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   for (i = 0; i <= 2; i++)
     {
       if (UNLIKELY (fstat (i, &statbuf) == -1))
         return crun_make_error (err, errno, "stat fd `%d`", i);
-      if (S_ISCHR (statbuf.st_mode) && statbuf.st_rdev == dev_null.st_rdev)
+      if (is_dev_null (&statbuf))
         {
           /* This FD is pointing to /dev/null. Point it to /dev/null inside
            * of the container. */
