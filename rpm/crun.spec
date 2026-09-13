@@ -115,6 +115,7 @@ rm -rf %{buildroot}%{_prefix}/lib*
 %files
 %license COPYING
 %{_bindir}/%{name}
+%{_includedir}/libcrun.h
 %{_mandir}/man1/%{name}.1.gz
 
 %if %{defined krun_support}

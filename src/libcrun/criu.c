@@ -56,6 +56,56 @@
 /* Defined in chroot_realpath.c  */
 char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
 
+/* Map the public cgroups mode (enum libcrun_cr_cgroups_mode) onto the CRIU enum.  */
+static enum criu_cg_mode
+criu_cg_mode_from_public (int mode)
+{
+  switch (mode)
+    {
+    case LIBCRUN_CR_CG_MODE_IGNORE:
+      return CRIU_CG_MODE_IGNORE;
+    case LIBCRUN_CR_CG_MODE_FULL:
+      return CRIU_CG_MODE_FULL;
+    case LIBCRUN_CR_CG_MODE_STRICT:
+      return CRIU_CG_MODE_STRICT;
+    case LIBCRUN_CR_CG_MODE_DEFAULT:
+    case LIBCRUN_CR_CG_MODE_SOFT:
+    default:
+      /* Default to CRIU_CG_MODE_SOFT, just as runc.  */
+      return CRIU_CG_MODE_SOFT;
+    }
+}
+
+/* Map the public network lock method (enum libcrun_cr_network_lock_method) onto the
+   CRIU enum.  *LOCK is set to 0 when no explicit method must be set (CRIU default).
+   A method that this build cannot honor is an error, never a silent fallback to
+   the CRIU default.  */
+static int
+criu_network_lock_from_public (int method, int *lock, libcrun_error_t *err)
+{
+  switch (method)
+    {
+    case LIBCRUN_CR_NETWORK_LOCK_IPTABLES:
+      *lock = CRIU_NETWORK_LOCK_IPTABLES;
+      return 0;
+    case LIBCRUN_CR_NETWORK_LOCK_NFTABLES:
+      *lock = CRIU_NETWORK_LOCK_NFTABLES;
+      return 0;
+    case LIBCRUN_CR_NETWORK_LOCK_SKIP:
+#  if CRIU_NETWORK_LOCK_SKIP_SUPPORT
+      *lock = CRIU_NETWORK_LOCK_SKIP;
+      return 0;
+#  else
+      return crun_make_error (err, 0, "CRIU: the `skip` network lock method is not supported by this build");
+#  endif
+    case LIBCRUN_CR_NETWORK_LOCK_DEFAULT:
+      *lock = 0;
+      return 0;
+    default:
+      return crun_make_error (err, 0, "CRIU: unknown network lock method %d", method);
+    }
+}
+
 static const char *console_socket = NULL;
 
 #  define LIBCRIU_MIN_VERSION 31500
@@ -846,19 +896,24 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   libcriu_wrapper->criu_set_tcp_established (cr_options->tcp_established);
   libcriu_wrapper->criu_set_file_locks (cr_options->file_locks);
   libcriu_wrapper->criu_set_orphan_pts_master (true);
-  if (cr_options->manage_cgroups_mode == -1)
-    /* Defaulting to CRIU_CG_MODE_SOFT just as runc */
-    libcriu_wrapper->criu_set_manage_cgroups_mode (CRIU_CG_MODE_SOFT);
-  else
-    libcriu_wrapper->criu_set_manage_cgroups_mode (cr_options->manage_cgroups_mode);
+  libcriu_wrapper->criu_set_manage_cgroups_mode (criu_cg_mode_from_public (cr_options->manage_cgroups_mode));
 
   libcriu_wrapper->criu_set_manage_cgroups (true);
 
-  if (libcriu_wrapper->criu_set_network_lock && cr_options->network_lock_method > 0)
+  if (libcriu_wrapper->criu_set_network_lock)
     {
-      ret = libcriu_wrapper->criu_set_network_lock (cr_options->network_lock_method);
+      int lock = 0;
+
+      ret = criu_network_lock_from_public (cr_options->network_lock_method, &lock, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, 0, "CRIU: failed setting network lock");
+        return ret;
+
+      if (lock > 0)
+        {
+          ret = libcriu_wrapper->criu_set_network_lock (lock);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, 0, "CRIU: failed setting network lock");
+        }
     }
 
   ret = libcriu_wrapper->criu_dump ();
@@ -1354,20 +1409,25 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
         }
     }
 
-  if (cr_options->manage_cgroups_mode == -1)
-    /* Defaulting to CRIU_CG_MODE_SOFT just as runc */
-    libcriu_wrapper->criu_set_manage_cgroups_mode (CRIU_CG_MODE_SOFT);
-  else
-    libcriu_wrapper->criu_set_manage_cgroups_mode (cr_options->manage_cgroups_mode);
+  libcriu_wrapper->criu_set_manage_cgroups_mode (criu_cg_mode_from_public (cr_options->manage_cgroups_mode));
   libcriu_wrapper->criu_set_manage_cgroups (true);
 
-  if (libcriu_wrapper->criu_set_network_lock && cr_options->network_lock_method > 0)
+  if (libcriu_wrapper->criu_set_network_lock)
     {
-      ret = libcriu_wrapper->criu_set_network_lock (cr_options->network_lock_method);
+      int lock = 0;
+
+      ret = criu_network_lock_from_public (cr_options->network_lock_method, &lock, err);
       if (UNLIKELY (ret < 0))
+        goto out_umount;
+
+      if (lock > 0)
         {
-          ret = crun_make_error (err, 0, "CRIU: failed setting network lock");
-          goto out_umount;
+          ret = libcriu_wrapper->criu_set_network_lock (lock);
+          if (UNLIKELY (ret < 0))
+            {
+              ret = crun_make_error (err, 0, "CRIU: failed setting network lock");
+              goto out_umount;
+            }
         }
     }
 

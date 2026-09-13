@@ -26,14 +26,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <regex.h>
-#if HAVE_CRIU && HAVE_DLOPEN
-#  include <criu/criu.h>
-#endif
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/status.h"
-#include "libcrun/utils.h"
 
 enum
 {
@@ -52,7 +46,7 @@ enum
 
 static char doc[] = "OCI runtime";
 
-static libcrun_checkpoint_restore_t cr_options;
+static struct libcrun_checkpoint_restore_options_s cr_options;
 
 static struct argp_option options[]
     = { { "image-path", OPTION_IMAGE_PATH, "DIR", 0, "path for saving criu image files", 0 },
@@ -74,42 +68,34 @@ static struct argp_option options[]
 
 static char args_doc[] = "checkpoint CONTAINER";
 
+/* Map the CLI names onto the public LIBCRUN_CR_* enums; libcrun translates
+   these to CRIU's own values internally so CRIU headers never reach here.  */
 int
-crun_parse_network_lock_method (char *param arg_unused)
+crun_parse_network_lock_method (char *param)
 {
-#if HAVE_CRIU && HAVE_DLOPEN
   if (strcmp (param, "iptables") == 0)
-    return CRIU_NETWORK_LOCK_IPTABLES;
+    return LIBCRUN_CR_NETWORK_LOCK_IPTABLES;
   else if (strcmp (param, "nftables") == 0)
-    return CRIU_NETWORK_LOCK_NFTABLES;
-#  if CRIU_NETWORK_LOCK_SKIP_SUPPORT
+    return LIBCRUN_CR_NETWORK_LOCK_NFTABLES;
   else if (strcmp (param, "skip") == 0)
-    return CRIU_NETWORK_LOCK_SKIP;
-#  endif
+    return LIBCRUN_CR_NETWORK_LOCK_SKIP;
   else
     libcrun_fail_with_error (0, "unknown network lock method specified");
-#else
-  return 0;
-#endif
 }
 
 int
-crun_parse_manage_cgroups_mode (char *param arg_unused)
+crun_parse_manage_cgroups_mode (char *param)
 {
-#if HAVE_CRIU && HAVE_DLOPEN
   if (strcmp (param, "soft") == 0)
-    return CRIU_CG_MODE_SOFT;
+    return LIBCRUN_CR_CG_MODE_SOFT;
   else if (strcmp (param, "ignore") == 0)
-    return CRIU_CG_MODE_IGNORE;
+    return LIBCRUN_CR_CG_MODE_IGNORE;
   else if (strcmp (param, "full") == 0)
-    return CRIU_CG_MODE_FULL;
+    return LIBCRUN_CR_CG_MODE_FULL;
   else if (strcmp (param, "strict") == 0)
-    return CRIU_CG_MODE_STRICT;
+    return LIBCRUN_CR_CG_MODE_STRICT;
   else
     libcrun_fail_with_error (0, "unknown cgroup mode specified");
-#else
-  return 0;
-#endif
 }
 
 static error_t
@@ -179,17 +165,16 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
   cleanup_free char *cr_path = NULL;
   int first_arg;
   int ret;
+  cleanup_context libcrun_context_t *crun_context = NULL;
 
-  libcrun_context_t crun_context = {
-    0,
-  };
-
-  cr_options.manage_cgroups_mode = -1;
+  cr_options.struct_size = sizeof (cr_options);
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -207,5 +192,5 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
       cr_options.image_path = cr_path;
     }
 
-  return libcrun_container_checkpoint (&crun_context, argv[first_arg], &cr_options, err);
+  return libcrun_container_checkpoint (crun_context, argv[first_arg], &cr_options, err);
 }

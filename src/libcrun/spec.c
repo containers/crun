@@ -239,3 +239,27 @@ libcrun_container_spec (bool root, FILE *out, libcrun_error_t *err)
 
   return ret;
 }
+
+int
+libcrun_container_spec_json (bool root, char **out, libcrun_error_t *err)
+{
+  char *buffer = NULL;
+  size_t len = 0;
+  FILE *f;
+  int ret;
+
+  f = open_memstream (&buffer, &len);
+  if (f == NULL)
+    return crun_make_error (err, errno, "open_memstream");
+
+  ret = libcrun_container_spec (root, f, err);
+  fclose (f);
+  if (UNLIKELY (ret < 0))
+    {
+      free (buffer);
+      return ret;
+    }
+
+  *out = buffer;
+  return 0;
+}

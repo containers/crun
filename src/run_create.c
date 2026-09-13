@@ -26,8 +26,6 @@
 
 #include "crun.h"
 #include "run_create.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
 
 int
 crun_run_create_internal (struct crun_global_arguments *global_args, int argc, char **argv,
@@ -39,9 +37,6 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
   cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *config_file_cleanup = NULL;
-
-  crun_context->preserve_fds = 0;
-  crun_context->listen_fds = 0;
 
   argp_parse (run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, crun_context);
   /* Get options after parsing the arguments.  */
@@ -93,11 +88,12 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
     return -1;
 
   libcrun_debug ("Using bundle: %s", bundle);
-  crun_context->bundle = bundle;
+  libcrun_context_set_bundle (crun_context, bundle);
   if (getenv ("LISTEN_FDS"))
     {
-      crun_context->listen_fds = parse_id_or_fail (getenv ("LISTEN_FDS"), NULL, "LISTEN_FDS");
-      crun_context->preserve_fds += crun_context->listen_fds;
+      int listen_fds = parse_id_or_fail (getenv ("LISTEN_FDS"), NULL, "LISTEN_FDS");
+      libcrun_context_set_listen_fds (crun_context, listen_fds);
+      libcrun_context_set_preserve_fds (crun_context, libcrun_context_get_preserve_fds (crun_context) + listen_fds);
     }
   return container_run_create_func (crun_context, container, options, err);
 }

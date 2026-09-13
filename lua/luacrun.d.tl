@@ -107,7 +107,9 @@ local record luacrun
         handler: string | nil
         systemd_cgroup: boolean | nil
         detach: boolean | nil
-        args: {string}
+        -- `args` is not supported: libcrun only uses the context arguments to
+        -- rewrite the process title in place, which requires the argv of the
+        -- calling process, something this binding cannot provide.
     end
 
     new_ctx: (function (
