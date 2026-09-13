@@ -17,7 +17,6 @@
 
 import json
 import os
-import time
 from tests_utils import *
 
 
@@ -32,15 +31,9 @@ def test_create_start():
     try:
         proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
 
-        # Wait for container to be in created state
-        for i in range(50):
-            try:
-                state = json.loads(run_crun_command(["state", cid]))
-                if state['status'] == 'created':
-                    break
-            except:
-                pass
-            time.sleep(0.1)
+        if wait_for_state(cid, 'created') is None:
+            logger.info("container not in created state")
+            return -1
 
         # Start container
         run_crun_command(["start", cid])
@@ -80,15 +73,9 @@ def test_create_delete_without_start():
     try:
         proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
 
-        # Wait for container to be in created state
-        for i in range(50):
-            try:
-                state = json.loads(run_crun_command(["state", cid]))
-                if state['status'] == 'created':
-                    break
-            except:
-                pass
-            time.sleep(0.1)
+        if wait_for_state(cid, 'created') is None:
+            logger.info("container not in created state")
+            return -1
 
         # Delete without starting
         run_crun_command(['delete', '-f', cid])
@@ -127,15 +114,9 @@ def test_create_with_annotations():
     try:
         proc, cid = run_and_get_output(conf, hide_stderr=True, command='create', use_popen=True)
 
-        # Wait for container to be in created state
-        for i in range(50):
-            try:
-                state = json.loads(run_crun_command(["state", cid]))
-                if state['status'] == 'created':
-                    break
-            except:
-                pass
-            time.sleep(0.1)
+        if wait_for_state(cid, 'created') is None:
+            logger.info("container not in created state")
+            return -1
 
         # Check state includes annotations
         state = json.loads(run_crun_command(['state', cid]))

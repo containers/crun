@@ -4302,7 +4302,7 @@ restore_proxy_process (int *proxy_pid_pipe, int cgroup_manager, libcrun_error_t 
 }
 
 int
-libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_checkpoint_restore_t *cr_options,
+libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused, libcrun_checkpoint_restore_t *cr_options,
                            libcrun_error_t *err)
 {
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
@@ -4400,6 +4400,14 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
         if (UNLIKELY (ret < 0))
           return ret;
 
+        /* Now that the container is restored, keep any signal for it, so that
+           it is forwarded to the init by wait_for_process, rather than acted
+           upon by crun.  This cannot be done earlier, as CRIU, which is run as
+           a child process, would inherit the blocked signals.  */
+        ret = block_signals (err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
         /* Use the container first process PID to setup the cgroup.  The
            restored processes are already in the cgroup, as CRIU was run
            there, and the controllers were enabled by precreate_cgroup.  */
@@ -4479,6 +4487,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
         if (UNLIKELY (ret < 0))
           return ret;
 
+        /* See the comment for the other libcrun_container_restore_linux call.  */
+        ret = block_signals (err);
+        if (UNLIKELY (ret < 0))
+          return ret;
+
         /* Notify the dummy process of the container PID.  It will move itself to its parent cgroup and
            destroy the cgroup.  */
         ret = TEMP_FAILURE_RETRY (write (proxy_pid_pipe1, &status.pid, sizeof (status.pid)));
@@ -4500,24 +4513,22 @@ libcrun_container_restore (libcrun_context_t *context, const char *id, libcrun_c
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (context->pid_file)
-    {
-      ret = write_pid_file (context->pid_file, status.pid, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  {
+    /* Wait the same way run and exec do: apart from waiting for the container
+       init, this writes the pid file, forwards any signal to the init, and
+       reaps every child, not only the init.  */
+    struct wait_for_process_args args = {
+      .pid = status.pid,
+      .context = context,
+      .terminal_fd = -1,
+      .notify_socket = -1,
+      .container_ready_fd = NULL,
+      .seccomp_notify_fd = -1,
+      .seccomp_notify_plugins = NULL,
+    };
 
-  if (! cr_options->detach)
-    {
-      int wait_status;
-      ret = waitpid_ignore_stopped (status.pid, &wait_status, 0);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "waitpid failed for container `%s` with %d", id, ret);
-
-      return get_process_exit_status (wait_status);
-    }
-
-  return 0;
+    return wait_for_process (&args, err);
+  }
 }
 
 int

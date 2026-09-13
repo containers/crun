@@ -18,6 +18,7 @@
 import time
 import json
 import os
+import signal
 import subprocess
 import errno
 import tempfile
@@ -71,24 +72,10 @@ def _check_cr_requirements(min_criu_version=0):
     return None
 
 
-def _get_cmdline(cid, tests_root):
-    s = {}
-    for _ in range(50):
-        try:
-            if os.path.exists(os.path.join(tests_root, 'root/%s/status' % cid)):
-                s = json.loads(run_crun_command(["state", cid]))
-                break
-            else:
-                time.sleep(0.1)
-        except Exception as e:
-            time.sleep(0.1)
-
-    if len(s) == 0:
-        logger.info("_get_cmdline: no state found for container %s", cid)
-        return ""
-
-    if s['status'] != "running":
-        logger.info("_get_cmdline: container %s status is '%s', expected 'running'", cid, s['status'])
+def _get_cmdline(cid):
+    s = wait_for_state(cid)
+    if s is None:
+        logger.info("_get_cmdline: container %s is not running", cid)
         return ""
     if s['id'] != cid:
         logger.info("_get_cmdline: container id mismatch: got '%s', expected '%s'", s['id'], cid)
@@ -112,7 +99,7 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
         )
         logger.info("run_cr_test: container started with id=%s", cid)
 
-        first_cmdline = _get_cmdline(cid, get_tests_root())
+        first_cmdline = _get_cmdline(cid)
         logger.info("run_cr_test: first_cmdline='%s'", first_cmdline)
         if first_cmdline == "":
             logger.info("run_cr_test: FAILED - first_cmdline is empty")
@@ -150,7 +137,7 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
         ])
         logger.info("run_cr_test: restore completed")
 
-        second_cmdline = _get_cmdline(cid, get_tests_root())
+        second_cmdline = _get_cmdline(cid)
         logger.info("run_cr_test: second_cmdline='%s'", second_cmdline)
         if first_cmdline != second_cmdline:
             logger.info("run_cr_test: FAILED - cmdline mismatch: first='%s' second='%s'", first_cmdline, second_cmdline)
@@ -162,6 +149,88 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
     finally:
         if cid is not None:
             logger.info("run_cr_test: cleaning up container %s", cid)
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
+# A foreground restore must forward any signal crun gets to the container
+# init, the same way a foreground run does.
+def test_cr_restore_forward_signal():
+    if r := _check_cr_requirements():
+        return r
+
+    cid = None
+    crun = None
+    cr_dir = os.path.join(get_tests_root(), 'checkpoint-forward-signal')
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'exit-on-signal']
+    add_all_namespaces(conf)
+    # Not a pipe: were crun killed, CRIU could still hold it open.
+    stderr = tempfile.TemporaryFile()
+
+    def crun_stderr():
+        stderr.seek(0)
+        return stderr.read().decode(errors='replace')
+
+    try:
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True
+        )
+
+        if wait_for_state(cid) is None:
+            logger.info("test_cr_restore_forward_signal: the container did not start")
+            return -1
+
+        run_crun_command([
+            "checkpoint",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            cid
+        ])
+
+        bundle = os.path.join(get_tests_root(), cid.split('-')[1])
+        crun = subprocess.Popen([
+            get_crun_path(),
+            "--cgroup-manager", get_cgroup_manager(),
+            "--root", get_tests_root_status(),
+            "restore",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            "--bundle=%s" % bundle,
+            cid
+        ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=stderr, close_fds=False)
+
+        if wait_for_state(cid) is None:
+            logger.info("test_cr_restore_forward_signal: the container was not restored: %s",
+                        crun_stderr())
+            return -1
+
+        # The init exits with 42 once it gets SIGUSR1, so that is the status
+        # crun is expected to report.  Were the signal acted upon by crun
+        # itself, crun would be killed by it (the default disposition of
+        # SIGUSR1), and the container left running.
+        crun.send_signal(signal.SIGUSR1)
+        try:
+            ret = crun.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            logger.info("test_cr_restore_forward_signal: crun did not exit")
+            return -1
+
+        if ret != 42:
+            logger.info("test_cr_restore_forward_signal: crun exited with %d, expected 42: %s",
+                        ret, crun_stderr())
+            return -1
+    finally:
+        if crun is not None and crun.poll() is None:
+            crun.kill()
+            crun.wait()
+        stderr.close()
+        if cid is not None:
             run_crun_command(["delete", "-f", cid])
     return 0
 
@@ -208,7 +277,7 @@ def test_cr_pre_dump():
             detach=True
         )
 
-        first_cmdline = _get_cmdline(cid, get_tests_root())
+        first_cmdline = _get_cmdline(cid)
         if first_cmdline == "":
             logger.info("test_cr_pre_dump: failed to get first cmdline")
             return -1
@@ -260,7 +329,7 @@ def test_cr_pre_dump():
             cid
         ])
 
-        second_cmdline = _get_cmdline(cid, get_tests_root())
+        second_cmdline = _get_cmdline(cid)
         if first_cmdline != second_cmdline:
             logger.info("test_cr_pre_dump: cmdline mismatch after restore")
             return -1
@@ -475,6 +544,7 @@ all_tests = {
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
+    "checkpoint-restore-forward-signal": test_cr_restore_forward_signal,
     "checkpoint-restore-pre-dump": test_cr_pre_dump,
     "checkpoint-restore-with-runc-config": test_cr_with_runc_config,
     "checkpoint-restore-with-crun-config": test_cr_with_crun_config,
