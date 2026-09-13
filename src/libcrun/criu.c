@@ -1033,6 +1033,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *own_cgroups = NULL;
   cleanup_close int work_fd = -1;
+  int cgroup_mode;
   int ret_out;
   size_t i;
   int ret;
@@ -1330,7 +1331,22 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
 
   if (status->cgroup_path)
     {
-      ret = libcriu_wrapper->criu_add_cg_root (NULL, status->cgroup_path);
+      cgroup_mode = libcrun_get_cgroup_mode (err);
+      if (UNLIKELY (cgroup_mode < 0))
+        {
+          ret = cgroup_mode;
+          goto out_umount;
+        }
+
+      /* With cgroup v2, the cgroup path is only meaningful for the unified
+         hierarchy, so only relocate that one.  A NULL controller would make
+         CRIU relocate every hierarchy the container is in, named cgroup v1
+         ones included.  As CRIU dumps such a hierarchy from wherever the
+         container is in it, which is its root, as crun leaves named
+         hierarchies alone, every checkpoint and restore would then copy the
+         whole hierarchy into itself.  */
+      ret = libcriu_wrapper->criu_add_cg_root (cgroup_mode == CGROUP_MODE_UNIFIED ? "" : NULL,
+                                               status->cgroup_path);
       if (UNLIKELY (ret != 0))
         {
           ret = crun_make_error (err, 0, "error setting CRIU cgroup root to `%s`", status->cgroup_path);

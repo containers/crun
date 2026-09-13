@@ -325,6 +325,60 @@ def test_cr_with_ext_ns():
     return run_cr_test(conf)
 
 
+def test_cr_named_cgroup_hierarchy():
+    if r := _check_cr_requirements():
+        return r
+    if not is_cgroup_v2_unified():
+        return 77, "requires cgroup v2"
+
+    # A named cgroup v1 hierarchy, such as the ones left behind by the CRIU
+    # test suite.  Every process is in its root.  crun leaves it alone, so
+    # the restore must not create the container cgroup in it: otherwise
+    # every checkpoint/restore cycle copies the hierarchy into itself.
+    name = "crun-test-%d-%d" % (os.getpid(), int(time.monotonic() * 1000))
+    mnt = tempfile.mkdtemp()
+    try:
+        subprocess.run(["mount", "-t", "cgroup", "-o", "none,name=" + name, "cgroup", mnt],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        os.rmdir(mnt)
+        return 77, "cannot mount a named cgroup v1 hierarchy"
+
+    def cgroups():
+        return [os.path.join(root, d)[len(mnt):] for root, dirs, _ in os.walk(mnt) for d in dirs]
+
+    try:
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'pause']
+        add_all_namespaces(conf)
+        ret = run_cr_test(conf)
+        if ret != 0:
+            return ret
+        created = cgroups()
+        if created:
+            logger.info("cgroups created in the name=%s hierarchy: %s", name, created)
+            return -1
+        return 0
+    finally:
+        # The container processes may take a moment to go away after delete.
+        deadline = time.monotonic() + 5
+        while True:
+            for root, dirs, _ in os.walk(mnt, topdown=False):
+                for d in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, d))
+                    except OSError:
+                        pass
+            left = cgroups()
+            if not left or time.monotonic() > deadline:
+                break
+            time.sleep(0.1)
+        if left:
+            logger.info("cannot remove cgroups from the name=%s hierarchy: %s", name, left)
+        subprocess.run(["umount", mnt], check=False)
+        os.rmdir(mnt)
+
+
 def _remove_file(filename):
     try:
         os.remove(filename)
@@ -420,6 +474,7 @@ all_tests = {
     "checkpoint-restore": test_cr,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
+    "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
     "checkpoint-restore-pre-dump": test_cr_pre_dump,
     "checkpoint-restore-with-runc-config": test_cr_with_runc_config,
     "checkpoint-restore-with-crun-config": test_cr_with_crun_config,
