@@ -25,6 +25,7 @@
 #  include <sys/types.h>
 #  include <criu/criu.h>
 #  include <sched.h>
+#  include <signal.h>
 #  include <sys/stat.h>
 #  include <sys/mount.h>
 #  include <fcntl.h>
@@ -983,6 +984,119 @@ move_back_to_cgroups (const char *cgroups)
     }
 }
 
+/* Ask CRIU to restore from a throw-away process, which first joins CGROUP_PATH,
+   when it is set, so that the tasks CRIU creates are placed there.
+
+   It is used when the calling process must be left alone: it is neither moved
+   to the container cgroup, so there is nothing to undo once the restore is
+   over, nor does it become the parent of the container, as the restored
+   process tree is a sibling of CRIU, hence a child of the process calling
+   criu_restore_child().
+
+   As the child shares the memory and the stack with the caller, all signals
+   are blocked across the vfork, and the child resets the signal handlers
+   before unblocking them, so that no handler of the caller can run there.
+   This is a separate function so that no variable of the caller is live
+   across the vfork.  */
+static int
+criu_restore_child_in_cgroup (const char *cgroup_path, int *criu_ret, libcrun_error_t *err)
+{
+  sigset_t all_signals, old_mask;
+  int wait_status = 0;
+  pid_t pid;
+  int ret;
+
+  *criu_ret = -1;
+
+  sigfillset (&all_signals);
+  ret = sigprocmask (SIG_BLOCK, &all_signals, &old_mask);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
+
+  /* Must be vfork: the child shares our memory space, so both *criu_ret and
+     the error it creates are visible here once it is gone.  */
+  pid = vfork ();
+  if (UNLIKELY (pid < 0))
+    {
+      int saved_errno = errno;
+
+      sigprocmask (SIG_SETMASK, &old_mask, NULL);
+      return crun_make_error (err, saved_errno, "vfork");
+    }
+
+  if (pid == 0)
+    {
+      struct sigaction act;
+      int i;
+
+      /* The signal dispositions are not shared with the parent, so resetting
+         them here does not affect it.  Keep the ignored signals ignored, as
+         CRIU would inherit them if it was run directly by the caller.  */
+      for (i = 1; i < NSIG; i++)
+        {
+          if (sigaction (i, NULL, &act) < 0 || act.sa_handler == SIG_IGN || act.sa_handler == SIG_DFL)
+            continue;
+
+          memset (&act, 0, sizeof (act));
+          act.sa_handler = SIG_DFL;
+          sigaction (i, &act, NULL);
+        }
+      ret = sigprocmask (SIG_SETMASK, &old_mask, NULL);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_make_error (err, errno, "sigprocmask");
+          _safe_exit (EXIT_FAILURE);
+        }
+
+      if (! is_empty_string (cgroup_path))
+        {
+          ret = libcrun_move_process_to_cgroup (0, 0, cgroup_path, false, err);
+          if (UNLIKELY (ret < 0))
+            _safe_exit (EXIT_FAILURE);
+        }
+
+      *criu_ret = libcriu_wrapper->criu_restore_child ();
+      _safe_exit (EXIT_SUCCESS);
+    }
+
+  /* The child is gone by now, it is safe to handle signals again.  */
+  ret = sigprocmask (SIG_SETMASK, &old_mask, NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      int saved_errno = errno;
+
+      /* Do not leave the child behind, and do not lose an error it left.  */
+      waitpid_ignore_stopped (pid, NULL, 0);
+      if (*err != NULL)
+        return -1;
+      return crun_make_error (err, saved_errno, "sigprocmask");
+    }
+
+  ret = waitpid_ignore_stopped (pid, &wait_status, 0);
+  if (UNLIKELY (ret < 0))
+    {
+      /* The caller might have reaped the child already, e.g. when it ignores
+         SIGCHLD.  Its result is still visible, so use it.  */
+      if (errno != ECHILD)
+        return crun_make_error (err, errno, "waitpid for the CRIU restore process");
+
+      /* The child might have failed before calling CRIU, and left an error.  */
+      return *err != NULL ? -1 : 0;
+    }
+
+  ret = get_process_exit_status (wait_status);
+  if (UNLIKELY (ret != EXIT_SUCCESS))
+    {
+      /* The child creates the error in the shared memory space, do not
+         overwrite it with crun_make_error().  */
+      if (*err == NULL)
+        return crun_make_error (err, 0, "the CRIU restore process exited with status %d", ret);
+      return -1;
+    }
+
+  return 0;
+}
+
 /* Recreate the mountpoints which do not exist in the container rootfs
  * mounted at ROOT, the same way it is done on the container creation.  */
 static int
@@ -1034,6 +1148,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_free char *own_cgroups = NULL;
   cleanup_close int work_fd = -1;
   int cgroup_mode;
+  int criu_ret;
   int ret_out;
   size_t i;
   int ret;
@@ -1379,33 +1494,48 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
       goto out_umount;
     }
 
-  /* Like runc does, put CRIU into the container cgroup for the time of
-   * restore, so the restored tasks are created there. It is necessary in
-   * the "ignore" mode, where CRIU does not deal with cgroups at all, and
-   * does not hurt otherwise. As CRIU is our child, do it by moving
-   * ourselves there, and move back once the restore is done. */
-  if (! is_empty_string (status->cgroup_path))
-    {
-      ret = read_all_file (PROC_SELF_CGROUP, &own_cgroups, NULL, err);
-      if (UNLIKELY (ret < 0))
-        goto out_umount;
-
-      ret = libcrun_move_process_to_cgroup (0, 0, status->cgroup_path, false, err);
-      if (UNLIKELY (ret < 0))
-        {
-          /* Some of the cgroups might have been joined already.  */
-          move_back_to_cgroups (own_cgroups);
-          goto out_umount;
-        }
-    }
-
   /* criu_restore() returns the PID of the process of the restored process
    * tree. This PID will not be the same as status->pid if the container is
    * running in a PID namespace. But it will always be > 0. */
-  ret = libcriu_wrapper->criu_restore_child ();
+  if (cr_options->detach)
+    {
+      /* Nothing waits for the container, so there is no reason to take over
+         this process: use a throw-away one.  It is used even when there is no
+         cgroup to join, so that the container is not left as a child of a
+         process which is not going to reap it.  */
+      ret = criu_restore_child_in_cgroup (status->cgroup_path, &criu_ret, err);
+      if (UNLIKELY (ret < 0))
+        goto out_umount;
 
-  if (own_cgroups)
-    move_back_to_cgroups (own_cgroups);
+      ret = criu_ret;
+    }
+  else
+    {
+      /* Like runc does, put CRIU into the container cgroup for the time of
+       * restore, so the restored tasks are created there. It is necessary in
+       * the "ignore" mode, where CRIU does not deal with cgroups at all, and
+       * does not hurt otherwise. As CRIU is our child, do it by moving
+       * ourselves there, and move back once the restore is done. */
+      if (! is_empty_string (status->cgroup_path))
+        {
+          ret = read_all_file (PROC_SELF_CGROUP, &own_cgroups, NULL, err);
+          if (UNLIKELY (ret < 0))
+            goto out_umount;
+
+          ret = libcrun_move_process_to_cgroup (0, 0, status->cgroup_path, false, err);
+          if (UNLIKELY (ret < 0))
+            {
+              /* Some of the cgroups might have been joined already.  */
+              move_back_to_cgroups (own_cgroups);
+              goto out_umount;
+            }
+        }
+
+      ret = libcriu_wrapper->criu_restore_child ();
+
+      if (own_cgroups)
+        move_back_to_cgroups (own_cgroups);
+    }
 
   if (UNLIKELY (ret <= 0))
     {
