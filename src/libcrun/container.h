@@ -210,6 +210,10 @@ struct libcrun_checkpoint_restore_s
   int network_lock_method;
   char *lsm_profile;
   char *lsm_mount_context;
+  bool lazy_pages;
+  char *page_server_address;
+  int page_server_port;
+  int status_fd;
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 

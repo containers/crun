@@ -57,6 +57,7 @@
 char *chroot_realpath (const char *chroot, const char *path, char resolved_path[]);
 
 static const char *console_socket = NULL;
+static int status_fd = -1;
 
 #  define LIBCRIU_MIN_VERSION 31500
 
@@ -84,6 +85,7 @@ struct libcriu_wrapper_s
   int (*criu_set_log_file) (const char *log_file);
   void (*criu_set_log_level) (int log_level);
   void (*criu_set_leave_running) (bool leave_running);
+  void (*criu_set_lazy_pages) (bool lazy_pages);
   void (*criu_set_manage_cgroups) (bool manage);
   void (*criu_set_manage_cgroups_mode) (enum criu_cg_mode mode);
   int (*criu_set_network_lock) (enum criu_network_lock_method method);
@@ -91,6 +93,7 @@ struct libcriu_wrapper_s
   void (*criu_set_orphan_pts_master) (bool orphan_pts_master);
   void (*criu_set_images_dir_fd) (int fd);
   int (*criu_set_parent_images) (const char *path);
+  int (*criu_set_page_server_address_port) (const char *address, int port);
   void (*criu_set_pid) (int pid);
   int (*criu_set_root) (const char *root);
   int (*criu_add_cg_root) (const char *ctrl, const char *path);
@@ -179,6 +182,10 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_set_freeze_cgroup, false);
   LOAD_CRIU_FUNCTION (criu_set_images_dir_fd, false);
   LOAD_CRIU_FUNCTION (criu_set_leave_running, false);
+#  if ! defined STATIC || defined CRIU_LAZY_PAGES
+  /* criu_set_lazy_pages() is only available in newer libcriu versions.  */
+  LOAD_CRIU_FUNCTION (criu_set_lazy_pages, true);
+#  endif
   LOAD_CRIU_FUNCTION (criu_set_log_file, false);
   LOAD_CRIU_FUNCTION (criu_set_log_level, false);
   LOAD_CRIU_FUNCTION (criu_set_manage_cgroups, false);
@@ -187,6 +194,7 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_set_notify_cb, false);
   LOAD_CRIU_FUNCTION (criu_set_orphan_pts_master, false);
   LOAD_CRIU_FUNCTION (criu_set_parent_images, false);
+  LOAD_CRIU_FUNCTION (criu_set_page_server_address_port, false);
   LOAD_CRIU_FUNCTION (criu_set_pid, false);
   LOAD_CRIU_FUNCTION (criu_set_root, false);
   LOAD_CRIU_FUNCTION (criu_add_cg_root, false);
@@ -238,6 +246,19 @@ criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
           return ret;
         }
     }
+  else if (strcmp (action, "status-ready") == 0 && status_fd >= 0)
+    {
+      /* CRIU is ready to serve memory pages to the lazy-pages daemon.
+       * Let the user know by writing a zero byte to the status fd. */
+      const char c = '\0';
+      ssize_t ret;
+
+      ret = TEMP_FAILURE_RETRY (write (status_fd, &c, 1));
+      close (status_fd);
+      status_fd = -1;
+      if (UNLIKELY (ret != 1))
+        return -1;
+    }
   return 0;
 }
 
@@ -268,6 +289,32 @@ criu_check_mem_track (libcrun_error_t *err)
 }
 
 #  endif
+
+static int
+setup_lazy_pages (libcrun_error_t *err)
+{
+  if (libcriu_wrapper->criu_set_lazy_pages == NULL)
+    return crun_make_error (err, 0, "lazy pages are not supported by this libcriu version");
+
+#  ifdef CRIU_PRE_DUMP_SUPPORT
+  {
+    struct criu_feature_check features = { 0 };
+    int ret;
+
+    features.lazy_pages = true;
+
+    ret = libcriu_wrapper->criu_feature_check (&features, sizeof (features));
+    if (UNLIKELY (ret < 0))
+      return crun_make_error (err, 0, "CRIU feature checking failed: %d", ret);
+
+    if (! features.lazy_pages)
+      return crun_make_error (err, 0, "CRIU lazy pages not supported");
+  }
+#  endif
+
+  libcriu_wrapper->criu_set_lazy_pages (true);
+  return 0;
+}
 
 static int
 register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_container_t *container,
@@ -861,6 +908,34 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
         return crun_make_error (err, 0, "CRIU: failed setting network lock");
     }
 
+  if (cr_options->lazy_pages)
+    {
+      ret = setup_lazy_pages (err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (cr_options->page_server_address != NULL)
+    {
+      /* Do not check the return value, as libcriu versions before
+       * criu_set_lazy_pages() was added always return -ENOMEM. */
+      libcriu_wrapper->criu_set_page_server_address_port (cr_options->page_server_address,
+                                                          cr_options->page_server_port);
+    }
+
+  if (cr_options->status_fd >= 0)
+    {
+      int flags = fcntl (cr_options->status_fd, F_GETFL);
+
+      if (UNLIKELY (flags < 0))
+        return crun_make_error (err, errno, "invalid status fd `%d`", cr_options->status_fd);
+      if (UNLIKELY ((flags & O_ACCMODE) == O_RDONLY))
+        return crun_make_error (err, 0, "invalid status fd `%d`: not writable", cr_options->status_fd);
+
+      status_fd = cr_options->status_fd;
+      libcriu_wrapper->criu_set_notify_cb (criu_notify);
+    }
+
   ret = libcriu_wrapper->criu_dump ();
   if (UNLIKELY (ret != 0))
     {
@@ -1328,6 +1403,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   libcriu_wrapper->criu_set_tcp_close (cr_options->tcp_close);
   libcriu_wrapper->criu_set_file_locks (cr_options->file_locks);
   libcriu_wrapper->criu_set_orphan_pts_master (true);
+
+  if (cr_options->lazy_pages)
+    {
+      ret = setup_lazy_pages (err);
+      if (UNLIKELY (ret < 0))
+        goto out_umount;
+    }
 
   if (status->cgroup_path)
     {
