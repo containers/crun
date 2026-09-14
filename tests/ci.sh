@@ -79,6 +79,33 @@ run_container() {
 # has to share the host cgroup namespace and see the host cgroup tree.
 privileged=(--cgroupns=host --privileged -v "/sys/fs/cgroup:/sys/fs/cgroup:rw,rslave")
 
+# Make the runc integration tests listed in tests/runc-integration-skip.txt
+# skipped, by adding a "skip" to each of them in the runc checkout in ./runc,
+# or, for an entry which is just a file name, by removing the whole file.
+# An entry that does not match any test is an error, so that the list does
+# not keep the tests which are gone or renamed.
+skip_runc_tests() {
+    local line file name
+    while IFS= read -r line; do
+        [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+        file="runc/tests/integration/${line%%: *}"
+        if [[ $line != *": "* ]]; then
+            rm "$file" || return
+            continue
+        fi
+        name=${line#*: }
+        awk -v t="@test \"$name\" {" '
+            $0 == t { print; print "\tskip \"fails with crun\""; found = 1; next }
+            { print }
+            END { exit !found }
+        ' "$file" >"$file.tmp" || {
+            echo "no such test: $line" >&2
+            return 1
+        }
+        mv "$file.tmp" "$file" || return
+    done <tests/runc-integration-skip.txt
+}
+
 case "$test_name" in
 disable-systemd)
     build --disable-systemd
@@ -195,6 +222,46 @@ checkpoint-restore)
     # recurses into libocispec with the TESTS override).
     group "tests as root" \
         sudo make check-am TESTS=tests/test_checkpoint_restore.py || dump_log
+    ;;
+runc-integration | runc-integration-rootless)
+    # Run the runc integration test suite, from a runc checkout in ./runc,
+    # against crun.  This mimics the way runc's own CI runs it, with both
+    # the cgroupfs and the systemd cgroup manager.
+    build
+    sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    # The test helpers do not need libpathrs, which is not packaged.
+    group "build runc test binaries" \
+        make -C runc RUNC_BUILDTAGS=-libpathrs test-binaries
+    skip_runc_tests
+
+    # A test which hangs should fail on its own, rather than eat up the
+    # whole job time.
+    export RUNC="$PWD/crun" RUNC_ALLOW_UNSAFE_TESTS=yes BATS_TEST_TIMEOUT=120
+    if [ "$test_name" = runc-integration-rootless ]; then
+        group "add rootless user" runc/script/setup_rootless.sh
+        # Let the rootless user get to the crun binary.
+        sudo chmod a+X "$HOME"
+        tests=runc/tests/rootless.sh
+    else
+        tests="bats -t runc/tests/integration"
+    fi
+
+    # Delegate all cgroup v2 controllers to the rootless user's systemd
+    # instance.  The default (since systemd v252) is "pids memory cpu".
+    sudo mkdir -p /etc/systemd/system/user@.service.d
+    printf "[Service]\nDelegate=yes\n" |
+        sudo tee /etc/systemd/system/user@.service.d/delegate.conf
+    sudo systemctl daemon-reload
+
+    # Some tests need a terminal, which GitHub Actions does not provide,
+    # so "script" is used to fake one.  The second run goes ahead even if
+    # the first one fails, so that all the failures are seen at once.
+    rc=0
+    group "tests, cgroupfs cgroup manager" \
+        sudo -E PATH="$PATH" script -e -c "$tests" || rc=1
+    group "tests, systemd cgroup manager" \
+        sudo -E PATH="$PATH" RUNC_USE_SYSTEMD=yes script -e -c "$tests" || rc=1
+    exit $rc
     ;;
 fuzzing)
     run_container "${privileged[@]}" -e RUN_TIME=300
