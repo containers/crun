@@ -203,9 +203,10 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
  *
  * The configuration precedence is as follows:
  * OCI annotations -> krun_vm.json.
+ * The config file is only used if "use_config_file" is "true".
  */
 static int
-libkrun_parse_resource_configuration (json_object *config_tree, libcrun_container_t *container, const char *annotation, const char *key)
+libkrun_parse_resource_configuration (json_object *config_tree, libcrun_container_t *container, const char *annotation, const char *key, bool use_config_file)
 {
   char *val_str, *endptr;
   int val = -1;
@@ -225,7 +226,7 @@ libkrun_parse_resource_configuration (json_object *config_tree, libcrun_containe
 
       return val;
     }
-  else if (config_tree != NULL)
+  else if (use_config_file && config_tree != NULL)
     {
       val_json = json_object_object_get (config_tree, key);
       if (val_json == NULL)
@@ -242,7 +243,7 @@ libkrun_parse_resource_configuration (json_object *config_tree, libcrun_containe
 static int
 libkrun_parse_string_configuration (json_object *config_tree, libcrun_container_t *container,
                                     const char *annotation, const char *key,
-                                    const char **value, libcrun_error_t *err)
+                                    const char **value, libcrun_error_t *err, bool use_config_file)
 {
   const char *val;
   json_object *val_json = NULL;
@@ -256,7 +257,7 @@ libkrun_parse_string_configuration (json_object *config_tree, libcrun_container_
       return 0;
     }
 
-  if (config_tree == NULL)
+  if (! use_config_file || config_tree == NULL)
     return 0;
 
   val_json = json_object_object_get (config_tree, key);
@@ -300,7 +301,8 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
   int cpus, ram_mib, nested_virt, ret;
   cpu_set_t set;
 
-  cpus = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.cpus", "cpus");
+  /* We let the OCI set the number of vCPUs for the VM, since cgroups CPU restrictions still apply. */
+  cpus = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.cpus", "cpus", true);
   if (cpus <= 0)
     {
       CPU_ZERO (&set);
@@ -310,7 +312,8 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
         cpus = 1;
     }
 
-  ram_mib = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.ram_mib", "ram_mib");
+  /* We let the OCI set the amount of RAM for the VM, since cgroups memory restrictions still apply. */
+  ram_mib = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.ram_mib", "ram_mib", true);
   if (ram_mib <= LIBKRUN_MINIMUM_RAM_MIB)
     {
       if (def && def->linux && def->linux->resources && def->linux->resources->memory
@@ -329,7 +332,7 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, -ret, "could not set krun vm configuration");
 
-  nested_virt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.nested_virt", "nested_virt");
+  nested_virt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.nested_virt", "nested_virt", false);
   if (nested_virt > 0)
     {
       int32_t (*krun_check_nested_virt) (void);
@@ -402,20 +405,23 @@ libkrun_configure_vm (uint32_t ctx_id, void *handle, struct krun_config *kconf, 
        * specify a kernel, libkrun automatically fall back to using libkrunfw,
        * if the library is present and was loaded while creating the context.
        */
-      ret = libkrun_configure_kernel (ctx_id, handle, kconf->config_tree, err);
-      if (UNLIKELY (ret))
-        return ret;
+      int custom_kernel = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.custom_kernel", "custom_kernel", false);
+      if (custom_kernel > 0)
+        {
+          ret = libkrun_configure_kernel (ctx_id, handle, kconf->config_tree, err);
+          if (UNLIKELY (ret))
+            return ret;
+        }
     }
 
   return 0;
 }
 
 static int
-libkrun_configure_flavor (void *cookie, json_object *config_tree, libcrun_container_t *container, libcrun_error_t *err)
+libkrun_configure_flavor (void *cookie, libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret, sev_indicated = 0, awsnitro_indicated = 0;
   struct krun_config *kconf = (struct krun_config *) cookie;
-  json_object *val_flavor = NULL;
   const char *flavor = NULL;
   void *close_handles[2];
 
@@ -424,23 +430,11 @@ libkrun_configure_flavor (void *cookie, json_object *config_tree, libcrun_contai
 
   // Check if the user provided the krun variant through OCI annotations.
   flavor = find_annotation (container, "krun.variant");
-  if (flavor == NULL && config_tree != NULL)
-    {
-      // If the user doesn't specify a variant via OCI annotations, check the krun VM config to see if the "flavor" field was populated.
-      val_flavor = json_object_object_get (config_tree, "flavor");
-      if (val_flavor != NULL && json_object_is_type (val_flavor, json_type_string))
-        flavor = json_object_get_string (val_flavor);
-    }
-
   if (flavor != NULL)
     {
       sev_indicated |= strcmp (flavor, KRUN_FLAVOR_SEV) == 0;
       awsnitro_indicated |= strcmp (flavor, KRUN_FLAVOR_AWS_NITRO) == 0;
     }
-
-  // To maintain backward compatibility, also use the SEV flavor if the
-  // KRUN_SEV_FILE was found.
-  sev_indicated |= access (KRUN_SEV_FILE, F_OK) == 0;
 
   if (sev_indicated)
     {
@@ -506,7 +500,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   int32_t ctx_id, ret;
   libcrun_error_t err;
 
-  ret = libkrun_configure_flavor (cookie, kconf->config_tree, container, &err);
+  ret = libkrun_configure_flavor (cookie, container, &err);
   if (UNLIKELY (ret < 0))
     {
       int errcode = crun_error_get_errno (&err);
@@ -628,7 +622,7 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
 {
   int ret;
 
-  kconf->gpu_flags = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.gpu_flags", "gpu_flags");
+  kconf->gpu_flags = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.gpu_flags", "gpu_flags", false);
   if (kconf->gpu_flags > 0)
     {
       if (access ("/dev/dri", F_OK) != 0)
@@ -741,14 +735,14 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
 
   ret = libkrun_parse_string_configuration (kconf->config_tree, container,
                                             "krun.tap_name", "tap_name",
-                                            &kconf->tap_name, err);
+                                            &kconf->tap_name, err, false);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (kconf->tap_name != NULL && is_empty_string (kconf->tap_name))
     return crun_make_error (err, 0, "krun.tap_name cannot be empty");
 
-  use_passt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.use_passt", "use_passt");
+  use_passt = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.use_passt", "use_passt", false);
 
   if (use_passt > 0)
     {
