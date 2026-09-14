@@ -501,7 +501,7 @@ def test_scheduler_deadline_too_small_runtime():
 
 
 def test_scheduler_deadline_too_big_runtime():
-    """Test SCHED_DEADLINE validation - runtime > max."""
+    """Test SCHED_DEADLINE validation - runtime = 2^63 is rejected (issue #2190)."""
     if is_rootless():
         return (77, "SCHED_DEADLINE requires root")
     if not is_sched_deadline_available():
@@ -512,8 +512,8 @@ def test_scheduler_deadline_too_big_runtime():
 
     conf['process']['scheduler'] = {
         'policy': 'SCHED_DEADLINE',
-        'runtime': 9223372036854775809,
-        'deadline': 9223372036854775810,
+        'runtime': 9223372036854775808,
+        'deadline': 9223372036854775809,
     }
 
     conf['process']['args'] = ['/init', 'true']
