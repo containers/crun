@@ -45,6 +45,7 @@ enum
   OPTION_NETWORK_LOCK_METHOD,
   OPTION_LSM_PROFILE,
   OPTION_LSM_MOUNT_CONTEXT,
+  OPTION_LAZY_PAGES,
 };
 
 static char doc[] = "OCI runtime";
@@ -72,6 +73,7 @@ static struct argp_option options[]
         { "network-lock", OPTION_NETWORK_LOCK_METHOD, "METHOD", 0, "set network lock method", 0 },
         { "lsm-profile", OPTION_LSM_PROFILE, "VALUE", 0, "Specify an LSM profile to be used during restore in the form of TYPE:NAME", 0 },
         { "lsm-mount-context", OPTION_LSM_MOUNT_CONTEXT, "VALUE", 0, "Specify an LSM mount context to be used during restore", 0 },
+        { "lazy-pages", OPTION_LAZY_PAGES, 0, 0, "use userfaultfd to lazily restore memory pages", 0 },
         {
             0,
         } };
@@ -144,6 +146,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_LSM_MOUNT_CONTEXT:
       cr_options.lsm_mount_context = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_LAZY_PAGES:
+      cr_options.lazy_pages = true;
       break;
 
     default:
