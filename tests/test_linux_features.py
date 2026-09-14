@@ -233,6 +233,37 @@ def test_process_apparmor_profile():
         return -1
 
 
+def test_process_apparmor_profile_not_loaded():
+    """Test the error message for an AppArmor profile which is not loaded."""
+
+    if not os.path.exists('/sys/kernel/security/apparmor'):
+        return (77, "AppArmor not available")
+
+    if is_rootless():
+        return (77, "requires root")
+
+    profile_name = "crun-test-definitely-not-loaded"
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+    conf['process']['apparmorProfile'] = profile_name
+
+    try:
+        run_and_get_output(conf, hide_stderr=False)
+        logger.info("test failed: container started with an unloaded AppArmor profile")
+        return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        expected = "apply apparmor profile `%s`: profile not loaded" % profile_name
+        if expected not in output:
+            logger.info("test failed: expected '%s' in output, got: %s", expected, output.strip())
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+
 def test_process_apparmor_profile_userns():
     """Test AppArmor profile is applied inside a user namespace.
 
@@ -1831,6 +1862,7 @@ all_tests = {
     "process-no-new-privileges": test_process_no_new_privileges,
     "process-oom-score-adj": test_process_oom_score_adj,
     "process-apparmor-profile": test_process_apparmor_profile,
+    "process-apparmor-profile-not-loaded": test_process_apparmor_profile_not_loaded,
     "process-apparmor-profile-userns": test_process_apparmor_profile_userns,
     "process-selinux-label": test_process_selinux_label,
     "process-umask": test_process_umask,

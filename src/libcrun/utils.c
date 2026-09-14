@@ -987,7 +987,17 @@ set_security_attr (libcrun_container_t *container, const char *lsm, const char *
   // Write out data
   ret = TEMP_FAILURE_RETRY (write (fd, data, strlen (data)));
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "write to file `%s`", attr_path);
+    {
+      /* ENOENT from the write is AppArmor telling the profile is unknown.
+         The data is "<op> <profile>".  */
+      if (errno == ENOENT && lsm != NULL && strcmp (lsm, "apparmor") == 0)
+        {
+          const char *profile = strchr (data, ' ');
+
+          return crun_make_error (err, 0, "apply apparmor profile `%s`: profile not loaded", profile ? profile + 1 : data);
+        }
+      return crun_make_error (err, errno, "write to file `%s`", attr_path);
+    }
 
   return 0;
 }
