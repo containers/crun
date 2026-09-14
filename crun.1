@@ -446,6 +446,27 @@ checkpoint directory specified via \fB--image-path\fP\&. It will fail
 if an absolute path is used.
 
 .PP
+\fB--lazy-pages\fP
+Use the lazy migration mechanism: instead of saving the memory pages
+to the image, serve them from the page server (see \fB--page-server\fP)
+to a \fBcriu lazy-pages\fP daemon, which in turn provides them on demand
+to the container restored with \fBrestore --lazy-pages\fP\&. The checkpoint
+is completed once all memory pages are transferred. Requires libcriu
+with lazy pages support.
+
+.PP
+\fB--page-server\fP=\fIADDRESS\fP:\fIPORT\fP
+Address and port of the page server. With \fB--lazy-pages\fP, a page
+server is started, listening on this address and port. Otherwise, the
+memory pages are sent to a page server (\fBcriu page-server\fP) running
+on this address and port.
+
+.PP
+\fB--status-fd\fP=\fIFD\fP
+Write a zero byte to the file descriptor \fIFD\fP once the page server is
+ready to serve memory pages. Used together with \fB--lazy-pages\fP\&.
+
+.PP
 \fB--manage-cgroups-mode\fP=\fIMODE\fP
 Specify which CRIU manage cgroup mode should be used. Permitted values are
 \fBsoft\fP, \fBignore\fP, \fBfull\fP or \fBstrict\fP\&. Default is \fBsoft\fP\&.
@@ -489,6 +510,11 @@ Where to write the PID of the container
 \fB--manage-cgroups-mode\fP=\fIMODE\fP
 Specify which CRIU manage cgroup mode should be used. Permitted values are
 \fBsoft\fP, \fBignore\fP, \fBfull\fP or \fBstrict\fP\&. Default is \fBsoft\fP\&.
+
+.PP
+\fB--lazy-pages\fP
+Restore the memory pages lazily, on demand, from a running
+\fBcriu lazy-pages\fP daemon. See \fBcheckpoint --lazy-pages\fP\&.
 
 .PP
 \fB--lsm-profile\fP=\fITYPE\fP:\fINAME\fP

@@ -317,6 +317,11 @@ struct libcrun_checkpoint_restore_options_s
 
   int manage_cgroups_mode; /* enum libcrun_cr_cgroups_mode */
   int network_lock_method; /* enum libcrun_cr_network_lock_method */
+
+  bool lazy_pages;
+  const char *page_server_address;
+  int page_server_port;
+  int status_fd; /* 0 if not used */
 };
 
 int libcrun_container_checkpoint (libcrun_context_t *ctx, const char *id,
