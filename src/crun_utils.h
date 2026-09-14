@@ -86,6 +86,18 @@ xstrdup (const char *str)
   return ret;
 }
 
+static inline char *
+xstrndup (const char *str, size_t n)
+{
+  char *ret;
+  if (str == NULL)
+    return NULL;
+  ret = strndup (str, n);
+  if (UNLIKELY (ret == NULL))
+    OOM ();
+  return ret;
+}
+
 static inline void
 cleanup_freep (void *p)
 {
