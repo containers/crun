@@ -25,6 +25,7 @@
 #  include <sys/types.h>
 #  include <criu/criu.h>
 #  include <sched.h>
+#  include <signal.h>
 #  include <sys/stat.h>
 #  include <sys/mount.h>
 #  include <fcntl.h>
@@ -992,26 +993,56 @@ move_back_to_cgroups (const char *cgroups)
    process tree is a sibling of CRIU, hence a child of the process calling
    criu_restore_child().
 
-   The child is kept as small as possible, as it shares the memory with the
-   caller.  This is a separate function so that no variable of the caller is
-   live across the vfork.  */
+   As the child shares the memory and the stack with the caller, all signals
+   are blocked across the vfork, and the child resets the signal handlers
+   before unblocking them, so that no handler of the caller can run there.
+   This is a separate function so that no variable of the caller is live
+   across the vfork.  */
 static int
 criu_restore_child_in_cgroup (const char *cgroup_path, int *criu_ret, libcrun_error_t *err)
 {
+  sigset_t all_signals, old_mask;
   int wait_status = 0;
   pid_t pid;
   int ret;
 
   *criu_ret = -1;
 
+  sigfillset (&all_signals);
+  ret = sigprocmask (SIG_BLOCK, &all_signals, &old_mask);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "sigprocmask");
+
   /* Must be vfork: the child shares our memory space, so both *criu_ret and
      the error it creates are visible here once it is gone.  */
   pid = vfork ();
   if (UNLIKELY (pid < 0))
-    return crun_make_error (err, errno, "vfork");
+    {
+      int saved_errno = errno;
+
+      sigprocmask (SIG_SETMASK, &old_mask, NULL);
+      return crun_make_error (err, saved_errno, "vfork");
+    }
 
   if (pid == 0)
     {
+      struct sigaction act;
+      int i;
+
+      /* The signal dispositions are not shared with the parent, so resetting
+         them here does not affect it.  Keep the ignored signals ignored, as
+         CRIU would inherit them if it was run directly by the caller.  */
+      for (i = 1; i < NSIG; i++)
+        {
+          if (sigaction (i, NULL, &act) < 0 || act.sa_handler == SIG_IGN || act.sa_handler == SIG_DFL)
+            continue;
+
+          memset (&act, 0, sizeof (act));
+          act.sa_handler = SIG_DFL;
+          sigaction (i, &act, NULL);
+        }
+      sigprocmask (SIG_SETMASK, &old_mask, NULL);
+
       if (! is_empty_string (cgroup_path))
         {
           ret = libcrun_move_process_to_cgroup (0, 0, cgroup_path, false, err);
@@ -1022,6 +1053,9 @@ criu_restore_child_in_cgroup (const char *cgroup_path, int *criu_ret, libcrun_er
       *criu_ret = libcriu_wrapper->criu_restore_child ();
       _safe_exit (EXIT_SUCCESS);
     }
+
+  /* The child is gone by now, it is safe to handle signals again.  */
+  sigprocmask (SIG_SETMASK, &old_mask, NULL);
 
   ret = waitpid_ignore_stopped (pid, &wait_status, 0);
   if (UNLIKELY (ret < 0))
