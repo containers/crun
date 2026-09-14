@@ -24,6 +24,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include <errno.h>
 #include "utils.h"
 
 #include <json-c/json.h>
@@ -97,7 +98,9 @@ crun_error_wrap (libcrun_error_t *err, const char *fmt, ...)
 int
 crun_error_release (libcrun_error_t *err)
 {
+  const int saved_errno = errno;
   libcrun_error_t ptr;
+
   if (err == NULL)
     return 0;
 
@@ -108,6 +111,8 @@ crun_error_release (libcrun_error_t *err)
   free (ptr->msg);
   free (ptr);
   *err = NULL;
+
+  errno = saved_errno;
   return 0;
 }
 
@@ -120,6 +125,7 @@ libcrun_error_release (libcrun_error_t *err)
 void
 crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
 {
+  const int saved_errno = errno;
   libcrun_error_t ref;
 
   if (out == NULL)
@@ -139,6 +145,8 @@ crun_error_write_warning_and_release (FILE *out, libcrun_error_t **err)
   free (ref->msg);
   free (ref);
   **err = NULL;
+
+  errno = saved_errno;
 }
 
 void

@@ -19,6 +19,7 @@
 #include <libcrun/error.h>
 #include <libcrun/utils.h>
 #include <string.h>
+#include <errno.h>
 
 typedef int (*test) ();
 
@@ -212,6 +213,66 @@ test_crun_error_release_null ()
   return 0;
 }
 
+static int
+test_crun_error_release_preserves_errno ()
+{
+  libcrun_error_t err = NULL;
+  int ret;
+
+  ret = crun_make_error (&err, 12, "test error");
+  if (ret >= 0)
+    return -1;
+
+  errno = 42;
+  ret = crun_error_release (&err);
+  if (ret != 0 || errno != 42 || err != NULL)
+    return -1;
+
+  /* Test with NULL */
+  errno = 99;
+  ret = crun_error_release (NULL);
+  if (ret != 0 || errno != 99)
+    return -1;
+
+  /* Test with pointer to NULL */
+  err = NULL;
+  errno = 101;
+  ret = crun_error_release (&err);
+  if (ret != 0 || errno != 101)
+    return -1;
+
+  return 0;
+}
+
+static int
+test_crun_write_warning_and_release_preserves_errno ()
+{
+  libcrun_error_t err_data = NULL;
+  libcrun_error_t *err = &err_data;
+  cleanup_free char *buffer = NULL;
+  size_t len;
+  FILE *stream;
+  int ret;
+
+  ret = crun_make_error (err, 12, "test error");
+  if (ret >= 0)
+    return -1;
+
+  stream = open_memstream (&buffer, &len);
+  if (stream == NULL)
+    return -1;
+
+  errno = 42;
+  crun_error_write_warning_and_release (stream, &err);
+  const int test_errno = errno;
+  fclose (stream);
+
+  if (test_errno != 42 || *err != NULL)
+    return -1;
+
+  return 0;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -234,7 +295,7 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..7\n");
+  printf ("1..9\n");
   RUN_TEST (test_crun_make_error);
   RUN_TEST (test_crun_write_warning_and_release);
   RUN_TEST (test_crun_error_wrap);
@@ -242,5 +303,7 @@ main ()
   RUN_TEST (test_libcrun_verbosity);
   RUN_TEST (test_libcrun_set_log_format);
   RUN_TEST (test_crun_error_release_null);
+  RUN_TEST (test_crun_error_release_preserves_errno);
+  RUN_TEST (test_crun_write_warning_and_release_preserves_errno);
   return 0;
 }
