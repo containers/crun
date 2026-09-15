@@ -37,6 +37,12 @@ Version: 0
 Release: %autorelease
 URL: https://github.com/containers/%{name}
 Source0: %{url}/releases/download/%{version}/%{name}-%{version}.tar.zst
+%if !%{defined copr_build}
+Source1: %{url}/releases/download/%{version}/%{name}-%{version}.tar.zst.asc
+# The keyring is synced to dist-git by Packit, so it is not fetched from the
+# same place as the tarball and the signature.
+Source2: crun.keyring
+%endif
 License: GPL-2.0-only
 %if %{defined golang_arches_future}
 ExclusiveArch: %{golang_arches_future}
@@ -46,6 +52,9 @@ ExclusiveArch: aarch64 ppc64le riscv64 s390x x86_64
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
+%if !%{defined copr_build}
+BuildRequires: gnupg2
+%endif
 BuildRequires: git-core
 BuildRequires: gperf
 BuildRequires: libcap-devel
@@ -98,6 +107,9 @@ Recommends: wasmedge
 %endif
 
 %prep
+%if !%{defined copr_build}
+%{gpgverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
+%endif
 %autosetup -Sgit -n %{name}-%{version}
 
 %build
