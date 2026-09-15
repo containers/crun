@@ -110,6 +110,13 @@ jobs:
       - name: run test
         run: ./tests/ci.sh "${{ matrix.test }}"
 
+  keyring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: validate crun.keyring
+        run: build-aux/keyring_validate.sh
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
