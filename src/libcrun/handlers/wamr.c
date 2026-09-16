@@ -95,6 +95,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   uint32_t (*wasm_runtime_get_wasi_exit_code) (wasm_module_inst_t module_inst);
   bool (*wasm_application_execute_main) (wasm_module_inst_t module_inst, int32_t argc, char *argv[]);
   void (*wasm_runtime_set_wasi_args) (wasm_module_t module, const char *dir_list[], uint32_t dir_count, const char *map_dir_list[], uint32_t map_dir_count, const char *env[], uint32_t env_count, char *argv[], int argc);
+  void (*wasm_runtime_set_wasi_addr_pool) (wasm_module_t module, const char *addr_pool[], uint32_t pool_size);
+  void (*wasm_runtime_set_wasi_ns_lookup_pool) (wasm_module_t module, const char *ns_lookup_pool[], uint32_t pool_size);
 
   wasm_runtime_init = dlsym (cookie, "wasm_runtime_init");
   wasm_runtime_full_init = dlsym (cookie, "wasm_runtime_full_init");
@@ -113,6 +115,8 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
   wasm_runtime_get_wasi_exit_code = dlsym (cookie, "wasm_runtime_get_wasi_exit_code");
   wasm_application_execute_main = dlsym (cookie, "wasm_application_execute_main");
   wasm_runtime_set_wasi_args = dlsym (cookie, "wasm_runtime_set_wasi_args");
+  wasm_runtime_set_wasi_addr_pool = dlsym (cookie, "wasm_runtime_set_wasi_addr_pool");
+  wasm_runtime_set_wasi_ns_lookup_pool = dlsym (cookie, "wasm_runtime_set_wasi_ns_lookup_pool");
 
   if (wasm_runtime_init == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_init symbol in `libiwasm.so`");
@@ -148,6 +152,10 @@ libwamr_exec (void *cookie, __attribute__ ((unused)) libcrun_container_t *contai
     error (EXIT_FAILURE, 0, "could not find wasm_application_execute_main symbol in `libiwasm.so`");
   if (wasm_runtime_set_wasi_args == NULL)
     error (EXIT_FAILURE, 0, "could not find wasm_runtime_set_wasi_args symbol in `libiwasm.so`");
+  if (wasm_runtime_set_wasi_addr_pool == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_set_wasi_addr_pool symbol in `libiwasm.so`");
+  if (wasm_runtime_set_wasi_ns_lookup_pool == NULL)
+    error (EXIT_FAILURE, 0, "could not find wasm_runtime_set_wasi_ns_lookup_pool symbol in `libiwasm.so`");
 
   int ret;
   const char *exception;
