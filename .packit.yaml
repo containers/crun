@@ -20,6 +20,8 @@ files_to_sync:
     dest: .fmf/
     delete: true
     mkpath: true
+  - src: crun.keyring
+    dest: crun.keyring
   - .packit.yaml
 
 packages:

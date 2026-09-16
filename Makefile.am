@@ -167,7 +167,7 @@ crun_LDFLAGS = $(CRUN_LDFLAGS)
 endif
 endif
 
-EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md rpm/crun.spec autogen.sh \
+EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md crun.keyring rpm/crun.spec autogen.sh \
 	src/libcrun/blake3/blake3_impl.h src/libcrun/blake3/blake3.h \
 	src/crun.h src/list.h src/run.h src/run_create.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/oci_features.h src/spec.h src/update.h src/ps.h src/mounts.h \
@@ -453,6 +453,9 @@ LIST_SH_FILES = git ls-files '*.sh'
 shellcheck:
 	$(LIST_SH_FILES) | xargs shellcheck
 
+validate-keyring:
+	$(srcdir)/build-aux/keyring_validate.sh
+
 shfmt:
 	$(LIST_SH_FILES) | xargs shfmt -w
 
@@ -581,4 +584,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: check-no-openat2 check-systemd coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 check-systemd coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck validate-keyring shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env

@@ -15,6 +15,20 @@ crun conforms to the OCI Container Runtime specifications
 
 The user documentation is available [here](crun.1.md).
 
+## Releases
+
+Official releases of crun are available on the
+[releases](https://github.com/containers/crun/releases) page.
+
+All release artifacts are signed by one of the keys listed in the
+[`crun.keyring`](crun.keyring) file in the root of this repository.  To
+verify a release artifact:
+
+```console
+$ gpg --no-default-keyring --keyring ./crun.gpg --import crun.keyring
+$ gpg --no-default-keyring --keyring ./crun.gpg --verify crun-1.29.1.tar.zst.asc crun-1.29.1.tar.zst
+```
+
 ## Why another implementation?
 
 While most of the tools used in the Linux containers ecosystem are

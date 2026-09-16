@@ -21,6 +21,27 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
     fi
 done
 
+# Make sure the release is going to be signed with one of the keys listed in
+# crun.keyring, so that users can verify the signatures against it.
+check_signing_key() {
+    local tmpdir rc=0
+    tmpdir="$(mktemp -d --tmpdir crun-release-keyring.XXXXXX)"
+    gpg2 --homedir "$tmpdir" --batch --quiet --import crun.keyring || rc=1
+    if test "$rc" = 0; then
+        gpg2 --clear-sign <<<"crun release signing key check $(date --rfc-email)" |
+            gpg2 --homedir "$tmpdir" --batch --verify || rc=1
+    fi
+    gpgconf --homedir "$tmpdir" --kill all >/dev/null 2>&1 || true
+    rm -rf "$tmpdir"
+    return "$rc"
+}
+if test "$SKIP_GPG" = ""; then
+    if ! check_signing_key; then
+        echo "the default GPG signing key is not listed in crun.keyring" >&2
+        exit 1
+    fi
+fi
+
 # Remove generated intermediates on exit so they do not linger after a
 # successful run or a failure.  OUTDIR is left untouched for inspection.
 cleanup() {
