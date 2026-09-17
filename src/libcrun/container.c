@@ -523,6 +523,22 @@ gen_error:
   return r;
 }
 
+/* Return the bundle path to report in the container state.  crun always
+   chdir()s into the bundle, so fall back to getcwd() when the caller has no
+   absolute bundle path, as can happen when libcrun is used as a library.
+   *ALLOCATED must be freed by the caller.  */
+static const char *
+get_bundle_path (const char *bundle, char **allocated)
+{
+  if (bundle != NULL && bundle[0] == '/')
+    return bundle;
+
+  *allocated = getcwd (NULL, 0);
+  if (*allocated == NULL)
+    OOM ();
+  return *allocated;
+}
+
 static int
 do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *cwd,
           const char *status, const char *name, hook **hooks, size_t hooks_len, int out_fd, int err_fd,
@@ -535,12 +551,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   const char *rootfs = def->root ? def->root->path : "";
   cleanup_json_gen json_gen_ctx *gen = NULL;
 
-  if (cwd == NULL)
-    {
-      cwd = cwd_allocated = getcwd (NULL, 0);
-      if (cwd == NULL)
-        OOM ();
-    }
+  cwd = get_bundle_path (cwd, &cwd_allocated);
 
   if (! json_gen_init (&gen, NULL))
     return crun_make_error (err, 0, "json_gen_init failed");
@@ -1691,9 +1702,8 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
                         pid_t pid, struct libcrun_cgroup_status *cgroup_status,
                         libcrun_error_t *err)
 {
-  cleanup_free char *cwd = getcwd (NULL, 0);
-  if (UNLIKELY (cwd == NULL))
-    libcrun_fail_with_error (errno, "getcwd failed");
+  cleanup_free char *bundle_allocated = NULL;
+  const char *bundle = get_bundle_path (context->bundle, &bundle_allocated);
   cleanup_free char *owner = get_user_name (geteuid ());
   char *external_descriptors = libcrun_get_external_descriptors (container);
   char *rootfs = container->container_def->root ? container->container_def->root->path : "";
@@ -1702,7 +1712,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
   libcrun_container_status_t status = {
     .pid = pid,
     .rootfs = rootfs,
-    .bundle = cwd,
+    .bundle = (char *) bundle,
     .created = created,
     .owner = owner,
     .systemd_cgroup = context->systemd_cgroup,
@@ -2703,7 +2713,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (context->fifo_exec_wait_fd < 0 && def->hooks && def->hooks->poststart_len)
     {
       libcrun_debug ("Running `poststart` hooks");
-      ret = do_hooks (def, pid, context->id, false, NULL, "running", "poststart", (hook **) def->hooks->poststart,
+      ret = do_hooks (def, pid, context->id, false, context->bundle, "running", "poststart", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
         goto fail;
