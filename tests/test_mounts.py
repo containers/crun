@@ -1500,6 +1500,57 @@ def test_rbind_with_bind_option():
         return -1
     return 0
 
+def test_bind_host_root():
+    """Bind mount the host root and verify the container sees the host, not its own rootfs.
+
+    Regression test for https://github.com/containers/crun/issues/2262, where the
+    source path "/" was resolved after the process root had already been switched
+    to the container rootfs, so /host ended up being a recursive bind of the
+    rootfs itself.
+
+    The rootfs can live on the same file system as the host root, so the device
+    number alone does not tell the two apart.  Compare it together with the mount
+    root (field 4 of mountinfo): a bind of the rootfs gives /host the same device
+    *and* the same mount root as the container's own /.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+    add_all_namespaces(conf)
+    conf['mounts'].append({
+        "destination": "/host",
+        "type": "bind",
+        "source": "/",
+        "options": ["rbind", "rslave"]
+    })
+    out, _ = run_and_get_output(conf, hide_stderr=True)
+
+    root = None
+    host = None
+    for line in out.splitlines():
+        fields = line.split()
+        if len(fields) < 5:
+            continue
+        if fields[4] == '/':
+            root = (fields[2], fields[3])
+        elif fields[4] == '/host':
+            host = (fields[2], fields[3])
+
+    if host is None:
+        logger.info("no mount found for /host")
+        logger.info("mountinfo output: %s", out)
+        return -1
+
+    if host == root:
+        logger.info("/host has the same device and mount root as the container "
+                    "root %s: the host root was not bind mounted", host)
+        logger.info("mountinfo output: %s", out)
+        return -1
+
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1551,6 +1602,7 @@ all_tests = {
     "mount-no-proc": test_no_proc,
     "mount-no-proc-sysfs-cgroup": test_no_proc_sysfs_cgroup,
     "mount-rbind-with-bind-option": test_rbind_with_bind_option,
+    "mount-bind-host-root": test_bind_host_root,
 }
 
 if __name__ == "__main__":
