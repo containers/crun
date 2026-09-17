@@ -805,7 +805,7 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
       dup2 (null, STDERR_FILENO);
       close (null);
 
-      execvp ("passt", passt_argv);
+      execvp ("/usr/bin/passt", passt_argv);
       // Only reachable on error.
       _exit (EXIT_FAILURE);
     }
