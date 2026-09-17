@@ -331,7 +331,8 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager=None,
                        all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path="config.json",
-                       chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False):
+                       chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False,
+                       bundle_via_symlink=False):
 
     # Some tests require that the container user, which might not be the
     # same user as the person running the tests, is able to resolve the full path
@@ -386,6 +387,17 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     if callback_prepare_rootfs is not None:
         callback_prepare_rootfs(rootfs)
 
+    # Run crun from a different directory, passing the bundle as a symlink to
+    # it.  This makes getcwd() in crun differ from the bundle path passed on the
+    # command line, which is what the hooks must report.
+    bundle_arg = []
+    run_cwd = temp_dir
+    if bundle_via_symlink:
+        bundle_link = temp_dir + ".link"
+        os.symlink(temp_dir, bundle_link)
+        bundle_arg = ['--bundle', bundle_link]
+        run_cwd = "/"
+
     detach_arg = ['--detach'] if detach else []
     keep_arg = ['--keep'] if keep else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
@@ -398,7 +410,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         cgroup_manager = get_cgroup_manager()
 
     root = get_tests_root_status()
-    args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + relative_config_path + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
+    args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + bundle_arg + relative_config_path + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:
@@ -417,17 +429,17 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     if use_popen:
         if not stdout:
             stdout=subprocess.PIPE
-        return subprocess.Popen(args, cwd=temp_dir,
+        return subprocess.Popen(args, cwd=run_cwd,
                                 umask=default_umask,
                                 stdout=stdout,
                                 stderr=stderr, stdin=stdin, env=env,
                                 close_fds=False), id_container
     else:
         try:
-            return subprocess.check_output(args, cwd=temp_dir, stdin=stdin, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
+            return subprocess.check_output(args, cwd=run_cwd, stdin=stdin, stderr=stderr, env=env, close_fds=False, umask=default_umask).decode(), id_container
         except subprocess.CalledProcessError as e:
             logger.error("Command failed: %s", ' '.join(args))
-            logger.error("Working directory: %s", temp_dir)
+            logger.error("Working directory: %s", run_cwd)
             logger.error("Container ID: %s", id_container)
             logger.error("Return code: %d", e.returncode)
             if e.output:

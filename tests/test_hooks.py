@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import shutil
 from tests_utils import *
 
 def test_fail_prestart():
@@ -262,6 +263,62 @@ def test_createRuntime_hook_bundle_path():
     finally:
         if state_file and os.path.exists(state_file):
             os.unlink(state_file)
+
+
+def test_hooks_bundle_path_not_cwd():
+    """All hooks must report the bundle path, not crun's current directory.
+
+    crun is started from / with the bundle passed as a symlink to it, so that
+    getcwd() differs from the bundle path given on the command line.  The hooks
+    (and the container status they are fed from) must report the latter.
+    """
+    import tempfile
+    import json
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+
+    hook_names = ["prestart", "createRuntime", "poststart", "poststop"]
+
+    state_dir = tempfile.mkdtemp()
+    try:
+        conf['hooks'] = {}
+        for name in hook_names:
+            conf['hooks'][name] = [{
+                "path": "/bin/sh",
+                "args": ["/bin/sh", "-c", "cat > " + os.path.join(state_dir, name)]
+            }]
+
+        run_and_get_output(conf, hide_stderr=True, bundle_via_symlink=True)
+
+        for name in hook_names:
+            state_file = os.path.join(state_dir, name)
+            if not os.path.exists(state_file) or os.path.getsize(state_file) == 0:
+                logger.info("%s hook did not receive any state", name)
+                return -1
+
+            with open(state_file) as f:
+                bundle_path = json.load(f)['bundle']
+
+            if not os.path.exists(os.path.join(bundle_path, "config.json")):
+                logger.info("%s hook bundle has no config.json: '%s'", name, bundle_path)
+                return -1
+
+            # The bundle was passed as a symlink, so the reported path must
+            # still be that symlink.  A resolved path means crun reported its
+            # own working directory instead.
+            if not os.path.islink(bundle_path):
+                logger.info("%s hook got crun cwd instead of the bundle: '%s'", name, bundle_path)
+                return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        shutil.rmtree(state_dir, ignore_errors=True)
 
 
 def test_createContainer_hook():
@@ -601,6 +658,7 @@ all_tests = {
     "test-poststop-hook": test_poststop_hook,
     "test-createRuntime-hook": test_createRuntime_hook,
     "test-createRuntime-hook-bundle-path": test_createRuntime_hook_bundle_path,
+    "test-hooks-bundle-path-not-cwd": test_hooks_bundle_path_not_cwd,
     "test-createContainer-hook": test_createContainer_hook,
     "test-createContainer-hook-after-mounts": test_createContainer_hook_after_mounts,
     "test-startContainer-hook": test_startContainer_hook,
