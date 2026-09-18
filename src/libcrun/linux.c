@@ -171,6 +171,9 @@ struct private_data_s
   bool joined_mount_ns;
   bool needs_pivot;
   bool no_pivot;
+  /* Set once the process root is the container rootfs and the host root
+     can no longer be reached by path.  */
+  bool host_root_switched;
 };
 
 struct linux_namespace_s
@@ -3059,6 +3062,23 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
               get_private_data (container)->rootfsfd = new_rootfsfd;
             }
         }
+      else if (get_private_data (container)->host_root_switched)
+        {
+          /* The host root is unreachable now -- even through a fd, since
+             mount(2) requires the source to live in the current mount
+             namespace.  The path-based fallback below would resolve SOURCE
+             inside the container and bind the wrong tree.  */
+          return crun_make_error (err, errno, "move_mount `%s` to `%s`", source, target);
+        }
+      else if (errno != ENOSYS)
+        {
+          /* ENOSYS only means the kernel lacks the new mount API.  Anything
+             else is worth reporting: it is otherwise invisible, and it decides
+             whether the mount is set up from the pre-opened fd or from the
+             source path.  */
+          libcrun_warning ("move_mount `%s` to `%s` failed, falling back to mount(2): %s",
+                           source, target, strerror (errno));
+        }
     }
 
   if (! mounted)
@@ -3724,6 +3744,34 @@ open_mount_of_type (libcrun_container_t *container,
   return mnt_fd;
 }
 
+/* move_mount(2) refuses to attach a tree that contains a bind mount of a mount
+   namespace: check_for_nsfs_mounts() in the kernel rejects it with ELOOP.  A
+   recursive clone of "/" picks such a mount up, so a bind of the host root
+   cannot be attached from inside the namespace created by OPEN_TREE_NAMESPACE,
+   and there is no way back: once setns() has run, the host tree is unreachable
+   both by path and through a fd, since mount(2) wants the source to live in the
+   current mount namespace.  snapd pins mount namespaces under /run/snapd/ns, so
+   this is the common case on Ubuntu.  Detect it and keep to the pivot_root
+   path, which binds the source while the host root is still reachable.  */
+static bool
+has_pinned_mount_namespace (void)
+{
+  cleanup_free char *buffer = NULL;
+  libcrun_error_t tmp_err = NULL;
+  size_t len;
+  int ret;
+
+  ret = read_all_file ("/proc/self/mountinfo", &buffer, &len, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&tmp_err);
+      /* Cannot tell; assume the worst and use the traditional path.  */
+      return true;
+    }
+
+  return strstr (buffer, " mnt:[") != NULL;
+}
+
 static bool
 can_use_open_tree_namespace (libcrun_container_t *container)
 {
@@ -3736,6 +3784,9 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   size_t i;
 
   if (has_hooks || has_userns)
+    return false;
+
+  if (has_pinned_mount_namespace ())
     return false;
 
   {
@@ -3932,6 +3983,13 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
   if (tree_fd >= 0)
     {
+      /* Save a fd to the host root before entering the new namespace: once
+         setns() succeeds, "/" is the container rootfs and an absolute mount
+         source can no longer be resolved by path.  */
+      ret = get_old_root_fd (get_private_data (container));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open the host root");
+
       ret = setns (tree_fd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
@@ -3950,6 +4008,9 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
       get_private_data (container)->needs_pivot = false;
       get_private_data (container)->no_pivot = no_pivot;
+      /* setns() made the container rootfs the process root, so an absolute
+         source path no longer refers to the host.  */
+      get_private_data (container)->host_root_switched = true;
       free (*rootfs);
       *rootfs = xstrdup ("/");
     }
