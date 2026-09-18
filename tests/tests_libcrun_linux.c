@@ -391,6 +391,36 @@ test_namespace_consistency ()
   return 0;
 }
 
+static int
+test_sysctl_key_to_proc_path ()
+{
+  struct
+  {
+    const char *key;
+    const char *path;
+  } cases[] = {
+    { "kernel.shm_rmid_forced", "kernel/shm_rmid_forced" },
+    { "kernel/shm_rmid_forced", "kernel/shm_rmid_forced" },
+    { "net.ipv4.ip_forward", "net/ipv4/ip_forward" },
+    { "net/ipv4/ip_forward", "net/ipv4/ip_forward" },
+    { "net.ipv4.conf.eno2/100.rp_filter", "net/ipv4/conf/eno2.100/rp_filter" },
+    { "net/ipv4/conf/eno2.100/rp_filter", "net/ipv4/conf/eno2.100/rp_filter" },
+    { "net.ipv6.conf.bond1/340.autoconf", "net/ipv6/conf/bond1.340/autoconf" },
+    { "net/ipv6/conf/bond1.340/autoconf", "net/ipv6/conf/bond1.340/autoconf" },
+  };
+  size_t i;
+
+  for (i = 0; i < sizeof (cases) / sizeof (cases[0]); i++)
+    {
+      cleanup_free char *path = libcrun_sysctl_key_to_proc_path (cases[i].key);
+
+      if (path == NULL || strcmp (path, cases[i].path) != 0)
+        return -1;
+    }
+
+  return 0;
+}
+
 /* Test rlimits with zero length */
 static int
 test_rlimits_zero_length ()
@@ -432,7 +462,7 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..10\n");
+  printf ("1..11\n");
   RUN_TEST (test_find_namespace);
   RUN_TEST (test_path_is_slash_dev_linux);
   RUN_TEST (test_reopen_dev_null);
@@ -442,6 +472,7 @@ main ()
   RUN_TEST (test_safe_chdir);
   RUN_TEST (test_clone_constants);
   RUN_TEST (test_namespace_consistency);
+  RUN_TEST (test_sysctl_key_to_proc_path);
   RUN_TEST (test_rlimits_zero_length);
   return 0;
 }

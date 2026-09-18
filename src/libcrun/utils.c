@@ -2675,6 +2675,50 @@ get_user_name (uid_t uid)
   return xstrdup ("");
 }
 
+/* Convert a sysctl key to its /proc/sys path according to sysctl.d(5).
+   If the first separator is '/', remaining slashes and dots are left intact.
+   If the first separator is '.', dots and slashes are interchanged.  */
+char *
+libcrun_sysctl_key_to_proc_path (const char *key)
+{
+  const char *it;
+  bool interchange = true;
+
+  if (key == NULL || key[0] == '\0')
+    return xstrdup (key ?: "");
+
+  for (it = key; *it; it++)
+    {
+      if (*it == '/' || *it == '.')
+        {
+          if (*it == '/')
+            interchange = false;
+          break;
+        }
+    }
+
+  if (! interchange)
+    return xstrdup (key);
+
+  {
+    char *result = xmalloc (strlen (key) + 1);
+    char *out;
+
+    for (it = key, out = result; *it; it++, out++)
+      {
+        if (*it == '.')
+          *out = '/';
+        else if (*it == '/')
+          *out = '.';
+        else
+          *out = *it;
+      }
+    *out = '\0';
+
+    return result;
+  }
+}
+
 int
 has_suffix (const char *str, const char *suffix)
 {
