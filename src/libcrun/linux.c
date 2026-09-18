@@ -3064,9 +3064,10 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
         }
       else if (get_private_data (container)->host_root_switched)
         {
-          /* The process root is already the container rootfs, so the
-             path-based fallback below would resolve SOURCE inside the
-             container and bind the wrong tree.  */
+          /* The host root is unreachable now -- even through a fd, since
+             mount(2) requires the source to live in the current mount
+             namespace.  The path-based fallback below would resolve SOURCE
+             inside the container and bind the wrong tree.  */
           return crun_make_error (err, errno, "move_mount `%s` to `%s`", source, target);
         }
       else if (errno != ENOSYS)
@@ -3079,13 +3080,6 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
                            source, target, strerror (errno));
         }
     }
-
-  if (! mounted && (flags & MS_BIND) && mount->source != NULL
-      && mount->source[0] == '/'
-      && get_private_data (container)->host_root_switched)
-    return crun_make_error (err, ENOENT,
-                            "cannot bind mount `%s` on `%s`: the host root is no longer reachable",
-                            mount->source, target);
 
   if (! mounted)
     {
@@ -3750,6 +3744,34 @@ open_mount_of_type (libcrun_container_t *container,
   return mnt_fd;
 }
 
+/* move_mount(2) refuses to attach a tree that contains a bind mount of a mount
+   namespace: check_for_nsfs_mounts() in the kernel rejects it with ELOOP.  A
+   recursive clone of "/" picks such a mount up, so a bind of the host root
+   cannot be attached from inside the namespace created by OPEN_TREE_NAMESPACE,
+   and there is no way back: once setns() has run, the host tree is unreachable
+   both by path and through a fd, since mount(2) wants the source to live in the
+   current mount namespace.  snapd pins mount namespaces under /run/snapd/ns, so
+   this is the common case on Ubuntu.  Detect it and keep to the pivot_root
+   path, which binds the source while the host root is still reachable.  */
+static bool
+has_pinned_mount_namespace (void)
+{
+  cleanup_free char *buffer = NULL;
+  libcrun_error_t tmp_err = NULL;
+  size_t len;
+  int ret;
+
+  ret = read_all_file ("/proc/self/mountinfo", &buffer, &len, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&tmp_err);
+      /* Cannot tell; assume the worst and use the traditional path.  */
+      return true;
+    }
+
+  return strstr (buffer, " mnt:[") != NULL;
+}
+
 static bool
 can_use_open_tree_namespace (libcrun_container_t *container)
 {
@@ -3762,6 +3784,9 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   size_t i;
 
   if (has_hooks || has_userns)
+    return false;
+
+  if (has_pinned_mount_namespace ())
     return false;
 
   {
@@ -3958,6 +3983,13 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
   if (tree_fd >= 0)
     {
+      /* Save a fd to the host root before entering the new namespace: once
+         setns() succeeds, "/" is the container rootfs and an absolute mount
+         source can no longer be resolved by path.  */
+      ret = get_old_root_fd (get_private_data (container));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open the host root");
+
       ret = setns (tree_fd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
