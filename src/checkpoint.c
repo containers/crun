@@ -62,7 +62,7 @@ static struct argp_option options[]
         { "ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0 },
         { "shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0 },
         { "file-locks", OPTION_FILE_LOCKS, 0, 0, "allow file locks", 0 },
-        { "network-lock", OPTION_NETWORK_LOCK_METHOD, 0, 0, "set network lock method", 0 },
+        { "network-lock", OPTION_NETWORK_LOCK_METHOD, "METHOD", 0, "set network lock method", 0 },
 #ifdef CRIU_PRE_DUMP_SUPPORT
         { "parent-path", OPTION_PARENT_PATH, "DIR", 0, "path for previous criu image files in pre-dump", 0 },
         { "pre-dump", OPTION_PRE_DUMP, 0, 0, "dump container's memory information only, leave the container running after this", 0 },
