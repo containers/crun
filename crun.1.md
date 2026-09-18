@@ -364,6 +364,24 @@ the pre-dump. It is important to use a relative path from the actual
 checkpoint directory specified via **--image-path**. It will fail
 if an absolute path is used.
 
+**--lazy-pages**
+Use the lazy migration mechanism: instead of saving the memory pages
+to the image, serve them from the page server (see **--page-server**)
+to a **criu lazy-pages** daemon, which in turn provides them on demand
+to the container restored with **restore --lazy-pages**. The checkpoint
+is completed once all memory pages are transferred. Requires libcriu
+with lazy pages support.
+
+**--page-server**=_ADDRESS_:_PORT_
+Address and port of the page server. With **--lazy-pages**, a page
+server is started, listening on this address and port. Otherwise, the
+memory pages are sent to a page server (**criu page-server**) running
+on this address and port.
+
+**--status-fd**=_FD_
+Write a zero byte to the file descriptor _FD_ once the page server is
+ready to serve memory pages. Used together with **--lazy-pages**.
+
 **--manage-cgroups-mode**=_MODE_
 Specify which CRIU manage cgroup mode should be used. Permitted values are
 **soft**, **ignore**, **full** or **strict**. Default is **soft**.
@@ -399,6 +417,10 @@ Where to write the PID of the container
 **--manage-cgroups-mode**=_MODE_
 Specify which CRIU manage cgroup mode should be used. Permitted values are
 **soft**, **ignore**, **full** or **strict**. Default is **soft**.
+
+**--lazy-pages**
+Restore the memory pages lazily, on demand, from a running
+**criu lazy-pages** daemon. See **checkpoint --lazy-pages**.
 
 **--lsm-profile**=_TYPE_:_NAME_
 Specify an LSM profile to be used during restore.
