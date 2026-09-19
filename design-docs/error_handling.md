@@ -2,6 +2,7 @@ The C source code under the directory `src/` follows this convention regarding e
 
 Functions that can return a failure to the caller, take the argument
 `libcrun_error_t *err` and return an int or a pointer.
+Note that `libcrun_error_t err` must be initialized to `NULL` before passing its address to a `libcrun` function.
 
 If the function succeeds, then
 
