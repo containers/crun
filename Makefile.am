@@ -459,12 +459,16 @@ shfmt:
 # Static analysis with cppcheck.  Files copied into the source tree are not
 # analyzed.  varFuncNullUB is suppressed since a bare NULL is used as the
 # sentinel of the variadic helpers, and __has_attribute() is defined since
-# cppcheck cannot evaluate it.
+# cppcheck cannot evaluate it.  __builtin_expect() is reduced to its first
+# argument because cppcheck 2.22 loses track of the value of a condition
+# wrapped into it, reporting bogus null pointer dereferences after a
+# LIKELY()/UNLIKELY() guard.
 CPPCHECK_FLAGS = \
 	--quiet --force --inline-suppr --error-exitcode=1 \
 	--enable=warning,performance,portability \
 	--suppress=varFuncNullUB \
 	-D__has_attribute\(x\)=0 \
+	'-D__builtin_expect(x,y)=(x)' \
 	-i $(srcdir)/src/libcrun/blake3 \
 	-I $(builddir) -I $(srcdir)/src -I $(srcdir)/libocispec/src -I $(srcdir)/libocispec
 
