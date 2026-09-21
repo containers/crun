@@ -171,6 +171,9 @@ struct private_data_s
   bool joined_mount_ns;
   bool needs_pivot;
   bool no_pivot;
+  /* Set once the process root is the container rootfs and the host root
+     can no longer be reached by path.  */
+  bool host_root_switched;
 };
 
 struct linux_namespace_s
@@ -3059,6 +3062,14 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
               get_private_data (container)->rootfsfd = new_rootfsfd;
             }
         }
+      else if (get_private_data (container)->host_root_switched)
+        {
+          /* The host root is unreachable now -- even through a fd, since
+             mount(2) requires the source to live in the current mount
+             namespace.  The path-based fallback below would resolve SOURCE
+             inside the container and bind the wrong tree.  */
+          return crun_make_error (err, errno, "move_mount `%s` to `%s`", source, target);
+        }
     }
 
   if (! mounted)
@@ -3950,6 +3961,9 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
       get_private_data (container)->needs_pivot = false;
       get_private_data (container)->no_pivot = no_pivot;
+      /* setns() made the container rootfs the process root, so an absolute
+         source path no longer refers to the host.  */
+      get_private_data (container)->host_root_switched = true;
       free (*rootfs);
       *rootfs = xstrdup ("/");
     }
