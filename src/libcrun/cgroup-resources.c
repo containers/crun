@@ -1039,7 +1039,7 @@ static int
 write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
                      libcrun_error_t *err)
 {
-  int len, period_len;
+  int len, period_len = 0;
   int ret;
   char fmt_buf[64];
   int64_t period = -1;
