@@ -414,6 +414,7 @@ int str2sig (const char *name);
 
 int base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t *nbytes);
 int has_suffix (const char *source, const char *suffix);
+char *libcrun_sysctl_key_to_proc_path (const char *key);
 char *str_join_array (int offset, size_t size, char *const array[], const char *joint);
 
 ssize_t safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun_error_t *err);

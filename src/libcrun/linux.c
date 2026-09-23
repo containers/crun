@@ -4721,6 +4721,9 @@ validate_sysctl (const char *original_key, const char *original_value, const cha
 {
   const char *namespace = "";
 
+  if (path_has_dot_dot_component (name))
+    return crun_make_error (err, 0, "the sysctl `%s` contains an invalid path", original_key);
+
   name = consume_slashes (name);
 
   if (has_prefix (name, "fs/mqueue/"))
@@ -4823,17 +4826,13 @@ libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err)
       cleanup_free char *name = NULL;
       cleanup_close int fd = -1;
       int ret;
-      char *it;
 
       /* A sysctl whose value is null in the document is parsed into a NULL,
          and there is nothing to write to the file.  */
       if (def->linux->sysctl->keys[i] == NULL || def->linux->sysctl->values[i] == NULL)
         return crun_make_error (err, EINVAL, "sysctl value is not specified");
 
-      name = xstrdup (def->linux->sysctl->keys[i]);
-      for (it = name; *it; it++)
-        if (*it == '.')
-          *it = '/';
+      name = libcrun_sysctl_key_to_proc_path (def->linux->sysctl->keys[i]);
 
       ret = validate_sysctl (def->linux->sysctl->keys[i], def->linux->sysctl->values[i], name, namespaces_created, def, err);
       if (UNLIKELY (ret < 0))
