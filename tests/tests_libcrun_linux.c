@@ -421,6 +421,26 @@ test_sysctl_key_to_proc_path ()
   return 0;
 }
 
+static int
+test_sysctl_reject_dot_dot_path ()
+{
+  const char *keys[] = {
+    "net/../kernel/sysrq",
+    "net/..//kernel/sysrq",
+  };
+  size_t i;
+
+  for (i = 0; i < sizeof (keys) / sizeof (keys[0]); i++)
+    {
+      cleanup_free char *path = libcrun_sysctl_key_to_proc_path (keys[i]);
+
+      if (path == NULL || ! path_has_dot_dot_component (path))
+        return -1;
+    }
+
+  return 0;
+}
+
 /* Test rlimits with zero length */
 static int
 test_rlimits_zero_length ()
@@ -462,7 +482,7 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..11\n");
+  printf ("1..12\n");
   RUN_TEST (test_find_namespace);
   RUN_TEST (test_path_is_slash_dev_linux);
   RUN_TEST (test_reopen_dev_null);
@@ -473,6 +493,7 @@ main ()
   RUN_TEST (test_clone_constants);
   RUN_TEST (test_namespace_consistency);
   RUN_TEST (test_sysctl_key_to_proc_path);
+  RUN_TEST (test_sysctl_reject_dot_dot_path);
   RUN_TEST (test_rlimits_zero_length);
   return 0;
 }

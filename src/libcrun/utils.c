@@ -2681,42 +2681,25 @@ get_user_name (uid_t uid)
 char *
 libcrun_sysctl_key_to_proc_path (const char *key)
 {
-  const char *it;
-  bool interchange = true;
+  const char *sep;
+  char *ret, *it;
 
-  if (key == NULL || key[0] == '\0')
-    return xstrdup (key ?: "");
+  sep = strpbrk (key, "./");
 
-  for (it = key; *it; it++)
-    {
-      if (*it == '/' || *it == '.')
-        {
-          if (*it == '/')
-            interchange = false;
-          break;
-        }
-    }
-
-  if (! interchange)
+  /* No separator at all, or the key is already in the path form.  */
+  if (sep == NULL || *sep == '/')
     return xstrdup (key);
 
-  {
-    char *result = xmalloc (strlen (key) + 1);
-    char *out;
+  ret = xstrdup (key);
+  for (it = ret; *it; it++)
+    {
+      if (*it == '.')
+        *it = '/';
+      else if (*it == '/')
+        *it = '.';
+    }
 
-    for (it = key, out = result; *it; it++, out++)
-      {
-        if (*it == '.')
-          *out = '/';
-        else if (*it == '/')
-          *out = '.';
-        else
-          *out = *it;
-      }
-    *out = '\0';
-
-    return result;
-  }
+  return ret;
 }
 
 int

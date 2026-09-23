@@ -4721,6 +4721,9 @@ validate_sysctl (const char *original_key, const char *original_value, const cha
 {
   const char *namespace = "";
 
+  if (path_has_dot_dot_component (name))
+    return crun_make_error (err, 0, "the sysctl `%s` contains an invalid path", original_key);
+
   name = consume_slashes (name);
 
   if (has_prefix (name, "fs/mqueue/"))
