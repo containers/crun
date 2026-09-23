@@ -3070,6 +3070,15 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
              inside the container and bind the wrong tree.  */
           return crun_make_error (err, errno, "move_mount `%s` to `%s`", source, target);
         }
+      else if (errno != ENOSYS)
+        {
+          /* ENOSYS only means the kernel lacks the new mount API.  Anything
+             else is worth reporting: it is otherwise invisible, and it decides
+             whether the mount is set up from the pre-opened fd or from the
+             source path.  */
+          libcrun_warning ("move_mount `%s` to `%s` failed, falling back to mount(2): %s",
+                           source, target, strerror (errno));
+        }
     }
 
   if (! mounted)
