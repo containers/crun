@@ -309,10 +309,29 @@ libkrun_add_virtiofs_devices (uint32_t ctx_id, krun_add_virtiofs2_t krun_add_vir
 
 static int
 libkrun_configure_virtiofs_devices (uint32_t ctx_id, krun_add_virtiofs2_t krun_add_virtiofs2,
-                                    json_object *config_tree, libcrun_error_t *err)
+                                    json_object *config_tree, libcrun_container_t *container,
+                                    libcrun_error_t *err)
 {
-  return libkrun_add_virtiofs_devices (ctx_id, krun_add_virtiofs2, json_object_object_get (config_tree, "virtiofs"),
-                                       ".krun_vm.json `virtiofs`", err);
+  json_object *devices = NULL;
+  const char *annotation;
+  int ret;
+
+  ret = libkrun_add_virtiofs_devices (ctx_id, krun_add_virtiofs2, json_object_object_get (config_tree, "virtiofs"),
+                                      ".krun_vm.json `virtiofs`", err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  annotation = find_annotation (container, "krun.virtiofs");
+  if (annotation == NULL)
+    return 0;
+
+  ret = parse_json_file (&devices, annotation, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return crun_error_wrap (err, "parse `krun.virtiofs` annotation");
+
+  ret = libkrun_add_virtiofs_devices (ctx_id, krun_add_virtiofs2, devices, "`krun.virtiofs` annotation", err);
+  json_object_put (devices);
+  return ret;
 }
 
 static void
@@ -624,7 +643,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not add virtiofs root with tag `%s`", virtiofs_tag);
 
-      ret = libkrun_configure_virtiofs_devices (ctx_id, krun_add_virtiofs2, kconf->config_tree, &err);
+      ret = libkrun_configure_virtiofs_devices (ctx_id, krun_add_virtiofs2, kconf->config_tree, container, &err);
       if (UNLIKELY (ret < 0))
         libcrun_fail_with_error (err->status, "%s", err->msg);
     }

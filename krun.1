@@ -85,6 +85,12 @@ Select an alternative libkrun variant. Supported values are
 \fBsev\fP (AMD SEV confidential workloads) and \fBaws-nitro\fP (AWS
 Nitro Enclaves).
 
+.TP
+\fBkrun.virtiofs\fP=\fIJSON\fP
+Add VirtioFS devices, in the same format as the \fBvirtiofs\fP field
+of the VM configuration file. These devices are added after the
+devices from the VM configuration file.
+
 .SH VM Configuration File
 A \fB\&.krun_vm.json\fP file can be placed at the root of the container
 image to provide default VM settings. The file is a JSON object with

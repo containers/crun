@@ -88,6 +88,11 @@ The following annotations are supported:
     **sev** (AMD SEV confidential workloads) and **aws-nitro** (AWS
     Nitro Enclaves).
 
+**krun.virtiofs**=*JSON*
+:   Add VirtioFS devices, in the same format as the **virtiofs** field
+    of the VM configuration file. These devices are added after the
+    devices from the VM configuration file.
+
 ## VM Configuration File
 
 A **.krun_vm.json** file can be placed at the root of the container
