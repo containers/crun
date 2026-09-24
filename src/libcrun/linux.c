@@ -3744,6 +3744,207 @@ open_mount_of_type (libcrun_container_t *container,
   return mnt_fd;
 }
 
+#ifndef LSMT_ROOT
+#  define LSMT_ROOT 0xffffffffffffffffULL
+#endif
+#ifndef STATMOUNT_FS_TYPE
+#  define STATMOUNT_FS_TYPE 0x00000020U
+#endif
+#ifndef STATMOUNT_MNT_ROOT
+#  define STATMOUNT_MNT_ROOT 0x00000040U
+#endif
+#ifndef STATMOUNT_MNT_POINT
+#  define STATMOUNT_MNT_POINT 0x00000080U
+#endif
+
+/* Declared here so that the build does not depend on the UAPI headers being
+   recent enough; the layout is stable.  */
+struct mnt_id_req_s
+{
+  uint32_t size;
+  uint32_t spare;
+  uint64_t mnt_id;
+  uint64_t param;
+  uint64_t mnt_ns_id;
+};
+
+struct statmount_s
+{
+  uint32_t size;
+  uint32_t mnt_opts;
+  uint64_t mask;
+  uint32_t sb_dev_major;
+  uint32_t sb_dev_minor;
+  uint64_t sb_magic;
+  uint32_t sb_flags;
+  uint32_t fs_type;
+  uint64_t mnt_id;
+  uint64_t mnt_parent_id;
+  uint32_t mnt_id_old;
+  uint32_t mnt_parent_id_old;
+  uint64_t mnt_attr;
+  uint64_t mnt_propagation;
+  uint64_t mnt_peer_group;
+  uint64_t mnt_master;
+  uint64_t propagate_from;
+  uint32_t mnt_root;
+  uint32_t mnt_point;
+  uint64_t mnt_ns_id;
+  uint64_t __spare2[49];
+  char str[];
+};
+
+static int
+syscall_listmount (struct mnt_id_req_s *req, uint64_t *ids, size_t nr, unsigned int flags)
+{
+#ifdef __NR_listmount
+  return (int) syscall (__NR_listmount, req, ids, nr, flags);
+#else
+  (void) req;
+  (void) ids;
+  (void) nr;
+  (void) flags;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+static int
+syscall_statmount (struct mnt_id_req_s *req, struct statmount_s *buf, size_t size, unsigned int flags)
+{
+#ifdef __NR_statmount
+  return (int) syscall (__NR_statmount, req, buf, size, flags);
+#else
+  (void) req;
+  (void) buf;
+  (void) size;
+  (void) flags;
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+/* move_mount(2) refuses to attach a tree that contains a bind mount of a mount
+   namespace: check_for_nsfs_mounts() in the kernel rejects it with ELOOP.  A
+   recursive clone of such a source picks one up, and there is no way back:
+   once setns() has run the host tree is unreachable both by path and through a
+   fd saved beforehand, since mount(2) wants the source to live in the current
+   mount namespace.  snapd pins mount namespaces under /run/snapd/ns, so a
+   container binding the host root hits this on any Ubuntu host.
+
+   Return true when a mount namespace is pinned at or below the source of a
+   bind mount.  listmount(2) and statmount(2) are used instead of parsing
+   /proc/self/mountinfo, which escapes characters such as spaces in the paths
+   being compared; they predate OPEN_TREE_NAMESPACE, so they are available
+   wherever this code path can be taken at all.  */
+static bool
+mounts_hit_pinned_mount_namespace (runtime_spec_schema_config_schema *def)
+{
+  cleanup_free uint64_t *ids = NULL;
+  size_t i, n_ids = 0, capacity = 128;
+  bool has_absolute_bind = false;
+  uint64_t last = 0;
+
+  for (i = 0; i < def->mounts_len; i++)
+    {
+      bool recursive = false, nofollow = false;
+
+      if (is_bind_mount (def->mounts[i], &recursive, &nofollow)
+          && def->mounts[i]->source != NULL && def->mounts[i]->source[0] == '/')
+        {
+          has_absolute_bind = true;
+          break;
+        }
+    }
+  if (! has_absolute_bind)
+    return false;
+
+  ids = xmalloc (capacity * sizeof (uint64_t));
+  for (;;)
+    {
+      struct mnt_id_req_s req = {
+        .size = sizeof (req),
+        .mnt_id = LSMT_ROOT,
+        .param = last,
+      };
+      int ret;
+
+      if (n_ids == capacity)
+        {
+          capacity *= 2;
+          ids = xrealloc (ids, capacity * sizeof (uint64_t));
+        }
+
+      ret = syscall_listmount (&req, ids + n_ids, capacity - n_ids, 0);
+      if (ret < 0)
+        /* Without the mount table there is no way to tell; the kernel would
+           reject the move_mount() anyway, so stay on the traditional path.  */
+        return true;
+      if (ret == 0)
+        break;
+
+      n_ids += (size_t) ret;
+      last = ids[n_ids - 1];
+    }
+
+  for (i = 0; i < n_ids; i++)
+    {
+      char buffer[4096] __attribute__ ((aligned (8)));
+      struct statmount_s *sm = (struct statmount_s *) buffer;
+      struct mnt_id_req_s req = {
+        .size = sizeof (req),
+        .mnt_id = ids[i],
+        .param = STATMOUNT_FS_TYPE | STATMOUNT_MNT_ROOT | STATMOUNT_MNT_POINT,
+      };
+      const char *root, *point;
+      size_t j;
+
+      if (syscall_statmount (&req, sm, sizeof (buffer), 0) < 0)
+        continue;
+      if ((sm->mask & (STATMOUNT_MNT_ROOT | STATMOUNT_MNT_POINT)) != (STATMOUNT_MNT_ROOT | STATMOUNT_MNT_POINT))
+        continue;
+
+      /* The root of a pinned mount namespace reads as "mnt:[...]"; the other
+         namespace types cannot create a loop.  */
+      root = sm->str + sm->mnt_root;
+      if (! has_prefix (root, "mnt:["))
+        continue;
+
+      point = sm->str + sm->mnt_point;
+
+      for (j = 0; j < def->mounts_len; j++)
+        {
+          bool recursive = false, nofollow = false;
+          const char *source = def->mounts[j]->source;
+          size_t source_len;
+
+          if (! is_bind_mount (def->mounts[j], &recursive, &nofollow))
+            continue;
+          if (source == NULL || source[0] != '/')
+            continue;
+
+          source_len = strlen (source);
+          while (source_len > 1 && source[source_len - 1] == '/')
+            source_len--;
+
+          if (strncmp (point, source, source_len) != 0)
+            continue;
+
+          /* The source itself is a pinned mount namespace.  */
+          if (point[source_len] == '\0')
+            return true;
+
+          /* A recursive bind clones the subtree below the source as well, so
+             a pin anywhere under it is picked up.  A plain bind clones the
+             single mount, and cannot pick one up.  */
+          if (recursive && (source_len == 1 || point[source_len] == '/'))
+            return true;
+        }
+    }
+
+  return false;
+}
+
 static bool
 can_use_open_tree_namespace (libcrun_container_t *container)
 {
@@ -3756,6 +3957,9 @@ can_use_open_tree_namespace (libcrun_container_t *container)
   size_t i;
 
   if (has_hooks || has_userns)
+    return false;
+
+  if (mounts_hit_pinned_mount_namespace (def))
     return false;
 
   {
