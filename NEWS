@@ -1,3 +1,128 @@
+* crun-1.30
+
+- CVE-2026-84042: prevent that rootful krun with passt can execute
+  payload from container without proper confinement.
+- CVE-2026-88264: do not follow symlinks when creating /dev/console.
+  A rootfs providing /dev/console as a symlink made crun create a root
+  owned file on the host at a path chosen by the container image, since
+  the devices are created before the pivot_root.
+- CVE-2026-88265: validate /dev/null before reopening the std streams.
+  A rootfs providing /dev/null as a symlink to a host file bind mounted
+  into the container made crun replace the pipe- or socketpair-based
+  std streams with a writable descriptor for that file, and chown it to
+  the container user.  Refuse to continue unless /dev/null is the
+  character device 1:3, and only consider std streams that are
+  character devices themselves.
+- linux: skip OPEN_TREE_NAMESPACE when a bind source holds a pinned
+  namespace.  A recursive clone of such a source picks one up, so the
+  bind mount cannot be attached from inside the namespace created by
+  OPEN_TREE_NAMESPACE, and by then there is no way to mount it at all.
+- krun: use absolute path for passt binary.
+- krun: support TAP-backed networking.
+- krun: start render server if required.
+- linux: convert sysctl keys to /proc/sys paths as described in
+  sysctl.d(5), fixing sysctls for interface names containing dots
+  (e.g. VLAN interfaces such as "eth0.100").
+- criu: fix --network-lock, which did not take the method argument.
+- criu: block signals as soon as the container is restored, so that
+  a signal arriving before crun starts forwarding them is delivered to
+  the container init instead of killing crun.
+- criu: block signals across the vfork used for a detached restore, so
+  that a signal handler of a program embedding libcrun no longer runs
+  in the child and corrupts the state of the suspended caller.
+- build: add --enable-werror and --enable-sanitizers configure options.
+- release: add crun.keyring with the release signing keys
+- linux: apply recursive propagation flags recursively.  A 1.29
+  regression dropped MS_REC when mount_setattr() is available, so an
+  "rslave" mount only had its top level mount converted and a mount
+  created by the container under it propagated back to the host,
+  clobbering the devpts of the host for a container bind mounting /dev.
+- linux: clear the flags which are not requested on a read-only
+  remount, so that a "bind,ro" mount of a nosuid,nodev,noexec source
+  only gets the requested flag, as it was before 1.27.
+- linux: honor options which only clear flags (e.g. "dev", "suid",
+  "exec", "rw") for bind mounts instead of silently keeping the flags
+  of the source.
+- linux: clear nosymfollow on remount unless it is requested.
+- linux: set the atime flags the way mount(2) does, so that e.g. a
+  "bind,relatime" mount of a noatime source is no longer left with
+  noatime.
+- linux: fix idmapped bind mounts with a relative source.
+- linux: do not crash on a mount without a type.  This is reproducible
+  with podman by running a container with a CDI device in a pod that
+  has a user namespace, as the mounts in a CDI specification usually
+  have no type.
+- linux: do not crash on a mount without a source, or on a null entry
+  in maskedPaths or readonlyPaths; reject them with EINVAL.
+- libcrun: cope with a JSON null where the configuration expects a
+  string, instead of dereferencing it.
+- cgroup: refuse to run in a frozen cgroup, like runc does, instead of
+  hanging forever with no indication of what is going on.
+- cgroup: destroy the cgroup if its setup fails, so that an invalid
+  resource limit no longer leaves an empty cgroup behind.
+- cgroup: treat an empty cgroup path in the status file as no cgroup,
+  fixing "crun update" on a container started with
+  --cgroup-manager=disabled.
+- cgroup: handle a device entry with no "access" in the cgroup v1
+  writer, which wrote "c 1:3 (null)" to devices.allow.
+- exec: use the systemd AttachProcessesToUnit method as a fallback when
+  writing to cgroup.procs is denied, fixing "crun exec" for a rootless
+  user in a login session when the container uses the systemd cgroup
+  manager.
+- exec: use exit code 255 for "crun exec" failures, like runc does, so
+  that they can be told apart from the executed process exiting with 1.
+- exec: use the same error as runc for a paused container.
+- seccomp: apply all the argument conditions, removing the arbitrary
+  limit of 6 conditions.
+- seccomp: validate the argument indices once per syscall entry, so an
+  out of range index is no longer accepted when every name of the entry
+  is unknown to libseccomp.
+- seccomp: checksum every field that affects the generated filter, so a
+  cached filter is not reused for a different configuration.
+- restore: forward signals to the container init on a foreground
+  restore, so that a ^C no longer kills crun and leaves the container
+  running.
+- restore: use a throw-away process to drive a detached restore, so
+  that a program embedding libcrun is no longer moved in and out of the
+  container cgroup and left with the container init as a child.
+- restore: put CRIU into the container cgroup, so that the restored
+  tasks are created there.
+- restore: fix --manage-cgroups-mode, which was always overridden with
+  the default "soft" mode.
+- restore: fix bind mounts with a relative source, and create the
+  missing mountpoints inside the bind mount sources.
+- checkpoint: fix masked directories with a non-default --root.
+- criu: only relocate the unified hierarchy on restore with cgroup v2,
+  so that named v1 hierarchies are no longer duplicated on every
+  checkpoint and restore.
+- criu: fix stripping the rootfs prefix from the mount destination when
+  the rootfs is "/" or not set.
+- container: report the bundle path consistently, and pass it to the
+  createRuntime and poststart hooks instead of the working directory of
+  crun.
+- container: tell the hook type and its number when a hook fails.
+- scheduler: reject a SCHED_DEADLINE value equal to 2^63.
+- scheduler: fix the CPU affinity reset on systems with more than 1024
+  CPUs, and fix the CPU_ALLOC argument, which allocated a set about 8
+  times smaller than needed.
+- ring_buffer: fix an off-by-one in the wrapped regions, which could
+  truncate or garble the pty output once the ring buffer wrapped and
+  was drained partially.
+- intelrdt: fix a signed overflow in the schemata comparator, which
+  could misorder the qsort() and send the bsearch() down the wrong
+  branch.
+- status: fix a NULL dereference on the optional "owner" and
+  "external_descriptors" fields, which crashed "crun list --format=json"
+  and the checkpoint path on a status file without them.
+- utils: fall back to the uid_map heuristic to detect the initial user
+  namespace on OpenVZ, and on kernels without /proc/self/ns/user.
+- utils: say that the AppArmor profile is not loaded instead of
+  reporting a confusing ENOENT on the procfs file.
+- wamr: resolve the wasi socket pool functions via dlsym, fixing the
+  undefined references at link time.
+- python, lua: fix the bindings, which were missing the "start" method,
+  had a duplicate "spec" entry and a broken context capsule destructor.
+
 * crun-1.29.1
 
 - linux: do not clobber the mount root mode for proc, sysfs and mqueue.
