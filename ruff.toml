@@ -1,0 +1,4 @@
+# Most of the pyflakes checks do not work for the tests, which use
+# "from tests_utils import *", so only enable the ones that do.
+[lint]
+select = ["F811", "F821"]

@@ -83,6 +83,7 @@ jobs:
           - test: checkpoint-restore
           - test: fuzzing
           - test: codespell
+          - test: ruff
           - test: wasmedge-build
           - test: krun-build
     steps:
