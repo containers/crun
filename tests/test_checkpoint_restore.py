@@ -21,6 +21,7 @@ import os
 import signal
 import subprocess
 import errno
+import select
 import tempfile
 from tests_utils import *
 
@@ -343,6 +344,140 @@ def test_cr_pre_dump():
     return 0
 
 
+def _wait_status_fd(fd, timeout=30):
+    ready, _, _ = select.select([fd], [], [], timeout)
+    return bool(ready) and os.read(fd, 1) == b'\0'
+
+
+def test_cr_lazy_pages():
+    if r := _check_cr_requirements():
+        return r
+
+    if subprocess.run(["criu", "check", "--feature", "uffd-noncoop"],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+        return 77, "CRIU does not support lazy pages"
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+
+    port = 27277
+    cid = None
+    restored_cid = None
+    checkpoint = None
+    lazy_pages = None
+    cr_dir = os.path.join(get_tests_root(), 'checkpoint')
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
+    crun = [get_crun_path(), "--root", get_tests_root_status()]
+    try:
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True
+        )
+
+        first_cmdline = _get_cmdline(cid)
+        if first_cmdline == "":
+            logger.info("test_cr_lazy_pages: failed to get first cmdline")
+            return -1
+
+        # The checkpoint only completes once all the memory pages are
+        # transferred, so run it in the background, and wait for the
+        # page server to be ready.
+        r, w = os.pipe()
+        try:
+            checkpoint = subprocess.Popen(crun + [
+                "checkpoint",
+                "--lazy-pages",
+                "--page-server=127.0.0.1:%d" % port,
+                "--status-fd=%d" % w,
+                "--manage-cgroups-mode=ignore",
+                "--image-path=%s" % cr_dir,
+                "--work-path=%s" % work_dir,
+                cid
+            ], pass_fds=(w,), stderr=subprocess.PIPE)
+            os.close(w)
+            ready = _wait_status_fd(r)
+        finally:
+            os.close(r)
+
+        if not ready:
+            checkpoint.kill()
+            _, stderr = checkpoint.communicate()
+            if b"not supported by this libcriu" in stderr:
+                return 77, "libcriu does not support lazy pages"
+            logger.info("test_cr_lazy_pages: page server is not ready: %s", stderr.decode(errors='ignore'))
+            return -1
+
+        r, w = os.pipe()
+        try:
+            lazy_pages = subprocess.Popen([
+                "criu", "lazy-pages",
+                "--page-server",
+                "--address", "127.0.0.1",
+                "--port", str(port),
+                "--status-fd", str(w),
+                "--images-dir", cr_dir,
+                "--work-dir", work_dir,
+                "--log-file", "lazy-pages.log",
+                "-v4"
+            ], pass_fds=(w,))
+            os.close(w)
+            ready = _wait_status_fd(r)
+        finally:
+            os.close(r)
+
+        if not ready:
+            logger.info("test_cr_lazy_pages: lazy-pages daemon is not ready")
+            return -1
+
+        # The original container is still around until all the memory
+        # pages are transferred, so restore under a different name.
+        bundle = os.path.join(
+            get_tests_root(),
+            cid.split('-')[1]
+        )
+        restored_cid = cid + "-restored"
+        run_crun_command([
+            "restore",
+            "-d",
+            "--lazy-pages",
+            "--manage-cgroups-mode=ignore",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            "--bundle=%s" % bundle,
+            restored_cid
+        ])
+
+        second_cmdline = _get_cmdline(restored_cid)
+        if first_cmdline != second_cmdline:
+            logger.info("test_cr_lazy_pages: cmdline mismatch after restore")
+            return -1
+
+        if lazy_pages.wait(timeout=60) != 0:
+            logger.info("test_cr_lazy_pages: lazy-pages daemon failed")
+            return -1
+
+        _, stderr = checkpoint.communicate(timeout=60)
+        if checkpoint.returncode != 0:
+            logger.info("test_cr_lazy_pages: checkpoint failed: %s", stderr.decode(errors='ignore'))
+            return -1
+
+    except Exception as e:
+        logger.info("test_cr_lazy_pages: exception: %s", e)
+        return -1
+    finally:
+        for p in (lazy_pages, checkpoint):
+            if p is not None and p.poll() is None:
+                p.kill()
+                p.wait()
+        for c in (restored_cid, cid):
+            if c is not None and os.path.exists(os.path.join(get_tests_root_status(), c)):
+                run_crun_command(["delete", "-f", c])
+    return 0
+
+
 def test_cr():
     if r := _check_cr_requirements():
         return r
@@ -546,6 +681,7 @@ all_tests = {
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
     "checkpoint-restore-forward-signal": test_cr_restore_forward_signal,
     "checkpoint-restore-pre-dump": test_cr_pre_dump,
+    "checkpoint-restore-lazy-pages": test_cr_lazy_pages,
     "checkpoint-restore-with-runc-config": test_cr_with_runc_config,
     "checkpoint-restore-with-crun-config": test_cr_with_crun_config,
     "checkpoint-restore-with-annotation-config": test_cr_with_annotation_config,

@@ -48,6 +48,9 @@ enum
   OPTION_PARENT_PATH,
   OPTION_PRE_DUMP,
   OPTION_MANAGE_CGROUPS_MODE,
+  OPTION_LAZY_PAGES,
+  OPTION_PAGE_SERVER,
+  OPTION_STATUS_FD,
 };
 
 static char doc[] = "OCI runtime";
@@ -68,6 +71,9 @@ static struct argp_option options[]
         { "pre-dump", OPTION_PRE_DUMP, 0, 0, "dump container's memory information only, leave the container running after this", 0 },
 #endif
         { "manage-cgroups-mode", OPTION_MANAGE_CGROUPS_MODE, "MODE", 0, "cgroups mode: 'soft' (default), 'ignore', 'full' and 'strict'", 0 },
+        { "lazy-pages", OPTION_LAZY_PAGES, 0, 0, "use userfaultfd to lazily restore memory pages", 0 },
+        { "page-server", OPTION_PAGE_SERVER, "ADDRESS:PORT", 0, "address and port of the page server", 0 },
+        { "status-fd", OPTION_STATUS_FD, "FD", 0, "criu writes \\0 to this FD once lazy-pages is ready", 0 },
         {
             0,
         } };
@@ -110,6 +116,34 @@ crun_parse_manage_cgroups_mode (char *param arg_unused)
 #else
   return 0;
 #endif
+}
+
+static void
+parse_page_server (char *arg)
+{
+  char *address = arg;
+  char *sep = strrchr (arg, ':');
+  size_t len;
+  int port;
+
+  if (sep == NULL || sep == arg || sep[1] == '\0')
+    libcrun_fail_with_error (0, "use --page-server ADDRESS:PORT to specify page server");
+
+  *sep = '\0';
+  len = sep - arg;
+  /* Allow IPv6 addresses in the [ADDRESS]:PORT form.  */
+  if (len > 2 && address[0] == '[' && address[len - 1] == ']')
+    {
+      address[len - 1] = '\0';
+      address++;
+    }
+
+  port = parse_id_or_fail (sep + 1, NULL, "page server port");
+  if (port <= 0 || port > 65535)
+    libcrun_fail_with_error (0, "invalid page server port specified");
+
+  cr_options.page_server_address = address;
+  cr_options.page_server_port = port;
 }
 
 static error_t
@@ -164,6 +198,20 @@ parse_opt (int key, char *arg, struct argp_state *state)
       cr_options.network_lock_method = crun_parse_network_lock_method (argp_mandatory_argument (arg, state));
       break;
 
+    case OPTION_LAZY_PAGES:
+      cr_options.lazy_pages = true;
+      break;
+
+    case OPTION_PAGE_SERVER:
+      parse_page_server (argp_mandatory_argument (arg, state));
+      break;
+
+    case OPTION_STATUS_FD:
+      cr_options.status_fd = parse_id_or_fail (argp_mandatory_argument (arg, state), NULL, "status fd");
+      if (cr_options.status_fd < 0)
+        libcrun_fail_with_error (0, "invalid status fd specified");
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -185,6 +233,7 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
   };
 
   cr_options.manage_cgroups_mode = -1;
+  cr_options.status_fd = -1;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);

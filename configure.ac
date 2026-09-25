@@ -330,6 +330,13 @@ AS_IF([test "x$enable_criu" != "xno"], [
 	AS_IF([test "$have_criu_config_file" = "yes"], [
 		AC_DEFINE([CRIU_CONFIG_FILE], 1, [Define if CRIU_CONFIG_FILE is available])
 	])
+	AS_IF([test "$have_criu" = "yes"], [
+		saved_CFLAGS=$CFLAGS
+		CFLAGS="$CFLAGS $CRIU_CFLAGS"
+		AC_CHECK_DECL([criu_set_lazy_pages], [AC_DEFINE([CRIU_LAZY_PAGES], 1, [Define if libcriu supports lazy pages])],
+			[AC_MSG_NOTICE([libcriu version doesn't support lazy pages])], [[#include <criu/criu.h>]])
+		CFLAGS=$saved_CFLAGS
+	])
 
 ], [AC_MSG_NOTICE([CRIU support disabled per user request])])
 
