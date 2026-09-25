@@ -407,6 +407,12 @@ test_sysctl_key_to_proc_path ()
     { "net/ipv4/conf/eno2.100/rp_filter", "net/ipv4/conf/eno2.100/rp_filter" },
     { "net.ipv6.conf.bond1/340.autoconf", "net/ipv6/conf/bond1.340/autoconf" },
     { "net/ipv6/conf/bond1.340/autoconf", "net/ipv6/conf/bond1.340/autoconf" },
+    /* No separator at all, and the empty key: both are used as they are.  */
+    { "somekey", "somekey" },
+    { "", "" },
+    /* A leading separator is kept, so that it can be rejected later.  */
+    { "/net/ipv4/ip_forward", "/net/ipv4/ip_forward" },
+    { ".net.ipv4.ip_forward", "/net/ipv4/ip_forward" },
   };
   size_t i;
 
@@ -422,11 +428,13 @@ test_sysctl_key_to_proc_path ()
 }
 
 static int
-test_sysctl_reject_dot_dot_path ()
+test_sysctl_reject_invalid_path ()
 {
   const char *keys[] = {
     "net/../kernel/sysrq",
     "net/..//kernel/sysrq",
+    "/net/ipv4/ip_forward",
+    ".net.ipv4.ip_forward",
   };
   size_t i;
 
@@ -434,7 +442,8 @@ test_sysctl_reject_dot_dot_path ()
     {
       cleanup_free char *path = libcrun_sysctl_key_to_proc_path (keys[i]);
 
-      if (path == NULL || ! path_has_dot_dot_component (path))
+      /* These are the two conditions validate_sysctl() refuses on.  */
+      if (path == NULL || (path[0] != '/' && ! path_has_dot_dot_component (path)))
         return -1;
     }
 
@@ -493,7 +502,7 @@ main ()
   RUN_TEST (test_clone_constants);
   RUN_TEST (test_namespace_consistency);
   RUN_TEST (test_sysctl_key_to_proc_path);
-  RUN_TEST (test_sysctl_reject_dot_dot_path);
+  RUN_TEST (test_sysctl_reject_invalid_path);
   RUN_TEST (test_rlimits_zero_length);
   return 0;
 }

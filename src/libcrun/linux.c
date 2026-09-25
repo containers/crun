@@ -4951,10 +4951,11 @@ validate_sysctl (const char *original_key, const char *original_value, const cha
 {
   const char *namespace = "";
 
-  if (path_has_dot_dot_component (name))
+  /* The name is used as a relative path with openat(), so a leading '/' would
+     make it escape /proc/sys altogether, and a ".." component could reach a
+     sysctl other than the one being validated here.  */
+  if (name[0] == '/' || path_has_dot_dot_component (name))
     return crun_make_error (err, 0, "the sysctl `%s` contains an invalid path", original_key);
-
-  name = consume_slashes (name);
 
   if (has_prefix (name, "fs/mqueue/"))
     {
