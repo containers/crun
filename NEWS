@@ -1,3 +1,8 @@
+* crun-1.30.1
+
+- CVE-2026-84042: add a proper fix for it.  The old version didn't
+  include the correct patches.
+
 * crun-1.30
 
 - CVE-2026-84042: prevent that rootful krun with passt can execute
