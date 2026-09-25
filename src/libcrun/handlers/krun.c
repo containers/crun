@@ -271,6 +271,69 @@ libkrun_parse_string_configuration (json_object *config_tree, libcrun_container_
   return 0;
 }
 
+typedef int32_t (*krun_add_virtiofs2_t) (uint32_t ctx_id, const char *c_tag, const char *c_path, uint64_t shm_size);
+
+static int
+libkrun_add_virtiofs_devices (uint32_t ctx_id, krun_add_virtiofs2_t krun_add_virtiofs2,
+                              json_object *devices, const char *source, libcrun_error_t *err)
+{
+  json_object *tag, *path, *shm_size;
+  size_t i;
+  int32_t ret;
+
+  if (devices == NULL)
+    return 0;
+
+  if (! json_object_is_type (devices, json_type_array))
+    return crun_make_error (err, EINVAL, "%s is not an array", source);
+
+  for (i = 0; i < json_object_array_length (devices); i++)
+    {
+      json_object *device = json_object_array_get_idx (devices, i);
+
+      if (! json_object_object_get_ex (device, "tag", &tag) || ! json_object_is_type (tag, json_type_string)
+          || ! json_object_object_get_ex (device, "path", &path) || ! json_object_is_type (path, json_type_string)
+          || ! json_object_object_get_ex (device, "shm_size", &shm_size) || ! json_object_is_type (shm_size, json_type_int)
+          || json_object_get_int64 (shm_size) <= 0)
+        return crun_make_error (err, EINVAL, "%s entry %zu must have a string `tag`, a string `path` and a positive integer `shm_size`",
+                                source, i);
+
+      ret = krun_add_virtiofs2 (ctx_id, json_object_get_string (tag), json_object_get_string (path),
+                                (uint64_t) json_object_get_int64 (shm_size));
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "could not add virtiofs device with tag `%s`", json_object_get_string (tag));
+    }
+
+  return 0;
+}
+
+static int
+libkrun_configure_virtiofs_devices (uint32_t ctx_id, krun_add_virtiofs2_t krun_add_virtiofs2,
+                                    json_object *config_tree, libcrun_container_t *container,
+                                    libcrun_error_t *err)
+{
+  json_object *devices = NULL;
+  const char *annotation;
+  int ret;
+
+  ret = libkrun_add_virtiofs_devices (ctx_id, krun_add_virtiofs2, json_object_object_get (config_tree, "virtiofs"),
+                                      ".krun_vm.json `virtiofs`", err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  annotation = find_annotation (container, "krun.virtiofs");
+  if (annotation == NULL)
+    return 0;
+
+  ret = parse_json_file (&devices, annotation, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return crun_error_wrap (err, "parse `krun.virtiofs` annotation");
+
+  ret = libkrun_add_virtiofs_devices (ctx_id, krun_add_virtiofs2, devices, "`krun.virtiofs` annotation", err);
+  json_object_put (devices);
+  return ret;
+}
+
 static void
 libkrun_make_tap_mac (const char *id, uint8_t mac[6])
 {
@@ -489,7 +552,7 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   runtime_spec_schema_config_schema *def = container->container_def;
   int32_t (*krun_set_log_level) (uint32_t level);
   int (*krun_start_enter) (uint32_t ctx_id);
-  int32_t (*krun_add_virtiofs2) (uint32_t ctx_id, const char *c_tag, const char *c_path, uint64_t shm_size);
+  krun_add_virtiofs2_t krun_add_virtiofs2;
   int32_t (*krun_set_root_disk) (uint32_t ctx_id, const char *disk_path);
   int32_t (*krun_set_tee_config_file) (uint32_t ctx_id, const char *file_path);
   int32_t (*krun_set_console_output) (uint32_t ctx_id, const char *c_filepath);
@@ -579,6 +642,10 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
       ret = krun_add_virtiofs2 (ctx_id, virtiofs_tag, "/", virtiofs_shm_size);
       if (UNLIKELY (ret < 0))
         error (EXIT_FAILURE, -ret, "could not add virtiofs root with tag `%s`", virtiofs_tag);
+
+      ret = libkrun_configure_virtiofs_devices (ctx_id, krun_add_virtiofs2, kconf->config_tree, container, &err);
+      if (UNLIKELY (ret < 0))
+        libcrun_fail_with_error (err->status, "%s", err->msg);
     }
 
   if (kconf->awsnitro)
