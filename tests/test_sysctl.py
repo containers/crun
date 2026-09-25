@@ -23,10 +23,13 @@ from tests_utils import *
 def run_with_sysctl(key, value):
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/sys/net/ipv4/ip_forward']
-    # Use a user namespace so that the test also works when rootless.
-    add_all_namespaces(conf, userns=True)
-    conf['linux']['uidMappings'] = [{"containerID": 0, "hostID": os.geteuid(), "size": 1}]
-    conf['linux']['gidMappings'] = [{"containerID": 0, "hostID": os.getegid(), "size": 1}]
+    # A user namespace is needed when rootless, but not otherwise: as root,
+    # a single mapping for uid 0 may leave the rootfs path inaccessible.
+    rootless = is_rootless()
+    add_all_namespaces(conf, userns=rootless)
+    if rootless:
+        conf['linux']['uidMappings'] = [{"containerID": 0, "hostID": os.geteuid(), "size": 1}]
+        conf['linux']['gidMappings'] = [{"containerID": 0, "hostID": os.getegid(), "size": 1}]
     conf['linux']['sysctl'] = {key : value}
     # Do not hide stderr, so that the error message can be matched below.
     return run_and_get_output(conf)
