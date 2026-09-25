@@ -78,6 +78,11 @@ The following annotations are supported:
     **1**). A warning is emitted if the host does not appear to
     support nested virtualization.
 
+**krun.custom_kernel**=*NUM*
+:   When set to a value greater than 0, allow the VM configuration
+    file to specify a custom kernel via the **kernel_path**,
+    **kernel_format**, **initrd_path**, and **kernel_cmdline** fields.
+
 **krun.variant**=*VARIANT*
 :   Select an alternative libkrun variant. Supported values are
     **sev** (AMD SEV confidential workloads) and **aws-nitro** (AWS
@@ -91,22 +96,25 @@ the following optional fields:
 
 - **cpus** (integer): same as the **krun.cpus** annotation.
 - **ram_mib** (integer): same as the **krun.ram_mib** annotation.
-- **gpu_flags** (integer): same as the **krun.gpu_flags** annotation.
-- **use_passt** (integer): same as the **krun.use_passt** annotation.
-- **tap_name** (string): same as the **krun.tap_name** annotation.
-- **nested_virt** (integer): same as the **krun.nested_virt** annotation.
-- **flavor** (string): same as the **krun.variant** annotation.
-- **kernel_path** (string): path to an external kernel.
-- **kernel_format** (integer): kernel format identifier.
-- **initrd_path** (string): path to an initrd image.
-- **kernel_cmdline** (string): kernel command line.
+- **kernel_path** (string): path to an external kernel. Requires the
+  **krun.custom_kernel** annotation.
+- **kernel_format** (integer): kernel format identifier. Requires the
+  **krun.custom_kernel** annotation.
+- **initrd_path** (string): path to an initrd image. Requires the
+  **krun.custom_kernel** annotation.
+- **kernel_cmdline** (string): kernel command line. Requires the
+  **krun.custom_kernel** annotation.
 - **virtiofs_tag** (string): VirtioFS tag (defaults to **/dev/root**).
 - **virtiofs_shm_size** (integer): VirtioFS DAX shared memory size in
   bytes (defaults to 512 MiB).
 
+The following options are only available through OCI annotations and
+are not read from the configuration file: **gpu_flags**,
+**use_passt**, **tap_name**, **nested_virt**, and **flavor**.
+
 Example:
 
-    {"nested_virt": 1, "cpus": 4, "ram_mib": 2048}
+    {"cpus": 4, "ram_mib": 2048}
 
 # COMMANDS
 
