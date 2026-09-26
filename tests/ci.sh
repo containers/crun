@@ -285,6 +285,10 @@ codespell)
     group "install codespell" pip install --break-system-packages codespell==v2.4.1 # Use known version
     codespell
     ;;
+ruff)
+    group "install ruff" pip install --break-system-packages ruff==0.16.8 # Use known version
+    ruff check
+    ;;
 wasmedge-build)
     run_container "${privileged[@]}" -v containers:/var/lib/containers:rw -w /crun
     ;;
