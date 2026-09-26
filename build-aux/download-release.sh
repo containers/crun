@@ -25,13 +25,10 @@ fi
 OUTDIR=${OUTDIR:-release-$VERSION}
 mkdir -p "$OUTDIR"
 
-GH_ARGS=(release download "$VERSION" --dir "$OUTDIR" --clobber)
-if test "${REPO:-}" != ""; then
-    GH_ARGS+=(--repo "$REPO")
-fi
-
-gh "${GH_ARGS[@]}"
+gh release download "$VERSION" --dir "$OUTDIR" --clobber ${REPO:+--repo "$REPO"}
 
 echo "downloaded release $VERSION into $OUTDIR" >&2
 echo "sign the assets with, e.g.:" >&2
 echo "  for i in \"$OUTDIR\"/*; do gpg2 -b --armour \"\$i\"; done" >&2
+echo "then upload the signatures with:" >&2
+echo "  gh release upload${REPO:+ --repo $REPO} \"$VERSION\" \"$OUTDIR\"/*.asc" >&2
