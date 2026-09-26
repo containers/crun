@@ -233,14 +233,9 @@ def test_user_namespace_mappings():
         return 0  # Command ran successfully
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if is_nested_namespace_error(output):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if is_nested_namespace_error(str(e)):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
 
@@ -274,15 +269,9 @@ def test_user_namespace_root_in_container():
         return -1
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # With hide_stderr=True, error output may not be captured
-        if not output or is_nested_namespace_error(output):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if is_nested_namespace_error(str(e)):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
 
@@ -353,14 +342,9 @@ def test_setgroups_deny():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if is_nested_namespace_error(output):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if is_nested_namespace_error(str(e)):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
 
@@ -531,9 +515,6 @@ def test_multiple_uid_mappings():
         return 0  # Command ran successfully
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if "user" in output.lower() or "permission" in output.lower():
-            return (77, "user namespace not available")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
@@ -638,10 +619,7 @@ def test_join_namespaces_mount_without_type():
     conf['process']['args'] = ['/init', 'pause']
     add_all_namespaces(conf, userns=True)
 
-    try:
-        _, first_id = run_and_get_output(conf, detach=True)
-    except subprocess.CalledProcessError:
-        return (77, "user namespace not available in nested namespaces")
+    _, first_id = run_and_get_output(conf, detach=True)
 
     try:
         state = json.loads(run_crun_command(["state", first_id]))
@@ -665,9 +643,6 @@ def test_join_namespaces_mount_without_type():
         if "hello" not in out:
             return -1
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        if is_nested_namespace_error(output):
-            return (77, "namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     finally:
