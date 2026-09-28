@@ -332,7 +332,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager=None,
                        all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path="config.json",
                        chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False,
-                       bundle_via_symlink=False):
+                       bundle_via_symlink=False, console_socket=None):
 
     # Some tests require that the container user, which might not be the
     # same user as the person running the tests, is able to resolve the full path
@@ -404,13 +404,14 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
     relative_config_path = ['--config', relative_config_path] if relative_config_path else []
     debug_arg = ['--debug'] if debug else []
+    console_socket_arg = ['--console-socket', console_socket] if console_socket else []
 
     # Use env var if cgroup_manager not explicitly specified
     if cgroup_manager is None:
         cgroup_manager = get_cgroup_manager()
 
     root = get_tests_root_status()
-    args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + bundle_arg + relative_config_path + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
+    args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + bundle_arg + relative_config_path + console_socket_arg + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:

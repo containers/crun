@@ -135,11 +135,9 @@ def test_console_socket():
         # Wait for handler thread
         handler_thread.join(timeout=5)
 
-        # Verify we received the fd
-        if received_fd[0]:
-            return 0
-
-        # Even if fd passing didn't work perfectly, command completed
+        if not received_fd[0]:
+            logger.info("the terminal fd was not received")
+            return -1
         return 0
 
     except Exception as e:

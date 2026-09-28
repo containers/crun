@@ -21,7 +21,6 @@ import time
 import json
 import os
 from tests_utils import *
-import json
 
 
 def test_resources_fail_with_enoent():

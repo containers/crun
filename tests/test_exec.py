@@ -82,7 +82,7 @@ def test_uid_tty():
             logger.info("uid_tty test failed after 500 attempts")
             logger.info("container ID: %s", cid)
             if last_error:
-                logger.info("last error: %s", e)
+                logger.info("last error: %s", last_error)
         return ret
     finally:
         if cid is not None:
@@ -530,7 +530,7 @@ def test_exec_error_propagation():
 
             if has_chdir_error and has_read_pipe_error:
                 logger.info("exec error propagation test failed: both chdir and read pipe errors detected")
-                logger.info("error message: %s", error_output)
+                logger.info("error message: %s", error_msg)
                 return -1
 
             if not has_chdir_error:
