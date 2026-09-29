@@ -2468,6 +2468,10 @@ terminal_setup (runtime_spec_schema_config_schema *def, libcrun_context_t *conte
       if (UNLIKELY (*terminal_fd < 0))
         return -1;
 
+      ret = libcrun_clear_onlcr (*terminal_fd, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = libcrun_set_raw (0, orig_terminal, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -3801,6 +3805,13 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         }
       else
         {
+          ret = libcrun_clear_onlcr (terminal_fd, err);
+          if (UNLIKELY (ret < 0))
+            {
+              flush_fd_to_err (context, terminal_fd);
+              return ret;
+            }
+
           ret = libcrun_set_raw (0, &orig_terminal, err);
           if (UNLIKELY (ret < 0))
             {
