@@ -689,15 +689,9 @@ def test_user_namespace_mapping():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # Skip on nested namespace issues
-        if any(x in output.lower() for x in ["user", "mapping", "mount", "proc", "rootfs", "private", "busy"]):
-            return (77, "user namespace mapping not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if any(x in str(e).lower() for x in ["user", "mapping", "mount", "proc", "rootfs", "private", "busy"]):
-            return (77, "user namespace mapping not available")
         logger.info("test failed: %s", e)
         return -1
 
@@ -958,15 +952,9 @@ def test_set_id_init_root():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # Skip on nested namespace issues
-        if any(x in output.lower() for x in ["mount", "proc", "user", "rootfs", "private", "busy"]):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if any(x in str(e).lower() for x in ["mount", "proc", "user", "rootfs", "private", "busy"]):
-            return (77, "user namespace not available")
         logger.info("test failed: %s", e)
         return -1
 
@@ -1009,6 +997,9 @@ def test_set_id_init_nonroot():
 def test_set_id_with_additional_gids():
     """Test set_id_init with additional groups."""
 
+    if is_rootless():
+        return (77, "requires root to map multiple IDs")
+
     conf = base_config()
     add_all_namespaces(conf, userns=True)
     conf['process']['args'] = ['/init', 'true']
@@ -1031,15 +1022,9 @@ def test_set_id_with_additional_gids():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # Skip on nested namespace issues
-        if any(x in output.lower() for x in ["mount", "proc", "user", "gid", "rootfs", "private", "busy"]):
-            return (77, "user namespace not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if any(x in str(e).lower() for x in ["mount", "proc", "user", "gid", "rootfs", "private", "busy"]):
-            return (77, "user namespace not available")
         logger.info("test failed: %s", e)
         return -1
 
@@ -1477,15 +1462,9 @@ def test_sysfs_userns_no_netns_no_cgroup_mount():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # Skip on nested namespace issues
-        if any(x in output.lower() for x in ["mount", "proc", "sysfs", "user", "rootfs", "private", "busy"]):
-            return (77, "sysfs mount in userns not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if any(x in str(e).lower() for x in ["mount", "proc", "sysfs", "user", "rootfs", "private", "busy"]):
-            return (77, "sysfs mount in userns not available")
         logger.info("test failed: %s", e)
         return -1
 
@@ -1538,15 +1517,9 @@ def test_sysfs_userns_no_netns_with_cgroup_mount():
         return 0
 
     except subprocess.CalledProcessError as e:
-        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
-        # Skip on nested namespace issues
-        if any(x in output.lower() for x in ["mount", "proc", "sysfs", "user", "cgroup", "rootfs", "private", "busy"]):
-            return (77, "sysfs mount in userns with cgroup not available in nested namespaces")
         logger.info("test failed: %s", e)
         return -1
     except Exception as e:
-        if any(x in str(e).lower() for x in ["mount", "proc", "sysfs", "user", "cgroup", "rootfs", "private", "busy"]):
-            return (77, "sysfs mount in userns with cgroup not available")
         logger.info("test failed: %s", e)
         return -1
 
