@@ -89,6 +89,27 @@ libcrun_set_raw (int fd, void **current_status, libcrun_error_t *err)
   return 0;
 }
 
+/* Do not translate "\n" to "\r\n" on output, so that what the container
+   writes to the terminal reaches our stdout unchanged.  */
+int
+libcrun_clear_onlcr (int fd, libcrun_error_t *err)
+{
+  int ret;
+  struct termios termios;
+
+  ret = tcgetattr (fd, &termios);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "tcgetattr");
+
+  termios.c_oflag &= ~ONLCR;
+
+  ret = tcsetattr (fd, TCSANOW, &termios);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "tcsetattr");
+
+  return 0;
+}
+
 int
 libcrun_set_stdio (char *pty, libcrun_error_t *err)
 {

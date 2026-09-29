@@ -44,8 +44,6 @@ checkpoint.bats: checkpoint --lazy-pages and restore
 cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
 cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.json]
 cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
-cpu_affinity.bats: runc run [CPU affinity should reset]
-cpu_affinity.bats: runc run [CPU affinity should reset to cgroup cpuset]
 create.bats: runc create[detect fd leak as comprehensively as possible]
 create.bats: runc create exec
 create.bats: runc create --pid-file with new CWD
@@ -54,10 +52,8 @@ delete.bats: runc delete [host pidns + init gone]
 delete.bats: runc delete --force [host pidns + init gone]
 delete.bats: runc delete --force in cgroupv2 with subcgroups
 delete.bats: runc delete removes failed systemd unit
-env.bats: non-empty HOME env is used
 env.bats: empty HOME env var is overridden
 env.bats: empty HOME env var is overridden with multiple overrides
-env.bats: env var override
 exec.bats: runc exec --additional-gids
 exec.bats: runc --debug exec
 exec.bats: runc --debug --log exec
@@ -79,13 +75,11 @@ list.bats: list
 list.bats: list with non-existent root fails
 mask.bats: mask paths [duplicate paths]
 mask.bats: mask paths [directories share tmpfs]
-memorypolicy.bats: runc run memory policy interleave without flags
-memorypolicy.bats: runc run memory policy bind static
 memorypolicy.bats: runc run and exec memory policy prefer relative
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
 mounts.bats: runc run [setgid / + mkdirall]
+# As root, crun does not pass the inherited mode as a mode= mount option.
 mounts.bats: runc run [tmpfs mount mode= inherit]
-mounts.bats: runc run [tmpfs mount explicit mode=]
 mounts.bats: runc run [tmpfs mount mode=1777 default]
 mounts.bats: runc run [mount order, container bind-mount source]
 mounts.bats: runc run [mount order, container bind-mount source] (userns)
@@ -93,7 +87,6 @@ mounts.bats: runc run [mount order, container idmap source]
 mounts.bats: runc run [mount order, container idmap source] (userns)
 mounts.bats: runc run [bind mount through a dangling symlink component]
 mounts.bats: runc run [bind mount through a trailing dangling symlink]
-mounts_propagation.bats: runc run [rootfsPropagation shared]
 mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
 mounts_recursive.bats: runc run [ check rbind,r*atime mounts]
 mounts_sshfs.bats: runc run [mount(8)-unlike behaviour: --bind with clearing flag]
@@ -107,17 +100,11 @@ mounts_sshfs.bats: runc run [bind mount {no,rel,strict}atime semantics]
 ps.bats: ps
 ps.bats: ps -e -x
 ps.bats: ps after the container stopped
-rlimits.bats: runc run with RLIMIT_NOFILE(The same as system's hard value)
-rlimits.bats: runc run with RLIMIT_NOFILE(Bigger than system's hard value)
-rlimits.bats: runc run with RLIMIT_NOFILE(Smaller than system's hard value)
 rlimits.bats: runc exec with RLIMIT_NOFILE(The same as system's hard value)
 rlimits.bats: runc exec with RLIMIT_NOFILE(Bigger than system's hard value)
 rlimits.bats: runc exec with RLIMIT_NOFILE(Smaller than system's hard value)
-run.bats: runc run with tmpfs
-run.bats: runc run with tmpfs perms
 run.bats: runc run [/proc/self/exe clone]
 run.bats: runc run [joining existing container namespaces]
-run.bats: runc run check default home
 scheduler.bats: scheduler is applied
 scheduler.bats: scheduler vs cpus
 seccomp.bats: runc run [seccomp -ENOSYS handling]
@@ -129,8 +116,6 @@ seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
 start_detached.bats: runc run detached --pid-file with new CWD
-timens.bats: runc run [timens with no offsets]
-timens.bats: runc run [simple timens]
 timens.bats: runc run [simple timens + userns]
 tty.bats: runc run [stdin not a tty]
 tty.bats: runc exec [stdin not a tty]
