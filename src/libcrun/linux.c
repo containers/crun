@@ -772,6 +772,17 @@ get_mount_flags (const char *name, int current_flags, int *found, unsigned long 
   return current_flags | prop->flags;
 }
 
+static int
+validate_mount_option (const char *name, libcrun_error_t *err)
+{
+  size_t len = strlen (name);
+  /* Reject mount options containing null bytes, which would be silently
+     truncated by the kernel and pose a security risk.  */
+  if (len != strnlen (name, len + 1))
+    return crun_make_error (err, 0, "mount option contains null byte");
+  return 0;
+}
+
 static unsigned long
 get_mount_flags_or_option (const char *name, int current_flags, unsigned long *extra_flags, char **option, uint64_t *rec_clear, uint64_t *rec_set)
 {
@@ -2609,7 +2620,12 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
       size_t j;
 
       for (j = 0; j < mount->options_len; j++)
-        flags |= get_mount_flags_or_option (mount->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+        {
+          ret = validate_mount_option (mount->options[j], err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          flags |= get_mount_flags_or_option (mount->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+        }
     }
 
   if (type == NULL && (flags & MS_BIND) == 0)
@@ -2887,7 +2903,12 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
       size_t j;
 
       for (j = 0; j < mount_options_len; j++)
-        flags |= get_mount_flags_or_option (mount_options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+        {
+          ret = validate_mount_option (mount_options[j], err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+          flags |= get_mount_flags_or_option (mount_options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+        }
     }
 
   if (path_is_slash_dev (mount_destination))
@@ -3414,9 +3435,14 @@ open_mount_of_type (libcrun_container_t *container,
   fstype = mount->type;
 
   for (j = 0; j < mount->options_len; j++)
-    mnt_flags |= get_mount_flags_or_option (mount->options[j],
-                                            mnt_flags, &mnt_extra, &mnt_data,
-                                            &mnt_rec_clear, &mnt_rec_set);
+    {
+      int ret = validate_mount_option (mount->options[j], err);
+      if (UNLIKELY (ret < 0))
+        return -1;
+      mnt_flags |= get_mount_flags_or_option (mount->options[j],
+                                              mnt_flags, &mnt_extra, &mnt_data,
+                                              &mnt_rec_clear, &mnt_rec_set);
+    }
 
   if (def->linux && def->linux->mount_label)
     {
@@ -3532,9 +3558,14 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           size_t j;
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
-            mnt_flags |= get_mount_flags_or_option (def->mounts[i]->options[j],
-                                                    mnt_flags, &mnt_extra, &mnt_data,
-                                                    &mnt_rec_clear, &mnt_rec_set);
+            {
+              int ret = validate_mount_option (def->mounts[i]->options[j], err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              mnt_flags |= get_mount_flags_or_option (def->mounts[i]->options[j],
+                                                      mnt_flags, &mnt_extra, &mnt_data,
+                                                      &mnt_rec_clear, &mnt_rec_set);
+            }
 
           if (mnt_extra & OPTION_COPY_SYMLINK)
             {
@@ -7303,7 +7334,12 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
           size_t j;
 
           for (j = 0; j < mounts[i]->options_len; j++)
-            flags |= get_mount_flags_or_option (mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+            {
+              ret = validate_mount_option (mounts[i]->options[j], err);
+              if (UNLIKELY (ret < 0))
+                return ret;
+              flags |= get_mount_flags_or_option (mounts[i]->options[j], flags, &extra_flags, &data, &rec_clear, &rec_set);
+            }
         }
 
       if (fds->fds[i] < 0)
