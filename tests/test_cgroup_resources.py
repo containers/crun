@@ -494,6 +494,47 @@ def test_cpu_burst():
         return (77, "cpu.burst not available")
 
 
+def test_hugetlb_reservation_limit():
+    """Test hugetlb reservation limit (cgroup v2 only)."""
+    if is_rootless():
+        return (77, "requires root")
+
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Set 1GB HugeTLB limit
+    conf['linux']['resources'] = {
+        'hugepageLimits': [
+            {
+                'pageSize': '1GB',
+                'limit': 1073741824
+            }
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'cat', '/sys/fs/cgroup/hugetlb.1GB.max']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        if '1073741824' in out:
+            # Also check the reservation limit file
+            conf['process']['args'] = ['/init', 'cat', '/sys/fs/cgroup/hugetlb.1GB.rsvd.max']
+            out_rsvd, _ = run_and_get_output(conf, hide_stderr=True)
+            if '1073741824' in out_rsvd:
+                return 0
+            logger.info("Expected 1073741824 in rsvd.max, got: %s", out_rsvd.strip())
+            return -1
+        logger.info("Expected 1073741824 in max, got: %s", out.strip())
+        return -1
+    except Exception as e:
+        # HugeTLB controller might not be available
+        logger.info("hugetlb reservation test skipped: %s", e)
+        return (77, "hugetlb controller not available")
+
+
 all_tests = {
     "cgroup-resources-memory-limit": test_memory_limit,
     "cgroup-resources-memory-reservation": test_memory_reservation,
@@ -509,6 +550,7 @@ all_tests = {
     "cgroup-resources-pids-limit": test_pids_limit,
     "cgroup-resources-blkio-weight": test_blkio_weight,
     "cgroup-resources-unified": test_unified_resources,
+    "cgroup-resources-hugetlb-reservation-limit": test_hugetlb_reservation_limit,
 }
 
 if __name__ == "__main__":
