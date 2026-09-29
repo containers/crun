@@ -3591,6 +3591,42 @@ exec_process_entrypoint (libcrun_context_t *context,
 }
 
 int
+libcrun_load_process_from_file (const char *path, runtime_spec_schema_config_schema_process **process,
+                                libcrun_error_t *err)
+{
+  struct parser_context ctx = { 0, stderr };
+  cleanup_free char *content = NULL;
+  parser_error parser_err = NULL;
+  json_object *doc = NULL;
+  size_t len;
+  int ret;
+
+  ret = read_all_file (path, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_json_file (&doc, content, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  *process = make_runtime_spec_schema_config_schema_process (doc, &ctx, &parser_err);
+  if (UNLIKELY (*process == NULL))
+    {
+      ret = crun_make_error (err, 0, "cannot parse process file: `%s`", parser_err);
+      free (parser_err);
+      if (doc)
+        json_object_put (doc);
+      return ret;
+    }
+
+  free (parser_err);
+  if (doc)
+    json_object_put (doc);
+
+  return 0;
+}
+
+int
 libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                      struct libcrun_container_exec_options_s *opts,
                                      libcrun_error_t *err)
@@ -3680,36 +3716,12 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   if (opts->path)
     {
-      struct parser_context ctx = { 0, stderr };
-      cleanup_free char *content = NULL;
-      parser_error parser_err = NULL;
-      json_object *doc = NULL;
-      size_t len;
-
       if (process)
         return crun_make_error (err, EINVAL, "cannot specify both exec file and options");
 
-      ret = read_all_file (opts->path, &content, &len, err);
+      ret = libcrun_load_process_from_file (opts->path, &process, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      ret = parse_json_file (&doc, content, &ctx, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      process = make_runtime_spec_schema_config_schema_process (doc, &ctx, &parser_err);
-      if (UNLIKELY (process == NULL))
-        {
-          ret = crun_make_error (err, 0, "cannot parse process file: `%s`", parser_err);
-          free (parser_err);
-          if (doc)
-            json_object_put (doc);
-          return ret;
-        }
-
-      free (parser_err);
-      if (doc)
-        json_object_put (doc);
 
       process_cleanup = process;
     }
