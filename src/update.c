@@ -182,7 +182,8 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
 {
   int first_arg = 0, ret;
 
-  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
+  /* Allow options after the container ID, like runc does.  */
+  argp_parse (&run_argp, argc, argv, 0, &first_arg, &crun_context);
   crun_assert_n_args (argc - first_arg, 1, 1);
 
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
