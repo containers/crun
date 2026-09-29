@@ -39,6 +39,7 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
   cleanup_container libcrun_container_t *container = NULL;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *config_file_cleanup = NULL;
+  cleanup_free char *pid_file_cleanup = NULL;
 
   crun_context->preserve_fds = 0;
   crun_context->listen_fds = 0;
@@ -61,6 +62,19 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
             libcrun_fail_with_error (errno, "realpath `%s` failed", config_file);
           config_file = config_file_cleanup;
         }
+    }
+
+  /* Make sure the pid file is an absolute path before changing the directory.  */
+  if (crun_context->pid_file && crun_context->pid_file[0] != '/')
+    {
+      cleanup_free char *cwd = getcwd (NULL, 0);
+      if (UNLIKELY (cwd == NULL))
+        libcrun_fail_with_error (errno, "getcwd failed");
+      size_t len = strlen (cwd) + strlen (crun_context->pid_file) + 2;
+
+      pid_file_cleanup = xmalloc0 (len);
+      snprintf (pid_file_cleanup, len, "%s/%s", cwd, crun_context->pid_file);
+      crun_context->pid_file = pid_file_cleanup;
     }
 
   /* Make sure the bundle is an absolute path.  */
