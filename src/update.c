@@ -104,6 +104,81 @@ set_value (int id, const char *value)
   values_len++;
 }
 
+/* Parse a memory size, which may have a unit suffix (e.g. 512k or 1.5G),
+   like runc does.  Return the size in bytes as a string.  */
+static char *
+parse_memory_size (const char *opt, const char *value)
+{
+  const char *suffix;
+  char buf[32];
+  char *end;
+  double size, mul = 1;
+
+  if (strcmp (value, "-1") == 0)
+    return xstrdup (value);
+
+  errno = 0;
+  size = strtod (value, &end);
+  if ((value[0] != '.' && (value[0] < '0' || value[0] > '9')) || end == value || errno != 0 || size < 0)
+    goto invalid;
+
+  suffix = end;
+  if (*suffix == ' ')
+    suffix++;
+  if (*suffix)
+    {
+      switch (*suffix | 0x20)
+        {
+        case 'b':
+          if (suffix[1] != '\0')
+            goto invalid;
+          break;
+        case 'k':
+          mul = 1ULL << 10;
+          break;
+        case 'm':
+          mul = 1ULL << 20;
+          break;
+        case 'g':
+          mul = 1ULL << 30;
+          break;
+        case 't':
+          mul = 1ULL << 40;
+          break;
+        case 'p':
+          mul = 1ULL << 50;
+          break;
+        default:
+          goto invalid;
+        }
+      if (mul > 1 && suffix[1] != '\0' && strcasecmp (suffix + 1, "b") != 0 && strcasecmp (suffix + 1, "ib") != 0)
+        goto invalid;
+    }
+
+  size *= mul;
+  if (size >= 9223372036854775808.0)
+    goto invalid;
+
+  snprintf (buf, sizeof (buf), "%lld", (long long) size);
+  return xstrdup (buf);
+
+invalid:
+  libcrun_fail_with_error (0, "invalid value for --%s: `%s`", opt, value);
+}
+
+/* Check that VALUE is an integer.  */
+static const char *
+check_integer (const char *opt, const char *value)
+{
+  char *end;
+
+  errno = 0;
+  (void) strtoll (value, &end, 10);
+  if (end == value || *end != '\0' || errno != 0)
+    libcrun_fail_with_error (0, "invalid value for --%s: `%s`", opt, value);
+  return value;
+}
+
 static char *l3_cache_schema;
 static char *mem_bw_schema;
 
@@ -131,6 +206,17 @@ static struct argp_option options[]
 
 static char args_doc[] = "update [OPTION]... CONTAINER";
 
+static const char *
+option_name (int key)
+{
+  size_t i;
+
+  for (i = 0; options[i].name; i++)
+    if (options[i].key == key)
+      return options[i].name;
+  return "";
+}
+
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
@@ -143,21 +229,27 @@ parse_opt (int key, char *arg, struct argp_state *state)
     case ARGP_KEY_NO_ARGS:
       libcrun_fail_with_error (0, "please specify a ID for the container");
 
+    case CPUSET_CPUS:
+    case CPUSET_MEMS:
+      set_value (key, argp_mandatory_argument (arg, state));
+      break;
+
     case BLKIO_WEIGHT:
     case CPU_PERIOD:
     case CPU_QUOTA:
     case CPU_SHARE:
     case CPU_RT_PERIOD:
     case CPU_RT_RUNTIME:
-    case CPUSET_CPUS:
-    case CPUSET_MEMS:
+    case PIDS_LIMIT:
+      set_value (key, check_integer (option_name (key), argp_mandatory_argument (arg, state)));
+      break;
+
     case KERNEL_MEMORY:
     case KERNEL_MEMORY_TCP:
     case MEMORY:
     case MEMORY_RESERVATION:
     case MEMORY_SWAP:
-    case PIDS_LIMIT:
-      set_value (key, argp_mandatory_argument (arg, state));
+      set_value (key, parse_memory_size (option_name (key), argp_mandatory_argument (arg, state)));
       break;
 
     case L3_CACHE_SCHEMA:
