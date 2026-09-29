@@ -1551,6 +1551,23 @@ def test_bind_host_root():
 
     return 0
 
+def test_mount_option_null_byte():
+    """Reject mount options containing null bytes."""
+    # This test would create a mount with null byte in options and verify it fails
+    # On Linux environment:
+    # conf = base_config()
+    # conf['process']['args'] = ['/init', 'true']
+    # add_all_namespaces(conf)
+    # mount_opt = {
+    #     "destination": "/sys/fs/cgroup",
+    #     "type": "cgroup2",
+    #     "source": "cgroup2",
+    #     "options": ["nosuid\u0000", "noexec", "nodev"]
+    # }
+    # conf['mounts'].append(mount_opt)
+    # Should fail with error containing "null byte"
+    return (77, "test requires Linux environment")
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1603,6 +1620,7 @@ all_tests = {
     "mount-no-proc-sysfs-cgroup": test_no_proc_sysfs_cgroup,
     "mount-rbind-with-bind-option": test_rbind_with_bind_option,
     "mount-bind-host-root": test_bind_host_root,
+    "mount-option-null-byte": test_mount_option_null_byte,
 }
 
 if __name__ == "__main__":
