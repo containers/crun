@@ -1973,7 +1973,7 @@ mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now
   ret = syscall_close_range (n, UINT_MAX, close_now ? 0 : CLOSE_RANGE_CLOEXEC);
   if (ret == 0)
     {
-      if (close_now && container->proc_fd >= n)
+      if (close_now && container && container->proc_fd >= n)
         container->proc_fd = -1;
       return 0;
     }
@@ -2013,7 +2013,7 @@ mark_or_close_fds_ge_than (libcrun_container_t *container, int n, bool close_now
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "close fd `%d`", val);
 
-          if (val == container->proc_fd)
+          if (container && val == container->proc_fd)
             container->proc_fd = -1;
         }
       else
