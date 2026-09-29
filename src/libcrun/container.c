@@ -400,14 +400,22 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *container_def;
   cleanup_free char *oci_error = NULL;
+  cleanup_free char *content = NULL;
+  size_t len;
+  int ret;
+
   libcrun_debug ("Loading container from config file: `%s`", path);
-  container_def = runtime_spec_schema_config_schema_parse_file (path, NULL, &oci_error);
+  ret = read_all_file (path, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return NULL;
+
+  container_def = runtime_spec_schema_config_schema_parse_data (content, NULL, &oci_error);
   if (container_def == NULL)
     {
       crun_make_error (err, 0, "load `%s`: %s", path, oci_error);
       return NULL;
     }
-  return make_container (container_def, path, NULL);
+  return make_container (container_def, NULL, content);
 }
 
 void
