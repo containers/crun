@@ -561,9 +561,17 @@ rb_test_discard (int fd, size_t n, unsigned char *scratch, size_t scratch_size)
 static int
 test_ring_buffer_wraparound_partial_drain ()
 {
-  const size_t rb_size = 8192;
-  const size_t want = rb_size / 2; /* how much to partially drain */
-  size_t scratch_size = 1 << 16;
+  long page_size = sysconf (_SC_PAGESIZE);
+
+  if (page_size < 0)
+    {
+      fprintf (stderr, "failed to get page size\n");
+      return 1;
+    }
+
+  const size_t rb_size = 2 * (size_t) page_size;
+  const size_t want = (size_t) page_size; /* how much to partially drain */
+  const size_t scratch_size = rb_size;
   cleanup_free unsigned char *scratch = xmalloc (scratch_size);
   cleanup_free unsigned char *produced = xmalloc (2 * rb_size);
   size_t produced_n = 0, consumed_n = 0, src_pos = 0;
@@ -780,8 +788,10 @@ static int
 do_stress_ring_buffer_partial_drain (size_t cap)
 {
   const int iterations = 600;
-  const size_t scratch_size = 1 << 16;
   const size_t page = (size_t) sysconf (_SC_PAGESIZE);
+  /* Big enough for a full buffer, and a page multiple so that the prefill
+     below always covers whole pipe slots.  */
+  const size_t scratch_size = (cap + page) & ~(page - 1);
   cleanup_free unsigned char *scratch = xmalloc (scratch_size);
   libcrun_error_t err = NULL;
   int fds_to_close[5] = {
@@ -966,8 +976,11 @@ test_ring_buffer_stress_partial_drain ()
       return 1;
     }
 
+  /* The capacities above a page make the partial drain reachable, see
+     do_stress_ring_buffer_partial_drain.  */
   size_t caps[] = { 4097, 6000, 8192, 8193, 12000, 16384,
-                    (size_t) page_size, (size_t) page_size + 1 };
+                    (size_t) page_size, (size_t) page_size + 1,
+                    2 * (size_t) page_size, 2 * (size_t) page_size + 1 };
   size_t i;
 
   for (i = 0; i < sizeof (caps) / sizeof (caps[0]); i++)
