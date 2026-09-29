@@ -3590,6 +3590,14 @@ exec_process_entrypoint (libcrun_context_t *context,
   libcrun_fail_with_error (errno, "exec `%s`", exec_path);
 }
 
+/* Close the file descriptors inherited from the caller, other than those
+   to be passed to the container process.  */
+int
+libcrun_close_inherited_fds (libcrun_context_t *context, libcrun_error_t *err)
+{
+  return mark_or_close_fds_ge_than (NULL, context->preserve_fds + 3, true, err);
+}
+
 int
 libcrun_load_process_from_file (const char *path, runtime_spec_schema_config_schema_process **process,
                                 libcrun_error_t *err)
