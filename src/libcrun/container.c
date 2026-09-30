@@ -373,6 +373,20 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
 
   container->annotations = make_string_map_from_json (container_def->annotations);
 
+  /* An empty namespace path means that a new namespace is to be created,
+     the same as if it is not specified.  */
+  if (container_def->linux)
+    {
+      size_t i;
+
+      for (i = 0; i < container_def->linux->namespaces_len; i++)
+        if (container_def->linux->namespaces[i]->path && container_def->linux->namespaces[i]->path[0] == '\0')
+          {
+            free (container_def->linux->namespaces[i]->path);
+            container_def->linux->namespaces[i]->path = NULL;
+          }
+    }
+
   if (path)
     container->config_file = xstrdup (path);
   if (config)
