@@ -238,7 +238,7 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
   if (resources == NULL || resources->cpu == NULL)
     return 0;
 
-  if (! resources->cpu->burst_present)
+  if (! resources->cpu->burst_present && ! (cgroup2 && resources->cpu->idle_present))
     return 0;
 
   for (parent = 0; parent < 2; parent++)
@@ -259,6 +259,14 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
       ret = write_cpu_burst (dirfd, cgroup2, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      /* cpu.idle can be set by systemd (via CPUWeight=0), but not reset.  */
+      if (cgroup2)
+        {
+          ret = write_cpu_idle (dirfd, resources->cpu, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   return 0;
@@ -914,6 +922,8 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
   if (UNLIKELY (ret < 0))
     return ret;
   if (ret > 0 && value == 1)
+    has_idle = true;
+  if (resources->cpu && resources->cpu->idle_present && resources->cpu->idle == 1)
     has_idle = true;
 
   if (resources->cpu && resources->cpu->shares_present)
