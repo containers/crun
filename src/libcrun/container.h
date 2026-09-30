@@ -85,6 +85,9 @@ struct libcrun_container_s
   uid_t host_uid;
   gid_t host_gid;
 
+  /* Whether crun has CAP_SYS_PTRACE in its user namespace.  */
+  bool host_has_cap_sys_ptrace;
+
   uid_t container_uid;
   gid_t container_gid;
 
