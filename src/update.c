@@ -45,6 +45,8 @@ enum
   CPU_SHARE,
   CPU_RT_PERIOD,
   CPU_RT_RUNTIME,
+  CPU_BURST,
+  CPU_IDLE,
   CPUSET_CPUS,
   CPUSET_MEMS,
 
@@ -78,6 +80,8 @@ static struct description_s descriptors[] = { { BLKIO_WEIGHT, "blockIO", "weight
                                               { CPU_SHARE, "cpu", "shares", 1 },
                                               { CPU_RT_PERIOD, "cpu", "realtimePeriod", 1 },
                                               { CPU_RT_RUNTIME, "cpu", "realtimeRuntime", 1 },
+                                              { CPU_BURST, "cpu", "burst", 1 },
+                                              { CPU_IDLE, "cpu", "idle", 1 },
                                               { CPUSET_CPUS, "cpu", "cpus", 0 },
                                               { CPUSET_MEMS, "cpu", "mems", 0 },
 
@@ -190,6 +194,8 @@ static struct argp_option options[]
         { "cpu-share", CPU_SHARE, "VALUE", 0, "CPU shares", 0 },
         { "cpu-rt-period", CPU_RT_PERIOD, "VALUE", 0, "CPU realtime period to be used for hardcapping", 0 },
         { "cpu-rt-runtime", CPU_RT_RUNTIME, "VALUE", 0, "CPU realtime hardcap limit", 0 },
+        { "cpu-burst", CPU_BURST, "VALUE", 0, "CPU CFS burst limit", 0 },
+        { "cpu-idle", CPU_IDLE, "VALUE", 0, "set cgroup SCHED_IDLE or not, 0: default behavior, 1: SCHED_IDLE", 0 },
         { "cpuset-cpus", CPUSET_CPUS, "VALUE", 0, "CPU(s) to use", 0 },
         { "cpuset-mems", CPUSET_MEMS, "VALUE", 0, "Memory node(s) to use", 0 },
         { "kernel-memory", KERNEL_MEMORY, "VALUE", 0, "Kernel memory limit", 0 },
@@ -240,6 +246,8 @@ parse_opt (int key, char *arg, struct argp_state *state)
     case CPU_SHARE:
     case CPU_RT_PERIOD:
     case CPU_RT_RUNTIME:
+    case CPU_BURST:
+    case CPU_IDLE:
     case PIDS_LIMIT:
       set_value (key, check_integer (option_name (key), argp_mandatory_argument (arg, state)));
       break;
