@@ -222,15 +222,14 @@ def test_user_namespace_mappings():
         {"containerID": 0, "hostID": host_gid, "size": 1}
     ]
 
-    # Verify mappings inside container
-    conf['process']['args'] = ['/init', 'cat', '/proc/self/uid_map']
-
     try:
-        out, _ = run_and_get_output(conf)
-        # Should see the mapping we configured
-        if '0' in out and '1000' in out:
-            return 0
-        return 0  # Command ran successfully
+        for filename, host_id in [('uid_map', host_uid), ('gid_map', host_gid)]:
+            conf['process']['args'] = ['/init', 'cat', '/proc/self/%s' % filename]
+            out, _ = run_and_get_output(conf)
+            if out.split() != ['0', str(host_id), '1']:
+                logger.info("unexpected %s: %s", filename, out)
+                return -1
+        return 0
 
     except subprocess.CalledProcessError as e:
         logger.info("test failed: %s", e)
@@ -310,6 +309,11 @@ def test_time_namespace():
 def test_setgroups_deny():
     """Test setgroups deny with user namespace."""
 
+    # Only an unprivileged user writing a single mapping directly has to
+    # deny setgroups first, root does not.
+    if os.geteuid() == 0:
+        return (77, "setgroups is not denied for root")
+
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
@@ -328,7 +332,9 @@ def test_setgroups_deny():
 
     try:
         out, _ = run_and_get_output(conf)
-        # Should be 'deny' by default for security
+        if out.strip() != 'deny':
+            logger.info("unexpected setgroups: %s", out)
+            return -1
         return 0
 
     except subprocess.CalledProcessError as e:
