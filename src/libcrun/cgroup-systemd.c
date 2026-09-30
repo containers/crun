@@ -52,6 +52,9 @@
 #  define CGROUP_WEIGHT_DEFAULT ((uint64_t) 100)
 #  define CGROUP_WEIGHT_MAX ((uint64_t) 10000)
 
+/* The CPU quota period used by the kernel (and systemd) by default, in us.  */
+#  define DEFAULT_CPU_QUOTA_PERIOD ((uint64_t) 100000)
+
 #  define SYSTEMD_MISSING_PROPERTIES_DIR ".cache/systemd-missing-properties"
 
 #  define IS_WILDCARD(x) (x <= 0)
@@ -1580,18 +1583,27 @@ append_resources (sd_bus_message *m,
 
   if (resources->cpu)
     {
-      /* do not bother with systemd internal representation unless both values are specified */
-      if (resources->cpu->quota > 0 && resources->cpu->period)
+      uint64_t period = resources->cpu->period_present ? resources->cpu->period : 0;
+      int64_t quota = resources->cpu->quota_present ? resources->cpu->quota : 0;
+
+      if (period)
+        APPEND_UINT64_VALUE ("CPUQuotaPeriodUSec", period);
+
+      /* This conversion was copied from runc.  */
+      if (quota != 0 || period)
         {
-          uint64_t quota = resources->cpu->quota;
+          /* USEC_INFINITY in systemd.  */
+          uint64_t quota_per_sec = UINT64_MAX;
 
-          /* this conversion was copied from runc.  */
-          quota = (quota * 1000000) / resources->cpu->period;
-          if (quota % 10000)
-            quota = ((quota / 10000) + 1) * 10000;
-
-          APPEND_UINT64_VALUE ("CPUQuotaPerSecUSec", quota);
-          APPEND_UINT64_VALUE ("CPUQuotaPeriodUSec", resources->cpu->period);
+          if (quota > 0)
+            {
+              quota_per_sec = ((uint64_t) quota * 1000000) / (period ? period : DEFAULT_CPU_QUOTA_PERIOD);
+              /* systemd converts CPUQuotaPerSecUSec to a percentage of CPU, so round it
+                 up to the next 10ms, to not give the container less than it asked for.  */
+              if (quota_per_sec % 10000)
+                quota_per_sec = ((quota_per_sec / 10000) + 1) * 10000;
+            }
+          APPEND_UINT64_VALUE ("CPUQuotaPerSecUSec", quota_per_sec);
         }
     }
 
