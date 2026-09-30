@@ -629,6 +629,36 @@ append_systemd_annotation (sd_bus_message *m, const char *name, size_t name_len,
       name = tmp_name;
     }
 
+  /* A *USec property is always an uint64, so, like runc does, accept any
+     number of seconds (possibly with a fractional part, and with an
+     optional integer type), and convert it to uint64 microseconds.  */
+  if (factor != 1)
+    {
+      static const char *types[] = { "uint64 ", "int64 ", "uint32 ", "int32 ", NULL };
+      const char *num = it;
+      char *endptr = NULL;
+      double v;
+      size_t i;
+
+      for (i = 0; types[i]; i++)
+        if (has_prefix (num, types[i]))
+          {
+            num += strlen (types[i]);
+            break;
+          }
+
+      errno = 0;
+      v = strtod (num, &endptr);
+      if (UNLIKELY (errno != 0 || endptr == num || *endptr || v < 0 || v * factor >= 18446744073709551615.0))
+        return crun_make_error (err, errno, "invalid value for `%s`: `%s`", name, value);
+
+      sd_err = sd_bus_message_append (m, "(sv)", name, "t", (uint64_t) (v * factor));
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append `%s`", name);
+
+      return 0;
+    }
+
   if ((strcmp (it, "true") == 0) || (strcmp (it, "false") == 0))
     {
       bool b = *it == 't';
