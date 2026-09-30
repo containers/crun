@@ -887,7 +887,7 @@ setup_environment (runtime_spec_schema_config_schema *def, uid_t container_uid, 
         }
     }
 
-  if (getenv ("HOME") == NULL)
+  if (is_empty_string (getenv ("HOME")))
     {
       ret = set_home_env (container_uid);
       if (UNLIKELY (ret < 0))
@@ -3498,7 +3498,7 @@ exec_process_entrypoint (libcrun_context_t *context,
           return crun_make_error (err, errno, "putenv `%s`", process->env[i]);
     }
 
-  if (getenv ("HOME") == NULL)
+  if (is_empty_string (getenv ("HOME")))
     {
       ret = set_home_env (container_uid);
       if (UNLIKELY (ret < 0))
