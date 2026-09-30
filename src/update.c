@@ -275,6 +275,29 @@ parse_opt (int key, char *arg, struct argp_state *state)
   return 0;
 }
 
+/* If the memory limit is removed and no swap limit is given, remove the
+   swap limit as well (which cannot be larger than the memory one), like
+   runc does.  */
+static void
+set_swap_for_unlimited_memory (void)
+{
+  bool unlimited_memory = false;
+  size_t i;
+
+  for (i = 0; i < values_len; i++)
+    {
+      if (strcmp (values[i].section, "memory") != 0)
+        continue;
+      if (strcmp (values[i].name, "swap") == 0)
+        return;
+      if (strcmp (values[i].name, "limit") == 0)
+        unlimited_memory = strcmp (values[i].value, "-1") == 0;
+    }
+
+  if (unlimited_memory)
+    set_value (MEMORY_SWAP, "-1");
+}
+
 static struct argp run_argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
 int
@@ -285,6 +308,8 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
   /* Allow options after the container ID, like runc does.  */
   argp_parse (&run_argp, argc, argv, 0, &first_arg, &crun_context);
   crun_assert_n_args (argc - first_arg, 1, 1);
+
+  set_swap_for_unlimited_memory ();
 
   ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
