@@ -1267,3 +1267,44 @@ get_cgroup_dirfd_path (int dirfd, char **path, libcrun_error_t *err)
     }
   return crun_make_error (err, 0, "invalid cgroup path `%s`", cgroup_path);
 }
+
+/* Parse a cpu.max value: "QUOTA [PERIOD]", where QUOTA is either a
+   number or "max" (returned as -1).  */
+int
+parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
+{
+  const char *it = value;
+  char *endptr = NULL;
+
+  while (*it == ' ')
+    it++;
+
+  errno = 0;
+  if (has_prefix (it, "max"))
+    {
+      *quota = -1;
+      endptr = (char *) it + 3;
+    }
+  else
+    {
+      *quota = strtoll (it, &endptr, 10);
+      if (UNLIKELY (errno != 0 || endptr == it || *quota <= 0))
+        return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+    }
+
+  it = endptr;
+  while (*it == ' ')
+    it++;
+
+  *has_period = false;
+  if (*it && *it != '\n')
+    {
+      errno = 0;
+      *period = strtoull (it, &endptr, 10);
+      if (UNLIKELY (errno != 0 || endptr == it || (*endptr && *endptr != '\n')))
+        return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+      *has_period = true;
+    }
+
+  return 0;
+}

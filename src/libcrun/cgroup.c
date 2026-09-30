@@ -248,6 +248,64 @@ libcrun_cgroup_destroy (struct libcrun_cgroup_status *cgroup_status, libcrun_err
   return cgroup_manager->destroy_cgroup (cgroup_status, err);
 }
 
+/* On cgroup v2, the CPU quota and period are set together, via cpu.max.
+   If an update sets only one of them, take the other one from the current
+   cpu.max, so it is kept (rather than reset to the default).  */
+static int
+complete_cpu_max (const char *path, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_linux_resources_cpu *cpu;
+  cleanup_free char *cpu_max_path = NULL;
+  cleanup_free char *content = NULL;
+  bool has_period;
+  uint64_t period;
+  int64_t quota;
+  int cgroup_mode;
+  int ret;
+
+  if (resources == NULL || resources->cpu == NULL)
+    return 0;
+
+  cpu = resources->cpu;
+  if (cpu->quota_present == cpu->period_present)
+    return 0;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    return 0;
+
+  ret = append_paths (&cpu_max_path, err, CGROUP_ROOT, path, "cpu.max", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_all_file (cpu_max_path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    {
+      /* The cpu controller might not be enabled; nothing to keep then.  */
+      crun_error_release (err);
+      return 0;
+    }
+
+  ret = parse_cpu_max (content, &quota, &period, &has_period, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! cpu->quota_present)
+    {
+      cpu->quota = quota;
+      cpu->quota_present = 1;
+    }
+  else if (has_period)
+    {
+      cpu->period = period;
+      cpu->period_present = 1;
+    }
+
+  return 0;
+}
+
 int
 libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
                                  const char *state_root,
@@ -258,6 +316,10 @@ libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
   int ret;
 
   ret = get_cgroup_manager (cgroup_status->manager, &cgroup_manager, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = complete_cpu_max (cgroup_status->path, resources, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

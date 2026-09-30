@@ -52,6 +52,9 @@
 #  define CGROUP_WEIGHT_DEFAULT ((uint64_t) 100)
 #  define CGROUP_WEIGHT_MAX ((uint64_t) 10000)
 
+/* The CPU quota period used by the kernel (and systemd) by default, in us.  */
+#  define DEFAULT_CPU_QUOTA_PERIOD ((uint64_t) 100000)
+
 #  define SYSTEMD_MISSING_PROPERTIES_DIR ".cache/systemd-missing-properties"
 
 #  define IS_WILDCARD(x) (x <= 0)
@@ -235,7 +238,7 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
   if (resources == NULL || resources->cpu == NULL)
     return 0;
 
-  if (! resources->cpu->burst_present)
+  if (! resources->cpu->burst_present && ! (cgroup2 && resources->cpu->idle_present))
     return 0;
 
   for (parent = 0; parent < 2; parent++)
@@ -256,6 +259,14 @@ setup_missing_cpu_options_for_systemd (runtime_spec_schema_config_linux_resource
       ret = write_cpu_burst (dirfd, cgroup2, resources->cpu, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      /* cpu.idle can be set by systemd (via CPUWeight=0), but not reset.  */
+      if (cgroup2)
+        {
+          ret = write_cpu_idle (dirfd, resources->cpu, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   return 0;
@@ -836,6 +847,20 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
   return 0;
 }
 
+static const char *
+get_string_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name)
+{
+  size_t i;
+
+  if (resources == NULL || resources->unified == NULL)
+    return NULL;
+
+  for (i = 0; i < resources->unified->len; i++)
+    if (strcmp (resources->unified->keys[i], name) == 0)
+      return resources->unified->values[i];
+  return NULL;
+}
+
 static int
 get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name,
                             uint64_t *value, libcrun_error_t *err)
@@ -909,7 +934,25 @@ get_memory_swap_max (runtime_spec_schema_config_linux_resources *resources, uint
 {
   if (resources->memory && resources->memory->swap_present)
     {
-      *limit = resources->memory->swap;
+      runtime_spec_schema_config_linux_resources_memory *memory = resources->memory;
+      int64_t mem = memory->limit_present ? memory->limit : 0;
+
+      /* The OCI swap limit is for memory+swap, while MemorySwapMax is for
+         swap only, so convert it, like it is done for memory.swap.max.  */
+      if (memory->swap == -1 || (mem == -1 && memory->swap == 0))
+        {
+          *limit = UINT64_MAX;
+          return 1;
+        }
+      /* 0 means unset.  */
+      if (memory->swap == 0)
+        return 0;
+      if (mem <= 0)
+        return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
+      if (memory->swap < mem)
+        return crun_make_error (err, 0, "cannot set memory+swap limit less than the memory limit");
+
+      *limit = memory->swap - mem;
       return 1;
     }
 
@@ -928,6 +971,20 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
     return ret;
   if (ret > 0 && value == 1)
     has_idle = true;
+  if (resources->cpu && resources->cpu->idle_present && resources->cpu->idle == 1)
+    has_idle = true;
+
+  /* The unified map takes precedence, like with the cgroupfs driver.  */
+  ret = get_value_from_unified_map (resources, "cpu.weight", weight, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret > 0)
+    {
+      if (has_idle)
+        return crun_make_error (err, 0, "cannot set both `cpu.idle` and `cpu.weight`");
+
+      return 1;
+    }
 
   if (resources->cpu && resources->cpu->shares_present)
     {
@@ -938,17 +995,6 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
       if (resources->cpu->shares == 0)
         return 0;
       *weight = convert_shares_to_weight (resources->cpu->shares);
-      return 1;
-    }
-
-  ret = get_value_from_unified_map (resources, "cpu.weight", weight, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret > 0)
-    {
-      if (has_idle)
-        return crun_make_error (err, 0, "cannot set both `cpu.idle` and `cpu.weight`");
-
       return 1;
     }
   if (has_idle)
@@ -1545,6 +1591,59 @@ add_bpf_program (sd_bus_message *m,
   return 0;
 }
 
+/* Append CPUQuotaPeriodUSec and CPUQuotaPerSecUSec, the way runc does.  */
+static int
+append_cpu_quota (sd_bus_message *m, char **missing_properties,
+                  runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+{
+  uint64_t period = (resources->cpu && resources->cpu->period_present) ? resources->cpu->period : 0;
+  int64_t quota = (resources->cpu && resources->cpu->quota_present) ? resources->cpu->quota : 0;
+  const char *cpu_max = get_string_from_unified_map (resources, "cpu.max");
+  int sd_err;
+
+  /* The unified map takes precedence, like with the cgroupfs driver.  */
+  if (cpu_max)
+    {
+      uint64_t max_period;
+      bool has_period;
+      int ret;
+
+      ret = parse_cpu_max (cpu_max, &quota, &max_period, &has_period, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (has_period)
+        period = max_period;
+    }
+
+  if (period && ! property_missing_p (missing_properties, "CPUQuotaPeriodUSec"))
+    {
+      sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPeriodUSec", "t", period);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append CPUQuotaPeriodUSec");
+    }
+
+  if ((quota != 0 || period) && ! property_missing_p (missing_properties, "CPUQuotaPerSecUSec"))
+    {
+      /* USEC_INFINITY in systemd.  */
+      uint64_t quota_per_sec = UINT64_MAX;
+
+      if (quota > 0)
+        {
+          quota_per_sec = ((uint64_t) quota * 1000000) / (period ? period : DEFAULT_CPU_QUOTA_PERIOD);
+          /* systemd converts CPUQuotaPerSecUSec to a percentage of CPU, so round it
+             up to the next 10ms, to not give the container less than it asked for.  */
+          if (quota_per_sec % 10000)
+            quota_per_sec = ((quota_per_sec / 10000) + 1) * 10000;
+        }
+
+      sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPerSecUSec", "t", quota_per_sec);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append CPUQuotaPerSecUSec");
+    }
+
+  return 0;
+}
+
 static int
 append_resources (sd_bus_message *m,
                   bool is_update,
@@ -1608,22 +1707,9 @@ append_resources (sd_bus_message *m,
   APPEND_UINT64 ("MemorySwapMax", get_memory_swap_max);
   APPEND_UINT64 ("TasksMax", get_pids_max);
 
-  if (resources->cpu)
-    {
-      /* do not bother with systemd internal representation unless both values are specified */
-      if (resources->cpu->quota > 0 && resources->cpu->period)
-        {
-          uint64_t quota = resources->cpu->quota;
-
-          /* this conversion was copied from runc.  */
-          quota = (quota * 1000000) / resources->cpu->period;
-          if (quota % 10000)
-            quota = ((quota / 10000) + 1) * 10000;
-
-          APPEND_UINT64_VALUE ("CPUQuotaPerSecUSec", quota);
-          APPEND_UINT64_VALUE ("CPUQuotaPeriodUSec", resources->cpu->period);
-        }
-    }
+  ret = append_cpu_quota (m, missing_properties, resources, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   switch (cgroup_mode)
     {
@@ -1645,13 +1731,17 @@ append_resources (sd_bus_message *m,
         if (UNLIKELY (ret < 0))
           return ret;
 
-        if (resources->cpu && resources->cpu->cpus)
+        if (get_string_from_unified_map (resources, "cpuset.cpus") || (resources->cpu && resources->cpu->cpus))
           {
             const char *property_name = "AllowedCPUs";
+            const char *value = get_string_from_unified_map (resources, "cpuset.cpus");
             cleanup_free char *allowed_cpus = NULL;
             size_t allowed_cpus_len = 0;
 
-            ret = cpuset_string_to_bitmask (resources->cpu->cpus, &allowed_cpus, &allowed_cpus_len, err);
+            if (value == NULL)
+              value = resources->cpu->cpus;
+
+            ret = cpuset_string_to_bitmask (value, &allowed_cpus, &allowed_cpus_len, err);
             if (UNLIKELY (ret < 0))
               return ret;
 
@@ -1663,13 +1753,17 @@ append_resources (sd_bus_message *m,
               }
           }
 
-        if (resources->cpu && resources->cpu->mems)
+        if (get_string_from_unified_map (resources, "cpuset.mems") || (resources->cpu && resources->cpu->mems))
           {
             const char *property_name = "AllowedMemoryNodes";
+            const char *value = get_string_from_unified_map (resources, "cpuset.mems");
             cleanup_free char *allowed_mems = NULL;
             size_t allowed_mems_len = 0;
 
-            ret = cpuset_string_to_bitmask (resources->cpu->mems, &allowed_mems, &allowed_mems_len, err);
+            if (value == NULL)
+              value = resources->cpu->mems;
+
+            ret = cpuset_string_to_bitmask (value, &allowed_mems, &allowed_mems_len, err);
             if (UNLIKELY (ret < 0))
               return ret;
 

@@ -30,11 +30,8 @@ cgroup_delegation.bats: runc exec (cgroup v2, ro cgroupfs, new cgroupns) does no
 cgroups.bats: runc create (rootless + limits + no cgrouppath + no permission) fails with informative error
 cgroups.bats: runc create (limits + cgrouppath + permission on the cgroup dir) succeeds
 cgroups.bats: runc run (per-device multiple iops via unified)
-cgroups.bats: runc run (cpu.idle)
 cgroups.bats: runc run (hugetlb limits)
 cgroups.bats: runc run (pids.limit=0 means 1)
-cgroups.bats: runc run (cgroup v2 resources.unified only)
-cgroups.bats: runc run (cgroup v2 resources.unified override)
 # --ignore-paused is not implemented.
 cgroups.bats: runc exec --ignore-paused
 cgroups.bats: runc run/create should error for a non-empty cgroup
@@ -122,14 +119,16 @@ update.bats: update cgroup v1/v2 common limits
 update.bats: update cgroup cpu limits
 update.bats: update pids.limit
 update.bats: cpu burst
+# With systemd, crun sets the limits on a sub-cgroup of the unit one, and
+# systemd does not set the CPU period with no quota; the test checks the latter.
 update.bats: set cpu period with no quota
-update.bats: set cpu quota with no period
 update.bats: update cpu period with no previous period/quota set
-update.bats: update cpu quota with no previous period/quota set
 update.bats: update cgroup cpu.idle
+# crun errors out if both CPU shares and cpu.idle are set with systemd, while
+# runc warns ("unable to apply both") and ignores the shares.
 update.bats: update cgroup cpu.idle via systemd v252+
-update.bats: update cgroup v2 resources via unified map
+# The test uses "CPU", "Cpus" and "Mems" keys, which only work with runc
+# because Go decodes JSON case-insensitively.
 update.bats: update cpuset parameters via resources.CPU
-update.bats: update cpuset parameters via v2 unified map
 update.bats: update memory vs CheckBeforeUpdate
 update.bats: update per-device iops/bps values

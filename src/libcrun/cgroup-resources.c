@@ -998,6 +998,21 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
 }
 
 int
+write_cpu_idle (int cpu_dirfd, runtime_spec_schema_config_linux_resources_cpu *cpu, libcrun_error_t *err)
+{
+  char fmt_buf[32];
+  int len;
+
+  if (! cpu->idle_present)
+    return 0;
+
+  len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIi64, cpu->idle);
+  if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
+    return crun_make_error (err, 0, "internal error: static buffer too small");
+  return write_cgroup_file (cpu_dirfd, "cpu.idle", fmt_buf, len, err);
+}
+
+int
 write_cpu_burst (int cpu_dirfd, bool cgroup2, runtime_spec_schema_config_linux_resources_cpu *cpu,
                  libcrun_error_t *err)
 {
@@ -1051,7 +1066,20 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       uint32_t val = cpu->shares;
 
       if (cgroup2)
-        val = convert_shares_to_weight (val);
+        {
+          val = convert_shares_to_weight (val);
+
+          /* The weight cannot be changed while cpu.idle is set, and setting
+             it means the cgroup is not idle (this is what systemd does, too),
+             so reset cpu.idle unless it is also being set.  The file might
+             not exist on older kernels, so ignore errors.  */
+          if (! cpu->idle_present)
+            {
+              ret = write_cgroup_file (dirfd_cpu, "cpu.idle", "0", 1, err);
+              if (UNLIKELY (ret < 0))
+                crun_error_release (err);
+            }
+        }
 
       len = snprintf (fmt_buf, sizeof (fmt_buf), "%u", val);
       if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
@@ -1131,15 +1159,9 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  if (cpu->idle_present)
-    {
-      len = snprintf (fmt_buf, sizeof (fmt_buf), "%" PRIi64, cpu->idle);
-      if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
-        return crun_make_error (err, 0, "internal error: static buffer too small");
-      ret = write_cgroup_file (dirfd_cpu, "cpu.idle", fmt_buf, len, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  ret = write_cpu_idle (dirfd_cpu, cpu, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (cgroup2 && (quota > 0 || period > 0))
     {
