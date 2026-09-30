@@ -113,8 +113,6 @@ seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
 start_detached.bats: runc run detached --pid-file with new CWD
 timens.bats: runc run [simple timens + userns]
-tty.bats: runc run [stdin not a tty]
-tty.bats: runc exec [stdin not a tty]
 update.bats: update cgroup v1/v2 common limits
 update.bats: update cgroup cpu limits
 update.bats: update pids.limit

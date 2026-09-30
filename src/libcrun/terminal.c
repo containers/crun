@@ -69,7 +69,12 @@ libcrun_set_raw (int fd, void **current_status, libcrun_error_t *err)
 
   ret = tcgetattr (fd, &termios);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "tcgetattr");
+    {
+      /* Nothing to do if FD is not a terminal.  */
+      if (errno == ENOTTY)
+        return 0;
+      return crun_make_error (err, errno, "tcgetattr");
+    }
 
   if (current_status)
     {

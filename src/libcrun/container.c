@@ -1838,6 +1838,18 @@ write_pid_file (const char *pid_file, pid_t pid, libcrun_error_t *err)
 
 #define MAX_EVENTS 10
 
+static bool
+is_fd_pollable (int fd)
+{
+  struct epoll_event ev = { .events = EPOLLIN };
+  cleanup_close int epollfd = epoll_create1 (EPOLL_CLOEXEC);
+
+  if (epollfd < 0)
+    return true;
+
+  return epoll_ctl (epollfd, EPOLL_CTL_ADD, fd, &ev) == 0 || errno != EPERM;
+}
+
 static int
 wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
@@ -1846,6 +1858,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   int ret, container_exit_code = 0, last_process;
   cleanup_close int terminal_fd_from = -1;
   cleanup_close int terminal_fd_to = -1;
+  bool stdin_pollable = false, stdout_pollable = false;
   cleanup_close int epollfd = -1;
   cleanup_close int signalfd = -1;
   sigset_t mask;
@@ -1955,8 +1968,15 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
             return ret;
         }
 
+      /* stdin and stdout can be something epoll does not support, such as
+         /dev/null or a regular file.  Such a stdin is not forwarded, and
+         such a stdout is written to without waiting for it to be ready.  */
+      stdin_pollable = is_fd_pollable (0);
+      stdout_pollable = is_fd_pollable (1);
+
       from_terminal = channel_fd_pair_new (terminal_fd_from, 1, BUFSIZ);
-      to_terminal = channel_fd_pair_new (0, terminal_fd_to, BUFSIZ);
+      if (stdin_pollable)
+        to_terminal = channel_fd_pair_new (0, terminal_fd_to, BUFSIZ);
     }
 
   in_fds[in_fds_len++] = signalfd;
@@ -1964,11 +1984,15 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
     in_fds[in_fds_len++] = args->notify_socket;
   if (args->terminal_fd >= 0)
     {
-      in_fds[in_fds_len++] = 0;
-      out_fds[out_fds_len++] = terminal_fd_to;
+      if (stdin_pollable)
+        {
+          in_fds[in_fds_len++] = 0;
+          out_fds[out_fds_len++] = terminal_fd_to;
+        }
 
       in_fds[in_fds_len++] = terminal_fd_from;
-      out_fds[out_fds_len++] = 1;
+      if (stdout_pollable)
+        out_fds[out_fds_len++] = 1;
     }
 
   epollfd = epoll_helper (in_fds, NULL, out_fds, NULL, err);
@@ -1997,7 +2021,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
             }
           else if (events[i].data.fd == 1 || events[i].data.fd == terminal_fd_from)
             {
-              ret = channel_fd_pair_process (from_terminal, epollfd, err);
+              ret = channel_fd_pair_process (from_terminal, stdout_pollable ? epollfd : -1, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy from terminal fd");
             }
