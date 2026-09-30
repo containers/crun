@@ -85,13 +85,10 @@ mounts.bats: runc run [bind mount through a dangling symlink component]
 mounts.bats: runc run [bind mount through a trailing dangling symlink]
 mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
 mounts_recursive.bats: runc run [ check rbind,r*atime mounts]
-mounts_sshfs.bats: runc run [mount(8)-unlike behaviour: --bind with clearing flag]
-mounts_sshfs.bats: runc run [implied-rw bind mount of a ro fuse sshfs mount]
+# With a user namespace, crun allows to explicitly clear the locked flags of
+# a bind mount source (and the expected error message is runc specific).
 mounts_sshfs.bats: runc run [explicit-rw bind mount of a ro fuse sshfs mount]
 mounts_sshfs.bats: runc run [dev,exec,suid,atime bind mount of a nodev,nosuid,noexec,noatime fuse sshfs mount]
-mounts_sshfs.bats: runc run [ro bind mount of a nodev,nosuid,noexec fuse sshfs mount]
-mounts_sshfs.bats: runc run [ro,symfollow bind mount of a rw,nodev,nosymfollow fuse sshfs mount]
-mounts_sshfs.bats: runc run [ro,noexec bind mount of a nosuid,noatime fuse sshfs mount]
 mounts_sshfs.bats: runc run [bind mount {no,rel,strict}atime semantics]
 ps.bats: ps
 ps.bats: ps -e -x

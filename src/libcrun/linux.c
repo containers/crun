@@ -2850,6 +2850,47 @@ get_mount_label_how (const char *type, bool is_sysfs_or_proc)
   return LABEL_MOUNT;
 }
 
+/* The kernel does not let a mount inherited from a more privileged mount
+   namespace lose its ro, nosuid, nodev and noexec flags in a user
+   namespace.  The bind mounts prepared from the host are not subject to
+   that, so, for a container with a user namespace, return the flags of
+   SOURCE that are to be kept, i.e. those not explicitly cleared by the
+   mount options.  */
+static unsigned long
+get_bind_mount_locked_flags (int source_mountfd, const char *source, runtime_spec_schema_defs_mount *mount)
+{
+  unsigned long cleared = 0;
+  struct statfs sfs;
+  size_t i;
+  int ret;
+
+  if (source_mountfd >= 0)
+    ret = fstatfs (source_mountfd, &sfs);
+  else
+    ret = statfs (source, &sfs);
+  if (UNLIKELY (ret < 0))
+    return 0;
+
+  for (i = 0; i < mount->options_len; i++)
+    {
+      const struct propagation_flags_s *prop;
+
+      if (mount->options[i] == NULL)
+        continue;
+
+      prop = libcrun_str2mount_flags (mount->options[i]);
+      if (prop == NULL || (prop->extra_flags & OPTION_RECURSIVE))
+        continue;
+
+      if (prop->clear)
+        cleared |= prop->flags;
+      else
+        cleared &= ~prop->flags;
+    }
+
+  return sfs.f_flags & (MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC) & ~cleared;
+}
+
 static int
 process_single_mount (libcrun_container_t *container, const char *rootfs,
                       runtime_spec_schema_defs_mount *mount,
@@ -2889,6 +2930,10 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
   if (type == NULL && (flags & MS_BIND) == 0)
     return crun_make_error (err, 0, "invalid mount type for `%s`", mount->destination);
+
+  if ((flags & MS_BIND) && mount->source && has_mount_flag_options (mount)
+      && (get_private_data (container)->unshare_flags & CLONE_NEWUSER))
+    flags |= get_bind_mount_locked_flags (source_mountfd, mount->source, mount);
 
   if (flags & MS_BIND)
     {
