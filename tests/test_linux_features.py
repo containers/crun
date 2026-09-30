@@ -939,14 +939,6 @@ def test_set_id_init_root():
     conf['process']['args'] = ['/init', 'true']
     conf['process']['user'] = {'uid': 0, 'gid': 0}
 
-    # Add UID/GID mappings
-    conf['linux']['uidMappings'] = [
-        {'containerID': 0, 'hostID': os.getuid(), 'size': 1}
-    ]
-    conf['linux']['gidMappings'] = [
-        {'containerID': 0, 'hostID': os.getgid(), 'size': 1}
-    ]
-
     try:
         out, _ = run_and_get_output(conf, hide_stderr=False)
         return 0
@@ -1434,14 +1426,6 @@ def test_sysfs_userns_no_netns_no_cgroup_mount():
     conf['process']['args'] = ['/init', 'true']
     conf['process']['user'] = {'uid': 0, 'gid': 0}
 
-    # Add UID/GID mappings for the user namespace
-    conf['linux']['uidMappings'] = [
-        {'containerID': 0, 'hostID': os.getuid(), 'size': 1}
-    ]
-    conf['linux']['gidMappings'] = [
-        {'containerID': 0, 'hostID': os.getgid(), 'size': 1}
-    ]
-
     # Set up mounts with sysfs but WITHOUT /sys/fs/cgroup mount
     # This exercises the has_mount_for() == false branch at linux.c:1186
     conf['mounts'] = [
@@ -1482,14 +1466,6 @@ def test_sysfs_userns_no_netns_with_cgroup_mount():
     add_all_namespaces(conf, userns=True, netns=False)
     conf['process']['args'] = ['/init', 'true']
     conf['process']['user'] = {'uid': 0, 'gid': 0}
-
-    # Add UID/GID mappings for the user namespace
-    conf['linux']['uidMappings'] = [
-        {'containerID': 0, 'hostID': os.getuid(), 'size': 1}
-    ]
-    conf['linux']['gidMappings'] = [
-        {'containerID': 0, 'hostID': os.getgid(), 'size': 1}
-    ]
 
     # Set up mounts with sysfs AND /sys/fs/cgroup mount
     # This exercises the has_mount_for() == true branch at linux.c:1195
