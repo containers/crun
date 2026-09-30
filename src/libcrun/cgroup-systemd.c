@@ -809,6 +809,20 @@ open_sd_bus_connection (sd_bus **bus, libcrun_error_t *err)
   return 0;
 }
 
+static const char *
+get_string_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name)
+{
+  size_t i;
+
+  if (resources == NULL || resources->unified == NULL)
+    return NULL;
+
+  for (i = 0; i < resources->unified->len; i++)
+    if (strcmp (resources->unified->keys[i], name) == 0)
+      return resources->unified->values[i];
+  return NULL;
+}
+
 static int
 get_value_from_unified_map (runtime_spec_schema_config_linux_resources *resources, const char *name,
                             uint64_t *value, libcrun_error_t *err)
@@ -1518,6 +1532,59 @@ add_bpf_program (sd_bus_message *m,
   return 0;
 }
 
+/* Append CPUQuotaPeriodUSec and CPUQuotaPerSecUSec, the way runc does.  */
+static int
+append_cpu_quota (sd_bus_message *m, char **missing_properties,
+                  runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+{
+  uint64_t period = (resources->cpu && resources->cpu->period_present) ? resources->cpu->period : 0;
+  int64_t quota = (resources->cpu && resources->cpu->quota_present) ? resources->cpu->quota : 0;
+  const char *cpu_max = get_string_from_unified_map (resources, "cpu.max");
+  int sd_err;
+
+  /* The unified map takes precedence, like with the cgroupfs driver.  */
+  if (cpu_max)
+    {
+      uint64_t max_period;
+      bool has_period;
+      int ret;
+
+      ret = parse_cpu_max (cpu_max, &quota, &max_period, &has_period, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (has_period)
+        period = max_period;
+    }
+
+  if (period && ! property_missing_p (missing_properties, "CPUQuotaPeriodUSec"))
+    {
+      sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPeriodUSec", "t", period);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append CPUQuotaPeriodUSec");
+    }
+
+  if ((quota != 0 || period) && ! property_missing_p (missing_properties, "CPUQuotaPerSecUSec"))
+    {
+      /* USEC_INFINITY in systemd.  */
+      uint64_t quota_per_sec = UINT64_MAX;
+
+      if (quota > 0)
+        {
+          quota_per_sec = ((uint64_t) quota * 1000000) / (period ? period : DEFAULT_CPU_QUOTA_PERIOD);
+          /* systemd converts CPUQuotaPerSecUSec to a percentage of CPU, so round it
+             up to the next 10ms, to not give the container less than it asked for.  */
+          if (quota_per_sec % 10000)
+            quota_per_sec = ((quota_per_sec / 10000) + 1) * 10000;
+        }
+
+      sd_err = sd_bus_message_append (m, "(sv)", "CPUQuotaPerSecUSec", "t", quota_per_sec);
+      if (UNLIKELY (sd_err < 0))
+        return crun_make_error (err, -sd_err, "sd-bus message append CPUQuotaPerSecUSec");
+    }
+
+  return 0;
+}
+
 static int
 append_resources (sd_bus_message *m,
                   bool is_update,
@@ -1581,31 +1648,9 @@ append_resources (sd_bus_message *m,
   APPEND_UINT64 ("MemorySwapMax", get_memory_swap_max);
   APPEND_UINT64 ("TasksMax", get_pids_max);
 
-  if (resources->cpu)
-    {
-      uint64_t period = resources->cpu->period_present ? resources->cpu->period : 0;
-      int64_t quota = resources->cpu->quota_present ? resources->cpu->quota : 0;
-
-      if (period)
-        APPEND_UINT64_VALUE ("CPUQuotaPeriodUSec", period);
-
-      /* This conversion was copied from runc.  */
-      if (quota != 0 || period)
-        {
-          /* USEC_INFINITY in systemd.  */
-          uint64_t quota_per_sec = UINT64_MAX;
-
-          if (quota > 0)
-            {
-              quota_per_sec = ((uint64_t) quota * 1000000) / (period ? period : DEFAULT_CPU_QUOTA_PERIOD);
-              /* systemd converts CPUQuotaPerSecUSec to a percentage of CPU, so round it
-                 up to the next 10ms, to not give the container less than it asked for.  */
-              if (quota_per_sec % 10000)
-                quota_per_sec = ((quota_per_sec / 10000) + 1) * 10000;
-            }
-          APPEND_UINT64_VALUE ("CPUQuotaPerSecUSec", quota_per_sec);
-        }
-    }
+  ret = append_cpu_quota (m, missing_properties, resources, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   switch (cgroup_mode)
     {
@@ -1627,13 +1672,17 @@ append_resources (sd_bus_message *m,
         if (UNLIKELY (ret < 0))
           return ret;
 
-        if (resources->cpu && resources->cpu->cpus)
+        if (get_string_from_unified_map (resources, "cpuset.cpus") || (resources->cpu && resources->cpu->cpus))
           {
             const char *property_name = "AllowedCPUs";
+            const char *value = get_string_from_unified_map (resources, "cpuset.cpus");
             cleanup_free char *allowed_cpus = NULL;
             size_t allowed_cpus_len = 0;
 
-            ret = cpuset_string_to_bitmask (resources->cpu->cpus, &allowed_cpus, &allowed_cpus_len, err);
+            if (value == NULL)
+              value = resources->cpu->cpus;
+
+            ret = cpuset_string_to_bitmask (value, &allowed_cpus, &allowed_cpus_len, err);
             if (UNLIKELY (ret < 0))
               return ret;
 
@@ -1645,13 +1694,17 @@ append_resources (sd_bus_message *m,
               }
           }
 
-        if (resources->cpu && resources->cpu->mems)
+        if (get_string_from_unified_map (resources, "cpuset.mems") || (resources->cpu && resources->cpu->mems))
           {
             const char *property_name = "AllowedMemoryNodes";
+            const char *value = get_string_from_unified_map (resources, "cpuset.mems");
             cleanup_free char *allowed_mems = NULL;
             size_t allowed_mems_len = 0;
 
-            ret = cpuset_string_to_bitmask (resources->cpu->mems, &allowed_mems, &allowed_mems_len, err);
+            if (value == NULL)
+              value = resources->cpu->mems;
+
+            ret = cpuset_string_to_bitmask (value, &allowed_mems, &allowed_mems_len, err);
             if (UNLIKELY (ret < 0))
               return ret;
 
