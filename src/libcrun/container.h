@@ -258,6 +258,12 @@ struct libcrun_container_exec_options_s
   bool merge_env;
 };
 
+LIBCRUN_PUBLIC int libcrun_close_inherited_fds (libcrun_context_t *context, libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_load_process_from_file (const char *path,
+                                                   runtime_spec_schema_config_schema_process **process,
+                                                   libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                                         struct libcrun_container_exec_options_s *opts,
                                                         libcrun_error_t *err);

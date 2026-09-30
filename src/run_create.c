@@ -98,20 +98,29 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
         libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
-  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  container = libcrun_container_load_from_file (config_file, err);
-  if (container == NULL)
-    return -1;
-
-  libcrun_debug ("Using bundle: %s", bundle);
-  crun_context->bundle = bundle;
   if (getenv ("LISTEN_FDS"))
     {
       crun_context->listen_fds = parse_id_or_fail (getenv ("LISTEN_FDS"), NULL, "LISTEN_FDS");
       crun_context->preserve_fds += crun_context->listen_fds;
     }
+
+  /* The config file may be passed as /dev/fd/N, so read it before
+     closing the file descriptors.  */
+  container = libcrun_container_load_from_file (config_file, err);
+  if (container == NULL)
+    return -1;
+
+  /* Close the file descriptors inherited from the caller, so they do
+     not leak into the container.  */
+  ret = libcrun_close_inherited_fds (crun_context, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  libcrun_debug ("Using bundle: %s", bundle);
+  crun_context->bundle = bundle;
   return container_run_create_func (crun_context, container, options, err);
 }

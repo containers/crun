@@ -255,13 +255,6 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &exec_options);
   crun_assert_n_args (argc - first_arg, exec_options.process ? 1 : 2, -1);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  crun_context.detach = exec_options.detach;
-  crun_context.console_socket = exec_options.console_socket;
-  crun_context.pid_file = exec_options.pid_file;
   crun_context.preserve_fds = exec_options.preserve_fds;
 
   if (getenv ("LISTEN_FDS"))
@@ -270,8 +263,31 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
       crun_context.preserve_fds += crun_context.listen_fds;
     }
 
+  /* The process file may be passed as /dev/fd/N, so read it before
+     closing the file descriptors.  */
   if (exec_options.process)
-    exec_opts.path = exec_options.process;
+    {
+      ret = libcrun_load_process_from_file (exec_options.process, &process, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  /* Close the file descriptors inherited from the caller, so they do
+     not leak into the container.  */
+  ret = libcrun_close_inherited_fds (&crun_context, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  crun_context.detach = exec_options.detach;
+  crun_context.console_socket = exec_options.console_socket;
+  crun_context.pid_file = exec_options.pid_file;
+
+  if (exec_options.process)
+    exec_opts.process = process;
   else
     {
       process = xmalloc0 (sizeof (*process));

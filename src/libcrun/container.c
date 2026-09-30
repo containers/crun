@@ -400,14 +400,22 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *container_def;
   cleanup_free char *oci_error = NULL;
+  cleanup_free char *content = NULL;
+  size_t len;
+  int ret;
+
   libcrun_debug ("Loading container from config file: `%s`", path);
-  container_def = runtime_spec_schema_config_schema_parse_file (path, NULL, &oci_error);
+  ret = read_all_file (path, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return NULL;
+
+  container_def = runtime_spec_schema_config_schema_parse_data (content, NULL, &oci_error);
   if (container_def == NULL)
     {
       crun_make_error (err, 0, "load `%s`: %s", path, oci_error);
       return NULL;
     }
-  return make_container (container_def, path, NULL);
+  return make_container (container_def, NULL, content);
 }
 
 void
@@ -3606,6 +3614,50 @@ exec_process_entrypoint (libcrun_context_t *context,
   libcrun_fail_with_error (errno, "exec `%s`", exec_path);
 }
 
+/* Close the file descriptors inherited from the caller, other than those
+   to be passed to the container process.  */
+int
+libcrun_close_inherited_fds (libcrun_context_t *context, libcrun_error_t *err)
+{
+  return mark_or_close_fds_ge_than (NULL, context->preserve_fds + 3, true, err);
+}
+
+int
+libcrun_load_process_from_file (const char *path, runtime_spec_schema_config_schema_process **process,
+                                libcrun_error_t *err)
+{
+  struct parser_context ctx = { 0, stderr };
+  cleanup_free char *content = NULL;
+  parser_error parser_err = NULL;
+  json_object *doc = NULL;
+  size_t len;
+  int ret;
+
+  ret = read_all_file (path, &content, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = parse_json_file (&doc, content, &ctx, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  *process = make_runtime_spec_schema_config_schema_process (doc, &ctx, &parser_err);
+  if (UNLIKELY (*process == NULL))
+    {
+      ret = crun_make_error (err, 0, "cannot parse process file: `%s`", parser_err);
+      free (parser_err);
+      if (doc)
+        json_object_put (doc);
+      return ret;
+    }
+
+  free (parser_err);
+  if (doc)
+    json_object_put (doc);
+
+  return 0;
+}
+
 int
 libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
                                      struct libcrun_container_exec_options_s *opts,
@@ -3696,36 +3748,12 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   if (opts->path)
     {
-      struct parser_context ctx = { 0, stderr };
-      cleanup_free char *content = NULL;
-      parser_error parser_err = NULL;
-      json_object *doc = NULL;
-      size_t len;
-
       if (process)
         return crun_make_error (err, EINVAL, "cannot specify both exec file and options");
 
-      ret = read_all_file (opts->path, &content, &len, err);
+      ret = libcrun_load_process_from_file (opts->path, &process, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      ret = parse_json_file (&doc, content, &ctx, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      process = make_runtime_spec_schema_config_schema_process (doc, &ctx, &parser_err);
-      if (UNLIKELY (process == NULL))
-        {
-          ret = crun_make_error (err, 0, "cannot parse process file: `%s`", parser_err);
-          free (parser_err);
-          if (doc)
-            json_object_put (doc);
-          return ret;
-        }
-
-      free (parser_err);
-      if (doc)
-        json_object_put (doc);
 
       process_cleanup = process;
     }

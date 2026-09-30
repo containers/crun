@@ -41,7 +41,6 @@ checkpoint.bats: checkpoint --lazy-pages and restore
 cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
 cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.json]
 cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
-create.bats: runc create[detect fd leak as comprehensively as possible]
 create.bats: runc create exec
 create.bats: runc create [shared pidns + rootless]
 delete.bats: runc delete [host pidns + init gone]
