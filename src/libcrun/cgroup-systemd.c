@@ -904,7 +904,25 @@ get_memory_swap_max (runtime_spec_schema_config_linux_resources *resources, uint
 {
   if (resources->memory && resources->memory->swap_present)
     {
-      *limit = resources->memory->swap;
+      runtime_spec_schema_config_linux_resources_memory *memory = resources->memory;
+      int64_t mem = memory->limit_present ? memory->limit : 0;
+
+      /* The OCI swap limit is for memory+swap, while MemorySwapMax is for
+         swap only, so convert it, like it is done for memory.swap.max.  */
+      if (memory->swap == -1 || (mem == -1 && memory->swap == 0))
+        {
+          *limit = UINT64_MAX;
+          return 1;
+        }
+      /* 0 means unset.  */
+      if (memory->swap == 0)
+        return 0;
+      if (mem <= 0)
+        return crun_make_error (err, 0, "cannot set swap limit without the memory limit");
+      if (memory->swap < mem)
+        return crun_make_error (err, 0, "cannot set memory+swap limit less than the memory limit");
+
+      *limit = memory->swap - mem;
       return 1;
     }
 
