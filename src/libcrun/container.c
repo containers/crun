@@ -1552,13 +1552,17 @@ has_new_pid_namespace (runtime_spec_schema_config_schema *def)
   return false;
 }
 
+/* Delete the container state.  CONTAINER is the container the caller already has
+   available, or NULL.  When it is not NULL, the poststop hooks are run even if the
+   status file was never written, e.g. when the container creation failed.  */
 static int
-container_delete_internal (libcrun_context_t *context, runtime_spec_schema_config_schema *def,
-                           const char *id, bool force, bool killall, libcrun_error_t *err)
+container_delete_internal (libcrun_context_t *context, libcrun_container_t *container,
+                           runtime_spec_schema_config_schema *def, const char *id, bool force, bool killall,
+                           libcrun_error_t *err)
 {
   cleanup_cgroup_status struct libcrun_cgroup_status *cgroup_status = NULL;
   cleanup_container_status libcrun_container_status_t status = {};
-  cleanup_container libcrun_container_t *container = NULL;
+  cleanup_container libcrun_container_t *container_cleanup = NULL;
   const char *state_root = context->state_root;
   int ret;
 
@@ -1570,6 +1574,18 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
           libcrun_error_t tmp_err = NULL;
 
           crun_error_release (err);
+
+          if (container)
+            {
+              libcrun_container_status_t partial_status = {
+                .bundle = (char *) context->bundle,
+              };
+
+              ret = run_poststop_hooks (context, container, def, &partial_status, state_root, id, err);
+              if (UNLIKELY (ret < 0))
+                crun_error_write_warning_and_release (context->output_handler_arg, &err);
+            }
+
           libcrun_container_delete_status (state_root, id, &tmp_err);
           crun_error_release (&tmp_err);
           return 0;
@@ -1600,9 +1616,14 @@ container_delete_internal (libcrun_context_t *context, runtime_spec_schema_confi
 
   if (def == NULL)
     {
-      ret = read_container_config_from_state (&container, state_root, id, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      if (container == NULL)
+        {
+          ret = read_container_config_from_state (&container_cleanup, state_root, id, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          container = container_cleanup;
+        }
 
       def = container->container_def;
     }
@@ -1660,7 +1681,7 @@ int
 libcrun_container_delete (libcrun_context_t *context, runtime_spec_schema_config_schema *def, const char *id,
                           bool force, libcrun_error_t *err)
 {
-  return container_delete_internal (context, def, id, force, true, err);
+  return container_delete_internal (context, NULL, def, id, force, true, err);
 }
 
 int
@@ -2863,10 +2884,11 @@ libcrun_copy_config_file (const char *id, const char *state_root, libcrun_contai
 }
 
 static void
-force_delete_container_status (libcrun_context_t *context, runtime_spec_schema_config_schema *def)
+force_delete_container_status (libcrun_context_t *context, libcrun_container_t *container,
+                               runtime_spec_schema_config_schema *def)
 {
   libcrun_error_t tmp_err = NULL;
-  container_delete_internal (context, def, context->id, true, false, &tmp_err);
+  container_delete_internal (context, container, def, context->id, true, false, &tmp_err);
   crun_error_release (&tmp_err);
 }
 
@@ -2919,7 +2941,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 
       ret = libcrun_container_run_internal (container, context, NULL, err);
       if (! (options & LIBCRUN_RUN_OPTIONS_KEEP))
-        force_delete_container_status (context, def);
+        force_delete_container_status (context, container, def);
       return ret;
     }
 
@@ -2982,7 +3004,7 @@ libcrun_container_run (libcrun_context_t *context, libcrun_container_t *containe
 fail:
 
   if (! (options & LIBCRUN_RUN_OPTIONS_KEEP))
-    force_delete_container_status (context, def);
+    force_delete_container_status (context, container, def);
   if (tmp_err)
     {
       write_error_to_pipe (pipefd1, &tmp_err);
@@ -3037,7 +3059,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
         return ret;
       ret = libcrun_container_run_internal (container, context, NULL, err);
       if (UNLIKELY (ret < 0))
-        force_delete_container_status (context, def);
+        force_delete_container_status (context, container, def);
       return ret;
     }
 
@@ -3090,7 +3112,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
   ret = libcrun_container_run_internal (container, context, &pipefd1, err);
   if (UNLIKELY (ret < 0))
     {
-      force_delete_container_status (context, def);
+      force_delete_container_status (context, container, def);
       libcrun_error ((*err)->status, "%s", (*err)->msg);
       crun_error_release (err);
       crun_set_output_handler (log_write_to_stderr, NULL);
@@ -3193,7 +3215,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
       if (UNLIKELY (ret != 0))
         {
           libcrun_error_t tmp_err = NULL;
-          container_delete_internal (context, def, id, true, true, &tmp_err);
+          container_delete_internal (context, container, def, id, true, true, &tmp_err);
           crun_error_release (&tmp_err);
           return ret;
         }
@@ -4317,7 +4339,7 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id, libcru
     return ret;
 
   if (! (cr_options->leave_running || cr_options->pre_dump))
-    return container_delete_internal (context, NULL, id, true, true, err);
+    return container_delete_internal (context, NULL, NULL, id, true, true, err);
 
   return 0;
 }
