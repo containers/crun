@@ -4166,6 +4166,10 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_set_mempolicy (container->container_def, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = pipe2 (container_ret_status, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "pipe");
