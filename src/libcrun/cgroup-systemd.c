@@ -944,6 +944,18 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
   if (resources->cpu && resources->cpu->idle_present && resources->cpu->idle == 1)
     has_idle = true;
 
+  /* The unified map takes precedence, like with the cgroupfs driver.  */
+  ret = get_value_from_unified_map (resources, "cpu.weight", weight, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+  if (ret > 0)
+    {
+      if (has_idle)
+        return crun_make_error (err, 0, "cannot set both `cpu.idle` and `cpu.weight`");
+
+      return 1;
+    }
+
   if (resources->cpu && resources->cpu->shares_present)
     {
       if (has_idle)
@@ -953,17 +965,6 @@ get_cpu_weight (runtime_spec_schema_config_linux_resources *resources, uint64_t 
       if (resources->cpu->shares == 0)
         return 0;
       *weight = convert_shares_to_weight (resources->cpu->shares);
-      return 1;
-    }
-
-  ret = get_value_from_unified_map (resources, "cpu.weight", weight, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
-  if (ret > 0)
-    {
-      if (has_idle)
-        return crun_make_error (err, 0, "cannot set both `cpu.idle` and `cpu.weight`");
-
       return 1;
     }
   if (has_idle)
