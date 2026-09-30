@@ -308,6 +308,7 @@ PYTHON_TESTS = tests/test_capabilities.py \
 	tests/test_devices.py \
 	tests/test_hostname.py \
 	tests/test_domainname.py \
+	tests/test_sysctl.py \
 	tests/test_limits.py \
 	tests/test_oci_features.py \
 	tests/test_mempolicy.py \
