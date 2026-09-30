@@ -1066,7 +1066,20 @@ write_cpu_resources (int dirfd_cpu, bool cgroup2, runtime_spec_schema_config_lin
       uint32_t val = cpu->shares;
 
       if (cgroup2)
-        val = convert_shares_to_weight (val);
+        {
+          val = convert_shares_to_weight (val);
+
+          /* The weight cannot be changed while cpu.idle is set, and setting
+             it means the cgroup is not idle (this is what systemd does, too),
+             so reset cpu.idle unless it is also being set.  The file might
+             not exist on older kernels, so ignore errors.  */
+          if (! cpu->idle_present)
+            {
+              ret = write_cgroup_file (dirfd_cpu, "cpu.idle", "0", 1, err);
+              if (UNLIKELY (ret < 0))
+                crun_error_release (err);
+            }
+        }
 
       len = snprintf (fmt_buf, sizeof (fmt_buf), "%u", val);
       if (UNLIKELY (len >= (int) sizeof (fmt_buf)))
