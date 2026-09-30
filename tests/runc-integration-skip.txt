@@ -107,15 +107,12 @@ seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
 timens.bats: runc run [simple timens + userns]
-update.bats: update cgroup v1/v2 common limits
 update.bats: update cgroup cpu limits
 update.bats: update pids.limit
-update.bats: cpu burst
 # With systemd, crun sets the limits on a sub-cgroup of the unit one, and
 # systemd does not set the CPU period with no quota; the test checks the latter.
 update.bats: set cpu period with no quota
 update.bats: update cpu period with no previous period/quota set
-update.bats: update cgroup cpu.idle
 # crun errors out if both CPU shares and cpu.idle are set with systemd, while
 # runc warns ("unable to apply both") and ignores the shares.
 update.bats: update cgroup cpu.idle via systemd v252+
