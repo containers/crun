@@ -246,16 +246,6 @@ def test_user_namespace_root_in_container():
     conf = base_config()
     add_all_namespaces(conf, userns=True)
 
-    # Set up UID/GID mappings using current user's IDs
-    host_uid = os.geteuid()
-    host_gid = os.getegid()
-    conf['linux']['uidMappings'] = [
-        {"containerID": 0, "hostID": host_uid, "size": 1}
-    ]
-    conf['linux']['gidMappings'] = [
-        {"containerID": 0, "hostID": host_gid, "size": 1}
-    ]
-
     # Should see UID 0 inside container
     # init's id command returns "uid:gid" format
     conf['process']['args'] = ['/init', 'id']
