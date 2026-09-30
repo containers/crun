@@ -43,7 +43,6 @@ cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.j
 cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
 create.bats: runc create[detect fd leak as comprehensively as possible]
 create.bats: runc create exec
-create.bats: runc create --pid-file with new CWD
 create.bats: runc create [shared pidns + rootless]
 delete.bats: runc delete [host pidns + init gone]
 delete.bats: runc delete --force [host pidns + init gone]
@@ -108,7 +107,6 @@ seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
 # crun words the error differently ("open seccomp receiver: connect socket to ...").
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
-start_detached.bats: runc run detached --pid-file with new CWD
 timens.bats: runc run [simple timens + userns]
 update.bats: update cgroup v1/v2 common limits
 update.bats: update cgroup cpu limits
