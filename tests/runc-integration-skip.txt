@@ -64,7 +64,6 @@ ioprio.bats: ioprio_set is applied to process group
 kill.bats: kill detached busybox
 kill.bats: kill KILL [host pidns]
 kill.bats: kill KILL [host pidns + init gone]
-kill.bats: kill KILL [shared pidns]
 list.bats: list
 list.bats: list with non-existent root fails
 mask.bats: mask paths [duplicate paths]
@@ -95,7 +94,6 @@ rlimits.bats: runc exec with RLIMIT_NOFILE(The same as system's hard value)
 rlimits.bats: runc exec with RLIMIT_NOFILE(Bigger than system's hard value)
 rlimits.bats: runc exec with RLIMIT_NOFILE(Smaller than system's hard value)
 run.bats: runc run [/proc/self/exe clone]
-run.bats: runc run [joining existing container namespaces]
 scheduler.bats: scheduler is applied
 scheduler.bats: scheduler vs cpus
 seccomp.bats: runc run [seccomp -ENOSYS handling]
@@ -106,7 +104,6 @@ seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
 # crun words the error differently ("open seccomp receiver: connect socket to ...").
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
-timens.bats: runc run [simple timens + userns]
 update.bats: update cgroup cpu limits
 update.bats: update pids.limit
 # With systemd, crun sets the limits on a sub-cgroup of the unit one, and

@@ -6224,6 +6224,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   struct libcrun_fd_map *mount_fds = get_fd_map (container);
+  cleanup_close int timens_offsets_fd = -1;
   pid_t pid_container = 0;
   size_t i;
   int ret;
@@ -6320,6 +6321,19 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         }
     }
 
+  /* Open the time namespace offsets file now, as it might not be possible to
+     open it once the process has switched to the user namespace ids: the
+     process is not dumpable then, so its /proc files are owned by the host
+     root.  The offsets are written to the time namespace the process creates
+     for its children at the time of the write, and the permission to do so
+     is checked against the credentials of the opener.  */
+  if (def->linux->time_offsets)
+    {
+      timens_offsets_fd = libcrun_open_proc_file (container, "self/timens_offsets", O_WRONLY, err);
+      if (UNLIKELY (timens_offsets_fd < 0))
+        return timens_offsets_fd;
+    }
+
   if (init_status->all_namespaces & CLONE_NEWUSER)
     {
       if (init_status->delayed_userns_create)
@@ -6372,11 +6386,8 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   if (def->linux->time_offsets)
     {
       char fmt_buffer[128];
-      cleanup_close int fd = -1;
+      int fd = timens_offsets_fd;
 
-      fd = libcrun_open_proc_file (container, "self/timens_offsets", O_WRONLY, err);
-      if (UNLIKELY (fd < 0))
-        return fd;
       if (def->linux->time_offsets->boottime)
         {
           ret = snprintf (fmt_buffer, sizeof (fmt_buffer), "boottime %" PRIi64 " %" PRIu32, def->linux->time_offsets->boottime->secs, def->linux->time_offsets->boottime->nanosecs);
@@ -6501,6 +6512,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   int first_clone_args = 0;
   int sync_socket[2];
   pid_t pid;
+  bool new_userns;
   size_t i;
   int ret;
 
@@ -6557,7 +6569,11 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   init_status.delayed_userns_create
       = (init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0 && init_status.fd_len > 0;
 
-  /* Check if special handling is required to join the namespaces.  */
+  /* Check if special handling is required to join the namespaces.  The PID and time
+     namespaces are to be joined before creating a new user namespace (as the process
+     loses the privileges to do so after that), but after joining an existing one (as
+     the process might not have the privileges to do so before that).  */
+  new_userns = (init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0;
   for (i = 0; i < init_status.fd_len; i++)
     {
       switch (init_status.value[i])
@@ -6568,7 +6584,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           break;
 
         case CLONE_NEWPID:
-          if ((init_status.all_namespaces & CLONE_NEWUSER) == 0)
+          if (! new_userns)
             init_status.must_fork = true;
           else
             {
@@ -6579,7 +6595,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           break;
 
         case CLONE_NEWTIME:
-          if ((init_status.all_namespaces & CLONE_NEWUSER) == 0)
+          if (! new_userns)
             init_status.must_fork = true;
           else
             {
