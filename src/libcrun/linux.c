@@ -6512,6 +6512,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   int first_clone_args = 0;
   int sync_socket[2];
   pid_t pid;
+  bool new_userns;
   size_t i;
   int ret;
 
@@ -6568,7 +6569,11 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
   init_status.delayed_userns_create
       = (init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0 && init_status.fd_len > 0;
 
-  /* Check if special handling is required to join the namespaces.  */
+  /* Check if special handling is required to join the namespaces.  The PID and time
+     namespaces are to be joined before creating a new user namespace (as the process
+     loses the privileges to do so after that), but after joining an existing one (as
+     the process might not have the privileges to do so before that).  */
+  new_userns = (init_status.all_namespaces & CLONE_NEWUSER) && init_status.userns_index < 0;
   for (i = 0; i < init_status.fd_len; i++)
     {
       switch (init_status.value[i])
@@ -6579,7 +6584,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           break;
 
         case CLONE_NEWPID:
-          if ((init_status.all_namespaces & CLONE_NEWUSER) == 0)
+          if (! new_userns)
             init_status.must_fork = true;
           else
             {
@@ -6590,7 +6595,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           break;
 
         case CLONE_NEWTIME:
-          if ((init_status.all_namespaces & CLONE_NEWUSER) == 0)
+          if (! new_userns)
             init_status.must_fork = true;
           else
             {
