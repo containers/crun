@@ -859,40 +859,6 @@ write_memory_resources (int dirfd, bool cgroup2, runtime_spec_schema_config_linu
   char fmt_buf[32];
   bool memory_limits_written = false;
 
-  if (cgroup2 && memory->check_before_update_present && memory->check_before_update)
-    {
-      cleanup_free char *swap_current = NULL;
-      cleanup_free char *current = NULL;
-      uint64_t limit = 0;
-      uint64_t val, val_swap;
-      int ret;
-
-      ret = read_all_file_at (dirfd, "memory.current", &current, NULL, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      ret = read_all_file_at (dirfd, "memory.swap.current", &swap_current, NULL, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-
-      errno = 0;
-      val = strtoll (current, NULL, 10);
-      if (UNLIKELY (errno))
-        return crun_make_error (err, errno, "parse memory.current");
-
-      val_swap = strtoll (swap_current, NULL, 10);
-      if (UNLIKELY (errno))
-        return crun_make_error (err, errno, "parse memory.swap.current");
-
-      if (memory->limit_present && memory->limit >= 0)
-        limit = memory->limit;
-      if (memory->swap_present && memory->swap >= 0)
-        limit += memory->swap;
-
-      if (limit <= val + val_swap)
-        return crun_make_error (err, 0, "cannot set the memory limit lower than its current usage");
-    }
-
   if (memory->limit_present)
     {
       ret = write_memory (dirfd, cgroup2, memory, err);
@@ -1453,6 +1419,69 @@ update_cgroup_v2_resources (runtime_spec_schema_config_linux_resources *resource
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  return 0;
+}
+
+/* With checkBeforeUpdate, refuse to set the memory limit lower than the
+   current usage.  This must be done before any of the resources is updated,
+   including by the cgroup manager (e.g. the systemd unit properties).  */
+int
+check_memory_before_update (const char *path, runtime_spec_schema_config_linux_resources *resources,
+                            libcrun_error_t *err)
+{
+  runtime_spec_schema_config_linux_resources_memory *memory = resources->memory;
+  cleanup_free char *swap_current = NULL;
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *current = NULL;
+  cleanup_close int dirfd = -1;
+  uint64_t limit = 0;
+  uint64_t val, val_swap;
+  int cgroup_mode;
+  int ret;
+
+  if (path == NULL || memory == NULL || ! (memory->check_before_update_present && memory->check_before_update))
+    return 0;
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    return 0;
+
+  ret = append_paths (&cgroup_path, err, CGROUP_ROOT, path, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  dirfd = open (cgroup_path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", cgroup_path);
+
+  ret = read_all_file_at (dirfd, "memory.current", &current, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_all_file_at (dirfd, "memory.swap.current", &swap_current, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  errno = 0;
+  val = strtoll (current, NULL, 10);
+  if (UNLIKELY (errno))
+    return crun_make_error (err, errno, "parse memory.current");
+
+  val_swap = strtoll (swap_current, NULL, 10);
+  if (UNLIKELY (errno))
+    return crun_make_error (err, errno, "parse memory.swap.current");
+
+  if (memory->limit_present && memory->limit >= 0)
+    limit = memory->limit;
+  if (memory->swap_present && memory->swap >= 0)
+    limit += memory->swap;
+
+  if (limit <= val + val_swap)
+    return crun_make_error (err, 0, "cannot set the memory limit lower than its current usage");
 
   return 0;
 }

@@ -319,6 +319,10 @@ libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = check_memory_before_update (cgroup_status->path, resources, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = complete_cpu_max (cgroup_status->path, resources, err);
   if (UNLIKELY (ret < 0))
     return ret;
