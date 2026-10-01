@@ -31,6 +31,9 @@ struct default_dev_s
 };
 struct default_dev_s *get_default_devices ();
 
+int check_memory_before_update (const char *path, runtime_spec_schema_config_linux_resources *resources,
+                                libcrun_error_t *err);
+
 int update_cgroup_resources (const char *path,
                              const char *state_root,
                              runtime_spec_schema_config_linux_resources *resources,

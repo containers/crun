@@ -116,5 +116,4 @@ update.bats: update cgroup cpu.idle via systemd v252+
 # The test uses "CPU", "Cpus" and "Mems" keys, which only work with runc
 # because Go decodes JSON case-insensitively.
 update.bats: update cpuset parameters via resources.CPU
-update.bats: update memory vs CheckBeforeUpdate
 update.bats: update per-device iops/bps values
