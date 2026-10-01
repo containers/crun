@@ -52,7 +52,7 @@ enum
 
 static char doc[] = "OCI runtime";
 
-static libcrun_checkpoint_restore_t cr_options;
+static struct libcrun_checkpoint_restore_options_s cr_options;
 
 static struct argp_option options[]
     = { { "image-path", OPTION_IMAGE_PATH, "DIR", 0, "path for saving criu image files", 0 },
@@ -184,7 +184,7 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc, ch
     0,
   };
 
-  cr_options.manage_cgroups_mode = -1;
+  cr_options.struct_size = sizeof (cr_options);
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);
