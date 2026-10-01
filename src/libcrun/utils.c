@@ -515,8 +515,36 @@ safe_readlinkat (int dfd, const char *name, char **buffer, ssize_t hint, libcrun
   return size;
 }
 
+static int crun_safe_ensure_at (bool do_open, bool dir, bool follow_symlinks, int dirfd, const char *dirpath,
+                                const char *path, int mode, int max_readlinks, libcrun_error_t *err);
+
+/* CUR is a symlink in the directory CWD, NPATH is the path up to and
+   including CUR, and REST is what follows CUR in the path, or NULL.
+   Restart the lookup with the symlink target in place of CUR, so that
+   anything missing on the way to the target is created.  */
 static int
-crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
+crun_safe_ensure_follow_symlink (bool do_open, bool dir, bool follow_symlinks, int dirfd, const char *dirpath, int cwd,
+                                 const char *npath, const char *cur, const char *rest,
+                                 int mode, int max_readlinks, libcrun_error_t *err)
+{
+  cleanup_free char *target = NULL;
+  cleanup_free char *new_path = NULL;
+  ssize_t ret;
+
+  ret = safe_readlinkat (cwd, cur, &target, 0, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* A relative target is relative to the directory containing the symlink,
+     which is the path before CUR.  */
+  xasprintf (&new_path, "%.*s%s%s%s", target[0] == '/' ? 0 : (int) (cur - npath), npath, target,
+             rest ? "/" : "", rest ? rest : "");
+
+  return crun_safe_ensure_at (do_open, dir, follow_symlinks, dirfd, dirpath, new_path, mode, max_readlinks - 1, err);
+}
+
+static int
+crun_safe_ensure_at (bool do_open, bool dir, bool follow_symlinks, int dirfd, const char *dirpath,
                      const char *path, int mode, int max_readlinks, libcrun_error_t *err)
 {
   cleanup_close int wd_cleanup = -1;
@@ -581,16 +609,10 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
               /* If the last component is a symlink, repeat the lookup with the resolved path.  */
               if (errno == ELOOP)
                 {
-                  cleanup_free char *resolved_path = NULL;
-
-                  ret = safe_readlinkat (cwd, cur, &resolved_path, 0, err);
+                  ret = crun_safe_ensure_follow_symlink (do_open, dir, follow_symlinks, dirfd, dirpath, cwd, npath, cur, NULL,
+                                                         mode, max_readlinks, err);
                   if (LIKELY (ret >= 0))
-                    {
-                      return crun_safe_ensure_at (do_open, dir, dirfd,
-                                                  dirpath,
-                                                  resolved_path, mode,
-                                                  max_readlinks - 1, err);
-                    }
+                    return ret;
                   crun_error_release (err);
                 }
               /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
@@ -609,8 +631,19 @@ crun_safe_ensure_at (bool do_open, bool dir, int dirfd, const char *dirpath,
       ret = mkdirat (cwd, cur, mode);
       if (ret < 0)
         {
+          mode_t st_mode;
+
           if (errno != EEXIST)
             return crun_make_error (err, errno, "mkdir `/%s`", npath);
+
+          /* If asked to, follow a symlink here, so that a dangling one gets
+             its target created, and the lookup of a relative target or a ".."
+             after it starts from the right directory.  This is done for mount
+             targets, not for the working directory, where both crun and runc
+             have always failed with a dangling symlink.  */
+          if (follow_symlinks && get_file_type_at (cwd, &st_mode, true, cur) == 0 && S_ISLNK (st_mode))
+            return crun_safe_ensure_follow_symlink (do_open, dir, follow_symlinks, dirfd, dirpath, cwd, npath, cur,
+                                                    it ? it + 1 : NULL, mode, max_readlinks, err);
         }
 
       cwd = safe_openat (dirfd, dirpath, npath, (last_component ? O_PATH : 0) | O_CLOEXEC, 0, err);
@@ -675,21 +708,21 @@ crun_safe_create_and_open_ref_at (bool dir, int dirfd, const char *dirpath, cons
     return ret;
 
   crun_error_release (err);
-  return crun_safe_ensure_at (true, dir, dirfd, dirpath, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (true, dir, true, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_directory_at (int dirfd, const char *dirpath, const char *path, int mode,
                                libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, true, dirfd, dirpath, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, true, false, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
 int
 crun_safe_ensure_file_at (int dirfd, const char *dirpath, const char *path, int mode,
                           libcrun_error_t *err)
 {
-  return crun_safe_ensure_at (false, false, dirfd, dirpath, path, mode, MAX_READLINKS, err);
+  return crun_safe_ensure_at (false, false, false, dirfd, dirpath, path, mode, MAX_READLINKS, err);
 }
 
 int
