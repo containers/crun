@@ -25,12 +25,8 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
 
 static char doc[] = "OCI runtime";
-
-static libcrun_context_t crun_context;
 
 static struct argp_option options[] = {
   0,
@@ -56,18 +52,21 @@ int
 crun_command_mounts (struct crun_global_arguments *global_args, int argc, char **argv, libcrun_error_t *err)
 {
   int first_arg = 0, ret;
+  cleanup_context libcrun_context_t *crun_context = NULL;
 
-  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &crun_context);
+  argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, NULL);
   crun_assert_n_args (argc - first_arg, 3, 3);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (strcmp (argv[first_arg], "add") == 0)
-    return libcrun_container_add_mounts_from_file (&crun_context, argv[first_arg + 1], argv[first_arg + 2], err);
+    return libcrun_container_add_mounts_from_file (crun_context, argv[first_arg + 1], argv[first_arg + 2], err);
   else if (strcmp (argv[first_arg], "remove") == 0)
-    return libcrun_container_remove_mounts_from_file (&crun_context, argv[first_arg + 1], argv[first_arg + 2], err);
+    return libcrun_container_remove_mounts_from_file (crun_context, argv[first_arg + 1], argv[first_arg + 2], err);
 
   return crun_make_error (err, 0, "unknown command %s", argv[first_arg]);
 }

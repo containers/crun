@@ -15,10 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with crun.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CRUN_H
-#define CRUN_H
+#ifndef CRUN_CLI_H
+#define CRUN_CLI_H
 
-#include "libcrun/container.h"
+#include <stdbool.h>
+#include <libcrun/libcrun.h>
+#include "crun_utils.h"
 
 struct crun_global_arguments
 {
@@ -40,5 +42,6 @@ char *argp_mandatory_argument (char *arg, struct argp_state *state);
 int parse_id_or_fail (const char *str, char **endptr, const char *kind);
 int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob,
                           libcrun_error_t *err);
+libcrun_context_t *new_libcrun_context (struct crun_global_arguments *glob);
 void crun_assert_n_args (int n, int min, int max);
 #endif
