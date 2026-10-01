@@ -6,98 +6,151 @@
 #
 # The latter is for the whole file, e.g. for a feature crun does not have.
 #
+# A comment applies to the entries below it, up to the next empty line.
+#
 # The list is expected to shrink, as either crun or the tests get fixed.
 # Remove an entry once the test passes; an entry which does not match any
 # test (for example, because it was renamed or removed) is an error.
 
-# Features crun does not have, and runc specific tests.
 # "crun events" is not implemented.
 events.bats
+
 # Checks the output of runc --debug, which is runc specific.
 debug.bats
+
 # "-h" is not implemented, only "--help".
 help.bats
+
 # --pidfd-socket is not implemented.
 pidfd-socket.bats
+
 # Checks the output format of "runc --version", which is runc specific.
 version.bats
 
-# Individual tests.
-capabilities.bats: runc run with unknown capability
-capabilities.bats: runc exec --cap [ambient is set from spec]
-capabilities.bats: runc run [ambient caps not set in inheritable result in a warning]
-cgroup_delegation.bats: runc exec (cgroup v2, ro cgroupfs, new cgroupns) does not chown cgroup
-cgroups.bats: runc create (rootless + limits + no cgrouppath + no permission) fails with informative error
-cgroups.bats: runc create (limits + cgrouppath + permission on the cgroup dir) succeeds
-cgroups.bats: runc run (per-device multiple iops via unified)
-cgroups.bats: runc run (hugetlb limits)
-cgroups.bats: runc run (pids.limit=0 means 1)
 # --ignore-paused is not implemented.
 cgroups.bats: runc exec --ignore-paused
-cgroups.bats: runc run/create should error for a non-empty cgroup
-# --lazy-pages not implemented.
+
+# "crun exec --additional-gids" is not implemented.
+exec.bats: runc exec --additional-gids
+
+# "crun ps" does not run ps(1): it only lists the container PIDs, and does not
+# accept ps options.
+ps.bats: ps
+ps.bats: ps -e -x
+
+# --lazy-pages is not implemented.
 # TODO: remove once containers/crun#2259 is merged.
 checkpoint.bats: checkpoint --lazy-pages and restore
-cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
-cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.json]
-cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
-create.bats: runc create [shared pidns + rootless]
+
+# With the systemd cgroup driver, crun puts the container processes into the
+# "container" sub-cgroup of the unit cgroup, while these tests look at the unit
+# cgroup itself (its cgroup.procs, or a sub-cgroup created from the container).
 delete.bats: runc delete [host pidns + init gone]
 delete.bats: runc delete --force [host pidns + init gone]
 delete.bats: runc delete --force in cgroupv2 with subcgroups
-exec.bats: runc exec --additional-gids
+
+# With the systemd cgroup driver, crun sets the limits on the "container"
+# sub-cgroup of the unit cgroup, and systemd does not set the CPU period with
+# no quota on the unit cgroup, which is what the tests check.
+update.bats: set cpu period with no quota
+update.bats: update cpu period with no previous period/quota set
+
+# The tests check runc specific debug messages.
+cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
+cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.json]
+cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
 exec.bats: runc --debug exec
 exec.bats: runc --debug --log exec
-exec.bats: runc exec --cgroup subcgroup [v2]
-exec.bats: runc exec [init changes cgroup]
-hooks.bats: runc run [hook's argv is preserved]
-hooks_so.bats: runc run (hooks library tests)
-host-mntns.bats: runc run [host mount ns + hooks]
-# crun keeps all idmapped mount source fds open at once (EMFILE with a low RLIMIT_NOFILE).
-idmap.bats: Check mount source fds are cleaned up with idmapped mounts [userns]
-# crun makes idmapped mounts private, even if another propagation is requested.
-idmap.bats: idmap mount with propagation flag [userns]
-kill.bats: kill detached busybox
-kill.bats: kill KILL [host pidns]
-kill.bats: kill KILL [host pidns + init gone]
+run.bats: runc run [/proc/self/exe clone]
+
+# The test checks the runc specific output format of "list".
 list.bats: list
-list.bats: list with non-existent root fails
+
+# The test checks for a runc specific warning ("Such configuration is strongly
+# discouraged").
+create.bats: runc create [shared pidns + rootless]
+
+# crun fails as well, but words the error differently.
+kill.bats: kill detached busybox
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
-# As root, crun does not pass the inherited mode as a mode= mount option.
-mounts.bats: runc run [tmpfs mount mode= inherit]
+
+# crun reports the hook exit code, not the signal ("bad system call").
+seccomp.bats: runc run [seccomp] (startContainer hook)
+
+# crun words the error differently ("open seccomp receiver: connect socket to ...").
+seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
+
+# runc rejects the configuration, while crun fails to set the scheduler (EPERM).
+scheduler.bats: scheduler vs cpus
+
+# crun errors out if both CPU shares and cpu.idle are set with systemd, while
+# runc warns ("unable to apply both") and ignores the shares.
+update.bats: update cgroup cpu.idle via systemd v252+
+
+# Without the permission to use cgroups, crun ignores the resource limits of
+# a rootless container, while runc fails.
+cgroups.bats: runc create (rootless + limits + no cgrouppath + no permission) fails with informative error
+
+# The test uses "CPU", "Cpus" and "Mems" keys, which only work with runc
+# because Go decodes JSON case-insensitively.
+# TODO: remove once opencontainers/runc#5501 is merged.
+update.bats: update cpuset parameters via resources.CPU
+
+# runc returns -ENOSYS for syscalls newer than any in the profile, using a
+# BPF stub. This is better solved in libseccomp, see seccomp/libseccomp#457.
+seccomp.bats: runc run [seccomp -ENOSYS handling]
+
+# The test uses host rootfs paths as mount destinations, which runc accepts for
+# legacy reasons, and crun does not.
+# TODO: remove once opencontainers/runc#5503 is merged.
 mounts.bats: runc run [mount order, container bind-mount source]
 mounts.bats: runc run [mount order, container bind-mount source] (userns)
+
+# An idmapped mount can only be created by the host, while a bind mount source
+# inside the container rootfs must be opened after the preceding mounts are done
+# in the container mount namespace; crun opens idmapped mount sources beforehand.
 mounts.bats: runc run [mount order, container idmap source]
 mounts.bats: runc run [mount order, container idmap source] (userns)
-mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
+
+# crun keeps all idmapped mount source fds open at once (EMFILE with a low
+# RLIMIT_NOFILE).
+idmap.bats: Check mount source fds are cleaned up with idmapped mounts [userns]
+
+# crun makes idmapped mounts private, even if another propagation is requested.
+idmap.bats: idmap mount with propagation flag [userns]
+
+# As root, crun does not pass the inherited mode as a mode= mount option.
+mounts.bats: runc run [tmpfs mount mode= inherit]
+
 # With a user namespace, crun allows to explicitly clear the locked flags of
 # a bind mount source (and the expected error message is runc specific).
 mounts_sshfs.bats: runc run [explicit-rw bind mount of a ro fuse sshfs mount]
 mounts_sshfs.bats: runc run [dev,exec,suid,atime bind mount of a nodev,nosuid,noexec,noatime fuse sshfs mount]
 mounts_sshfs.bats: runc run [bind mount {no,rel,strict}atime semantics]
-ps.bats: ps
-ps.bats: ps -e -x
+
+# Not yet explained: either to be fixed in crun, or yet to be looked into.
+capabilities.bats: runc run with unknown capability
+capabilities.bats: runc exec --cap [ambient is set from spec]
+capabilities.bats: runc run [ambient caps not set in inheritable result in a warning]
+cgroup_delegation.bats: runc exec (cgroup v2, ro cgroupfs, new cgroupns) does not chown cgroup
+cgroups.bats: runc create (limits + cgrouppath + permission on the cgroup dir) succeeds
+cgroups.bats: runc run (per-device multiple iops via unified)
+cgroups.bats: runc run (hugetlb limits)
+cgroups.bats: runc run (pids.limit=0 means 1)
+cgroups.bats: runc run/create should error for a non-empty cgroup
+exec.bats: runc exec --cgroup subcgroup [v2]
+exec.bats: runc exec [init changes cgroup]
+hooks.bats: runc run [hook's argv is preserved]
+hooks_so.bats: runc run (hooks library tests)
+host-mntns.bats: runc run [host mount ns + hooks]
+kill.bats: kill KILL [host pidns]
+kill.bats: kill KILL [host pidns + init gone]
+list.bats: list with non-existent root fails
+mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
 ps.bats: ps after the container stopped
-run.bats: runc run [/proc/self/exe clone]
-scheduler.bats: scheduler vs cpus
-seccomp.bats: runc run [seccomp -ENOSYS handling]
 seccomp.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_*)
-# crun reports the hook exit code, not the signal ("bad system call").
-seccomp.bats: runc run [seccomp] (startContainer hook)
 seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
-# crun words the error differently ("open seccomp receiver: connect socket to ...").
-seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
 update.bats: update cgroup cpu limits
 update.bats: update pids.limit
-# With systemd, crun sets the limits on a sub-cgroup of the unit one, and
-# systemd does not set the CPU period with no quota; the test checks the latter.
-update.bats: set cpu period with no quota
-update.bats: update cpu period with no previous period/quota set
-# crun errors out if both CPU shares and cpu.idle are set with systemd, while
-# runc warns ("unable to apply both") and ignores the shares.
-update.bats: update cgroup cpu.idle via systemd v252+
-# The test uses "CPU", "Cpus" and "Mems" keys, which only work with runc
-# because Go decodes JSON case-insensitively.
-update.bats: update cpuset parameters via resources.CPU
 update.bats: update per-device iops/bps values
