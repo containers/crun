@@ -45,8 +45,6 @@ create.bats: runc create [shared pidns + rootless]
 delete.bats: runc delete [host pidns + init gone]
 delete.bats: runc delete --force [host pidns + init gone]
 delete.bats: runc delete --force in cgroupv2 with subcgroups
-env.bats: empty HOME env var is overridden
-env.bats: empty HOME env var is overridden with multiple overrides
 exec.bats: runc exec --additional-gids
 exec.bats: runc --debug exec
 exec.bats: runc --debug --log exec
