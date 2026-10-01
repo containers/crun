@@ -66,8 +66,6 @@ kill.bats: kill KILL [host pidns]
 kill.bats: kill KILL [host pidns + init gone]
 list.bats: list
 list.bats: list with non-existent root fails
-mask.bats: mask paths [duplicate paths]
-mask.bats: mask paths [directories share tmpfs]
 memorypolicy.bats: runc run and exec memory policy prefer relative
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
 mounts.bats: runc run [setgid / + mkdirall]
