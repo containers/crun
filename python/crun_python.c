@@ -33,12 +33,15 @@ python_crun.run(ctx, ctr)
 */
 
 #include <config.h>
+
 #include <Python.h>
-#include <libcrun/container.h>
-#include <libcrun/status.h>
-#include <libcrun/spec.h>
-#include <libcrun/utils.h>
-#include <libcrun/error.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <libcrun/libcrun.h>
+
+#define arg_unused __attribute__ ((unused))
 
 #define CONTEXT_OBJ_TAG "crun-context"
 #define CONTAINER_OBJ_TAG "crun-container"
@@ -46,18 +49,22 @@ python_crun.run(ctx, ctr)
 static PyObject *
 set_error (libcrun_error_t *err)
 {
-  if ((*err)->status == 0)
-    PyErr_SetString (PyExc_RuntimeError, (*err)->msg);
+  int status = libcrun_error_get_status (*err);
+  const char *msg = libcrun_error_get_message (*err);
+
+  if (status == 0)
+    PyErr_SetString (PyExc_RuntimeError, msg);
   else
     {
-      cleanup_free char *msg = NULL;
+      char *full = NULL;
       int ret;
 
-      ret = asprintf (&msg, "%s: %s", (*err)->msg, strerror ((*err)->status));
-      if (LIKELY (ret >= 0))
-        PyErr_SetString (PyExc_RuntimeError, msg);
-      else
-        msg = NULL;
+      ret = asprintf (&full, "%s: %s", msg, strerror (status));
+      if (ret >= 0)
+        {
+          PyErr_SetString (PyExc_RuntimeError, full);
+          free (full);
+        }
     }
 
   libcrun_error_release (err);
@@ -68,7 +75,7 @@ static void
 free_container (PyObject *ptr)
 {
   libcrun_container_t *ctr = PyCapsule_GetPointer (ptr, CONTAINER_OBJ_TAG);
-  free_runtime_spec_schema_config_schema (ctr->container_def);
+  libcrun_container_free (ctr);
 }
 
 static PyObject *
@@ -109,21 +116,8 @@ static void
 free_context (PyObject *ptr)
 {
   libcrun_context_t *ctx = PyCapsule_GetPointer (ptr, CONTEXT_OBJ_TAG);
-  void *id, *bundle, *state_root, *notify_socket;
 
-  if (ctx == NULL)
-    return;
-
-  id = (void *) ctx->id;
-  bundle = (void *) ctx->bundle;
-  state_root = (void *) ctx->state_root;
-  notify_socket = (void *) ctx->notify_socket;
-
-  free (id);
-  free (bundle);
-  free (state_root);
-  free (notify_socket);
-  free (ctx);
+  libcrun_context_free (ctx);
 }
 
 static PyObject *
@@ -133,27 +127,34 @@ make_context (PyObject *self arg_unused, PyObject *args, PyObject *kwargs)
   char *bundle = NULL;
   char *state_root = NULL;
   char *notify_socket = NULL;
+  unsigned char systemd_cgroup = 0;
+  unsigned char detach = 0;
+  unsigned char no_new_keyring = 0;
+  unsigned char force_no_cgroup = 0;
+  unsigned char no_pivot = 0;
   static char *kwlist[] =
     { "id", "bundle", "state_root", "systemd_cgroup", "notify_socket", "detach", "no_new_keyring", "force_no_cgroup", "no_pivot", NULL };
-  libcrun_context_t *ctx = malloc (sizeof (*ctx));
-  if (ctx == NULL)
-    return NULL;
-
-  memset (ctx, 0, sizeof (*ctx));
-  ctx->fifo_exec_wait_fd = -1;
+  libcrun_error_t err = NULL;
+  libcrun_context_t *ctx;
 
   if (!PyArg_ParseTupleAndKeywords
       (args, kwargs, "s|ssbsbbbb", kwlist, &id, &bundle, &state_root,
-       &ctx->systemd_cgroup, &notify_socket, &ctx->detach, &ctx->no_new_keyring, &ctx->force_no_cgroup, &ctx->no_pivot))
-    {
-      free (ctx);
-      return NULL;
-    }
+       &systemd_cgroup, &notify_socket, &detach, &no_new_keyring, &force_no_cgroup, &no_pivot))
+    return NULL;
 
-  ctx->id = xstrdup (id);
-  ctx->bundle = xstrdup (bundle ? bundle : ".");
-  ctx->state_root = xstrdup (state_root);
-  ctx->notify_socket = xstrdup (notify_socket);
+  ctx = libcrun_context_new (id, state_root, &err);
+  if (ctx == NULL)
+    return set_error (&err);
+
+  libcrun_context_set_bundle (ctx, bundle ? bundle : ".");
+  if (notify_socket)
+    libcrun_context_set_notify_socket (ctx, notify_socket);
+  libcrun_context_set_systemd_cgroup (ctx, systemd_cgroup);
+  libcrun_context_set_detach (ctx, detach);
+  libcrun_context_set_no_new_keyring (ctx, no_new_keyring);
+  libcrun_context_set_force_no_cgroup (ctx, force_no_cgroup);
+  libcrun_context_set_no_pivot (ctx, no_pivot);
+
   return PyCapsule_New (ctx, CONTEXT_OBJ_TAG, free_context);
 }
 
@@ -235,7 +236,7 @@ container_delete (PyObject *self arg_unused, PyObject *args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS;
-  ret = libcrun_container_delete (ctx, NULL, id, force, &err);
+  ret = libcrun_container_delete (ctx, id, force, &err);
   Py_END_ALLOW_THREADS;
   if (ret < 0)
     return set_error (&err);
@@ -300,7 +301,9 @@ containers_list (PyObject *self arg_unused, PyObject *args)
   libcrun_error_t err = NULL;
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
-  libcrun_container_list_t *containers, *it;
+  libcrun_container_list_t *containers = NULL;
+  libcrun_container_iter_t *it;
+  const char *id;
   PyObject *retobj;
   Py_ssize_t i = 0;
   int ret;
@@ -313,24 +316,31 @@ containers_list (PyObject *self arg_unused, PyObject *args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS;
-  ret = libcrun_get_containers_list (&containers, ctx->state_root, &err);
+  ret = libcrun_container_list (ctx, &containers, &err);
   Py_END_ALLOW_THREADS;
   if (ret < 0)
     return set_error (&err);
 
   i = 0;
-  for (it = containers; it; it = it->next)
+  it = libcrun_container_list_iter (containers);
+  while (libcrun_container_iter_next (it, NULL))
     i++;
+  libcrun_container_iter_free (it);
 
   retobj = PyList_New (i);
   if (retobj == NULL)
-    return NULL;
+    {
+      libcrun_container_list_free (containers);
+      return NULL;
+    }
 
   i = 0;
-  for (it = containers; it; it = it->next)
-    PyList_SetItem (retobj, i++, PyUnicode_FromString (it->name));
+  it = libcrun_container_list_iter (containers);
+  while (libcrun_container_iter_next (it, &id))
+    PyList_SetItem (retobj, i++, PyUnicode_FromString (id));
+  libcrun_container_iter_free (it);
 
-  libcrun_free_containers_list (containers);
+  libcrun_container_list_free (containers);
 
   return retobj;
 }
@@ -342,8 +352,8 @@ container_status (PyObject *self arg_unused, PyObject *args)
   PyObject *ctx_obj = NULL;
   libcrun_context_t *ctx;
   char *id = NULL;
-  cleanup_free char *buffer = NULL;
-  FILE *memfile;
+  char *buffer = NULL;
+  PyObject *retobj;
   int ret;
 
   if (!PyArg_ParseTuple (args, "Os", &ctx_obj, &id))
@@ -353,24 +363,16 @@ container_status (PyObject *self arg_unused, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  buffer = malloc (4096);
-  if (buffer == NULL)
-    return NULL;
-
-  /* A bit silly (and expensive), libcrun_container_state needs a refactoring
-     to make this nicer. */
-  memset (buffer, 0, 4096);
-
-  memfile = fmemopen (buffer, 4095, "w");
   Py_BEGIN_ALLOW_THREADS;
-  ret = libcrun_container_state (ctx, id, memfile, &err);
+  ret = libcrun_container_state_json (ctx, id, &buffer, &err);
   Py_END_ALLOW_THREADS;
   if (ret < 0)
     return set_error (&err);
 
-  fclose (memfile);
+  retobj = PyUnicode_FromString (buffer);
+  free (buffer);
 
-  return PyUnicode_FromString (buffer);
+  return retobj;
 }
 
 static PyObject *
@@ -381,11 +383,7 @@ container_update (PyObject *self arg_unused, PyObject *args)
   libcrun_context_t *ctx;
   char *id = NULL;
   char *content = NULL;
-  json_object *doc = NULL;
   int ret;
-  parser_error parser_err = NULL;
-  struct parser_context parser_ctx = { 0, stderr };
-  runtime_spec_schema_config_schema_process *process = NULL;
 
   if (!PyArg_ParseTuple (args, "Oss", &ctx_obj, &id, &content))
     return NULL;
@@ -394,31 +392,12 @@ container_update (PyObject *self arg_unused, PyObject *args)
   if (ctx == NULL)
     return NULL;
 
-  ret = parse_json_file (&doc, content, &parser_ctx, &err);
-  if (UNLIKELY (ret < 0))
-    return set_error (&err);
-
-  process = make_runtime_spec_schema_config_schema_process (doc, &parser_ctx, &parser_err);
-  json_object_put (doc);
-  if (process == NULL)
-    {
-      cleanup_free char *msg = NULL;
-      ret = asprintf (&msg, "cannot parse process: %s", parser_err);
-      if (LIKELY (ret >= 0))
-        PyErr_SetString (PyExc_RuntimeError, msg);
-      else
-        msg = NULL;
-      free (parser_err);
-      return NULL;
-    }
-
   Py_BEGIN_ALLOW_THREADS;
-  ret = libcrun_container_exec (ctx, id, process, &err);
+  ret = libcrun_container_exec_json (ctx, id, content, &err);
   Py_END_ALLOW_THREADS;
-
-  free_runtime_spec_schema_config_schema_process (process);
   if (ret < 0)
     return set_error (&err);
+
   Py_RETURN_NONE;
 }
 
@@ -426,30 +405,24 @@ static PyObject *
 container_spec (PyObject *self arg_unused, PyObject *args arg_unused)
 {
   libcrun_error_t err = NULL;
-  cleanup_free char *buffer = NULL;
-  FILE *memfile;
+  char *buffer = NULL;
+  PyObject *retobj;
   int ret;
 
-  buffer = malloc (4096);
-  if (buffer == NULL)
-    return NULL;
-
-  memfile = fmemopen (buffer, 4095, "w");
-  Py_BEGIN_ALLOW_THREADS;
-  ret = libcrun_container_spec (geteuid () == 0, memfile, &err);
-  Py_END_ALLOW_THREADS;
+  ret = libcrun_container_spec_json (geteuid () == 0, &buffer, &err);
   if (ret < 0)
     return set_error (&err);
-  buffer[ret] = '\0';
-  fclose (memfile);
 
-  return PyUnicode_FromString (buffer);
+  retobj = PyUnicode_FromString (buffer);
+  free (buffer);
+
+  return retobj;
 }
 
 static PyObject *
 get_verbosity (PyObject *self arg_unused, PyObject *args arg_unused)
 {
-  return PyLong_FromLong (libcrun_get_verbosity());
+  return PyLong_FromLong (libcrun_get_verbosity ());
 }
 
 static PyObject *

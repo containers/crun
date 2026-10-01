@@ -25,9 +25,6 @@
 #include <errno.h>
 
 #include "crun.h"
-#include "libcrun/container.h"
-#include "libcrun/utils.h"
-#include "libcrun/cgroup.h"
 
 static char doc[] = "OCI runtime";
 
@@ -71,7 +68,7 @@ parse_opt (int key, char *arg, struct argp_state *state arg_unused)
       else if (strcmp (arg, "json") == 0)
         ps_options.format = PS_JSON;
       else
-        error (EXIT_FAILURE, 0, "invalid format `%s`", arg);
+        libcrun_fail_with_error (0, "invalid format `%s`", arg);
       break;
 
     default:
@@ -89,9 +86,7 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
   int first_arg;
   int ret;
   cleanup_free pid_t *pids = NULL;
-  libcrun_context_t crun_context = {
-    0,
-  };
+  cleanup_context libcrun_context_t *crun_context = NULL;
   size_t i;
 
   ps_options.format = PS_TABLE;
@@ -99,14 +94,16 @@ crun_command_ps (struct crun_global_arguments *global_args, int argc, char **arg
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &ps_options);
   crun_assert_n_args (argc - first_arg, 1, 1);
 
-  ret = init_libcrun_context (&crun_context, argv[first_arg], global_args, err);
+  crun_context = new_libcrun_context (global_args);
+
+  ret = init_libcrun_context (crun_context, argv[first_arg], global_args, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_container_read_pids (&crun_context, argv[first_arg], true, &pids, err);
+  ret = libcrun_container_read_pids (crun_context, argv[first_arg], true, &pids, err);
   if (UNLIKELY (ret < 0))
     {
-      libcrun_error_write_warning_and_release (stderr, &err);
+      libcrun_error_report_and_release (err);
       return ret;
     }
 

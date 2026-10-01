@@ -103,6 +103,8 @@ LIBCRUN_PUBLIC int libcrun_make_error (libcrun_error_t *err, int status, const c
 
 LIBCRUN_PUBLIC void libcrun_error_write_warning_and_release (FILE *out, libcrun_error_t **err);
 
+LIBCRUN_PUBLIC void libcrun_error_report_and_release (libcrun_error_t *err);
+
 LIBCRUN_PUBLIC void libcrun_fail_with_error (int errno_, const char *msg, ...) __attribute__ ((noreturn)) __attribute__ ((format (printf, 2, 3)));
 
 LIBCRUN_PUBLIC int libcrun_set_log_format (const char *format, libcrun_error_t *err);
@@ -111,6 +113,10 @@ LIBCRUN_PUBLIC int libcrun_init_logging (crun_output_handler *output_handler, vo
                                          const char *log, libcrun_error_t *err);
 
 LIBCRUN_PUBLIC int libcrun_error_release (libcrun_error_t *err);
+
+LIBCRUN_PUBLIC int libcrun_error_get_status (libcrun_error_t err);
+
+LIBCRUN_PUBLIC const char *libcrun_error_get_message (libcrun_error_t err);
 
 int json_gen_error_to_crun_error (int gen_status, libcrun_error_t *err);
 
