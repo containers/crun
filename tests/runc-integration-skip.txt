@@ -81,7 +81,6 @@ mounts.bats: runc run [mount order, container idmap source] (userns)
 mounts.bats: runc run [bind mount through a dangling symlink component]
 mounts.bats: runc run [bind mount through a trailing dangling symlink]
 mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
-mounts_recursive.bats: runc run [ check rbind,r*atime mounts]
 # With a user namespace, crun allows to explicitly clear the locked flags of
 # a bind mount source (and the expected error message is runc specific).
 mounts_sshfs.bats: runc run [explicit-rw bind mount of a ro fuse sshfs mount]

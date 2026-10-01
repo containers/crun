@@ -366,6 +366,10 @@ do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t cle
         attr.attr_set |= MOUNT_ATTR_NODIRATIME;
       attr.attr_clr |= MOUNT_ATTR__ATIME | MOUNT_ATTR_NODIRATIME;
     }
+  /* The kernel rejects a partial MOUNT_ATTR__ATIME in attr_clr, so clearing
+     any of the atime modes resets the mount to the relatime default.  */
+  else if (clear & (MS_NOATIME | MS_RELATIME | MS_STRICTATIME))
+    attr.attr_clr |= MOUNT_ATTR__ATIME;
 
   ret = syscall_mount_setattr (targetfd, "", (recursive ? AT_RECURSIVE : 0) | AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
