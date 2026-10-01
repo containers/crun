@@ -814,15 +814,20 @@ libcrun_status_has_read_exec_fifo (const char *state_root, const char *id, libcr
 struct libcrun_status_s
 {
   libcrun_container_status_t status;
+  char *id;
+  char *state_root;
+
+  /* The live state requires probing the container (and its cgroup), so it is
+     resolved on demand and cached here.  */
+  bool state_resolved;
   libcrun_container_state_t state;
+  int running;
 };
 
 int
 libcrun_container_status_load (libcrun_context_t *context, const char *id, libcrun_status_t **out, libcrun_error_t *err)
 {
-  const char *state_string = NULL;
   libcrun_status_t *st;
-  int running;
   int ret;
 
   st = xmalloc0 (sizeof (*st));
@@ -834,25 +839,8 @@ libcrun_container_status_load (libcrun_context_t *context, const char *id, libcr
       return ret;
     }
 
-  ret = libcrun_get_container_state_string (id, &st->status, context->state_root, &state_string, &running, err);
-  if (UNLIKELY (ret < 0))
-    {
-      libcrun_container_status_free (st);
-      return ret;
-    }
-
-  if (state_string == NULL)
-    st->state = LIBCRUN_CONTAINER_STATUS_STOPPED;
-  else if (strcmp (state_string, "creating") == 0)
-    st->state = LIBCRUN_CONTAINER_STATUS_CREATING;
-  else if (strcmp (state_string, "created") == 0)
-    st->state = LIBCRUN_CONTAINER_STATUS_CREATED;
-  else if (strcmp (state_string, "running") == 0)
-    st->state = LIBCRUN_CONTAINER_STATUS_RUNNING;
-  else if (strcmp (state_string, "paused") == 0)
-    st->state = LIBCRUN_CONTAINER_STATUS_PAUSED;
-  else
-    st->state = LIBCRUN_CONTAINER_STATUS_STOPPED;
+  st->id = xstrdup (id);
+  st->state_root = xstrdup (context->state_root);
 
   *out = st;
   return 0;
@@ -864,13 +852,63 @@ libcrun_container_status_free (libcrun_status_t *st)
   if (st == NULL)
     return;
   libcrun_free_container_status (&st->status);
+  free (st->state_root);
+  free (st->id);
   free (st);
 }
 
-libcrun_container_state_t
-libcrun_status_get_state (libcrun_status_t *st)
+int
+libcrun_status_get_state (libcrun_status_t *st, libcrun_container_state_t *state, int *running, libcrun_error_t *err)
 {
-  return st->state;
+  if (! st->state_resolved)
+    {
+      const char *state_string = NULL;
+      int ret;
+
+      ret = libcrun_get_container_state_string (st->id, &st->status, st->state_root, &state_string, &st->running, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      if (state_string == NULL)
+        st->state = LIBCRUN_CONTAINER_STATUS_STOPPED;
+      else if (strcmp (state_string, "creating") == 0)
+        st->state = LIBCRUN_CONTAINER_STATUS_CREATING;
+      else if (strcmp (state_string, "created") == 0)
+        st->state = LIBCRUN_CONTAINER_STATUS_CREATED;
+      else if (strcmp (state_string, "running") == 0)
+        st->state = LIBCRUN_CONTAINER_STATUS_RUNNING;
+      else if (strcmp (state_string, "paused") == 0)
+        st->state = LIBCRUN_CONTAINER_STATUS_PAUSED;
+      else
+        st->state = LIBCRUN_CONTAINER_STATUS_STOPPED;
+
+      st->state_resolved = true;
+    }
+
+  if (state)
+    *state = st->state;
+  if (running)
+    *running = st->running;
+  return 0;
+}
+
+const char *
+libcrun_container_state_to_string (libcrun_container_state_t state)
+{
+  switch (state)
+    {
+    case LIBCRUN_CONTAINER_STATUS_CREATING:
+      return "creating";
+    case LIBCRUN_CONTAINER_STATUS_CREATED:
+      return "created";
+    case LIBCRUN_CONTAINER_STATUS_RUNNING:
+      return "running";
+    case LIBCRUN_CONTAINER_STATUS_PAUSED:
+      return "paused";
+    case LIBCRUN_CONTAINER_STATUS_STOPPED:
+      return "stopped";
+    }
+  return "unknown";
 }
 
 pid_t
@@ -901,6 +939,12 @@ const char *
 libcrun_status_get_owner (libcrun_status_t *st)
 {
   return st->status.owner;
+}
+
+const char *
+libcrun_status_get_scope (libcrun_status_t *st)
+{
+  return st->status.scope;
 }
 
 const char *

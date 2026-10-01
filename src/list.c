@@ -150,11 +150,11 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
         printf ("%s\n", name);
       else
         {
+          libcrun_container_state_t state;
           int running = 0;
           int pid = libcrun_status_get_pid (status);
-          const char *container_status = NULL;
 
-          ret = libcrun_container_get_state_string (crun_context, name, &container_status, &running, err);
+          ret = libcrun_status_get_state (status, &state, &running, err);
           if (UNLIKELY (ret < 0))
             {
               libcrun_error_report_and_release (err);
@@ -165,9 +165,9 @@ crun_command_list (struct crun_global_arguments *global_args, int argc, char **a
           if (! running)
             pid = 0;
 
-          printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, name, pid, container_status,
-                  libcrun_status_get_bundle (status), libcrun_status_get_created (status),
-                  libcrun_status_get_owner (status));
+          printf ("%-*s%-10d%-8s %-39s %-30s %s\n", max_length, name, pid,
+                  libcrun_container_state_to_string (state), libcrun_status_get_bundle (status),
+                  libcrun_status_get_created (status), libcrun_status_get_owner (status));
         }
 
       libcrun_container_status_free (status);
