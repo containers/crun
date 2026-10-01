@@ -70,10 +70,8 @@ mask.bats: mask paths [duplicate paths]
 mask.bats: mask paths [directories share tmpfs]
 memorypolicy.bats: runc run and exec memory policy prefer relative
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
-mounts.bats: runc run [setgid / + mkdirall]
 # As root, crun does not pass the inherited mode as a mode= mount option.
 mounts.bats: runc run [tmpfs mount mode= inherit]
-mounts.bats: runc run [tmpfs mount mode=1777 default]
 mounts.bats: runc run [mount order, container bind-mount source]
 mounts.bats: runc run [mount order, container bind-mount source] (userns)
 mounts.bats: runc run [mount order, container idmap source]

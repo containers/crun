@@ -3058,7 +3058,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
       else
         {
           /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
           targetfd = ret;
@@ -3248,7 +3248,7 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
     }
 
   /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-  ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+  ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, 0755, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
