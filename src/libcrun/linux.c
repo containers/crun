@@ -2520,6 +2520,59 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   return 0;
 }
 
+/* Advance to the next path component, skipping empty and "." ones.  */
+static const char *
+next_path_component (const char *p, size_t *len)
+{
+  for (;;)
+    {
+      p = consume_slashes (p);
+      *len = strcspn (p, "/");
+      if (*len != 1 || p[0] != '.')
+        return p;
+      p++;
+    }
+}
+
+/* Whether A and B are the same path, ignoring repeated, leading and
+   trailing slashes, and "." components.  ".." components are compared
+   as they are, not resolved lexically: if a path component before them
+   is a symlink, the path may refer to something else entirely, and
+   treating it as a duplicate would leave it unmasked.  */
+static bool
+same_path (const char *a, const char *b)
+{
+  size_t la, lb;
+
+  for (;;)
+    {
+      a = next_path_component (a, &la);
+      b = next_path_component (b, &lb);
+      if (la != lb || memcmp (a, b, la) != 0)
+        return false;
+      if (la == 0)
+        return true;
+      a += la;
+      b += lb;
+    }
+}
+
+/* Whether paths[i] is the same as one of the paths before it.  */
+static bool
+is_duplicate_path (char **paths, size_t i)
+{
+  size_t j;
+
+  if (paths[i] == NULL)
+    return false;
+
+  for (j = 0; j < i; j++)
+    if (paths[j] && same_path (paths[j], paths[i]))
+      return true;
+
+  return false;
+}
+
 static int
 do_masked_and_readonly_paths (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -2532,6 +2585,9 @@ do_masked_and_readonly_paths (libcrun_container_t *container, libcrun_error_t *e
 
   for (i = 0; i < def->linux->masked_paths_len; i++)
     {
+      if (is_duplicate_path (def->linux->masked_paths, i))
+        continue;
+
       ret = do_masked_or_readonly_path (container, def->linux->masked_paths[i], false, false, err);
       if (UNLIKELY (ret < 0))
         return ret;
