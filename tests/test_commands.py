@@ -366,6 +366,49 @@ def test_kill_all():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_kill_all_threaded():
+    """Test kill --all with a non-SIGKILL signal when the container cgroup has a threaded child."""
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if is_rootless():
+        return (77, "requires root for cgroup access")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'exit-on-signal']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        state = json.loads(run_crun_command(['state', cid]))
+        pid = state['pid']
+        with open("/proc/%d/cgroup" % pid) as f:
+            cgroup = f.read().strip().split("::", 1)[1]
+
+        worker = os.path.join("/sys/fs/cgroup" + cgroup, "worker")
+        os.mkdir(worker)
+        with open(os.path.join(worker, "cgroup.type"), "w") as f:
+            f.write("threaded")
+        with open(os.path.join(worker, "cgroup.threads"), "w") as f:
+            f.write(str(pid))
+
+        run_crun_command(['kill', '--all', cid, 'SIGUSR1'])
+
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("container not stopped after kill --all")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 def test_list_table_format():
     """Test list command with table format."""
 
@@ -762,6 +805,7 @@ all_tests = {
     "kill-signal-number": test_kill_signal_number,
     "kill-sigterm": test_kill_sigterm,
     "kill-all": test_kill_all,
+    "kill-all-threaded": test_kill_all_threaded,
     "run-forward-signal": test_run_forward_signal,
     "list-containers": test_list_containers,
     "list-table-format": test_list_table_format,
