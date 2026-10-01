@@ -2665,27 +2665,6 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
   return 0;
 }
 
-static char *
-append_mode_if_missing (char *data, const char *mode)
-{
-  char *new_data;
-  bool append;
-
-  if (data != NULL && strstr (data, "mode="))
-    return data;
-
-  append = data != NULL && data[0] != '\0';
-
-  if (append)
-    xasprintf (&new_data, "%s,%s", data, mode);
-  else
-    new_data = xstrdup (mode);
-
-  free (data);
-
-  return new_data;
-}
-
 static const char *
 get_force_cgroup_v1_annotation (libcrun_container_t *container)
 {
@@ -3015,8 +2994,6 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
           source_mountfd = ret;
         }
-
-      data = append_mode_if_missing (data, "mode=1755");
     }
 
   if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
@@ -3243,8 +3220,6 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
       is_dir = crun_dir_p (mount_source, false, err);
       if (UNLIKELY (is_dir < 0))
         return is_dir;
-
-      data = append_mode_if_missing (data, "mode=1755");
     }
 
   /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
