@@ -174,6 +174,9 @@ struct private_data_s
   /* Set once the process root is the container rootfs and the host root
      can no longer be reached by path.  */
   bool host_root_switched;
+  /* The rootfs path on the host, used to recognize bind mount sources
+     inside the container rootfs.  */
+  char *host_rootfs;
 };
 
 struct linux_namespace_s
@@ -215,6 +218,7 @@ cleanup_private_data (void *private_data)
   free (p->container_notify_socket_path);
   free (p->external_descriptors);
   free (p->maskdir_proc_path);
+  free (p->host_rootfs);
   free (p);
 }
 
@@ -2891,6 +2895,33 @@ get_bind_mount_locked_flags (int source_mountfd, const char *source, runtime_spe
   return sfs.f_flags & (MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC) & ~cleared;
 }
 
+/* If PATH is lexically inside the container rootfs ROOTFS, return the part
+   of it relative to ROOTFS, otherwise NULL.  Such a bind mount source refers
+   to what is in the container rootfs at the time of the mount, including the
+   mounts done before it, so it cannot be opened beforehand.  */
+static const char *
+get_path_in_rootfs (const char *rootfs, const char *path)
+{
+  size_t len;
+
+  if (rootfs == NULL || path == NULL)
+    return NULL;
+
+  len = strlen (rootfs);
+  while (len > 0 && rootfs[len - 1] == '/')
+    len--;
+
+  /* With "/" as the rootfs, every path is in it, and there is nothing to
+     do differently.  */
+  if (len == 0)
+    return NULL;
+
+  if (strncmp (path, rootfs, len) != 0 || (path[len] != '/' && path[len] != '\0'))
+    return NULL;
+
+  return consume_slashes (path + len);
+}
+
 static int
 process_single_mount (libcrun_container_t *container, const char *rootfs,
                       runtime_spec_schema_defs_mount *mount,
@@ -2930,6 +2961,21 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
   if (type == NULL && (flags & MS_BIND) == 0)
     return crun_make_error (err, 0, "invalid mount type for `%s`", mount->destination);
+
+  if ((flags & MS_BIND) && source_mountfd < 0 && ! (extra_flags & OPTION_COPY_SYMLINK))
+    {
+      const char *rel_source = get_path_in_rootfs (get_private_data (container)->host_rootfs, mount->source);
+
+      if (rel_source)
+        {
+          unsigned long propagation = (flags & (MS_SHARED | MS_SLAVE | MS_UNBINDABLE)) ? 0 : MS_PRIVATE;
+
+          source_mountfd = get_bind_mount (get_private_data (container)->rootfsfd, rel_source, (flags & MS_REC) != 0,
+                                           false, (extra_flags & OPTION_SRC_NOFOLLOW) != 0, propagation, err);
+          if (UNLIKELY (source_mountfd < 0))
+            return crun_error_wrap (err, "open mount source `%s`", mount->source);
+        }
+    }
 
   if ((flags & MS_BIND) && mount->source && has_mount_flag_options (mount)
       && (get_private_data (container)->unshare_flags & CLONE_NEWUSER))
@@ -4077,6 +4123,9 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
   if (UNLIKELY (ret < 0))
     return ret;
 
+  free (get_private_data (container)->host_rootfs);
+  get_private_data (container)->host_rootfs = xstrdup (*rootfs);
+
   /* Pre-create mounts and cache paths before pivot_root,
      while the host file system is still reachable.  */
   for (i = 0; i < def->mounts_len; i++)
@@ -4132,7 +4181,8 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
                                    && i < get_private_data (container)->n_copy_symlink_targets
                                    && get_private_data (container)->copy_symlink_targets[i];
 
-          if (mount_fds && def->mounts[i]->source != NULL && ! has_cached_target)
+          if (mount_fds && def->mounts[i]->source != NULL && ! has_cached_target
+              && get_path_in_rootfs (*rootfs, def->mounts[i]->source) == NULL)
             {
               libcrun_error_t tmp_err = NULL;
               unsigned long propagation = MS_PRIVATE;
@@ -5904,6 +5954,7 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close_map struct libcrun_fd_map *mount_fds = NULL;
   bool has_userns = (get_private_data (container)->unshare_flags & CLONE_NEWUSER) ? true : false;
+  cleanup_free char *rootfs = NULL;
   size_t how_many = 0;
   size_t i;
   int ret;
@@ -5912,6 +5963,9 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
     return 0;
 
   mount_fds = make_libcrun_fd_map (def->mounts_len);
+
+  if (def->root && def->root->path)
+    rootfs = realpath (def->root->path, NULL);
 
   if (! has_userns)
     {
@@ -5937,7 +5991,8 @@ prepare_and_send_mount_mounts (libcrun_container_t *container, pid_t pid, int sy
          Skip copy-symlink mounts: open_tree follows the symlink, losing the
          link itself; let process_single_mount handle them.  */
       if (mount_fd < 0 && (has_mappings || has_userns) && is_bind_mount (def->mounts[i], &recursive, &nofollow)
-          && ! mount_option_exists (def->mounts[i], "copy-symlink"))
+          && ! mount_option_exists (def->mounts[i], "copy-symlink")
+          && get_path_in_rootfs (rootfs, def->mounts[i]->source) == NULL)
         {
           unsigned long propagation = 0;
 
