@@ -59,6 +59,7 @@
 #include <libgen.h>
 #include <sys/wait.h>
 #include <sys/vfs.h>
+#include <sys/statvfs.h>
 #include <limits.h>
 #include <inttypes.h>
 #include <sys/personality.h>
@@ -167,6 +168,7 @@ struct private_data_s
   int maskdir_fd;
   char *maskdir_proc_path;
   bool maskdir_bind_failed;
+  bool maskdir_move_failed;
   bool maskdir_warned;
   bool joined_mount_ns;
   bool needs_pivot;
@@ -1234,6 +1236,19 @@ ensure_dev_null (int fd, libcrun_error_t *err)
   return 0;
 }
 
+/* Whether FD is the root of a read-only tmpfs that can hold no inode
+   other than its root, so it is safe to show in place of any directory.  */
+static bool
+is_empty_ro_tmpfs (int fd)
+{
+  struct statfs sfs;
+
+  if (fstatfs (fd, &sfs) < 0)
+    return false;
+
+  return sfs.f_type == TMPFS_MAGIC && (sfs.f_flags & ST_RDONLY) && sfs.f_files == 1;
+}
+
 static int
 mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_path, libcrun_error_t *err)
 {
@@ -1242,16 +1257,19 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
   libcrun_error_t tmp_err = NULL;
   int ret;
 
-  if (private_data->maskdir_bind_failed)
-    goto fallback_to_tmpfs;
-
-  ret = get_shared_empty_dir_cached (container, NULL, &tmp_err);
-  if (ret < 0)
+  if (private_data->maskdir_fd < 0)
     {
-      private_data->maskdir_bind_failed = true;
-      warn_tmpfs_fallback_once (private_data, tmp_err->msg);
-      crun_error_release (&tmp_err);
-      goto fallback_to_tmpfs;
+      if (private_data->maskdir_bind_failed)
+        goto fallback_to_tmpfs;
+
+      ret = get_shared_empty_dir_cached (container, NULL, &tmp_err);
+      if (ret < 0)
+        {
+          private_data->maskdir_bind_failed = true;
+          warn_tmpfs_fallback_once (private_data, tmp_err->msg);
+          crun_error_release (&tmp_err);
+          goto fallback_to_tmpfs;
+        }
     }
 
   if (private_data->maskdir_fd >= 0)
@@ -1289,6 +1307,7 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
 
       TEMP_FAILURE_RETRY (close (private_data->maskdir_fd));
       private_data->maskdir_fd = -1;
+      private_data->maskdir_move_failed = true;
     }
 
   private_data->maskdir_bind_failed = true;
@@ -1297,8 +1316,28 @@ mount_masked_dir (libcrun_container_t *container, int pathfd, const char *rel_pa
 
 fallback_to_tmpfs:
   libcrun_debug ("using tmpfs fallback for %s", rel_path);
-  return do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1",
-                   LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
+  ret = do_mount (container, "tmpfs", pathfd, rel_path, "tmpfs", MS_RDONLY, "nr_blocks=1,nr_inodes=1",
+                  LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* Reuse this tmpfs for the other masked directories, so that they do not
+     need a tmpfs instance each.  */
+  if (! private_data->maskdir_move_failed)
+    {
+      ret = get_bind_mount (private_data->rootfsfd, rel_path, true, true, false, MS_PRIVATE, &tmp_err);
+      if (ret >= 0 && is_empty_ro_tmpfs (ret))
+        private_data->maskdir_fd = ret;
+      else
+        {
+          if (ret >= 0)
+            TEMP_FAILURE_RETRY (close (ret));
+          private_data->maskdir_move_failed = true;
+          crun_error_release (&tmp_err);
+        }
+    }
+
+  return 0;
 }
 
 static int
