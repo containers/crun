@@ -150,7 +150,11 @@ dist-luarock: $(LUACRUN_ROCK)
 
 endif
 
-crun_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/src -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\"" $(SANITIZER_CFLAGS)
+# The crun binary is a pure consumer of the public libcrun API: it includes
+# only <libcrun.h> and links dynamically against libcrun.so.  It therefore
+# does NOT get the libocispec/json-c include paths -- if a binary source file
+# ever reaches for an internal header the build breaks, which is intentional.
+crun_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_srcdir)/src -D CRUN_LIBDIR="\"$(CRUN_LIBDIR)\"" $(SANITIZER_CFLAGS)
 if ENABLE_COVERAGE
 crun_CFLAGS += $(COVERAGE_CFLAGS)
 endif
@@ -165,11 +169,17 @@ else
 crun_LDFLAGS = -Wl,--unresolved-symbols=ignore-all $(CRUN_LDFLAGS) $(SANITIZER_LDFLAGS)
 endif
 else
-crun_LDADD = libcrun.la $(FOUND_LIBS) $(JSON_C_LIBS)
+# The crun binary links dynamically against libcrun; it resolves 100% of its
+# libcrun symbols from the public API exported by libcrun.lds.  There is no
+# -static-libtool-libs smuggling: if a binary source file reaches for a symbol
+# that is not part of the public API, the dynamic link fails, which is
+# intentional.  It links only against libcrun (no direct libocispec/json-c/
+# system deps): those are transitively provided by libcrun.so.
+crun_LDADD = libcrun.la
 if ENABLE_COVERAGE
-crun_LDFLAGS = $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS) $(SANITIZER_LDFLAGS)
+crun_LDFLAGS = -Wl,--as-needed $(CRUN_LDFLAGS) $(COVERAGE_LDFLAGS) $(SANITIZER_LDFLAGS)
 else
-crun_LDFLAGS = $(CRUN_LDFLAGS) $(SANITIZER_LDFLAGS)
+crun_LDFLAGS = -Wl,--as-needed $(CRUN_LDFLAGS) $(SANITIZER_LDFLAGS)
 endif
 endif
 
