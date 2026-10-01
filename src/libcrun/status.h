@@ -59,6 +59,19 @@ LIBCRUN_PUBLIC int libcrun_container_delete_status (const char *state_root, cons
 LIBCRUN_PUBLIC int libcrun_get_containers_list (libcrun_container_list_t **ret, const char *state_root,
                                                 libcrun_error_t *err);
 
+struct libcrun_container_iter_s
+{
+  libcrun_container_list_t *cur;
+};
+typedef struct libcrun_container_iter_s libcrun_container_iter_t;
+
+LIBCRUN_PUBLIC int libcrun_container_list (libcrun_context_t *context, libcrun_container_list_t **out,
+                                           libcrun_error_t *err);
+LIBCRUN_PUBLIC libcrun_container_iter_t *libcrun_container_list_iter (libcrun_container_list_t *l);
+LIBCRUN_PUBLIC bool libcrun_container_iter_next (libcrun_container_iter_t *it, const char **id);
+LIBCRUN_PUBLIC void libcrun_container_iter_free (libcrun_container_iter_t *it);
+LIBCRUN_PUBLIC void libcrun_container_list_free (libcrun_container_list_t *l);
+
 typedef enum
 {
   LIBCRUN_CONTAINER_STATUS_CREATING = 0,
