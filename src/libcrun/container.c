@@ -4156,8 +4156,17 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
       process_cleanup = process;
     }
 
-  /* This must be done before we enter a user namespace.  */
-  ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);
+  /* This must be done before we enter a user namespace.  If the process does
+     not specify any rlimits, use the ones from the container configuration.  */
+  if (process->rlimits_len == 0 && container->container_def->process)
+    ret = libcrun_set_rlimits (container->container_def->process->rlimits,
+                               container->container_def->process->rlimits_len, err);
+  else
+    ret = libcrun_set_rlimits (process->rlimits, process->rlimits_len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_set_mempolicy (container->container_def, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4167,10 +4176,24 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   pipefd0 = container_ret_status[0];
   pipefd1 = container_ret_status[1];
 
-  /* If the new process block doesn't specify a SELinux label, AppArmor profile or user, then
-     use the configuration from the original config file.  */
+  /* If the new process block doesn't specify a SELinux label, AppArmor profile, user,
+     I/O priority or scheduler, then use the configuration from the original config file.  */
   if (container->container_def->process)
     {
+      if (process->io_priority == NULL && container->container_def->process->io_priority)
+        {
+          process->io_priority = clone_runtime_spec_schema_config_schema_process_io_priority (container->container_def->process->io_priority);
+          if (process->io_priority == NULL)
+            OOM ();
+        }
+
+      if (process->scheduler == NULL && container->container_def->process->scheduler)
+        {
+          process->scheduler = clone_runtime_spec_schema_config_schema_process_scheduler (container->container_def->process->scheduler);
+          if (process->scheduler == NULL)
+            OOM ();
+        }
+
       if (process->selinux_label == NULL && container->container_def->process->selinux_label)
         process->selinux_label = xstrdup (container->container_def->process->selinux_label);
 

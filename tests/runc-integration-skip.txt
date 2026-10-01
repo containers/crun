@@ -57,13 +57,11 @@ host-mntns.bats: runc run [host mount ns + hooks]
 idmap.bats: Check mount source fds are cleaned up with idmapped mounts [userns]
 # crun makes idmapped mounts private, even if another propagation is requested.
 idmap.bats: idmap mount with propagation flag [userns]
-ioprio.bats: ioprio_set is applied to process group
 kill.bats: kill detached busybox
 kill.bats: kill KILL [host pidns]
 kill.bats: kill KILL [host pidns + init gone]
 list.bats: list
 list.bats: list with non-existent root fails
-memorypolicy.bats: runc run and exec memory policy prefer relative
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
 # As root, crun does not pass the inherited mode as a mode= mount option.
 mounts.bats: runc run [tmpfs mount mode= inherit]
@@ -80,11 +78,7 @@ mounts_sshfs.bats: runc run [bind mount {no,rel,strict}atime semantics]
 ps.bats: ps
 ps.bats: ps -e -x
 ps.bats: ps after the container stopped
-rlimits.bats: runc exec with RLIMIT_NOFILE(The same as system's hard value)
-rlimits.bats: runc exec with RLIMIT_NOFILE(Bigger than system's hard value)
-rlimits.bats: runc exec with RLIMIT_NOFILE(Smaller than system's hard value)
 run.bats: runc run [/proc/self/exe clone]
-scheduler.bats: scheduler is applied
 scheduler.bats: scheduler vs cpus
 seccomp.bats: runc run [seccomp -ENOSYS handling]
 seccomp.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_*)

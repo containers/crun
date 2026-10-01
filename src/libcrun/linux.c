@@ -6993,12 +6993,14 @@ join_process_parent_helper (libcrun_context_t *context,
       ret = libcrun_cgroup_join_process (cgroup_status, final_cgroup ?: status->cgroup_path, pid, status->pid, err);
       if (UNLIKELY (ret < 0))
         return ret;
-
-      /* Join the scheduler immediately after joining the cgroup.  */
-      ret = libcrun_set_scheduler (pid, process, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
     }
+
+  /* Set the scheduler for the process itself (it might have been set for its
+     parent, but it is not inherited with SCHED_FLAG_RESET_ON_FORK, and
+     SCHED_DEADLINE cannot be set there as it prevents forking).  */
+  ret = libcrun_set_scheduler (pid, process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (process && process->exec_cpu_affinity)
     {
@@ -7260,11 +7262,12 @@ libcrun_join_process (libcrun_context_t *context,
 
   pid = syscall_clone3 (&clone3_args);
 
-  if (pid > 0)
+  if (pid > 0 && ! (process->scheduler && process->scheduler->policy && strcmp (process->scheduler->policy, "SCHED_DEADLINE") == 0))
     {
       /* We need to set the scheduler as soon as possible after joining the cgroup,
          because if it is a RT scheduler, other processes in the container could already
-         take the entire cpu time and stall the new process.  */
+         take the entire cpu time and stall the new process.  This is not done for
+         SCHED_DEADLINE, which does not allow the process to fork.  */
       ret = libcrun_set_scheduler (pid, process, err);
       if (UNLIKELY (ret < 0))
         return ret;
