@@ -24,6 +24,7 @@
 #include <libcrun/cgroup-systemd.h>
 #include <sys/types.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <errno.h>
 #include <signal.h>
@@ -857,6 +858,93 @@ test_safe_openat_null_rootfs ()
   return 0;
 }
 
+static int
+check_safe_create_through_symlink (int rootfd, const char *root, bool dir, const char *path, const char *expected)
+{
+  libcrun_error_t err = NULL;
+  struct stat st_fd, st_expected;
+  int fd, ret;
+
+  fd = crun_safe_create_and_open_ref_at (dir, rootfd, root, path, 0755, &err);
+  if (fd < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  ret = fstat (fd, &st_fd);
+  close (fd);
+  if (ret < 0)
+    return -1;
+
+  if (fstatat (rootfd, expected, &st_expected, AT_SYMLINK_NOFOLLOW) < 0)
+    return -1;
+
+  if (st_fd.st_dev != st_expected.st_dev || st_fd.st_ino != st_expected.st_ino)
+    return -1;
+
+  if (dir != S_ISDIR (st_expected.st_mode))
+    return -1;
+
+  return 0;
+}
+
+/* When creating a mount target, dangling symlinks on the way are resolved
+   within the root, and their targets are created, a relative target relative
+   to the symlink.  */
+static int
+test_safe_create_through_dangling_symlinks ()
+{
+  char dir[PATH_MAX];
+  int rootfd, ret = -1;
+
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  rootfd = open (dir, O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (rootfd < 0)
+    goto out;
+
+  if (mkdirat (rootfd, "etc", 0755) < 0
+      || symlinkat ("/abs/x", rootfd, "jump") < 0
+      || symlinkat ("/jump/y/file", rootfd, "etc/abs") < 0
+      || symlinkat ("sub/file", rootfd, "etc/rel") < 0
+      || symlinkat ("../up/dir", rootfd, "etc/up") < 0)
+    goto out;
+
+  if (check_safe_create_through_symlink (rootfd, dir, false, "/etc/abs", "abs/x/y/file") < 0
+      || check_safe_create_through_symlink (rootfd, dir, false, "/etc/rel", "etc/sub/file") < 0
+      || check_safe_create_through_symlink (rootfd, dir, true, "/etc/up", "up/dir") < 0)
+    goto out;
+
+  /* This is not done for the working directory.  */
+  if (symlinkat ("/cwd/dir", rootfd, "etc/cwd") < 0)
+    goto out;
+  {
+    libcrun_error_t err = NULL;
+
+    if (crun_safe_ensure_directory_at (rootfd, dir, "/etc/cwd", 0755, &err) == 0)
+      goto out;
+    crun_error_release (&err);
+    if (faccessat (rootfd, "cwd", F_OK, AT_SYMLINK_NOFOLLOW) == 0)
+      goto out;
+  }
+
+  ret = 0;
+
+out:
+  if (rootfd >= 0)
+    close (rootfd);
+  {
+    char *args[] = { "/bin/rm", "-rf", dir, NULL };
+    libcrun_error_t err = NULL;
+
+    if (run_process (args, &err) != 0)
+      crun_error_release (&err);
+  }
+  return ret;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -880,9 +968,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..20\n");
+  printf ("1..21\n");
 #else
-  printf ("1..17\n");
+  printf ("1..18\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -897,6 +985,7 @@ main ()
   RUN_TEST (test_str_join_array);
   RUN_TEST (test_get_current_timestamp);
   RUN_TEST (test_crun_ensure_directory);
+  RUN_TEST (test_safe_create_through_dangling_symlinks);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
   RUN_TEST (test_format_default_id_mapping);
   RUN_TEST (test_safe_openat_root);
