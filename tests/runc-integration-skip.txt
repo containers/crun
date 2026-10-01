@@ -68,16 +68,13 @@ list.bats: list
 list.bats: list with non-existent root fails
 memorypolicy.bats: runc run and exec memory policy prefer relative
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
-mounts.bats: runc run [setgid / + mkdirall]
 # As root, crun does not pass the inherited mode as a mode= mount option.
 mounts.bats: runc run [tmpfs mount mode= inherit]
-mounts.bats: runc run [tmpfs mount mode=1777 default]
 mounts.bats: runc run [mount order, container bind-mount source]
 mounts.bats: runc run [mount order, container bind-mount source] (userns)
 mounts.bats: runc run [mount order, container idmap source]
 mounts.bats: runc run [mount order, container idmap source] (userns)
 mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
-mounts_recursive.bats: runc run [ check rbind,r*atime mounts]
 # With a user namespace, crun allows to explicitly clear the locked flags of
 # a bind mount source (and the expected error message is runc specific).
 mounts_sshfs.bats: runc run [explicit-rw bind mount of a ro fuse sshfs mount]

@@ -372,6 +372,10 @@ do_mount_setattr (bool recursive, const char *target, int targetfd, uint64_t cle
         attr.attr_set |= MOUNT_ATTR_NODIRATIME;
       attr.attr_clr |= MOUNT_ATTR__ATIME | MOUNT_ATTR_NODIRATIME;
     }
+  /* The kernel rejects a partial MOUNT_ATTR__ATIME in attr_clr, so clearing
+     any of the atime modes resets the mount to the relatime default.  */
+  else if (clear & (MS_NOATIME | MS_RELATIME | MS_STRICTATIME))
+    attr.attr_clr |= MOUNT_ATTR__ATIME;
 
   ret = syscall_mount_setattr (targetfd, "", (recursive ? AT_RECURSIVE : 0) | AT_EMPTY_PATH, &attr);
   if (UNLIKELY (ret < 0))
@@ -2760,27 +2764,6 @@ get_default_flags (libcrun_container_t *container, const char *destination, char
   return 0;
 }
 
-static char *
-append_mode_if_missing (char *data, const char *mode)
-{
-  char *new_data;
-  bool append;
-
-  if (data != NULL && strstr (data, "mode="))
-    return data;
-
-  append = data != NULL && data[0] != '\0';
-
-  if (append)
-    xasprintf (&new_data, "%s,%s", data, mode);
-  else
-    new_data = xstrdup (mode);
-
-  free (data);
-
-  return new_data;
-}
-
 static const char *
 get_force_cgroup_v1_annotation (libcrun_container_t *container)
 {
@@ -3152,8 +3135,6 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
           source_mountfd = ret;
         }
-
-      data = append_mode_if_missing (data, "mode=1755");
     }
 
   if (S_ISLNK (src_mode) && (extra_flags & OPTION_COPY_SYMLINK))
@@ -3195,7 +3176,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
       else
         {
           /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+          ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, 0755, err);
           if (UNLIKELY (ret < 0))
             return ret;
           targetfd = ret;
@@ -3380,12 +3361,10 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
       is_dir = crun_dir_p (mount_source, false, err);
       if (UNLIKELY (is_dir < 0))
         return is_dir;
-
-      data = append_mode_if_missing (data, "mode=1755");
     }
 
   /* Make sure any other directory/file is created and take a O_PATH reference to it.  */
-  ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, is_dir ? 01755 : 0755, err);
+  ret = crun_safe_create_and_open_ref_at (is_dir, get_private_data (container)->rootfsfd, rootfs, target, 0755, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
