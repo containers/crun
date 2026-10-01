@@ -193,6 +193,41 @@ def test_mount_bind_to_rootfs():
     _, _ = run_and_get_output(conf, hide_stderr=True)
     return 0
 
+def test_mount_bind_source_in_rootfs():
+    # A bind mount source inside the container rootfs refers to what is
+    # there at the time of the mount, including the mounts done before it.
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'cat', '/b/file']
+    add_all_namespaces(conf)
+    srcdir = tempfile.mkdtemp(dir=get_tests_root())
+    with open(os.path.join(srcdir, "file"), "w") as f:
+        f.write("hello")
+
+    def prepare_rootfs(rootfs):
+        rootfs = os.path.realpath(rootfs)
+        os.makedirs(os.path.join(rootfs, "a"))
+        os.makedirs(os.path.join(rootfs, "b"))
+        # The absolute rootfs path is known only now, so add the mounts to the
+        # config file that is already written.
+        config_path = os.path.join(os.path.dirname(rootfs), "config.json")
+        with open(config_path) as f:
+            config = json.load(f)
+        config['mounts'] += [
+            {"destination": "/a", "type": "bind", "source": srcdir, "options": ["bind"]},
+            {"destination": "/b", "type": "bind", "source": os.path.join(rootfs, "a"), "options": ["bind"]},
+        ]
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+    finally:
+        shutil.rmtree(srcdir)
+    if "hello" not in out:
+        sys.stderr.write("# unexpected output: %s\n" % out)
+        return -1
+    return 0
+
 def test_mount_tmpfs_to_rootfs():
     # tmpcopyup on "/" is rejected: after pivot_root is moved before mounts,
     # there is no original rootfs content to copy from.
@@ -1569,6 +1604,7 @@ all_tests = {
     "mount-symlink-not-existing" : test_mount_symlink_not_existing,
     "mount-dev" : test_mount_dev,
     "mount-bind-to-rootfs": test_mount_bind_to_rootfs,
+    "mount-bind-source-in-rootfs": test_mount_bind_source_in_rootfs,
     "mount-tmpfs-to-rootfs": test_mount_tmpfs_to_rootfs,
     "mount-nodev" : test_mount_nodev,
     "mount-path-with-multiple-slashes" : test_mount_path_with_multiple_slashes,
