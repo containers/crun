@@ -361,6 +361,22 @@ sync_socket_send_sync (int fd, bool flush_errors, libcrun_error_t *err)
   return 0;
 }
 
+static bool
+has_cap_sys_ptrace ()
+{
+#ifdef HAVE_CAP
+  struct __user_cap_header_struct hdr = { _LINUX_CAPABILITY_VERSION_3, 0 };
+  struct __user_cap_data_struct data[2] = { { 0 } };
+
+  if (UNLIKELY (capget (&hdr, data) < 0))
+    return true;
+
+  return (data[0].effective & (1U << CAP_SYS_PTRACE)) != 0;
+#else
+  return geteuid () == 0;
+#endif
+}
+
 static libcrun_container_t *
 make_container (runtime_spec_schema_config_schema *container_def, const char *path, const char *config)
 {
@@ -369,6 +385,7 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
 
   container->host_uid = geteuid ();
   container->host_gid = getegid ();
+  container->host_has_cap_sys_ptrace = has_cap_sys_ptrace ();
   container->proc_fd = -1;
 
   container->annotations = make_string_map_from_json (container_def->annotations);

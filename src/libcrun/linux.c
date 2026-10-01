@@ -6543,9 +6543,18 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         }
     }
 
-  ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
+  /* Do not do it if crun has no CAP_SYS_PTRACE: until the container process
+     is executed, accessing /proc files of a non-dumpable init (e.g. to join
+     its namespaces with crun exec before the container is started) requires
+     CAP_SYS_PTRACE in the user namespace crun runs in.  The capability check
+     is done before creating the container user namespace, where the process
+     has all capabilities.  */
+  if (container->host_has_cap_sys_ptrace)
+    {
+      ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
+    }
 
   if (init_status->must_fork)
     {
