@@ -296,7 +296,7 @@ libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error
 }
 
 static int
-read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
+read_pids_cgroup_file (int dfd, const char *file, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
   cleanup_close int tasksfd = -1;
   cleanup_free char *buffer = NULL;
@@ -306,17 +306,17 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
   char *it;
   int ret;
 
-  tasksfd = openat (dfd, "cgroup.procs", O_RDONLY | O_CLOEXEC);
+  tasksfd = openat (dfd, file, O_RDONLY | O_CLOEXEC);
   if (tasksfd < 0)
     {
       /* The cgroup was removed concurrently (e.g. while killing the
          container), there are no processes left to account for.  */
       if (errno == ENOENT || errno == ENODEV)
         return 0;
-      return crun_make_error (err, errno, "open `cgroup.procs`");
+      return crun_make_error (err, errno, "open `%s`", file);
     }
 
-  ret = read_all_fd (tasksfd, "cgroup.procs", &buffer, &len, err);
+  ret = read_all_fd (tasksfd, file, &buffer, &len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -370,12 +370,34 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
           if (UNLIKELY (nfd < 0))
             return crun_make_error (err, errno, "open cgroup directory `%s`", de->d_name);
 
-          ret = read_pids_cgroup (nfd, recurse, pids, n_pids, allocated, err);
+          ret = read_pids_cgroup_file (nfd, file, recurse, pids, n_pids, allocated, err);
           if (UNLIKELY (ret < 0))
-            return ret;
+            {
+              /* Reading `cgroup.procs` of a threaded cgroup fails with
+                 EOPNOTSUPP.  Its processes are already listed by its
+                 threaded domain root, which was read before.  */
+              if (crun_error_get_errno (err) != EOPNOTSUPP)
+                return ret;
+              crun_error_release (err);
+            }
         }
     }
   return 0;
+}
+
+static int
+read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
+{
+  int ret;
+
+  ret = read_pids_cgroup_file (dfd, "cgroup.procs", recurse, pids, n_pids, allocated, err);
+  if (ret < 0 && crun_error_get_errno (err) == EOPNOTSUPP)
+    {
+      /* A threaded cgroup has no `cgroup.procs`, list its threads instead.  */
+      crun_error_release (err);
+      ret = read_pids_cgroup_file (dfd, "cgroup.threads", recurse, pids, n_pids, allocated, err);
+    }
+  return ret;
 }
 
 static int
