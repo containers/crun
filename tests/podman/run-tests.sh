@@ -25,8 +25,6 @@ export CGROUP_MANAGER=cgroupfs
 export STORAGE_OPTIONS="--storage-driver=overlay"
 export STORAGE_FS="overlay"
 
-export GO111MODULE=off
-
 ulimit -u unlimited
 export TMPDIR=/var/tmp
 
