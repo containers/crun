@@ -1687,7 +1687,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (tmp_err)
         crun_error_release (&tmp_err);
 
-      ret = do_hooks (def, getpid (), container->context->id, false, entrypoint_args->bundle, NULL, "starting", "startContainer",
+      ret = do_hooks (def, getpid (), container->context->id, false, entrypoint_args->bundle, NULL, "created", "startContainer",
                       (hook **) def->hooks->start_container,
                       def->hooks->start_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
                       in_userns > 0, err);

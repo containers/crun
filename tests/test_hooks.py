@@ -346,7 +346,8 @@ def test_in_container_hooks_state():
     """createContainer and startContainer hooks must get the correct state (issue #2285).
 
     The pid must be the container process pid, as seen from the container,
-    and the bundle must be the bundle path as seen by the runtime.
+    the bundle must be the bundle path as seen by the runtime, and the
+    status must be "created".
     """
     hooks = {
         # createContainer runs before pivot_root, so a host binary is used.
@@ -371,6 +372,10 @@ def test_in_container_hooks_state():
         bundle = state.get('bundle', '')
         if not os.path.islink(bundle) or not os.path.exists(os.path.join(bundle, "config.json")):
             logger.info("%s hook got invalid bundle: %s", name, state)
+            return -1
+
+        if state.get('status') != 'created':
+            logger.info("%s hook got invalid status: %s", name, state)
             return -1
 
     return 0
