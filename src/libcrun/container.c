@@ -92,6 +92,9 @@ struct container_entrypoint_s
   int hooks_out_fd;
   int hooks_err_fd;
 
+  /* Absolute bundle path, to be reported to hooks run in the container.  */
+  const char *bundle;
+
   struct custom_handler_instance_s *custom_handler;
 };
 
@@ -849,18 +852,18 @@ get_bundle_path (const char *bundle, char **allocated)
 }
 
 static int
-do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *cwd,
-          const char *status, const char *name, hook **hooks, size_t hooks_len, int out_fd, int err_fd,
-          bool can_ignore_chdir_errors, libcrun_error_t *err)
+do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *bundle,
+          const char *cwd, const char *status, const char *name, hook **hooks, size_t hooks_len, int out_fd,
+          int err_fd, bool can_ignore_chdir_errors, libcrun_error_t *err)
 {
   size_t i, stdin_len;
   int r, ret;
   char *stdin = NULL;
-  cleanup_free char *cwd_allocated = NULL;
+  cleanup_free char *bundle_allocated = NULL;
   const char *rootfs = def->root ? def->root->path : "";
   cleanup_json_gen json_gen_ctx *gen = NULL;
 
-  cwd = get_bundle_path (cwd, &cwd_allocated);
+  bundle = get_bundle_path (bundle, &bundle_allocated);
 
   if (! json_gen_init (&gen, NULL))
     return crun_make_error (err, 0, "json_gen_init failed");
@@ -882,7 +885,7 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   GEN_STR (gen, rootfs);
 
   GEN_KEY (gen, "bundle");
-  GEN_STR (gen, cwd);
+  GEN_STR (gen, bundle);
 
   GEN_KEY (gen, "status");
   GEN_STR (gen, status);
@@ -1380,7 +1383,8 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
       int in_userns = check_running_in_user_namespace (&tmp_err);
       if (tmp_err)
         crun_error_release (&tmp_err);
-      ret = do_hooks (def, 0, container->context->id, false, NULL, "created", "createContainer", (hook **) def->hooks->create_container,
+      ret = do_hooks (def, getpid (), container->context->id, false, entrypoint_args->bundle, NULL, "created", "createContainer",
+                      (hook **) def->hooks->create_container,
                       def->hooks->create_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
                       in_userns > 0, err);
       if (UNLIKELY (ret != 0))
@@ -1683,7 +1687,8 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       if (tmp_err)
         crun_error_release (&tmp_err);
 
-      ret = do_hooks (def, 0, container->context->id, false, NULL, "starting", "startContainer", (hook **) def->hooks->start_container,
+      ret = do_hooks (def, getpid (), container->context->id, false, entrypoint_args->bundle, NULL, "created", "startContainer",
+                      (hook **) def->hooks->start_container,
                       def->hooks->start_container_len, entrypoint_args->hooks_out_fd, entrypoint_args->hooks_err_fd,
                       in_userns > 0, err);
       if (UNLIKELY (ret != 0))
@@ -1825,7 +1830,7 @@ run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_hooks (def, 0, id, true, status->bundle, "stopped", "poststop", (hook **) def->hooks->poststop,
+      ret = do_hooks (def, 0, id, true, status->bundle, status->bundle, "stopped", "poststop", (hook **) def->hooks->poststop,
                       def->hooks->poststop_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
         {
@@ -2856,9 +2861,11 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
   struct libcrun_cgroup_args cg;
+  cleanup_free char *bundle_allocated = NULL;
   struct container_entrypoint_s container_args = {
     .container = container,
     .context = context,
+    .bundle = get_bundle_path (context->bundle, &bundle_allocated),
     .terminal_socketpair = { -1, -1 },
     .console_socket_fd = -1,
     .hooks_out_fd = -1,
@@ -3019,7 +3026,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (def->hooks && def->hooks->prestart_len)
     {
       libcrun_debug ("Running `prestart` hooks");
-      ret = do_hooks (def, pid, context->id, false, context->bundle, "created", "prestart", (hook **) def->hooks->prestart,
+      ret = do_hooks (def, pid, context->id, false, context->bundle, context->bundle, "created", "prestart", (hook **) def->hooks->prestart,
                       def->hooks->prestart_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
         goto fail;
@@ -3027,7 +3034,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (def->hooks && def->hooks->create_runtime_len)
     {
       libcrun_debug ("Running `create` hooks");
-      ret = do_hooks (def, pid, context->id, false, context->bundle, "created", "createRuntime", (hook **) def->hooks->create_runtime,
+      ret = do_hooks (def, pid, context->id, false, context->bundle, context->bundle, "created", "createRuntime", (hook **) def->hooks->create_runtime,
                       def->hooks->create_runtime_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
         goto fail;
@@ -3071,7 +3078,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (context->fifo_exec_wait_fd < 0 && def->hooks && def->hooks->poststart_len)
     {
       libcrun_debug ("Running `poststart` hooks");
-      ret = do_hooks (def, pid, context->id, false, context->bundle, "running", "poststart", (hook **) def->hooks->poststart,
+      ret = do_hooks (def, pid, context->id, false, context->bundle, context->bundle, "running", "poststart", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
         goto fail;
@@ -3511,7 +3518,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_hooks (def, status.pid, context->id, false, status.bundle, "running", "poststart", (hook **) def->hooks->poststart,
+      ret = do_hooks (def, status.pid, context->id, false, status.bundle, status.bundle, "running", "poststart", (hook **) def->hooks->poststart,
                       def->hooks->poststart_len, hooks_out_fd, hooks_err_fd, false, err);
       if (UNLIKELY (ret != 0))
         {

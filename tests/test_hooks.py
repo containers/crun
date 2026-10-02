@@ -321,6 +321,66 @@ def test_hooks_bundle_path_not_cwd():
         shutil.rmtree(state_dir, ignore_errors=True)
 
 
+def _get_in_container_hook_state(name, hook):
+    """Run a container with an in-container hook, return the state it got."""
+    import tempfile
+    import json
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+    conf['hooks'] = {name: [hook]}
+
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        state_file = f.name
+    try:
+        conf['annotations'] = {'run.oci.hooks.stdout': state_file}
+        run_and_get_output(conf, hide_stderr=True, bundle_via_symlink=True)
+        with open(state_file) as f:
+            return json.load(f)
+    finally:
+        os.unlink(state_file)
+
+
+def test_in_container_hooks_state():
+    """createContainer and startContainer hooks must get the correct state (issue #2285).
+
+    The pid must be the container process pid, as seen from the container,
+    the bundle must be the bundle path as seen by the runtime, and the
+    status must be "created".
+    """
+    hooks = {
+        # createContainer runs before pivot_root, so a host binary is used.
+        "createContainer": {"path": "/bin/cat"},
+        "startContainer": {"path": "/init", "args": ["/init", "cat", "/proc/self/fd/0"]},
+    }
+
+    for name, hook in hooks.items():
+        try:
+            state = _get_in_container_hook_state(name, hook)
+        except Exception as e:
+            logger.info("%s: failed to get hook state: %s", name, e)
+            return -1
+
+        pid = state.get('pid')
+        if not isinstance(pid, int) or pid <= 0:
+            logger.info("%s hook got invalid pid: %s", name, state)
+            return -1
+
+        # The bundle is passed to crun as a symlink, see
+        # test_hooks_bundle_path_not_cwd.
+        bundle = state.get('bundle', '')
+        if not os.path.islink(bundle) or not os.path.exists(os.path.join(bundle, "config.json")):
+            logger.info("%s hook got invalid bundle: %s", name, state)
+            return -1
+
+        if state.get('status') != 'created':
+            logger.info("%s hook got invalid status: %s", name, state)
+            return -1
+
+    return 0
+
+
 def test_createContainer_hook():
     """Test createContainer hook."""
     conf = base_config()
@@ -717,6 +777,7 @@ all_tests = {
     "test-createRuntime-hook": test_createRuntime_hook,
     "test-createRuntime-hook-bundle-path": test_createRuntime_hook_bundle_path,
     "test-hooks-bundle-path-not-cwd": test_hooks_bundle_path_not_cwd,
+    "test-in-container-hooks-state": test_in_container_hooks_state,
     "test-createContainer-hook": test_createContainer_hook,
     "test-createContainer-hook-after-mounts": test_createContainer_hook_after_mounts,
     "test-startContainer-hook": test_startContainer_hook,
