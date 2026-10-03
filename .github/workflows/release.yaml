@@ -28,7 +28,7 @@ jobs:
           if [[ -z $(ls -A /nix) ]]; then sudo docker run --rm --privileged -v /:/mnt nixos/nix:2.35.1 cp -rfT /nix /mnt/nix; fi
           sudo RUNTIME=docker SKIP_CHECKS=1 SKIP_GPG=1 build-aux/release.sh
           sudo mv /nix .cache
-          sudo chown -Rf $(whoami) .cache
+          sudo chown -Rf "$(whoami)" .cache
 
       - run: |
           sudo mv release-* /tmp/artifact
@@ -38,7 +38,7 @@ jobs:
           done
           sudo mv /tmp/artifact/*.tar.gz /tmp/artifact/crun.tar.gz
           sudo mv /tmp/artifact/*.tar.zst /tmp/artifact/crun.tar.zst
-          (cd /tmp/artifact; sha256sum * | sudo tee CHECKSUMS)
+          (cd /tmp/artifact; sha256sum -- * | sudo tee CHECKSUMS)
 
       - uses: actions/upload-artifact@v7
         with:

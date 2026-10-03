@@ -52,11 +52,11 @@ jobs:
             apt-get install -y libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev clang mawk
 
           run: |
-            find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+            find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
             ./tests/ci.sh cross-${{ matrix.build }}
 
   Test:
-    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +106,7 @@ jobs:
       - name: run autogen.sh
         run: |
           git clean -fdx .
-          find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+          find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
 
       - name: run test
@@ -176,7 +176,7 @@ jobs:
         run: |
           mkdir -p ~/.local/bin
           curl -sSfL --retry 5 -o ~/.local/bin/shfmt \
-            $BASEURL/$VERSION/shfmt_${VERSION}_linux_amd64
+            "$BASEURL/$VERSION/shfmt_${VERSION}_linux_amd64"
           sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shfmt"
           chmod +x ~/.local/bin/shfmt
       - name: install shellcheck
@@ -186,8 +186,8 @@ jobs:
           SHA256: 4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b
         run: |
           mkdir -p ~/.local/bin
-          curl -sSfL --retry 5 $BASEURL/$VERSION/shellcheck-$VERSION.linux.x86_64.tar.xz |
-            tar xfJ - -C ~/.local/bin --strip 1 shellcheck-$VERSION/shellcheck
+          curl -sSfL --retry 5 "$BASEURL/$VERSION/shellcheck-$VERSION.linux.x86_64.tar.xz" |
+            tar xfJ - -C ~/.local/bin --strip 1 "shellcheck-$VERSION/shellcheck"
           sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shellcheck"
           # make sure to remove the old version
           sudo rm -f /usr/bin/shellcheck
@@ -198,7 +198,7 @@ jobs:
       - uses: lumaxis/shellcheck-problem-matchers@v2
       - name: shellcheck
         run: |
-          find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+          find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
           ./configure --enable-embedded-blake3
           make shellcheck
