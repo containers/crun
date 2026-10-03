@@ -25,7 +25,7 @@ jobs:
           - riscv64
         distro: [ubuntu_latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
           set-safe-directory: true
@@ -38,7 +38,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config
           ./autogen.sh
 
-      - uses: uraimo/run-on-arch-action@v3.2.0
+      - uses: uraimo/run-on-arch-action@460cb8e6d9f726a588fc9b5e681c8a6cab09ae41 # v3.2.0
         name: Build
         id: build
         with:
@@ -88,7 +88,7 @@ jobs:
           - test: krun-build
     steps:
       - name: checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: install dependencies
         run: |
@@ -115,7 +115,7 @@ jobs:
   keyring:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: validate crun.keyring
         run: build-aux/keyring_validate.sh
 
@@ -129,17 +129,17 @@ jobs:
         rootless: ["", "-rootless"]
     steps:
       - name: checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: checkout runc
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opencontainers/runc
           path: runc
 
       # For the runc test helpers (tests/cmd in runc).
       - name: install go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
 
@@ -150,7 +150,7 @@ jobs:
           sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev pkg-config gcc libsystemd-dev gperf libjson-c-dev libprotobuf-c-dev mawk sshfs uidmap
 
       - name: install bats
-        uses: bats-core/bats-action@4.0.0
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
         with:
           bats-version: 1.12.0
           support-install: false
@@ -167,7 +167,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: install shfmt
         env:
           VERSION: v3.14.0
@@ -195,7 +195,7 @@ jobs:
         run: |
           sudo apt-get update -q -y
           sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev mawk
-      - uses: lumaxis/shellcheck-problem-matchers@v2
+      - uses: lumaxis/shellcheck-problem-matchers@bf6e0860fd06e4910738c6160dcd2889146ce824 # v2.3.1
       - name: shellcheck
         run: |
           find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
