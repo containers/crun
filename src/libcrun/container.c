@@ -1021,7 +1021,7 @@ get_seccomp_receiver_fd_payload (libcrun_container_t *container, const char *sta
       GEN_STR (gen, container->context->bundle);
     }
 
-  if (def->annotations && def->annotations->len)
+  if (def && def->annotations && def->annotations->len)
     GEN_OR_FAIL (gen_annotations (gen, def->annotations));
 
   GEN_OR_FAIL (json_gen_map_close (gen));
