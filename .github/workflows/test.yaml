@@ -29,6 +29,7 @@ jobs:
         with:
           submodules: true
           set-safe-directory: true
+          persist-credentials: false
 
       # Running autoreconf natively is much faster than under emulation.
       # The generated files are architecture independent.
@@ -89,6 +90,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: install dependencies
         run: |
@@ -116,6 +119,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: validate crun.keyring
         run: build-aux/keyring_validate.sh
 
@@ -130,12 +135,15 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: checkout runc
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opencontainers/runc
           path: runc
+          persist-credentials: false
 
       # For the runc test helpers (tests/cmd in runc).
       - name: install go
@@ -168,6 +176,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: install shfmt
         env:
           VERSION: v3.14.0
