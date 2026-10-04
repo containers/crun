@@ -2,6 +2,16 @@ name: Test
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
+# Cancel superseded runs of the same pull request. For everything else
+# (in particular, pushes to a branch or a tag) there is no PR number, so
+# the group falls back to the unique run_id and nothing is cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build_job:
     runs-on: ubuntu-latest
@@ -25,10 +35,11 @@ jobs:
           - riscv64
         distro: [ubuntu_latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
           set-safe-directory: true
+          persist-credentials: false
 
       # Running autoreconf natively is much faster than under emulation.
       # The generated files are architecture independent.
@@ -38,7 +49,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config
           ./autogen.sh
 
-      - uses: uraimo/run-on-arch-action@v3.2.0
+      - uses: uraimo/run-on-arch-action@460cb8e6d9f726a588fc9b5e681c8a6cab09ae41 # v3.2.0
         name: Build
         id: build
         with:
@@ -52,11 +63,11 @@ jobs:
             apt-get install -y libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev clang mawk
 
           run: |
-            find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+            find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
             ./tests/ci.sh cross-${{ matrix.build }}
 
   Test:
-    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -88,7 +99,9 @@ jobs:
           - test: krun-build
     steps:
       - name: checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: install dependencies
         run: |
@@ -106,7 +119,7 @@ jobs:
       - name: run autogen.sh
         run: |
           git clean -fdx .
-          find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+          find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
 
       - name: run test
@@ -115,7 +128,9 @@ jobs:
   keyring:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: validate crun.keyring
         run: build-aux/keyring_validate.sh
 
@@ -129,17 +144,20 @@ jobs:
         rootless: ["", "-rootless"]
     steps:
       - name: checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: checkout runc
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opencontainers/runc
           path: runc
+          persist-credentials: false
 
       # For the runc test helpers (tests/cmd in runc).
       - name: install go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
 
@@ -150,7 +168,7 @@ jobs:
           sudo apt-get install -q -y criu automake libtool autotools-dev libseccomp-dev git make libcap-dev pkg-config gcc libsystemd-dev gperf libjson-c-dev libprotobuf-c-dev mawk sshfs uidmap
 
       - name: install bats
-        uses: bats-core/bats-action@4.0.0
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
         with:
           bats-version: 1.12.0
           support-install: false
@@ -167,7 +185,9 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: install shfmt
         env:
           VERSION: v3.14.0
@@ -176,7 +196,7 @@ jobs:
         run: |
           mkdir -p ~/.local/bin
           curl -sSfL --retry 5 -o ~/.local/bin/shfmt \
-            $BASEURL/$VERSION/shfmt_${VERSION}_linux_amd64
+            "$BASEURL/$VERSION/shfmt_${VERSION}_linux_amd64"
           sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shfmt"
           chmod +x ~/.local/bin/shfmt
       - name: install shellcheck
@@ -186,8 +206,8 @@ jobs:
           SHA256: 4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b
         run: |
           mkdir -p ~/.local/bin
-          curl -sSfL --retry 5 $BASEURL/$VERSION/shellcheck-$VERSION.linux.x86_64.tar.xz |
-            tar xfJ - -C ~/.local/bin --strip 1 shellcheck-$VERSION/shellcheck
+          curl -sSfL --retry 5 "$BASEURL/$VERSION/shellcheck-$VERSION.linux.x86_64.tar.xz" |
+            tar xfJ - -C ~/.local/bin --strip 1 "shellcheck-$VERSION/shellcheck"
           sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shellcheck"
           # make sure to remove the old version
           sudo rm -f /usr/bin/shellcheck
@@ -195,10 +215,10 @@ jobs:
         run: |
           sudo apt-get update -q -y
           sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev mawk
-      - uses: lumaxis/shellcheck-problem-matchers@v2
+      - uses: lumaxis/shellcheck-problem-matchers@bf6e0860fd06e4910738c6160dcd2889146ce824 # v2.3.1
       - name: shellcheck
         run: |
-          find $(pwd) -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
+          find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
           ./configure --enable-embedded-blake3
           make shellcheck
@@ -206,3 +226,15 @@ jobs:
         run: |
           make shfmt
           git diff --ignore-submodules --exit-code
+
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          advanced-security: false
+          annotations: true
