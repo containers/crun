@@ -5028,7 +5028,17 @@ int
 libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element **new_rlimits, size_t len,
                      libcrun_error_t *err)
 {
-  size_t i;
+  size_t i, j;
+  /* Check for duplicate rlimit types.  */
+  for (i = 0; i < len; i++)
+    {
+      for (j = i + 1; j < len; j++)
+        {
+          if (strcmp (new_rlimits[i]->type, new_rlimits[j]->type) == 0)
+            return crun_make_error (err, 0, "duplicate rlimit `%s`", new_rlimits[i]->type);
+        }
+    }
+
   for (i = 0; i < len; i++)
     {
       struct rlimit limit;
