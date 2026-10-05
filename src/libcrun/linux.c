@@ -2291,21 +2291,62 @@ relative_path_under_dev (const char *path)
 }
 
 static int
-mknod_and_set_attrs (int dirfd, const char *name, struct device_s *device, mode_t type, dev_t dev, libcrun_error_t *err)
+mknod_and_set_attrs (libcrun_container_t *container, int dirfd, const char *name, struct device_s *device,
+                     mode_t type, dev_t dev, libcrun_error_t *err)
 {
+  cleanup_close int fd = -1;
+  proc_fd_path_t fd_path;
+  const char *what = "new";
+  bool exists = false;
+  struct stat st;
+  int procfd;
   int ret;
 
   ret = mknodat (dirfd, name, device->mode | type, dev);
-  if (UNLIKELY (ret < 0 && errno == EEXIST))
-    return 0;
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "mknodat `%s`", device->path);
+    {
+      if (errno != EEXIST)
+        return crun_make_error (err, errno, "mknodat `%s`", device->path);
+      /* The runtime spec requires an error if the existing file
+         does not match the requested device, so check it below.  */
+      exists = true;
+      what = "existing";
+    }
 
-  ret = fchmodat (dirfd, name, device->mode, 0);
+  /* Get a handle and verify that it matches the expected inode type
+     and major:minor before operating on it.  */
+  fd = openat (dirfd, name, O_PATH | O_NOFOLLOW | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open %s device `%s`", what, device->path);
+
+  ret = fstat (fd, &st);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fstat %s device `%s`", what, device->path);
+
+  if (UNLIKELY ((st.st_mode & S_IFMT) != type))
+    return crun_make_error (err, 0, "%s device `%s` has incorrect file type %#o, expected %#o",
+                            what, device->path, st.st_mode & S_IFMT, type);
+
+  if (UNLIKELY (type != S_IFIFO && st.st_rdev != dev))
+    return crun_make_error (err, 0, "%s device `%s` has incorrect major:minor %u:%u, expected %u:%u",
+                            what, device->path, major (st.st_rdev), minor (st.st_rdev),
+                            major (dev), minor (dev));
+
+  /* Leave the existing inode's mode and owner as is.  */
+  if (exists)
+    return 0;
+
+  /* fchmod(2) does not work on O_PATH fds, so go through /proc.  */
+  procfd = get_procfd (get_private_data (container), err);
+  if (UNLIKELY (procfd < 0))
+    return procfd;
+
+  get_self_fd_path (fd_path, fd);
+  ret = fchmodat (procfd, fd_path, device->mode, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fchmod `%s`", device->path);
 
-  ret = fchownat (dirfd, name, device->uid, device->gid, AT_SYMLINK_NOFOLLOW);
+  ret = fchownat (fd, "", device->uid, device->gid, AT_EMPTY_PATH);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "fchown `%s`", device->path);
 
@@ -2404,7 +2445,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
       */
       if (rel_dev)
         {
-          ret = mknod_and_set_attrs (devfd, rel_dev, device, type, dev, err);
+          ret = mknod_and_set_attrs (container, devfd, rel_dev, device, type, dev, err);
           if (ret <= 0)
             return ret;
         }
@@ -2441,7 +2482,7 @@ libcrun_create_dev (libcrun_container_t *container, int devfd, int srcfd,
                 return dirfd;
             }
 
-          ret = mknod_and_set_attrs (dirfd, basename, device, type, dev, err);
+          ret = mknod_and_set_attrs (container, dirfd, basename, device, type, dev, err);
           if (ret <= 0)
             return ret;
         }
