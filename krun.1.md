@@ -27,6 +27,190 @@ purpose, abstracting most of the complexity from Virtual Machine management.
 Because of the additional isolation, sharing content with processes and other
 containers outside of the krun VM is more difficult.
 
+# ARCHITECTURE
+
+krun operates by first setting up the container environment and cgroup
+configuration according to the specified OCI configuration. Once the
+container environment is prepared, crun invokes libkrun to launch a
+microVM. The workload inside the container then runs within this microVM
+rather than directly on the host kernel.
+
+The architecture consists of three main components:
+
+1. **crun**: Sets up the container namespaces (user, pid, mount, ipc, uts, cgroup),
+   mounts the root file system, and configures cgroup resource limits. crun then
+   hands off execution to libkrun.
+
+2. **libkrun**: The VMM (Virtual Machine Monitor) that creates and manages the
+   microVM. It integrates a minimal set of emulated devices (virtio-blk for
+   storage, virtio-fs for file system access, virtio-console for I/O) and
+   abstracts away most KVM/hypervisor complexity.
+
+3. **Network stack**: krun supports three networking modes:
+   - **TSI (Transparent Socket Impersonation)**: The default mode where libkrun
+     intercepts socket operations in the guest and transparently relays them to
+     the host network stack. This gives the guest direct access to the host's
+     network interfaces and routing.
+   - **passt**: A user-space networking daemon that provides port forwarding,
+     NAT, and DNS. crun spawns passt and communicates with it via a Unix socket
+     pair. The microVM connects to passt via virtio-vsock.
+   - **TAP**: Direct attachment to a host TAP interface via virtio-net, for
+     advanced networking scenarios.
+
+When using passt or TAP networking, the microVM gets its own network namespace
+and IP address, unlike TSI which presents the host network directly to the guest.
+
+# NETWORKING
+
+## Networking Modes
+
+### TSI (Transparent Socket Impersonation) - Default
+
+TSI is the default networking mode when no special networking annotations are
+used. In this mode:
+
+- The guest sees the host's network interfaces directly
+- Network connections originate from the host's IP addresses
+- No additional network configuration is needed
+- Port publishing works as it would with regular containers
+- The guest uses the host's routing table and DNS configuration
+
+TSI works by intercepting socket system calls in the guest kernel and relaying
+them to the host, making the networking appear transparent.
+
+### passt Networking
+
+When the **krun.use_passt** annotation is set, crun spawns the passt daemon to
+provide networking:
+
+- crun creates a Unix socket pair and passes one end to passt via the --fd flag
+- passt binds to privileged ports on the host if allowed (requires CAP_NET_BIND_SERVICE
+  or net.ipv4.ip_unprivileged_port_start sysctl)
+- The microVM connects to passt via virtio-vsock
+- passt provides NAT, port forwarding, and DNS services
+- The microVM gets its own IP address (typically in a private range)
+- Port publishing works via passt's port forwarding configuration
+
+passt is invoked with `-t all -u all` to forward all TCP and UDP ports. Note
+that binding to privileged ports (< 1024) requires either the CAP_NET_BIND_SERVICE
+capability or setting the net.ipv4.ip_unprivileged_port_start sysctl.
+
+### TAP Networking
+
+When the **krun.tap_name** annotation is set, the microVM attaches directly to
+a host TAP interface:
+
+- Requires libkrun built with virtio-net support
+- The microVM gets direct layer-2 access to the network
+- Suitable for advanced networking configurations with bridges, VLANs, etc.
+- Mutually exclusive with passt networking
+
+## Port Publishing
+
+Port publishing behavior depends on the networking mode:
+
+- **TSI mode**: Works identically to regular containers since the guest uses the
+  host network stack directly. Podman's `-p` flag works transparently.
+
+- **passt mode**: Port publishing works through passt's port forwarding. passt
+  forwards all ports by default, but binding to privileged ports requires
+  additional system configuration. See passt(1) for details on privileged port
+  handling.
+
+- **TAP mode**: Port publishing depends on the TAP interface configuration.
+  The host network stack sees traffic from the microVM's MAC address, so port
+  publishing must be configured at the network layer (e.g., via iptables rules
+  or bridge configuration).
+
+# TROUBLESHOOTING
+
+## Verifying krun Mode
+
+To verify that a container is running in krun mode, check the kernel version
+inside the container:
+
+    podman run --runtime krun alpine uname -a
+
+The kernel version will differ from the host kernel, indicating a microVM.
+
+## Network Issues
+
+### TSI Mode
+
+If networking appears broken in TSI mode:
+- Verify the host network is functional
+- Check that the container has the correct capabilities
+- Review crun debug output with `--debug` flag
+
+### passt Mode
+
+If passt networking fails:
+- Verify passt is installed at `/usr/bin/passt`
+- Check passt logs (currently redirected to /dev/null by crun)
+- Verify the passt socket pair was created successfully
+- For privileged port issues, check:
+  - CAP_NET_BIND_SERVICE capability
+  - sysctl net.ipv4.ip_unprivileged_port_start
+- Test passt directly with a simple configuration
+
+### TAP Mode
+
+If TAP networking fails:
+- Verify the TAP interface exists and is up: `ip link show tap0`
+- Check libkrun was built with virtio-net support
+- Verify the TAP interface is accessible to the container user
+- Check for SELinux/AppArmor denials
+
+## Debug Output
+
+Increase crun's verbosity for troubleshooting:
+
+    podman run --runtime krun --log-level=debug ...
+
+This shows detailed information about libkrun initialization, networking setup,
+and microVM configuration.
+
+## Checking microVM State
+
+To inspect the microVM's configuration, check the temporary config file written
+by crun. The location is typically in the container's state directory under
+/run/crun or the configured state root.
+
+## Inspecting Network Layout
+
+To understand the network configuration inside a running krun container:
+
+    podman exec -it <container> ip addr show
+    podman exec -it <container> ip route show
+
+This shows the network interfaces and routing table from inside the microVM.
+Compare this with the host's network configuration to understand how the
+networking mode affects the container's view of the network.
+
+For passt mode, you can also check the passt process on the host:
+
+    ps aux | grep passt
+
+## Common Issues
+
+### Container fails to start with KVM errors
+
+- Verify KVM is available: `lsmod | grep kvm`
+- Check hardware virtualization is enabled in BIOS/UEFI
+- Verify nested virtualization if using **krun.nested_virt**
+
+### passt fails to start
+
+- Ensure passt is installed at `/usr/bin/passt`
+- Check that passt can be executed by the container user
+- Verify no firewall rules block passt operation
+
+### Performance issues
+
+- Increase VM memory with krun.ram_mib
+- Increase vCPUs with krun.cpus
+- Consider using virtio-fs optimization options in a **.krun_vm.json** file
+
 # CONFIGURATION
 
 The microVM can be configured through OCI annotations or a
