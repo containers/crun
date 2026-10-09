@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import stat
 import subprocess
 import shutil
 import json
@@ -369,6 +370,55 @@ def test_mknod_char_device():
         return -1
     return 0
 
+def test_mknod_existing_device():
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    def prepare_rootfs(rootfs):
+        os.makedirs(os.path.join(rootfs, "data"))
+        os.mknod(os.path.join(rootfs, "data", "null"), 0o666 | stat.S_IFCHR, os.makedev(1, 3))
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'ischar', '/data/null']
+    conf['linux']['devices'] = [{"path": "/data/null", "type": "c", "major": 1, "minor": 3}]
+    try:
+        run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+    except Exception as e:
+        logger.info("test_mknod_existing_device failed: %s", e)
+        return -1
+    return 0
+
+def test_mknod_conflicting_device():
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    def prepare_regular_file(rootfs):
+        os.makedirs(os.path.join(rootfs, "data"))
+        open(os.path.join(rootfs, "data", "conflict"), "w").close()
+
+    def prepare_other_device(rootfs):
+        os.makedirs(os.path.join(rootfs, "data"))
+        os.mknod(os.path.join(rootfs, "data", "conflict"), 0o666 | stat.S_IFCHR, os.makedev(1, 5))
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'true']
+    conf['linux']['devices'] = [{"path": "/data/conflict", "type": "c", "major": 1, "minor": 3}]
+
+    for prepare, expected in [(prepare_regular_file, "has incorrect file type"),
+                              (prepare_other_device, "has incorrect major:minor 1:5, expected 1:3")]:
+        try:
+            run_and_get_output(conf, callback_prepare_rootfs=prepare)
+            logger.info("test_mknod_conflicting_device: %s: container unexpectedly started", prepare.__name__)
+            return -1
+        except subprocess.CalledProcessError as e:
+            output = e.output.decode(errors='ignore')
+            if expected not in output:
+                logger.info("test_mknod_conflicting_device: %s: unexpected error: %s", prepare.__name__, output)
+                return -1
+    return 0
+
 def test_userns_precreated_devices_flags():
     conf = base_config()
     add_all_namespaces(conf, userns=True)
@@ -613,6 +663,8 @@ def test_allow_device_read_only():
 all_tests = {
     "mknod-fifo-device": test_mknod_fifo_device,
     "mknod-char-device": test_mknod_char_device,
+    "mknod-existing-device": test_mknod_existing_device,
+    "mknod-conflicting-device": test_mknod_conflicting_device,
     "dev-null-symlink-not-reopened": test_dev_null_symlink_not_reopened,
     "dev-console-symlink-does-not-escape-rootfs": test_dev_console_symlink_does_not_escape_rootfs,
     "dev-symlink-does-not-populate-outside-rootfs": test_dev_symlink_does_not_populate_outside_rootfs,
