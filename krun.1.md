@@ -48,17 +48,18 @@ The architecture consists of three main components:
 
 3. **Network stack**: krun supports three networking modes:
    - **TSI (Transparent Socket Impersonation)**: The default mode where libkrun
-     intercepts socket operations in the guest and transparently relays them to
-     the host network stack. This gives the guest direct access to the host's
-     network interfaces and routing.
-   - **passt**: A user-space networking daemon that provides port forwarding,
-     NAT, and DNS. crun spawns passt and communicates with it via a Unix socket
-     pair. The microVM connects to passt via virtio-vsock.
-   - **TAP**: Direct attachment to a host TAP interface via virtio-net, for
+     intercepts socket operations in the guest and proxies them in the VMM's
+     network context. This provides network connectivity without a guest network
+     interface. TCP ports listened to by the guest can be published with Podman's
+     `-p` flag. Listening on guest SOCK_DGRAM sockets is not supported.
+   - **passt**: A user-space networking daemon that provides port forwarding and
+     NAT. crun spawns passt with a virtio-net interface backed by a Unix socket
+     supplied through `krun_add_net_unixstream()`. crun starts passt with
+     `--no-dhcp-dns` and does not provide DNS configuration.
+   - **TAP**: Direct attachment to an existing TAP interface via virtio-net, for
      advanced networking scenarios.
 
-When using passt or TAP networking, the microVM gets its own network namespace
-and IP address, unlike TSI which presents the host network directly to the guest.
+When using passt or TAP networking, the microVM has a conventional virtio-net interface, unlike TSI, which provides network connectivity without a guest network interface. With TAP, guest IP addressing and routing must be configured separately.
 
 # NETWORKING
 
@@ -69,11 +70,12 @@ and IP address, unlike TSI which presents the host network directly to the guest
 TSI is the default networking mode when no special networking annotations are
 used. In this mode:
 
-- The guest sees the host's network interfaces directly
+- libkrun proxies guest socket operations in the VMM's network context
 - Network connections originate from the host's IP addresses
 - No additional network configuration is needed
 - Port publishing works as it would with regular containers
-- The guest uses the host's routing table and DNS configuration
+- The guest uses the host's routing table
+- Listening on SOCK_DGRAM sockets is not supported
 
 TSI works by intercepting socket system calls in the guest kernel and relaying
 them to the host, making the networking appear transparent.
@@ -83,11 +85,12 @@ them to the host, making the networking appear transparent.
 When the **krun.use_passt** annotation is set, crun spawns the passt daemon to
 provide networking:
 
-- crun creates a Unix socket pair and passes one end to passt via the --fd flag
+- crun creates a virtio-net interface backed by a Unix socket supplied through
+  `krun_add_net_unixstream()`
 - passt binds to privileged ports on the host if allowed (requires CAP_NET_BIND_SERVICE
   or net.ipv4.ip_unprivileged_port_start sysctl)
-- The microVM connects to passt via virtio-vsock
-- passt provides NAT, port forwarding, and DNS services
+- passt provides NAT and port forwarding services
+- crun starts passt with `--no-dhcp-dns` and does not provide DNS configuration
 - The microVM gets its own IP address (typically in a private range)
 - Port publishing works via passt's port forwarding configuration
 
@@ -97,20 +100,29 @@ capability or setting the net.ipv4.ip_unprivileged_port_start sysctl.
 
 ### TAP Networking
 
-When the **krun.tap_name** annotation is set, the microVM attaches directly to
-a host TAP interface:
+When the **krun.tap_name** annotation is set, the microVM attaches to an
+existing TAP interface through a virtio-net device:
 
 - Requires libkrun built with virtio-net support
-- The microVM gets direct layer-2 access to the network
+- The TAP interface must already exist in the VMM's network namespace
+- The TAP interface must be usable by the user running the VMM
+- crun does not create or configure the TAP interface
+- `/dev/net/tun` must be available to the VMM
+- The guest sees the network device as `eth0`
+- Guest IP addressing and routes must be configured separately
+- The microVM gets direct layer-2 connectivity to the attached network
 - Suitable for advanced networking configurations with bridges, VLANs, etc.
-- Mutually exclusive with passt networking
+- TSI is disabled when TAP networking is used
+- Mutually exclusive with **krun.use_passt**
 
 ## Port Publishing
 
 Port publishing behavior depends on the networking mode:
 
-- **TSI mode**: Works identically to regular containers since the guest uses the
-  host network stack directly. Podman's `-p` flag works transparently.
+- **TSI mode**: TCP port publishing works like regular containers since libkrun proxies
+  socket operations in the VMM's network context. Podman's `-p` flag works for TCP
+  ports listened to by the guest. Listening on `SOCK_DGRAM` sockets from the guest
+  is not supported.
 
 - **passt mode**: Port publishing works through passt's port forwarding. passt
   forwards all ports by default, but binding to privileged ports requires
@@ -145,7 +157,7 @@ If networking appears broken in TSI mode:
 ### passt Mode
 
 If passt networking fails:
-- Verify passt is installed on the host: `which passt`
+- Verify passt is installed at `/usr/bin/passt`
 - Check passt logs (currently redirected to /dev/null by crun)
 - Verify the passt socket pair was created successfully
 - For privileged port issues, check:
@@ -156,9 +168,11 @@ If passt networking fails:
 ### TAP Mode
 
 If TAP networking fails:
-- Verify the TAP interface exists and is up: `ip link show tap0`
+- Verify the TAP interface exists and is up in the VMM's network namespace:
+  `ip link show tap0`
 - Check libkrun was built with virtio-net support
-- Verify the TAP interface is accessible to the container user
+- Verify the TAP interface is accessible to the user running the VMM
+- Check that `/dev/net/tun` is available to the VMM
 - Check for SELinux/AppArmor denials
 
 ## Debug Output
@@ -172,9 +186,18 @@ and microVM configuration.
 
 ## Checking microVM State
 
-To inspect the microVM's configuration, check the temporary config file written
-by crun. The location is typically in the container's state directory under
-/run/crun or the configured state root.
+To inspect the microVM's configuration, there are two relevant configuration
+files:
+
+1. **OCI config.json**: Kept in the crun state directory (typically
+   /run/crun or the configured state root). This contains the OCI container
+   configuration.
+
+2. **Guest /.krun_config.json**: Written by crun into the container root
+   file system for the guest. This contains the libkrun VM configuration.
+
+For OCI configuration, check the state directory. For VM-specific settings,
+inspect the guest-side configuration file from within the container.
 
 ## Inspecting Network Layout
 
@@ -197,11 +220,11 @@ For passt mode, you can also check the passt process on the host:
 
 - Verify KVM is available: `lsmod | grep kvm`
 - Check hardware virtualization is enabled in BIOS/UEFI
-- Verify nested virtualization if using krun.nested_virt
+- Verify nested virtualization if using **krun.nested_virt**
 
 ### passt fails to start
 
-- Ensure passt is installed: `which passt`
+- Ensure passt is installed at `/usr/bin/passt`
 - Check that passt can be executed by the container user
 - Verify no firewall rules block passt operation
 
@@ -209,7 +232,9 @@ For passt mode, you can also check the passt process on the host:
 
 - Increase VM memory with krun.ram_mib
 - Increase vCPUs with krun.cpus
-- Consider using virtio-fs optimization options in .krun_vm.json
+- Consider using virtio-fs optimization options in a **.krun_vm.json** file
+
+# CONFIGURATION
 
 The microVM can be configured through OCI annotations or a
 **.krun_vm.json** file placed at the root of the container image.
