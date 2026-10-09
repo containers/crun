@@ -83,6 +83,15 @@ The following annotations are supported:
     file to specify a custom kernel via the **kernel_path**,
     **kernel_format**, **initrd_path**, and **kernel_cmdline** fields.
 
+**krun.vmm_user**=*UID:GID*
+:   Run the VMM process as user *UID* and group *GID*, numeric IDs
+    inside the container's user namespace. **process.user** still
+    applies to the workload inside the guest, but its **additionalGids**
+    are not applied to the VMM. **process.capabilities** and
+    **noNewPrivileges** are not modified and are applied to the VMM
+    as usual. If **krun.vmm_user** is not set, the VMM uses the UID
+    and GID from **process.user**.
+
 **krun.variant**=*VARIANT*
 :   Select an alternative libkrun variant. Supported values are
     **sev** (AMD SEV confidential workloads) and **aws-nitro** (AWS
