@@ -88,6 +88,11 @@ The following annotations are supported:
     **sev** (AMD SEV confidential workloads) and **aws-nitro** (AWS
     Nitro Enclaves).
 
+**krun.virtiofs**=*JSON*
+:   Add VirtioFS devices, in the same format as the **virtiofs** field
+    of the VM configuration file. These devices are added after the
+    devices from the VM configuration file.
+
 ## VM Configuration File
 
 A **.krun_vm.json** file can be placed at the root of the container
@@ -107,6 +112,10 @@ the following optional fields:
 - **virtiofs_tag** (string): VirtioFS tag (defaults to **/dev/root**).
 - **virtiofs_shm_size** (integer): VirtioFS DAX shared memory size in
   bytes (defaults to 512 MiB).
+- **virtiofs** (array): additional VirtioFS devices, added in order
+  after the root device. Each entry is an object containing a unique
+  **tag** of at most 36 bytes, an absolute **path** inside the
+  container, and a positive **shm_size** in bytes.
 
 The following options are only available through OCI annotations and
 are not read from the configuration file: **gpu_flags**,
@@ -114,7 +123,13 @@ are not read from the configuration file: **gpu_flags**,
 
 Example:
 
-    {"cpus": 4, "ram_mib": 2048}
+    {
+      "cpus": 4,
+      "ram_mib": 2048,
+      "virtiofs": [
+        {"tag": "devshm", "path": "/dev/shm", "shm_size": 536870912}
+      ]
+    }
 
 # COMMANDS
 
