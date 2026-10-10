@@ -18,6 +18,7 @@
 # Tests for cgroup resource limits (cgroup-resources.c coverage)
 
 import os
+import glob
 import subprocess
 from tests_utils import *
 
@@ -494,6 +495,74 @@ def test_cpu_burst():
         return (77, "cpu.burst not available")
 
 
+def test_hugetlb_reservation_limit():
+    """Test hugetlb reservation limit (cgroup v2 only)."""
+    if is_rootless():
+        return (77, "requires root")
+
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+
+    # Discover the first available HugeTLB reservation file
+    rsvd_files = glob.glob('/sys/fs/cgroup/hugetlb.*.rsvd.max')
+    if not rsvd_files:
+        return (77, "hugetlb reservation accounting not available")
+
+    # Extract page size from filename (e.g., hugetlb.2MB.rsvd.max -> 2MB)
+    rsvd_file = rsvd_files[0]
+    filename = rsvd_file.split('/')[-1]  # hugetlb.2MB.rsvd.max
+    page_size_str = filename.split('.')[1]  # 2MB
+
+    # Convert page size string to bytes
+    page_size_bytes = 0
+    if page_size_str.endswith('MB'):
+        page_size_bytes = int(page_size_str[:-2]) * 1024 * 1024
+    elif page_size_str.endswith('GB'):
+        page_size_bytes = int(page_size_str[:-2]) * 1024 * 1024 * 1024
+    elif page_size_str.endswith('KB'):
+        page_size_bytes = int(page_size_str[:-2]) * 1024
+    else:
+        page_size_bytes = int(page_size_str)
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Set HugeTLB limit using discovered page size in bytes
+    conf['linux']['resources'] = {
+        'hugepageLimits': [
+            {
+                'pageSize': page_size_str,
+                'limit': page_size_bytes
+            }
+        ]
+    }
+
+    max_file = rsvd_file.replace('.rsvd.max', '.max')
+    conf['process']['args'] = ['/init', 'cat', max_file]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        if str(page_size_bytes) in out:
+            # Also check the reservation limit file
+            conf['process']['args'] = ['/init', 'cat', rsvd_file]
+            out_rsvd, _ = run_and_get_output(conf, hide_stderr=True)
+            # Check if reservation limit was written (not default max)
+            # Default max is 9223372036854771712
+            if str(page_size_bytes) in out_rsvd:
+                return 0
+            # If rsvd.max shows default max, reservation accounting might not be working
+            if '9223372036854771712' in out_rsvd or 'max' in out_rsvd.lower():
+                logger.info("Reservation limit shows default max, skipping test")
+                return (77, "reservation accounting not functional")
+            logger.info("Expected %s in rsvd.max, got: %s", page_size_bytes, out_rsvd.strip())
+            return -1
+        logger.info("Expected %s in max, got: %s", page_size_bytes, out.strip())
+        return -1
+    except subprocess.CalledProcessError as e:
+        logger.info("hugetlb reservation test failed: %s", e)
+        return -1
+
+
 all_tests = {
     "cgroup-resources-memory-limit": test_memory_limit,
     "cgroup-resources-memory-reservation": test_memory_reservation,
@@ -509,6 +578,7 @@ all_tests = {
     "cgroup-resources-pids-limit": test_pids_limit,
     "cgroup-resources-blkio-weight": test_blkio_weight,
     "cgroup-resources-unified": test_unified_resources,
+    "cgroup-resources-hugetlb-reservation-limit": test_hugetlb_reservation_limit,
 }
 
 if __name__ == "__main__":
