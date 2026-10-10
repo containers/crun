@@ -541,6 +541,22 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      /* For cgroup2, also write to the reservation limit file if the kernel
+         supports reservation accounting.  This is indicated by the presence
+         of the .rsvd.max file.  */
+      if (cgroup2)
+        {
+          cleanup_free char *rsvd_filename = NULL;
+          int rsvd_ret;
+
+          xasprintf (&rsvd_filename, "hugetlb.%s.rsvd.max", htlb[i]->page_size);
+          rsvd_ret = write_file_at (dirfd, rsvd_filename, fmt_buf, len, err);
+          /* Ignore ENOENT when reservation accounting is not supported.  */
+          if (rsvd_ret < 0 && crun_error_get_errno (err) != ENOENT)
+            return rsvd_ret;
+          crun_error_release (err);
+        }
     }
   return 0;
 }
