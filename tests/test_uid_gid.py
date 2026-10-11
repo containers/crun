@@ -17,6 +17,7 @@
 
 import os
 import sys
+import subprocess
 from tests_utils import *
 
 def test_userns_full_mapping():
@@ -143,6 +144,55 @@ def test_additional_gids():
         return -2
     return 0
 
+def test_additional_gids_setgroups_deny():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    if os.geteuid() != 0:
+        # crun writes the single mapping itself, so it must deny setgroups.
+        add_all_namespaces(conf, userns=True)
+        conf['linux']['uidMappings'] = [
+            {"containerID": 0, "hostID": os.geteuid(), "size": 1}
+        ]
+        conf['linux']['gidMappings'] = [
+            {"containerID": 0, "hostID": os.getegid(), "size": 1}
+        ]
+    else:
+        try:
+            with open("/proc/self/setgroups") as f:
+                if f.read().strip() != "deny":
+                    return (77, "setgroups is not denied")
+        except FileNotFoundError:
+            return (77, "/proc/self/setgroups not available")
+        add_all_namespaces(conf)
+    conf['process']['user'] = {"uid": 0, "gid": 0}
+
+    # The primary gid is in effect even if setgroups is denied.
+    conf['process']['user']['additionalGids'] = [0]
+    try:
+        run_and_get_output(conf, hide_stderr=True)
+    except subprocess.CalledProcessError as e:
+        logger.info("primary gid as additional gid failed: %s", e)
+        return -1
+
+    conf['process']['user']['additionalGids'] = [0, 1]
+    try:
+        run_and_get_output(conf)
+        logger.info("additional gid 1 was silently ignored")
+        return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "setgroups is denied" not in output:
+            logger.info("unexpected error: %s", output)
+            return -1
+
+    conf['annotations'] = {"run.oci.keep_original_groups": "1"}
+    try:
+        run_and_get_output(conf, hide_stderr=True)
+    except subprocess.CalledProcessError as e:
+        logger.info("keep_original_groups failed: %s", e)
+        return -1
+    return 0
+
 def test_umask():
     if is_rootless():
         pass
@@ -251,6 +301,7 @@ all_tests = {
     "no-groups" : test_no_groups,
     "keep-groups" : test_keep_groups,
     "additional-gids": test_additional_gids,
+    "additional-gids-setgroups-deny": test_additional_gids_setgroups_deny,
     "umask": test_umask,
     "dev-null-no-chown": test_dev_null_no_chown,
     "regular-files-chowned": test_regular_files_chowned,
