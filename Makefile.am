@@ -183,7 +183,7 @@ crun_LDFLAGS = -Wl,--as-needed $(CRUN_LDFLAGS) $(SANITIZER_LDFLAGS)
 endif
 endif
 
-EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md crun.keyring rpm/crun.spec autogen.sh \
+EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md THREAT_MODEL.md crun.keyring rpm/crun.spec autogen.sh \
 	src/libcrun/blake3/blake3_impl.h src/libcrun/blake3/blake3.h \
 	src/crun.h src/crun_utils.h src/list.h src/run.h src/run_create.h src/delete.h src/kill.h src/pause.h src/unpause.h \
 	src/create.h src/start.h src/state.h src/exec.h src/oci_features.h src/spec.h src/update.h src/ps.h src/mounts.h \

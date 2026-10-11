@@ -29,6 +29,9 @@ Direct all security questions and vulnerability reports to:
 
 ## **Security Scope**
 
+See [THREAT_MODEL.md](THREAT_MODEL.md) for a more detailed description of the
+trust boundaries and of what is in and out of scope.
+
 ### What is considered a security vulnerability
 
 A security vulnerability is any issue where untrusted content can be used to escape the container sandbox, escalate privileges, or otherwise compromise the host. The primary source of untrusted content is the **container rootfs** — everything inside it (binaries, libraries, symlinks, device nodes, etc.) must be treated as potentially malicious. For example:
