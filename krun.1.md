@@ -58,7 +58,17 @@ The following annotations are supported:
 
 **krun.use_passt**=*NUM*
 :   When set to a value greater than 0, enable passt-based networking
-    in the microVM.
+    in the microVM. Note that passt runs inside the container's confinement,
+    so the same limitations apply to passt as to the container. In particular,
+    forwarding to privileged host ports (ports below 1024) may fail unless
+    net.ipv4.ip_unprivileged_port_start is set to a value lower than or equal
+    to the target port. For example, to forward to port 100:
+
+        podman run --runtime=krun --annotation krun.use_passt=1 \
+                   --sysctl net.ipv4.ip_unprivileged_port_start=100 \
+                   -p 10000:100 ...
+
+    This is expected behavior, not a crun networking bug.
 
 **krun.nested_virt**=*NUM*
 :   When set to a value greater than 0, enable nested virtualization
