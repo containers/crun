@@ -611,6 +611,63 @@ test_str_join_array ()
 }
 
 static int
+decode_b64 (const char *in, char *out, size_t *nbytes)
+{
+  size_t len = strlen (in);
+  int consumed;
+
+  consumed = base64_decode (in, len, out, len, nbytes);
+  return consumed == (int) len ? 0 : -1;
+}
+
+static int
+test_base64_decode ()
+{
+  struct
+  {
+    const char *in;
+    const char *out;
+  } valid[] = {
+    { "", "" },
+    { "Zg==", "f" },
+    { "Zm8=", "fo" }, /* codespell:ignore */
+    { "Zm9v", "foo" },
+    { "Zm9vYg==", "foob" },
+    { "Zm9vYmE=", "fooba" },
+    { "Zm9vYmFy", "foobar" },
+    { "Zm9v\nYmFy", "foobar" },
+  };
+  const char *invalid[] = {
+    "====",
+    "A===",
+    "Zg===",
+    "Zg=v",
+    "Zg==Zm9v",
+    "Zg======",
+    "Zm9",
+  };
+  char buf[32];
+  size_t nbytes;
+  size_t i;
+
+  for (i = 0; i < sizeof (valid) / sizeof (valid[0]); i++)
+    {
+      if (decode_b64 (valid[i].in, buf, &nbytes) < 0)
+        return -1;
+      if (nbytes != strlen (valid[i].out) || memcmp (buf, valid[i].out, nbytes) != 0)
+        return -1;
+    }
+
+  for (i = 0; i < sizeof (invalid) / sizeof (invalid[0]); i++)
+    {
+      if (decode_b64 (invalid[i], buf, &nbytes) == 0)
+        return -1;
+    }
+
+  return 0;
+}
+
+static int
 test_get_current_timestamp ()
 {
   char buf[64];
@@ -968,9 +1025,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..21\n");
+  printf ("1..22\n");
 #else
-  printf ("1..18\n");
+  printf ("1..19\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -983,6 +1040,7 @@ main ()
   RUN_TEST (test_has_prefix);
   RUN_TEST (test_has_suffix);
   RUN_TEST (test_str_join_array);
+  RUN_TEST (test_base64_decode);
   RUN_TEST (test_get_current_timestamp);
   RUN_TEST (test_crun_ensure_directory);
   RUN_TEST (test_safe_create_through_dangling_symlinks);
