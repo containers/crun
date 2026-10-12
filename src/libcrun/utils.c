@@ -2678,6 +2678,10 @@ base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t 
             }
         }
 
+      /* RFC 4648 allows at most 2 padding characters.  */
+      if (pad > 2)
+        return -1;
+
       /* I have an entire block of data 32 bits get the output data.  */
       if (i == 4)
         {
@@ -2693,6 +2697,7 @@ base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t 
           return consumed;
         }
       i = 0;
+      pad = 0;
     }
   return consumed;
 }
