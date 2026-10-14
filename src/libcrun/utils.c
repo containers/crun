@@ -2670,7 +2670,11 @@ base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t 
           tmp = b64_input (*iptr++);
           consumed++;
           if (tmp != -1)
-            data[i++] = tmp;
+            {
+              if (UNLIKELY (pad > 0))
+                return -1;
+              data[i++] = tmp;
+            }
           else if (*(iptr - 1) == '=')
             {
               data[i++] = '\0';
@@ -2681,6 +2685,8 @@ base64_decode (const char *iptr, size_t isize, char *optr, size_t osize, size_t 
       /* I have an entire block of data 32 bits get the output data.  */
       if (i == 4)
         {
+          if (UNLIKELY (pad > 2))
+            return -1;
           *optr++ = (data[0] << 2) | ((data[1] & 0x30) >> 4);
           *optr++ = ((data[1] & 0xf) << 4) | ((data[2] & 0x3c) >> 2);
           *optr++ = ((data[2] & 0x3) << 6) | data[3];
