@@ -4678,7 +4678,23 @@ libcrun_container_setgroups (libcrun_container_t *container,
     return can_do_setgroups;
 
   if (can_do_setgroups == 0)
-    return 0;
+    {
+      const char *annotation;
+      size_t i;
+
+      annotation = find_annotation (container, "run.oci.keep_original_groups");
+      if (annotation && strcmp (annotation, "0") != 0)
+        return 0;
+
+      /* The supplementary groups cannot be changed.  Fail if any of the
+         requested additional gids would not be in effect, but tolerate
+         the primary gid since it is already granted by setgid.  */
+      for (i = 0; i < additional_gids_len; i++)
+        if (additional_gids[i] != process->user->gid)
+          return crun_make_error (err, EPERM, "cannot set additional gid `%d`: setgroups is denied in the user namespace",
+                                  (int) additional_gids[i]);
+      return 0;
+    }
 
   ret = setgroups (additional_gids_len, additional_gids);
   if (UNLIKELY (ret < 0))
