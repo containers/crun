@@ -330,7 +330,7 @@ def get_test_environment():
 def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        keep=False,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager=None,
-                       all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path="config.json",
+                       all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path=None,
                        chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False,
                        bundle_via_symlink=False, console_socket=None):
 
@@ -352,7 +352,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     if id_container is None:
         id_container = 'test-%s' % os.path.basename(temp_dir)
 
-    config_path = os.path.join(temp_dir, relative_config_path)
+    config_path = os.path.join(temp_dir, relative_config_path or "config.json")
     config_dir = os.path.dirname(config_path)
     if not os.path.exists(config_dir):
         os.makedirs(config_dir)
@@ -402,7 +402,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     keep_arg = ['--keep'] if keep else []
     preserve_fds_arg = ['--preserve-fds', str(preserve_fds)] if preserve_fds else []
     pid_file_arg = ['--pid-file', pid_file] if pid_file else []
-    relative_config_path = ['--config', relative_config_path] if relative_config_path else []
+    config_arg = ['--config', relative_config_path] if relative_config_path else []
     debug_arg = ['--debug'] if debug else []
     console_socket_arg = ['--console-socket', console_socket] if console_socket else []
 
@@ -411,7 +411,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
         cgroup_manager = get_cgroup_manager()
 
     root = get_tests_root_status()
-    args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + bundle_arg + relative_config_path + console_socket_arg + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
+    args = [crun] + debug_arg + ["--cgroup-manager", cgroup_manager, "--root", root, command] + bundle_arg + config_arg + console_socket_arg + preserve_fds_arg + detach_arg + keep_arg + pid_file_arg + [id_container]
 
     stderr = subprocess.STDOUT
     if hide_stderr:
