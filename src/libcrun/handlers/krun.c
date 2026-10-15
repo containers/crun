@@ -23,6 +23,7 @@
 #include "../utils.h"
 #include "../linux.h"
 #include <unistd.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <errno.h>
@@ -1088,6 +1089,63 @@ stat_optional_device (const char *path, struct stat *st, bool *present, libcrun_
   return 0;
 }
 
+/* krun.vmm_user=UID:GID runs the VMM with a different identity than the
+   guest.  Only the in-memory configuration is changed: the guest still reads
+   the original process.user from the copy of config.json in its rootfs.  */
+static int
+libkrun_set_vmm_user (runtime_spec_schema_config_schema *def, libcrun_error_t *err)
+{
+  const char *value = NULL;
+  const char *gid_str;
+  unsigned long long uid, gid;
+  char *end;
+  size_t i;
+
+  if (def->annotations == NULL || def->process == NULL)
+    return 0;
+
+  for (i = 0; i < def->annotations->len; i++)
+    if (strcmp (def->annotations->keys[i], "krun.vmm_user") == 0)
+      {
+        value = def->annotations->values[i];
+        break;
+      }
+  if (value == NULL)
+    return 0;
+
+  /* UINT32_MAX is rejected: (uid_t) -1 and (gid_t) -1 mean
+     "leave unchanged" to setresuid/setresgid.  */
+  if (value[0] < '0' || value[0] > '9')
+    goto invalid;
+
+  errno = 0;
+  uid = strtoull (value, &end, 10);
+  if (errno != 0 || uid >= UINT32_MAX || *end != ':')
+    goto invalid;
+
+  gid_str = end + 1;
+  if (gid_str[0] < '0' || gid_str[0] > '9')
+    goto invalid;
+
+  errno = 0;
+  gid = strtoull (gid_str, &end, 10);
+  if (errno != 0 || gid >= UINT32_MAX || *end != '\0')
+    goto invalid;
+
+  if (def->process->user == NULL)
+    def->process->user = xmalloc0 (sizeof (*def->process->user));
+
+  def->process->user->uid = (uid_t) uid;
+  def->process->user->gid = (gid_t) gid;
+  /* additionalGids belong to the guest user, do not apply them to the VMM.  */
+  def->process->user->additional_gids_len = 0;
+
+  return 0;
+
+invalid:
+  return crun_make_error (err, 0, "krun.vmm_user must be `UID:GID`");
+}
+
 static int
 libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *context arg_unused,
                                   runtime_spec_schema_config_schema *def,
@@ -1099,6 +1157,10 @@ libkrun_modify_oci_configuration (void *cookie arg_unused, libcrun_context_t *co
   bool has_kvm = true, has_sev = true, has_awsnitro = true;
   size_t old_len, new_len;
   int ret;
+
+  ret = libkrun_set_vmm_user (def, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   /* Always allow the /dev/kvm device.  */
 
