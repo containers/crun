@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/sysmacros.h>
@@ -787,11 +788,30 @@ libkrun_configure_network (void *cookie, libcrun_container_t *container, libcrun
     return crun_make_error (err, errno, "fork passt");
   else if (pid == 0)
     {
+      runtime_spec_schema_config_schema *def = container->container_def;
+      size_t i;
+
       close (kconf->passt_fds[FD_PAIR_PARENT]);
 
       null = open ("/dev/null", O_WRONLY);
       if (null == -1)
         _exit (EXIT_FAILURE);
+
+      /* Remount /proc if the parent detached its PID namespace, as passt(1)
+       * needs a consistent /proc view to operate properly.
+       */
+      for (i = 0; i < def->linux->namespaces_len; i++)
+        {
+          int value = libcrun_find_namespace (def->linux->namespaces[i]->type);
+
+          if (value == CLONE_NEWPID)
+            {
+              if (mount ("", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL))
+                _exit (EXIT_FAILURE);
+
+              break;
+            }
+        }
 
       // Redirect passt's stdout and stderr to /dev/null, as closing them here
       // instead will cause passt to exit with an error.
