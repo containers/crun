@@ -3592,8 +3592,18 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
       ret = syscall_move_mount (notify_socket_tree_fd, "", AT_FDCWD, container_notify_socket_path_dir,
                                 MOVE_MOUNT_F_EMPTY_PATH);
       if (ret >= 0)
-        /* if move_mount(2) worked, make sure we don't try mount(2) */
-        did_mount_with_move_mount = 1;
+        {
+          /* if move_mount(2) worked, make sure we don't try mount(2) */
+          did_mount_with_move_mount = 1;
+
+          /* the tree was cloned from the host mount namespace and is still in
+             the peer group of its source, so make it private like the mount(2)
+             fallback below does.  */
+          ret = do_mount (container, NULL, -1, container_notify_socket_path_dir, NULL,
+                          MS_REC | MS_PRIVATE, NULL, LABEL_NONE, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
       else if (errno == ENOSYS)
         /* do nothing; we will try mount(2) next */
         ;
