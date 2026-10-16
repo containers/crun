@@ -57,12 +57,14 @@ libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd,
 {
   cleanup_free char *sub_path = make_cgroup_path (args->cgroup_path, args->id);
   cleanup_free char *cgroup_path = NULL;
+  bool exists = false;
   int ret;
 
   /* No need to check the mode since this feature is supported only on cgroup v2, and
      libcrun_cgroup_preenter already performs this check.  */
 
   *dirfd = -1;
+  args->precreated = false;
 
   /* The container process is created directly in the cgroup, so check it
      now: once it is there, it is too late.  */
@@ -74,12 +76,22 @@ libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = crun_ensure_directory (cgroup_path, 0755, true, err);
+  ret = crun_path_exists (cgroup_path, err);
+  if (LIKELY (ret >= 0))
+    {
+      exists = ret > 0;
+      ret = crun_ensure_directory (cgroup_path, 0755, true, err);
+    }
   if (UNLIKELY (ret < 0))
     {
       libcrun_error_release (err);
       return 0;
     }
+
+  /* Remember that the cgroup was created here, so it can be destroyed if
+     the container creation fails before there is a status for it.  A
+     pre-existing cgroup is left alone.  */
+  args->precreated = ! exists;
 
   ret = enable_controllers (sub_path, err);
   if (UNLIKELY (ret < 0))
