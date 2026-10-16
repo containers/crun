@@ -860,6 +860,52 @@ def test_remove_mounts_no_symlinks():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_add_mounts_container_namespaces():
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    new_mounts = [{"destination": "/foo/tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["nosuid", "nodev", "size=64k", "mode=0700"]},
+                  {"destination": "/foo/proc", "type": "proc", "source": "proc", "options": ["nosuid", "nodev", "noexec"]}]
+    mounts_path = os.path.join(get_tests_root(), "mounts-container-namespaces.json")
+    with open(mounts_path, "w+") as f:
+        json.dump(new_mounts, f)
+
+    for userns in [False, True]:
+        conf = base_config()
+        conf['mounts'].append({"destination": "/foo", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]})
+        add_all_namespaces(conf, userns=userns)
+        conf['process']['args'] = ['/init', 'pause']
+
+        cid = None
+        try:
+            _, cid = run_and_get_output(conf, detach=True)
+
+            run_crun_command(["mounts", "add", cid, mounts_path])
+
+            # The options that are not mount flags must be honored.
+            out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
+            if not re.search(r" /foo/tmpfs .* - tmpfs .*size=64k", out):
+                logger.info("userns=%s: /foo/tmpfs not mounted with size=64k", userns)
+                return -1
+            out = run_crun_command(["exec", cid, "/init", "mode", "/foo/tmpfs"])
+            if out != "700":
+                logger.info("userns=%s: wrong mode for /foo/tmpfs: %s", userns, out)
+                return -1
+            out = run_crun_command(["exec", cid, "/init", "owner", "/foo/tmpfs"])
+            if out != "0:0":
+                logger.info("userns=%s: wrong owner for /foo/tmpfs: %s", userns, out)
+                return -1
+
+            # The file system must be created in the namespaces of the container.
+            out = run_crun_command(["exec", cid, "/init", "cat", "/foo/proc/1/cmdline"])
+            if not out.startswith("/init\0pause"):
+                logger.info("userns=%s: /foo/proc is not for the container PID namespace: %s", userns, out)
+                return -1
+        finally:
+            if cid is not None:
+                run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_mount_help():
     out = run_crun_command(["mounts", "--help"])
     if "Usage: crun [OPTION...] mounts [add|remove] CONTAINER FILE" not in out:
@@ -1677,6 +1723,7 @@ all_tests = {
     "mount-tmpfs-explicit-mode": test_mount_tmpfs_explicit_mode,
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-remove-mounts-no-symlinks": test_remove_mounts_no_symlinks,
+    "mount-add-mounts-container-namespaces": test_add_mounts_container_namespaces,
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
     "mount-propagation-private": test_mount_propagation_private,
