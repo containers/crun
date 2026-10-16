@@ -176,6 +176,32 @@ def test_mount_tmpfs_explicit_mode():
     logger.info("tmpfs explicit mode test failed: expected '1777', got '%s'", out)
     return -1
 
+def test_mount_tmpfs_symlink_mode():
+    # The mode of the mountpoint must be looked up inside the rootfs: a
+    # mountpoint that is a symlink to a host path must take the mode of
+    # that path inside the rootfs, not disclose the mode of the host one.
+    host_dir = tempfile.mkdtemp(dir=get_tests_root())
+    os.chmod(host_dir, 0o712)
+
+    def prepare_rootfs(rootfs):
+        os.symlink(host_dir, os.path.join(rootfs, "test-tmpfs"))
+        path = os.path.join(rootfs, host_dir.lstrip("/"))
+        os.makedirs(path)
+        os.chmod(path, 0o750)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'mode', '/test-tmpfs']
+    add_all_namespaces(conf)
+    conf['mounts'].append({"destination": "/test-tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["ro"]})
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+    finally:
+        shutil.rmtree(host_dir)
+    if out.strip() == "750":
+        return 0
+    logger.info("tmpfs symlink mode test failed: expected '750', got '%s'", out)
+    return -1
+
 def test_mount_bind_to_rootfs():
     if is_rootless():
         return (77, "requires root for bind mount to rootfs")
@@ -1624,6 +1650,7 @@ all_tests = {
     "mount-tmpfs-permissions": test_mount_tmpfs_permissions,
     "mount-proc-mode": test_mount_proc_mode,
     "mount-tmpfs-explicit-mode": test_mount_tmpfs_explicit_mode,
+    "mount-tmpfs-symlink-mode": test_mount_tmpfs_symlink_mode,
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,

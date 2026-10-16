@@ -4220,6 +4220,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   unsigned long rootfs_propagation = 0;
+  cleanup_close int rootfsfd = -1;
   cleanup_close int tree_fd = -1;
   libcrun_error_t tmp_err = NULL;
   bool use_open_tree = false;
@@ -4246,11 +4247,9 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
   for (i = 0; i < def->mounts_len; i++)
     {
       struct libcrun_fd_map *mount_fds = get_fd_map (container);
-      cleanup_free char *dest_path = NULL;
       cleanup_close int mnt_fd = -1;
       bool recursive_bind, nofollow;
       unsigned long mnt_flags = 0;
-      struct stat st;
 
       if (mount_fds && mount_fds->fds[i] >= 0)
         continue;
@@ -4321,24 +4320,38 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
           continue;
         }
 
-      ret = append_paths (&dest_path, err, *rootfs, def->mounts[i]->destination, NULL);
-      if (UNLIKELY (ret < 0))
-        return ret;
-      if (mount_inherits_mountpoint_mode (def->mounts[i]) && stat (dest_path, &st) == 0)
+      if (mount_inherits_mountpoint_mode (def->mounts[i]))
         {
-          proc_fd_path_t fd_path;
-          int procfd = get_procfd (get_private_data (container), err);
-          if (UNLIKELY (procfd < 0))
-            return procfd;
+          cleanup_close int destfd = -1;
+          struct stat st;
 
-          get_self_fd_path (fd_path, mnt_fd);
-          ret = fchmodat (procfd, fd_path, st.st_mode & 07777, 0);
-          (void) ret;
+          if (rootfsfd < 0)
+            {
+              rootfsfd = open (*rootfs, O_PATH | O_CLOEXEC);
+              if (UNLIKELY (rootfsfd < 0))
+                return crun_make_error (err, errno, "open `%s`", *rootfs);
+            }
+
+          destfd = safe_openat (rootfsfd, *rootfs, def->mounts[i]->destination, O_PATH | O_CLOEXEC, 0, &tmp_err);
+          if (destfd < 0)
+            crun_error_release (&tmp_err);
+          else if (fstat (destfd, &st) == 0)
+            {
+              proc_fd_path_t fd_path;
+              int procfd = get_procfd (get_private_data (container), err);
+              if (UNLIKELY (procfd < 0))
+                return procfd;
+
+              get_self_fd_path (fd_path, mnt_fd);
+              ret = fchmodat (procfd, fd_path, st.st_mode & 07777, 0);
+              (void) ret;
+            }
         }
 
       mount_fds->fds[i] = mnt_fd;
       mnt_fd = -1;
     }
+  close_and_reset (&rootfsfd);
 
   ret = get_shared_empty_dir_cached (container, NULL, &tmp_err);
   if (ret < 0)
