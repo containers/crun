@@ -4901,6 +4901,10 @@ cr_options_from_public (libcrun_checkpoint_restore_t *dst, struct libcrun_checkp
   dst->detach = src->detach;
   dst->manage_cgroups_mode = src->manage_cgroups_mode;
   dst->network_lock_method = src->network_lock_method;
+  dst->lazy_pages = src->lazy_pages;
+  dst->page_server_address = (char *) src->page_server_address;
+  dst->page_server_port = src->page_server_port;
+  dst->status_fd = src->status_fd > 0 ? src->status_fd : -1;
 }
 
 int
