@@ -508,12 +508,39 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
 }
 
 static int
+rmdirfd_move_to (DIR **d, const char *name, libcrun_error_t *err)
+{
+  cleanup_close int fd = -1;
+  DIR *new_d;
+
+  fd = openat (dirfd (*d), name, O_DIRECTORY | O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "cannot open directory `%s`", name);
+
+  new_d = fdopendir (fd);
+  if (UNLIKELY (new_d == NULL))
+    return crun_make_error (err, errno, "cannot open directory `%s`", name);
+
+  fd = -1;
+
+  closedir (*d);
+  *d = new_d;
+  return 0;
+}
+
+static int
 rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
 {
   int ret;
   cleanup_dir DIR *d = NULL;
   struct dirent *de;
+  struct stat root_st;
+  bool is_root = true;
   __attribute__ ((unused)) cleanup_close int fd_cleanup = fd;
+
+  ret = fstat (fd, &root_st);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "stat `%s`", namedir);
 
   d = fdopendir (fd);
   if (d == NULL)
@@ -522,8 +549,32 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
   /* Now D owns FD. */
   fd_cleanup = -1;
 
-  for (de = readdir (d); de; de = readdir (d))
+  for (;;)
     {
+      errno = 0;
+      de = readdir (d);
+      if (de == NULL)
+        {
+          struct stat st;
+
+          if (is_root)
+            break;
+
+          if (UNLIKELY (errno != 0))
+            return crun_make_error (err, errno, "cannot read directory");
+
+          ret = rmdirfd_move_to (&d, "..", err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = fstat (dirfd (d), &st);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "stat `..`");
+
+          is_root = st.st_dev == root_st.st_dev && st.st_ino == root_st.st_ino;
+          continue;
+        }
+
       if ((strcmp (de->d_name, ".") == 0) || (strcmp (de->d_name, "..") == 0))
         continue;
 
@@ -544,26 +595,20 @@ rmdirfd (const char *namedir, int fd, libcrun_error_t *err)
                   if (umount2 (procpath, MNT_DETACH) == 0)
                     goto retry_unlink;
                 }
+              if (! is_root)
+                return crun_make_error (err, EBUSY, "cannot rm directory `%s`", de->d_name);
             }
           else if (ret < 0 && errno == ENOTEMPTY)
             {
-              cleanup_close int cfd = -1;
-
-              cfd = openat (dirfd (d), de->d_name, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
-              if (UNLIKELY (cfd < 0))
-                return crun_make_error (err, errno, "cannot open directory `%s`", de->d_name);
-
-              ret = rmdirfd (de->d_name, cfd, err);
-
-              /* rmdirfd owns CFD.  */
-              cfd = -1;
-
+              ret = rmdirfd_move_to (&d, de->d_name, err);
               if (UNLIKELY (ret < 0))
                 return ret;
 
-              ret = unlinkat (dirfd (d), de->d_name, AT_REMOVEDIR);
-              if (UNLIKELY (ret < 0 && errno != ENOENT))
-                return crun_make_error (err, errno, "cannot rm directory `%s`", de->d_name);
+              is_root = false;
+            }
+          else if (ret < 0 && errno != ENOENT && ! is_root)
+            {
+              return crun_make_error (err, errno, "cannot rm `%s`", de->d_name);
             }
         }
     }

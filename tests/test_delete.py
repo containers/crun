@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import resource
 import subprocess
 import os
 import time
@@ -167,6 +168,33 @@ def test_delete_exited_main_thread():
             run_crun_command_raw(["delete", "-f", container_id])
         except subprocess.CalledProcessError:
             pass
+def test_delete_nested_directories():
+    """Delete a state directory nested deeper than the number of files that can be open"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+
+    out, container_id = run_and_get_output(conf, detach=True, hide_stderr=True)
+    if out != "":
+        return -1
+
+    state_dir = os.path.join(get_tests_root_status(), container_id)
+    os.makedirs(os.path.join(state_dir, *(["d"] * 256)))
+
+    limits = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (64, limits[1]))
+    try:
+        run_crun_command_raw(["delete", "-f", container_id])
+    except subprocess.CalledProcessError as exc:
+        logger.error("Status : FAIL %s %s", exc.returncode, exc.output)
+        return -1
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, limits)
+
+    if os.path.exists(state_dir):
+        return -1
+
+    return 0
 
 def test_help_delete():
     out = run_crun_command(["delete", "--help"])
@@ -179,6 +207,7 @@ all_tests = {
     "test_simple_delete" : test_simple_delete,
     "test_multiple_containers_delete" : test_multiple_containers_delete,
     "test_delete_exited_main_thread": test_delete_exited_main_thread,
+    "test_delete_nested_directories" : test_delete_nested_directories,
     "test_help_delete": test_help_delete,
 }
 
