@@ -73,6 +73,11 @@
  */
 #define KRUN_VM_FILE "/.krun_vm.json"
 
+/* KRUN_VM_FILE holds a handful of settings and it is parsed by crun
+ * itself before the container process exists, refuse anything bigger.
+ */
+#define KRUN_VM_FILE_MAX_SIZE (64 * 1024)
+
 #define KRUN_FLAVOR_AWS_NITRO "aws-nitro"
 #define KRUN_FLAVOR_SEV "sev"
 
@@ -170,10 +175,16 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
 {
   int ret;
   cleanup_free char *config = NULL;
+  cleanup_close int pathfd = -1;
   cleanup_close int fd = -1;
+  proc_fd_path_t fd_path;
+  struct stat st;
 
-  fd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW, 0, err);
-  if (fd < 0)
+  /* The content of the rootfs is controlled by the user: look at the file through an
+     O_PATH descriptor first and refuse anything that is not a small regular file, as
+     opening a FIFO blocks and a device node must not be accessed.  */
+  pathfd = safe_openat (rootfsfd, rootfs, KRUN_VM_FILE, O_PATH | O_CLOEXEC | O_NOFOLLOW, 0, err);
+  if (pathfd < 0)
     {
       // The configuration file is optional, don't generate an error if it's missing.
       if (crun_error_get_errno (err) == ENOENT)
@@ -181,8 +192,24 @@ libkrun_read_vm_config (struct krun_config *kconf, int rootfsfd, const char *roo
           crun_error_release (err);
           return 0;
         }
-      return fd;
+      return pathfd;
     }
+
+  ret = fstat (pathfd, &st);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "stat `%s`", KRUN_VM_FILE);
+
+  if (! S_ISREG (st.st_mode))
+    return crun_make_error (err, 0, "`%s` is not a regular file", KRUN_VM_FILE);
+
+  if (st.st_size > KRUN_VM_FILE_MAX_SIZE)
+    return crun_make_error (err, 0, "`%s` is bigger than %d bytes", KRUN_VM_FILE, KRUN_VM_FILE_MAX_SIZE);
+
+  get_proc_self_fd_path (fd_path, pathfd);
+
+  fd = open (fd_path, O_RDONLY | O_CLOEXEC);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `%s`", KRUN_VM_FILE);
 
   ret = read_all_fd (fd, "krun configuration file", &config, NULL, err);
   if (UNLIKELY (ret < 0))
@@ -873,8 +900,13 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
         return ret;
 
       /* CVE-2025-24965: the content below rootfs cannot be trusted because it is controlled by the user.  We
-         must ensure the file is opened below the rootfs directory.  */
-      fd = safe_openat (rootfsfd, rootfs, KRUN_CONFIG_FILE, WRITE_FILE_DEFAULT_FLAGS | O_NOFOLLOW, S_IRUSR | S_IRGRP | S_IROTH, err);
+         must ensure the file is opened below the rootfs directory.  Whatever the image ships at that name
+         could also be a device node or a FIFO, so never open it: unlink it and create a new regular file.  */
+      ret = unlinkat (rootfsfd, KRUN_CONFIG_FILE, 0);
+      if (UNLIKELY (ret < 0 && errno != ENOENT))
+        return crun_make_error (err, errno, "unlink `%s`", KRUN_CONFIG_FILE);
+
+      fd = safe_openat (rootfsfd, rootfs, KRUN_CONFIG_FILE, WRITE_FILE_DEFAULT_FLAGS | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IRGRP | S_IROTH, err);
       if (UNLIKELY (fd < 0))
         return fd;
 
