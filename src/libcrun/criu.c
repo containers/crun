@@ -383,6 +383,25 @@ criu_check_mem_track (libcrun_error_t *err)
 
 #  endif
 
+/* CRIU stores an external mount as the string "mnt[KEY]:VAL", looks it up
+   by prefix and reads "mnt[]" as a request to autodetect external mounts.
+   KEY comes from the container rootfs, refuse anything CRIU would not read
+   back as KEY.  */
+static int
+add_ext_bind_mount (const char *key, const char *val, libcrun_error_t *err)
+{
+  int ret;
+
+  if (UNLIKELY (key[0] == '\0' || strstr (key, "]:") != NULL))
+    return crun_make_error (err, 0, "CRIU: invalid external mount destination `%s`", key);
+
+  ret = libcriu_wrapper->criu_add_ext_mount (key, val);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", val);
+
+  return 0;
+}
+
 static int
 setup_lazy_pages (libcrun_error_t *err)
 {
@@ -981,9 +1000,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
           if (has_prefix (dest_in_root, status->rootfs))
             dest_in_root += safe_strlen (status->rootfs);
 
-          ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, dest_in_root);
+          ret = add_ext_bind_mount (dest_in_root, dest_in_root, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->destination);
+            return ret;
         }
     }
 
@@ -1564,9 +1583,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
               source = abs_source;
             }
 
-          ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, source);
+          ret = add_ext_bind_mount (dest_in_root, source, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", source);
+            return ret;
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
             {
