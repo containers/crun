@@ -2945,7 +2945,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   cleanup_close int own_seccomp_receiver_fd = -1;
   cleanup_close int seccomp_notify_fd = -1;
   const char *seccomp_notify_plugins = NULL;
-  struct libcrun_cgroup_args cg;
+  cleanup_cgroup_preenter struct libcrun_cgroup_args cg = {};
   cleanup_free char *bundle_allocated = NULL;
   struct container_entrypoint_s container_args = {
     .container = container,
@@ -5214,7 +5214,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   {
     cleanup_close int cgroup_dirfd = -1;
     bool needs_proxy_process;
-    struct libcrun_cgroup_args cg = {
+    cleanup_cgroup_preenter struct libcrun_cgroup_args cg = {
       .resources = def->linux ? def->linux->resources : NULL,
       .annotations = container->annotations,
       .cgroup_path = def->linux ? def->linux->cgroups_path : "",

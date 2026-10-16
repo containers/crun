@@ -1710,6 +1710,57 @@ def test_cgroup_exec_frozen_subcgroup():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_cgroup_cleanup_failed_start():
+    """Test that the cgroup is not left behind when the container creation
+    fails after the cgroup is created but before it is configured, and that
+    a pre-existing cgroup is left alone."""
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if is_rootless():
+        return (77, "requires root for cgroup manipulation")
+    if get_cgroup_manager() == 'systemd':
+        return (77, "test uses cgroupfs-style paths")
+
+    conf = base_config()
+    add_all_namespaces(conf, netns=False)
+    conf['process']['args'] = ['/init', 'true']
+    # Joining a namespace that does not exist fails before the container
+    # process is created.
+    conf['linux']['namespaces'].append({
+        'type': 'network',
+        'path': os.path.join(get_tests_root(), 'not-existing-netns'),
+    })
+
+    cgroup_path = f'/test-cleanup-failed-start-{os.getpid()}'
+    conf['linux']['cgroupsPath'] = cgroup_path
+
+    host_cgroup_dir = f'/sys/fs/cgroup{cgroup_path}'
+
+    try:
+        for pre_existing in (False, True):
+            if pre_existing:
+                os.mkdir(host_cgroup_dir)
+
+            try:
+                run_and_get_output(conf, hide_stderr=True)
+                logger.info("the container was expected to fail")
+                return -1
+            except subprocess.CalledProcessError:
+                pass
+
+            if os.path.exists(host_cgroup_dir) != pre_existing:
+                logger.info("cgroup directory %s: pre-existing=%s, exists after the failed start=%s",
+                            host_cgroup_dir, pre_existing, not pre_existing)
+                return -1
+
+        return 0
+    finally:
+        try:
+            os.rmdir(host_cgroup_dir)
+        except OSError:
+            pass
+
+
 all_tests = {
     "cgroup-disabled": test_cgroup_disabled,
     "cgroup-disabled-detach": test_cgroup_disabled_detach,
@@ -1756,6 +1807,7 @@ all_tests = {
     "cgroup-v2-mount-options": test_cgroup_v2_mount_options,
     "cgroup-subcgroup-cleanup": test_cgroup_subcgroup_cleanup,
     "cgroup-exec-frozen-subcgroup": test_cgroup_exec_frozen_subcgroup,
+    "cgroup-cleanup-failed-start": test_cgroup_cleanup_failed_start,
 }
 
 if __name__ == "__main__":

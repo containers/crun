@@ -61,6 +61,9 @@ struct libcrun_cgroup_args
   gid_t root_gid;
   const char *id;
   bool joined;
+  /* The path of the cgroup created by libcrun_cgroup_preenter, when there
+     is no status for it yet.  */
+  char *precreated_path;
 
   const char *state_root;
   libcrun_container_t *container;
@@ -68,6 +71,7 @@ struct libcrun_cgroup_args
 
 /* cgroup life-cycle management.  */
 int libcrun_cgroup_preenter (struct libcrun_cgroup_args *args, int *dirfd, libcrun_error_t *err);
+void libcrun_cgroup_preenter_cleanup (struct libcrun_cgroup_args *args);
 int libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status **out, libcrun_error_t *err);
 int libcrun_cgroup_enter_finalize (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status *cgroup_status, libcrun_error_t *err);
 int libcrun_cgroup_destroy (struct libcrun_cgroup_status *cgroup_status, libcrun_error_t *err);
@@ -87,6 +91,7 @@ cgroup_status_freep (struct libcrun_cgroup_status **p)
     libcrun_cgroup_status_free (s);
 }
 #define cleanup_cgroup_status __attribute__ ((cleanup (cgroup_status_freep)))
+#define cleanup_cgroup_preenter __attribute__ ((cleanup (libcrun_cgroup_preenter_cleanup)))
 
 /* Operations on the cgroup.  */
 

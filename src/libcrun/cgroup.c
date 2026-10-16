@@ -391,6 +391,21 @@ libcrun_cgroup_preenter (struct libcrun_cgroup_args *args, int *dirfd, libcrun_e
   return cgroup_manager->precreate_cgroup (args, dirfd, err);
 }
 
+/* Remove the cgroup created by libcrun_cgroup_preenter if libcrun_cgroup_enter
+   did not take it over: until then the caller has no status to destroy it with.
+   Being created by us and without any process joining it, it is empty and a
+   plain rmdir is enough.  */
+void
+libcrun_cgroup_preenter_cleanup (struct libcrun_cgroup_args *args)
+{
+  if (args->precreated_path == NULL)
+    return;
+
+  (void) rmdir (args->precreated_path);
+  free (args->precreated_path);
+  args->precreated_path = NULL;
+}
+
 int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status **out, libcrun_error_t *err)
 {
@@ -455,6 +470,10 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
 
       return ret;
     }
+
+  /* From now on the cgroup is destroyed through its status.  */
+  free (args->precreated_path);
+  args->precreated_path = NULL;
 
   if (status->path)
     {

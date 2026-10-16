@@ -57,6 +57,7 @@ libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd,
 {
   cleanup_free char *sub_path = make_cgroup_path (args->cgroup_path, args->id);
   cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *parent_path = NULL;
   int ret;
 
   /* No need to check the mode since this feature is supported only on cgroup v2, and
@@ -74,12 +75,21 @@ libcrun_precreate_cgroup_cgroupfs (struct libcrun_cgroup_args *args, int *dirfd,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = crun_ensure_directory (cgroup_path, 0755, true, err);
+  parent_path = xstrdup (cgroup_path);
+  ret = crun_ensure_directory (dirname (parent_path), 0755, true, err);
   if (UNLIKELY (ret < 0))
     {
       libcrun_error_release (err);
       return 0;
     }
+
+  /* Remember the cgroup created here, so it can be removed if the container
+     creation fails before there is a status for it.  A pre-existing cgroup is
+     left alone.  */
+  if (mkdir (cgroup_path, 0755) == 0)
+    args->precreated_path = xstrdup (cgroup_path);
+  else if (errno != EEXIST)
+    return 0;
 
   ret = enable_controllers (sub_path, err);
   if (UNLIKELY (ret < 0))
