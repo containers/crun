@@ -79,6 +79,24 @@ def test_gid():
             return -1
     return 0
 
+def test_invalid_uid_gid():
+    if is_rootless():
+        return (77, "requires root privileges")
+    # (uid_t) -1 and (gid_t) -1 mean "leave unchanged" for setresuid and setresgid.
+    for uid, gid in [(4294967295, 4294967295), (4294967295, 1000), (1000, 4294967295)]:
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'cat', '/proc/self/status']
+        add_all_namespaces(conf)
+        conf['process']['user']['uid'] = uid
+        conf['process']['user']['gid'] = gid
+        try:
+            run_and_get_output(conf, hide_stderr=True)
+        except Exception:
+            continue
+        logger.info("container with user %d:%d was not rejected", uid, gid)
+        return -1
+    return 0
+
 def test_no_groups():
     if is_rootless():
         return (77, "requires root privileges")
@@ -297,6 +315,7 @@ def test_regular_files_chowned():
 all_tests = {
     "uid" : test_uid,
     "gid" : test_gid,
+    "invalid-uid-gid" : test_invalid_uid_gid,
     "userns-full-mapping" : test_userns_full_mapping,
     "no-groups" : test_no_groups,
     "keep-groups" : test_keep_groups,
