@@ -427,6 +427,98 @@ def test_cr_exec_seccomp():
         return 0
 
     return run_cr_test(conf, after_restore_cb=check_exec_seccomp)
+# CRIU gets the source of an external mount from crun and its flags from the
+# image, i.e. from whatever was mounted at that path when the container was
+# checkpointed.  Each source must be restored with the flags the configuration
+# asks for it anyway.
+def test_cr_mount_flags():
+    if r := _check_cr_requirements():
+        return r
+
+    cid = None
+    cr_dir = os.path.join(get_tests_root(), 'checkpoint-mount-flags')
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
+    ro_dir = os.path.join(get_tests_root(), 'mount-flags-ro')
+    rw_dir = os.path.join(get_tests_root(), 'mount-flags-rw')
+    os.makedirs(ro_dir)
+    os.makedirs(rw_dir)
+
+    masked = ['/sys/firmware', '/sys/kernel']
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    conf['linux']['maskedPaths'] = masked
+    conf['mounts'] += [
+        {"destination": "/a/data", "type": "bind", "source": ro_dir,
+         "options": ["bind", "ro", "nosuid", "nodev", "noexec"]},
+        {"destination": "/b/data", "type": "bind", "source": rw_dir, "options": ["bind", "rw"]},
+        {"destination": "/c", "type": "bind", "source": ro_dir, "options": ["bind", "ro"]},
+    ]
+
+    try:
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True
+        )
+
+        if wait_for_state(cid) is None:
+            logger.info("test_cr_mount_flags: the container did not start")
+            return -1
+
+        # A mount point cannot be renamed, but its parent directory can, also
+        # from inside the container: exchange the read-only and the read-write
+        # mount before the checkpoint.
+        bundle = os.path.join(get_tests_root(), cid.split('-')[1])
+        rootfs = os.path.join(bundle, 'rootfs')
+        os.rename(os.path.join(rootfs, 'a'), os.path.join(rootfs, 'tmp'))
+        os.rename(os.path.join(rootfs, 'b'), os.path.join(rootfs, 'a'))
+        os.rename(os.path.join(rootfs, 'tmp'), os.path.join(rootfs, 'b'))
+
+        run_crun_command([
+            "checkpoint",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            cid
+        ])
+
+        run_crun_command([
+            "restore",
+            "-d",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            "--bundle=%s" % bundle,
+            cid
+        ])
+
+        s = wait_for_state(cid)
+        if s is None:
+            logger.info("test_cr_mount_flags: the container was not restored")
+            return -1
+
+        found = 0
+        with open("/proc/%s/mountinfo" % s['pid']) as f:
+            for line in f:
+                _, _, _, root, mountpoint, options = line.split()[:6]
+                expected = set()
+                if root.endswith('/mount-flags-ro'):
+                    found += 1
+                    expected = {'ro'} if mountpoint == '/c' else {'ro', 'nosuid', 'nodev', 'noexec'}
+                elif mountpoint in masked:
+                    expected = {'ro'}
+                if not expected.issubset(options.split(',')):
+                    logger.info("test_cr_mount_flags: `%s` restored at `%s` with `%s`, expected `%s`",
+                                root, mountpoint, options, ','.join(sorted(expected)))
+                    return -1
+
+        if found != 2:
+            logger.info("test_cr_mount_flags: found %d mounts of `%s`, expected 2", found, ro_dir)
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
 
 
 def test_cr_with_ext_ns():
@@ -606,6 +698,7 @@ all_tests = {
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
     "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,
+    "checkpoint-restore-mount-flags": test_cr_mount_flags,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
     "checkpoint-restore-forward-signal": test_cr_restore_forward_signal,

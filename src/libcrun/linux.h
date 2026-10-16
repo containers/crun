@@ -147,4 +147,12 @@ int libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_contain
 
 int libcrun_destroy_runtime_mounts (libcrun_container_t *container, libcrun_container_status_t *status, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err);
 
+struct libcrun_mount_flags_s
+{
+  char *target;
+  unsigned long flags;
+};
+
+int libcrun_restrict_mounts_in_container (pid_t pid, struct libcrun_mount_flags_s *mounts, size_t len, libcrun_error_t *err);
+
 #endif

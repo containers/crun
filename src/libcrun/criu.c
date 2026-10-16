@@ -36,6 +36,7 @@
 #  include "utils.h"
 #  include "cgroup.h"
 #  include "cgroup-utils.h"
+#  include "mount_flags.h"
 
 #  ifndef STATIC
 #    include <dlfcn.h>
@@ -109,6 +110,11 @@ criu_network_lock_from_public (int method, int *lock, libcrun_error_t *err)
 
 static const char *console_socket = NULL;
 
+/* The external mounts CRIU restores, and the flags the configuration asks
+   for each of them.  */
+static struct libcrun_mount_flags_s *restored_ext_mounts = NULL;
+static size_t n_restored_ext_mounts = 0;
+
 #  define LIBCRIU_MIN_VERSION 31500
 
 struct libcriu_wrapper_s
@@ -121,6 +127,7 @@ struct libcriu_wrapper_s
   int (*criu_dump) (void);
   int (*criu_get_orphan_pts_master_fd) (void);
   int (*criu_init_opts) (void);
+  int (*criu_notify_pid) (criu_notify_arg_t na);
 #  ifdef CRIU_JOIN_NS_SUPPORT
   int (*criu_join_ns_add) (const char *ns, const char *ns_file, const char *extra_opt);
 #  endif
@@ -172,6 +179,11 @@ cleanup_wrapper (void *p)
 #  endif
   free (*w);
   libcriu_wrapper = NULL;
+
+  while (n_restored_ext_mounts > 0)
+    free (restored_ext_mounts[--n_restored_ext_mounts].target);
+  free (restored_ext_mounts);
+  restored_ext_mounts = NULL;
 }
 
 #  define cleanup_wrapper __attribute__ ((cleanup (cleanup_wrapper)))
@@ -210,6 +222,7 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   LOAD_CRIU_FUNCTION (criu_dump, false);
   LOAD_CRIU_FUNCTION (criu_get_orphan_pts_master_fd, false);
   LOAD_CRIU_FUNCTION (criu_init_opts, false);
+  LOAD_CRIU_FUNCTION (criu_notify_pid, false);
 
 #  ifdef CRIU_JOIN_NS_SUPPORT
   /* criu_join_ns_add() API was introduced with CRIU version 3.16.1
@@ -258,9 +271,38 @@ load_wrapper (struct libcriu_wrapper_s **wrapper_out, libcrun_error_t *err)
   return 0;
 }
 
-static int
-criu_notify (char *action, __attribute__ ((unused)) criu_notify_arg_t na)
+static void
+add_restored_ext_mount (const char *target, unsigned long flags)
 {
+  restored_ext_mounts = xrealloc (restored_ext_mounts, sizeof (*restored_ext_mounts) * (n_restored_ext_mounts + 1));
+  restored_ext_mounts[n_restored_ext_mounts].target = xstrdup (target);
+  restored_ext_mounts[n_restored_ext_mounts].flags = flags;
+  n_restored_ext_mounts++;
+}
+
+static int
+criu_notify (char *action, criu_notify_arg_t na)
+{
+  if (strcmp (action, "post-restore") == 0)
+    {
+      /* CRIU takes the source of an external mount from us and its flags
+       * from the image, i.e. from whatever mount was at that path in the
+       * container when it was checkpointed.  The container can move its
+       * mount points around, so before it is resumed make sure that each
+       * source is mounted with the restrictions the configuration asks for. */
+      libcrun_error_t tmp_err = NULL;
+      int ret;
+
+      ret = libcrun_restrict_mounts_in_container (libcriu_wrapper->criu_notify_pid (na), restored_ext_mounts,
+                                                  n_restored_ext_mounts, &tmp_err);
+      if (UNLIKELY (ret < 0))
+        {
+          libcrun_error (tmp_err->status, "cannot set the flags of the restored mounts: %s", tmp_err->msg);
+          libcrun_error_release (&tmp_err);
+          return ret;
+        }
+    }
+
   if (strncmp (action, "orphan-pts-master", 17) == 0)
     {
       /* CRIU sends us the master FD via the 'orphan-pts-master'
@@ -355,6 +397,9 @@ register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_co
           ret = libcriu_wrapper->criu_add_ext_mount (def->linux->masked_paths[i], empty_dir_path);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, -ret, "CRIU: failed adding external mount for masked directory `%s`", def->linux->masked_paths[i]);
+
+          if (is_restore)
+            add_restored_ext_mount (def->linux->masked_paths[i], MS_RDONLY);
         }
       else if (S_ISREG (statbuf.st_mode))
         {
@@ -362,6 +407,9 @@ register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_co
           ret = libcriu_wrapper->criu_add_ext_mount (def->linux->masked_paths[i], bind_target);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", bind_target);
+
+          if (is_restore)
+            add_restored_ext_mount (def->linux->masked_paths[i], MS_RDONLY);
         }
     }
 
@@ -1302,6 +1350,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           const char *dest_in_root;
           const char *source = def->mounts[i]->source;
           cleanup_free char *abs_source = NULL;
+          unsigned long flags = 0;
+          size_t j;
 
           if (nofollow)
             return crun_make_error (err, 0, "CRIU does not support `src-nofollow` for bind mounts");
@@ -1328,6 +1378,17 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
           ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, source);
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", source);
+
+          for (j = 0; j < def->mounts[i]->options_len; j++)
+            {
+              const struct propagation_flags_s *prop = NULL;
+
+              if (def->mounts[i]->options[j])
+                prop = libcrun_str2mount_flags (def->mounts[i]->options[j]);
+              if (prop && ! prop->clear)
+                flags |= prop->flags;
+            }
+          add_restored_ext_mount (dest_in_root, flags);
         }
     }
 
