@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import json
+import time
 from tests_utils import *
 import tempfile
 import re
@@ -907,6 +908,81 @@ def test_remove_mounts_no_symlinks():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def helper_add_mounts_nested_userns(init_arg: str, expect_failure: bool) -> int:
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    bind_dir = os.path.join(get_tests_root(), "bind-mount")
+    os.makedirs(bind_dir, exist_ok=True)
+    mounts_path = os.path.join(get_tests_root(), "mounts.json")
+    with open(mounts_path, "w+") as f:
+        json.dump([{"destination": "/foo/bar", "type": "bind", "source": bind_dir, "options": ["bind", "ro"]},
+                   {"destination": "/foo/tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["size=64k"]}], f)
+
+    for userns in [False, True]:
+        conf = base_config()
+        conf['mounts'].append({"destination": "/foo", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]})
+        add_all_namespaces(conf, userns=userns)
+        if userns:
+            fullMapping = [
+                {
+                    "containerID": 0,
+                    "hostID": 1,
+                    "size": 10
+                }
+            ]
+            conf['linux']['uidMappings'] = fullMapping
+            conf['linux']['gidMappings'] = fullMapping
+        conf['process']['args'] = ['/init', init_arg]
+
+        cid = None
+        try:
+            _, cid = run_and_get_output(conf, detach=True)
+            pid = json.loads(run_crun_command(['state', cid]))['pid']
+
+            # wait for the container process to be in its own user namespace
+            for _ in range(100):
+                try:
+                    with open("/proc/%d/uid_map" % pid) as f:
+                        if f.read().strip() == "":
+                            break
+                except FileNotFoundError:
+                    return (77, "cannot create a nested user namespace")
+                time.sleep(0.05)
+            else:
+                return (77, "cannot create a nested user namespace")
+
+            if expect_failure:
+                try:
+                    run_crun_command_raw(["mounts", "add", cid, mounts_path])
+                    logger.info("userns=%s: mounts add did not fail", userns)
+                    return -1
+                except subprocess.CalledProcessError as e:
+                    if b"user namespace of the container" not in e.output:
+                        logger.info("userns=%s: unexpected error: %s", userns, e.output)
+                        return -1
+            else:
+                run_crun_command(["mounts", "add", cid, mounts_path])
+                out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
+                if not re.search(r" /foo/tmpfs .* - tmpfs .*size=64k", out):
+                    logger.info("userns=%s: /foo/tmpfs not mounted with size=64k", userns)
+                    return -1
+        finally:
+            if cid is not None:
+                run_crun_command(["delete", "-f", cid])
+    return 0
+
+
+def test_add_mounts_nested_userns_mountns():
+    """mounts add must fail if the container process moved to a mount namespace owned by a nested user namespace."""
+    return helper_add_mounts_nested_userns('nested-userns-mountns', True)
+
+
+def test_add_mounts_nested_userns():
+    """mounts add must create the file systems in the user namespace of the container, not in the nested one the container process moved to."""
+    return helper_add_mounts_nested_userns('nested-userns', False)
+
+
 def test_add_mounts_container_namespaces():
     if is_rootless():
         return (77, "requires root privileges")
@@ -1782,6 +1858,8 @@ all_tests = {
     "mount-add-remove-mounts": test_add_remove_mounts,
     "mount-remove-mounts-no-symlinks": test_remove_mounts_no_symlinks,
     "mount-add-mounts-container-namespaces": test_add_mounts_container_namespaces,
+    "mount-add-mounts-nested-userns-mountns": test_add_mounts_nested_userns_mountns,
+    "mount-add-mounts-nested-userns": test_add_mounts_nested_userns,
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
     "mount-propagation-private": test_mount_propagation_private,

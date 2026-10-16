@@ -70,6 +70,7 @@
 #include <sched.h>
 #include <linux/sched.h>
 #include <linux/magic.h>
+#include <linux/nsfs.h>
 
 #include <json-c/json.h>
 #include <ocispec/json_common.h>
@@ -8023,11 +8024,11 @@ libcrun_safe_chdir (const char *path, libcrun_error_t *err)
   return 0;
 }
 
-/* Run the callback in the namespace referred to by PIDFD.  It is done in a
-   separate function so that no variable of the caller is live across the
-   vfork.  */
+/* Run the callback in the mount namespace referred to by MNTNS_FD.  It is
+   done in a separate function so that no variable of the caller is live
+   across the vfork.  */
 static int
-run_callback_in_namespace (int pidfd, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
+run_callback_in_namespace (int mntns_fd, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
 {
   int wait_status = 0;
   pid_t pid;
@@ -8040,7 +8041,7 @@ run_callback_in_namespace (int pidfd, int (*callback) (void *, libcrun_error_t *
 
   if (pid == 0)
     {
-      ret = setns (pidfd, CLONE_NEWNS);
+      ret = setns (mntns_fd, CLONE_NEWNS);
       if (UNLIKELY (ret < 0))
         {
           /* Create an error for the parent proc.  */
@@ -8071,18 +8072,84 @@ run_callback_in_namespace (int pidfd, int (*callback) (void *, libcrun_error_t *
   return get_process_exit_status (wait_status);
 }
 
+/* Check that USERNS_FD refers to the user namespace configured for the container.  */
 static int
-run_in_container_namespace (libcrun_container_status_t *status, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
+check_container_userns (libcrun_container_t *container, int userns_fd, libcrun_error_t *err)
 {
-  cleanup_close int pidfd = -1;
-  pid_t pid = status->pid;
+  runtime_spec_schema_config_schema *def = container->container_def;
+  bool new_userns = container->host_uid != 0;
+  cleanup_close int expected_fd = -1;
+  cleanup_close int parent_fd = -1;
+  struct stat st, expected_st;
+  const char *path = NULL;
+  size_t i;
   int ret;
 
-  pidfd = syscall_pidfd_open (pid, 0);
-  if (UNLIKELY (pidfd < 0))
-    return crun_make_error (err, errno, "pidfd_open");
+  if (def->linux)
+    for (i = 0; i < def->linux->namespaces_len; i++)
+      if (libcrun_find_namespace (def->linux->namespaces[i]->type) == CLONE_NEWUSER)
+        {
+          path = def->linux->namespaces[i]->path;
+          new_userns = path == NULL;
+          break;
+        }
 
-  /* Check if the container is still running after opening the pidfd.  */
+  if (path == NULL)
+    {
+      expected_fd = libcrun_open_proc_file (container, "self/ns/user", O_RDONLY, err);
+      if (UNLIKELY (expected_fd < 0))
+        return expected_fd;
+    }
+  else
+    {
+      expected_fd = open (path, O_RDONLY | O_CLOEXEC);
+      if (UNLIKELY (expected_fd < 0))
+        return crun_make_error (err, errno, "open `%s`", path);
+    }
+
+  /* A user namespace created for the container is a child of the current one.  */
+  if (new_userns)
+    {
+      parent_fd = ioctl (userns_fd, NS_GET_PARENT);
+      if (UNLIKELY (parent_fd < 0))
+        return crun_make_error (err, errno, "get the parent of the user namespace");
+      userns_fd = parent_fd;
+    }
+
+  ret = fstat (userns_fd, &st);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fstat user namespace");
+
+  ret = fstat (expected_fd, &expected_st);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fstat user namespace");
+
+  if (st.st_dev != expected_st.st_dev || st.st_ino != expected_st.st_ino)
+    return crun_make_error (err, 0, "the container process is not using the user namespace of the container");
+
+  return 0;
+}
+
+/* Open the mount namespace of the container in MNTNS_FD and the user namespace
+   owning it in OWNER_FD.  The container process could have moved to a mount
+   namespace owned by a nested user namespace, where it has CAP_SYS_ADMIN.  A
+   mount attached there is not protected by the MNT_LOCK_* flags the kernel
+   sets on the mounts copied to a less privileged namespace, so the container
+   could drop its ro, nosuid, nodev and noexec flags.  Make sure the mount
+   namespace is owned by the user namespace of the container, so that the
+   caller can join the same namespaces that were checked.  */
+static int
+open_container_mntns (libcrun_container_t *container, libcrun_container_status_t *status, int *mntns_fd, int *owner_fd, libcrun_error_t *err)
+{
+  cleanup_close int mntns = -1;
+  cleanup_close int owner = -1;
+  int ret;
+
+  mntns = libcrun_open_proc_pid_file (container, status->pid, "ns/mnt", O_RDONLY, err);
+  if (UNLIKELY (mntns < 0))
+    return mntns;
+
+  /* Check if the container is still running after opening the namespace.  */
   ret = libcrun_is_container_running (status, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -8090,7 +8157,33 @@ run_in_container_namespace (libcrun_container_status_t *status, int (*callback) 
   if (ret == 0)
     return crun_make_error (err, 0, "container not running");
 
-  return run_callback_in_namespace (pidfd, callback, arg, err);
+  owner = ioctl (mntns, NS_GET_USERNS);
+  if (UNLIKELY (owner < 0))
+    return crun_make_error (err, errno, "get the owner of the mount namespace");
+
+  ret = check_container_userns (container, owner, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  *mntns_fd = mntns;
+  mntns = -1;
+  *owner_fd = owner;
+  owner = -1;
+  return 0;
+}
+
+static int
+run_in_container_namespace (libcrun_container_t *container, libcrun_container_status_t *status, int (*callback) (void *, libcrun_error_t *), void *arg, libcrun_error_t *err)
+{
+  cleanup_close int mntns_fd = -1;
+  cleanup_close int owner_fd = -1;
+  int ret;
+
+  ret = open_container_mntns (container, status, &mntns_fd, &owner_fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return run_callback_in_namespace (mntns_fd, callback, arg, err);
 }
 
 struct umount_in_a_container_args
@@ -8260,7 +8353,7 @@ do_mount_in_a_container (void *arg, libcrun_error_t *err)
    to SYNC_FD.  It must be called from a child process.  */
 static int
 send_mounts_from_container_namespaces (libcrun_container_t *container, int pidfd, runtime_spec_schema_defs_mount **mounts,
-                                       struct libcrun_fd_map *fds, size_t len, int flags, int sync_fd, libcrun_error_t *err)
+                                       struct libcrun_fd_map *fds, size_t len, int flags, int owner_fd, int sync_fd, libcrun_error_t *err)
 {
   pid_t pid;
   size_t i;
@@ -8271,7 +8364,14 @@ send_mounts_from_container_namespaces (libcrun_container_t *container, int pidfd
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
 
-  ret = setns (pidfd, CLONE_NEWUSER | flags);
+  /* Join the namespaces while still being privileged, then the user
+     namespace that was checked and not the one the container process is in
+     right now.  */
+  ret = flags ? setns (pidfd, flags) : 0;
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "setns to target pid");
+
+  ret = setns (owner_fd, CLONE_NEWUSER);
   if (ret == 0)
     {
       /* CAP_SYS_ADMIN is needed in the user namespace owning the mount
@@ -8282,13 +8382,11 @@ send_mounts_from_container_namespaces (libcrun_container_t *container, int pidfd
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "unshare `CLONE_NEWNS`");
     }
-  else if (errno == EINVAL)
+  else if (errno != EINVAL)
     {
-      /* The container runs in the current user namespace.  */
-      ret = flags ? setns (pidfd, flags) : 0;
+      /* EINVAL means that the container runs in the current user namespace.  */
+      return crun_make_error (err, errno, "setns to the user namespace of the container");
     }
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "setns to target pid");
 
   /* We need to fork once again to join the PID namespace.  */
   pid = fork ();
@@ -8396,7 +8494,7 @@ get_namespaces_to_join (libcrun_container_t *container, pid_t pid, int *flags, l
    a process that joined the namespaces of the container, as it happens for
    the mounts in the container configuration.  */
 static int
-open_mounts_in_container_namespaces (libcrun_container_t *container, libcrun_container_status_t *status,
+open_mounts_in_container_namespaces (libcrun_container_t *container, libcrun_container_status_t *status, int owner_fd,
                                      runtime_spec_schema_defs_mount **mounts, struct libcrun_fd_map *fds, size_t len,
                                      libcrun_error_t *err)
 {
@@ -8457,7 +8555,7 @@ open_mounts_in_container_namespaces (libcrun_container_t *container, libcrun_con
     {
       close_and_reset (&sync_fd);
 
-      ret = send_mounts_from_container_namespaces (container, pidfd, mounts, fds, len, flags, sync_socket_fd[1], err);
+      ret = send_mounts_from_container_namespaces (container, pidfd, mounts, fds, len, flags, owner_fd, sync_socket_fd[1], err);
       if (UNLIKELY (ret < 0))
         send_error_to_sync_socket_and_die (sync_socket_fd[1], true, err);
 
@@ -8522,9 +8620,15 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
   struct mount_in_a_container_args args;
   cleanup_close_map struct libcrun_fd_map *fds = NULL;
   cleanup_close int pidfd = -1;
+  cleanup_close int mntns_fd = -1;
+  cleanup_close int owner_fd = -1;
   pid_t pid = status->pid;
   size_t i;
   int ret;
+
+  ret = open_container_mntns (container, status, &mntns_fd, &owner_fd, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   fds = make_libcrun_fd_map (len);
 
@@ -8554,7 +8658,7 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
     }
 
   /* All the remaining mounts are new file systems.  */
-  ret = open_mounts_in_container_namespaces (container, status, mounts, fds, len, err);
+  ret = open_mounts_in_container_namespaces (container, status, owner_fd, mounts, fds, len, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -8580,18 +8684,18 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
   args.pidfd = pidfd;
   args.len = len;
 
-  return run_in_container_namespace (status, do_mount_in_a_container, &args, err);
+  return run_callback_in_namespace (mntns_fd, do_mount_in_a_container, &args, err);
 }
 
 int
-libcrun_destroy_runtime_mounts (libcrun_container_t *container arg_unused, libcrun_container_status_t *status arg_unused, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err)
+libcrun_destroy_runtime_mounts (libcrun_container_t *container, libcrun_container_status_t *status, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err)
 {
   struct umount_in_a_container_args args;
 
   args.mounts = mounts;
   args.len = len;
 
-  return run_in_container_namespace (status, do_umount_in_a_container, &args, err);
+  return run_in_container_namespace (container, status, do_umount_in_a_container, &args, err);
 }
 
 int
