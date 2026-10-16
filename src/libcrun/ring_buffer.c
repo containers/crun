@@ -159,15 +159,18 @@ ring_buffer_read (struct ring_buffer *rb, int fd, bool *is_eagain, libcrun_error
   ret = readv (fd, iov, iov_count);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == EIO)
-        return 0;
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
+      /* A terminal that was hung up fails with EIO.  As with EAGAIN, there
+         is nothing to read until the state of the fd changes.  */
+      if (errno == EIO || errno == EAGAIN || errno == EWOULDBLOCK)
         {
           *is_eagain = true;
           return 0;
         }
       return crun_make_error (err, errno, "readv");
     }
+  /* The same holds at EOF.  */
+  if (ret == 0)
+    *is_eagain = true;
   ring_buffer_advance_nocheck_tail (rb, ret);
   return ret;
 }
@@ -191,9 +194,9 @@ ring_buffer_write (struct ring_buffer *rb, int fd, bool *is_eagain, libcrun_erro
   ret = writev (fd, iov, iov_count);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == EIO)
-        return 0;
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
+      /* A terminal that was hung up fails with EIO.  As with EAGAIN, there
+         is nothing to write until the state of the fd changes.  */
+      if (errno == EIO || errno == EAGAIN || errno == EWOULDBLOCK)
         {
           *is_eagain = true;
           return 0;

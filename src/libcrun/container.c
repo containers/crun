@@ -2377,7 +2377,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
             }
           else if (events[i].data.fd == 1 || events[i].data.fd == terminal_fd_from)
             {
-              ret = channel_fd_pair_process (from_terminal, stdout_pollable ? epollfd : -1, err);
+              ret = channel_fd_pair_process (from_terminal, epollfd, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy from terminal fd");
             }
