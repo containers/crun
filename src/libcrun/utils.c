@@ -606,17 +606,15 @@ crun_safe_ensure_at (bool do_open, bool dir, bool follow_symlinks, int dirfd, co
           ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW, 0700);
           if (UNLIKELY (ret < 0))
             {
-              /* If the last component is a symlink, repeat the lookup with the resolved path.  */
+              /* If the last component is a symlink, repeat the lookup with the resolved path.
+                 That lookup is confined to DIRFD, so its result is final: an openat without
+                 O_NOFOLLOW would follow the symlink from the process root instead.  */
               if (errno == ELOOP)
-                {
-                  ret = crun_safe_ensure_follow_symlink (do_open, dir, follow_symlinks, dirfd, dirpath, cwd, npath, cur, NULL,
-                                                         mode, max_readlinks, err);
-                  if (LIKELY (ret >= 0))
-                    return ret;
-                  crun_error_release (err);
-                }
+                return crun_safe_ensure_follow_symlink (do_open, dir, follow_symlinks, dirfd, dirpath, cwd, npath, cur, NULL,
+                                                        mode, max_readlinks, err);
+
               /* If the previous openat fails, attempt to open the file in O_PATH mode.  */
-              ret = openat (cwd, cur, O_CLOEXEC | O_PATH, 0);
+              ret = openat (cwd, cur, O_CLOEXEC | O_PATH | O_NOFOLLOW, 0);
               if (ret < 0)
                 return crun_make_error (err, errno, "open `%s/%s`", dirpath, npath);
             }
