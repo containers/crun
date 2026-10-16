@@ -367,6 +367,34 @@ def test_cr_masked_paths():
     return run_cr_test(conf)
 
 
+# Once it is restored, the container is running and decides what its stdin,
+# stdout and stderr point to.  That must not make the restore fail.
+def test_cr_long_stdin_path():
+    if r := _check_cr_requirements():
+        return r
+
+    data_dir = os.path.join(get_tests_root(), 'long-stdin-path')
+    os.makedirs(data_dir)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'long-stdin-path', '/data']
+    add_all_namespaces(conf)
+    conf['mounts'].append({"destination": "/data", "type": "bind", "source": data_dir, "options": ["bind", "rw"]})
+
+    def wait_for_ready():
+        for _ in range(100):
+            if os.path.exists(os.path.join(data_dir, 'ready')):
+                return
+            time.sleep(0.1)
+        raise Exception("the container is not ready to be checkpointed")
+
+    def mark_restored():
+        with open(os.path.join(data_dir, 'restored'), 'w'):
+            pass
+
+    return run_cr_test(conf, before_checkpoint_cb=wait_for_ready, before_restore_cb=mark_restored)
+
+
 def test_cr_with_ext_ns():
     if r := _check_cr_requirements(min_criu_version=31601):
         return r
@@ -542,6 +570,7 @@ def test_cr_with_annotation_config():
 all_tests = {
     "checkpoint-restore": test_cr,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
+    "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
     "checkpoint-restore-forward-signal": test_cr_restore_forward_signal,

@@ -816,6 +816,49 @@ main (int argc, char **argv)
     {
       do_pause ();
     }
+  if (strcmp (argv[1], "long-stdin-path") == 0)
+    {
+      /* Once the file "restored" shows up in the specified directory, replace
+         the stdin with a file whose path is longer than PATH_MAX.  CRIU cannot
+         checkpoint such a file, so until then keep open only its grandparent
+         directory, whose path is short enough.  */
+      char name[NAME_MAX + 1], file[NAME_MAX + 3];
+      int basefd, dirfd, fd, i;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'long-stdin-path' requires an argument");
+
+      memset (name, 'a', NAME_MAX);
+      name[NAME_MAX] = '\0';
+      snprintf (file, sizeof (file), "%s/f", name);
+
+      basefd = open (argv[2], O_RDONLY | O_DIRECTORY);
+      if (basefd < 0 || fchdir (basefd) < 0)
+        error (EXIT_FAILURE, errno, "open `%s`", argv[2]);
+      for (i = 0; i < PATH_MAX / (NAME_MAX + 1) - 1; i++)
+        if (mkdir (name, 0700) < 0 || chdir (name) < 0)
+          error (EXIT_FAILURE, errno, "mkdir");
+      dirfd = open (".", O_RDONLY | O_DIRECTORY);
+      if (dirfd < 0 || mkdir (name, 0700) < 0)
+        error (EXIT_FAILURE, errno, "mkdir");
+      fd = open (file, O_CREAT | O_WRONLY, 0600);
+      if (fd < 0 || chdir ("/") < 0)
+        error (EXIT_FAILURE, errno, "create file");
+      close (fd);
+
+      fd = openat (basefd, "ready", O_CREAT | O_WRONLY, 0600);
+      if (fd < 0)
+        error (EXIT_FAILURE, errno, "create `ready`");
+      close (fd);
+
+      while (faccessat (basefd, "restored", F_OK, 0) < 0)
+        nanosleep ((const struct timespec[]) { { 0, 10000000L } }, NULL);
+
+      fd = openat (dirfd, file, O_RDONLY);
+      if (fd < 0 || dup2 (fd, 0) < 0)
+        error (EXIT_FAILURE, errno, "replace stdin");
+      do_pause ();
+    }
   if (strcmp (argv[1], "exit-on-signal") == 0)
     {
       /* Exit with a distinctive status once SIGUSR1 is received.  Unlike a

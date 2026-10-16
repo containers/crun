@@ -1261,6 +1261,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
     json_object_put (doc);
   }
 
+  /* Our std streams are the new external descriptors, as CRIU connects the
+   * inherited pipes to them.  Record them now: once the container is
+   * restored it is already running, and /proc/PID/fd is under its control. */
+  ret = libcrun_save_external_descriptors (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = setup_criu_work_dir (cr_options, &work_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -1592,8 +1599,7 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   /* Update the status struct with the newly allocated PID. This will
    * be necessary later when moving the process into its cgroup. */
   status->pid = ret;
-
-  ret = libcrun_save_external_descriptors (container, ret, err);
+  ret = 0;
 
 out_umount:
   ret_out = umount (root);

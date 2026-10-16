@@ -5358,7 +5358,7 @@ libcrun_get_external_descriptors (libcrun_container_t *container)
 }
 
 int
-libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err)
+libcrun_save_external_descriptors (libcrun_container_t *container, libcrun_error_t *err)
 {
   const char *buf = NULL;
   json_gen_ctx *gen = NULL;
@@ -5379,7 +5379,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, li
       proc_fd_path_t fd_path;
       char link_path[PATH_MAX];
 
-      get_proc_fd_path (fd_path, pid, i);
+      get_proc_self_fd_path (fd_path, i);
 
       ret = readlink (fd_path, link_path, PATH_MAX - 1);
       if (UNLIKELY (ret < 0))
@@ -6868,7 +6868,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       __attribute__ ((unused)) cleanup_pid pid_t pid_to_clean = pid;
 
       /* this is safe to do because the std stream files were not changed since the clone().  */
-      ret = libcrun_save_external_descriptors (container, 0, err);
+      ret = libcrun_save_external_descriptors (container, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
