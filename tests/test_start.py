@@ -257,6 +257,10 @@ def test_sd_notify():
         out, cid = run_and_get_output(conf, hide_stderr=True, env=env, command='run')
         if "/run/notify/the-socket" not in str(out):
             return -1
+        # the notify mount must not be a peer of the host mount it was cloned from
+        for line in str(out).splitlines():
+            if "/run/notify/the-socket" in line and "shared:" in line:
+                return -1
     except:
         return -1
     return 0
