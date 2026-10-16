@@ -201,7 +201,7 @@ get_file_type (mode_t *mode, bool nofollow, const char *path)
 int
 create_file_if_missing_at (int dirfd, const char *file, mode_t mode, libcrun_error_t *err)
 {
-  cleanup_close int fd_write = openat (dirfd, file, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW, mode);
+  cleanup_close int fd_write = openat (dirfd, file, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW | O_NONBLOCK, mode);
   if (fd_write < 0)
     {
       int saved_errno = errno;
@@ -603,7 +603,7 @@ crun_safe_ensure_at (bool do_open, bool dir, bool follow_symlinks, int dirfd, co
 
       if (last_component && ! dir)
         {
-          ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW, 0700);
+          ret = openat (cwd, cur, O_CLOEXEC | O_CREAT | O_WRONLY | O_NOFOLLOW | O_NONBLOCK, 0700);
           if (UNLIKELY (ret < 0))
             {
               /* If the last component is a symlink, repeat the lookup with the resolved path.  */
@@ -646,7 +646,9 @@ crun_safe_ensure_at (bool do_open, bool dir, bool follow_symlinks, int dirfd, co
                                                     it ? it + 1 : NULL, mode, max_readlinks, err);
         }
 
-      cwd = safe_openat (dirfd, dirpath, npath, (last_component ? O_PATH : 0) | O_CLOEXEC, 0, err);
+      /* The type of an existing component is not known yet, so open it with
+         O_PATH: a FIFO must not block and a device must not be opened.  */
+      cwd = safe_openat (dirfd, dirpath, npath, O_PATH | O_CLOEXEC, 0, err);
       if (UNLIKELY (cwd < 0))
         return crun_error_wrap (err, "creating `/%s`", path);
 
