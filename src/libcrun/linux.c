@@ -176,6 +176,9 @@ struct private_data_s
   /* Set once the process root is the container rootfs and the host root
      can no longer be reached by path.  */
   bool host_root_switched;
+  /* The process joining an existing PID namespace is created only once
+     the container root is in place.  */
+  bool delayed_pidns_fork;
   /* The rootfs path on the host, used to recognize bind mount sources
      inside the container rootfs.  */
   char *host_rootfs;
@@ -3281,6 +3284,12 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
               get_private_data (container)->rootfsfd = new_rootfsfd;
             }
         }
+      else if (get_private_data (container)->delayed_pidns_fork && strcmp (type, "proc") == 0)
+        {
+          /* The process is not in the container PID namespace yet, so
+             mount(2) would create a proc instance for the wrong one.  */
+          return crun_make_error (err, 0, "the proc mount `%s` was not opened in the target PID namespace", target);
+        }
       else if (get_private_data (container)->host_root_switched)
         {
           /* The host root is unreachable now -- even through a fd, since
@@ -3853,7 +3862,8 @@ move_root (const char *rootfs, libcrun_error_t *err)
 }
 
 int
-libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
+libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container, const char *rootfs,
+                         set_mounts_cb_t after_pivot_cb, void *cb_data, libcrun_error_t *err)
 {
   int ret;
 
@@ -3899,6 +3909,13 @@ libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun
       ret = chdir ("/");
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chdir to `/`");
+    }
+
+  if (after_pivot_cb)
+    {
+      ret = after_pivot_cb (cb_data, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = finalize_mounts (container, err);
@@ -5777,6 +5794,10 @@ struct init_status_s
   /* Need to fork again once in the container.  */
   bool must_fork;
 
+  /* The fork is needed only to join an existing PID namespace, so it
+     can wait until the container root is in place.  */
+  bool can_delay_pidns_fork;
+
   /* fd index for userns.  */
   int userns_index;
   /* def->linux->namespaces userns.  */
@@ -5824,6 +5845,7 @@ configure_init_status (struct init_status_s *ns, libcrun_container_t *container,
   ns->join_pidns = false;
   ns->join_ipcns = false;
   ns->must_fork = false;
+  ns->can_delay_pidns_fork = false;
   ns->delayed_userns_create = false;
   ns->userns_index = -1;
   ns->userns_index_origin = -1;
@@ -6538,6 +6560,129 @@ set_id_init (libcrun_container_t *container, libcrun_error_t *err)
   return 0;
 }
 
+static bool
+is_proc_mount (runtime_spec_schema_defs_mount *mnt)
+{
+  return mnt->type && strcmp (mnt->type, "proc") == 0 && ! is_bind_mount (mnt, NULL, NULL);
+}
+
+/* Any process in a PID namespace can read the mount table of the others
+   through /proc/PID/mountinfo, so a process joining an existing PID
+   namespace must not be created while it still sees the host mounts.
+   The only step that needs a process in the target PID namespace before
+   the container root is in place is creating the proc mounts: open them
+   from a short-lived child and keep the fds in the mounts fd map.  The
+   child is created with the container rootfs as its root directory, so
+   that it does not expose the host mounts either.
+
+   Return 1 if all the proc mounts were opened and the fork can be delayed,
+   0 if the process must be created now.  */
+static int
+open_proc_mounts_in_pidns (libcrun_container_t *container, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  struct libcrun_fd_map *mount_fds = get_fd_map (container);
+  cleanup_close int socket_parent = -1;
+  cleanup_close int socket_child = -1;
+  cleanup_close int root_fd = -1;
+  cleanup_close int cwd_fd = -1;
+  size_t i, missing = 0;
+  int saved_errno;
+  int sockets[2];
+  pid_t pid;
+  int ret;
+
+  if (def->root == NULL || def->root->path == NULL)
+    return 0;
+
+  for (i = 0; i < def->mounts_len; i++)
+    if (is_proc_mount (def->mounts[i]))
+      missing++;
+  if (missing == 0)
+    return 1;
+
+  root_fd = open ("/", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (root_fd < 0))
+    return crun_make_error (err, errno, "open `/`");
+
+  cwd_fd = open (".", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (cwd_fd < 0))
+    return crun_make_error (err, errno, "open `.`");
+
+  ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sockets);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "socketpair");
+  socket_parent = sockets[0];
+  socket_child = sockets[1];
+
+  ret = chroot (def->root->path);
+  if (UNLIKELY (ret < 0))
+    return 0;
+
+  pid = fork ();
+  saved_errno = errno;
+  if (pid == 0)
+    {
+      /* If an existing user namespace was joined, the process has no
+         privileges on the current mount namespace.  */
+      if (get_private_data (container)->unshare_flags & CLONE_NEWUSER)
+        (void) unshare (CLONE_NEWNS);
+
+      for (i = 0; i < def->mounts_len; i++)
+        {
+          cleanup_close int fd = -1;
+
+          if (! is_proc_mount (def->mounts[i]))
+            continue;
+
+          fd = open_mount_of_type (container, def->mounts[i], err);
+          if (fd < 0)
+            _safe_exit (EXIT_FAILURE);
+
+          ret = send_fd_to_socket_with_payload (socket_child, fd, (char *) &i, sizeof (i), err);
+          if (UNLIKELY (ret < 0))
+            _safe_exit (EXIT_FAILURE);
+        }
+      _safe_exit (EXIT_SUCCESS);
+    }
+
+  if (UNLIKELY (fchdir (root_fd) < 0 || chroot (".") < 0 || fchdir (cwd_fd) < 0))
+    return crun_make_error (err, errno, "restore the root directory");
+
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, saved_errno, "fork");
+
+  close_and_reset (&socket_child);
+
+  /* If for any reason the mounts cannot be opened, fall back to creating
+     the process now.  */
+  while (missing > 0)
+    {
+      libcrun_error_t tmp_err = NULL;
+
+      ret = receive_fd_from_socket_with_payload (socket_parent, (char *) &i, sizeof (i), &tmp_err);
+      if (ret < 0)
+        {
+          crun_error_release (&tmp_err);
+          break;
+        }
+      if (i >= mount_fds->nfds)
+        {
+          TEMP_FAILURE_RETRY (close (ret));
+          break;
+        }
+
+      if (mount_fds->fds[i] >= 0)
+        TEMP_FAILURE_RETRY (close (mount_fds->fds[i]));
+      mount_fds->fds[i] = ret;
+      missing--;
+    }
+
+  waitpid_ignore_stopped (pid, NULL, 0);
+
+  return missing == 0 ? 1 : 0;
+}
+
 static int
 init_container (libcrun_container_t *container, int sync_socket_container, struct init_status_s *init_status,
                 libcrun_error_t *err)
@@ -6545,6 +6690,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   runtime_spec_schema_config_schema *def = container->container_def;
   struct libcrun_fd_map *mount_fds = get_fd_map (container);
   cleanup_close int timens_offsets_fd = -1;
+  bool delayed_pidns_fork = false;
   pid_t pid_container = 0;
   size_t i;
   int ret;
@@ -6577,9 +6723,34 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           close_and_reset (&init_status->fd[init_status->idx_timens_to_join_immediately]);
         }
 
-      new_pid = fork ();
-      if (UNLIKELY (new_pid < 0))
-        return crun_make_error (err, errno, "fork");
+      if (init_status->can_delay_pidns_fork)
+        {
+          ret = open_proc_mounts_in_pidns (container, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          delayed_pidns_fork = ret > 0;
+        }
+
+      if (delayed_pidns_fork)
+        {
+          /* A zero PID tells the parent that the process is created later.  */
+          new_pid = 0;
+
+          ret = send_success_to_sync_socket (sync_socket_container, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          ret = TEMP_FAILURE_RETRY (write (sync_socket_container, &new_pid, sizeof (new_pid)));
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "write to sync socket");
+        }
+      else
+        {
+          new_pid = fork ();
+          if (UNLIKELY (new_pid < 0))
+            return crun_make_error (err, errno, "fork");
+        }
 
       if (new_pid)
         {
@@ -6595,7 +6766,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           _safe_exit (0);
         }
 
-      /* In the new process.  Wait for the parent to receive the new PID.  */
+      /* Wait for the parent to receive the new PID.  */
       ret = expect_success_from_sync_socket (sync_socket_container, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -6633,7 +6804,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           /* If for any reason the mount cannot be opened, ignore errors and continue.
              An error will be generated later if it is not possible to join the namespace.
           */
-          if (init_status->join_pidns && strcmp (def->mounts[i]->type, "proc") == 0)
+          if (init_status->join_pidns && ! delayed_pidns_fork && strcmp (def->mounts[i]->type, "proc") == 0)
             fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
             fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
@@ -6747,13 +6918,25 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
 
   if (init_status->must_fork)
     {
-      /* A PID and a time namespace are joined when the new process is created.  */
-      pid_container = fork ();
-      if (UNLIKELY (pid_container < 0))
-        return crun_make_error (err, errno, "cannot fork");
+      if (init_status->can_delay_pidns_fork)
+        {
+          ret = open_proc_mounts_in_pidns (container, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
 
-      /* Report back the new PID.  */
-      if (pid_container)
+          delayed_pidns_fork = ret > 0;
+        }
+
+      if (! delayed_pidns_fork)
+        {
+          /* A PID and a time namespace are joined when the new process is created.  */
+          pid_container = fork ();
+          if (UNLIKELY (pid_container < 0))
+            return crun_make_error (err, errno, "cannot fork");
+        }
+
+      /* Report back the new PID.  A zero PID tells the parent that the process is created later.  */
+      if (pid_container || delayed_pidns_fork)
         {
           libcrun_debug ("Running container PID after fork: `%d`", pid_container);
           ret = send_success_to_sync_socket (sync_socket_container, err);
@@ -6764,13 +6947,16 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write to sync socket");
 
-          _safe_exit (EXIT_SUCCESS);
+          if (pid_container)
+            _safe_exit (EXIT_SUCCESS);
         }
 
       ret = expect_success_from_sync_socket (sync_socket_container, err);
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  get_private_data (container)->delayed_pidns_fork = delayed_pidns_fork;
 
   ret = send_success_to_sync_socket (sync_socket_container, err);
   if (UNLIKELY (ret < 0))
@@ -6796,8 +6982,14 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   return 0;
 }
 
-static int
-handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcrun_error_t *err)
+bool
+libcrun_container_delayed_pidns_fork (libcrun_container_t *container)
+{
+  return get_private_data (container)->delayed_pidns_fork;
+}
+
+int
+libcrun_handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcrun_error_t *err)
 {
   cleanup_close int client_fd = -1;
   cleanup_close int pidfd = -1;
@@ -6912,6 +7104,11 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           break;
 
         case CLONE_NEWPID:
+          /* The prestart, createRuntime and createContainer hooks need the PID of the
+             process in the PID namespace before the pivot_root.  */
+          init_status.can_delay_pidns_fork = ! (def->hooks
+                                                && (def->hooks->prestart_len || def->hooks->create_runtime_len
+                                                    || def->hooks->create_container_len));
           if (! new_userns)
             init_status.must_fork = true;
           else
@@ -6958,6 +7155,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
       first_clone_args &= ~CLONE_NEWPID;
       init_status.namespaces_to_unshare |= CLONE_NEWPID;
       init_status.must_fork = true;
+      init_status.can_delay_pidns_fork = false;
     }
 
   pid = -1;
@@ -7013,10 +7211,15 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           if (UNLIKELY (ret != sizeof (new_pid)))
             return crun_make_error (err, ret < 0 ? errno : 0, "read pid from sync socket");
 
-          /* Cleanup the first process.  */
-          ret = waitpid_ignore_stopped (pid, NULL, 0);
+          if (new_pid == 0)
+            get_private_data (container)->delayed_pidns_fork = true;
+          else
+            {
+              /* Cleanup the first process.  */
+              ret = waitpid_ignore_stopped (pid, NULL, 0);
 
-          pid_to_clean = pid = new_pid;
+              pid_to_clean = pid = new_pid;
+            }
 
           ret = send_success_to_sync_socket (sync_socket_host, err);
           if (UNLIKELY (ret < 0))
@@ -7057,10 +7260,15 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
           if (UNLIKELY (ret < 0))
             return ret;
 
-          /* Cleanup the first process.  */
-          waitpid_ignore_stopped (pid, NULL, 0);
+          if (grandchild == 0)
+            get_private_data (container)->delayed_pidns_fork = true;
+          else
+            {
+              /* Cleanup the first process.  */
+              waitpid_ignore_stopped (pid, NULL, 0);
 
-          pid_to_clean = pid = grandchild;
+              pid_to_clean = pid = grandchild;
+            }
         }
 
       /* They are received by `receive_mounts`.  */
@@ -7074,9 +7282,13 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
 
       *sync_socket_out = get_and_reset (&sync_socket_host);
 
-      ret = handle_pidfd_receiver (pid, container, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
+      /* If the fork is delayed, it is done once the container process exists.  */
+      if (! get_private_data (container)->delayed_pidns_fork)
+        {
+          ret = libcrun_handle_pidfd_receiver (pid, container, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
 
       pid_to_clean = 0;
       return pid;

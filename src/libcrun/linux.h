@@ -61,12 +61,14 @@ struct libcrun_dirfd_s
 
 pid_t libcrun_run_linux_container (libcrun_container_t *container, container_entrypoint_t entrypoint, void *args,
                                    int *sync_socket_out, struct libcrun_dirfd_s *dirfd, libcrun_error_t *err);
+bool libcrun_container_delayed_pidns_fork (libcrun_container_t *container);
+int libcrun_handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcrun_error_t *err);
 int get_notify_fd (libcrun_context_t *context, libcrun_container_t *container, int *notify_socket_out,
                    libcrun_error_t *err);
 int libcrun_set_mounts (struct container_entrypoint_s *args, libcrun_container_t *container, const char *rootfs,
                         set_mounts_cb_t cb, void *cb_data, libcrun_error_t *err);
 int libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_container_t *container,
-                             const char *rootfs, libcrun_error_t *err);
+                             const char *rootfs, set_mounts_cb_t after_pivot_cb, void *cb_data, libcrun_error_t *err);
 int libcrun_init_caps (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, char **rootfs, libcrun_error_t *err);
 int libcrun_reopen_dev_null (libcrun_error_t *err);
