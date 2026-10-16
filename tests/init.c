@@ -590,6 +590,13 @@ main (int argc, char **argv)
       return open_only (argv[2], O_WRONLY);
     }
 
+  if (strcmp (argv[1], "openrdwr") == 0)
+    {
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'openrdwr' requires an argument");
+      return open_only (argv[2], O_RDWR);
+    }
+
   if (strcmp (argv[1], "access") == 0)
     {
       if (argc < 3)

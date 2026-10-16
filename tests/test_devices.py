@@ -660,6 +660,58 @@ def test_allow_device_read_only():
 
     return 1
 
+def test_deny_device_write():
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    try:
+        os.stat("/dev/fuse")
+    except:
+        return (77, "/dev/fuse device not available")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['devices'] = [{
+        "path": "/dev/controlledchar",
+        "type": "c",
+        "major": 10,
+        "minor": 229,
+        "fileMode": 0o0666
+    }]
+    conf['linux']['resources'] = {
+        "devices": [
+            {"allow": False, "access": "rwm"},
+            {"allow": True, "type": "c", "major": 10, "minor": 229, "access": "rwm"},
+            {"allow": False, "type": "c", "major": 10, "minor": 229, "access": "w"},
+        ]
+    }
+
+    conf['process']['args'] = ['/init', 'open', '/dev/controlledchar']
+    try:
+        run_and_get_output(conf)
+    except Exception as e:
+        output_str = getattr(e, 'output', b'').decode(errors='ignore')
+        if "systemd does not support deny rules" in output_str:
+            return (77, "deny rules not supported by the cgroup manager")
+        logger.info("test_deny_device_write failed: %s", e)
+        return -1
+
+    # A deny rule must apply also when other access bits are requested with it.
+    for mode in ['openwronly', 'openrdwr']:
+        conf['process']['args'] = ['/init', mode, '/dev/controlledchar']
+        try:
+            run_and_get_output(conf)
+            logger.info("test_deny_device_write: %s was unexpectedly allowed.", mode)
+            return 1
+        except Exception as e:
+            output_str = getattr(e, 'output', b'').decode(errors='ignore')
+            if "Operation not permitted" not in output_str:
+                logger.info("test_deny_device_write (%s) failed with: %s, output: %s", mode, e, output_str)
+                return 1
+
+    return 0
+
 all_tests = {
     "mknod-fifo-device": test_mknod_fifo_device,
     "mknod-char-device": test_mknod_char_device,
@@ -670,6 +722,7 @@ all_tests = {
     "dev-symlink-does-not-populate-outside-rootfs": test_dev_symlink_does_not_populate_outside_rootfs,
     "userns-precreated-devices-flags": test_userns_precreated_devices_flags,
     "allow-device-read-only": test_allow_device_read_only,
+    "deny-device-write": test_deny_device_write,
     "owner-device" : test_owner_device,
     "deny-devices" : test_deny_devices,
     "allow-device" : test_allow_device,

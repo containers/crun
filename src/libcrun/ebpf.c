@@ -192,7 +192,9 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
   /*
     if (request.type != device.type)
       goto next_block:
-    if ((request.access & device.access) != request.access)
+    if (accept && (request.access & device.access) != request.access)
+      goto next_block:
+    if (! accept && (request.access & device.access) == 0)
       goto next_block:
     if (device.major != '*' && request.major != device.major) == 0)
       goto next_block:
@@ -219,7 +221,8 @@ bpf_program_append_dev (struct bpf_program *program, const char *access, char ty
       struct bpf_insn i[] = {
         BPF_MOV32_REG (BPF_REG_1, BPF_REG_3),
         BPF_ALU32_IMM (BPF_AND, BPF_REG_1, bpf_access),
-        BPF_JMP_REG (BPF_JNE, BPF_REG_1, BPF_REG_3, number_instructions - 2),
+        accept ? BPF_JMP_REG (BPF_JNE, BPF_REG_1, BPF_REG_3, number_instructions - 2)
+               : BPF_JMP_IMM (BPF_JEQ, BPF_REG_1, 0, number_instructions - 2),
       };
       number_instructions -= 3;
       program = bpf_program_append (program, i, sizeof (i));
