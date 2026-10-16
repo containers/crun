@@ -5081,6 +5081,17 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
         if (UNLIKELY (ret < 0))
           goto fail;
 
+        /* Complete the configuration for the cgroup before the container is
+           restored there: CRIU resumes the restored processes before it
+           returns, so the device filter and the limits must already be in
+           place.  There is no process to move, as CRIU is run in the cgroup,
+           and the controllers were enabled by precreate_cgroup.  */
+        cg.joined = true;
+
+        ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
+        if (UNLIKELY (ret < 0))
+          goto fail;
+
         /* Restore the container directly in the desired cgroup.  */
         status.cgroup_path = cgroup_path;
 
@@ -5096,11 +5107,8 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
         if (UNLIKELY (ret < 0))
           goto fail;
 
-        /* Use the container first process PID to setup the cgroup.  The
-           restored processes are already in the cgroup, as CRIU was run
-           there, and the controllers were enabled by precreate_cgroup.  */
+        /* Use the container first process PID to finalize the cgroup.  */
         cg.pid = status.pid;
-        cg.joined = true;
       }
     else
       {
@@ -5142,14 +5150,12 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
 
         /* Use the dummy process PID as the PID to setup the cgroup.  */
         cg.pid = proxy_pid;
+
+        /* Complete the configuration for the cgroup.  It contains only the dummy process.  */
+        ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
+        if (UNLIKELY (ret < 0))
+          goto fail;
       }
-
-    /* Complete the configuration for the cgroup.  It either contains the fully restored container with cgroupfs,
-       or the dummy process with systemd.  */
-
-    ret = libcrun_cgroup_enter (&cg, &cgroup_status, err);
-    if (UNLIKELY (ret < 0))
-      goto fail;
 
     ret = libcrun_cgroup_enter_finalize (&cg, cgroup_status, err);
     if (UNLIKELY (ret < 0))
