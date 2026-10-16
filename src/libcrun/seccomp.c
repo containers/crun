@@ -197,6 +197,59 @@ get_seccomp_action (const char *name, int errno_ret, uint32_t *action, libcrun_e
 fail:
   return crun_make_error (err, 0, "seccomp get action `%s`", name);
 }
+
+/* seccomp_export_bpf issues a single write and succeeds even when it is
+   short, so retrieve the whole program first and write it with safe_write,
+   which fails on ENOSPC or EFBIG instead of leaving a truncated filter.  */
+static int
+export_bpf (scmp_filter_ctx ctx, int fd, libcrun_error_t *err)
+{
+  cleanup_free char *bpf = NULL;
+  size_t len = 0;
+  int ret;
+
+#  ifdef HAVE_SECCOMP_EXPORT_BPF_MEM
+  ret = seccomp_export_bpf_mem (ctx, NULL, &len);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "seccomp_export_bpf_mem");
+
+  bpf = xmalloc (len);
+
+  ret = seccomp_export_bpf_mem (ctx, bpf, &len);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "seccomp_export_bpf_mem");
+#  else
+  cleanup_close int pipe_r = -1;
+  cleanup_close int pipe_w = -1;
+  int p[2];
+
+  /* A pipe is not affected by the free space or by RLIMIT_FSIZE, the write
+     is short only when it fills the pipe.  */
+  ret = pipe2 (p, O_CLOEXEC | O_NONBLOCK);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "pipe");
+  pipe_r = p[0];
+  pipe_w = p[1];
+
+  ret = seccomp_export_bpf (ctx, pipe_w);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "seccomp_export_bpf");
+
+  close_and_reset (&pipe_w);
+
+  ret = read_all_fd (pipe_r, "seccomp pipe", &bpf, &len, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = fcntl (pipe_r, F_GETPIPE_SZ);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fcntl (F_GETPIPE_SZ)");
+  if (UNLIKELY (len >= (size_t) ret))
+    return crun_make_error (err, 0, "the seccomp filter does not fit in a pipe");
+#  endif
+
+  return safe_write (fd, "seccomp.bpf", bpf, len, err);
+}
 #endif /* HAVE_SECCOMP */
 
 static void
@@ -939,9 +992,9 @@ libcrun_generate_seccomp (struct libcrun_seccomp_gen_ctx_s *gen_ctx, libcrun_err
 
   if (gen_ctx->fd >= 0)
     {
-      ret = seccomp_export_bpf (ctx, gen_ctx->fd);
+      ret = export_bpf (ctx, gen_ctx->fd, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, -ret, "seccomp_export_bpf");
+        return ret;
 
       return store_seccomp_cache (gen_ctx, err);
     }
