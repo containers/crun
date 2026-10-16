@@ -208,6 +208,7 @@ AS_IF([test "x$enable_seccomp" != "xno"], [
 	AS_IF([test "$ac_cv_header_seccomp_h" = "yes"], [
 		AC_SEARCH_LIBS(seccomp_rule_add, [seccomp], [AC_DEFINE([HAVE_SECCOMP], 1, [Define if seccomp is available])], [AC_MSG_ERROR([*** libseccomp headers not found])])
 		AC_SEARCH_LIBS(seccomp_arch_resolve_name, [seccomp], [AC_DEFINE([SECCOMP_ARCH_RESOLVE_NAME], 1, [Define if seccomp_arch_resolve_name is available])], [ ])
+		AC_CHECK_FUNCS(seccomp_export_bpf_mem)
 	])
 ])
 
