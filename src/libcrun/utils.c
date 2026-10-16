@@ -72,6 +72,7 @@
 #endif
 
 #define MAX_READLINKS 32
+#define MAX_OPENAT2_EAGAIN_RETRIES 128
 
 int
 crun_path_exists (const char *path, libcrun_error_t *err)
@@ -432,6 +433,7 @@ safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mod
              libcrun_error_t *err)
 {
   static bool openat2_supported = true;
+  int retries = MAX_OPENAT2_EAGAIN_RETRIES;
   int ret;
 
   if (is_empty_string (path))
@@ -469,7 +471,13 @@ safe_openat (int dirfd, const char *rootfs, const char *path, int flags, int mod
       ret = syscall_openat2 (dirfd, path, flags, mode, RESOLVE_IN_ROOT);
       if (UNLIKELY (ret < 0))
         {
-          if (errno == EINTR || errno == EAGAIN)
+          if (errno == EINTR)
+            goto repeat;
+          /* With RESOLVE_IN_ROOT the kernel returns EAGAIN when a rename or a
+             mount happened anywhere on the system while a ".." component was
+             being resolved.  Any process can cause that, so give up after a
+             bounded number of attempts instead of retrying forever.  */
+          if (errno == EAGAIN && retries-- > 0)
             goto repeat;
           if (errno == ENOSYS)
             openat2_supported = false;
