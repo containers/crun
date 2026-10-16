@@ -6395,6 +6395,31 @@ receive_mounts (struct libcrun_fd_map *fds, int sync_socket_container, libcrun_e
   return 0;
 }
 
+/* Make the init process non-dumpable, so that its /proc files cannot be
+   accessed from the namespaces it joins, e.g. by other processes in a joined
+   PID namespace while it still has the host root and credentials.
+
+   Do not do it if crun has no CAP_SYS_PTRACE: until the container process
+   is executed, accessing /proc files of a non-dumpable init (e.g. to join
+   its namespaces with crun exec before the container is started) requires
+   CAP_SYS_PTRACE in the user namespace crun runs in.  The capability check
+   is done before creating the container user namespace, where the process
+   has all capabilities.  */
+static int
+set_init_non_dumpable (libcrun_container_t *container, libcrun_error_t *err)
+{
+  int ret;
+
+  if (! container->host_has_cap_sys_ptrace)
+    return 0;
+
+  ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
+
+  return 0;
+}
+
 static int
 set_id_init (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -6455,6 +6480,12 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
   pid_t pid_container = 0;
   size_t i;
   int ret;
+
+  /* Do it before joining any namespace, otherwise the process would be
+     visible in a joined PID namespace while it is still dumpable.  */
+  ret = set_init_non_dumpable (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (init_status->idx_pidns_to_join_immediately >= 0 || init_status->idx_timens_to_join_immediately >= 0)
     {
@@ -6596,6 +6627,12 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
       ret = set_id_init (container, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      /* Changing the credentials resets the dumpable flag to the value of
+         fs.suid_dumpable, so set it again.  */
+      ret = set_init_non_dumpable (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = join_namespaces (def, init_status->fd, init_status->fd_len, init_status->index, false, err);
@@ -6638,19 +6675,6 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           if (UNLIKELY (ret < 0))
             return crun_make_error (err, errno, "write `/proc/self/timens_offsets`");
         }
-    }
-
-  /* Do not do it if crun has no CAP_SYS_PTRACE: until the container process
-     is executed, accessing /proc files of a non-dumpable init (e.g. to join
-     its namespaces with crun exec before the container is started) requires
-     CAP_SYS_PTRACE in the user namespace crun runs in.  The capability check
-     is done before creating the container user namespace, where the process
-     has all capabilities.  */
-  if (container->host_has_cap_sys_ptrace)
-    {
-      ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "prctl (PR_SET_DUMPABLE)");
     }
 
   if (init_status->must_fork)
