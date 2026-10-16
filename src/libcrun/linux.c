@@ -8099,6 +8099,77 @@ struct umount_in_a_container_args
   size_t len;
 };
 
+/* Detach the mount at DESTINATION, relative to the current root.  The file
+   system tree is under the control of the container, so no symlink is
+   followed, otherwise the container could choose what mount is detached.
+   umount2 accepts only a path, so unmount the last component from its parent
+   directory and then go back to the previous working directory.  */
+static int
+umount_nofollow (const char *destination, libcrun_error_t *err)
+{
+  cleanup_close int parentfd = -1;
+  cleanup_close int cwdfd = -1;
+  char buffer[PATH_MAX];
+  const char *parent, *name;
+  char *last_slash;
+  size_t len;
+  int saved_errno;
+  int ret;
+
+  if (is_empty_string (destination))
+    return crun_make_error (err, 0, "empty destination for mount");
+
+  len = strlen (destination);
+  if (UNLIKELY (len >= sizeof (buffer)))
+    return crun_make_error (err, ENAMETOOLONG, "umount `%s`", destination);
+  memcpy (buffer, destination, len + 1);
+
+  while (len > 1 && buffer[len - 1] == '/')
+    buffer[--len] = '\0';
+
+  last_slash = strrchr (buffer, '/');
+  if (last_slash == NULL)
+    {
+      parent = ".";
+      name = buffer;
+    }
+  else if (last_slash == buffer)
+    {
+      parent = "/";
+      name = buffer[1] ? buffer + 1 : ".";
+    }
+  else
+    {
+      *last_slash = '\0';
+      parent = buffer;
+      name = last_slash + 1;
+    }
+
+  parentfd = syscall_openat2 (AT_FDCWD, parent, O_PATH | O_DIRECTORY | O_CLOEXEC, 0,
+                              RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS);
+  if (UNLIKELY (parentfd < 0))
+    return crun_make_error (err, errno, "open parent directory of `%s`", destination);
+
+  cwdfd = open (".", O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (cwdfd < 0))
+    return crun_make_error (err, errno, "open current directory");
+
+  ret = fchdir (parentfd);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fchdir to parent directory of `%s`", destination);
+
+  ret = umount2 (name, MNT_DETACH | UMOUNT_NOFOLLOW);
+  saved_errno = errno;
+
+  if (UNLIKELY (fchdir (cwdfd) < 0))
+    return crun_make_error (err, errno, "fchdir to the previous working directory");
+
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, saved_errno, "umount `%s`", destination);
+
+  return 0;
+}
+
 static int
 do_umount_in_a_container (void *arg, libcrun_error_t *err)
 {
@@ -8108,9 +8179,9 @@ do_umount_in_a_container (void *arg, libcrun_error_t *err)
 
   for (i = 0; i < args->len; i++)
     {
-      ret = umount2 (args->mounts[i]->destination, MNT_DETACH);
+      ret = umount_nofollow (args->mounts[i]->destination, err);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "umount `%s`", args->mounts[i]->destination);
+        return ret;
     }
 
   return 0;
@@ -8123,6 +8194,38 @@ struct mount_in_a_container_args
   int pidfd;
   size_t len;
 };
+
+/* Open DESTINATION, relative to the current root, creating it if it does not
+   exist.  The file system tree is under the control of the container, so no
+   symlink is followed, as it happens for `mounts remove`, otherwise a mount
+   could be added that cannot be removed.  */
+static int
+open_destination_nofollow (const char *destination, bool dir, libcrun_error_t *err)
+{
+  const uint64_t resolve = RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS;
+  int fd;
+  int ret;
+
+  fd = syscall_openat2 (AT_FDCWD, destination, O_PATH | O_CLOEXEC, 0, resolve);
+  if (LIKELY (fd >= 0))
+    return fd;
+
+  if (errno != ENOENT)
+    return crun_make_error (err, errno, "open `%s`", destination);
+
+  if (dir)
+    ret = crun_safe_ensure_directory_at (AT_FDCWD, "/", destination, 0755, err);
+  else
+    ret = crun_safe_ensure_file_at (AT_FDCWD, "/", destination, 0755, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  fd = syscall_openat2 (AT_FDCWD, destination, O_PATH | O_CLOEXEC, 0, resolve);
+  if (UNLIKELY (fd < 0))
+    return crun_make_error (err, errno, "open `%s`", destination);
+
+  return fd;
+}
 
 static int
 do_mount_in_a_container (void *arg, libcrun_error_t *err)
@@ -8140,7 +8243,7 @@ do_mount_in_a_container (void *arg, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "fstat");
 
-      dest_fd = crun_safe_create_and_open_ref_at ((st.st_mode & S_IFMT) == S_IFDIR, AT_FDCWD, "/", args->mounts[i]->destination, 0755, err);
+      dest_fd = open_destination_nofollow (args->mounts[i]->destination, (st.st_mode & S_IFMT) == S_IFDIR, err);
       if (UNLIKELY (dest_fd < 0))
         return dest_fd;
 

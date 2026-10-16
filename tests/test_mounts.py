@@ -851,6 +851,62 @@ def test_add_remove_mounts():
         shutil.rmtree(bind_dir)
     return 0
 
+def test_remove_mounts_no_symlinks():
+    if is_rootless():
+        return (77, "requires root privileges")
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['linux']['readonlyPaths'] = ["/proc/sys"]
+    conf['process']['args'] = ['/init', 'pause']
+
+    def prepare_rootfs(rootfs):
+        os.symlink("/proc/sys", os.path.join(rootfs, "last-component"))
+        os.symlink("/proc", os.path.join(rootfs, "parent"))
+
+    def count_proc_sys_mounts():
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
+        return len(re.findall(r" /proc/sys ", out))
+
+    mounts_path = os.path.join(get_tests_root(), "mounts-no-symlinks.json")
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, detach=True, callback_prepare_rootfs=prepare_rootfs)
+
+        if count_proc_sys_mounts() != 1:
+            logger.info("/proc/sys is not a mount point")
+            return -1
+
+        # The symlinks can be created by the container, they must not be followed.
+        for destination in ["/last-component", "/parent/sys"]:
+            with open(mounts_path, "w+") as f:
+                json.dump([{"destination": destination}], f)
+            try:
+                run_crun_command_raw(["mounts", "remove", cid, mounts_path])
+                logger.info("mounts remove `%s` did not fail", destination)
+                return -1
+            except subprocess.CalledProcessError:
+                pass
+            if count_proc_sys_mounts() != 1:
+                logger.info("mounts remove `%s` detached /proc/sys", destination)
+                return -1
+
+            with open(mounts_path, "w+") as f:
+                json.dump([{"destination": destination, "type": "tmpfs", "source": "tmpfs"}], f)
+            try:
+                run_crun_command_raw(["mounts", "add", cid, mounts_path])
+                logger.info("mounts add `%s` did not fail", destination)
+                return -1
+            except subprocess.CalledProcessError:
+                pass
+            if count_proc_sys_mounts() != 1:
+                logger.info("mounts add `%s` changed the mounts on /proc/sys", destination)
+                return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_mount_help():
     out = run_crun_command(["mounts", "--help"])
     if "Usage: crun [OPTION...] mounts [add|remove] CONTAINER FILE" not in out:
@@ -1668,6 +1724,7 @@ all_tests = {
     "mount-tmpfs-explicit-mode": test_mount_tmpfs_explicit_mode,
     "mount-tmpfs-symlink-mode": test_mount_tmpfs_symlink_mode,
     "mount-add-remove-mounts": test_add_remove_mounts,
+    "mount-remove-mounts-no-symlinks": test_remove_mounts_no_symlinks,
     "mount-help": test_mount_help,
     "annotation-mount-context-type": test_annotation_mount_context_type,
     "mount-propagation-private": test_mount_propagation_private,

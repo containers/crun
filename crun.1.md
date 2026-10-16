@@ -31,10 +31,10 @@ Exec a command in a running container.
 List known containers.
 
 **mounts add**
-Add mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Each mount listed there is added to the running container.  The command is experimental and can be changed without notice.
+Add mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Each mount listed there is added to the running container; symlinks in its destination path are not followed.  The command is experimental and can be changed without notice.
 
 **mounts remove**
-Remove mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Only the destination attribute for each mount is used.  The command is experimental and can be changed without notice.
+Remove mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Only the destination attribute for each mount is used; symlinks in its path are not followed.  The command is experimental and can be changed without notice.
 
 **kill**
 Send the specified signal to the container init process.  If no signal
