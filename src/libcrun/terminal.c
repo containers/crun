@@ -30,6 +30,10 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
+#ifndef TIOCGPTPEER
+#  define TIOCGPTPEER _IO ('T', 0x41)
+#endif
+
 struct terminal_status_s
 {
   int fd;
@@ -116,11 +120,19 @@ libcrun_clear_onlcr (int fd, libcrun_error_t *err)
 }
 
 int
-libcrun_set_stdio (char *pty, libcrun_error_t *err)
+libcrun_set_stdio (int ptmx_fd, char *pty, libcrun_error_t *err)
 {
+  cleanup_close int fd = -1;
   int ret, i;
-  cleanup_close int fd = open (pty, O_RDWR | O_CLOEXEC);
 
+  /* Open the slave directly from the master.  The path is resolved in the
+     container mount namespace, and could point anywhere.  */
+  fd = ioctl (ptmx_fd, TIOCGPTPEER, O_RDWR | O_CLOEXEC);
+  if (fd < 0 && (errno == EINVAL || errno == ENOTTY))
+    {
+      /* TIOCGPTPEER requires Linux 4.13.  */
+      fd = open (pty, O_RDWR | O_CLOEXEC);
+    }
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "open `%s`", pty);
 

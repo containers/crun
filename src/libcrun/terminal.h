@@ -27,7 +27,7 @@ void cleanup_terminalp (void *p);
 
 int libcrun_new_terminal (char **pty, libcrun_error_t *err);
 
-int libcrun_set_stdio (char *pty, libcrun_error_t *err);
+int libcrun_set_stdio (int ptmx_fd, char *pty, libcrun_error_t *err);
 
 int libcrun_set_raw (int fd, void **current_status, libcrun_error_t *err);
 

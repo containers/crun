@@ -5336,13 +5336,14 @@ open_terminal (char **pty, runtime_spec_schema_config_schema_process *process, l
   if (UNLIKELY (fd < 0))
     return fd;
 
-  ret = libcrun_set_stdio (*pty, err);
+  ret = libcrun_set_stdio (fd, *pty, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (uid)
     {
-      ret = chown (*pty, uid, -1);
+      /* The slave is now stdin, use the descriptor instead of resolving the path again.  */
+      ret = fchown (0, uid, -1);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chown `%s`", *pty);
     }
