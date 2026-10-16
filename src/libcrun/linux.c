@@ -1544,7 +1544,6 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
                        unsigned long mountflags, const char *fstype,
                        libcrun_error_t *err)
 {
-  unsigned long flags = mountflags & ~(ALL_PROPAGATIONS_NO_REC | MS_RDONLY);
   int ret;
 
   if (! ((mountflags & MS_RDONLY) && targetfd > 0 && fstype && strcmp (fstype, "sysfs") == 0))
@@ -1564,14 +1563,15 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
     cleanup_close int mountfd = -1;
     cleanup_close int sysfd = -1;
     int sys_old_root_fd = get_old_root_fd (get_private_data (container));
-    bool ro = flags & MS_RDONLY;
 
+    /* The bind brings the host mounts below /sys along.  The later do_remount
+       only affects the top mount, so make the whole tree read-only here.  */
     if (sys_old_root_fd >= 0)
-      mountfd = get_bind_mount (sys_old_root_fd, "sys", true, ro, false, MS_PRIVATE, err);
+      mountfd = get_bind_mount (sys_old_root_fd, "sys", true, true, false, MS_PRIVATE, err);
     if (mountfd < 0)
       {
         crun_error_release (err);
-        mountfd = get_bind_mount (AT_FDCWD, "/sys", true, ro, false, MS_PRIVATE, err);
+        mountfd = get_bind_mount (AT_FDCWD, "/sys", true, true, false, MS_PRIVATE, err);
       }
 
     if (cgroup_mount == NULL)
