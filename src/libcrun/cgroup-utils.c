@@ -821,6 +821,31 @@ libcrun_cgroup_ensure_not_frozen (const char *cgroup_path, libcrun_error_t *err)
   return 0;
 }
 
+/* Like libcrun_cgroup_ensure_not_frozen, but check the ancestors of
+   CGROUP_PATH too: on cgroup v2 freezing a cgroup freezes all its
+   descendants, while their own cgroup.freeze still reads 0.  */
+int
+libcrun_cgroup_ensure_not_frozen_with_ancestors (const char *cgroup_path, libcrun_error_t *err)
+{
+  cleanup_free char *path = xstrdup (cgroup_path);
+  char *slash;
+  int ret;
+
+  while (path[0] != '\0')
+    {
+      ret = libcrun_cgroup_ensure_not_frozen (path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      slash = strrchr (path, '/');
+      if (slash == NULL)
+        break;
+      *slash = '\0';
+    }
+
+  return 0;
+}
+
 int
 cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 {
