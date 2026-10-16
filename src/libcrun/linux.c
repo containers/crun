@@ -2752,7 +2752,7 @@ append_tmpfs_mode_if_missing (libcrun_container_t *container, runtime_spec_schem
   if (*data != NULL && strstr (*data, "mode="))
     return 0;
 
-  fd = safe_openat (get_private_data (container)->rootfsfd, rootfs, mount->destination, O_CLOEXEC | O_RDONLY, 0, err);
+  fd = safe_openat (get_private_data (container)->rootfsfd, rootfs, mount->destination, O_CLOEXEC | O_PATH, 0, err);
   if (fd < 0)
     {
       if (crun_error_get_errno (err) != ENOENT)
