@@ -852,6 +852,20 @@ main (int argc, char **argv)
         error (EXIT_FAILURE, errno, "clone");
       syscall (__NR_exit, 0);
     }
+  if (strcmp (argv[1], "nested-userns") == 0)
+    {
+      /* Move to a new user namespace, keeping the mount namespace.  */
+      if (unshare (CLONE_NEWUSER) < 0)
+        error (EXIT_FAILURE, errno, "unshare");
+      do_pause ();
+    }
+  if (strcmp (argv[1], "nested-userns-mountns") == 0)
+    {
+      /* Move to a mount namespace owned by a new user namespace.  */
+      if (unshare (CLONE_NEWUSER | CLONE_NEWNS) < 0)
+        error (EXIT_FAILURE, errno, "unshare");
+      do_pause ();
+    }
   if (strcmp (argv[1], "memhog") == 0)
     {
       if (argc < 3)
