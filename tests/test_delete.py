@@ -31,6 +31,7 @@ def test_simple_delete():
 
     state = None
     freezerCreated = False
+    frozen = False
     cleanup_result = 0
 
     try:
@@ -51,11 +52,19 @@ def test_simple_delete():
                     f.write(str(state['pid']))
                 with open('/sys/fs/cgroup/freezer/frozen/freezer.state', 'w') as f:
                     f.write('FROZEN')
+                frozen = True
             try:
                 output = run_crun_command_raw(["delete", "-f", container_id])
             except subprocess.CalledProcessError as exc:
-                logger.error("Status : FAIL %s %s", exc.returncode, exc.output)
-                cleanup_result = -1
+                if frozen and b'Device or resource busy' in exc.output:
+                    # the frozen process cannot be killed, so the delete must fail
+                    # and keep the container, then succeed once the process is thawed
+                    with open('/sys/fs/cgroup/freezer/frozen/freezer.state', 'w') as f:
+                        f.write('THAWED')
+                    run_crun_command(["delete", "-f", container_id])
+                else:
+                    logger.error("Status : FAIL %s %s", exc.returncode, exc.output)
+                    cleanup_result = -1
             else:
                 # this is expected for cgroup v1 so ignore
                 # also ignore profiling messages from coverage builds
