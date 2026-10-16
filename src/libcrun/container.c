@@ -2077,7 +2077,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
 }
 
 static int
-reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process, libcrun_error_t *err)
+reap_subprocesses (pid_t *main_process, int *main_process_exit, int *last_process, libcrun_error_t *err)
 {
   *last_process = 0;
   while (1)
@@ -2097,10 +2097,13 @@ reap_subprocesses (pid_t main_process, int *main_process_exit, int *last_process
         }
       if (r == 0)
         break;
-      if (r != main_process)
+      if (r != *main_process)
         continue;
 
       *main_process_exit = get_process_exit_status (status);
+
+      /* Once reaped, the pid can be reused by an unrelated process.  */
+      *main_process = 0;
     }
   return 0;
 }
@@ -2246,7 +2249,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   if (UNLIKELY (signalfd < 0))
     return signalfd;
 
-  ret = reap_subprocesses (args->pid, &container_exit_code, &last_process, err);
+  ret = reap_subprocesses (&args->pid, &container_exit_code, &last_process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2385,7 +2388,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
                 return crun_make_error (err, errno, "read from signalfd");
               if (si.ssi_signo == SIGCHLD)
                 {
-                  ret = reap_subprocesses (args->pid, &container_exit_code,
+                  ret = reap_subprocesses (&args->pid, &container_exit_code,
                                            &last_process, err);
                   if (UNLIKELY (ret < 0))
                     return ret;
@@ -2406,9 +2409,9 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
                         return crun_make_error (err, errno, "ioctl TIOCSWINSZ copy terminal size to pty");
                     }
                 }
-              else
+              else if (args->pid > 0)
                 {
-                  /* Send any other signal to the child process.  */
+                  /* Send any other signal to the child process, if it was not reaped yet.  */
                   ret = kill (args->pid, si.ssi_signo);
                 }
             }
