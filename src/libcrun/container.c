@@ -1972,9 +1972,12 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
 
   if (status.cgroup_path)
     {
+      /* If the cgroup cannot be destroyed, there are still processes in it.
+         Keep the container status, it is the only record of the cgroup, so
+         that the delete can be retried.  */
       ret = libcrun_cgroup_destroy (cgroup_status, err);
       if (UNLIKELY (ret < 0))
-        libcrun_error_report_and_release (err);
+        return ret;
     }
 
   ret = run_poststop_hooks (context, container, def, &status, state_root, id, err);
@@ -3197,7 +3200,7 @@ force_delete_container_status (libcrun_context_t *context, libcrun_container_t *
 {
   libcrun_error_t tmp_err = NULL;
   container_delete_internal (context, container, def, context->id, true, false, &tmp_err);
-  crun_error_release (&tmp_err);
+  libcrun_error_report_and_release (&tmp_err);
 }
 
 /* Serialize ERR to FD as an int errno followed by a NUL-terminated message.
@@ -3400,7 +3403,7 @@ libcrun_container_create (libcrun_context_t *context, libcrun_container_t *conta
       libcrun_debug ("Exit code is `%d`, deleting container", exit_code);
       libcrun_error_t tmp_err = NULL;
       container_delete_internal (context, NULL, def, context->id, true, true, &tmp_err);
-      crun_error_release (&tmp_err);
+      libcrun_error_report_and_release (&tmp_err);
       return crun_make_error (err, 0, "error creating container");
     }
 
@@ -3524,7 +3527,7 @@ libcrun_container_start (libcrun_context_t *context, const char *id, libcrun_err
         {
           libcrun_error_t tmp_err = NULL;
           container_delete_internal (context, container, def, id, true, true, &tmp_err);
-          crun_error_release (&tmp_err);
+          libcrun_error_report_and_release (&tmp_err);
           return ret;
         }
     }
