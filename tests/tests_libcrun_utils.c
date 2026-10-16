@@ -1162,6 +1162,70 @@ out:
   return ret;
 }
 
+/* A symlink as the last component of a file mount target must be resolved
+   inside the root: if that fails, the lookup must not fall back to resolving
+   it from the process root.  */
+static int
+test_safe_create_symlink_not_followed_from_host ()
+{
+  libcrun_error_t err = NULL;
+  cleanup_free char *outside = NULL;
+  cleanup_free char *root = NULL;
+  cleanup_free char *first = NULL;
+  char dir[PATH_MAX];
+  int rootfd = -1, fd, ret = -1;
+  char *slash;
+
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  xasprintf (&outside, "%s/outside", dir);
+  xasprintf (&root, "%s/root", dir);
+  if (write_file (outside, "x", 1, &err) < 0 || mkdir (root, 0755) < 0)
+    goto out;
+
+  rootfd = open (root, O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (rootfd < 0)
+    goto out;
+
+  /* Make the first component of OUTSIDE a file in the root, so that the
+     symlink cannot be resolved there.  */
+  first = xstrdup (outside + 1);
+  slash = strchr (first, '/');
+  if (slash)
+    *slash = '\0';
+  fd = openat (rootfd, first, O_CREAT | O_WRONLY | O_CLOEXEC, 0644);
+  if (fd < 0)
+    goto out;
+  close (fd);
+
+  if (symlinkat (outside, rootfd, "target") < 0)
+    goto out;
+
+  fd = crun_safe_create_and_open_ref_at (false, rootfd, root, "/target", 0755, &err);
+  if (fd >= 0)
+    {
+      close (fd);
+      goto out;
+    }
+  crun_error_release (&err);
+
+  ret = 0;
+
+out:
+  if (err)
+    crun_error_release (&err);
+  if (rootfd >= 0)
+    close (rootfd);
+  {
+    char *args[] = { "/bin/rm", "-rf", dir, NULL };
+
+    if (run_process (args, &err) != 0)
+      crun_error_release (&err);
+  }
+  return ret;
+}
+
 /* The content of the root is not trusted: an existing FIFO, either on the
    way to the target or in its place, must be rejected or accepted at once
    instead of blocking the open until a peer shows up.  */
@@ -1245,6 +1309,7 @@ main ()
   RUN_TEST (test_crun_ensure_directory);
   RUN_TEST (test_safe_create_through_dangling_symlinks);
   RUN_TEST (test_safe_ensure_does_not_block_on_fifo);
+  RUN_TEST (test_safe_create_symlink_not_followed_from_host);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
   RUN_TEST (test_waitpid_ignore_stopped_no_busy_loop_on_traced_child);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_terminal_hangup);
