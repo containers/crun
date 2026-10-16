@@ -435,9 +435,6 @@ rmdir_all_fd (int dfd)
       ret = unlinkat (dfd, name, AT_REMOVEDIR);
       if (ret < 0 && errno == EBUSY)
         {
-          cleanup_free pid_t *pids = NULL;
-          libcrun_error_t tmp_err = NULL;
-          size_t i, n_pids = 0, allocated = 0;
           cleanup_close int child_dfd = -1;
 
           child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
@@ -449,16 +446,6 @@ rmdir_all_fd (int dfd)
               errno = saved_errno;
               return child_dfd;
             }
-
-          ret = read_pids_cgroup (child_dfd, true, &pids, &n_pids, &allocated, &tmp_err);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_error_release (&tmp_err);
-              continue;
-            }
-
-          for (i = 0; i < n_pids; i++)
-            kill (pids[i], SIGKILL);
 
           ret = rmdir_all_fd (child_dfd);
           child_dfd = -1;
