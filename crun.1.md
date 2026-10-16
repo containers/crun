@@ -551,7 +551,8 @@ doesn't already exist.
 It is an experimental feature.
 
 If specified, run the specified handler for execing the container.
-The only supported values are `krun` and `wasm`.
+The only supported values are `krun` and `wasm`.  If the handler is not
+available in the running crun, the container fails to start.
 
 - `krun`: When `krun` is specified, the `libkrun.so` shared object is loaded
 and it is used to launch the container using libkrun.

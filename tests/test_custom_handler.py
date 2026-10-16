@@ -55,13 +55,12 @@ def test_handler_nonexistent():
         conf['annotations'] = {}
     conf['annotations']['run.oci.handler'] = 'nonexistent-handler'
 
-    # This should fail gracefully or run normally if handler not found
+    # The container must not start without the handler that was requested
     try:
         out, _ = run_and_get_output(conf, hide_stderr=True)
-        # If it succeeds, that's OK (handler not found, ran normally)
-        return 0
+        logger.error("container started without the requested handler")
+        return -1
     except subprocess.CalledProcessError as e:
-        # Failure is also acceptable (handler required but not found)
         return 0
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
@@ -194,7 +193,7 @@ def test_handler_annotation_multiple_types():
         # (annotation_key, annotation_value, should_succeed)
         ('io.kubernetes.cri.container-type', 'container', True),  # Non-sandbox
         ('io.kubernetes.cri.container-type', 'sandbox', True),    # Sandbox
-        ('run.oci.handler', 'unknown-handler', True),             # Unknown handler (continues or fails gracefully)
+        ('run.oci.handler', 'unknown-handler', False),            # Unknown handler
     ]
 
     for key, value, should_succeed in test_cases:

@@ -20,6 +20,7 @@
 #include <git-version.h>
 #include <stdlib.h>
 #include <argp.h>
+#include <ctype.h>
 #include <string.h>
 #include <libgen.h>
 #include <errno.h>
@@ -424,14 +425,13 @@ static void
 fill_handler_from_argv0 (char *argv0, struct crun_global_arguments *args)
 {
   const char *b = basename (argv0);
-#ifdef HAVE_LIBKRUN
   if (strcmp (b, "krun") == 0)
     {
       args->handler = "krun";
       return;
     }
-#endif
-  if (strncmp (b, "crun-", 5) == 0 && b[5] != '\0')
+  /* Release binaries are named crun-$VERSION-linux-$ARCH.  */
+  if (strncmp (b, "crun-", 5) == 0 && b[5] != '\0' && ! isdigit ((unsigned char) b[5]))
     args->handler = b + 5;
 }
 

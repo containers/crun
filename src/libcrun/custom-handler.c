@@ -351,6 +351,11 @@ libcrun_configure_handler (struct custom_handler_manager_s *manager,
             ret = 0;
           goto out;
         }
+
+      /* `wasm-smart` is not a handler name, the wasm handlers claim the container
+         from can_handle_container only when the entrypoint is a wasm module.  */
+      if (strcmp (explicit_handler, "wasm-smart") != 0)
+        return crun_make_error (err, 0, "invalid handler specified `%s`", explicit_handler);
     }
 
   if (manager == NULL)
