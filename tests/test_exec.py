@@ -700,6 +700,36 @@ def test_exec_exit_code():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_exec_dev_null_reopened():
+    """Test that exec does not pass down the /dev/null of the host."""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    # use a different mode to tell the container /dev/null apart from the host one
+    conf['linux']['devices'] = [{"path": "/dev/null", "type": "c", "major": 1, "minor": 3, "fileMode": 0o640}]
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        args = [get_crun_path(), "--root", get_tests_root_status(), "exec", cid, "/init", "mode", "/proc/self/fd/0"]
+        out = subprocess.check_output(args, stdin=subprocess.DEVNULL, close_fds=False).decode()
+        if out != "640":
+            logger.info("test_exec_dev_null_reopened: expected mode '640', got '%s'", out)
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test_exec_dev_null_reopened failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -722,6 +752,7 @@ all_tests = {
     "exec-detach" : test_exec_detach,
     "exec-multiple" : test_exec_multiple,
     "exec-exit-code" : test_exec_exit_code,
+    "exec-dev-null-reopened" : test_exec_dev_null_reopened,
 }
 
 if __name__ == "__main__":

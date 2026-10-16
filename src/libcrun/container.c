@@ -3950,6 +3950,10 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_reopen_dev_null (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (! process->no_new_privileges)
     {
       ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
