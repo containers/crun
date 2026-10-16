@@ -304,6 +304,15 @@ def test_ro_cgroup():
                                 logger.error("fail with cgroupns=%s, netns=%s, userns=%s and cgroup_mount=%s, /sys options: %s", cgroupns, netns, userns, has_cgroup_mount, fields[5])
                                 return -1
                             break
+
+                    # When the host /sys is bind mounted in place of a new
+                    # sysfs, the mounts below it must be read-only as well.
+                    for i in out.split("\n"):
+                        fields = i.split(" ")
+                        if len(fields) >= 6 and fields[4].startswith("/sys/"):
+                            if "ro" not in fields[5].split(","):
+                                logger.error("fail with cgroupns=%s, netns=%s, userns=%s and cgroup_mount=%s, got=%s", cgroupns, netns, userns, has_cgroup_mount, i)
+                                return -1
     return 0
 
 def test_mount_symlink_not_existing():
