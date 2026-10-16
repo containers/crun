@@ -35,7 +35,7 @@ List known containers.
 
 .PP
 \fBmounts add\fP
-Add mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Each mount listed there is added to the running container.  The command is experimental and can be changed without notice.
+Add mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Each mount listed there is added to the running container; symlinks in its destination path are not followed.  The command is experimental and can be changed without notice.
 
 .PP
 \fBmounts remove\fP
