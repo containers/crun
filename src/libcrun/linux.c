@@ -1140,6 +1140,9 @@ enum
 
   /* Do not defer a readonly remount — apply MS_RDONLY directly.  */
   MOUNT_NO_DEFERRED_REMOUNT = 0x10,
+
+  /* Do not remount — keep the flags the mount already has.  */
+  MOUNT_NO_REMOUNT = 0x20,
 };
 
 static int do_mount (libcrun_container_t *container, const char *source, int targetfd,
@@ -1948,7 +1951,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
       needs_remount = true;
     }
 
-  if (needs_remount)
+  if (needs_remount && ! (extra_flags & MOUNT_NO_REMOUNT))
     {
       ret = schedule_or_do_remount (container, &fd, targetfd, target, real_target,
                                     single_instance, mountflags, data, extra_flags, err);
@@ -3061,6 +3064,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
   bool is_sysfs_or_proc;
   uint64_t rec_clear = 0;
   uint64_t rec_set = 0;
+  int no_remount = 0;
   int ret;
 
   if (mount_fds)
@@ -3102,6 +3106,13 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
 
   if (flags & MS_BIND)
     {
+      /* A remount sets exactly the requested flags and clears any other
+         one.  A bind mount without mount flag options (e.g. "bind",
+         "rbind,rprivate") keeps the flags of the source, so it must not
+         be remounted.  */
+      if (! has_mount_flag_options (mount))
+        no_remount = MOUNT_NO_REMOUNT;
+
       if (path_is_slash_dev (mount->destination))
         get_private_data (container)->mount_dev_from_host = true;
       /* It is used only for error messages.  */
@@ -3253,7 +3264,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
              source), in which case remaining_flags might be empty.  */
           if (remaining_flags || has_mount_flag_options (mount))
             {
-              ret = do_mount (container, NULL, source_mountfd, target, NULL, remaining_flags, data, LABEL_NONE, err);
+              ret = do_mount (container, NULL, source_mountfd, target, NULL, remaining_flags, data, LABEL_NONE | no_remount, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
@@ -3306,7 +3317,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
         }
       else
         {
-          int extra_flags = get_mount_label_how (type, is_sysfs_or_proc);
+          int extra_flags = get_mount_label_how (type, is_sysfs_or_proc) | no_remount;
 
           ret = do_mount (container, source, targetfd, target, type, flags, data, extra_flags, err);
           if (UNLIKELY (ret < 0))
