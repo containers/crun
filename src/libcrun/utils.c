@@ -1128,8 +1128,8 @@ set_apparmor_profile (libcrun_container_t *container, const char *profile, bool 
   return 0;
 }
 
-int
-read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t *len, size_t size_hint, libcrun_error_t *err)
+static int
+read_all_fd_internal (int fd, const char *description, char **out, size_t *len, size_t size_hint, size_t max_size, libcrun_error_t *err)
 {
   cleanup_free char *buf = NULL;
   size_t nread, allocated;
@@ -1144,6 +1144,9 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
       ret = get_file_size (fd, &size);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "stat `%s`", description);
+
+      if (max_size && (size_t) size > max_size)
+        return crun_make_error (err, EFBIG, "`%s` is bigger than %zu bytes", description, max_size);
 
       allocated = size == 0 ? 1023 : size;
     }
@@ -1161,6 +1164,9 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
         break;
 
       nread += ret;
+
+      if (max_size && nread > max_size)
+        return crun_make_error (err, EFBIG, "`%s` is bigger than %zu bytes", description, max_size);
 
       if (nread == allocated)
         {
@@ -1189,6 +1195,18 @@ read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t 
   if (len)
     *len = nread;
   return 0;
+}
+
+int
+read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t *len, size_t size_hint, libcrun_error_t *err)
+{
+  return read_all_fd_internal (fd, description, out, len, size_hint, 0, err);
+}
+
+int
+read_all_fd_with_max_size (int fd, const char *description, char **out, size_t *len, size_t max_size, libcrun_error_t *err)
+{
+  return read_all_fd_internal (fd, description, out, len, 0, max_size, err);
 }
 
 int

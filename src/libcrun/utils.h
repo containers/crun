@@ -308,6 +308,8 @@ int set_apparmor_profile (libcrun_container_t *container, const char *profile, b
 
 int read_all_fd_with_size_hint (int fd, const char *description, char **out, size_t *len, size_t hint, libcrun_error_t *err);
 
+int read_all_fd_with_max_size (int fd, const char *description, char **out, size_t *len, size_t max_size, libcrun_error_t *err);
+
 static inline int
 read_all_fd (int fd, const char *description, char **out, size_t *len, libcrun_error_t *err)
 {
