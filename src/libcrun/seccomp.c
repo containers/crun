@@ -709,6 +709,18 @@ get_seccomp_configuration (struct libcrun_seccomp_gen_ctx_s *ctx)
   return ctx->container->container_def->linux->seccomp;
 }
 
+/* Whether a seccomp.bpf file is expected to exist for the container.  */
+static inline bool
+has_seccomp_configuration (struct libcrun_seccomp_gen_ctx_s *ctx)
+{
+  if (ctx->container == NULL || ctx->container->container_def == NULL
+      || ctx->container->container_def->linux == NULL)
+    return false;
+
+  return ctx->container->container_def->linux->seccomp != NULL
+         || find_annotation (ctx->container, "run.oci.seccomp_bpf_data") != NULL;
+}
+
 static int
 find_in_cache (struct libcrun_seccomp_gen_ctx_s *ctx, int dirfd, const char *dest_path, bool *created, libcrun_error_t *err)
 {
@@ -1017,7 +1029,9 @@ libcrun_open_seccomp_bpf (struct libcrun_seccomp_gen_ctx_s *ctx, int *fd, libcru
       ret = TEMP_FAILURE_RETRY (openat (dirfd, dest_path, O_CLOEXEC | O_RDONLY));
       if (UNLIKELY (ret < 0))
         {
-          if (errno == ENOENT)
+          /* The file is missing only when the container has no seccomp
+             configuration.  If it is configured, do not run without the filter.  */
+          if (errno == ENOENT && ! has_seccomp_configuration (ctx))
             return 0;
           return crun_make_error (err, errno, "open `seccomp.bpf`");
         }
