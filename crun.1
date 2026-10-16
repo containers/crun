@@ -39,7 +39,7 @@ Add mounts while the container is running.  It requires two arguments: the conta
 
 .PP
 \fBmounts remove\fP
-Remove mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Only the destination attribute for each mount is used.  The command is experimental and can be changed without notice.
+Remove mounts while the container is running.  It requires two arguments: the container ID and a JSON file containing the mounts section of the OCI config file.  Only the destination attribute for each mount is used; symlinks in its path are not followed.  The command is experimental and can be changed without notice.
 
 .PP
 \fBkill\fP

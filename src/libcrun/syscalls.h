@@ -100,6 +100,12 @@
 #endif
 
 /* openat2 resolve flags */
+#ifndef RESOLVE_NO_MAGICLINKS
+#  define RESOLVE_NO_MAGICLINKS 0x02
+#endif
+#ifndef RESOLVE_NO_SYMLINKS
+#  define RESOLVE_NO_SYMLINKS 0x04
+#endif
 #ifndef RESOLVE_IN_ROOT
 #  define RESOLVE_IN_ROOT 0x10
 #endif
