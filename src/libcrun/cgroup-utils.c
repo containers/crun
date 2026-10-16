@@ -33,6 +33,8 @@
 #include <sys/vfs.h>
 #include <inttypes.h>
 #include <time.h>
+#include <poll.h>
+#include <sys/inotify.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -485,8 +487,8 @@ rmdir_all (const char *path)
   return rmdir (path);
 }
 
-int
-libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+static int
+read_pids_from_path (const char *path, bool recurse, bool threads, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int dirfd = -1;
@@ -527,7 +529,18 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
   n_pids = 0;
   allocated = 0;
 
+  /* On cgroup v1 `cgroup.procs` lists the thread group of every task in the
+     cgroup, so there is no need to read `tasks` there.  */
+  if (threads && mode == CGROUP_MODE_UNIFIED)
+    return read_pids_cgroup_file (dirfd, "cgroup.threads", recurse, pids, &n_pids, &allocated, err);
+
   return read_pids_cgroup (dirfd, recurse, pids, &n_pids, &allocated, err);
+}
+
+int
+libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+{
+  return read_pids_from_path (path, recurse, false, pids, err);
 }
 
 /* same semantic as strtok_r.  */
@@ -810,10 +823,88 @@ libcrun_cgroup_ensure_not_frozen (const char *cgroup_path, libcrun_error_t *err)
   return 0;
 }
 
+#define CGROUP_KILL_WAIT_SEC 1
+
+/* Watch cgroup.events of PATH, so that a later wait_cgroup_unpopulated does
+   not miss a change.  Return -1 if the watch cannot be set up.  */
+static int
+watch_cgroup_events (const char *path)
+{
+  cleanup_free char *events_file = NULL;
+  cleanup_close int fd = -1;
+  libcrun_error_t tmp_err = NULL;
+  int ret;
+
+  ret = append_paths (&events_file, &tmp_err, CGROUP_ROOT, path, "cgroup.events", NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&tmp_err);
+      return -1;
+    }
+
+  fd = inotify_init1 (IN_CLOEXEC | IN_NONBLOCK);
+  if (UNLIKELY (fd < 0))
+    return -1;
+
+  ret = inotify_add_watch (fd, events_file, IN_MODIFY);
+  if (UNLIKELY (ret < 0))
+    return -1;
+
+  ret = fd;
+  fd = -1;
+  return ret;
+}
+
+/* Wait up to a short timeout for the cgroup to have no processes left.
+   Return 1 if the cgroup is not populated anymore, 0 otherwise.  */
+static int
+wait_cgroup_unpopulated (const char *path, int inotify_fd)
+{
+  cleanup_free char *events_file = NULL;
+  libcrun_error_t tmp_err = NULL;
+  struct timespec timeout = {
+    .tv_sec = CGROUP_KILL_WAIT_SEC,
+    .tv_nsec = 0,
+  };
+  int ret;
+
+  ret = append_paths (&events_file, &tmp_err, CGROUP_ROOT, path, "cgroup.events", NULL);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&tmp_err);
+      return 0;
+    }
+
+  for (;;)
+    {
+      cleanup_free char *content = NULL;
+      char buf[4096];
+      struct pollfd pfd = { .fd = inotify_fd, .events = POLLIN };
+
+      ret = read_all_file (events_file, &content, NULL, &tmp_err);
+      if (UNLIKELY (ret < 0))
+        {
+          crun_error_release (&tmp_err);
+          return 0;
+        }
+
+      if (strstr (content, "populated 0"))
+        return 1;
+
+      ret = TEMP_FAILURE_RETRY (ppoll (&pfd, 1, &timeout, NULL));
+      if (ret <= 0)
+        return 0;
+
+      while (read (inotify_fd, buf, sizeof (buf)) > 0)
+        ;
+    }
+}
+
 int
 cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 {
   bool frozen = false;
+  cleanup_close int inotify_fd = -1;
   int ret;
   size_t i;
   cleanup_free pid_t *pids = NULL;
@@ -821,7 +912,11 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
   if (path == NULL || *path == '\0')
     return 0;
 
-  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.  */
+  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.
+     The kernel signals the thread group leaders, and that has no effect on a
+     process whose leader already exited while other threads are still running.
+     If the cgroup is not empty shortly after the write, go on and signal
+     whatever is still listed in the cgroup.  */
   if (signal == SIGKILL)
     {
       cleanup_free char *kill_file = NULL;
@@ -830,11 +925,14 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
       if (UNLIKELY (ret < 0))
         return ret;
 
+      inotify_fd = watch_cgroup_events (path);
+
       ret = write_file_at_with_flags (AT_FDCWD, 0, 0700, kill_file, "1", 1, err);
-      if (ret >= 0)
+      if (ret >= 0 && inotify_fd >= 0 && wait_cgroup_unpopulated (path, inotify_fd))
         return 0;
 
-      crun_error_release (err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
     }
 
   /* Freeze the cgroup so that the processes cannot fork while they are being
@@ -846,7 +944,11 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
   else
     frozen = true;
 
-  ret = libcrun_cgroup_read_pids_from_path (path, true, &pids, err);
+  /* On cgroup v2 a process is listed in `cgroup.procs` of the cgroup of its
+     leader, and a process whose leader exited is not listed anywhere once it
+     is moved to another cgroup.  For SIGKILL enumerate the threads instead,
+     kill() accepts any thread ID and always targets the whole process.  */
+  ret = read_pids_from_path (path, true, signal == SIGKILL, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) != ENOENT)

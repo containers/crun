@@ -361,6 +361,30 @@ pause_thread (void *arg)
   return 0;
 }
 
+static void
+fork_and_exit_main_thread ()
+{
+  static char stack[64 * 1024] __attribute__ ((aligned (16)));
+  const int flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD;
+  pid_t pid;
+
+  pid = fork ();
+  if (pid < 0)
+    error (EXIT_FAILURE, errno, "fork");
+
+  if (pid == 0)
+    {
+      if (clone (pause_thread, stack + sizeof (stack), flags, NULL) < 0)
+        error (EXIT_FAILURE, errno, "clone");
+
+      close (1);
+      close (2);
+
+      /* Terminate only the main thread, not the whole thread group.  */
+      syscall (__NR_exit, 0);
+    }
+}
+
 static int
 memhog (int megabytes)
 {
@@ -873,6 +897,11 @@ main (int argc, char **argv)
       fd = openat (dirfd, file, O_RDONLY);
       if (fd < 0 || dup2 (fd, 0) < 0)
         error (EXIT_FAILURE, errno, "replace stdin");
+      do_pause ();
+    }
+  if (strcmp (argv[1], "fork-and-exit-main-thread") == 0)
+    {
+      fork_and_exit_main_thread ();
       do_pause ();
     }
   if (strcmp (argv[1], "exit-on-signal") == 0)
