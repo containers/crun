@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <signal.h>
+#include <limits.h>
 
 #define STEAL_POINTER(x, y) \
   do                        \
@@ -258,7 +259,13 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  status->process_start_time = st.starttime;
+  /* read_pid_stat returns a start time of 0 when the process already exited,
+     e.g. a restored container that terminated before the status is written.
+     Do not store the 0, libcrun_check_pid_valid treats it as "no start time
+     available" and would accept any process that later reuses the same pid.
+     Store a value that no process can have instead, so that the container is
+     reported as stopped.  */
+  status->process_start_time = st.starttime ? st.starttime : ULLONG_MAX;
 
   xasprintf (&file_tmp, "%s.tmp", file);
   fd_write = open (file_tmp, O_CREAT | O_WRONLY | O_CLOEXEC, 0700);
