@@ -4962,6 +4962,10 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "prctl set KEEPCAPS");
 
+  /* -1 means "leave unchanged" for setresgid and setresuid.  */
+  if (UNLIKELY (uid == (uid_t) -1 || gid == (gid_t) -1))
+    return crun_make_error (err, EINVAL, "invalid user `%u:%u`", uid, gid);
+
   ret = setresgid (gid, gid, gid);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "setresgid to `%d`", gid);
@@ -6424,6 +6428,10 @@ set_id_init (libcrun_container_t *container, libcrun_error_t *err)
           libcrun_debug ("Using mapped GID in container: `%d`", gid);
         }
     }
+
+  /* -1 means "leave unchanged" for setresuid and setresgid.  */
+  if (UNLIKELY (uid == (uid_t) -1 || gid == (gid_t) -1))
+    return crun_make_error (err, EINVAL, "invalid user `%u:%u`", uid, gid);
 
   ret = setresuid (uid, uid, uid);
   if (UNLIKELY (ret < 0))
