@@ -312,8 +312,9 @@ The following annotations are supported:
 ## VM Configuration File
 
 A **.krun_vm.json** file can be placed at the root of the container
-image to provide default VM settings. The file is a JSON object with
-the following optional fields:
+image to provide default VM settings. It must be a regular file not
+bigger than 64 KiB. The file is a JSON object with the following
+optional fields:
 
 - **cpus** (integer): same as the **krun.cpus** annotation.
 - **ram_mib** (integer): same as the **krun.ram_mib** annotation.
