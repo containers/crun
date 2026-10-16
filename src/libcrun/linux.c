@@ -7300,6 +7300,17 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
         }
     }
 
+  /* The namespace files were opened by PID.  Validate that the PID still refers
+     to the original container process before joining any of them.  */
+  ret = libcrun_check_pid_valid (status, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+  if (ret == 0)
+    {
+      ret = crun_make_error (err, ESRCH, "container process not found, the pid was reused");
+      goto exit;
+    }
+
   for (i = 0; namespaces[i].ns_file; i++)
     {
       if (namespaces[i].value == CLONE_NEWUSER)
