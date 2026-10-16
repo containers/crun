@@ -5030,8 +5030,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   cleanup_close int proxy_pid_pipe1 = -1;
   runtime_spec_schema_config_schema *def;
   libcrun_container_status_t status = {};
+  struct libcrun_seccomp_gen_ctx_s seccomp_gen_ctx;
   libcrun_checkpoint_restore_t cr;
   cleanup_pid pid_t proxy_pid = -1;
+  cleanup_close int seccomp_fd = -1;
+  const char *seccomp_bpf_data;
   int proxy_pid_pipe[2];
   int cgroup_manager;
   uid_t root_uid = -1;
@@ -5058,6 +5061,20 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
   if (UNLIKELY (ret < 0))
     goto fail;
+
+  /* CRIU restores the seccomp filters of the checkpointed processes, but
+     exec loads the filter from the seccomp.bpf file in the state directory,
+     so it must be generated again for the restored container.  */
+  seccomp_bpf_data = find_annotation (container, "run.oci.seccomp_bpf_data");
+
+  ret = setup_seccomp (container, seccomp_bpf_data, &seccomp_gen_ctx, &seccomp_fd, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+
+  ret = seccomp_generation (seccomp_fd, seccomp_bpf_data, &seccomp_gen_ctx, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
+  close_and_reset (&seccomp_fd);
 
   cgroup_manager = CGROUP_MANAGER_CGROUPFS;
   if (context->systemd_cgroup)

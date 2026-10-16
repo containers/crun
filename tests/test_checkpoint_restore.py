@@ -85,7 +85,7 @@ def _get_cmdline(cid):
     return ""
 
 
-def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
+def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None, after_restore_cb=None):
     cid = None
     cr_dir = os.path.join(get_tests_root(), 'checkpoint')
     work_dir = os.path.join(get_tests_root(), 'work-dir')
@@ -143,6 +143,9 @@ def run_cr_test(conf, before_checkpoint_cb=None, before_restore_cb=None):
             logger.info("run_cr_test: FAILED - cmdline mismatch: first='%s' second='%s'", first_cmdline, second_cmdline)
             return -1
         logger.info("run_cr_test: SUCCESS - cmdlines match")
+
+        if after_restore_cb is not None:
+            return after_restore_cb(cid)
     except Exception as e:
         logger.info("run_cr_test: EXCEPTION - %s", e)
         raise
@@ -393,6 +396,37 @@ def test_cr_long_stdin_path():
             pass
 
     return run_cr_test(conf, before_checkpoint_cb=wait_for_ready, before_restore_cb=mark_restored)
+# exec loads the seccomp filter from the state directory, which is deleted
+# by the checkpoint, so the restore must generate it again.
+def test_cr_exec_seccomp():
+    if r := _check_cr_requirements():
+        return r
+    if 'SECCOMP' not in get_crun_feature_string():
+        return 77, "crun built without seccomp support"
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, netns=False)
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'syscalls': [
+            {
+                'names': ['unshare'],
+                'action': 'SCMP_ACT_ERRNO',
+                'errnoRet': 1
+            }
+        ]
+    }
+
+    def check_exec_seccomp(cid):
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/status"])
+        mode = parse_proc_status(out).get('Seccomp')
+        if mode != '2':
+            logger.info("test_cr_exec_seccomp: expected seccomp mode 2 after restore, got %s", mode)
+            return -1
+        return 0
+
+    return run_cr_test(conf, after_restore_cb=check_exec_seccomp)
 
 
 def test_cr_with_ext_ns():
@@ -571,6 +605,7 @@ all_tests = {
     "checkpoint-restore": test_cr,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
+    "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
     "checkpoint-restore-forward-signal": test_cr_restore_forward_signal,
