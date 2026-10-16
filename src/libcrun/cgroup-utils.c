@@ -546,9 +546,6 @@ rmdir_all_fd (int dfd)
 
   for (;;)
     {
-      cleanup_free pid_t *pids = NULL;
-      libcrun_error_t tmp_err = NULL;
-      size_t i, n_pids = 0, allocated = 0;
       struct cgroup_walk_dir_s *d;
       int child_dfd;
 
@@ -568,15 +565,6 @@ rmdir_all_fd (int dfd)
       child_dfd = openat (walk.dfd, d->name, O_DIRECTORY | O_CLOEXEC);
       if (UNLIKELY (child_dfd < 0))
         return child_dfd;
-
-      /* The sub-cgroups are visited by the walk, there is no need to read
-         their processes here.  */
-      ret = read_pids_cgroup (child_dfd, false, &pids, &n_pids, &allocated, &tmp_err);
-      if (UNLIKELY (ret < 0))
-        crun_error_release (&tmp_err);
-
-      for (i = 0; i < n_pids; i++)
-        kill (pids[i], SIGKILL);
 
       /* Keep the directory queued, so that removing it is retried once its
          children are gone.  */
