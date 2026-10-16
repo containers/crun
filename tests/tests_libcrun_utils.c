@@ -1002,6 +1002,70 @@ out:
   return ret;
 }
 
+/* The content of the root is not trusted: an existing FIFO, either on the
+   way to the target or in its place, must be rejected or accepted at once
+   instead of blocking the open until a peer shows up.  */
+static int
+test_safe_ensure_does_not_block_on_fifo ()
+{
+  libcrun_error_t err = NULL;
+  char dir[PATH_MAX];
+  int rootfd = -1, fd, ret = -1;
+
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  /* Fail instead of hanging.  */
+  alarm (30);
+
+  rootfd = open (dir, O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (rootfd < 0)
+    goto out;
+
+  if (mkfifoat (rootfd, "fifo", 0700) < 0)
+    goto out;
+
+  /* The FIFO is in place of a parent directory.  */
+  fd = crun_safe_create_and_open_ref_at (false, rootfd, dir, "/fifo/file", 0755, &err);
+  if (fd >= 0)
+    {
+      close (fd);
+      goto out;
+    }
+  if (crun_error_get_errno (&err) != ENOTDIR)
+    goto out;
+  crun_error_release (&err);
+
+  if (crun_safe_ensure_directory_at (rootfd, dir, "/fifo/dir", 0755, &err) == 0)
+    goto out;
+  if (crun_error_get_errno (&err) != ENOTDIR)
+    goto out;
+  crun_error_release (&err);
+
+  /* The FIFO is in place of the file.  */
+  if (crun_safe_ensure_file_at (rootfd, dir, "/fifo", 0755, &err) < 0)
+    goto out;
+
+  if (create_file_if_missing_at (rootfd, "fifo", 0700, &err) == 0)
+    goto out;
+  crun_error_release (&err);
+
+  ret = 0;
+
+out:
+  alarm (0);
+  crun_error_release (&err);
+  if (rootfd >= 0)
+    close (rootfd);
+  {
+    char *args[] = { "/bin/rm", "-rf", dir, NULL };
+
+    if (run_process (args, &err) != 0)
+      crun_error_release (&err);
+  }
+  return ret;
+}
+
 static void
 run_and_print_test_result (const char *name, int id, test t)
 {
@@ -1025,9 +1089,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..22\n");
+  printf ("1..23\n");
 #else
-  printf ("1..19\n");
+  printf ("1..20\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -1044,6 +1108,7 @@ main ()
   RUN_TEST (test_get_current_timestamp);
   RUN_TEST (test_crun_ensure_directory);
   RUN_TEST (test_safe_create_through_dangling_symlinks);
+  RUN_TEST (test_safe_ensure_does_not_block_on_fifo);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
   RUN_TEST (test_format_default_id_mapping);
   RUN_TEST (test_safe_openat_root);
