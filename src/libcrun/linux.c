@@ -7396,6 +7396,9 @@ libcrun_join_process (libcrun_context_t *context,
   close_and_reset (&sync_socket_fd[0]);
   sync_fd = sync_socket_fd[1];
 
+  /* Not needed anymore, do not keep a reference to the host file system.  */
+  close_and_reset (&cgroup_dirfd);
+
   ret = join_process_namespaces (container, pid_to_join, status, err);
   if (UNLIKELY (ret < 0))
     {
