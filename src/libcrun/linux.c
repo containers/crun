@@ -946,12 +946,48 @@ make_remount (int targetfd, const char *target, unsigned long flags, const char 
   return ret;
 }
 
+static int get_procfd (struct private_data_s *data, libcrun_error_t *err);
+
+/* mount(2) on TARGET or, when TARGETFD is set, on the mount it refers to.
+   The fd path is resolved relative to PROCFD, the procfs opened before the
+   root was switched: once the rootfs is "/", an absolute /proc/self/fd path
+   goes through the container's /proc, and a mount placed there could
+   redirect it.  */
 static int
-do_remount (int targetfd, const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
+remount (int procfd, int targetfd, const char *target, unsigned long flags, const char *data)
 {
-  proc_fd_path_t target_buffer;
+  cleanup_close int cwdfd = -1;
+  proc_fd_path_t fd_path;
+  int saved_errno;
   int ret;
-  const char *real_target = target;
+
+  if (targetfd < 0)
+    return mount (NULL, target, NULL, flags, data);
+
+  cwdfd = open (".", O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (cwdfd < 0))
+    return -1;
+
+  ret = fchdir (procfd);
+  if (UNLIKELY (ret < 0))
+    return -1;
+
+  get_self_fd_path (fd_path, targetfd);
+  ret = mount (NULL, fd_path, NULL, flags, data);
+  saved_errno = errno;
+
+  if (UNLIKELY (fchdir (cwdfd) < 0))
+    return -1;
+
+  errno = saved_errno;
+  return ret;
+}
+
+static int
+do_remount (libcrun_container_t *container, int targetfd, const char *target, unsigned long flags, const char *data, libcrun_error_t *err)
+{
+  int procfd = -1;
+  int ret;
 
   if (targetfd >= 0)
     {
@@ -962,8 +998,9 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
         return 0;
       crun_error_release (err);
 
-      get_proc_self_fd_path (target_buffer, targetfd);
-      real_target = target_buffer;
+      procfd = get_procfd (get_private_data (container), err);
+      if (UNLIKELY (procfd < 0))
+        return procfd;
     }
 
   /* Older kernels (seen on 4.18) fail with EINVAL if data is set when
@@ -971,15 +1008,15 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
   if (flags & (MS_REMOUNT | MS_RDONLY))
     data = NULL;
 
-  ret = mount (NULL, real_target, NULL, flags, data);
+  ret = remount (procfd, targetfd, target, flags, data);
   if (UNLIKELY (ret < 0))
     {
       unsigned long current_flags, remount_flags;
       struct statfs sfs;
 
-      ret = statfs (real_target, &sfs);
+      ret = targetfd >= 0 ? fstatfs (targetfd, &sfs) : statfs (target, &sfs);
       if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "statfs `%s`", real_target);
+        return crun_make_error (err, errno, "statfs `%s`", target);
 
       current_flags = mount_flags_from_statfs (sfs.f_flags);
 
@@ -989,13 +1026,13 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
 
       if ((flags | remount_flags) != flags)
         {
-          ret = mount (NULL, real_target, NULL, flags | remount_flags, data);
+          ret = remount (procfd, targetfd, target, flags | remount_flags, data);
           if (LIKELY (ret == 0))
             return 0;
 
           /* If it still fails and MS_RDONLY is present in the mount, try adding it.  */
           if (current_flags & MS_RDONLY)
-            ret = mount (NULL, real_target, NULL, flags | remount_flags | MS_RDONLY, data);
+            ret = remount (procfd, targetfd, target, flags | remount_flags | MS_RDONLY, data);
         }
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "remount `%s`", target);
@@ -1029,7 +1066,7 @@ finalize_mounts (libcrun_container_t *container, libcrun_error_t *err)
           crun_error_release (err);
         }
 
-      ret = do_remount (r->targetfd, r->target, r->flags, r->data, err);
+      ret = do_remount (container, r->targetfd, r->target, r->flags, r->data, err);
       if (UNLIKELY (ret < 0))
         goto cleanup;
 
@@ -1649,7 +1686,7 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
       if (UNLIKELY (sysfd < 0))
         return sysfd;
 
-      ret = do_remount (sysfd, target,
+      ret = do_remount (container, sysfd, target,
                         MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
                         NULL, err);
       if (UNLIKELY (ret < 0))
@@ -1669,7 +1706,7 @@ sysfs_userns_fallback (libcrun_container_t *container, const char *target,
   if (UNLIKELY (sysfd < 0))
     return sysfd;
 
-  ret = do_remount (sysfd, target,
+  ret = do_remount (container, sysfd, target,
                     MS_REMOUNT | MS_BIND | (mountflags & ~ALL_PROPAGATIONS),
                     NULL, err);
   if (UNLIKELY (ret < 0))
@@ -1787,15 +1824,14 @@ apply_propagation_flags (const char *target, int targetfd, const char *real_targ
    consumed when the remount is deferred.  */
 static int
 schedule_or_do_remount (libcrun_container_t *container, int *fd, int targetfd,
-                        const char *target, const char *real_target,
-                        bool single_instance, unsigned long mountflags,
+                        const char *target, bool single_instance, unsigned long mountflags,
                         const void *data, int extra_flags, libcrun_error_t *err)
 {
   unsigned long remount_flags = MS_REMOUNT | (single_instance ? 0 : MS_BIND) | (mountflags & ~ALL_PROPAGATIONS);
   struct remount_s *r;
 
   if ((remount_flags & MS_RDONLY) == 0 || (extra_flags & MOUNT_NO_DEFERRED_REMOUNT))
-    return do_remount (*fd >= 0 ? *fd : targetfd, real_target, remount_flags, data, err);
+    return do_remount (container, *fd >= 0 ? *fd : targetfd, target, remount_flags, data, err);
 
   if (*fd < 0)
     {
@@ -1994,7 +2030,7 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
   if (needs_remount && ! (extra_flags & MOUNT_NO_REMOUNT))
     {
-      ret = schedule_or_do_remount (container, &fd, targetfd, target, real_target,
+      ret = schedule_or_do_remount (container, &fd, targetfd, target,
                                     single_instance, mountflags, data, extra_flags, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -4503,6 +4539,14 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
         return ret;
     }
 
+  /* The remounts resolve their target relative to the procfs handle:
+     open it while "/" is still the host root, before setns() to the
+     OPEN_TREE_NAMESPACE or pivot_root() switch it to the container
+     rootfs, where "/proc" is controlled by the image.  */
+  ret = get_procfd (get_private_data (container), err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   /* Pre-open needed device fds and the notify socket while the host
      file system is still reachable.  After setns(OPEN_TREE_NAMESPACE)
      the host /dev is no longer accessible.  When tree_fd < 0 (no
@@ -4626,11 +4670,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
   if (tree_fd < 0)
     preopen_needed_devs_and_notify (container);
-
-  /* After pivot_root, /proc is not yet mounted.  */
-  ret = get_procfd (get_private_data (container), &tmp_err);
-  if (ret < 0)
-    crun_error_release (&tmp_err);
 
   check_running_in_user_namespace (&tmp_err);
   crun_error_release (&tmp_err);
