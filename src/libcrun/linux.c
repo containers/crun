@@ -119,6 +119,40 @@
 /* The per-mount flags a remount clears unless they are explicitly set.  */
 #define REMOUNT_CLEAR_FLAGS (MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_NOSYMFOLLOW)
 
+#ifndef ST_NOSYMFOLLOW
+#  define ST_NOSYMFOLLOW 0x2000
+#endif
+
+/* Convert the ST_ flags reported by statfs(2) to the MS_ flags of mount(2).  */
+static unsigned long
+mount_flags_from_statfs (unsigned long f_flags)
+{
+  unsigned long flags = 0;
+
+  if (f_flags & ST_RDONLY)
+    flags |= MS_RDONLY;
+  if (f_flags & ST_NOSUID)
+    flags |= MS_NOSUID;
+  if (f_flags & ST_NODEV)
+    flags |= MS_NODEV;
+  if (f_flags & ST_NOEXEC)
+    flags |= MS_NOEXEC;
+  if (f_flags & ST_NOSYMFOLLOW)
+    flags |= MS_NOSYMFOLLOW;
+  if (f_flags & ST_NOATIME)
+    flags |= MS_NOATIME;
+  if (f_flags & ST_NODIRATIME)
+    flags |= MS_NODIRATIME;
+  if (f_flags & ST_RELATIME)
+    flags |= MS_RELATIME;
+  /* There is no ST_ flag for strictatime: it is the mode when neither noatime
+     nor relatime is set.  */
+  if (! (flags & (MS_NOATIME | MS_RELATIME)))
+    flags |= MS_STRICTATIME;
+
+  return flags;
+}
+
 struct remount_s
 {
   struct remount_s *next;
@@ -8102,6 +8136,108 @@ libcrun_destroy_runtime_mounts (libcrun_container_t *container arg_unused, libcr
   args.len = len;
 
   return run_in_container_namespace (status, do_umount_in_a_container, &args, err);
+}
+
+struct restrict_mounts_in_a_container_args
+{
+  struct libcrun_mount_flags_s *mounts;
+  size_t len;
+  int rootfd;
+};
+
+static int
+do_restrict_mounts_in_a_container (void *arg, libcrun_error_t *err)
+{
+  struct restrict_mounts_in_a_container_args *args = arg;
+  size_t i;
+  int ret;
+
+  /* The root of the container is not necessarily the root of the mount
+     namespace.  */
+  ret = fchdir (args->rootfd);
+  if (LIKELY (ret == 0))
+    ret = chroot (".");
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "chroot to the container root");
+
+  for (i = 0; i < args->len; i++)
+    {
+      unsigned long flags = args->mounts[i].flags & (MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC);
+      const char *target = consume_slashes (args->mounts[i].target);
+      cleanup_close int fd = -1;
+      struct statfs sfs;
+
+      if (flags == 0)
+        continue;
+
+      fd = safe_openat (AT_FDCWD, "/", target, O_PATH | O_CLOEXEC, 0, err);
+      if (UNLIKELY (fd < 0))
+        {
+          if (crun_error_get_errno (err) == ENOENT)
+            {
+              crun_error_release (err);
+              continue;
+            }
+          return fd;
+        }
+
+      ret = fstatfs (fd, &sfs);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "statfs `/%s`", target);
+
+      if ((sfs.f_flags & flags) == flags)
+        continue;
+
+      ret = do_mount_setattr (false, target, fd, 0, flags, err);
+      if (LIKELY (ret == 0))
+        continue;
+
+      if (crun_error_get_errno (err) != ENOSYS && crun_error_get_errno (err) != EINVAL)
+        return ret;
+      crun_error_release (err);
+
+      /* Without mount_setattr(2), remount through the path: the container is
+         not running yet, and the root was changed to its rootfs.  The remount
+         clears the per-mount flags that are not specified, so pass the
+         current ones as well.  */
+      ret = mount (NULL, target, NULL, MS_REMOUNT | MS_BIND | flags | mount_flags_from_statfs (sfs.f_flags), NULL);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "remount `/%s`", target);
+    }
+
+  return 0;
+}
+
+/* Make sure that each of MOUNTS, in the mount namespace of PID, has at least
+   the read-only, nosuid, nodev and noexec flags that are requested for it.  */
+int
+libcrun_restrict_mounts_in_container (pid_t pid, struct libcrun_mount_flags_s *mounts, size_t len, libcrun_error_t *err)
+{
+  struct restrict_mounts_in_a_container_args args;
+  cleanup_close int mntns_fd = -1;
+  cleanup_close int rootfd = -1;
+  char path[64];
+  int ret;
+
+  snprintf (path, sizeof (path), "/proc/%d/ns/mnt", pid);
+  mntns_fd = open (path, O_RDONLY | O_CLOEXEC);
+  if (UNLIKELY (mntns_fd < 0))
+    return crun_make_error (err, errno, "open `%s`", path);
+
+  snprintf (path, sizeof (path), "/proc/%d/root", pid);
+  rootfd = open (path, O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (rootfd < 0))
+    return crun_make_error (err, errno, "open `%s`", path);
+
+  args.mounts = mounts;
+  args.len = len;
+  args.rootfd = rootfd;
+
+  ret = run_callback_in_namespace (mntns_fd, do_restrict_mounts_in_a_container, &args, err);
+  if (UNLIKELY (ret > 0))
+    return *err ? -1 : crun_make_error (err, 0, "the process in the container mount namespace exited with status %d", ret);
+
+  return ret;
 }
 
 int
