@@ -72,7 +72,7 @@ int libcrun_do_pivot_root (libcrun_container_t *container, bool no_pivot, char *
 int libcrun_reopen_dev_null (libcrun_error_t *err);
 int libcrun_set_usernamespace (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
 int libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid,
-                      int no_new_privileges, libcrun_error_t *err);
+                      int no_new_privileges, bool no_exec, libcrun_error_t *err);
 int libcrun_set_rlimits (runtime_spec_schema_config_schema_process_rlimits_element **rlimits, size_t len,
                          libcrun_error_t *err);
 int libcrun_set_selinux_label (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
