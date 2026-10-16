@@ -2071,7 +2071,8 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
   if (UNLIKELY (cgroup_mode < 0))
     return cgroup_mode;
 
-  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data, LABEL_NONE, err);
+  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data,
+                  LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
   if (UNLIKELY (ret < 0))
     {
       int saved_errno = crun_error_get_errno (err);
@@ -2090,7 +2091,8 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
               ret = do_mount (container, "tmpfs", targetfd, target, "tmpfs", MS_PRIVATE, "nr_blocks=1,nr_inodes=1", LABEL_NONE, err);
               if (LIKELY (ret == 0))
                 {
-                  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data, LABEL_NONE, err);
+                  ret = do_mount (container, "cgroup2", targetfd, target, "cgroup2", mountflags, data,
+                                  LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
                   if (LIKELY (ret == 0))
                     return ret;
 
@@ -2107,7 +2109,7 @@ do_mount_cgroup_v2 (libcrun_container_t *container, int targetfd, const char *ta
           /* If everything else failed, bind mount from the current cgroup.  */
           src_cgroup = unified_cgroup_path && container_has_cgroupns (container) ? unified_cgroup_path : CGROUP_ROOT;
           return do_mount (container, src_cgroup, targetfd, target, NULL,
-                           MS_BIND | mountflags, NULL, LABEL_NONE, err);
+                           MS_BIND | mountflags, NULL, LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
         }
 
       return ret;
@@ -2150,8 +2152,8 @@ do_mount_cgroup_systemd_v1 (libcrun_container_t *container, const char *source, 
   if (UNLIKELY (fd < 0))
     return crun_make_error (err, errno, "openat `%s`", subsystem_path);
 
-  return do_mount (container, "cgroup", fd, subsystem_path, "cgroup", mountflags, "none,name=systemd,xattr", LABEL_NONE,
-                   err);
+  return do_mount (container, "cgroup", fd, subsystem_path, "cgroup", mountflags, "none,name=systemd,xattr",
+                   LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
 }
 
 static int
@@ -2240,7 +2242,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       if (container_has_cgroupns (container))
         {
           ret = do_mount (container, source_path, subsystemfd, subsystem_path, "cgroup", mountflags, subsystem_fqn,
-                          LABEL_NONE, err);
+                          LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
           if (UNLIKELY (ret < 0))
             {
               if (crun_error_get_errno (err) == ENOENT || crun_error_get_errno (err) == ENODEV)
@@ -2255,7 +2257,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
       else
         {
           ret = do_mount (container, source_path, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags, NULL,
-                          LABEL_NONE, err);
+                          LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
           if (UNLIKELY (ret < 0))
             {
               if (crun_error_get_errno (err) != ENOENT)
@@ -2265,7 +2267,7 @@ do_mount_cgroup_v1 (libcrun_container_t *container, const char *source, int targ
 
               /* We might already be in a container.  Mount the source subsystem.  */
               ret = do_mount (container, source_subsystem, subsystemfd, subsystem_path, NULL, MS_BIND | mountflags,
-                              NULL, LABEL_NONE, err);
+                              NULL, LABEL_NONE | MOUNT_NO_DEFERRED_REMOUNT, err);
               if (UNLIKELY (ret < 0))
                 {
                   /* If it still fails with ENOENT, ignore the error as the controller might have been
@@ -3155,7 +3157,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
   bool is_sysfs_or_proc;
   uint64_t rec_clear = 0;
   uint64_t rec_set = 0;
-  int no_remount = 0;
+  int remount_how = 0;
   int ret;
 
   if (mount_fds)
@@ -3202,7 +3204,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
          "rbind,rprivate") keeps the flags of the source, so it must not
          be remounted.  */
       if (! has_mount_flag_options (mount))
-        no_remount = MOUNT_NO_REMOUNT;
+        remount_how = MOUNT_NO_REMOUNT;
 
       if (path_is_slash_dev (mount->destination))
         get_private_data (container)->mount_dev_from_host = true;
@@ -3210,6 +3212,16 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
       type = "bind";
     }
   is_sysfs_or_proc = strcmp (type, "sysfs") == 0 || strcmp (type, "proc") == 0;
+
+  /* The content of a bind mount or of a cgroup hierarchy exists outside of
+     the container too.  If it was requested read-only, do not leave it
+     writable while the rest of the container is set up, as the rootfs can
+     redirect there what is created later, e.g. a missing mount point or the
+     working directory.  A mount on "/" replaces the rootfs, which must stay
+     writable until the end.  */
+  if (((flags & MS_BIND) || strcmp (type, "cgroup") == 0 || strcmp (type, "cgroup2") == 0)
+      && ! is_empty_string (target))
+    remount_how |= MOUNT_NO_DEFERRED_REMOUNT;
 
   if (strcmp (type, "tmpfs") == 0)
     {
@@ -3355,7 +3367,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
              source), in which case remaining_flags might be empty.  */
           if (remaining_flags || has_mount_flag_options (mount))
             {
-              ret = do_mount (container, NULL, source_mountfd, target, NULL, remaining_flags, data, LABEL_NONE | no_remount, err);
+              ret = do_mount (container, NULL, source_mountfd, target, NULL, remaining_flags, data, LABEL_NONE | remount_how, err);
               if (UNLIKELY (ret < 0))
                 return ret;
             }
@@ -3414,7 +3426,7 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
         }
       else
         {
-          int extra_flags = get_mount_label_how (type, is_sysfs_or_proc) | no_remount;
+          int extra_flags = get_mount_label_how (type, is_sysfs_or_proc) | remount_how;
 
           ret = do_mount (container, source, targetfd, target, type, flags, data, extra_flags, err);
           if (UNLIKELY (ret < 0))
@@ -3519,7 +3531,8 @@ libcrun_container_do_bind_mount (libcrun_container_t *container, char *mount_sou
 
   targetfd = ret;
 
-  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data, LABEL_MOUNT, err);
+  ret = do_mount (container, mount_source, targetfd, target, "bind", flags, data,
+                  LABEL_MOUNT | MOUNT_NO_DEFERRED_REMOUNT, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

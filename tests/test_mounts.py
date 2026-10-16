@@ -1850,6 +1850,91 @@ def test_bind_host_root():
 
     return 0
 
+def test_ro_bind_mount_not_written():
+    """A read-only bind mount must be read-only while the container is set up,
+    not only once the container process runs.
+
+    crun creates the working directory and any missing mount point, and a
+    symlink in the rootfs can point them into the volume.  Nothing must be
+    created in the source directory, and the container must fail to start.
+    """
+    root = tempfile.mkdtemp(dir=get_tests_root())
+    source = os.path.join(root, "source")
+    other_dir = os.path.join(root, "other-dir")
+    other_file = os.path.join(root, "other-file")
+    os.mkdir(source)
+    os.mkdir(other_dir)
+    open(other_file, "w").close()
+
+    def prepare_rootfs(rootfs):
+        os.symlink("/data/file", os.path.join(rootfs, "symlink-to-file"))
+        os.symlink("/data/dir", os.path.join(rootfs, "symlink-to-dir"))
+
+    cases = [
+        ("/data/cwd", None),
+        ("/", {"destination": "/symlink-to-file", "type": "bind", "source": other_file, "options": ["bind"]}),
+        ("/", {"destination": "/symlink-to-dir/subdir", "type": "bind", "source": other_dir, "options": ["bind"]}),
+        ("/", {"destination": "/data/subdir", "type": "tmpfs", "source": "tmpfs"}),
+    ]
+    for cwd, mount in cases:
+        conf = base_config()
+        conf['process']['args'] = ['/init', 'true']
+        conf['process']['cwd'] = cwd
+        add_all_namespaces(conf)
+        conf['mounts'].append({"destination": "/data", "type": "bind", "source": source, "options": ["rbind", "ro"]})
+        if mount is not None:
+            conf['mounts'].append(mount)
+        try:
+            run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare_rootfs)
+            logger.info("the container with cwd %s and mount %s was expected to fail", cwd, mount)
+            return -1
+        except subprocess.CalledProcessError:
+            pass
+
+        created = os.listdir(source)
+        if created:
+            logger.info("cwd %s, mount %s: %s created in the source of a read-only bind mount", cwd, mount, created)
+            return -1
+
+    return 0
+
+def test_ro_cgroup2_mount_not_written():
+    """Without a cgroup namespace, a cgroup2 mount shows the cgroup root of
+    the host.  If it is requested read-only, crun must not create the
+    working directory there while the container is set up.
+    """
+    if is_rootless():
+        return (77, "requires root privileges")
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+
+    name = "crun-test-ro-cgroup2-%d" % os.getpid()
+    host_path = os.path.join("/sys/fs/cgroup", name)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'true']
+    conf['process']['cwd'] = os.path.join("/cg", name)
+    add_all_namespaces(conf, cgroupns=False)
+    conf['mounts'].append({"destination": "/cg", "type": "cgroup2", "source": "cgroup2", "options": ["ro"]})
+
+    failed = False
+    try:
+        run_and_get_output(conf, hide_stderr=True)
+    except subprocess.CalledProcessError:
+        failed = True
+    finally:
+        created = os.path.exists(host_path)
+        if created:
+            os.rmdir(host_path)
+
+    if created:
+        logger.info("%s created in the cgroup root of the host", host_path)
+        return -1
+    if not failed:
+        logger.info("the container was expected to fail")
+        return -1
+    return 0
+
 all_tests = {
     "mount-ro" : test_mount_ro,
     "mount-rro" : test_mount_rro,
@@ -1908,6 +1993,8 @@ all_tests = {
     "mount-no-proc-sysfs-cgroup": test_no_proc_sysfs_cgroup,
     "mount-rbind-with-bind-option": test_rbind_with_bind_option,
     "mount-bind-host-root": test_bind_host_root,
+    "mount-ro-bind-mount-not-written": test_ro_bind_mount_not_written,
+    "mount-ro-cgroup2-mount-not-written": test_ro_cgroup2_mount_not_written,
 }
 
 if __name__ == "__main__":
