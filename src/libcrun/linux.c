@@ -751,7 +751,7 @@ libcrun_create_keyring (libcrun_container_t *container, const char *name, const 
           ret = 0;
           goto out;
         }
-      ret = crun_make_error (err, errno, "join keyctl `%s`", name);
+      ret = crun_make_error (err, errno, "join keyctl `%s`", name ? name : "");
       goto out;
     }
 

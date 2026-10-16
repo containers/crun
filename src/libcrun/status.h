@@ -42,6 +42,7 @@ struct libcrun_container_status_s
   int systemd_cgroup;
   char *created;
   int detached;
+  int no_new_keyring;
   char *external_descriptors;
   char *owner;
 };

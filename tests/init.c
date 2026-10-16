@@ -39,6 +39,7 @@
 #include <sys/types.h>
 #include <sched.h>
 
+#include <linux/keyctl.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <netinet/in.h>
@@ -960,6 +961,15 @@ main (int argc, char **argv)
     {
       pid_t pid = getpgrp ();
       printf ("%d\n", pid);
+      return 0;
+    }
+
+  if (strcmp (argv[1], "session-keyring") == 0)
+    {
+      long id = syscall (__NR_keyctl, KEYCTL_GET_KEYRING_ID, KEY_SPEC_SESSION_KEYRING, 0);
+      if (id < 0)
+        error (EXIT_FAILURE, errno, "keyctl");
+      printf ("%ld\n", id);
       return 0;
     }
 

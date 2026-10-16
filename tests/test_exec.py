@@ -505,6 +505,36 @@ def test_exec_getpgrp():
             run_crun_command(["delete", "-f", cid])
     return 0
 
+def test_exec_session_keyring():
+    """Test that the exec'd process does not inherit the caller's session keyring"""
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        ids = []
+        for _ in range(2):
+            try:
+                out = run_crun_command_raw(["exec", cid, "/init", "session-keyring"]).decode(errors='ignore')
+            except subprocess.CalledProcessError as e:
+                out = e.output.decode(errors='ignore') if e.output else ""
+                if "Function not implemented" in out:
+                    return (77, "keyctl not supported")
+                logger.info("exec failed: %s", out)
+                return -1
+            if "keyctl_join is not supported" in out:
+                return (77, "keyctl not supported")
+            ids.append(out.strip().splitlines()[-1])
+        # each exec must get its own session keyring, not the one of the caller.
+        if ids[0] == ids[1]:
+            logger.info("the session keyring %s was inherited from the caller", ids[0])
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
 def test_exec_help():
     out = run_crun_command(["exec", "--help"])
     if "Usage: crun [OPTION...] exec CONTAINER cmd" not in out:
@@ -745,6 +775,7 @@ all_tests = {
     "exec-test-uid-tty": test_uid_tty,
     "exec-cpu-affinity": test_exec_cpu_affinity,
     "exec-getpgrp": test_exec_getpgrp,
+    "exec-session-keyring": test_exec_session_keyring,
     "exec-help" : test_exec_help,
     "exec-error-propagation" : test_exec_error_propagation,
     "exec-cwd" : test_exec_cwd,

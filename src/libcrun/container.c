@@ -2069,6 +2069,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
     .owner = owner,
     .systemd_cgroup = context->systemd_cgroup,
     .detached = context->detach,
+    .no_new_keyring = context->no_new_keyring,
     .external_descriptors = external_descriptors,
     .cgroup_path = NULL,
     .scope = NULL,
@@ -4247,6 +4248,17 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* Do not leak the session keyring of the caller into the container.  The
+     keyring created for the container cannot be joined, so use an anonymous one.  */
+  if (! context->no_new_keyring && ! status.no_new_keyring)
+    {
+      libcrun_debug ("Creating new keyring for the exec process");
+
+      ret = libcrun_create_keyring (container, NULL, process->selinux_label, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "prctl unset dumpable");
@@ -5074,6 +5086,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  /* CRIU runs as a child process, so the restored processes would inherit the session keyring.  */
+  ret = setup_container_keyring (container, context, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   {
     cleanup_close int cgroup_dirfd = -1;

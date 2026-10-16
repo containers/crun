@@ -45,6 +45,7 @@ enum
   OPTION_NETWORK_LOCK_METHOD,
   OPTION_LSM_PROFILE,
   OPTION_LSM_MOUNT_CONTEXT,
+  OPTION_NO_NEW_KEYRING,
 };
 
 static char doc[] = "OCI runtime";
@@ -72,6 +73,7 @@ static struct argp_option options[]
         { "network-lock", OPTION_NETWORK_LOCK_METHOD, "METHOD", 0, "set network lock method", 0 },
         { "lsm-profile", OPTION_LSM_PROFILE, "VALUE", 0, "Specify an LSM profile to be used during restore in the form of TYPE:NAME", 0 },
         { "lsm-mount-context", OPTION_LSM_MOUNT_CONTEXT, "VALUE", 0, "Specify an LSM mount context to be used during restore", 0 },
+        { "no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key", 0 },
         {
             0,
         } };
@@ -144,6 +146,10 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_LSM_MOUNT_CONTEXT:
       cr_options.lsm_mount_context = argp_mandatory_argument (arg, state);
+      break;
+
+    case OPTION_NO_NEW_KEYRING:
+      libcrun_context_set_no_new_keyring (crun_context, true);
       break;
 
     default:
