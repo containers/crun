@@ -478,6 +478,12 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
       if (cgroup_crun_exec_path == NULL)
         xasprintf (&cgroup_crun_exec_path, "%s/crun-exec", path);
 
+      /* The sub-cgroup is managed by the container, make sure it is not
+         frozen or the process would never run once moved there.  */
+      ret = libcrun_cgroup_ensure_not_frozen (cgroup_crun_exec_path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = append_paths (&cgroup_sub_path_procs, err, CGROUP_ROOT, cgroup_crun_exec_path, "cgroup.procs", NULL);
       if (UNLIKELY (ret < 0))
         return ret;

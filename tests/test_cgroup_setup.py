@@ -1639,6 +1639,77 @@ def test_cgroup_subcgroup_cleanup():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_cgroup_exec_frozen_subcgroup():
+    """Test that exec refuses to join a frozen sub-cgroup of the container
+    instead of waiting forever for a process that never runs."""
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if is_rootless():
+        return (77, "requires root for cgroup manipulation")
+    if get_cgroup_manager() == 'systemd':
+        return (77, "test uses cgroupfs-style paths")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'pause']
+
+    cgroup_path = f'/test-exec-frozen-subcgroup-{os.getpid()}'
+    conf['linux']['cgroupsPath'] = cgroup_path
+
+    host_cgroup_dir = f'/sys/fs/cgroup{cgroup_path}'
+
+    def write_cgroup_file(name, value):
+        with open(os.path.join(host_cgroup_dir, name), 'w') as f:
+            f.write(value)
+
+    def run_exec(args):
+        cmd = [get_crun_path(), '--root', get_tests_root_status(), 'exec', '-d'] + args + [cid, '/init', 'true']
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10)
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=False, command='run', detach=True)
+
+        state = json.loads(run_crun_command(['state', cid]))
+
+        # Once controllers are enabled the container cgroup cannot be joined
+        # anymore, and exec follows the init process into its sub-cgroup.
+        os.makedirs(os.path.join(host_cgroup_dir, 'a/b'))
+        write_cgroup_file('a/b/cgroup.procs', str(state['pid']))
+        try:
+            write_cgroup_file('cgroup.subtree_control', '+pids')
+        except OSError:
+            return (77, "cannot enable the pids controller")
+
+        all_args = ([], ['--cgroup', '/a/b'])
+
+        for args in all_args:
+            ret = run_exec(args)
+            if ret.returncode != 0:
+                logger.info("exec %s failed: %s", args, ret.stdout)
+                return -1
+
+        write_cgroup_file('a/b/cgroup.freeze', '1')
+
+        for args in all_args:
+            ret = run_exec(args)
+            if ret.returncode == 0 or b'frozen' not in ret.stdout:
+                logger.info("exec %s into a frozen cgroup returned %d: %s", args, ret.returncode, ret.stdout)
+                return -1
+
+        return 0
+
+    except subprocess.TimeoutExpired:
+        logger.info("exec into a frozen cgroup did not terminate")
+        return -1
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 all_tests = {
     "cgroup-disabled": test_cgroup_disabled,
     "cgroup-disabled-detach": test_cgroup_disabled_detach,
@@ -1684,6 +1755,7 @@ all_tests = {
     "annotation-systemd-force-cgroup-v1": test_annotation_systemd_force_cgroup_v1,
     "cgroup-v2-mount-options": test_cgroup_v2_mount_options,
     "cgroup-subcgroup-cleanup": test_cgroup_subcgroup_cleanup,
+    "cgroup-exec-frozen-subcgroup": test_cgroup_exec_frozen_subcgroup,
 }
 
 if __name__ == "__main__":
