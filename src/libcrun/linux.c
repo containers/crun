@@ -3567,15 +3567,20 @@ do_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 }
 #endif
 
+/* Bind mount the notify socket directory into the rootfs.  It must run
+   before pivot_root, while the host path is still reachable for the
+   mount(2) fallback, and the destination is resolved inside the rootfs so
+   that a symlink in the container image cannot point it elsewhere.  */
 static int
-do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
+do_finalize_notify_socket (libcrun_container_t *container, const char *rootfs, libcrun_error_t *err)
 {
   int ret;
   cleanup_free char *host_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path = NULL;
   cleanup_free char *container_notify_socket_path_dir_alloc = NULL;
-  char *container_notify_socket_path_dir = NULL;
+  const char *container_notify_socket_path_dir = NULL;
   cleanup_close int notify_socket_tree_fd = -1;
+  cleanup_close int targetfd = -1;
   int did_mount_with_move_mount = 0;
 
   host_notify_socket_path = get_private_data (container)->host_notify_socket_path;
@@ -3587,12 +3592,29 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
   if (host_notify_socket_path == NULL || container_notify_socket_path == NULL)
     return 0;
 
-  container_notify_socket_path_dir_alloc = xstrdup (container_notify_socket_path);
-  container_notify_socket_path_dir = dirname (container_notify_socket_path_dir_alloc);
+  if (rootfs == NULL)
+    rootfs = "/";
 
-  ret = crun_ensure_directory (container_notify_socket_path_dir, 0755, false, err);
+  container_notify_socket_path_dir_alloc = xstrdup (container_notify_socket_path);
+  container_notify_socket_path_dir = consume_slashes (dirname (container_notify_socket_path_dir_alloc));
+
+  /* libcrun_set_mounts does not open the rootfs when there are no mounts.  */
+  if (get_private_data (container)->rootfsfd < 0)
+    {
+      ret = open (rootfs, O_PATH | O_CLOEXEC);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open `%s`", rootfs);
+
+      get_private_data (container)->rootfsfd = ret;
+      get_private_data (container)->rootfs = rootfs;
+    }
+
+  ret = crun_safe_create_and_open_ref_at (true, get_private_data (container)->rootfsfd, rootfs,
+                                          container_notify_socket_path_dir, 0755, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  targetfd = ret;
 
   notify_socket_tree_fd = get_private_data (container)->notify_socket_tree_fd;
   /* the FD will be unconditionally closed at the end of this function due to cleanup_close above */
@@ -3600,8 +3622,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 
   if (notify_socket_tree_fd >= 0)
     {
-      ret = syscall_move_mount (notify_socket_tree_fd, "", AT_FDCWD, container_notify_socket_path_dir,
-                                MOVE_MOUNT_F_EMPTY_PATH);
+      ret = fs_move_mount_to (notify_socket_tree_fd, targetfd, NULL);
       if (ret >= 0)
         {
           /* if move_mount(2) worked, make sure we don't try mount(2) */
@@ -3609,8 +3630,14 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 
           /* the tree was cloned from the host mount namespace and is still in
              the peer group of its source, so make it private like the mount(2)
-             fallback below does.  */
-          ret = do_mount (container, NULL, -1, container_notify_socket_path_dir, NULL,
+             fallback below does.  TARGETFD is now underneath the new mount,
+             so reopen the target.  */
+          close_and_reset (&targetfd);
+          targetfd = open_mount_target (container, container_notify_socket_path_dir, err);
+          if (UNLIKELY (targetfd < 0))
+            return targetfd;
+
+          ret = do_mount (container, NULL, targetfd, container_notify_socket_path_dir, NULL,
                           MS_REC | MS_PRIVATE, NULL, LABEL_NONE, err);
           if (UNLIKELY (ret < 0))
             return ret;
@@ -3625,7 +3652,7 @@ do_finalize_notify_socket (libcrun_container_t *container, libcrun_error_t *err)
 
   if (! did_mount_with_move_mount)
     {
-      ret = do_mount (container, host_notify_socket_path, -1, container_notify_socket_path_dir, NULL,
+      ret = do_mount (container, host_notify_socket_path, targetfd, container_notify_socket_path_dir, NULL,
                       MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -3835,7 +3862,16 @@ libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun
   if (UNLIKELY (ret < 0))
     return crun_error_wrap (err, "failed configuring mounts for handler at phase: HANDLER_CONFIGURE_AFTER_MOUNTS");
 
+  ret = do_finalize_notify_socket (container, rootfs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   close_and_reset (&(get_private_data (container)->rootfsfd));
+
+  /* The host root must not stay reachable through /proc/self/fd once the
+     container rootfs becomes the root: every path resolved by name from now
+     on is controlled by the container image.  */
+  close_and_reset (&(get_private_data (container)->old_root_fd));
 
   if (get_private_data (container)->needs_pivot)
     {
@@ -3864,10 +3900,6 @@ libcrun_finalize_mounts (struct container_entrypoint_s *entrypoint_args, libcrun
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "chdir to `/`");
     }
-
-  ret = do_finalize_notify_socket (container, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   ret = finalize_mounts (container, err);
   if (UNLIKELY (ret < 0))
@@ -4481,8 +4513,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
 
   if (tree_fd < 0)
     preopen_needed_devs_and_notify (container);
-
-  get_old_root_fd (get_private_data (container));
 
   /* After pivot_root, /proc is not yet mounted.  */
   ret = get_procfd (get_private_data (container), &tmp_err);
