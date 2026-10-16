@@ -1132,6 +1132,28 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   return 0;
 }
 
+/* Whether the options of MNT ask for a read-only mount.  */
+static bool
+is_read_only_mount (runtime_spec_schema_defs_mount *mnt)
+{
+  bool read_only = false;
+  size_t i;
+
+  for (i = 0; i < mnt->options_len; i++)
+    {
+      const struct propagation_flags_s *prop;
+
+      if (mnt->options[i] == NULL)
+        continue;
+
+      prop = libcrun_str2mount_flags (mnt->options[i]);
+      if (prop && (prop->flags & MS_RDONLY))
+        read_only = ! prop->clear;
+    }
+
+  return read_only;
+}
+
 static int
 prepare_restore_mounts_internal (runtime_spec_schema_config_schema *def, char *root, const char **mounted,
                                  size_t *n_mounted, libcrun_error_t *err)
@@ -1207,8 +1229,16 @@ prepare_restore_mounts_internal (runtime_spec_schema_config_schema *def, char *r
       /* Mount a bind mount source now, so that the mountpoints of the
        * mounts inside it (e.g. a nested bind mount) are created in the
        * source, where CRIU expects them.  This also happens during the
-       * initial container creation, as the mounts are done in order.  */
-      if (is_bind_mount (def->mounts[i], NULL, &nofollow))
+       * initial container creation, as the mounts are done in order.
+       *
+       * Skip read-only bind mounts: the mount here is writable, and the
+       * rootfs is controlled by the container, which can turn the
+       * destination of a later mount into a symlink pointing inside the
+       * read-only mount, so that the missing mountpoint is created in its
+       * source.  Any mountpoint inside it must already exist in the
+       * source, as crun cannot create it there when the container is
+       * created either.  */
+      if (is_bind_mount (def->mounts[i], NULL, &nofollow) && ! is_read_only_mount (def->mounts[i]))
         {
           cleanup_close int dst_fd = -1;
           proc_fd_path_t fd_path;
