@@ -485,8 +485,8 @@ rmdir_all (const char *path)
   return rmdir (path);
 }
 
-int
-libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+static int
+read_pids_from_path (const char *path, bool recurse, bool threads, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int dirfd = -1;
@@ -527,7 +527,18 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
   n_pids = 0;
   allocated = 0;
 
+  /* On cgroup v1 `cgroup.procs` lists the thread group of every task in the
+     cgroup, so there is no need to read `tasks` there.  */
+  if (threads && mode == CGROUP_MODE_UNIFIED)
+    return read_pids_cgroup_file (dirfd, "cgroup.threads", recurse, pids, &n_pids, &allocated, err);
+
   return read_pids_cgroup (dirfd, recurse, pids, &n_pids, &allocated, err);
+}
+
+int
+libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+{
+  return read_pids_from_path (path, recurse, false, pids, err);
 }
 
 /* same semantic as strtok_r.  */
@@ -821,7 +832,11 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
   if (path == NULL || *path == '\0')
     return 0;
 
-  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.  */
+  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.
+     A successful write is not enough on its own: the kernel signals the thread
+     group leaders, and that has no effect on a process whose leader already
+     exited while other threads are still running.  Go on and signal whatever
+     is still listed in the cgroup.  */
   if (signal == SIGKILL)
     {
       cleanup_free char *kill_file = NULL;
@@ -831,10 +846,8 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
         return ret;
 
       ret = write_file_at_with_flags (AT_FDCWD, 0, 0700, kill_file, "1", 1, err);
-      if (ret >= 0)
-        return 0;
-
-      crun_error_release (err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
     }
 
   /* Freeze the cgroup so that the processes cannot fork while they are being
@@ -846,7 +859,11 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
   else
     frozen = true;
 
-  ret = libcrun_cgroup_read_pids_from_path (path, true, &pids, err);
+  /* On cgroup v2 a process is listed in `cgroup.procs` of the cgroup of its
+     leader, and a process whose leader exited is not listed anywhere once it
+     is moved to another cgroup.  For SIGKILL enumerate the threads instead,
+     kill() accepts any thread ID and always targets the whole process.  */
+  ret = read_pids_from_path (path, true, signal == SIGKILL, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) != ENOENT)

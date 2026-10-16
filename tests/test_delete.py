@@ -18,6 +18,7 @@
 import json
 import subprocess
 import os
+import time
 from tests_utils import *
 
 def test_simple_delete():
@@ -107,6 +108,66 @@ def test_multiple_containers_delete():
 
     return cleanup_result
 
+def test_delete_exited_main_thread():
+    """Delete a container sharing the host PID namespace with a process whose main thread exited"""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'fork-and-exit-main-thread']
+    add_all_namespaces(conf, pidns=False)
+
+    def task_state(pid, tid):
+        with open("/proc/%d/task/%d/stat" % (pid, tid)) as f:
+            return f.read().rsplit(")", 1)[1].split()[0]
+
+    def is_alive(pid):
+        try:
+            for tid in os.listdir("/proc/%d/task" % pid):
+                if task_state(pid, int(tid)) not in ("Z", "X"):
+                    return True
+        except FileNotFoundError:
+            pass
+        return False
+
+    _, container_id = run_and_get_output(conf, detach=True, hide_stderr=True)
+
+    child = None
+    try:
+        state = json.loads(run_crun_command(["state", container_id]))
+        children_path = "/proc/%d/task/%d/children" % (state['pid'], state['pid'])
+        for _ in range(100):
+            with open(children_path) as f:
+                children = f.read().split()
+            if children:
+                child = int(children[0])
+                if task_state(child, child) == "Z" and is_alive(child):
+                    break
+            time.sleep(0.1)
+        else:
+            logger.info("the process with the exited main thread was not found")
+            return -1
+
+        try:
+            run_crun_command_raw(["delete", "-f", container_id])
+        except subprocess.CalledProcessError as exc:
+            logger.info("delete failed: %s", exc.output)
+            return -1
+
+        for _ in range(50):
+            if not is_alive(child):
+                return 0
+            time.sleep(0.1)
+        logger.info("process %d is still alive after the delete", child)
+        return -1
+    finally:
+        if child is not None and is_alive(child):
+            os.kill(child, 9)
+        try:
+            run_crun_command_raw(["delete", "-f", container_id])
+        except subprocess.CalledProcessError:
+            pass
+
 def test_help_delete():
     out = run_crun_command(["delete", "--help"])
     if "Usage: crun [OPTION...] delete CONTAINER" not in out:
@@ -117,6 +178,7 @@ def test_help_delete():
 all_tests = {
     "test_simple_delete" : test_simple_delete,
     "test_multiple_containers_delete" : test_multiple_containers_delete,
+    "test_delete_exited_main_thread": test_delete_exited_main_thread,
     "test_help_delete": test_help_delete,
 }
 
