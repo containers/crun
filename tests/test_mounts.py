@@ -950,6 +950,7 @@ def test_bind_mount_flags():
     """Check the flags of a bind mount with options are exactly the requested ones.
 
     The flags of the source not requested (explicitly or not) must be cleared.
+    With no mount flag options at all, the flags of the source must be kept.
     """
     if is_rootless():
         return (77, "requires root privileges")
@@ -966,6 +967,12 @@ def test_bind_mount_flags():
             ("ro,nosuid,nodev,noexec", ["bind", "dev", "suid", "exec"], ["rw"], ["ro", "nosuid", "nodev", "noexec"]),
             ("ro,nosuid,nodev,noexec", ["bind", "ro"], ["ro"], ["nosuid", "nodev", "noexec"]),
             ("ro,nosuid,nodev,noexec", ["bind", "nosuid"], ["rw", "nosuid"], ["ro", "nodev", "noexec"]),
+            # MS_REC and the propagation are not mount flags.
+            ("ro,nosuid,nodev,noexec", ["bind"], ["ro", "nosuid", "nodev", "noexec"], ["rw"]),
+            ("ro,nosuid,nodev,noexec", ["rbind"], ["ro", "nosuid", "nodev", "noexec"], ["rw"]),
+            ("ro,nosuid,nodev,noexec", ["bind", "private"], ["ro", "nosuid", "nodev", "noexec"], ["rw"]),
+            ("ro,nosuid,nodev,noexec", ["rbind", "rprivate"], ["ro", "nosuid", "nodev", "noexec"], ["rw"]),
+            ("ro,nosuid,nodev,noexec", ["rbind", "rslave"], ["ro", "nosuid", "nodev", "noexec"], ["rw"]),
             # Setting an atime flag resets the others, like mount(2) does.
             ("rw,noatime", ["bind", "relatime"], ["relatime"], ["noatime"]),
             ("rw,noatime", ["bind", "nodiratime"], ["nodiratime", "relatime"], ["noatime"]),
