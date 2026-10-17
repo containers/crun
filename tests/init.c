@@ -339,6 +339,39 @@ handle_signal (int signum)
   _exit (SIGNAL_EXIT_STATUS);
 }
 
+static int
+sleep_forever (void *arg)
+{
+  (void) arg;
+  for (;;)
+    pause ();
+  return 0;
+}
+
+static void
+fork_and_exit_main_thread ()
+{
+  static char stack[64 * 1024] __attribute__ ((aligned (16)));
+  const int flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SYSVSEM;
+  pid_t pid;
+
+  pid = fork ();
+  if (pid < 0)
+    error (EXIT_FAILURE, errno, "fork");
+
+  if (pid == 0)
+    {
+      close (1);
+      close (2);
+
+      if (clone (sleep_forever, stack + sizeof (stack), flags, NULL) < 0)
+        error (EXIT_FAILURE, errno, "clone");
+
+      /* Terminate only the main thread, not the whole thread group.  */
+      syscall (__NR_exit, 0);
+    }
+}
+
 static void
 do_pause ()
 {
@@ -830,6 +863,11 @@ main (int argc, char **argv)
     }
   if (strcmp (argv[1], "pause") == 0)
     {
+      do_pause ();
+    }
+  if (strcmp (argv[1], "fork-and-exit-main-thread") == 0)
+    {
+      fork_and_exit_main_thread ();
       do_pause ();
     }
   if (strcmp (argv[1], "exit-on-signal") == 0)

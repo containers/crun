@@ -7427,6 +7427,21 @@ libcrun_join_process (libcrun_context_t *context,
   if (path_has_dot_dot_component (sub_cgroup))
     return crun_make_error (err, 0, "invalid cgroup path `%s`: `..` components are not allowed", sub_cgroup);
 
+  /* The caller checked only the container cgroup, but a sub-cgroup is managed
+     by the container and the process would never run if it is frozen.  */
+  if (sub_cgroup && ! is_empty_string (status->cgroup_path))
+    {
+      cleanup_free char *final_cgroup = NULL;
+
+      ret = append_paths (&final_cgroup, err, status->cgroup_path, sub_cgroup, NULL);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      ret = libcrun_cgroup_ensure_not_frozen_with_ancestors (final_cgroup, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   ret = socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sync_socket_fd);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "error creating socketpair");

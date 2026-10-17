@@ -296,7 +296,7 @@ libcrun_get_cgroup_process (pid_t pid, char **path, bool absolute, libcrun_error
 }
 
 static int
-read_pids_cgroup_file (int dfd, const char *file, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
+read_pids_file (int dfd, const char *file, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
 {
   cleanup_close int tasksfd = -1;
   cleanup_free char *buffer = NULL;
@@ -341,47 +341,181 @@ read_pids_cgroup_file (int dfd, const char *file, bool recurse, pid_t **pids, si
       (*pids)[*n_pids] = 0;
     }
 
-  if (recurse)
+  return 0;
+}
+
+/* A sub-cgroup still to be visited by a walk of the cgroup tree.  */
+struct cgroup_walk_dir_s
+{
+  char *name;
+  size_t depth;
+  bool entered;
+};
+
+/* Depth-first walk of a cgroup tree.  The shape of the tree is chosen by the
+   container, so the walk must not recurse: one open directory per level runs
+   out of file descriptors on a deep chain of sub-cgroups.  Only the current
+   directory is kept open, the sub-cgroups still to visit are queued by name
+   and the walk goes back to a parent through "..".  */
+struct cgroup_walk_s
+{
+  int dfd;
+  size_t depth;
+  struct cgroup_walk_dir_s *dirs;
+  size_t n_dirs;
+  size_t allocated;
+};
+
+static void
+cgroup_walk_pop (struct cgroup_walk_s *walk)
+{
+  free (walk->dirs[--walk->n_dirs].name);
+}
+
+static void
+cleanup_cgroup_walkp (struct cgroup_walk_s *walk)
+{
+  int saved_errno = errno;
+
+  while (walk->n_dirs > 0)
+    cgroup_walk_pop (walk);
+  free (walk->dirs);
+  close_and_reset (&walk->dfd);
+  errno = saved_errno;
+}
+
+#define cleanup_cgroup_walk __attribute__ ((cleanup (cleanup_cgroup_walkp)))
+
+/* Make DFD the current directory of the walk and queue its sub-directories.
+   DFD must be the root of the walk or a child of the current directory, and
+   it is owned by the walk afterwards.  On error -1 is returned with errno set.  */
+static int
+cgroup_walk_enter (struct cgroup_walk_s *walk, int dfd)
+{
+  cleanup_close int dfd_clone = -1;
+  cleanup_dir DIR *dir = NULL;
+  struct dirent *de;
+
+  close_and_reset (&walk->dfd);
+  walk->dfd = dfd;
+  walk->depth++;
+
+  dfd_clone = openat (dfd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (dfd_clone < 0))
+    return -1;
+
+  dir = fdopendir (dfd_clone);
+  if (UNLIKELY (dir == NULL))
+    return -1;
+  /* fdopendir takes ownership of dfd_clone.  */
+  dfd_clone = -1;
+
+  for (de = readdir (dir); de; de = readdir (dir))
     {
-      cleanup_close int dfd_clone = openat (dfd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-      cleanup_dir DIR *dir = NULL;
-      struct dirent *de;
+      struct cgroup_walk_dir_s *d;
 
-      if (UNLIKELY (dfd_clone < 0))
-        return crun_make_error (err, errno, "open cgroup sub-directory");
+      if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
+        continue;
 
-      dir = fdopendir (dfd_clone);
-      if (UNLIKELY (dir == NULL))
-        return crun_make_error (err, errno, "open cgroup sub-directory");
-      /* fdopendir takes ownership of dfd_clone.  */
-      dfd_clone = -1;
+      if (de->d_type != DT_DIR)
+        continue;
 
-      for (de = readdir (dir); de; de = readdir (dir))
+      if (walk->n_dirs == walk->allocated)
         {
-          cleanup_close int nfd = -1;
-
-          if (strcmp (de->d_name, ".") == 0 || strcmp (de->d_name, "..") == 0)
-            continue;
-
-          if (de->d_type != DT_DIR)
-            continue;
-
-          nfd = openat (dirfd (dir), de->d_name, O_DIRECTORY | O_PATH | O_CLOEXEC);
-          if (UNLIKELY (nfd < 0))
-            return crun_make_error (err, errno, "open cgroup directory `%s`", de->d_name);
-
-          ret = read_pids_cgroup_file (nfd, file, recurse, pids, n_pids, allocated, err);
-          if (UNLIKELY (ret < 0))
-            {
-              /* Reading `cgroup.procs` of a threaded cgroup fails with
-                 EOPNOTSUPP.  Its processes are already listed by its
-                 threaded domain root, which was read before.  */
-              if (crun_error_get_errno (err) != EOPNOTSUPP)
-                return ret;
-              crun_error_release (err);
-            }
+          walk->allocated = walk->allocated * 2 + 32;
+          walk->dirs = xrealloc (walk->dirs, sizeof (*walk->dirs) * walk->allocated);
         }
+
+      d = &walk->dirs[walk->n_dirs++];
+      d->name = xstrdup (de->d_name);
+      d->depth = walk->depth + 1;
+      d->entered = false;
     }
+
+  return 0;
+}
+
+/* Store in *D the next queued sub-directory, or NULL once there are no more,
+   and make its parent the current directory of the walk.  On error -1 is
+   returned with errno set.  */
+static int
+cgroup_walk_next (struct cgroup_walk_s *walk, struct cgroup_walk_dir_s **d)
+{
+  *d = walk->n_dirs > 0 ? &walk->dirs[walk->n_dirs - 1] : NULL;
+
+  while (*d && walk->depth >= (*d)->depth)
+    {
+      int parent;
+
+      parent = openat (walk->dfd, "..", O_DIRECTORY | O_PATH | O_CLOEXEC);
+      if (UNLIKELY (parent < 0))
+        return -1;
+
+      close_and_reset (&walk->dfd);
+      walk->dfd = parent;
+      walk->depth--;
+    }
+
+  return 0;
+}
+
+static int
+read_pids_cgroup_file (int dfd, const char *file, bool recurse, pid_t **pids, size_t *n_pids, size_t *allocated, libcrun_error_t *err)
+{
+  cleanup_cgroup_walk struct cgroup_walk_s walk = { .dfd = -1 };
+  int dfd_clone;
+  int ret;
+
+  ret = read_pids_file (dfd, file, pids, n_pids, allocated, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (! recurse)
+    return 0;
+
+  dfd_clone = openat (dfd, ".", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (dfd_clone < 0))
+    return crun_make_error (err, errno, "open cgroup sub-directory");
+
+  ret = cgroup_walk_enter (&walk, dfd_clone);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "open cgroup sub-directory");
+
+  for (;;)
+    {
+      struct cgroup_walk_dir_s *d;
+      cleanup_close int nfd = -1;
+
+      ret = cgroup_walk_next (&walk, &d);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open parent cgroup directory");
+      if (d == NULL)
+        break;
+
+      nfd = openat (walk.dfd, d->name, O_DIRECTORY | O_PATH | O_CLOEXEC);
+      if (UNLIKELY (nfd < 0))
+        return crun_make_error (err, errno, "open cgroup directory `%s`", d->name);
+
+      cgroup_walk_pop (&walk);
+
+      ret = read_pids_file (nfd, file, pids, n_pids, allocated, err);
+      if (UNLIKELY (ret < 0))
+        {
+          /* Reading `cgroup.procs` of a threaded cgroup fails with
+             EOPNOTSUPP.  Its processes are already listed by its
+             threaded domain root, which was read before.  */
+          if (crun_error_get_errno (err) != EOPNOTSUPP)
+            return ret;
+          crun_error_release (err);
+          continue;
+        }
+
+      ret = cgroup_walk_enter (&walk, nfd);
+      nfd = -1;
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "open cgroup sub-directory");
+    }
+
   return 0;
 }
 
@@ -403,70 +537,44 @@ read_pids_cgroup (int dfd, bool recurse, pid_t **pids, size_t *n_pids, size_t *a
 static int
 rmdir_all_fd (int dfd)
 {
-  cleanup_dir DIR *dir = NULL;
-  struct dirent *next;
+  cleanup_cgroup_walk struct cgroup_walk_s walk = { .dfd = -1 };
+  int ret;
 
-  dir = fdopendir (dfd);
-  if (dir == NULL)
+  ret = cgroup_walk_enter (&walk, dfd);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (;;)
     {
-      int saved_errno = errno;
-      TEMP_FAILURE_RETRY (close (dfd));
-      errno = saved_errno;
-      return -1;
-    }
+      struct cgroup_walk_dir_s *d;
+      int child_dfd;
 
-  dfd = dirfd (dir);
+      ret = cgroup_walk_next (&walk, &d);
+      if (UNLIKELY (ret < 0))
+        return ret;
+      if (d == NULL)
+        break;
 
-  for (next = readdir (dir); next; next = readdir (dir))
-    {
-      const char *name = next->d_name;
-      int ret;
-
-      if (name[0] == '.' && name[1] == '\0')
-        continue;
-      if (name[0] == '.' && name[1] == '.' && name[2] == '\0')
-        continue;
-
-      if (next->d_type != DT_DIR)
-        continue;
-
-      ret = unlinkat (dfd, name, AT_REMOVEDIR);
-      if (ret < 0 && errno == EBUSY)
+      ret = unlinkat (walk.dfd, d->name, AT_REMOVEDIR);
+      if (ret == 0 || errno != EBUSY || d->entered)
         {
-          cleanup_free pid_t *pids = NULL;
-          libcrun_error_t tmp_err = NULL;
-          size_t i, n_pids = 0, allocated = 0;
-          cleanup_close int child_dfd = -1;
-
-          child_dfd = openat (dfd, name, O_DIRECTORY | O_CLOEXEC);
-          if (child_dfd < 0)
-            {
-              int saved_errno = errno;
-              closedir (dir);
-              dir = NULL;
-              errno = saved_errno;
-              return child_dfd;
-            }
-
-          ret = read_pids_cgroup (child_dfd, true, &pids, &n_pids, &allocated, &tmp_err);
-          if (UNLIKELY (ret < 0))
-            {
-              crun_error_release (&tmp_err);
-              continue;
-            }
-
-          for (i = 0; i < n_pids; i++)
-            kill (pids[i], SIGKILL);
-
-          ret = rmdir_all_fd (child_dfd);
-          child_dfd = -1;
-          if (ret < 0)
-            return ret;
-
-          /* Retry removing the directory now that its children are gone.  */
-          unlinkat (dfd, name, AT_REMOVEDIR);
+          cgroup_walk_pop (&walk);
+          continue;
         }
+
+      child_dfd = openat (walk.dfd, d->name, O_DIRECTORY | O_CLOEXEC);
+      if (UNLIKELY (child_dfd < 0))
+        return child_dfd;
+
+      /* Keep the directory queued, so that removing it is retried once its
+         children are gone.  */
+      d->entered = true;
+
+      ret = cgroup_walk_enter (&walk, child_dfd);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
+
   return 0;
 }
 
@@ -485,8 +593,8 @@ rmdir_all (const char *path)
   return rmdir (path);
 }
 
-int
-libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+static int
+read_pids_from_path (const char *path, bool recurse, bool threads, pid_t **pids, libcrun_error_t *err)
 {
   cleanup_free char *cgroup_path = NULL;
   cleanup_close int dirfd = -1;
@@ -527,7 +635,18 @@ libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids
   n_pids = 0;
   allocated = 0;
 
+  /* On cgroup v1 `cgroup.procs` lists the thread group of every task in the
+     cgroup, so there is no need to read `tasks` there.  */
+  if (threads && mode == CGROUP_MODE_UNIFIED)
+    return read_pids_cgroup_file (dirfd, "cgroup.threads", recurse, pids, &n_pids, &allocated, err);
+
   return read_pids_cgroup (dirfd, recurse, pids, &n_pids, &allocated, err);
+}
+
+int
+libcrun_cgroup_read_pids_from_path (const char *path, bool recurse, pid_t **pids, libcrun_error_t *err)
+{
+  return read_pids_from_path (path, recurse, false, pids, err);
 }
 
 /* same semantic as strtok_r.  */
@@ -810,6 +929,31 @@ libcrun_cgroup_ensure_not_frozen (const char *cgroup_path, libcrun_error_t *err)
   return 0;
 }
 
+/* Like libcrun_cgroup_ensure_not_frozen, but check the ancestors of
+   CGROUP_PATH too: on cgroup v2 freezing a cgroup freezes all its
+   descendants, while their own cgroup.freeze still reads 0.  */
+int
+libcrun_cgroup_ensure_not_frozen_with_ancestors (const char *cgroup_path, libcrun_error_t *err)
+{
+  cleanup_free char *path = xstrdup (cgroup_path);
+  char *slash;
+  int ret;
+
+  while (path[0] != '\0')
+    {
+      ret = libcrun_cgroup_ensure_not_frozen (path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
+      slash = strrchr (path, '/');
+      if (slash == NULL)
+        break;
+      *slash = '\0';
+    }
+
+  return 0;
+}
+
 int
 cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 {
@@ -821,7 +965,11 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
   if (path == NULL || *path == '\0')
     return 0;
 
-  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.  */
+  /* If the signal is SIGKILL, try to kill each process using the `cgroup.kill` file.
+     A successful write is not enough on its own: the kernel signals the thread
+     group leaders, and that has no effect on a process whose leader already
+     exited while other threads are still running.  Go on and signal whatever
+     is still listed in the cgroup.  */
   if (signal == SIGKILL)
     {
       cleanup_free char *kill_file = NULL;
@@ -831,10 +979,8 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
         return ret;
 
       ret = write_file_at_with_flags (AT_FDCWD, 0, 0700, kill_file, "1", 1, err);
-      if (ret >= 0)
-        return 0;
-
-      crun_error_release (err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
     }
 
   /* Freeze the cgroup so that the processes cannot fork while they are being
@@ -846,7 +992,11 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
   else
     frozen = true;
 
-  ret = libcrun_cgroup_read_pids_from_path (path, true, &pids, err);
+  /* On cgroup v2 a process is listed in `cgroup.procs` of the cgroup of its
+     leader, and a process whose leader exited is not listed anywhere once it
+     is moved to another cgroup.  For SIGKILL enumerate the threads instead,
+     kill() accepts any thread ID and always targets the whole process.  */
+  ret = read_pids_from_path (path, true, signal == SIGKILL, &pids, err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) != ENOENT)

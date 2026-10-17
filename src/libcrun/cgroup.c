@@ -391,6 +391,43 @@ libcrun_cgroup_preenter (struct libcrun_cgroup_args *args, int *dirfd, libcrun_e
   return cgroup_manager->precreate_cgroup (args, dirfd, err);
 }
 
+/* Destroy the cgroup created by libcrun_cgroup_preenter if libcrun_cgroup_enter
+   did not take it over: until then the caller has no status to destroy it with.  */
+void
+libcrun_cgroup_preenter_cleanup (struct libcrun_cgroup_args *args)
+{
+  cleanup_cgroup_status struct libcrun_cgroup_status *status = NULL;
+  struct libcrun_cgroup_manager *cgroup_manager;
+  struct libcrun_cgroup_args tmp_args = *args;
+  libcrun_error_t tmp_err = NULL;
+  int ret;
+
+  if (! args->precreated)
+    return;
+
+  args->precreated = false;
+
+  ret = get_cgroup_manager (args->manager, &cgroup_manager, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+
+  status = xmalloc0 (sizeof *status);
+  status->manager = args->manager;
+
+  /* There is no process to move, only fill the status with the cgroup path.  */
+  tmp_args.joined = true;
+
+  ret = cgroup_manager->create_cgroup (&tmp_args, status, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+
+  ret = cgroup_manager->destroy_cgroup (status, &tmp_err);
+
+exit:
+  if (UNLIKELY (ret < 0))
+    crun_error_release (&tmp_err);
+}
+
 int
 libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_status **out, libcrun_error_t *err)
 {
@@ -455,6 +492,9 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
 
       return ret;
     }
+
+  /* From now on the cgroup is destroyed through its status.  */
+  args->precreated = false;
 
   if (status->path)
     {
