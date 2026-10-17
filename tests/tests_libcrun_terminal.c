@@ -27,7 +27,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 /* Helper to create an isolated pty for testing */
 static int
@@ -233,29 +233,9 @@ test_new_terminal ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
-  printf ("1..7\n");
   RUN_TEST (test_cleanup_terminalp_null);
   RUN_TEST (test_terminal_setup_size_invalid_fd);
   RUN_TEST (test_terminal_setup_size_pty);
@@ -263,5 +243,6 @@ main ()
   RUN_TEST (test_set_raw_pty);
   RUN_TEST (test_set_raw_no_status);
   RUN_TEST (test_new_terminal);
+  print_tap_plan ();
   return 0;
 }

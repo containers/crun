@@ -21,7 +21,7 @@
 #include <errno.h>
 #include <signal.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 static int
 test_str2sig_common_signals ()
@@ -502,29 +502,9 @@ test_str2sig_numeric_edge_cases ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
-  printf ("1..12\n");
   RUN_TEST (test_str2sig_common_signals);
   RUN_TEST (test_str2sig_with_sig_prefix);
   RUN_TEST (test_str2sig_numeric_strings);
@@ -537,5 +517,6 @@ main ()
   RUN_TEST (test_str2sig_all_rtmin_signals);
   RUN_TEST (test_str2sig_all_rtmax_signals);
   RUN_TEST (test_str2sig_numeric_edge_cases);
+  print_tap_plan ();
   return 0;
 }

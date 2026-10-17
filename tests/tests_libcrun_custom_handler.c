@@ -20,7 +20,7 @@
 #include <libcrun/custom-handler.h>
 #include <stdio.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 /* Test handler manager create and free */
 static int
@@ -98,33 +98,14 @@ test_handler_by_name_empty ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
-  printf ("1..3\n");
-
   RUN_TEST (test_handler_manager_create_free);
   RUN_TEST (test_handler_by_name_not_found);
   RUN_TEST (test_handler_by_name_empty);
+
+  print_tap_plan ();
 
   return 0;
 }

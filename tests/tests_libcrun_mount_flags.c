@@ -22,7 +22,7 @@
 #include <string.h>
 #include <sys/mount.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 /* Test that known flags are found */
 static int
@@ -152,34 +152,14 @@ test_extra_flags ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-    }                                          \
-  while (0)
-
 int
 main ()
 {
-  int id = 1;
-  printf ("1..5\n");
   RUN_TEST (test_known_flags_found);
   RUN_TEST (test_unknown_flags);
   RUN_TEST (test_flag_names);
   RUN_TEST (test_clear_field);
   RUN_TEST (test_extra_flags);
+  print_tap_plan ();
   return 0;
 }

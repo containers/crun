@@ -27,7 +27,7 @@
 #include <fcntl.h>
 #include <limits.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 static void
 fill_data (char *buffer, size_t size)
@@ -992,35 +992,15 @@ test_ring_buffer_stress_partial_drain ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
-  printf ("1..6\n");
-
   RUN_TEST (test_ring_buffer_read_write);
   RUN_TEST (test_ring_buffer_wraparound_data_integrity);
   RUN_TEST (test_ring_buffer_reserved_byte_boundary);
   RUN_TEST (test_ring_buffer_no_reserved_byte_access);
   RUN_TEST (test_ring_buffer_wraparound_partial_drain);
   RUN_TEST (test_ring_buffer_stress_partial_drain);
+  print_tap_plan ();
   return 0;
 }

@@ -36,7 +36,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 extern int cpuset_string_to_bitmask (const char *str, char **out, size_t *out_size, libcrun_error_t *err);
 
@@ -1226,33 +1226,9 @@ out:
   return ret;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
-#ifdef HAVE_SYSTEMD
-  printf ("1..25\n");
-#else
-  printf ("1..22\n");
-#endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
   RUN_TEST (test_run_process);
@@ -1280,5 +1256,6 @@ main ()
   RUN_TEST (test_get_scope_path);
   RUN_TEST (test_cpuset_string_to_bitmask);
 #endif
+  print_tap_plan ();
   return 0;
 }

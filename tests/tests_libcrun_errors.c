@@ -21,7 +21,7 @@
 #include <string.h>
 #include <errno.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 static int
 test_crun_make_error ()
@@ -260,29 +260,9 @@ test_crun_write_warning_and_release_preserves_errno ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
-  printf ("1..9\n");
   RUN_TEST (test_crun_make_error);
   RUN_TEST (test_crun_write_warning_and_release);
   RUN_TEST (test_crun_error_wrap);
@@ -292,5 +272,6 @@ main ()
   RUN_TEST (test_crun_error_release_null);
   RUN_TEST (test_crun_error_release_preserves_errno);
   RUN_TEST (test_crun_write_warning_and_release_preserves_errno);
+  print_tap_plan ();
   return 0;
 }
