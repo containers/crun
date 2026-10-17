@@ -87,8 +87,9 @@ Nitro Enclaves).
 
 .SH VM Configuration File
 A \fB\&.krun_vm.json\fP file can be placed at the root of the container
-image to provide default VM settings. The file is a JSON object with
-the following optional fields:
+image to provide default VM settings. It must be a regular file not
+bigger than 64 KiB. The file is a JSON object with the following
+optional fields:
 .IP \(bu 2
 \fBcpus\fP (integer): same as the \fBkrun.cpus\fP annotation.
 .IP \(bu 2

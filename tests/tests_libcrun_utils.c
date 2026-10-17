@@ -278,6 +278,102 @@ test_write_read_file ()
 }
 
 static int
+read_with_max_size (int fd, size_t max, size_t expected_len, libcrun_error_t *err)
+{
+  cleanup_free char *buf = NULL;
+  size_t len;
+  int ret;
+
+  ret = read_all_fd_with_max_size (fd, "test", &buf, &len, max, err);
+  if (ret < 0)
+    return ret;
+
+  return len == expected_len ? 0 : -1;
+}
+
+static int
+test_read_all_fd_with_max_size ()
+{
+  libcrun_error_t err = NULL;
+  cleanup_free char *name = NULL;
+  char data[1025];
+  char dir[PATH_MAX];
+  size_t max = 1024;
+  int failed = 0;
+  int ret;
+
+  if (make_temp_dir (dir, sizeof (dir)) < 0)
+    return 77;
+
+  xasprintf (&name, "%s/file", dir);
+  memset (data, 'x', sizeof (data));
+
+  /* Regular file: the size is known from fstat.  */
+  for (size_t size = max; size <= max + 1; size++)
+    {
+      cleanup_close int fd = -1;
+
+      ret = write_file (name, data, size, &err);
+      if (ret < 0)
+        {
+          crun_error_release (&err);
+          failed = 1;
+          break;
+        }
+
+      fd = open (name, O_RDONLY | O_CLOEXEC);
+      if (fd < 0)
+        {
+          failed = 1;
+          break;
+        }
+
+      ret = read_with_max_size (fd, max, size, &err);
+      if (size <= max && ret != 0)
+        failed = 1;
+      if (size > max && (ret >= 0 || crun_error_get_errno (&err) != EFBIG))
+        failed = 1;
+      if (ret < 0)
+        crun_error_release (&err);
+    }
+
+  /* Pipe: fstat reports no size, the limit must be enforced while reading.  */
+  for (size_t size = max; size <= max + 1; size++)
+    {
+      cleanup_close int rfd = -1;
+      cleanup_close int wfd = -1;
+      int fds[2];
+
+      if (pipe2 (fds, O_CLOEXEC) < 0)
+        {
+          failed = 1;
+          break;
+        }
+      rfd = fds[0];
+      wfd = fds[1];
+
+      if (write (wfd, data, size) != (ssize_t) size)
+        {
+          failed = 1;
+          break;
+        }
+      close_and_reset (&wfd);
+
+      ret = read_with_max_size (rfd, max, size, &err);
+      if (size <= max && ret != 0)
+        failed = 1;
+      if (size > max && (ret >= 0 || crun_error_get_errno (&err) != EFBIG))
+        failed = 1;
+      if (ret < 0)
+        crun_error_release (&err);
+    }
+
+  unlink (name);
+  rmdir (dir);
+  return failed ? -1 : 0;
+}
+
+static int
 test_crun_path_exists ()
 {
 
@@ -1231,6 +1327,7 @@ main ()
 {
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
+  RUN_TEST (test_read_all_fd_with_max_size);
   RUN_TEST (test_run_process);
   RUN_TEST (test_dir_p);
   RUN_TEST (test_socket_pair);
