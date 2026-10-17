@@ -552,7 +552,7 @@ def test_hugetlb_reservation_limit():
     # Check if reservation file exists in the container's cgroup
     conf['process']['args'] = ['/init', 'cat', f'/sys/fs/cgroup/hugetlb.{page_size}.rsvd.max']
     try:
-        out_rsvd, _ = run_and_get_output(conf, hide_stderr=True)
+        out_rsvd, _ = run_and_get_output(conf, hide_stderr=False)
         out_rsvd_val = out_rsvd.strip()
         # If reservation file exists, crun must have written to it
         if str(limit) in out_rsvd:
