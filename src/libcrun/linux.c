@@ -123,6 +123,8 @@
 #  define ST_NOSYMFOLLOW 0x2000
 #endif
 
+#define MOUNT_ATIME_FLAGS (MS_NOATIME | MS_NODIRATIME | MS_RELATIME | MS_STRICTATIME)
+
 /* Convert the ST_ flags reported by statfs(2) to the MS_ flags of mount(2).  */
 static unsigned long
 mount_flags_from_statfs (unsigned long f_flags)
@@ -968,14 +970,18 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
   ret = mount (NULL, real_target, NULL, flags, data);
   if (UNLIKELY (ret < 0))
     {
-      unsigned long remount_flags;
+      unsigned long current_flags, remount_flags;
       struct statfs sfs;
 
       ret = statfs (real_target, &sfs);
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "statfs `%s`", real_target);
 
-      remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC);
+      current_flags = mount_flags_from_statfs (sfs.f_flags);
+
+      remount_flags = current_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_NOSYMFOLLOW);
+      if (! (flags & MOUNT_ATIME_FLAGS))
+        remount_flags |= current_flags & MOUNT_ATIME_FLAGS;
 
       if ((flags | remount_flags) != flags)
         {
@@ -984,11 +990,8 @@ do_remount (int targetfd, const char *target, unsigned long flags, const char *d
             return 0;
 
           /* If it still fails and MS_RDONLY is present in the mount, try adding it.  */
-          if (sfs.f_flags & MS_RDONLY)
-            {
-              remount_flags = sfs.f_flags & (MS_NOSUID | MS_NODEV | MS_NOEXEC | MS_RDONLY);
-              ret = mount (NULL, real_target, NULL, flags | remount_flags, data);
-            }
+          if (current_flags & MS_RDONLY)
+            ret = mount (NULL, real_target, NULL, flags | remount_flags | MS_RDONLY, data);
         }
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "remount `%s`", target);
