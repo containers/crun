@@ -307,6 +307,9 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
   GEN_KEY (gen, "detached");
   GEN_OR_FAIL (json_gen_bool (gen, status->detached));
 
+  GEN_KEY (gen, "no-new-keyring");
+  GEN_OR_FAIL (json_gen_bool (gen, status->no_new_keyring));
+
   if (status->external_descriptors)
     {
       GEN_KEY (gen, "external_descriptors");
@@ -479,6 +482,10 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
   {
     tmp = json_object_object_get (doc, "detached");
     status->detached = tmp != NULL && json_object_get_boolean (tmp);
+  }
+  {
+    tmp = json_object_object_get (doc, "no-new-keyring");
+    status->no_new_keyring = tmp != NULL && json_object_get_boolean (tmp);
   }
   {
     tmp = json_object_object_get (doc, "external_descriptors");

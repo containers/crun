@@ -1453,9 +1453,14 @@ epoll_helper_toggle (int epollfd, int fd, int events, libcrun_error_t *err)
   ev.events = events;
   ev.data.fd = fd;
   ret = epoll_ctl (epollfd, add ? EPOLL_CTL_ADD : EPOLL_CTL_DEL, fd, &ev);
+  /* The fd is already registered, possibly with a different mask.  */
+  if (UNLIKELY (ret < 0 && errno == EEXIST))
+    ret = epoll_ctl (epollfd, EPOLL_CTL_MOD, fd, &ev);
   if (UNLIKELY (ret < 0))
     {
-      if (errno == EEXIST || errno == ENOENT)
+      /* ENOENT: not registered.  EPERM: the fd is not supported by epoll,
+         such as a regular file or /dev/null, and is always ready.  */
+      if (errno == ENOENT || errno == EPERM)
         return 0;
       return crun_make_error (err, errno, "epoll_ctl `%s` `%d`", add ? "add" : "del", fd);
     }

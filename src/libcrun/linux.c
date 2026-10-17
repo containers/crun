@@ -751,7 +751,7 @@ libcrun_create_keyring (libcrun_container_t *container, const char *name, const 
           ret = 0;
           goto out;
         }
-      ret = crun_make_error (err, errno, "join keyctl `%s`", name);
+      ret = crun_make_error (err, errno, "join keyctl `%s`", name ? name : "");
       goto out;
     }
 
@@ -7108,15 +7108,15 @@ join_process_parent_helper (libcrun_context_t *context,
 
   /* Read the status and the PID from the child process.  */
   ret = TEMP_FAILURE_RETRY (read (sync_fd, &res, 1));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from sync socket");
+  if (UNLIKELY (ret != 1))
+    return crun_make_error (err, ret < 0 ? errno : 0, "read from sync socket");
 
   if (res != '0')
     return crun_make_error (err, 0, "fail startup");
 
   ret = TEMP_FAILURE_RETRY (read (sync_fd, &pid, sizeof (pid)));
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "read from sync socket");
+  if (UNLIKELY (ret != sizeof (pid)))
+    return crun_make_error (err, ret < 0 ? errno : 0, "read from sync socket");
 
   /* Wait for the child pid so we ensure the grandchild gets properly reparented.  */
   ret = waitpid_ignore_stopped (child_pid, NULL, 0);
@@ -7298,6 +7298,17 @@ join_process_namespaces (libcrun_container_t *container, pid_t pid_to_join, libc
           ret = fds[i];
           goto exit;
         }
+    }
+
+  /* The namespace files were opened by PID.  Validate that the PID still refers
+     to the original container process before joining any of them.  */
+  ret = libcrun_check_pid_valid (status, err);
+  if (UNLIKELY (ret < 0))
+    goto exit;
+  if (ret == 0)
+    {
+      ret = crun_make_error (err, ESRCH, "container process not found, the pid was reused");
+      goto exit;
     }
 
   for (i = 0; namespaces[i].ns_file; i++)
@@ -7503,8 +7514,10 @@ libcrun_join_process (libcrun_context_t *context,
       cleanup_free char *pty = NULL;
       int r = -1;
 
+      /* Wait for the parent to complete the setup (cgroup, scheduler, ...).
+         An EOF means the parent failed, so do not go any further.  */
       ret = TEMP_FAILURE_RETRY (read (sync_fd, &r, sizeof (r)));
-      if (UNLIKELY (ret < 0))
+      if (UNLIKELY (ret != sizeof (r) || r < 0))
         _safe_exit (EXIT_FAILURE);
 
       ret = setsid ();
@@ -7530,9 +7543,6 @@ libcrun_join_process (libcrun_context_t *context,
           if (UNLIKELY (ret < 0))
             send_error_to_sync_socket_and_die (sync_fd, true, err);
         }
-
-      if (r < 0)
-        _safe_exit (EXIT_FAILURE);
     }
 
   return 0;

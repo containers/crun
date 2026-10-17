@@ -876,6 +876,95 @@ test_waitpid_ignore_stopped_no_busy_loop_on_traced_child ()
 }
 
 static int
+test_channel_fd_pair_no_busy_loop_on_terminal_hangup ()
+{
+  /* Once every slave is closed, the pty master reports EPOLLHUP, which cannot
+     be masked, and reads fail with EIO.  channel_fd_pair_process must not
+     leave it registered level-triggered, or epoll_wait never blocks again.  */
+  libcrun_error_t err = NULL;
+  cleanup_close int master = -1, slave = -1, outfd0 = -1, outfd1 = -1;
+  cleanup_close int epollfd = -1;
+  cleanup_channel_fd_pair struct channel_fd_pair *channel = NULL;
+  struct epoll_event ev;
+  int output_pipe[2], in_fds[2];
+  char buf[16];
+  int i, ret;
+
+  master = posix_openpt (O_RDWR | O_NOCTTY | O_NONBLOCK);
+  if (master < 0)
+    return 77;
+  if (grantpt (master) < 0 || unlockpt (master) < 0)
+    return 77;
+  slave = open (ptsname (master), O_RDWR | O_NOCTTY);
+  if (slave < 0)
+    return 77;
+
+  if (pipe2 (output_pipe, O_NONBLOCK) < 0)
+    return -1;
+  outfd0 = output_pipe[0];
+  outfd1 = output_pipe[1];
+
+  /* Register the master level-triggered, as wait_for_process does.  */
+  in_fds[0] = master;
+  in_fds[1] = -1;
+  epollfd = epoll_helper (in_fds, NULL, NULL, NULL, &err);
+  if (epollfd < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  channel = channel_fd_pair_new (master, outfd1, 4096);
+
+  close_and_reset (&slave);
+
+  for (i = 0; i < 10; i++)
+    {
+      ret = epoll_wait (epollfd, &ev, 1, 0);
+      if (ret <= 0)
+        break;
+
+      ret = channel_fd_pair_process (channel, epollfd, &err);
+      if (ret < 0)
+        {
+          crun_error_release (&err);
+          return -1;
+        }
+    }
+  if (i == 10)
+    {
+      fprintf (stderr, "epoll keeps firing on a terminal that was hung up\n");
+      return -1;
+    }
+
+  /* The terminal can be opened again and its output must still be forwarded.  */
+  slave = open (ptsname (master), O_RDWR | O_NOCTTY);
+  if (slave < 0)
+    return -1;
+  if (write (slave, "A", 1) != 1)
+    return -1;
+
+  ret = epoll_wait (epollfd, &ev, 1, 1000);
+  if (ret != 1 || ev.data.fd != master)
+    {
+      fprintf (stderr, "epoll did not fire on a terminal that was opened again\n");
+      return -1;
+    }
+
+  ret = channel_fd_pair_process (channel, epollfd, &err);
+  if (ret < 0)
+    {
+      crun_error_release (&err);
+      return -1;
+    }
+
+  if (read (outfd0, buf, sizeof (buf)) != 1 || buf[0] != 'A')
+    return -1;
+
+  return 0;
+}
+
+static int
 test_format_default_id_mapping ()
 {
   libcrun_error_t err = NULL;
@@ -1160,9 +1249,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..24\n");
+  printf ("1..25\n");
 #else
-  printf ("1..21\n");
+  printf ("1..22\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -1182,6 +1271,7 @@ main ()
   RUN_TEST (test_safe_ensure_does_not_block_on_fifo);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
   RUN_TEST (test_waitpid_ignore_stopped_no_busy_loop_on_traced_child);
+  RUN_TEST (test_channel_fd_pair_no_busy_loop_on_terminal_hangup);
   RUN_TEST (test_format_default_id_mapping);
   RUN_TEST (test_safe_openat_root);
   RUN_TEST (test_safe_openat_null_rootfs);

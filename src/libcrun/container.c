@@ -2069,6 +2069,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
     .owner = owner,
     .systemd_cgroup = context->systemd_cgroup,
     .detached = context->detach,
+    .no_new_keyring = context->no_new_keyring,
     .external_descriptors = external_descriptors,
     .cgroup_path = NULL,
     .scope = NULL,
@@ -2376,7 +2377,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
             }
           else if (events[i].data.fd == 1 || events[i].data.fd == terminal_fd_from)
             {
-              ret = channel_fd_pair_process (from_terminal, stdout_pollable ? epollfd : -1, err);
+              ret = channel_fd_pair_process (from_terminal, epollfd, err);
               if (UNLIKELY (ret < 0))
                 return crun_error_wrap (err, "copy from terminal fd");
             }
@@ -3950,6 +3951,10 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_reopen_dev_null (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   if (! process->no_new_privileges)
     {
       ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
@@ -4242,6 +4247,17 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   ret = initialize_security (container, process, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* Do not leak the session keyring of the caller into the container.  The
+     keyring created for the container cannot be joined, so use an anonymous one.  */
+  if (! context->no_new_keyring && ! status.no_new_keyring)
+    {
+      libcrun_debug ("Creating new keyring for the exec process");
+
+      ret = libcrun_create_keyring (container, NULL, process->selinux_label, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
   if (UNLIKELY (ret < 0))
@@ -5070,6 +5086,11 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
       if (UNLIKELY (ret < 0))
         return ret;
     }
+
+  /* CRIU runs as a child process, so the restored processes would inherit the session keyring.  */
+  ret = setup_container_keyring (container, context, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   {
     cleanup_close int cgroup_dirfd = -1;

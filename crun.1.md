@@ -411,6 +411,9 @@ with the specified value. This is useful when restoring
 a container into an existing Pod and selinux labels
 need to be changed during restore.
 
+**--no-new-keyring**
+Keep the same session key.
+
 # Extensions to OCI
 
 ## `run.oci.mount_context_type=context`
