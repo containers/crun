@@ -805,6 +805,37 @@ def test_seccomp_invalid_flag():
     return run_and_expect_error(conf, ["unknown seccomp option", "SECCOMP_FILTER_FLAG_NOT_A_FLAG"])
 
 
+def test_seccomp_exec_missing_bpf():
+    """exec must fail if seccomp is configured but the generated filter is missing."""
+    conf = base_config()
+    add_all_namespaces(conf)
+
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+    }
+
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        run_crun_command(["exec", cid, "/init", "true"])
+
+        os.unlink(os.path.join(get_tests_root_status(), cid, "seccomp.bpf"))
+        try:
+            run_crun_command(["exec", cid, "/init", "true"])
+        except subprocess.CalledProcessError:
+            return 0
+        logger.info("exec succeeded without the seccomp filter")
+        return -1
+    except Exception as e:
+        logger.info("Exception: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 all_tests = {
     "seccomp-listener": test_seccomp_listener,
     "seccomp-block-syscall": test_seccomp_block_syscall,
@@ -829,6 +860,7 @@ all_tests = {
     "seccomp-invalid-arg-index": test_seccomp_invalid_arg_index,
     "seccomp-invalid-arg-index-unknown-syscall": test_seccomp_invalid_arg_index_unknown_syscall,
     "seccomp-invalid-flag": test_seccomp_invalid_flag,
+    "seccomp-exec-missing-bpf": test_seccomp_exec_missing_bpf,
 }
 
 if __name__ == "__main__":

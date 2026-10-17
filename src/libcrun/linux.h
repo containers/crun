@@ -111,7 +111,7 @@ int libcrun_container_setgroups (libcrun_container_t *container,
                                  libcrun_error_t *err);
 int libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_error_t *err);
 int libcrun_create_final_userns (libcrun_container_t *container, libcrun_error_t *err);
-int libcrun_save_external_descriptors (libcrun_container_t *container, pid_t pid, libcrun_error_t *err);
+int libcrun_save_external_descriptors (libcrun_container_t *container, libcrun_error_t *err);
 
 int libcrun_create_dev (libcrun_container_t *container, int devfd,
                         int srcfd, struct device_s *device, bool binds,
@@ -146,5 +146,13 @@ bool is_bind_mount (runtime_spec_schema_defs_mount *mnt, bool *recursive, bool *
 int libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_status_t *status, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err);
 
 int libcrun_destroy_runtime_mounts (libcrun_container_t *container, libcrun_container_status_t *status, runtime_spec_schema_defs_mount **mounts, size_t len, libcrun_error_t *err);
+
+struct libcrun_mount_flags_s
+{
+  char *target;
+  unsigned long flags;
+};
+
+int libcrun_restrict_mounts_in_container (pid_t pid, struct libcrun_mount_flags_s *mounts, size_t len, libcrun_error_t *err);
 
 #endif
