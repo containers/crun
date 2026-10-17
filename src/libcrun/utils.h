@@ -465,9 +465,10 @@ path_has_dot_dot_component (const char *path)
 static inline int
 waitpid_ignore_stopped (pid_t pid, int *status, int options)
 {
-  int ret, s = 0;
+  int ret, s;
   do
     {
+      s = 0;
       ret = TEMP_FAILURE_RETRY (waitpid (pid, &s, options));
       if (ret < 0)
         return ret;

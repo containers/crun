@@ -26,6 +26,8 @@
 #include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/ptrace.h>
+#include <sys/prctl.h>
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
@@ -805,6 +807,75 @@ test_channel_fd_pair_no_busy_loop_on_blocked_output ()
 }
 
 static int
+test_waitpid_ignore_stopped_no_busy_loop_on_traced_child ()
+{
+  /* A traced child reports its stops to the tracer even without WUNTRACED.
+     Once the stop is consumed, waitpid_ignore_stopped with WNOHANG must
+     return 0 instead of retrying waitpid with the stale status forever.  */
+  pid_t tester;
+  int status, ret = 0;
+  int i;
+
+  tester = fork ();
+  if (tester < 0)
+    return -1;
+  if (tester == 0)
+    {
+      siginfo_t info;
+      pid_t pid;
+
+      pid = fork ();
+      if (pid < 0)
+        _exit (1);
+      if (pid == 0)
+        {
+          prctl (PR_SET_PDEATHSIG, SIGKILL);
+          if (ptrace (PTRACE_TRACEME, 0, NULL, NULL) < 0)
+            _exit (77);
+          raise (SIGSTOP);
+          _exit (0);
+        }
+
+      /* Wait for the stop to be reported without consuming it.  */
+      if (waitid (P_PID, pid, &info, WEXITED | WSTOPPED | WNOWAIT) < 0)
+        _exit (1);
+      if (info.si_code == CLD_EXITED)
+        _exit (info.si_status == 77 ? 77 : 1);
+      if (info.si_code != CLD_TRAPPED)
+        _exit (1);
+
+      ret = waitpid_ignore_stopped (pid, &status, WNOHANG);
+
+      kill (pid, SIGKILL);
+      while (waitpid (pid, NULL, 0) < 0 && errno == EINTR)
+        ;
+      _exit (ret == 0 ? 0 : 1);
+    }
+
+  for (i = 0; i < 100; i++)
+    {
+      ret = waitpid (tester, &status, WNOHANG);
+      if (ret != 0)
+        break;
+      usleep (50000);
+    }
+  if (ret != tester)
+    {
+      fprintf (stderr, "waitpid_ignore_stopped busy loops on a traced child\n");
+      kill (tester, SIGKILL);
+      while (waitpid (tester, NULL, 0) < 0 && errno == EINTR)
+        ;
+      return -1;
+    }
+
+  if (! WIFEXITED (status))
+    return -1;
+  if (WEXITSTATUS (status) == 77)
+    return 77;
+  return WEXITSTATUS (status) == 0 ? 0 : -1;
+}
+
+static int
 test_format_default_id_mapping ()
 {
   libcrun_error_t err = NULL;
@@ -1089,9 +1160,9 @@ main ()
 {
   int id = 1;
 #ifdef HAVE_SYSTEMD
-  printf ("1..23\n");
+  printf ("1..24\n");
 #else
-  printf ("1..20\n");
+  printf ("1..21\n");
 #endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
@@ -1110,6 +1181,7 @@ main ()
   RUN_TEST (test_safe_create_through_dangling_symlinks);
   RUN_TEST (test_safe_ensure_does_not_block_on_fifo);
   RUN_TEST (test_channel_fd_pair_no_busy_loop_on_blocked_output);
+  RUN_TEST (test_waitpid_ignore_stopped_no_busy_loop_on_traced_child);
   RUN_TEST (test_format_default_id_mapping);
   RUN_TEST (test_safe_openat_root);
   RUN_TEST (test_safe_openat_null_rootfs);
