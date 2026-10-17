@@ -182,7 +182,7 @@ initialize_memory_subsystem (const char *path, libcrun_error_t *err)
     {
       int ret;
 
-      ret = write_file_at (dirfd, files[i], "-1", 2, err);
+      ret = write_cgroup_file (dirfd, files[i], "-1", 2, err);
       if (UNLIKELY (ret < 0))
         {
           /* Ignore any error here.  */
@@ -428,7 +428,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+  ret = write_cgroup_file (AT_FDCWD, cgroup_path_procs, pid_str, strlen (pid_str), err);
   if (LIKELY (ret >= 0))
     return ret;
 
@@ -440,7 +440,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+      ret = write_cgroup_file (AT_FDCWD, cgroup_path_procs, pid_str, strlen (pid_str), err);
       if (LIKELY (ret >= 0))
         return ret;
     }
@@ -488,7 +488,7 @@ enter_cgroup_v2 (pid_t pid, pid_t init_pid, const char *path, bool create_if_mis
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = write_file (cgroup_sub_path_procs, pid_str, strlen (pid_str), err);
+      ret = write_cgroup_file (AT_FDCWD, cgroup_sub_path_procs, pid_str, strlen (pid_str), err);
       if (UNLIKELY (ret < 0))
         {
           /* The init process might have moved to a different cgroup, try again.  */
