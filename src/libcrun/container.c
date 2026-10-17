@@ -48,6 +48,7 @@
 #include "cgroup.h"
 #include "cgroup-utils.h"
 #include <sys/prctl.h>
+#include <sys/auxv.h>
 #include <sys/signalfd.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -1535,6 +1536,20 @@ open_hooks_output (libcrun_container_t *container, int *out_fd, int *err_fd, lib
   return 0;
 }
 
+/* The environment the process was started with lives on the initial stack, right after the
+   argv strings and before the string AT_EXECFN points to.  clearenv(3) only drops the pointers
+   to it, so when there is no execv to replace the stack, erase it or the container process can
+   still read it, e.g. through /proc/self/environ.  */
+static void
+erase_initial_environment (char **argv, int argc)
+{
+  char *start = argv[argc - 1] + strlen (argv[argc - 1]) + 1;
+  char *end = (char *) getauxval (AT_EXECFN);
+
+  if (end > start)
+    memset (start, 0, end - start);
+}
+
 static void
 rewrite_argv (char **argv, int argc, const char *name, char **args, size_t args_len)
 {
@@ -1724,6 +1739,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
       if (entrypoint_args->context->argv)
         {
+          erase_initial_environment (entrypoint_args->context->argv, entrypoint_args->context->argc);
           rewrite_argv (entrypoint_args->context->argv, entrypoint_args->context->argc,
                         entrypoint_args->custom_handler->vtable->name, def->process->args,
                         def->process->args_len);
@@ -3999,6 +4015,9 @@ exec_process_entrypoint (libcrun_context_t *context,
     {
       if (custom_handler->vtable->exec_func == NULL)
         return crun_make_error (err, 0, "the handler does not support exec");
+
+      if (context->argv)
+        erase_initial_environment (context->argv, context->argc);
 
       ret = custom_handler->vtable->exec_func (custom_handler->cookie,
                                                container,
