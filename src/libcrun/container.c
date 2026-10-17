@@ -34,6 +34,8 @@
 #include <stdbool.h>
 #include <argp.h>
 #include <unistd.h>
+#include <time.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sched.h>
@@ -949,34 +951,129 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
           actual_err_fd = capture_err_pipe[1];
         }
 
-      ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
-                                                 stdin, stdin_len, actual_out_fd, actual_err_fd, can_ignore_chdir_errors, err);
-      if (UNLIKELY (ret < 0))
-        error_created = true;
-
-      /* Close write ends of capture pipes */
-      if (capture_out_pipe[1] >= 0)
-        close (capture_out_pipe[1]);
-      if (capture_err_pipe[1] >= 0)
-        close (capture_err_pipe[1]);
-
-      /* Read captured output if hook failed */
-      if (ret != 0)
+      /* For capture, use fork/exec directly with concurrent draining */
+      if (capture_out_pipe[0] >= 0 || capture_err_pipe[0] >= 0)
         {
+          int stdin_pipe[2];
+          pid_t pid;
+          sigset_t oldmask, mask;
+          int child_exited = 0;
+          size_t stdin_written = 0;
+          struct pollfd pfds[4];
+          int nfds = 0;
+          int out_idx = -1, err_idx = -1, stdin_idx = -1;
+          time_t timeout_start = 0;
+          int r, status;
+
+          sigemptyset (&mask);
+
+          ret = pipe2 (stdin_pipe, O_CLOEXEC);
+          if (UNLIKELY (ret < 0))
+            {
+              libcrun_error (errno, "pipe");
+              break;
+            }
+
+          if (hooks[i]->timeout > 0)
+            {
+              sigaddset (&mask, SIGCHLD);
+              ret = sigprocmask (SIG_BLOCK, &mask, &oldmask);
+              if (UNLIKELY (ret < 0))
+                {
+                  close (stdin_pipe[0]);
+                  close (stdin_pipe[1]);
+                  libcrun_error (errno, "sigprocmask");
+                  break;
+                }
+              timeout_start = time (NULL);
+            }
+
+          pid = fork ();
+          if (UNLIKELY (pid < 0))
+            {
+              close (stdin_pipe[0]);
+              close (stdin_pipe[1]);
+              if (hooks[i]->timeout > 0)
+                sigprocmask (SIG_UNBLOCK, &oldmask, NULL);
+              libcrun_error (errno, "fork");
+              break;
+            }
+
+          if (pid == 0)
+            {
+              /* Child process - reuse run_process_child logic */
+              char *tmp_args[] = { hooks[i]->path, NULL };
+              char **use_env = hooks[i]->env ? hooks[i]->env : environ;
+              int dev_null_fd = -1;
+
+              /* Close unused pipe ends */
+              close (stdin_pipe[1]);
+              if (capture_out_pipe[1] >= 0)
+                close (capture_out_pipe[1]);
+              if (capture_err_pipe[1] >= 0)
+                close (capture_err_pipe[1]);
+
+              /* Set up stdin, stdout, stderr */
+              dup2 (stdin_pipe[0], 0);
+              close (stdin_pipe[0]);
+
+              if (actual_out_fd >= 0)
+                {
+                  dup2 (actual_out_fd, 1);
+                  close (actual_out_fd);
+                }
+              else
+                {
+                  dev_null_fd = open ("/dev/null", O_WRONLY);
+                  dup2 (dev_null_fd, 1);
+                  close (dev_null_fd);
+                }
+
+              if (actual_err_fd >= 0)
+                {
+                  dup2 (actual_err_fd, 2);
+                  close (actual_err_fd);
+                }
+              else
+                {
+                  if (dev_null_fd < 0)
+                    dev_null_fd = open ("/dev/null", O_WRONLY);
+                  dup2 (dev_null_fd, 2);
+                  close (dev_null_fd);
+                }
+
+              if (cwd && chdir (cwd) < 0)
+                {
+                  if (! can_ignore_chdir_errors || (errno != EACCES && errno != EPERM))
+                    _exit (EXIT_FAILURE);
+                }
+
+              if (hooks[i]->args == NULL)
+                hooks[i]->args = tmp_args;
+
+              execvpe (hooks[i]->path, hooks[i]->args, use_env);
+              _exit (EXIT_FAILURE);
+            }
+
+          /* Parent process */
+          close (stdin_pipe[0]);
+
+          /* Set up pollfds for concurrent I/O */
+          if (stdin_len > 0 && stdin)
+            {
+              pfds[nfds].fd = stdin_pipe[1];
+              pfds[nfds].events = POLLOUT;
+              stdin_idx = nfds++;
+            }
+
           if (capture_out_pipe[0] >= 0)
             {
               int flags = fcntl (capture_out_pipe[0], F_GETFL, 0);
               if (flags >= 0)
                 fcntl (capture_out_pipe[0], F_SETFL, flags | O_NONBLOCK);
-              ssize_t r;
-              while (out_read < sizeof (out_buf) - 1)
-                {
-                  r = TEMP_FAILURE_RETRY (read (capture_out_pipe[0], out_buf + out_read, sizeof (out_buf) - 1 - out_read));
-                  if (r <= 0)
-                    break;
-                  out_read += r;
-                }
-              close (capture_out_pipe[0]);
+              pfds[nfds].fd = capture_out_pipe[0];
+              pfds[nfds].events = POLLIN;
+              out_idx = nfds++;
             }
 
           if (capture_err_pipe[0] >= 0)
@@ -984,25 +1081,174 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
               int flags = fcntl (capture_err_pipe[0], F_GETFL, 0);
               if (flags >= 0)
                 fcntl (capture_err_pipe[0], F_SETFL, flags | O_NONBLOCK);
-              ssize_t r;
-              while (err_read < sizeof (err_buf) - 1)
-                {
-                  r = TEMP_FAILURE_RETRY (read (capture_err_pipe[0], err_buf + err_read, sizeof (err_buf) - 1 - err_read));
-                  if (r <= 0)
-                    break;
-                  err_read += r;
-                }
-              close (capture_err_pipe[0]);
+              pfds[nfds].fd = capture_err_pipe[0];
+              pfds[nfds].events = POLLIN;
+              err_idx = nfds++;
             }
-        }
-      else
-        {
-          /* Close read ends on success */
+
+          /* Concurrent I/O loop */
+          while (! child_exited && (stdin_idx >= 0 || out_idx >= 0 || err_idx >= 0))
+            {
+              int poll_timeout = 100;
+
+              ret = poll (pfds, nfds, poll_timeout);
+              if (ret < 0)
+                {
+                  if (errno == EINTR)
+                    continue;
+                  break;
+                }
+
+              /* Check for child exit with WNOHANG */
+              if (! child_exited)
+                {
+                  r = waitpid (pid, &status, WNOHANG);
+                  if (r > 0)
+                    {
+                      child_exited = 1;
+                    }
+                  else if (r < 0 && errno != EINTR)
+                    {
+                      break;
+                    }
+                }
+
+              /* Handle stdout */
+              if (out_idx >= 0 && (pfds[out_idx].revents & (POLLIN | POLLHUP)))
+                {
+                  if (out_read < sizeof (out_buf) - 1)
+                    {
+                      ssize_t n = TEMP_FAILURE_RETRY (read (capture_out_pipe[0], out_buf + out_read, sizeof (out_buf) - 1 - out_read));
+                      if (n > 0)
+                        out_read += n;
+                      else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
+                        {
+                          close (capture_out_pipe[0]);
+                          capture_out_pipe[0] = -1;
+                          out_idx = -1;
+                        }
+                    }
+                  else
+                    {
+                      char drain_buf[4096];
+                      TEMP_FAILURE_RETRY (read (capture_out_pipe[0], drain_buf, sizeof (drain_buf)));
+                    }
+                }
+
+              /* Handle stderr */
+              if (err_idx >= 0 && (pfds[err_idx].revents & (POLLIN | POLLHUP)))
+                {
+                  if (err_read < sizeof (err_buf) - 1)
+                    {
+                      ssize_t n = TEMP_FAILURE_RETRY (read (capture_err_pipe[0], err_buf + err_read, sizeof (err_buf) - 1 - err_read));
+                      if (n > 0)
+                        err_read += n;
+                      else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
+                        {
+                          close (capture_err_pipe[0]);
+                          capture_err_pipe[0] = -1;
+                          err_idx = -1;
+                        }
+                    }
+                  else
+                    {
+                      char drain_buf[4096];
+                      TEMP_FAILURE_RETRY (read (capture_err_pipe[0], drain_buf, sizeof (drain_buf)));
+                    }
+                }
+
+              /* Handle stdin */
+              if (stdin_idx >= 0 && (pfds[stdin_idx].revents & POLLOUT))
+                {
+                  ssize_t n = TEMP_FAILURE_RETRY (write (stdin_pipe[1], stdin + stdin_written, stdin_len - stdin_written));
+                  if (n > 0)
+                    {
+                      stdin_written += n;
+                      if (stdin_written >= stdin_len)
+                        {
+                          close (stdin_pipe[1]);
+                          stdin_idx = -1;
+                        }
+                    }
+                  else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                    {
+                      if (errno != EPIPE)
+                        break;
+                      close (stdin_pipe[1]);
+                      stdin_idx = -1;
+                    }
+                }
+
+              /* Check timeout */
+              if (hooks[i]->timeout > 0 && ! child_exited)
+                {
+                  time_t now = time (NULL);
+                  if (now - timeout_start >= hooks[i]->timeout)
+                    {
+                      kill (pid, SIGKILL);
+                      ret = -1;
+                      libcrun_error (0, "timeout expired for `%s`", hooks[i]->path);
+                      error_created = true;
+                      break;
+                    }
+                }
+            }
+
+          /* Final waitpid if child hasn't exited yet */
+          if (! child_exited)
+            {
+              r = waitpid (pid, &status, 0);
+              if (r < 0)
+                {
+                  ret = -1;
+                  libcrun_error (errno, "waitpid");
+                  error_created = true;
+                }
+              else
+                {
+                  ret = get_process_exit_status (status);
+                }
+            }
+          else
+            {
+              ret = get_process_exit_status (status);
+            }
+
+          /* Close remaining descriptors */
+          if (stdin_pipe[1] >= 0)
+            close (stdin_pipe[1]);
           if (capture_out_pipe[0] >= 0)
             close (capture_out_pipe[0]);
           if (capture_err_pipe[0] >= 0)
             close (capture_err_pipe[0]);
+          if (capture_out_pipe[1] >= 0)
+            close (capture_out_pipe[1]);
+          if (capture_err_pipe[1] >= 0)
+            close (capture_err_pipe[1]);
+
+          if (hooks[i]->timeout > 0)
+            sigprocmask (SIG_UNBLOCK, &oldmask, NULL);
+
+          /* NUL-terminate captured output */
+          if (out_read < sizeof (out_buf))
+            out_buf[out_read] = '\0';
+          if (err_read < sizeof (err_buf))
+            err_buf[err_read] = '\0';
         }
+      else
+        {
+          /* No capture, use existing runner */
+          ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
+                                                     stdin, stdin_len, actual_out_fd, actual_err_fd, can_ignore_chdir_errors, err);
+          if (UNLIKELY (ret < 0))
+            error_created = true;
+        }
+
+      /* Close write ends of capture pipes */
+      if (capture_out_pipe[1] >= 0)
+        close (capture_out_pipe[1]);
+      if (capture_err_pipe[1] >= 0)
+        close (capture_err_pipe[1]);
 
       if (UNLIKELY (ret != 0))
         {
