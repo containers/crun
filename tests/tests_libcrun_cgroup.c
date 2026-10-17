@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <libcrun/cgroup-internal.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 /* Test read_proc_cgroup with cgroup v2 content */
 static int
@@ -270,28 +270,9 @@ test_read_proc_cgroup_selective ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
   RUN_TEST (test_read_proc_cgroup_v2);
   RUN_TEST (test_read_proc_cgroup_v1);
   RUN_TEST (test_read_proc_cgroup_empty);
@@ -300,6 +281,6 @@ main ()
   RUN_TEST (test_convert_shares_boundary);
   RUN_TEST (test_read_proc_cgroup_null_params);
   RUN_TEST (test_read_proc_cgroup_selective);
-  printf ("1..%d\n", id - 1);
+  print_tap_plan ();
   return 0;
 }

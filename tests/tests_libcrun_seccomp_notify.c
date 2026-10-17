@@ -22,7 +22,7 @@
 #include <libcrun/error.h>
 #include <errno.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 /* Test cleanup function with NULL */
 static int
@@ -145,33 +145,14 @@ test_notify_no_seccomp ()
 #endif
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
   RUN_TEST (test_cleanup_null);
   RUN_TEST (test_free_null_context);
   RUN_TEST (test_load_invalid_path);
   RUN_TEST (test_load_nonexistent_plugin);
   RUN_TEST (test_notify_no_seccomp);
-  printf ("1..%d\n", id - 1);
+  print_tap_plan ();
   return 0;
 }

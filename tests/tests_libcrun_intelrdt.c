@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include <string.h>
 
-typedef int (*test) ();
+#include "tap.h"
 
 extern int compare_rdt_configurations (const char *a, const char *b);
 extern char *intelrdt_clean_l3_cache_schema (const char *l3_cache_schema);
@@ -133,31 +133,12 @@ test_get_rdt_value ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
   RUN_TEST (test_compare_rdt_configurations);
   RUN_TEST (test_intelrdt_clean_l3_cache_schema);
   RUN_TEST (test_get_rdt_value);
-  printf ("1..%d\n", id - 1);
+  print_tap_plan ();
   return 0;
 }

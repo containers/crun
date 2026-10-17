@@ -57,7 +57,7 @@
 #  define CLONE_NEWTIME 0x00000080
 #endif
 
-typedef int (*test) ();
+#include "tap.h"
 
 /* Test libcrun_find_namespace function */
 static int
@@ -469,28 +469,9 @@ test_rlimits_zero_length ()
   return 0;
 }
 
-static void
-run_and_print_test_result (const char *name, int id, test t)
-{
-  int ret = t ();
-  if (ret == 0)
-    printf ("ok %d - %s\n", id, name);
-  else if (ret == 77)
-    printf ("ok %d - %s #SKIP\n", id, name);
-  else
-    printf ("not ok %d - %s\n", id, name);
-}
-
-#define RUN_TEST(T)                            \
-  do                                           \
-    {                                          \
-      run_and_print_test_result (#T, id++, T); \
-  } while (0)
-
 int
 main ()
 {
-  int id = 1;
   RUN_TEST (test_find_namespace);
   RUN_TEST (test_path_is_slash_dev_linux);
   RUN_TEST (test_reopen_dev_null);
@@ -503,6 +484,6 @@ main ()
   RUN_TEST (test_sysctl_key_to_proc_path);
   RUN_TEST (test_sysctl_reject_invalid_path);
   RUN_TEST (test_rlimits_zero_length);
-  printf ("1..%d\n", id - 1);
+  print_tap_plan ();
   return 0;
 }
