@@ -4945,7 +4945,7 @@ libcrun_init_caps (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 static int
-set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_privs, libcrun_error_t *err)
+set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_privs, bool no_exec, libcrun_error_t *err)
 {
 #ifdef HAVE_CAP
   unsigned long cap;
@@ -5004,6 +5004,31 @@ set_required_caps (struct all_caps_s *caps, uid_t uid, gid_t gid, int no_new_pri
           return crun_make_error (err, errno, "prctl ambient raise");
       }
 #  endif
+
+  /* If the workload runs in the current process, there is no execve(2) that resets KEEPCAPS and,
+     for a non-root user, leaves only the ambient set in the permitted and effective sets.  */
+  if (no_exec)
+    {
+      ret = prctl (PR_SET_KEEPCAPS, 0, 0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "prctl reset KEEPCAPS");
+
+      if (uid != 0)
+        {
+          data[0].permitted = data[1].permitted = 0;
+#  ifdef PR_CAP_AMBIENT
+          for (cap = 0; cap <= cap_last_cap; cap++)
+            if (prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_IS_SET, cap, 0, 0) > 0)
+              data[cap / 32].permitted |= CAP_TO_MASK_0 (cap);
+#  endif
+          data[0].effective = data[0].permitted;
+          data[1].effective = data[1].permitted;
+
+          ret = capset (&hdr, data);
+          if (UNLIKELY (ret < 0))
+            return crun_make_error (err, errno, "capset");
+        }
+    }
 #endif
 
   if (no_new_privs)
@@ -5055,7 +5080,7 @@ libcrun_set_apparmor_profile (libcrun_container_t *container, runtime_spec_schem
 
 int
 libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabilities, uid_t uid, gid_t gid,
-                  int no_new_privileges, libcrun_error_t *err)
+                  int no_new_privileges, bool no_exec, libcrun_error_t *err)
 {
   struct all_caps_s caps = {};
   int ret;
@@ -5082,7 +5107,7 @@ libcrun_set_caps (runtime_spec_schema_config_schema_process_capabilities *capabi
       if (UNLIKELY (ret < 0))
         return ret;
     }
-  return set_required_caps (&caps, uid, gid, no_new_privileges, err);
+  return set_required_caps (&caps, uid, gid, no_new_privileges, no_exec, err);
 }
 
 struct rlimit_s

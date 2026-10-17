@@ -1308,7 +1308,8 @@ apply_security_settings (struct container_entrypoint_s *entrypoint_args, runtime
 
   capabilities = def->process ? def->process->capabilities : NULL;
   no_new_privs = def->process ? def->process->no_new_privileges : 1;
-  ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs, err);
+  ret = libcrun_set_caps (capabilities, container->container_uid, container->container_gid, no_new_privs,
+                          entrypoint_args->custom_handler != NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3970,7 +3971,8 @@ exec_process_entrypoint (libcrun_context_t *context,
   else if (container->container_def->process)
     capabilities = container->container_def->process->capabilities;
 
-  ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges, err);
+  ret = libcrun_set_caps (capabilities, container_uid, container_gid, process->no_new_privileges,
+                          custom_handler != NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
