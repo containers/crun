@@ -97,7 +97,7 @@ def test_deny_devices():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -124,7 +124,7 @@ def test_deny_devices():
 def test_create_or_bind_mount_device():
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -152,7 +152,7 @@ def test_allow_device():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -182,7 +182,7 @@ def test_allow_access():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -313,17 +313,17 @@ def test_net_devices():
                     if "address: 10.1.2.3" not in out[0]:
                         logger.info("address not found in output")
                         logger.info("full output: %s", out[0])
-                        return 1
+                        return -1
                     if specify_broadcast:
                         if "broadcast: 10.1.2.254" not in out[0]:
                             logger.info("broadcast address not found in output")
                             logger.info("full output: %s", out[0])
-                            return 1
+                            return -1
                     else:
                         if "broadcast" in out[0]:
                             logger.info("broadcast address found in output when it shouldn't be")
                             logger.info("full output: %s", out[0])
-                            return 1
+                            return -1
                 except Exception as e:
                     logger.info("test_net_devices exception: %s", e)
                     return -1
@@ -613,12 +613,12 @@ def test_allow_device_read_only():
     try:
         # Best effort load
         subprocess.run(["modprobe", "null_blk", "nr_devices=1"])
-    except:
+    except OSError:
         pass
     try:
         st = os.stat("/dev/nullb0")
         major, minor = os.major(st.st_rdev), os.minor(st.st_rdev)
-    except:
+    except OSError:
         return (77, "/dev/nullb0 device not available")
 
     conf = base_config()
@@ -649,16 +649,16 @@ def test_allow_device_read_only():
     try:
         run_and_get_output(conf)
         logger.info("test_allow_device_read_only: write access was unexpectedly allowed.")
-        return 1
+        return -1
     except Exception as e:
         output_str = getattr(e, 'output', b'').decode(errors='ignore')
         if "Operation not permitted" in output_str or "Permission denied" in output_str:
             return 0
         else:
             logger.info("test_allow_device_read_only (write attempt) failed with: %s, output: %s", e, output_str)
-            return 1
+            return -1
 
-    return 1
+    return -1
 
 def test_deny_device_write():
     if is_rootless():
@@ -666,7 +666,7 @@ def test_deny_device_write():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -703,12 +703,12 @@ def test_deny_device_write():
         try:
             run_and_get_output(conf)
             logger.info("test_deny_device_write: %s was unexpectedly allowed.", mode)
-            return 1
+            return -1
         except Exception as e:
             output_str = getattr(e, 'output', b'').decode(errors='ignore')
             if "Operation not permitted" not in output_str:
                 logger.info("test_deny_device_write (%s) failed with: %s, output: %s", mode, e, output_str)
-                return 1
+                return -1
 
     return 0
 
