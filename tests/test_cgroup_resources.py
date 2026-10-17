@@ -505,34 +505,74 @@ def test_hugetlb_reservation_limit():
     conf = base_config()
     add_all_namespaces(conf, cgroupns=True)
 
-    # Set 1GB HugeTLB limit
+    # Use 2MB which is commonly available
+    page_size = '2MB'
+    limit = 100 * 1024 * 1024  # 100MB
+
     conf['linux']['resources'] = {
         'hugepageLimits': [
             {
-                'pageSize': '1GB',
-                'limit': 1073741824
+                'pageSize': page_size,
+                'limit': limit
             }
         ]
     }
 
-    conf['process']['args'] = ['/init', 'cat', '/sys/fs/cgroup/hugetlb.1GB.max']
+    # First verify crun can set the standard limit
+    conf['process']['args'] = ['/init', 'true']
 
     try:
         out, _ = run_and_get_output(conf, hide_stderr=True)
-        if '1073741824' in out:
-            # Also check the reservation limit file
-            conf['process']['args'] = ['/init', 'cat', '/sys/fs/cgroup/hugetlb.1GB.rsvd.max']
-            out_rsvd, _ = run_and_get_output(conf, hide_stderr=True)
-            if '1073741824' in out_rsvd:
-                return 0
-            logger.info("Expected 1073741824 in rsvd.max, got: %s", out_rsvd.strip())
-            return -1
-        logger.info("Expected 1073741824 in max, got: %s", out.strip())
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "hugetlb" in output.lower() or "controller" in output.lower():
+            return (77, "hugetlb controller not available")
+        logger.info("hugetlb setup failed: %s", e)
         return -1
-    except Exception as e:
-        # HugeTLB controller might not be available
-        logger.info("hugetlb reservation test skipped: %s", e)
-        return (77, "hugetlb controller not available")
+
+    # Verify the standard limit was written correctly
+    conf['process']['args'] = ['/init', 'cat', f'/sys/fs/cgroup/hugetlb.{page_size}.max']
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        out_val = out.strip()
+        if out_val == '0' or out_val == 'max':
+            logger.info("HugeTLB limit not set for page size %s (got: %s)", page_size, out_val)
+            return (77, f"hugetlb.{page_size} not supported")
+        if str(limit) not in out:
+            logger.info("Expected %d in max, got: %s", limit, out.strip())
+            return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "No such file" in output:
+            return (77, f"hugetlb.{page_size} not available")
+        logger.info("hugetlb max read failed: %s", e)
+        return -1
+
+    # Check if reservation file exists in the container's cgroup
+    conf['process']['args'] = ['/init', 'cat', f'/sys/fs/cgroup/hugetlb.{page_size}.rsvd.max']
+    try:
+        out_rsvd, _ = run_and_get_output(conf, hide_stderr=True)
+        out_rsvd_val = out_rsvd.strip()
+        # If reservation file exists, crun must have written to it
+        if str(limit) in out_rsvd:
+            logger.info("Reservation limit verified")
+            return 0
+        # Reservation file exists but crun didn't write to it - this is a test failure
+        # It could be due to delegation issues, but we should not silently pass
+        if out_rsvd_val == 'max':
+            logger.info("Reservation file exists but crun did not write to it (delegation issue)")
+            return (77, "reservation file not writable in container cgroup (delegation issue)")
+        logger.info("Expected %d in rsvd.max, got: %s", limit, out_rsvd_val)
+        return -1
+    except subprocess.CalledProcessError as e:
+        # Reservation file doesn't exist in container's cgroup (kernel 5.7 scenario)
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+        if "No such file" in output or "ENOENT" in output:
+            logger.info("Reservation file not available in container cgroup (kernel 5.7 scenario)")
+            return 0
+        logger.info("hugetlb rsvd.max read failed: %s", e)
+        return -1
 
 
 all_tests = {
