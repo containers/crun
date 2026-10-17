@@ -97,7 +97,7 @@ def test_deny_devices():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -124,7 +124,7 @@ def test_deny_devices():
 def test_create_or_bind_mount_device():
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -152,7 +152,7 @@ def test_allow_device():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -182,7 +182,7 @@ def test_allow_access():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
@@ -613,12 +613,12 @@ def test_allow_device_read_only():
     try:
         # Best effort load
         subprocess.run(["modprobe", "null_blk", "nr_devices=1"])
-    except:
+    except OSError:
         pass
     try:
         st = os.stat("/dev/nullb0")
         major, minor = os.major(st.st_rdev), os.minor(st.st_rdev)
-    except:
+    except OSError:
         return (77, "/dev/nullb0 device not available")
 
     conf = base_config()
@@ -666,7 +666,7 @@ def test_deny_device_write():
 
     try:
         os.stat("/dev/fuse")
-    except:
+    except OSError:
         return (77, "/dev/fuse device not available")
 
     conf = base_config()
