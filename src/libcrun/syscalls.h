@@ -94,6 +94,10 @@
 #  define MOUNT_ATTR_NOSYMFOLLOW 0x00200000
 #endif
 
+#ifndef MS_NOSYMFOLLOW
+#  define MS_NOSYMFOLLOW 256
+#endif
+
 /* close_range flags */
 #ifndef CLOSE_RANGE_CLOEXEC
 #  define CLOSE_RANGE_CLOEXEC (1U << 2)
