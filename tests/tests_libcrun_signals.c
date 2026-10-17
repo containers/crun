@@ -524,7 +524,6 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..12\n");
   RUN_TEST (test_str2sig_common_signals);
   RUN_TEST (test_str2sig_with_sig_prefix);
   RUN_TEST (test_str2sig_numeric_strings);
@@ -537,5 +536,6 @@ main ()
   RUN_TEST (test_str2sig_all_rtmin_signals);
   RUN_TEST (test_str2sig_all_rtmax_signals);
   RUN_TEST (test_str2sig_numeric_edge_cases);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

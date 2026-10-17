@@ -404,7 +404,6 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..11\n");
   RUN_TEST (test_null_chroot);
   RUN_TEST (test_empty_chroot);
   RUN_TEST (test_root_chroot);
@@ -416,5 +415,6 @@ main ()
   RUN_TEST (test_trailing_slash);
   RUN_TEST (test_deep_path);
   RUN_TEST (test_symlinks);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

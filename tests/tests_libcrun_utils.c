@@ -1248,11 +1248,6 @@ int
 main ()
 {
   int id = 1;
-#ifdef HAVE_SYSTEMD
-  printf ("1..25\n");
-#else
-  printf ("1..22\n");
-#endif
   RUN_TEST (test_crun_path_exists);
   RUN_TEST (test_write_read_file);
   RUN_TEST (test_run_process);
@@ -1280,5 +1275,6 @@ main ()
   RUN_TEST (test_get_scope_path);
   RUN_TEST (test_cpuset_string_to_bitmask);
 #endif
+  printf ("1..%d\n", id - 1);
   return 0;
 }

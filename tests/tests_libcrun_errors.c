@@ -282,7 +282,6 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..9\n");
   RUN_TEST (test_crun_make_error);
   RUN_TEST (test_crun_write_warning_and_release);
   RUN_TEST (test_crun_error_wrap);
@@ -292,5 +291,6 @@ main ()
   RUN_TEST (test_crun_error_release_null);
   RUN_TEST (test_crun_error_release_preserves_errno);
   RUN_TEST (test_crun_write_warning_and_release_preserves_errno);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

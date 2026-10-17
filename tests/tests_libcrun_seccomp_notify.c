@@ -167,11 +167,11 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..5\n");
   RUN_TEST (test_cleanup_null);
   RUN_TEST (test_free_null_context);
   RUN_TEST (test_load_invalid_path);
   RUN_TEST (test_load_nonexistent_plugin);
   RUN_TEST (test_notify_no_seccomp);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

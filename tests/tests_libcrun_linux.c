@@ -491,7 +491,6 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..12\n");
   RUN_TEST (test_find_namespace);
   RUN_TEST (test_path_is_slash_dev_linux);
   RUN_TEST (test_reopen_dev_null);
@@ -504,5 +503,6 @@ main ()
   RUN_TEST (test_sysctl_key_to_proc_path);
   RUN_TEST (test_sysctl_reject_invalid_path);
   RUN_TEST (test_rlimits_zero_length);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

@@ -155,9 +155,9 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..3\n");
   RUN_TEST (test_compare_rdt_configurations);
   RUN_TEST (test_intelrdt_clean_l3_cache_schema);
   RUN_TEST (test_get_rdt_value);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

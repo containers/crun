@@ -175,11 +175,11 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..5\n");
   RUN_TEST (test_known_flags_found);
   RUN_TEST (test_unknown_flags);
   RUN_TEST (test_flag_names);
   RUN_TEST (test_clear_field);
   RUN_TEST (test_extra_flags);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

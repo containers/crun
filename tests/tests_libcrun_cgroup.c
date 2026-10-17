@@ -292,7 +292,6 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..8\n");
   RUN_TEST (test_read_proc_cgroup_v2);
   RUN_TEST (test_read_proc_cgroup_v1);
   RUN_TEST (test_read_proc_cgroup_empty);
@@ -301,5 +300,6 @@ main ()
   RUN_TEST (test_convert_shares_boundary);
   RUN_TEST (test_read_proc_cgroup_null_params);
   RUN_TEST (test_read_proc_cgroup_selective);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

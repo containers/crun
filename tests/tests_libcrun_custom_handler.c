@@ -120,11 +120,11 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..3\n");
-
   RUN_TEST (test_handler_manager_create_free);
   RUN_TEST (test_handler_by_name_not_found);
   RUN_TEST (test_handler_by_name_empty);
+
+  printf ("1..%d\n", id - 1);
 
   return 0;
 }

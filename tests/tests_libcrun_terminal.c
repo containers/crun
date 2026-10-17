@@ -255,7 +255,6 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..7\n");
   RUN_TEST (test_cleanup_terminalp_null);
   RUN_TEST (test_terminal_setup_size_invalid_fd);
   RUN_TEST (test_terminal_setup_size_pty);
@@ -263,5 +262,6 @@ main ()
   RUN_TEST (test_set_raw_pty);
   RUN_TEST (test_set_raw_no_status);
   RUN_TEST (test_new_terminal);
+  printf ("1..%d\n", id - 1);
   return 0;
 }

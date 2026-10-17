@@ -1014,13 +1014,12 @@ int
 main ()
 {
   int id = 1;
-  printf ("1..6\n");
-
   RUN_TEST (test_ring_buffer_read_write);
   RUN_TEST (test_ring_buffer_wraparound_data_integrity);
   RUN_TEST (test_ring_buffer_reserved_byte_boundary);
   RUN_TEST (test_ring_buffer_no_reserved_byte_access);
   RUN_TEST (test_ring_buffer_wraparound_partial_drain);
   RUN_TEST (test_ring_buffer_stress_partial_drain);
+  printf ("1..%d\n", id - 1);
   return 0;
 }
