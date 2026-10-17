@@ -568,13 +568,13 @@ static void
 show_criu_log (const char *work_path, const char *log)
 {
   cleanup_free char *log_path = NULL;
-  libcrun_error_t *tmp_err = NULL;
+  libcrun_error_t tmp_err = NULL;
   char line[1024];
   FILE *f;
 
-  if (UNLIKELY (append_paths (&log_path, tmp_err, work_path, log, NULL)) < 0)
+  if (UNLIKELY (append_paths (&log_path, &tmp_err, work_path, log, NULL) < 0))
     {
-      crun_error_release (tmp_err);
+      crun_error_release (&tmp_err);
       return;
     }
 
