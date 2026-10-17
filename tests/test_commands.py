@@ -336,6 +336,50 @@ def test_run_forward_signal():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_kill_zombie_leader():
+    """Test that a container whose main thread exited on its own is still running and can be killed."""
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'exit-main-thread']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        pid = json.loads(run_crun_command(['state', cid]))['pid']
+
+        # Wait for the thread group leader to become a zombie
+        for _ in range(100):
+            with open("/proc/%d/stat" % pid) as f:
+                if f.read().rsplit(')', 1)[1].split()[0] == 'Z':
+                    break
+            time.sleep(0.1)
+        else:
+            logger.info("the main thread did not exit")
+            return -1
+
+        state = json.loads(run_crun_command(['state', cid]))
+        if state['status'] != 'running':
+            logger.info("container not in running state: %s", state['status'])
+            return -1
+
+        run_crun_command(['kill', cid, 'SIGKILL'])
+
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("container not stopped after SIGKILL")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 def test_kill_all():
     """Test kill command with --all flag."""
     if is_rootless():
@@ -804,6 +848,7 @@ all_tests = {
     "kill-signal": test_kill_signal,
     "kill-signal-number": test_kill_signal_number,
     "kill-sigterm": test_kill_sigterm,
+    "kill-zombie-leader": test_kill_zombie_leader,
     "kill-all": test_kill_all,
     "kill-all-threaded": test_kill_all_threaded,
     "run-forward-signal": test_run_forward_signal,

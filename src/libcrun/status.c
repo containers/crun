@@ -42,6 +42,7 @@
 struct pid_stat
 {
   char state;
+  long num_threads;
   unsigned long long starttime;
 };
 
@@ -192,6 +193,7 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   if (ret < 0)
     {
       st->starttime = 0;
+      st->num_threads = 0;
       st->state = 'X';
       /* The process already exited.  */
       libcrun_error_release (err);
@@ -214,11 +216,17 @@ read_pid_stat (pid_t pid, struct pid_stat *st, libcrun_error_t *err)
   st->state = *s;
 
   /* Seek to the starttime argument.  */
-  for (it = s + 1, i = 0; i < 19 && it != NULL; i++, it = strchr (it, ' ') + 1)
-    ;
+  for (it = s + 1, i = 0; i < 19; i++)
+    {
+      it = strchr (it, ' ');
+      if (it == NULL)
+        return crun_make_error (err, 0, "could not read process start time");
+      it++;
 
-  if (it == NULL || i != 19)
-    return crun_make_error (err, 0, "could not read process start time");
+      /* num_threads is the second argument before starttime.  */
+      if (i == 16)
+        st->num_threads = strtol (it, NULL, 10);
+    }
 
   errno = 0;
   st->starttime = strtoull (it, NULL, 10);
@@ -713,7 +721,13 @@ libcrun_check_pid_valid (libcrun_container_status_t *status, libcrun_error_t *er
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (status->process_start_time != st.starttime || st.state == 'Z' || st.state == 'X')
+  if (status->process_start_time != st.starttime || st.state == 'X')
+    return 0; /* stopped */
+
+  /* /proc/PID/stat describes only the thread group leader.  If it exited on
+     its own, it stays a zombie while other threads of the process are still
+     running.  */
+  if (st.state == 'Z' && st.num_threads <= 1)
     return 0; /* stopped */
 
   return 1; /* running, created, or paused */

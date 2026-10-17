@@ -353,6 +353,14 @@ do_pause ()
 }
 
 static int
+pause_thread (void *arg)
+{
+  (void) arg;
+  do_pause ();
+  return 0;
+}
+
+static int
 memhog (int megabytes)
 {
   size_t page_size, size, pos;
@@ -824,6 +832,17 @@ main (int argc, char **argv)
       if (signal (SIGUSR1, handle_signal) == SIG_ERR)
         error (EXIT_FAILURE, errno, "signal SIGUSR1");
       do_pause ();
+    }
+  if (strcmp (argv[1], "exit-main-thread") == 0)
+    {
+      /* Leave the thread group leader as a zombie while another thread of
+         the process keeps running.  */
+      static char stack[64 * 1024] __attribute__ ((aligned (16)));
+      int flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD;
+
+      if (clone (pause_thread, stack + sizeof (stack), flags, NULL) < 0)
+        error (EXIT_FAILURE, errno, "clone");
+      syscall (__NR_exit, 0);
     }
   if (strcmp (argv[1], "memhog") == 0)
     {
