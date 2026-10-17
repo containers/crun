@@ -852,6 +852,8 @@ get_bundle_path (const char *bundle, char **allocated)
   return *allocated;
 }
 
+#define HOOK_OUTPUT_MAX 4096
+
 static int
 do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, bool keep_going, const char *bundle,
           const char *cwd, const char *status, const char *name, hook **hooks, size_t hooks_len, int out_fd,
@@ -904,6 +906,13 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   for (i = 0; i < hooks_len; i++)
     {
       char **env = environ;
+      int capture_out_pipe[2] = {-1, -1};
+      int capture_err_pipe[2] = {-1, -1};
+      char out_buf[HOOK_OUTPUT_MAX] = {0};
+      char err_buf[HOOK_OUTPUT_MAX] = {0};
+      size_t out_read = 0, err_read = 0;
+      int actual_out_fd = out_fd;
+      int actual_err_fd = err_fd;
 
       if (hooks[i]->env)
         env = hooks[i]->env;
@@ -915,18 +924,141 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
           error_created = false;
         }
 
+      /* Create capture pipes if annotations are not set */
+      if (out_fd < 0)
+        {
+          if (pipe (capture_out_pipe) < 0)
+            {
+              libcrun_error (errno, "create stdout pipe");
+              break;
+            }
+          actual_out_fd = capture_out_pipe[1];
+        }
+
+      if (err_fd < 0)
+        {
+          if (pipe (capture_err_pipe) < 0)
+            {
+              if (capture_out_pipe[0] >= 0)
+                close (capture_out_pipe[0]);
+              if (capture_out_pipe[1] >= 0)
+                close (capture_out_pipe[1]);
+              libcrun_error (errno, "create stderr pipe");
+              break;
+            }
+          actual_err_fd = capture_err_pipe[1];
+        }
+
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
-                                                 stdin, stdin_len, out_fd, err_fd, can_ignore_chdir_errors, err);
+                                                 stdin, stdin_len, actual_out_fd, actual_err_fd, can_ignore_chdir_errors, err);
       if (UNLIKELY (ret < 0))
         error_created = true;
 
+      /* Close write ends of capture pipes */
+      if (capture_out_pipe[1] >= 0)
+        close (capture_out_pipe[1]);
+      if (capture_err_pipe[1] >= 0)
+        close (capture_err_pipe[1]);
+
+      /* Read captured output if hook failed */
+      if (ret != 0)
+        {
+          if (capture_out_pipe[0] >= 0)
+            {
+              int flags = fcntl (capture_out_pipe[0], F_GETFL, 0);
+              if (flags >= 0)
+                fcntl (capture_out_pipe[0], F_SETFL, flags | O_NONBLOCK);
+              ssize_t r;
+              while (out_read < sizeof (out_buf) - 1)
+                {
+                  r = TEMP_FAILURE_RETRY (read (capture_out_pipe[0], out_buf + out_read, sizeof (out_buf) - 1 - out_read));
+                  if (r <= 0)
+                    break;
+                  out_read += r;
+                }
+              close (capture_out_pipe[0]);
+            }
+
+          if (capture_err_pipe[0] >= 0)
+            {
+              int flags = fcntl (capture_err_pipe[0], F_GETFL, 0);
+              if (flags >= 0)
+                fcntl (capture_err_pipe[0], F_SETFL, flags | O_NONBLOCK);
+              ssize_t r;
+              while (err_read < sizeof (err_buf) - 1)
+                {
+                  r = TEMP_FAILURE_RETRY (read (capture_err_pipe[0], err_buf + err_read, sizeof (err_buf) - 1 - err_read));
+                  if (r <= 0)
+                    break;
+                  err_read += r;
+                }
+              close (capture_err_pipe[0]);
+            }
+        }
+      else
+        {
+          /* Close read ends on success */
+          if (capture_out_pipe[0] >= 0)
+            close (capture_out_pipe[0]);
+          if (capture_err_pipe[0] >= 0)
+            close (capture_err_pipe[0]);
+        }
+
       if (UNLIKELY (ret != 0))
         {
+          char msg[512];
+          size_t msg_len = 0;
+          int written;
+
+          /* Build error message with captured output */
+          written = snprintf (msg, sizeof (msg), "error running %s hook #%zu: `%s` (exit code: %d)",
+                             name, i, hooks[i]->path, ret);
+          if (written > 0 && written < (int) sizeof (msg))
+            msg_len = written;
+
+          if (out_read > 0)
+            {
+              const char *prefix = ", stdout: ";
+              size_t avail = sizeof (msg) - msg_len - 1;
+              if (avail > strlen (prefix))
+                {
+                  memcpy (msg + msg_len, prefix, strlen (prefix));
+                  msg_len += strlen (prefix);
+                  avail -= strlen (prefix);
+                }
+              if (avail > 0)
+                {
+                  size_t copy_len = out_read < avail ? out_read : avail - 1;
+                  memcpy (msg + msg_len, out_buf, copy_len);
+                  msg_len += copy_len;
+                }
+            }
+
+          if (err_read > 0)
+            {
+              const char *prefix = ", stderr: ";
+              size_t avail = sizeof (msg) - msg_len - 1;
+              if (avail > strlen (prefix))
+                {
+                  memcpy (msg + msg_len, prefix, strlen (prefix));
+                  msg_len += strlen (prefix);
+                  avail -= strlen (prefix);
+                }
+              if (avail > 0)
+                {
+                  size_t copy_len = err_read < avail ? err_read : avail - 1;
+                  memcpy (msg + msg_len, err_buf, copy_len);
+                  msg_len += copy_len;
+                }
+            }
+
+          msg[msg_len] = '\0';
+
           if (keep_going)
-            libcrun_warning ("error running %s hook #%zu: `%s` (exit code: %d)", name, i, hooks[i]->path, ret);
+            libcrun_warning ("%s", msg);
           else
             {
-              libcrun_error (0, "error running %s hook #%zu: `%s` (exit code: %d)", name, i, hooks[i]->path, ret);
+              libcrun_error (0, "%s", msg);
               break;
             }
         }
