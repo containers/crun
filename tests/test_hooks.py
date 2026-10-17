@@ -18,6 +18,7 @@
 import os
 import shutil
 from tests_utils import *
+import subprocess
 
 def test_fail_prestart():
     conf = base_config()
@@ -765,7 +766,70 @@ def test_poststop_hook_on_createruntime_timeout():
     return _test_poststop_hook_on_create_failure(hook, 'create')
 
 
+
+
+def test_hook_output_on_failure():
+    """Test that hook stdout/stderr are captured and included in error message."""
+    conf = base_config()
+    hook = {"path": "/bin/sh", "args": ["/bin/sh", "-c", "echo hook_stdout; echo hook_stderr >&2; exit 1"]}
+    conf['hooks'] = {"prestart": [hook]}
+    add_all_namespaces(conf)
+    try:
+        out, err = run_and_get_output(conf, hide_stderr=False)
+        return -1
+    except subprocess.CalledProcessError as e:
+        # Check that both markers appear in the error output
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ""
+        if "hook_stdout" in output and "hook_stderr" in output:
+            return 0
+        return -1
+    except:
+        return -1
+
+
+
+def test_hook_large_output_no_deadlock():
+    """Test that hooks writing large output don't deadlock."""
+    import signal
+    from contextlib import contextmanager
+
+    @contextmanager
+    def timeout_handler(seconds):
+        def timeout_handler_func(signum, frame):
+            raise TimeoutError()
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler_func)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+
+    conf = base_config()
+    # Write 256KB to stdout and 256KB to stderr (far exceeding typical 64KB pipe buffer)
+    # Place markers early so they're in the bounded diagnostic
+    hook = {"path": "/bin/sh", "args": ["/bin/sh", "-c", "echo 'STDOUT_MARKER'; for i in $(seq 1 3500); do printf '%0800d\\n' 1; done; echo 'STDERR_MARKER' >&2; for i in $(seq 1 3500); do printf '%0800d\\n' 1 >&2; done; exit 1"]}
+    conf['hooks'] = {"prestart": [hook]}
+    add_all_namespaces(conf)
+
+    try:
+        with timeout_handler(30):  # 30 second timeout to detect deadlock
+            out, err = run_and_get_output(conf, hide_stderr=False)
+            return -1
+    except TimeoutError:
+        return -1  # Deadlock detected
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ""
+        # Check that both markers appear and original error context is preserved
+        if "STDOUT_MARKER" in output and "STDERR_MARKER" in output and "error running prestart hook" in output:
+            return 0
+        return -1
+    except:
+        return -1
+
 all_tests = {
+    "test-hook-large-output-no-deadlock" : test_hook_large_output_no_deadlock,
+    "test-hook-output-on-failure" : test_hook_output_on_failure,
     "test-fail-prestart" : test_fail_prestart,
     "test-success-prestart" : test_success_prestart,
     "test-fail-poststart" : test_fail_poststart,
