@@ -548,6 +548,12 @@ def test_mount_dirsync():
             return -1
     return 0
 
+def test_mount_iversion_silent():
+    for option in ["iversion", "noiversion", "silent", "loud"]:
+        if helper_mount(option, userns=True)[0] is None:
+            return -1
+    return 0
+
 def test_mount_nodev():
     for userns in [True, False]:
         a = helper_mount("nodev", is_file=True)[0]
@@ -1640,6 +1646,7 @@ all_tests = {
     "mount-nosuid" : test_mount_nosuid,
     "mount-sync" : test_mount_sync,
     "mount-dirsync" : test_mount_dirsync,
+    "mount-iversion-silent" : test_mount_iversion_silent,
     "mount-symlink" : test_mount_symlink,
     "mount-fifo" : test_mount_fifo,
     "mount-unix-socket" : test_mount_unix_socket,

@@ -70,6 +70,31 @@ test_known_flags_found ()
   return 0;
 }
 
+/* Test mount flags that are not filesystem data options. */
+static int
+test_iversion_and_silent_flags ()
+{
+  const struct propagation_flags_s *flag;
+
+  flag = libcrun_str2mount_flags ("iversion");
+  if (flag == NULL || flag->flags != MS_I_VERSION || flag->clear)
+    return -1;
+
+  flag = libcrun_str2mount_flags ("noiversion");
+  if (flag == NULL || flag->flags != MS_I_VERSION || ! flag->clear)
+    return -1;
+
+  flag = libcrun_str2mount_flags ("silent");
+  if (flag == NULL || flag->flags != MS_SILENT || flag->clear)
+    return -1;
+
+  flag = libcrun_str2mount_flags ("loud");
+  if (flag == NULL || flag->flags != MS_SILENT || ! flag->clear)
+    return -1;
+
+  return 0;
+}
+
 /* Test that unknown flags return NULL */
 static int
 test_unknown_flags ()
@@ -156,6 +181,7 @@ int
 main ()
 {
   RUN_TEST (test_known_flags_found);
+  RUN_TEST (test_iversion_and_silent_flags);
   RUN_TEST (test_unknown_flags);
   RUN_TEST (test_flag_names);
   RUN_TEST (test_clear_field);

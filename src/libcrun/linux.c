@@ -1834,7 +1834,8 @@ do_mount (libcrun_container_t *container, const char *source, int targetfd,
 
       ret = -1;
 
-      if (targetfd >= 0)
+      /* The new mount API cannot set these legacy mount(2) flags. */
+      if (targetfd >= 0 && (mountflags & (MS_I_VERSION | MS_SILENT)) == 0)
         {
           if (mountflags & MS_BIND)
             {
@@ -3972,6 +3973,11 @@ open_mount_of_type (libcrun_container_t *container,
     mnt_flags |= get_mount_flags_or_option (mount->options[j],
                                             mnt_flags, &mnt_extra, &mnt_data,
                                             &mnt_rec_clear, &mnt_rec_set);
+
+  /* Leave mounts using legacy MS_* flags for process_single_mount(), where
+     do_mount() can apply them with mount(2). */
+  if (mnt_flags & (MS_I_VERSION | MS_SILENT))
+    return -1;
 
   if (def->linux && def->linux->mount_label)
     {
