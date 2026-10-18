@@ -416,11 +416,72 @@ make_container (runtime_spec_schema_config_schema *container_def, const char *pa
   return container;
 }
 
+static int
+validate_mount_options_array (struct json_object *mounts, libcrun_error_t *err)
+{
+  size_t i, j;
+
+  if (mounts == NULL || ! json_object_is_type (mounts, json_type_array))
+    return 0;
+
+  for (i = 0; i < json_object_array_length (mounts); i++)
+    {
+      struct json_object *mount = json_object_array_get_idx (mounts, i);
+      struct json_object *options;
+
+      if (mount == NULL || ! json_object_is_type (mount, json_type_object)
+          || ! json_object_object_get_ex (mount, "options", &options)
+          || ! json_object_is_type (options, json_type_array))
+        continue;
+
+      for (j = 0; j < json_object_array_length (options); j++)
+        {
+          struct json_object *option = json_object_array_get_idx (options, j);
+          const char *value;
+          size_t len;
+
+          if (option == NULL || ! json_object_is_type (option, json_type_string))
+            continue;
+
+          value = json_object_get_string (option);
+          len = (size_t) json_object_get_string_len (option);
+          if (value != NULL && memchr (value, '\0', len) != NULL)
+            return crun_make_error (err, 0,
+                                    "mount %zu option %zu contains an embedded NUL byte",
+                                    i, j);
+        }
+    }
+
+  return 0;
+}
+
+static int
+validate_mount_options (const char *json, libcrun_error_t *err)
+{
+  struct json_object *root = json_tokener_parse (json);
+  struct json_object *mounts;
+  int ret = 0;
+
+  if (root == NULL)
+    return 0;
+
+  if (json_object_is_type (root, json_type_object)
+      && json_object_object_get_ex (root, "mounts", &mounts))
+    ret = validate_mount_options_array (mounts, err);
+
+  json_object_put (root);
+  return ret;
+}
+
 libcrun_container_t *
 libcrun_container_load_from_memory (const char *json, libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *container_def;
   cleanup_free char *oci_error = NULL;
+
+  if (UNLIKELY (validate_mount_options (json, err) < 0))
+    return NULL;
+
   container_def = runtime_spec_schema_config_schema_parse_data (json, NULL, &oci_error);
   if (container_def == NULL)
     {
@@ -442,6 +503,9 @@ libcrun_container_load_from_file (const char *path, libcrun_error_t *err)
   libcrun_debug ("Loading container from config file: `%s`", path);
   ret = read_all_file (path, &content, &len, err);
   if (UNLIKELY (ret < 0))
+    return NULL;
+
+  if (UNLIKELY (validate_mount_options (content, err) < 0))
     return NULL;
 
   container_def = runtime_spec_schema_config_schema_parse_data (content, NULL, &oci_error);
@@ -5438,19 +5502,21 @@ libcrun_container_add_or_remove_mounts_from_file (libcrun_context_t *context, co
       ret = crun_make_error (err, 0, "mounts must be an array");
       goto cleanup;
     }
-  else
-    {
-      n_mounts = json_object_array_length (doc);
 
-      mounts = xmalloc0 ((n_mounts + 1) * sizeof (*mounts));
-      for (i = 0; i < n_mounts; i++)
+  ret = validate_mount_options_array (doc, err);
+  if (UNLIKELY (ret < 0))
+    goto cleanup;
+
+  n_mounts = json_object_array_length (doc);
+
+  mounts = xmalloc0 ((n_mounts + 1) * sizeof (*mounts));
+  for (i = 0; i < n_mounts; i++)
+    {
+      mounts[i] = make_runtime_spec_schema_defs_mount (json_object_array_get_idx (doc, i), &pctx, &parser_err);
+      if (mounts[i] == NULL)
         {
-          mounts[i] = make_runtime_spec_schema_defs_mount (json_object_array_get_idx (doc, i), &pctx, &parser_err);
-          if (mounts[i] == NULL)
-            {
-              ret = crun_make_error (err, 0, "cannot parse mount: %s", parser_err);
-              goto cleanup;
-            }
+          ret = crun_make_error (err, 0, "cannot parse mount: %s", parser_err);
+          goto cleanup;
         }
     }
 

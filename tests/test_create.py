@@ -17,7 +17,48 @@
 
 import json
 import os
+import subprocess
+import tempfile
 from tests_utils import *
+
+
+def test_mount_option_embedded_nul():
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle = os.path.join(tmp, "bundle")
+        os.makedirs(os.path.join(bundle, "rootfs"))
+        state = os.path.join(tmp, "state")
+        os.mkdir(state)
+        config = {
+            "ociVersion": "1.0.2",
+            "process": {
+                "args": ["/bin/true"],
+                "cwd": "/",
+                "user": {"uid": 0, "gid": 0},
+            },
+            "root": {"path": "rootfs"},
+            "mounts": [{
+                "destination": "/sys/fs/cgroup",
+                "type": "cgroup2",
+                "source": "cgroup2",
+                "options": ["nosuid\x00,noexec"],
+            }],
+            "linux": {"namespaces": [{"type": "mount"}]},
+        }
+        with open(os.path.join(bundle, "config.json"), "w") as f:
+            json.dump(config, f)
+
+        cmd = [get_crun_path(), "--root", state, "create", "--bundle", bundle, "nul-test"]
+        try:
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT, close_fds=False)
+        except subprocess.CalledProcessError as e:
+            output = (e.output or b"").decode('utf-8', errors='replace')
+            if "contains an embedded NUL byte" in output:
+                return 0
+            logger.info("expected an embedded-NUL validation error, got: %s", output)
+            return -1
+
+        logger.info("container creation unexpectedly accepted an embedded NUL in mount options")
+        return -1
 
 
 def test_create_start():
@@ -148,6 +189,7 @@ def test_create_with_annotations():
 
 
 all_tests = {
+    "mount-option-embedded-nul": test_mount_option_embedded_nul,
     "create-start": test_create_start,
     "create-delete-without-start": test_create_delete_without_start,
     "create-with-annotations": test_create_with_annotations,
