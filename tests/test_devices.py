@@ -330,6 +330,28 @@ def test_net_devices():
                 finally:
                     # Clean up the test device
                     subprocess.run(["ip", "link", "del", "testdevice"], capture_output=True)
+        result = subprocess.run(["ip", "link", "add", "testdevice", "type", "dummy"], capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.info("ip link add failed for name-template test: %s", result.stderr)
+            return -1
+
+        conf = base_config()
+        add_all_namespaces(conf)
+        conf['process']['args'] = ['/init', 'ip', 'newtest0']
+        conf['process']['capabilities'] = {
+            "bounding": ["CAP_NET_ADMIN", "CAP_NET_RAW", "CAP_SYS_ADMIN"],
+            "effective": ["CAP_NET_ADMIN", "CAP_NET_RAW", "CAP_SYS_ADMIN"],
+            "inheritable": ["CAP_NET_ADMIN", "CAP_NET_RAW", "CAP_SYS_ADMIN"],
+            "permitted": ["CAP_NET_ADMIN", "CAP_NET_RAW", "CAP_SYS_ADMIN"]
+        }
+        conf['linux']['netDevices'] = {"testdevice": {"name": "newtest%d"}}
+        try:
+            run_and_get_output(conf, hide_stderr=True)
+        except Exception as e:
+            logger.info("test_net_devices name template failed: %s", e)
+            return -1
+        finally:
+            subprocess.run(["ip", "link", "del", "testdevice"], capture_output=True)
     finally:
         os.setns(current_netns, os.CLONE_NEWNET)
         os.close(current_netns)

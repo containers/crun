@@ -376,8 +376,32 @@ request_enable_interface_and_wait (int sock, char *buffer, size_t buffer_size, i
 }
 
 static int
-setup_network_device_in_ns_helper (char *buffer, size_t buffer_size, int netns_fd, const char *newifname,
-                                   struct ip_addr *ips, libcrun_error_t *err)
+do_rename_link_and_wait (int sock, char *buffer, size_t buffer_size, int ifindex, const char *newifname,
+                         libcrun_error_t *err)
+{
+  struct nl_req *req = (struct nl_req *) buffer;
+  uint32_t seq;
+  int ret;
+
+  seq = reset_request (req, RTM_NEWLINK, NLM_F_REQUEST | NLM_F_ACK, sizeof (struct ifinfomsg));
+  req->ifi.ifi_family = AF_UNSPEC;
+  req->ifi.ifi_index = ifindex;
+
+  ret = append_rtattr (&req->nlh, buffer_size, IFLA_IFNAME, newifname, strlen (newifname) + 1, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = send_request (sock, req, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return wait_for_ack (sock, seq, buffer, buffer_size, err);
+}
+
+static int
+setup_network_device_in_ns_helper (char *buffer, size_t buffer_size, int netns_fd, const char *ifname,
+                                   const char *newifname, bool name_template, struct ip_addr *ips,
+                                   libcrun_error_t *err)
 {
   cleanup_close int sock_in_ns = -1;
   int new_ifindex;
@@ -394,9 +418,17 @@ setup_network_device_in_ns_helper (char *buffer, size_t buffer_size, int netns_f
   /* we could ask for a specific index with IFLA_NEW_IFINDEX, and apparently the kernel tries anyway to
      reuse the existing one, but asking for a specific index could cause conflicts if the
      target network namespace already exists, so avoid doing it and lookup the device again.  */
-  new_ifindex = name_to_index (sock_in_ns, newifname, buffer, buffer_size, err);
+  new_ifindex = name_to_index (sock_in_ns, name_template ? ifname : newifname, buffer, buffer_size, err);
   if (UNLIKELY (new_ifindex < 0))
     return new_ifindex;
+
+  if (name_template)
+    {
+      /* Let the kernel expand `%d`, then continue using the interface index. */
+      ret = do_rename_link_and_wait (sock_in_ns, buffer, buffer_size, new_ifindex, newifname, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = configure_ip_addresses (sock_in_ns, new_ifindex, buffer, buffer_size, ips, err);
   if (ret < 0)
@@ -420,9 +452,12 @@ do_move_link_to_ns_and_wait (int sock, char *buffer, size_t buffer_size, int ifi
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = append_rtattr (&req->nlh, buffer_size, IFLA_IFNAME, newifname, strlen (newifname) + 1, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
+  if (newifname)
+    {
+      ret = append_rtattr (&req->nlh, buffer_size, IFLA_IFNAME, newifname, strlen (newifname) + 1, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
 
   ret = send_request (sock, req, err);
   if (UNLIKELY (ret < 0))
@@ -434,8 +469,9 @@ do_move_link_to_ns_and_wait (int sock, char *buffer, size_t buffer_size, int ifi
 /* Run the setup in the target namespace.  It is done in a separate function
    so that no variable of the caller is live across the vfork.  */
 static int
-setup_network_device_in_ns (char *buffer, size_t buffer_size, int netns_fd, const char *newifname,
-                            struct ip_addr *ips, libcrun_error_t *err)
+setup_network_device_in_ns (char *buffer, size_t buffer_size, int netns_fd, const char *ifname,
+                            const char *newifname, bool name_template, struct ip_addr *ips,
+                            libcrun_error_t *err)
 {
   int wait_status;
   pid_t pid;
@@ -448,7 +484,7 @@ setup_network_device_in_ns (char *buffer, size_t buffer_size, int netns_fd, cons
 
   if (pid == 0)
     {
-      ret = setup_network_device_in_ns_helper (buffer, buffer_size, netns_fd, newifname, ips, err);
+      ret = setup_network_device_in_ns_helper (buffer, buffer_size, netns_fd, ifname, newifname, name_template, ips, err);
       if (UNLIKELY (ret < 0))
         {
           /* Do not release the error as it will be used by the parent proc.  */
@@ -494,10 +530,13 @@ move_network_device (const char *ifname, const char *newifname, int netns_fd, li
   if (UNLIKELY (ret < 0))
     return ret;
 
-  /* Move the device to the target network namespace.  */
-  ret = do_move_link_to_ns_and_wait (sock, buffer, buffer_size, ifindex, netns_fd, newifname, err);
+  /* Move the device to the target network namespace.  For a `%d` template,
+     rename it there so we can look it up by its original name first. */
+  bool name_template = strstr (newifname, "%d") != NULL;
+  ret = do_move_link_to_ns_and_wait (sock, buffer, buffer_size, ifindex, netns_fd,
+                                     name_template ? NULL : newifname, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  return setup_network_device_in_ns (buffer, buffer_size, netns_fd, newifname, ips, err);
+  return setup_network_device_in_ns (buffer, buffer_size, netns_fd, ifname, newifname, name_template, ips, err);
 }
