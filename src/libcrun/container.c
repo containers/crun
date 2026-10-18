@@ -1429,7 +1429,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
     {
       libcrun_warning ("setting LISTEN_PID=1 since no previous configuration was found");
       if (UNLIKELY (setenv ("LISTEN_PID", "1", 1) < 0))
-        return crun_make_error (err, errno, "setenv LISTENPID");
+        return crun_make_error (err, errno, "setenv LISTEN_PID");
     }
 
   /* Attempt to chdir immediately here, before doing the setresuid.  If we fail here, let's
