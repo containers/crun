@@ -39,6 +39,36 @@ def get_crun_commit():
         logger.error("Error retrieving crun commit: %s", str(e))
         return None
 
+def check_features(expected, actual, path):
+    """Check that actual has everything from expected.
+
+    Dicts are compared recursively, ignoring extra keys in actual. Lists
+    must have the same elements in any order. Anything else must be equal.
+    """
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            logger.info("# Mismatch in feature: %s", path)
+            logger.info("# Expected: %s", expected)
+            logger.info("# Actual: %s", actual)
+            return False
+        for key, value in expected.items():
+            if key not in actual:
+                logger.info("# Missing feature: %s.%s", path, key)
+                return False
+            if not check_features(value, actual[key], path + "." + key):
+                return False
+        return True
+
+    if isinstance(expected, list):
+        ok = isinstance(actual, list) and sorted(expected) == sorted(actual)
+    else:
+        ok = expected == actual
+    if not ok:
+        logger.info("# Mismatch in feature: %s", path)
+        logger.info("# Expected: %s", expected)
+        logger.info("# Actual: %s", actual)
+    return ok
+
 def test_crun_features():
     try:
         output = run_crun_command(["features"])
@@ -63,8 +93,6 @@ def test_crun_features():
                     "pid",
                     "user",
                     "uts"
-                ],
-                "capabilities": [
                 ],
                 "cgroup": {
                     "v1": True,
@@ -104,11 +132,6 @@ def test_crun_features():
                     },
                 }
             },
-            "annotations": {
-                "org.opencontainers.runc.checkpoint.enabled": "true",
-                "run.oci.checkpoint.enabled": "true",
-                "run.oci.commit": get_crun_commit(),
-            },
             "potentiallyUnsafeConfigAnnotations": [
                 "module.wasm.image/variant",
                 "io.kubernetes.cri.container-type",
@@ -124,53 +147,45 @@ def test_crun_features():
                 logger.info("# Missing mount option: %s", option)
                 return -1
 
-        systemd_enabled = is_systemd_enabled()
-        seccomp_enabled = is_seccomp_enabled()
-
-        if seccomp_enabled:
+        if is_seccomp_enabled():
             expected_features["linux"]["seccomp"]["enabled"] = True
+        else:
+            expected_features["linux"]["seccomp"] = {"enabled": False}
 
-        # Check if systemd is enabled and set systemdUser accordingly
-        if systemd_enabled:
-            expected_features["linux"]["cgroup"]["systemd"] = True
-            expected_features["linux"]["cgroup"]["systemdUser"] = True
+        systemd_enabled = is_systemd_enabled()
+        expected_features["linux"]["cgroup"]["systemd"] = systemd_enabled
+        expected_features["linux"]["cgroup"]["systemdUser"] = systemd_enabled
 
-        for key, value in expected_features.items():
-            if key == "linux" and isinstance(value, dict) and "capabilities" in value:
-                if "capabilities" in features.get("linux", {}):
-                    capabilities = features["linux"]["capabilities"]
-                    if not ("CAP_SYS_ADMIN" in capabilities and "CAP_KILL" in capabilities and "CAP_NET_BIND_SERVICE" in capabilities):
-                        return -1
-                continue
+        if not check_features(expected_features, features, "features"):
+            return -1
 
-            if key == "annotations":
-                if "annotations" not in features:
-                    logger.info("annotations section is missing")
-                    return -1
+        if "capabilities" in features.get("linux", {}):
+            capabilities = features["linux"]["capabilities"]
+            if not ("CAP_SYS_ADMIN" in capabilities and "CAP_KILL" in capabilities and "CAP_NET_BIND_SERVICE" in capabilities):
+                return -1
 
-                annotations = features["annotations"]
-                if annotations.get("run.oci.crun.commit") != get_crun_commit():
-                    logger.info("wrong value for run.oci.crun.commit")
-                    return -1
+        if "annotations" not in features:
+            logger.info("annotations section is missing")
+            return -1
 
-                if ('WASM' in get_crun_feature_string()
-                    and annotations.get("run.oci.crun.wasm") != "true"):
-                    logger.info("wrong value for run.oci.crun.wasm")
-                    return -1
+        annotations = features["annotations"]
+        if annotations.get("run.oci.crun.commit") != get_crun_commit():
+            logger.info("wrong value for run.oci.crun.commit")
+            return -1
 
-                if 'CRIU' in get_crun_feature_string():
-                    if annotations.get("org.opencontainers.runc.checkpoint.enabled") != "true":
-                        logger.info("wrong value for org.opencontainers.runc.checkpoint.enabled")
-                        return -1
-                    if annotations.get("run.oci.crun.checkpoint.enabled") != "true":
-                        logger.info("wrong value for run.oci.crun.checkpoint.enabled")
-                        return -1
-            else:
-                if key not in features or sorted(features[key]) != sorted(value):
-                    logger.info("# Mismatch in feature: %s", key)
-                    logger.info("# Expected: %s", value)
-                    logger.info("# Actual: %s", features.get(key))
-                    return -1
+        if ('WASM' in get_crun_feature_string()
+            and annotations.get("run.oci.crun.wasm") != "true"):
+            logger.info("wrong value for run.oci.crun.wasm")
+            return -1
+
+        if 'CRIU' in get_crun_feature_string():
+            if annotations.get("org.opencontainers.runc.checkpoint.enabled") != "true":
+                logger.info("wrong value for org.opencontainers.runc.checkpoint.enabled")
+                return -1
+            if annotations.get("run.oci.crun.checkpoint.enabled") != "true":
+                logger.info("wrong value for run.oci.crun.checkpoint.enabled")
+                return -1
+
         return 0
 
     except Exception as e:
