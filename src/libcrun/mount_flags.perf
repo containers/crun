@@ -46,6 +46,10 @@ exec, 1, MS_NOEXEC, 0
 noexec, 0, MS_NOEXEC, 0
 sync, 0, MS_SYNCHRONOUS, 0
 async, 1, MS_SYNCHRONOUS, 0
+iversion, 0, 0, 0
+noiversion, 0, 0, 0
+silent, 0, 0, 0
+loud, 0, 0, 0
 dirsync, 0, MS_DIRSYNC, 0
 remount, 0, MS_REMOUNT, 0
 mand, 0, MS_MANDLOCK, 0
