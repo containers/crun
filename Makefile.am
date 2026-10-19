@@ -64,6 +64,7 @@ libcrun_SOURCES = src/libcrun/utils.c \
 		src/libcrun/handlers/wamr.c \
 		src/libcrun/intelrdt.c \
 		src/libcrun/io_priority.c \
+		src/libcrun/io_uring.c \
 		src/libcrun/linux.c \
 		src/libcrun/mount_flags.c \
 		src/libcrun/scheduler.c \
@@ -193,7 +194,7 @@ EXTRA_DIST = COPYING COPYING.libcrun README.md NEWS SECURITY.md THREAT_MODEL.md 
 	src/libcrun/cgroup-internal.h \
 	src/libcrun/cgroup-resources.h src/libcrun/cgroup-setup.h \
 	src/libcrun/cgroup-systemd.h src/libcrun/cgroup-utils.h \
-	src/libcrun/custom-handler.h src/libcrun/io_priority.h \
+	src/libcrun/custom-handler.h src/libcrun/io_priority.h src/libcrun/io_uring.h \
 	src/libcrun/handlers/handler-utils.h \
 	src/libcrun/linux.h src/libcrun/utils.h src/libcrun/error.h src/libcrun/criu.h \
 	src/libcrun/scheduler.h src/libcrun/mempolicy.h src/libcrun/status.h src/libcrun/terminal.h \
