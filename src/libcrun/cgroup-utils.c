@@ -119,7 +119,7 @@ maybe_make_cgroup_threaded (const char *path, libcrun_error_t *err)
       if (ret < 0)
         return ret;
     }
-  return write_file (cgroup_path_type, threaded, strlen (threaded), err);
+  return write_cgroup_file (AT_FDCWD, cgroup_path_type, threaded, strlen (threaded), err);
 }
 
 int
@@ -139,7 +139,7 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
   if (UNLIKELY (ret >= (int) sizeof (pid_str)))
     return crun_make_error (err, 0, "internal error: static buffer too small");
 
-  ret = write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+  ret = write_cgroup_file (AT_FDCWD, cgroup_path_procs, pid_str, strlen (pid_str), err);
   if (UNLIKELY (ret < 0))
     {
       if (crun_error_get_errno (err) == EOPNOTSUPP)
@@ -160,7 +160,7 @@ move_process_to_cgroup (pid_t pid, const char *subsystem, const char *path, libc
           if (UNLIKELY (ret < 0))
             return ret;
 
-          return write_file (cgroup_path_procs, pid_str, strlen (pid_str), err);
+          return write_cgroup_file (AT_FDCWD, cgroup_path_procs, pid_str, strlen (pid_str), err);
         }
 
       return ret;
@@ -885,7 +885,7 @@ libcrun_cgroup_pause_unpause_with_mode (const char *cgroup_path, int cgroup_mode
         return ret;
     }
 
-  ret = write_file (path, state, strlen (state), err);
+  ret = write_cgroup_file (AT_FDCWD, path, state, strlen (state), err);
   if (ret >= 0)
     return 0;
   return ret;
@@ -1054,7 +1054,7 @@ cgroup_killall_path (const char *path, int signal, libcrun_error_t *err)
 
       inotify_fd = watch_cgroup_events (path);
 
-      ret = write_file_at_with_flags (AT_FDCWD, 0, 0700, kill_file, "1", 1, err);
+      ret = write_cgroup_file (AT_FDCWD, kill_file, "1", 1, err);
       if (ret >= 0 && inotify_fd >= 0 && wait_cgroup_unpopulated (path, inotify_fd))
         return 0;
 
@@ -1167,7 +1167,7 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
   ret = append_paths (&subtree_control, err, CGROUP_ROOT, path, "cgroup.subtree_control", NULL);
   if (UNLIKELY (ret < 0))
     return ret;
-  ret = write_file (subtree_control, controllers, controllers_len, err);
+  ret = write_cgroup_file (AT_FDCWD, subtree_control, controllers, controllers_len, err);
   if (UNLIKELY (ret < 0))
     {
       cleanup_free char *controllers_copy = xmalloc (controllers_len + 1);
@@ -1221,7 +1221,7 @@ write_controller_file (const char *path, int controllers_to_enable, libcrun_erro
           /* Fallback to write each one individually.  */
           for (token = strtok_r (controllers_copy, " ", &saveptr); token; token = strtok_r (NULL, " ", &saveptr))
             {
-              ret = write_file (subtree_control, token, strlen (token), err);
+              ret = write_cgroup_file (AT_FDCWD, subtree_control, token, strlen (token), err);
               if (ret < 0)
                 {
                   e = crun_error_get_errno (err);

@@ -82,6 +82,12 @@ is_rootless (libcrun_error_t *err)
   return check_running_in_user_namespace (err);
 }
 
+static inline int
+write_cgroup_file (int dirfd, const char *name, const void *data, size_t len, libcrun_error_t *err)
+{
+  return write_file_at_with_flags (dirfd, O_WRONLY | O_CLOEXEC, 0, name, data, len, err);
+}
+
 int libcrun_cgroup_pause_unpause_path (const char *cgroup_path, const bool pause, libcrun_error_t *err);
 
 static inline uint64_t
