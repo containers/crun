@@ -50,6 +50,11 @@
 #  include <linux/ioprio.h>
 #endif
 
+#ifdef HAVE_LINUX_IO_URING_H
+#  include <linux/io_uring.h>
+#  include <sys/mman.h>
+#endif
+
 #ifdef HAVE_SECCOMP
 #  include <linux/seccomp.h>
 #  include <linux/filter.h>
@@ -521,6 +526,77 @@ done:
   close (sock);
   free (buffer);
 }
+
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_setup && defined __NR_io_uring_enter
+/* Submit a single SQE for OP on a new ring and return its result.  */
+static int
+io_uring_submit_one (const char *op)
+{
+  struct io_uring_params p;
+  struct io_uring_sqe *sqe;
+  struct io_uring_cqe *cqes;
+  unsigned *sq_tail, *sq_array;
+  void *sq, *cq;
+  int fd, dev_null, ret;
+
+  dev_null = open ("/dev/null", O_RDWR);
+  if (dev_null < 0)
+    error (EXIT_FAILURE, errno, "open /dev/null");
+
+  memset (&p, 0, sizeof (p));
+  fd = syscall (__NR_io_uring_setup, 1, &p);
+  if (fd < 0)
+    error (EXIT_FAILURE, errno, "io_uring_setup");
+
+  sq = mmap (NULL, p.sq_off.array + p.sq_entries * sizeof (unsigned), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, IORING_OFF_SQ_RING);
+  cq = mmap (NULL, p.cq_off.cqes + p.cq_entries * sizeof (struct io_uring_cqe), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, IORING_OFF_CQ_RING);
+  sqe = mmap (NULL, p.sq_entries * sizeof (struct io_uring_sqe), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, IORING_OFF_SQES);
+  if (sq == MAP_FAILED || cq == MAP_FAILED || sqe == MAP_FAILED)
+    error (EXIT_FAILURE, errno, "mmap io_uring");
+
+  memset (sqe, 0, sizeof (*sqe));
+  if (strcmp (op, "nop") == 0)
+    sqe->opcode = IORING_OP_NOP;
+  else if (strcmp (op, "read") == 0 || strcmp (op, "read-async") == 0)
+    {
+      sqe->opcode = IORING_OP_READ;
+      sqe->fd = dev_null;
+      if (strcmp (op, "read-async") == 0)
+        sqe->flags = IOSQE_ASYNC;
+    }
+  else if (strcmp (op, "write") == 0)
+    {
+      sqe->opcode = IORING_OP_WRITE;
+      sqe->fd = dev_null;
+    }
+  else if (strcmp (op, "socket-inet") == 0 || strcmp (op, "socket-unix") == 0)
+    {
+      sqe->opcode = IORING_OP_SOCKET;
+      sqe->fd = strcmp (op, "socket-inet") == 0 ? AF_INET : AF_UNIX;
+      sqe->off = SOCK_STREAM;
+    }
+  else
+    error (EXIT_FAILURE, 0, "unknown io_uring operation `%s`", op);
+
+  sq_array = (unsigned *) ((char *) sq + p.sq_off.array);
+  sq_tail = (unsigned *) ((char *) sq + p.sq_off.tail);
+  sq_array[0] = 0;
+  __atomic_store_n (sq_tail, *sq_tail + 1, __ATOMIC_RELEASE);
+
+  ret = syscall (__NR_io_uring_enter, fd, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+  if (ret < 0)
+    error (EXIT_FAILURE, errno, "io_uring_enter");
+
+  cqes = (struct io_uring_cqe *) ((char *) cq + p.cq_off.cqes);
+  ret = cqes[0].res;
+  if (ret >= 0 && strncmp (op, "socket", 6) == 0)
+    close (ret);
+
+  close (fd);
+  close (dev_null);
+  return ret;
+}
+#endif
 
 int
 main (int argc, char **argv)
@@ -1018,6 +1094,58 @@ main (int argc, char **argv)
 #endif
     }
 
+  if (strcmp (argv[1], "io_uring") == 0)
+    {
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_setup && defined __NR_io_uring_enter
+      int i;
+
+      for (i = 2; i < argc; i++)
+        {
+          int ret = io_uring_submit_one (argv[i]);
+          printf ("%s %s\n", argv[i], ret == -EACCES ? "denied" : "allowed");
+        }
+      return 0;
+#else
+      error (EXIT_FAILURE, 0, "io_uring not supported");
+#endif
+    }
+
+  if (strcmp (argv[1], "io_uring-once-restored") == 0)
+    {
+      /* Like "io_uring", but only once the file "restored" shows up in the
+         specified directory, as CRIU cannot checkpoint io_uring.  The results
+         are written to the file "results" there.  */
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_setup && defined __NR_io_uring_enter
+      FILE *results;
+      int dirfd, fd, i;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'io_uring-once-restored' requires an argument");
+
+      dirfd = open (argv[2], O_RDONLY | O_DIRECTORY);
+      if (dirfd < 0)
+        error (EXIT_FAILURE, errno, "open `%s`", argv[2]);
+
+      while (faccessat (dirfd, "restored", F_OK, 0) < 0)
+        nanosleep ((const struct timespec[]) { { 0, 10000000L } }, NULL);
+
+      fd = openat (dirfd, "results.tmp", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+      results = fd < 0 ? NULL : fdopen (fd, "w");
+      if (results == NULL)
+        error (EXIT_FAILURE, errno, "create `results.tmp`");
+      for (i = 3; i < argc; i++)
+        {
+          int ret = io_uring_submit_one (argv[i]);
+          fprintf (results, "%s %s\n", argv[i], ret == -EACCES ? "denied" : "allowed");
+        }
+      if (fclose (results) != 0 || renameat (dirfd, "results.tmp", dirfd, "results") < 0)
+        error (EXIT_FAILURE, errno, "write `results`");
+      do_pause ();
+#else
+      error (EXIT_FAILURE, 0, "io_uring not supported");
+#endif
+    }
+
   if (strcmp (argv[1], "ls") == 0)
     {
       /* Fork so that ls /proc/1/fd doesn't show more fd's.  */
@@ -1075,6 +1203,16 @@ main (int argc, char **argv)
             return 0;
 #endif
           return 1;
+        }
+      if (strcmp (argv[2], "io_uring-restrictions") == 0)
+        {
+#if defined __NR_io_uring_register
+          /* IORING_REGISTER_BPF_FILTER for the task with a NULL argument: EFAULT if supported.  */
+          int ret = syscall (__NR_io_uring_register, -1, 37, NULL, 1);
+          return (ret < 0 && (errno == EFAULT || errno == EACCES)) ? 0 : 1;
+#else
+          return 1;
+#endif
         }
       if (strcmp (argv[2], "idmapped-mounts") == 0)
         {
