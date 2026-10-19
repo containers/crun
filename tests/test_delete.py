@@ -16,8 +16,10 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import resource
 import subprocess
 import os
+import time
 from tests_utils import *
 
 def test_simple_delete():
@@ -107,6 +109,108 @@ def test_multiple_containers_delete():
 
     return cleanup_result
 
+def task_state(pid, tid):
+    with open("/proc/%d/task/%d/stat" % (pid, tid)) as f:
+        return f.read().rsplit(")", 1)[1].split()[0]
+
+def is_alive(pid):
+    try:
+        for tid in os.listdir("/proc/%d/task" % pid):
+            if task_state(pid, int(tid)) not in ("Z", "X"):
+                return True
+    except FileNotFoundError:
+        pass
+    return False
+
+def delete_exited_main_thread(init_args, pidns, find_target):
+    conf = base_config()
+    conf['process']['args'] = ['/init'] + init_args
+    add_all_namespaces(conf, pidns=pidns)
+
+    _, container_id = run_and_get_output(conf, detach=True, hide_stderr=True)
+
+    target = None
+    try:
+        state = json.loads(run_crun_command(["state", container_id]))
+        for _ in range(100):
+            target = find_target(state['pid'])
+            if target is not None and task_state(target, target) == "Z" and is_alive(target):
+                break
+            time.sleep(0.1)
+        else:
+            logger.info("the process with the exited main thread was not found")
+            return -1
+
+        try:
+            run_crun_command_raw(["kill", "--all", container_id, "KILL"])
+        except subprocess.CalledProcessError as exc:
+            logger.info("kill failed: %s", exc.output)
+            return -1
+
+        for _ in range(50):
+            if not is_alive(target):
+                return 0
+            time.sleep(0.1)
+        logger.info("process %d is still alive after the delete", target)
+        return -1
+    finally:
+        if target is not None and is_alive(target):
+            os.kill(target, 9)
+        try:
+            run_crun_command_raw(["delete", "-f", container_id])
+        except subprocess.CalledProcessError:
+            pass
+
+def test_delete_nested_directories():
+    """Delete a state directory nested deeper than the number of files that can be open"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+
+    out, container_id = run_and_get_output(conf, detach=True, hide_stderr=True)
+    if out != "":
+        return -1
+
+    state_dir = os.path.join(get_tests_root_status(), container_id)
+    os.makedirs(os.path.join(state_dir, *(["d"] * 256)))
+
+    limits = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (64, limits[1]))
+    try:
+        run_crun_command_raw(["delete", "-f", container_id])
+    except subprocess.CalledProcessError as exc:
+        logger.error("Status : FAIL %s %s", exc.returncode, exc.output)
+        return -1
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, limits)
+
+    if os.path.exists(state_dir):
+        return -1
+
+    return 0
+
+def test_delete_exited_main_thread():
+    """Delete a container sharing the host PID namespace with a process whose main thread exited"""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    def find_child(init_pid):
+        try:
+            with open("/proc/%d/task/%d/children" % (init_pid, init_pid)) as f:
+                children = f.read().split()
+        except FileNotFoundError:
+            return None
+        return int(children[0]) if children else None
+
+    return delete_exited_main_thread(['fork-and-exit-main-thread'], False, find_child)
+
+def test_delete_exited_init_main_thread():
+    """Delete a container with a private PID namespace whose init main thread exited"""
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    return delete_exited_main_thread(['exit-main-thread'], True, lambda init_pid: init_pid)
+
 def test_help_delete():
     out = run_crun_command(["delete", "--help"])
     if "Usage: crun [OPTION...] delete CONTAINER" not in out:
@@ -117,6 +221,9 @@ def test_help_delete():
 all_tests = {
     "test_simple_delete" : test_simple_delete,
     "test_multiple_containers_delete" : test_multiple_containers_delete,
+    "test_delete_exited_main_thread": test_delete_exited_main_thread,
+    "test_delete_exited_init_main_thread": test_delete_exited_init_main_thread,
+    "test_delete_nested_directories" : test_delete_nested_directories,
     "test_help_delete": test_help_delete,
 }
 

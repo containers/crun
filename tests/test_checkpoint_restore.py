@@ -548,6 +548,48 @@ def test_cr_with_ext_ns():
     return run_cr_test(conf)
 
 
+# A failed restore has no container status, so nothing can destroy its
+# cgroup later: crun must not leave it behind.
+def test_cr_failed_restore_cgroup_cleanup():
+    if r := _check_cr_requirements():
+        return r
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+    if get_cgroup_manager() == 'systemd':
+        return (77, "test uses cgroupfs-style paths")
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+
+    cgroup_path = f'/test-failed-restore-{os.getpid()}'
+    conf['linux']['cgroupsPath'] = cgroup_path
+
+    host_cgroup_dir = f'/sys/fs/cgroup{cgroup_path}'
+
+    image_broken = False
+
+    def break_image():
+        nonlocal image_broken
+        os.unlink(os.path.join(get_tests_root(), 'checkpoint', 'inventory.img'))
+        image_broken = True
+
+    try:
+        run_cr_test(conf, before_restore_cb=break_image)
+        logger.info("the restore was expected to fail")
+        return -1
+    except subprocess.CalledProcessError:
+        if not image_broken:
+            raise
+
+    if os.path.exists(host_cgroup_dir):
+        logger.info("cgroup directory %s still exists after the failed restore", host_cgroup_dir)
+        os.rmdir(host_cgroup_dir)
+        return -1
+
+    return 0
+
+
 def test_cr_named_cgroup_hierarchy():
     if r := _check_cr_requirements():
         return r
@@ -700,6 +742,7 @@ all_tests = {
     "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,
     "checkpoint-restore-mount-flags": test_cr_mount_flags,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
+    "checkpoint-restore-failed-cgroup-cleanup": test_cr_failed_restore_cgroup_cleanup,
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,
     "checkpoint-restore-forward-signal": test_cr_restore_forward_signal,
     "checkpoint-restore-pre-dump": test_cr_pre_dump,
