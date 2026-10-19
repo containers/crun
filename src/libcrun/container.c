@@ -38,6 +38,8 @@
 #include <sys/types.h>
 #include <sched.h>
 #include <sys/wait.h>
+
+#define HOOK_OUTPUT_MAX 4096
 #include <string.h>
 #include <fcntl.h>
 #include "status.h"
@@ -904,6 +906,14 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
   for (i = 0; i < hooks_len; i++)
     {
       char **env = environ;
+      char out_tmpl[] = "/tmp/crun-hook-stdout-XXXXXX";
+      char err_tmpl[] = "/tmp/crun-hook-stderr-XXXXXX";
+      int capture_out_fd = -1, capture_err_fd = -1;
+      char out_buf[HOOK_OUTPUT_MAX] = { 0 };
+      char err_buf[HOOK_OUTPUT_MAX] = { 0 };
+      size_t out_read = 0, err_read = 0;
+      int actual_out_fd = out_fd;
+      int actual_err_fd = err_fd;
 
       if (hooks[i]->env)
         env = hooks[i]->env;
@@ -915,18 +925,115 @@ do_hooks (runtime_spec_schema_config_schema *def, pid_t pid, const char *id, boo
           error_created = false;
         }
 
+      /* Create temp file for stdout capture if no annotation is set.  */
+      if (out_fd < 0)
+        {
+          capture_out_fd = mkstemp (out_tmpl);
+          if (capture_out_fd >= 0)
+            {
+              unlink (out_tmpl);
+              actual_out_fd = capture_out_fd;
+            }
+        }
+
+      /* Create temp file for stderr capture if no annotation is set.  */
+      if (err_fd < 0)
+        {
+          capture_err_fd = mkstemp (err_tmpl);
+          if (capture_err_fd >= 0)
+            {
+              unlink (err_tmpl);
+              actual_err_fd = capture_err_fd;
+            }
+        }
+
       ret = run_process_with_stdin_timeout_envp (hooks[i]->path, hooks[i]->args, cwd, hooks[i]->timeout, env,
-                                                 stdin, stdin_len, out_fd, err_fd, can_ignore_chdir_errors, err);
+                                                 stdin, stdin_len, actual_out_fd, actual_err_fd, can_ignore_chdir_errors, err);
       if (UNLIKELY (ret < 0))
         error_created = true;
 
+      /* Read captured output if hook failed.  */
+      if (ret != 0)
+        {
+          if (capture_out_fd >= 0)
+            {
+              if (lseek (capture_out_fd, 0, SEEK_SET) == 0)
+                {
+                  ssize_t n = TEMP_FAILURE_RETRY (read (capture_out_fd, out_buf, sizeof (out_buf) - 1));
+                  if (n > 0)
+                    out_read = n;
+                }
+              close (capture_out_fd);
+            }
+
+          if (capture_err_fd >= 0)
+            {
+              if (lseek (capture_err_fd, 0, SEEK_SET) == 0)
+                {
+                  ssize_t n = TEMP_FAILURE_RETRY (read (capture_err_fd, err_buf, sizeof (err_buf) - 1));
+                  if (n > 0)
+                    err_read = n;
+                }
+              close (capture_err_fd);
+            }
+        }
+      else
+        {
+          /* Close capture fds on success.  */
+          if (capture_out_fd >= 0)
+            close (capture_out_fd);
+          if (capture_err_fd >= 0)
+            close (capture_err_fd);
+        }
+
       if (UNLIKELY (ret != 0))
         {
+          char msg[512];
+          int written = 0, msg_len = 0;
+
+          /* Build error message with captured output.  */
+          written = snprintf (msg, sizeof (msg), "error running %s hook #%zu: `%s` (exit code: %d)",
+                              name, i, hooks[i]->path, ret);
+          if (written > 0 && written < (int) sizeof (msg))
+            msg_len = written;
+
+          /* Append stdout if captured.  */
+          if (out_read > 0 && msg_len < (int) sizeof (msg) - 20)
+            {
+              int n = snprintf (msg + msg_len, sizeof (msg) - msg_len, ", stdout: ");
+              if (n > 0 && msg_len + n < (int) sizeof (msg))
+                {
+                  msg_len += n;
+                  size_t copy_len = out_read;
+                  if (msg_len + copy_len >= sizeof (msg))
+                    copy_len = sizeof (msg) - msg_len - 1;
+                  memcpy (msg + msg_len, out_buf, copy_len);
+                  msg_len += copy_len;
+                  msg[msg_len] = '\0';
+                }
+            }
+
+          /* Append stderr if captured.  */
+          if (err_read > 0 && msg_len < (int) sizeof (msg) - 20)
+            {
+              int n = snprintf (msg + msg_len, sizeof (msg) - msg_len, ", stderr: ");
+              if (n > 0 && msg_len + n < (int) sizeof (msg))
+                {
+                  msg_len += n;
+                  size_t copy_len = err_read;
+                  if (msg_len + copy_len >= sizeof (msg))
+                    copy_len = sizeof (msg) - msg_len - 1;
+                  memcpy (msg + msg_len, err_buf, copy_len);
+                  msg_len += copy_len;
+                  msg[msg_len] = '\0';
+                }
+            }
+
           if (keep_going)
-            libcrun_warning ("error running %s hook #%zu: `%s` (exit code: %d)", name, i, hooks[i]->path, ret);
+            libcrun_warning ("%s", msg);
           else
             {
-              libcrun_error (0, "error running %s hook #%zu: `%s` (exit code: %d)", name, i, hooks[i]->path, ret);
+              libcrun_error (0, "%s", msg);
               break;
             }
         }

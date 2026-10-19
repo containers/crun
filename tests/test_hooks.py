@@ -18,6 +18,7 @@
 import os
 import shutil
 from tests_utils import *
+import subprocess
 
 def test_fail_prestart():
     conf = base_config()
@@ -765,8 +766,30 @@ def test_poststop_hook_on_createruntime_timeout():
     return _test_poststop_hook_on_create_failure(hook, 'create')
 
 
+
+
+def test_hook_output_on_failure():
+    """Test that hook stdout/stderr are captured on failure."""
+    conf = base_config()
+    hook = {"path": "/bin/sh", "args": ["/bin/sh", "-c", "echo hook_stdout; echo hook_stderr >&2; exit 1"]}
+    conf['hooks'] = {"prestart": [hook]}
+    add_all_namespaces(conf)
+
+    try:
+        out, err = run_and_get_output(conf, hide_stderr=False)
+        return -1
+    except subprocess.CalledProcessError as e:
+        output = e.output.decode('utf-8', errors='ignore') if e.output else ""
+        if "hook_stdout" in output and "hook_stderr" in output:
+            return 0
+        return -1
+    except:
+        return -1
+
+
 all_tests = {
     "test-fail-prestart" : test_fail_prestart,
+    "test-hook-output-on-failure" : test_hook_output_on_failure,
     "test-success-prestart" : test_success_prestart,
     "test-fail-poststart" : test_fail_poststart,
     "test-success-poststart" : test_success_poststart,
