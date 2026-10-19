@@ -1316,8 +1316,65 @@ apply_security_settings (struct container_entrypoint_s *entrypoint_args, runtime
   return 0;
 }
 
+/* Create the process that joins the existing PID namespace now that the
+   host mounts are not visible anymore, and continue the setup from there.  */
 static int
-container_init_setup (void *args, pid_t own_pid, char *notify_socket,
+do_delayed_pidns_fork (int sync_socket, pid_t *own_pid, libcrun_error_t *err)
+{
+  pid_t pid;
+  int ret;
+
+  pid = fork ();
+  if (UNLIKELY (pid < 0))
+    return crun_make_error (err, errno, "fork");
+
+  if (pid)
+    {
+      /* Report the new PID to the parent and exit immediately.  */
+      ret = sync_socket_send_sync (sync_socket, false, err);
+      if (LIKELY (ret == 0))
+        {
+          ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
+          if (LIKELY (ret == sizeof (pid)))
+            _safe_exit (EXIT_SUCCESS);
+        }
+
+      kill (pid, SIGKILL);
+      _safe_exit (EXIT_FAILURE);
+    }
+
+  /* sync receive own pid.  */
+  ret = TEMP_FAILURE_RETRY (read (sync_socket, own_pid, sizeof (*own_pid)));
+  if (UNLIKELY (ret != sizeof (*own_pid)))
+    {
+      if (ret >= 0)
+        errno = 0;
+      return crun_make_error (err, errno, "read from sync socket");
+    }
+
+  return 0;
+}
+
+struct delayed_pidns_fork_s
+{
+  libcrun_container_t *container;
+  int sync_socket;
+  pid_t *own_pid;
+};
+
+static int
+delayed_pidns_fork_cb (void *data, libcrun_error_t *err)
+{
+  struct delayed_pidns_fork_s *d = data;
+
+  if (! libcrun_container_delayed_pidns_fork (d->container))
+    return 0;
+
+  return do_delayed_pidns_fork (d->sync_socket, d->own_pid, err);
+}
+
+static int
+container_init_setup (void *args, pid_t *own_pid, char *notify_socket,
                       int sync_socket, char **exec_path, libcrun_error_t *err)
 {
   struct container_entrypoint_s *entrypoint_args = args;
@@ -1329,6 +1386,11 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   cleanup_close int console_socketpair = -1;
   runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_free char *rootfs = NULL;
+  struct delayed_pidns_fork_s delayed_pidns_fork = {
+    .container = container,
+    .sync_socket = sync_socket,
+    .own_pid = own_pid,
+  };
 
   ret = initialize_security (container, def->process, err);
   if (UNLIKELY (ret < 0))
@@ -1393,7 +1455,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
         return ret;
     }
 
-  ret = libcrun_finalize_mounts (entrypoint_args, container, rootfs, err);
+  ret = libcrun_finalize_mounts (entrypoint_args, container, rootfs, delayed_pidns_fork_cb, &delayed_pidns_fork, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1476,7 +1538,7 @@ container_init_setup (void *args, pid_t own_pid, char *notify_socket,
   if (def->process && def->process->user)
     umask (def->process->user->umask_present ? def->process->user->umask : 0022);
 
-  ret = apply_security_settings (entrypoint_args, def, container, own_pid, err);
+  ret = apply_security_settings (entrypoint_args, def, container, *own_pid, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -1607,7 +1669,7 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       return crun_make_error (err, errno, "read from sync socket");
     }
 
-  ret = container_init_setup (args, own_pid, notify_socket, sync_socket, &exec_path, err);
+  ret = container_init_setup (args, &own_pid, notify_socket, sync_socket, &exec_path, err);
   if (UNLIKELY (ret < 0))
     {
       /* If it fails to write the error using the sync socket, then fallback
@@ -3041,9 +3103,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  ret = set_scheduler (pid, def, err);
-  if (UNLIKELY (ret < 0))
-    goto fail;
+  /* If the container process is created later, the scheduler is set on it then.  */
+  if (! libcrun_container_delayed_pidns_fork (container))
+    {
+      ret = set_scheduler (pid, def, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+    }
 
   /* The container is waiting that we write back.  In this phase we can launch the
      prestart hooks.  */
@@ -3073,6 +3139,48 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   ret = sync_socket_send_sync (sync_socket, true, err);
   if (UNLIKELY (ret < 0))
     goto fail;
+
+  /* The process joining an existing PID namespace is created once the container root is in place.  */
+  if (libcrun_container_delayed_pidns_fork (container))
+    {
+      pid_t new_pid = 0;
+
+      ret = sync_socket_wait_sync (context, sync_socket, false, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+
+      ret = TEMP_FAILURE_RETRY (read (sync_socket, &new_pid, sizeof (new_pid)));
+      if (UNLIKELY (ret != sizeof (new_pid)))
+        {
+          if (ret >= 0)
+            errno = 0;
+          crun_make_error (err, errno, "read pid from sync socket");
+          goto fail;
+        }
+
+      /* Cleanup the first process.  */
+      waitpid_ignore_stopped (pid, NULL, 0);
+
+      pid = new_pid;
+
+      ret = set_scheduler (pid, def, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+
+      ret = libcrun_handle_pidfd_receiver (pid, container, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+
+      /* sync send own pid.  */
+      ret = TEMP_FAILURE_RETRY (write (sync_socket, &pid, sizeof (pid)));
+      if (UNLIKELY (ret != sizeof (pid)))
+        {
+          if (ret >= 0)
+            errno = 0;
+          crun_make_error (err, errno, "write to sync socket");
+          goto fail;
+        }
+    }
 
   ret = terminal_setup (def, context, socket_pair_0, &terminal_fd, &orig_terminal, err);
   if (UNLIKELY (ret < 0))
