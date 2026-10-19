@@ -56,7 +56,7 @@ AC_PATH_PROG(MD2MAN, go-md2man)
 
 AM_CONDITIONAL([HAVE_MD2MAN], [test "x$ac_cv_path_MD2MAN" != x])
 
-AC_CHECK_HEADERS([linux/openat2.h stdatomic.h linux/ioprio.h])
+AC_CHECK_HEADERS([linux/openat2.h stdatomic.h linux/ioprio.h linux/io_uring.h])
 
 AC_CHECK_TYPES([atomic_int], [], [], [[#include <stdatomic.h>]])
 
