@@ -735,11 +735,52 @@ def test_cr_with_annotation_config():
     return _run_cr_test_with_config("annotation", ("dump.log", "restore.log"), extra_configs=extra, annotations=annotations)
 
 
+# CRIU does not restore the io_uring restrictions, the restored container
+# must inherit them from crun.
+def test_cr_io_uring():
+    if r := _check_cr_requirements():
+        return r
+    if subprocess.call([get_init_path(), "check-feature", "io_uring-restrictions"]) != 0:
+        return 77, "io_uring restrictions not supported by the kernel"
+
+    data_dir = os.path.join(get_tests_root(), 'io-uring')
+    os.makedirs(data_dir)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'io_uring-once-restored', '/data', 'nop', 'write']
+    add_all_namespaces(conf)
+    conf['mounts'].append({"destination": "/data", "type": "bind", "source": data_dir, "options": ["bind", "rw"]})
+    conf.setdefault('annotations', {})['run.oci.io_uring'] = json.dumps({"ops": ["IORING_OP_NOP"]})
+
+    def mark_restored():
+        with open(os.path.join(data_dir, 'restored'), 'w'):
+            pass
+
+    def check_results(cid):
+        results = os.path.join(data_dir, 'results')
+        for _ in range(100):
+            if os.path.exists(results):
+                break
+            time.sleep(0.1)
+        else:
+            logger.info("test_cr_io_uring: no results from the restored container")
+            return -1
+        with open(results) as f:
+            out = f.read()
+        if out.split() != ["nop", "allowed", "write", "denied"]:
+            logger.info("test_cr_io_uring: unexpected results after restore: %s", out)
+            return -1
+        return 0
+
+    return run_cr_test(conf, before_restore_cb=mark_restored, after_restore_cb=check_results)
+
+
 all_tests = {
     "checkpoint-restore": test_cr,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
     "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,
+    "checkpoint-restore-io-uring": test_cr_io_uring,
     "checkpoint-restore-mount-flags": test_cr_mount_flags,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-failed-cgroup-cleanup": test_cr_failed_restore_cgroup_cleanup,
