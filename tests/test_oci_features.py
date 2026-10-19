@@ -54,67 +54,6 @@ def test_crun_features():
                 "poststart",
                 "poststop"
             ],
-            "mountOptions": [
-                "rw",
-                "rrw",
-                "ro",
-                "rro",
-                "rdirsync",
-                "rdiratime",
-                "rnodev",
-                "rnorelatime",
-                "nodiratime",
-                "rnodiratime",
-                "diratime",
-                "rnoatime",
-                "rnomand",
-                "ratime",
-                "rmand",
-                "mand",
-                "idmap",
-                "noatime",
-                "nomand",
-                "dirsync",
-                "rnosuid",
-                "atime",
-                "rnoexec",
-                "nodev",
-                "rbind",
-                "norelatime",
-                "bind",
-                "rnostrictatime",
-                "strictatime",
-                "rstrictatime",
-                "rprivate",
-                "rsuid",
-                "remount",
-                "suid",
-                "nostrictatime",
-                "rrelatime",
-                "nosuid",
-                "noexec",
-                "rslave",
-                "dev",
-                "rdev",
-                "rsync",
-                "relatime",
-                "sync",
-                "shared",
-                "rshared",
-                "unbindable",
-                "runbindable",
-                "defaults",
-                "async",
-                "rasync",
-                "dest-nofollow",
-                "src-nofollow",
-                "private",
-                "tmpcopyup",
-                "rexec",
-                "copy-symlink",
-                "exec",
-                "slave"
-            ],
             "linux": {
                 "namespaces": [
                     "cgroup",
@@ -178,6 +117,12 @@ def test_crun_features():
                 "krun.",
             ]
         }
+
+        mount_options = features.get("mountOptions", [])
+        for option in ["ro", "rw", "bind", "rbind", "nosuid", "nodev", "noexec", "idmap"]:
+            if option not in mount_options:
+                logger.info("# Missing mount option: %s", option)
+                return -1
 
         systemd_enabled = is_systemd_enabled()
         seccomp_enabled = is_seccomp_enabled()
