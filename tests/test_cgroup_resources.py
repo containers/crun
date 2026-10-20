@@ -377,10 +377,10 @@ def test_hugetlb_reservation_limit():
 
     page_sizes = [
         page_size for page_size in ('2MB', '1GB')
-        if os.path.exists(f'/sys/fs/cgroup/hugetlb.{page_size}.rsvd.max')
+        if os.path.exists(f'/sys/fs/cgroup/hugetlb.{page_size}.max')
     ]
     if not page_sizes:
-        return (77, "HugeTLB reservation accounting is not available")
+        return (77, "HugeTLB accounting is not available")
 
     limit = 1024 * 1024 * 1024
     conf = base_config()
@@ -391,22 +391,40 @@ def test_hugetlb_reservation_limit():
             for page_size in page_sizes
         ]
     }
-    conf['process']['args'] = [
-        '/init', 'cat',
-        *[
-            f'/sys/fs/cgroup/hugetlb.{page_size}.{suffix}'
-            for page_size in page_sizes
-            for suffix in ('max', 'rsvd.max')
-        ]
-    ]
+    checks = []
+    for page_size in page_sizes:
+        max_path = f'/sys/fs/cgroup/hugetlb.{page_size}.max'
+        rsvd_path = f'/sys/fs/cgroup/hugetlb.{page_size}.rsvd.max'
+        checks.extend([
+            f'cat {max_path}',
+            f'if [ -e {rsvd_path} ]; then cat {rsvd_path}; '
+            'else echo unavailable; fi',
+        ])
+    conf['process']['args'] = ['/init', 'sh', '-c', '; '.join(checks)]
 
     try:
         out, _ = run_and_get_output(conf, hide_stderr=True)
-        expected = [str(limit)] * (len(page_sizes) * 2)
-        if out.strip().splitlines() == expected:
+        values = out.strip().splitlines()
+        if len(values) != len(page_sizes) * 2:
+            logger.info("Expected %s values, got: %s", len(page_sizes) * 2, values)
+            return -1
+
+        rsvd_supported = False
+        for index in range(len(page_sizes)):
+            max_value, rsvd_value = values[index * 2:index * 2 + 2]
+            if max_value != str(limit):
+                logger.info("Expected %s, got: %s", limit, max_value)
+                return -1
+            if rsvd_value == 'unavailable':
+                continue
+            if rsvd_value != str(limit):
+                logger.info("Expected %s, got: %s", limit, rsvd_value)
+                return -1
+            rsvd_supported = True
+
+        if rsvd_supported:
             return 0
-        logger.info("Expected %s, got: %s", expected, out.strip().splitlines())
-        return -1
+        return (77, "HugeTLB reservation accounting is not available in the container cgroup")
     except Exception as e:
         logger.info("hugetlb reservation limit test failed: %s", e)
         return -1
