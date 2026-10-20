@@ -516,16 +516,16 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
                          runtime_spec_schema_config_linux_resources_hugepage_limits_element **htlb, size_t htlb_len,
                          libcrun_error_t *err)
 {
+  const char *suffix = cgroup2 ? "max" : "limit_in_bytes";
+  bool skip_rsvd = false;
   char fmt_buf[128];
   size_t i;
   for (i = 0; i < htlb_len; i++)
     {
       cleanup_free char *filename = NULL;
-      const char *suffix;
+      cleanup_free char *rsvd_filename = NULL;
       int len;
       int ret;
-
-      suffix = cgroup2 ? "max" : "limit_in_bytes";
 
       xasprintf (&filename, "hugetlb.%s.%s", htlb[i]->page_size, suffix);
 
@@ -535,6 +535,20 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (skip_rsvd)
+        continue;
+
+      /* Reservation accounting (Linux >= 5.7) is used when available.  */
+      xasprintf (&rsvd_filename, "hugetlb.%s.rsvd.%s", htlb[i]->page_size, suffix);
+      ret = write_cgroup_file (dirfd, rsvd_filename, fmt_buf, len, err);
+      if (UNLIKELY (ret < 0))
+        {
+          if (crun_error_get_errno (err) != ENOENT)
+            return ret;
+          crun_error_release (err);
+          skip_rsvd = true;
+        }
     }
   return 0;
 }
