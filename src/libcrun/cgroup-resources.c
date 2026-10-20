@@ -535,6 +535,24 @@ write_hugetlb_resources (int dirfd, bool cgroup2,
       ret = write_file_and_check_controllers_at (cgroup2, dirfd, filename, NULL, fmt_buf, len, err);
       if (UNLIKELY (ret < 0))
         return ret;
+
+      if (cgroup2)
+        {
+          cleanup_free char *rsvd_filename = NULL;
+
+          xasprintf (&rsvd_filename, "hugetlb.%s.rsvd.max", htlb[i]->page_size);
+          ret = write_cgroup_file (dirfd, rsvd_filename, fmt_buf, len, err);
+          if (UNLIKELY (ret < 0))
+            {
+              /* Reservation accounting was added after the original
+                 hugetlb controller files.  Fall back to usage accounting
+                 on kernels that do not expose the reservation limit.  */
+              if (crun_error_get_errno (err) != ENOENT)
+                return ret;
+
+              crun_error_release (err);
+            }
+        }
     }
   return 0;
 }

@@ -367,6 +367,51 @@ def test_pids_limit():
         return -1
 
 
+def test_hugetlb_reservation_limit():
+    """Test HugeTLB reservation limits on cgroup v2."""
+    if is_rootless():
+        return (77, "requires root")
+
+    if not is_cgroup_v2_unified():
+        return (77, "requires cgroup v2")
+
+    page_sizes = [
+        page_size for page_size in ('2MB', '1GB')
+        if os.path.exists(f'/sys/fs/cgroup/hugetlb.{page_size}.rsvd.max')
+    ]
+    if not page_sizes:
+        return (77, "HugeTLB reservation accounting is not available")
+
+    limit = 1024 * 1024 * 1024
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['linux']['resources'] = {
+        'hugepageLimits': [
+            {'pageSize': page_size, 'limit': limit}
+            for page_size in page_sizes
+        ]
+    }
+    conf['process']['args'] = [
+        '/init', 'cat',
+        *[
+            f'/sys/fs/cgroup/hugetlb.{page_size}.{suffix}'
+            for page_size in page_sizes
+            for suffix in ('max', 'rsvd.max')
+        ]
+    ]
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        expected = [str(limit)] * (len(page_sizes) * 2)
+        if out.strip().splitlines() == expected:
+            return 0
+        logger.info("Expected %s, got: %s", expected, out.strip().splitlines())
+        return -1
+    except Exception as e:
+        logger.info("hugetlb reservation limit test failed: %s", e)
+        return -1
+
+
 def test_cpu_idle():
     """Test cpu.idle cgroup resource (cgroup v2 only)."""
     if is_rootless():
@@ -507,6 +552,7 @@ all_tests = {
     "cgroup-resources-cpuset-cpus": test_cpuset_cpus,
     "cgroup-resources-cpuset-mems": test_cpuset_mems,
     "cgroup-resources-pids-limit": test_pids_limit,
+    "cgroup-resources-hugetlb-reservation-limit": test_hugetlb_reservation_limit,
     "cgroup-resources-blkio-weight": test_blkio_weight,
     "cgroup-resources-unified": test_unified_resources,
 }
