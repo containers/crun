@@ -118,7 +118,7 @@ def is_alive(pid):
         for tid in os.listdir("/proc/%d/task" % pid):
             if task_state(pid, int(tid)) not in ("Z", "X"):
                 return True
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         pass
     return False
 
@@ -155,7 +155,10 @@ def delete_exited_main_thread(init_args, pidns, find_target):
         return -1
     finally:
         if target is not None and is_alive(target):
-            os.kill(target, 9)
+            try:
+                os.kill(target, 9)
+            except ProcessLookupError:
+                pass
         try:
             run_crun_command_raw(["delete", "-f", container_id])
         except subprocess.CalledProcessError:
