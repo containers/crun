@@ -1696,7 +1696,7 @@ def test_mount_overlay_fs():
     if is_rootless():
         return (77, "requires root privileges")
 
-    overlay_base = tempfile.mkdtemp(prefix="crun-overlay-test-")
+    overlay_base = tempfile.mkdtemp(prefix="crun-overlay-test-", dir=get_tests_root())
     lower = os.path.join(overlay_base, "lower")
     upper = os.path.join(overlay_base, "upper")
     work = os.path.join(overlay_base, "work")
