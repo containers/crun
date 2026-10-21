@@ -8071,7 +8071,7 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
       if (errno == ESRCH)
         return crun_make_error (err, errno, "process not running");
       /* Check if the PID is valid before reporting an error. */
-      if (errno == EINVAL)
+      if (errno == EINVAL || errno == ENOENT)
         {
           int errno_saved = errno;
           ret = libcrun_check_pid_valid (status, err);
