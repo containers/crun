@@ -37,7 +37,7 @@ logger = logging.getLogger('crun.tests')
 
 # Export logger for use in test files
 __all__ = ['logger', 'base_config', 'run_and_get_output', 'run_crun_command', 'run_crun_command_raw',
-           'parse_proc_status', 'add_all_namespaces', 'tests_main', 'is_rootless',
+           'parse_proc_status', 'add_all_namespaces', 'tests_main', 'is_rootless', 'is_openat2_available',
            'is_cgroup_v2_unified', 'is_sched_deadline_available', 'get_crun_feature_string', 'running_on_systemd',
            'systemctl_show',
            'get_tests_root', 'get_tests_root_status', 'get_init_path', 'get_crun_path',
@@ -546,6 +546,10 @@ def is_rootless():
         if "4294967295" in f.readline():
             return False
     return True
+
+def is_openat2_available():
+    """Check if openat2(2) works; it can be blocked by a seccomp filter, see tests/no_openat2."""
+    return subprocess.call([get_init_path(), "check-feature", "openat2"]) == 0
 
 def is_cgroup_v2_unified():
     return subprocess.check_output("stat -c%T -f /sys/fs/cgroup".split()).decode("utf-8").strip() == "cgroup2fs"

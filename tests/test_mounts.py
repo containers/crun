@@ -788,6 +788,8 @@ def test_cgroup_mount_without_netns():
 def test_add_remove_mounts():
     if is_rootless():
         return (77, "requires root privileges")
+    if not is_openat2_available():
+        return (77, "requires openat2")
     conf = base_config()
 
     conf['mounts'].append({"destination": "/foo", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]})
@@ -855,6 +857,8 @@ def test_add_remove_mounts():
 def test_remove_mounts_no_symlinks():
     if is_rootless():
         return (77, "requires root privileges")
+    if not is_openat2_available():
+        return (77, "requires openat2")
     conf = base_config()
     add_all_namespaces(conf)
     conf['linux']['readonlyPaths'] = ["/proc/sys"]
@@ -911,6 +915,8 @@ def test_remove_mounts_no_symlinks():
 def helper_add_mounts_nested_userns(init_arg: str, expect_failure: bool) -> int:
     if is_rootless():
         return (77, "requires root privileges")
+    if not is_openat2_available():
+        return (77, "requires openat2")
 
     bind_dir = os.path.join(get_tests_root(), "bind-mount")
     os.makedirs(bind_dir, exist_ok=True)
@@ -986,6 +992,8 @@ def test_add_mounts_nested_userns():
 def test_add_mounts_container_namespaces():
     if is_rootless():
         return (77, "requires root privileges")
+    if not is_openat2_available():
+        return (77, "requires openat2")
 
     new_mounts = [{"destination": "/foo/tmpfs", "type": "tmpfs", "source": "tmpfs", "options": ["nosuid", "nodev", "size=64k", "mode=0700"]},
                   {"destination": "/foo/proc", "type": "proc", "source": "proc", "options": ["nosuid", "nodev", "noexec"]}]

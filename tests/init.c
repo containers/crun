@@ -1105,6 +1105,19 @@ main (int argc, char **argv)
           return 1;
 #endif
         }
+      else if (strcmp (argv[2], "openat2") == 0)
+        {
+#if defined __NR_openat2
+          /* struct open_how: flags, mode, resolve.  */
+          uint64_t how[3] = { O_PATH | O_CLOEXEC, 0, 0 };
+          int ret;
+
+          ret = syscall (__NR_openat2, AT_FDCWD, "/", how, sizeof (how));
+          return ret >= 0 ? 0 : 1;
+#else
+          return 1;
+#endif
+        }
       else if (strcmp (argv[2], "seccomp-listener") == 0)
         {
 #ifdef HAVE_SECCOMP
