@@ -187,6 +187,7 @@ check_idmapped_mounts (const char *path)
     0,
   };
   char proc_path[64];
+  pid_t ppid = getpid ();
   int open_tree_fd;
   pid_t pid;
   int fd;
@@ -197,6 +198,9 @@ check_idmapped_mounts (const char *path)
   if (pid == 0)
     {
       prctl (PR_SET_PDEATHSIG, SIGKILL);
+      /* The parent might have exited before PR_SET_PDEATHSIG was set.  */
+      if (getppid () != ppid)
+        _exit (EXIT_SUCCESS);
       while (1)
         pause ();
       _exit (EXIT_SUCCESS);
@@ -1097,6 +1101,19 @@ main (int argc, char **argv)
 
           ret = syscall (__NR_move_mount);
           return (ret >= 0 || errno != ENOSYS) ? 0 : 1;
+#else
+          return 1;
+#endif
+        }
+      else if (strcmp (argv[2], "openat2") == 0)
+        {
+#if defined __NR_openat2
+          /* struct open_how: flags, mode, resolve.  */
+          uint64_t how[3] = { O_PATH | O_CLOEXEC, 0, 0 };
+          int ret;
+
+          ret = syscall (__NR_openat2, AT_FDCWD, "/", how, sizeof (how));
+          return ret >= 0 ? 0 : 1;
 #else
           return 1;
 #endif
