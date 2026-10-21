@@ -969,7 +969,10 @@ def helper_add_mounts_nested_userns(init_arg: str, expect_failure: bool) -> int:
                         return -1
             else:
                 run_crun_command(["mounts", "add", cid, mounts_path])
-                out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/mountinfo"])
+                # exec would join the nested user namespace, which has no
+                # mappings, so read the mounts of the container process.
+                with open("/proc/%d/mountinfo" % pid) as f:
+                    out = f.read()
                 if not re.search(r" /foo/tmpfs .* - tmpfs .*size=64k", out):
                     logger.info("userns=%s: /foo/tmpfs not mounted with size=64k", userns)
                     return -1
