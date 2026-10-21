@@ -8068,25 +8068,10 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
       /* If pidfd_open is not supported, fallback to kill.  */
       if (errno == ENOSYS)
         return libcrun_kill_linux_no_pidfd (status, true, signal, err);
-      if (errno == ESRCH)
-        return crun_make_error (err, errno, "process not running");
-      /* Check if the PID is valid before reporting an error. */
-      if (errno == EINVAL)
-        {
-          int errno_saved = errno;
-          ret = libcrun_check_pid_valid (status, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-          if (ret == 0)
-            {
-              errno = ESRCH;
-              return crun_make_error (err, errno, "kill process");
-            }
-
-          /* Restore original errno. */
-          errno = errno_saved;
-        }
-
+      /* Kernels < 6.16 return EINVAL, newer ones ENOENT, when the pid
+         is not a thread-group leader (i.e. it was reused).  */
+      if (errno == ESRCH || errno == ENOENT || errno == EINVAL)
+        return crun_make_error (err, ESRCH, "process not running");
       return crun_make_error (err, errno, "open pidfd");
     }
 
