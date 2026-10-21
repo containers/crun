@@ -187,6 +187,7 @@ check_idmapped_mounts (const char *path)
     0,
   };
   char proc_path[64];
+  pid_t ppid = getpid ();
   int open_tree_fd;
   pid_t pid;
   int fd;
@@ -197,6 +198,9 @@ check_idmapped_mounts (const char *path)
   if (pid == 0)
     {
       prctl (PR_SET_PDEATHSIG, SIGKILL);
+      /* The parent might have exited before PR_SET_PDEATHSIG was set.  */
+      if (getppid () != ppid)
+        _exit (EXIT_SUCCESS);
       while (1)
         pause ();
       _exit (EXIT_SUCCESS);
