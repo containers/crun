@@ -46,6 +46,7 @@ enum
   OPTION_LSM_PROFILE,
   OPTION_LSM_MOUNT_CONTEXT,
   OPTION_NO_NEW_KEYRING,
+  OPTION_NO_SUBREAPER,
 };
 
 static char doc[] = "OCI runtime";
@@ -74,6 +75,7 @@ static struct argp_option options[]
         { "lsm-profile", OPTION_LSM_PROFILE, "VALUE", 0, "Specify an LSM profile to be used during restore in the form of TYPE:NAME", 0 },
         { "lsm-mount-context", OPTION_LSM_MOUNT_CONTEXT, "VALUE", 0, "Specify an LSM mount context to be used during restore", 0 },
         { "no-new-keyring", OPTION_NO_NEW_KEYRING, 0, 0, "keep the same session key", 0 },
+        { "no-subreaper", OPTION_NO_SUBREAPER, 0, 0, "do not create a subreaper process (ignored)", 0 },
         {
             0,
         } };
@@ -152,6 +154,9 @@ parse_opt (int key, char *arg, struct argp_state *state)
       libcrun_context_set_no_new_keyring (crun_context, true);
       break;
 
+    case OPTION_NO_SUBREAPER:
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -172,6 +177,10 @@ crun_command_restore (struct crun_global_arguments *global_args, int argc, char 
   crun_context = new_libcrun_context (global_args);
   cr_options.struct_size = sizeof (cr_options);
   cr_options.manage_cgroups_mode = -1;
+
+  for (int i = 1; i < argc; i++)
+    if (strcmp (argv[i], "-no-subreaper") == 0)
+      argv[i] = "--no-subreaper";
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);

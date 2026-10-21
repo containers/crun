@@ -843,6 +843,25 @@ def test_help_command():
         return -1
 
 
+def test_restore_no_subreaper_option():
+    """Test restore accepts the no-subreaper flag spellings used by runtimes."""
+    if 'CRIU' not in get_crun_feature_string():
+        return (77, "crun built without CRIU support")
+
+    for option in ['--no-subreaper', '-no-subreaper']:
+        try:
+            run_crun_command_raw(['restore', option])
+            logger.info("restore unexpectedly succeeded without a container ID")
+            return -1
+        except subprocess.CalledProcessError as e:
+            output = e.output.decode('utf-8', errors='ignore').lower()
+            if 'please specify a id for the container' not in output:
+                logger.info("restore did not report a missing container ID for %s: %s", option, output)
+                return -1
+
+    return 0
+
+
 all_tests = {
     "pause-unpause": test_pause_unpause,
     "kill-signal": test_kill_signal,
@@ -868,6 +887,7 @@ all_tests = {
     "start-command": test_start_command,
     "version-command": test_version_command,
     "help-command": test_help_command,
+    "restore-no-subreaper-option": test_restore_no_subreaper_option,
 }
 
 if __name__ == "__main__":
