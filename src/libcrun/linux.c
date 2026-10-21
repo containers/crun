@@ -8070,8 +8070,12 @@ libcrun_kill_linux (libcrun_container_status_t *status, int signal, libcrun_erro
         return libcrun_kill_linux_no_pidfd (status, true, signal, err);
       if (errno == ESRCH)
         return crun_make_error (err, errno, "process not running");
-      /* Check if the PID is valid before reporting an error. */
-      if (errno == EINVAL)
+      /* Check if the PID is valid before reporting an error.  pidfd_open
+         fails for a pid that is not a thread-group leader, for example when
+         the container's pid was reused by a thread: with EINVAL before
+         Linux 6.16, with ENOENT since (commit 8cf4b738f6d8, "pidfd: improve
+         uapi when task isn't found").  */
+      if (errno == EINVAL || errno == ENOENT)
         {
           int errno_saved = errno;
           ret = libcrun_check_pid_valid (status, err);
