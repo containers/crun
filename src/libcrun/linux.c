@@ -8549,6 +8549,7 @@ struct mount_in_a_container_args
   runtime_spec_schema_defs_mount **mounts;
   struct libcrun_fd_map *fds;
   int pidfd;
+  int owner_fd;
   size_t len;
 };
 
@@ -8582,6 +8583,52 @@ open_destination_nofollow (const char *destination, bool dir, libcrun_error_t *e
     return crun_make_error (err, errno, "open `%s`", destination);
 
   return fd;
+}
+
+/* Create the missing destinations of the mounts as the root user of the
+   container.  The file systems of the container can be owned by its user
+   namespace, where the root user of the host has no mapping, so that an
+   inode it creates there would have no owner and mkdir fails with
+   EOVERFLOW.  */
+static int
+create_destinations_in_a_container (void *arg, libcrun_error_t *err)
+{
+  struct mount_in_a_container_args *args = arg;
+  size_t i;
+  int ret;
+
+  ret = setns (args->owner_fd, CLONE_NEWUSER);
+  if (ret == 0)
+    {
+      ret = setresgid (0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setresgid to `0`");
+
+      ret = setresuid (0, 0, 0);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "setresuid to `0`");
+    }
+  else if (errno != EINVAL)
+    {
+      /* EINVAL means that the container runs in the current user namespace.  */
+      return crun_make_error (err, errno, "setns to the user namespace of the container");
+    }
+
+  for (i = 0; i < args->len; i++)
+    {
+      cleanup_close int dest_fd = -1;
+      struct stat st;
+
+      ret = fstat (args->fds->fds[i], &st);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fstat");
+
+      dest_fd = open_destination_nofollow (args->mounts[i]->destination, (st.st_mode & S_IFMT) == S_IFDIR, err);
+      if (UNLIKELY (dest_fd < 0))
+        return dest_fd;
+    }
+
+  return 0;
 }
 
 static int
@@ -8946,7 +8993,14 @@ libcrun_make_runtime_mounts (libcrun_container_t *container, libcrun_container_s
   args.mounts = mounts;
   args.fds = fds;
   args.pidfd = pidfd;
+  args.owner_fd = owner_fd;
   args.len = len;
+
+  ret = run_callback_in_namespace (mntns_fd, create_destinations_in_a_container, &args, err);
+  if (UNLIKELY (ret > 0))
+    return *err ? -1 : crun_make_error (err, 0, "the process in the container mount namespace exited with status %d", ret);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   return run_callback_in_namespace (mntns_fd, do_mount_in_a_container, &args, err);
 }
