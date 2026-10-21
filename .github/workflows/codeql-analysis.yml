@@ -1,20 +1,9 @@
 name: "CodeQL"
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ main ]
+  workflow_call:
   schedule:
     - cron: '39 22 * * 5'
-
-# Cancel superseded runs of the same pull request. For everything else
-# (in particular, pushes to a branch or a tag) there is no PR number, so
-# the group falls back to the unique run_id and nothing is cancelled.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
 
 jobs:
   analyze:
@@ -51,3 +40,5 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+      with:
+        category: .github/workflows/codeql-analysis.yml:analyze/language:${{ matrix.language }}
