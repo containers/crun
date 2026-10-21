@@ -484,13 +484,15 @@ def wait_for_state(cid, states='running', timeout=5):
     """
     if isinstance(states, str):
         states = (states,)
-    status_file = os.path.join(get_tests_root_status(), cid, "status")
+    # Wait for the container state directory rather than a particular file
+    # in it, so as not to depend on how the runtime keeps the state.
+    state_dir = os.path.join(get_tests_root_status(), cid)
     args = [get_crun_path(), "--root", get_tests_root_status(), "state", cid]
     deadline = time.monotonic() + timeout
     while True:
         # Only ask crun once the container is known to it, as it logs an error
         # for every state command for a container which does not exist yet.
-        if os.path.exists(status_file):
+        if os.path.isdir(state_dir):
             r = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, close_fds=False)
             if r.returncode == 0:
                 state = json.loads(r.stdout)
