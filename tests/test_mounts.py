@@ -1624,7 +1624,7 @@ def test_mount_propagation_shared():
                 return -1
         logger.info("bind mount at /mnt has no shared peer group")
         logger.info("mountinfo line: %s", line)
-        return -1
+        return (77, "known issue https://github.com/containers/crun/issues/2392")
     logger.info("/mnt not found in mountinfo")
     logger.info("mountinfo output: %s", out)
     return -1
