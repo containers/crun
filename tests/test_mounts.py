@@ -17,6 +17,8 @@
 
 import sys
 import copy
+import functools
+import importlib.util
 import socket
 import os
 import shutil
@@ -28,11 +30,14 @@ import tempfile
 import re
 from typing import List, Optional
 
-try:
-    import libmount
-except Exception:
-    print("1..0")
-    sys.exit(0)
+def requires_libmount(test):
+    """Skip TEST if the libmount python module is not available."""
+    @functools.wraps(test)
+    def wrapper():
+        if importlib.util.find_spec("libmount") is None:
+            return (77, "requires the libmount python module")
+        return test()
+    return wrapper
 
 def helper_mount(options: str, tmpfs: bool = True, userns: bool = False, is_file: bool = False) -> List[Optional[str]]:
     conf = base_config()
@@ -53,6 +58,7 @@ def helper_mount(options: str, tmpfs: bool = True, userns: bool = False, is_file
         with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
             f.write(out)
             f.flush()
+            import libmount
             t = libmount.Table(f.name)
             target = '/var/file' if is_file else '/var/dir'
             m = t.find_target(target)
@@ -418,6 +424,7 @@ def test_mount_path_with_multiple_slashes():
         return 0
     return -1
 
+@requires_libmount
 def test_mount_ro():
     for userns in [True, False]:
         a = helper_mount("ro", userns=userns, is_file=True)[0]
@@ -431,6 +438,7 @@ def test_mount_ro():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_rro():
     for userns in [True, False]:
         a = helper_mount("rro", userns=userns, is_file=True)[0]
@@ -444,6 +452,7 @@ def test_mount_rro():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_rw():
     for userns in [True, False]:
         a = helper_mount("rw", tmpfs=False, userns=userns)[0]
@@ -457,6 +466,7 @@ def test_mount_rw():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_relatime():
     for userns in [True, False]:
         a = helper_mount("relatime", tmpfs=False, userns=userns)[0]
@@ -470,6 +480,7 @@ def test_mount_relatime():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_strictatime():
     for userns in [True, False]:
         a = helper_mount("strictatime", is_file=True, userns=userns)[0]
@@ -483,6 +494,7 @@ def test_mount_strictatime():
             return 0
     return -1
 
+@requires_libmount
 def test_mount_exec():
     for userns in [True, False]:
         a = helper_mount("exec", is_file=True, userns=userns)[0]
@@ -496,6 +508,7 @@ def test_mount_exec():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_noexec():
     for userns in [True, False]:
         a = helper_mount("noexec", is_file=True, userns=userns)[0]
@@ -509,6 +522,7 @@ def test_mount_noexec():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_suid():
     for userns in [True, False]:
         a = helper_mount("suid", is_file=True, userns=userns)[0]
@@ -522,6 +536,7 @@ def test_mount_suid():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_nosuid():
     for userns in [True, False]:
         a = helper_mount("nosuid", is_file=True, userns=userns)[0]
@@ -535,6 +550,7 @@ def test_mount_nosuid():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_sync():
     for userns in [True, False]:
         a = helper_mount("sync", userns=userns)[1]
@@ -542,6 +558,7 @@ def test_mount_sync():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_dirsync():
     for userns in [True, False]:
         a = helper_mount("dirsync", userns=userns)[1]
@@ -549,6 +566,7 @@ def test_mount_dirsync():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_nodev():
     for userns in [True, False]:
         a = helper_mount("nodev", is_file=True)[0]
@@ -562,6 +580,7 @@ def test_mount_nodev():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_dev():
     for userns in [True, False]:
         a = helper_mount("dev", userns=userns, tmpfs=False)[0]
@@ -1629,6 +1648,7 @@ def test_mount_propagation_shared():
     logger.info("mountinfo output: %s", out)
     return -1
 
+@requires_libmount
 def test_mount_tmpfs_size():
     """Verify tmpfs mounts with size= data option work via fsopen_mount."""
     conf = base_config()
@@ -1644,6 +1664,7 @@ def test_mount_tmpfs_size():
     with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
         f.write(out)
         f.flush()
+        import libmount
         t = libmount.Table(f.name)
         m = t.find_target('/sized-tmpfs')
         if m is None:
@@ -1654,6 +1675,7 @@ def test_mount_tmpfs_size():
             return -1
     return 0
 
+@requires_libmount
 def test_mount_tmpfs_size_userns():
     """Verify tmpfs with data options works inside a user namespace.
 
@@ -1674,6 +1696,7 @@ def test_mount_tmpfs_size_userns():
     with tempfile.NamedTemporaryFile(mode='w', delete=True) as f:
         f.write(out)
         f.flush()
+        import libmount
         t = libmount.Table(f.name)
         m = t.find_target('/sized-tmpfs')
         if m is None:
