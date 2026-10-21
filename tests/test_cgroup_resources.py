@@ -367,6 +367,70 @@ def test_pids_limit():
         return -1
 
 
+def hugetlb_page_sizes():
+    """Return (name, size in bytes) for each huge page size, using kernel naming."""
+    try:
+        entries = os.listdir('/sys/kernel/mm/hugepages')
+    except FileNotFoundError:
+        return []
+    sizes = []
+    for entry in entries:
+        kb = int(entry[len('hugepages-'):-len('kB')])
+        if kb >= 1024 * 1024:
+            name = f'{kb // (1024 * 1024)}GB'
+        elif kb >= 1024:
+            name = f'{kb // 1024}MB'
+        else:
+            name = f'{kb}KB'
+        sizes.append((name, kb * 1024))
+    return sizes
+
+
+def test_hugetlb_limits():
+    """Test hugepageLimits, including reservation limits if available."""
+    if is_rootless():
+        return (77, "requires root")
+
+    sizes = hugetlb_page_sizes()
+    if not sizes:
+        return (77, "huge pages not available")
+
+    if is_cgroup_v2_unified():
+        cgroup_dir, suffix = '/sys/fs/cgroup', 'max'
+    else:
+        cgroup_dir, suffix = '/sys/fs/cgroup/hugetlb', 'limit_in_bytes'
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+
+    # Limit to one page of each size.
+    conf['linux']['resources'] = {
+        'hugepageLimits': [{'pageSize': name, 'limit': limit} for name, limit in sizes]
+    }
+
+    try:
+        conf['process']['args'] = ['/init', 'ls', cgroup_dir]
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        present = out.split()
+
+        for name, limit in sizes:
+            files = [f'hugetlb.{name}.{suffix}']
+            rsvd = f'hugetlb.{name}.rsvd.{suffix}'
+            if rsvd in present:
+                files.append(rsvd)
+
+            for file in files:
+                conf['process']['args'] = ['/init', 'cat', f'{cgroup_dir}/{file}']
+                out, _ = run_and_get_output(conf, hide_stderr=True)
+                if out.strip() != str(limit):
+                    logger.info("Expected %d in %s, got: %s", limit, file, out.strip())
+                    return -1
+        return 0
+    except Exception as e:
+        logger.info("hugetlb test failed: %s", e)
+        return -1
+
+
 def test_cpu_idle():
     """Test cpu.idle cgroup resource (cgroup v2 only)."""
     if is_rootless():
@@ -507,6 +571,7 @@ all_tests = {
     "cgroup-resources-cpuset-cpus": test_cpuset_cpus,
     "cgroup-resources-cpuset-mems": test_cpuset_mems,
     "cgroup-resources-pids-limit": test_pids_limit,
+    "cgroup-resources-hugetlb-limits": test_hugetlb_limits,
     "cgroup-resources-blkio-weight": test_blkio_weight,
     "cgroup-resources-unified": test_unified_resources,
 }
