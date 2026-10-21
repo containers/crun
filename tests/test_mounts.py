@@ -943,7 +943,7 @@ def helper_add_mounts_nested_userns(init_arg: str, expect_failure: bool) -> int:
 
         cid = None
         try:
-            _, cid = run_and_get_output(conf, detach=True)
+            _, cid = run_and_get_output(conf, detach=True, chown_rootfs_to=1 if userns else None)
             pid = json.loads(run_crun_command(['state', cid]))['pid']
 
             # wait for the container process to be in its own user namespace
@@ -1019,7 +1019,7 @@ def test_add_mounts_container_namespaces():
 
         cid = None
         try:
-            _, cid = run_and_get_output(conf, detach=True)
+            _, cid = run_and_get_output(conf, detach=True, chown_rootfs_to=1 if userns else None)
 
             run_crun_command(["mounts", "add", cid, mounts_path])
 
