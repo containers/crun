@@ -116,6 +116,9 @@ jobs:
 
       - name: run autogen.sh
         run: |
+          # Tests run inside a container do this themselves.
+          test -f "tests/${{ matrix.test }}/Dockerfile" && exit 0
+
           git clean -fdx .
           find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
