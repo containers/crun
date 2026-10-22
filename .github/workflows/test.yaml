@@ -93,8 +93,6 @@ jobs:
           - test: bindings
           - test: checkpoint-restore
           - test: fuzzing
-          - test: codespell
-          - test: ruff
           - test: wasmedge-build
           - test: krun-build
     steps:
@@ -219,6 +217,22 @@ jobs:
           build-aux/sh-files.sh shfmt -w
           git diff --ignore-submodules --exit-code
 
+  # These need neither a build nor the build dependencies.
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [codespell, ruff]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # ruff checks the Python code in libocispec as well.
+          submodules: recursive
+          persist-credentials: false
+      - name: run test
+        run: ./tests/ci.sh "${{ matrix.test }}"
+
   zizmor:
     runs-on: ubuntu-latest
     steps:
@@ -248,6 +262,7 @@ jobs:
       - keyring
       - runc-integration
       - shellcheck
+      - lint
       - zizmor
       - codeql
     permissions: {}
