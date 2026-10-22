@@ -468,18 +468,14 @@ clang-format:
 # do not format files that were copied into the source directory.
 	git ls-files contrib src tests | grep -E "\\.[hc]" | grep -v "blake3\|chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
 
-# Only files with a .sh suffix: the extension-less scripts in build-aux are
-# imported from gnulib and are not ours to fix.
-LIST_SH_FILES = git ls-files '*.sh'
-
 shellcheck:
-	$(LIST_SH_FILES) | xargs shellcheck
+	$(srcdir)/build-aux/sh-files.sh shellcheck
 
 validate-keyring:
 	$(srcdir)/build-aux/keyring_validate.sh
 
 shfmt:
-	$(LIST_SH_FILES) | xargs shfmt -w
+	$(srcdir)/build-aux/sh-files.sh shfmt -w
 
 # Static analysis with cppcheck.  Files copied into the source tree are not
 # analyzed.  varFuncNullUB is suppressed since a bare NULL is used as the
