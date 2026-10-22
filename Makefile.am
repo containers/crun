@@ -465,8 +465,7 @@ generate-mount_flags.c: src/libcrun/mount_flags.perf
 	${GPERF} --lookup-function-name libcrun_mount_flag_in_word_set -m 100 -tCEG -S1 $< > src/libcrun/mount_flags.c
 
 clang-format:
-# do not format files that were copied into the source directory.
-	git ls-files contrib src tests | grep -E "\\.[hc]" | grep -v "blake3\|chroot_realpath.c\|cloned_binary.c\|signals.c\|mount_flags.c" | xargs clang-format -style=file -i
+	$(srcdir)/build-aux/c-files.sh clang-format -style=file -i
 
 shellcheck:
 	$(srcdir)/build-aux/sh-files.sh shellcheck
