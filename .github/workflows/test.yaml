@@ -211,20 +211,12 @@ jobs:
           sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shellcheck"
           # make sure to remove the old version
           sudo rm -f /usr/bin/shellcheck
-      - name: install dependencies
-        run: |
-          sudo apt-get update -q -y
-          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev mawk
       - uses: lumaxis/shellcheck-problem-matchers@bf6e0860fd06e4910738c6160dcd2889146ce824 # v2.3.1
       - name: shellcheck
-        run: |
-          find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
-          ./autogen.sh
-          ./configure --enable-embedded-blake3
-          make shellcheck
+        run: build-aux/sh-files.sh shellcheck
       - name: shfmt
         run: |
-          make shfmt
+          build-aux/sh-files.sh shfmt -w
           git diff --ignore-submodules --exit-code
 
   zizmor:
