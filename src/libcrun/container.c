@@ -1937,6 +1937,22 @@ has_new_pid_namespace (runtime_spec_schema_config_schema *def)
   return false;
 }
 
+static bool
+has_mount_namespace (runtime_spec_schema_config_schema *def)
+{
+  size_t i;
+
+  if (def->linux == NULL || def->linux->namespaces == NULL)
+    return false;
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      if (strcmp (def->linux->namespaces[i]->type, "mount") == 0)
+        return true;
+    }
+  return false;
+}
+
 /* Delete the container state.  CONTAINER is the container the caller already has
    available, or NULL.  When it is not NULL, the poststop hooks are run even if the
    status file was never written, e.g. when the container creation failed.  */
@@ -3292,6 +3308,23 @@ check_config_file (runtime_spec_schema_config_schema *def, libcrun_context_t *co
         return crun_make_error (err, 0, "invalid config file, no `root` block specified");
       if (UNLIKELY (def->mounts == NULL))
         return crun_make_error (err, 0, "invalid config file, no `mounts` block specified");
+    }
+
+  /* Without a mount namespace, these would change the host mounts.  */
+  if (! has_mount_namespace (def))
+    {
+      if (def->linux->rootfs_propagation && def->linux->rootfs_propagation[0])
+        return crun_make_error (err, 0, "unable to set rootfs propagation without a private MNT namespace");
+      if (context->no_pivot)
+        return crun_make_error (err, 0, "unable to use no-pivot without a private MNT namespace");
+    }
+
+  if (def->root && def->root->path)
+    {
+      cleanup_free char *rootfs = realpath (def->root->path, NULL);
+
+      if (rootfs && strcmp (rootfs, "/") == 0)
+        return crun_make_error (err, 0, "invalid rootfs: / is not allowed");
     }
   return 0;
 }
