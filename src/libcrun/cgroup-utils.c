@@ -27,6 +27,7 @@
 #include "ebpf.h"
 #include "utils.h"
 #include "status.h"
+#include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -1520,7 +1521,9 @@ get_cgroup_dirfd_path (int dirfd, char **path, libcrun_error_t *err)
 }
 
 /* Parse a cpu.max value: "QUOTA [PERIOD]", where QUOTA is either a
-   number or "max" (returned as -1).  */
+   number or "max" (returned as -1), and PERIOD is a number separated
+   from QUOTA by whitespace other than a newline.  Trailing whitespace
+   is allowed.  */
 int
 parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
 {
@@ -1544,18 +1547,28 @@ parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_pe
     }
 
   it = endptr;
-  while (*it == ' ')
+  while (*it != '\n' && isspace ((unsigned char) *it))
     it++;
 
   *has_period = false;
   if (*it && *it != '\n')
     {
+      /* strtoull() would also accept a sign, and wrap a negative value.  */
+      if (UNLIKELY (it == endptr || *it < '0' || *it > '9'))
+        return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+
       errno = 0;
       *period = strtoull (it, &endptr, 10);
-      if (UNLIKELY (errno != 0 || endptr == it || (*endptr && *endptr != '\n')))
+      if (UNLIKELY (errno != 0))
         return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
       *has_period = true;
+      it = endptr;
     }
+
+  while (isspace ((unsigned char) *it))
+    it++;
+  if (UNLIKELY (*it != '\0'))
+    return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
 
   return 0;
 }
