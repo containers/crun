@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <argp.h>
 #include <unistd.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sched.h>
@@ -1953,6 +1954,30 @@ has_mount_namespace (runtime_spec_schema_config_schema *def)
   return false;
 }
 
+/* Without a mount namespace, the container rootfs is bind mounted onto itself
+   in the host mount namespace, and the container mounts are created under it.
+   Unmount it, together with all the container mounts, provided it is still
+   the mount with MOUNT_ID, so that a mount not created by crun is never
+   unmounted.  */
+static void
+unmount_host_mntns_rootfs (const char *rootfs, uint64_t mount_id)
+{
+  cleanup_free char *path = NULL;
+
+  if (mount_id == 0)
+    return;
+
+  path = realpath (rootfs, NULL);
+  if (path == NULL || get_mount_id (path) != mount_id)
+    {
+      libcrun_debug ("Not unmounting `%s`: not the container rootfs mount", rootfs);
+      return;
+    }
+
+  if (UNLIKELY (umount2 (path, MNT_DETACH | UMOUNT_NOFOLLOW) < 0))
+    libcrun_warning ("cannot unmount `%s`: %s", path, strerror (errno));
+}
+
 /* Delete the container state.  CONTAINER is the container the caller already has
    available, or NULL.  When it is not NULL, the poststop hooks are run even if the
    status file was never written, e.g. when the container creation failed.  */
@@ -2070,6 +2095,18 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
         return ret;
     }
 
+  if (status.rootfs_mount_id && status.rootfs)
+    {
+      cleanup_free char *rootfs = NULL;
+
+      if (status.rootfs[0] == '/' || status.bundle == NULL)
+        rootfs = xstrdup (status.rootfs);
+      else
+        xasprintf (&rootfs, "%s/%s", status.bundle, status.rootfs);
+
+      unmount_host_mntns_rootfs (rootfs, status.rootfs_mount_id);
+    }
+
   ret = run_poststop_hooks (context, container, def, &status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     libcrun_error_report_and_release (err);
@@ -2128,7 +2165,7 @@ libcrun_container_killall (libcrun_context_t *context, const char *id, const cha
 static int
 write_container_status (libcrun_container_t *container, libcrun_context_t *context,
                         pid_t pid, struct libcrun_cgroup_status *cgroup_status,
-                        libcrun_error_t *err)
+                        uint64_t rootfs_mount_id, libcrun_error_t *err)
 {
   cleanup_free char *bundle_allocated = NULL;
   const char *bundle = get_bundle_path (context->bundle, &bundle_allocated);
@@ -2149,6 +2186,7 @@ write_container_status (libcrun_container_t *container, libcrun_context_t *conte
     .external_descriptors = external_descriptors,
     .cgroup_path = NULL,
     .scope = NULL,
+    .rootfs_mount_id = rootfs_mount_id,
   };
 
   get_current_timestamp (created, sizeof (created));
@@ -2959,6 +2997,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   const char *seccomp_notify_plugins = NULL;
   cleanup_cgroup_preenter struct libcrun_cgroup_args cg = {};
   cleanup_free char *bundle_allocated = NULL;
+  uint64_t rootfs_mount_id = 0;
   struct container_entrypoint_s container_args = {
     .container = container,
     .context = context,
@@ -3110,6 +3149,15 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     goto fail;
 
+  /* The container mounts are in place now.  Without a mount namespace, they
+     are in the host one, so remember the rootfs mount to unmount it later.  */
+  if (! has_mount_namespace (def) && def->root && def->root->path)
+    {
+      cleanup_free char *rootfs = realpath (def->root->path, NULL);
+      if (rootfs)
+        rootfs_mount_id = get_mount_id (rootfs);
+    }
+
   ret = libcrun_cgroup_enter_finalize (&cg, cgroup_status, err);
   if (UNLIKELY (ret < 0))
     goto fail;
@@ -3212,7 +3260,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
     }
 
   libcrun_debug ("Writing container status");
-  ret = write_container_status (container, context, pid, cgroup_status, err);
+  ret = write_container_status (container, context, pid, cgroup_status, rootfs_mount_id, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 
@@ -3266,6 +3314,8 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
 fail:
   ret = cleanup_watch (context, def, cgroup_status, pid, sync_socket, terminal_fd, err);
+  if (rootfs_mount_id)
+    unmount_host_mntns_rootfs (def->root->path, rootfs_mount_id);
   if (cgroup_status)
     {
       libcrun_error_t tmp_err = NULL;
@@ -5390,7 +5440,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   }
 
   context->detach = cr_options->detach;
-  ret = write_container_status (container, context, status.pid, cgroup_status, err);
+  ret = write_container_status (container, context, status.pid, cgroup_status, 0, err);
   if (UNLIKELY (ret < 0))
     goto fail;
 

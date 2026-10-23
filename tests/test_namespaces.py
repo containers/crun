@@ -63,6 +63,44 @@ def test_pid_namespace():
         return -1
 
 
+def test_no_mount_namespace():
+    """Test a container without a mount namespace."""
+    if is_rootless():
+        return (77, "requires root")
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['linux']['namespaces'] = [
+        ns for ns in conf['linux']['namespaces'] if ns['type'] != 'mount'
+    ]
+    del conf['linux']['rootfsPropagation']
+    conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
+
+    rootfs = []
+    def save_rootfs(path):
+        rootfs.append(os.path.realpath(path))
+
+    try:
+        out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=save_rootfs)
+    except subprocess.CalledProcessError as e:
+        logger.info("test failed: %s", e)
+        return -1
+
+    mountpoints = [line.split()[4] for line in out.splitlines() if len(line.split()) > 4]
+    for i in ["/proc", "/dev", "/dev/pts", "/sys"]:
+        if i not in mountpoints:
+            logger.info("%s is not mounted in the container: %s", i, out)
+            return -1
+
+    with open("/proc/self/mountinfo") as f:
+        for line in f:
+            mountpoint = line.split()[4]
+            if mountpoint == rootfs[0] or mountpoint.startswith(rootfs[0] + "/"):
+                logger.info("mount left behind: %s", line)
+                return -1
+    return 0
+
+
 def test_network_namespace():
     """Test network namespace isolation."""
     conf = base_config()
@@ -517,6 +555,7 @@ all_tests = {
     "pid-namespace": test_pid_namespace,
     "network-namespace": test_network_namespace,
     "mount-namespace": test_mount_namespace,
+    "no-mount-namespace": test_no_mount_namespace,
     "uts-namespace-hostname": test_uts_namespace_hostname,
     "ipc-namespace": test_ipc_namespace,
     "cgroup-namespace": test_cgroup_namespace,
