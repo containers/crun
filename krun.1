@@ -30,6 +30,247 @@ Because of the additional isolation, sharing content with processes and other
 containers outside of the krun VM is more difficult.
 
 
+.SH ARCHITECTURE
+krun operates by first setting up a standard OCI container namespace and
+cgroup configuration using crun's normal container setup code. Once the
+container environment is prepared, crun invokes libkrun to launch a
+microVM. The workload inside the container then runs within this microVM
+rather than directly on the host kernel.
+
+.PP
+The architecture consists of three main components:
+.IP "  1." 5
+\fBcrun\fP: Sets up the container namespaces (user, pid, mount, ipc, uts, cgroup),
+mounts the root file system, and configures cgroup resource limits. crun then
+hands off execution to libkrun.
+.IP "  2." 5
+\fBlibkrun\fP: The VMM (Virtual Machine Monitor) that creates and manages the
+microVM. It integrates a minimal set of emulated devices (virtio-blk for
+storage, virtio-fs for file system access, virtio-console for I/O) and
+abstracts away most KVM/hypervisor complexity.
+.IP "  3." 5
+\fBNetwork stack\fP: krun supports three networking modes:
+.RS
+.IP \(bu 2
+\fBTSI (Transparent Socket Impersonation)\fP: The default mode where libkrun
+intercepts socket operations in the guest and proxies them in the VMM's
+network context. This provides network connectivity without a guest network
+interface. TCP ports listened to by the guest can be published with Podman's
+\fB-p\fR flag. Listening on guest SOCK_DGRAM sockets is not supported.
+.IP \(bu 2
+\fBpasst\fP: A user-space networking daemon that provides port forwarding and
+NAT. crun spawns passt with a virtio-net interface backed by a Unix socket
+supplied through \fBkrun_add_net_unixstream()\fR\&. crun starts passt with
+\fB--no-dhcp-dns\fR and does not provide DNS configuration.
+.IP \(bu 2
+\fBTAP\fP: Direct attachment to an existing TAP interface via virtio-net, for
+advanced networking scenarios.
+.RE
+
+.PP
+When using passt or TAP networking, the microVM has a conventional virtio-net interface, unlike TSI, which provides network connectivity without a guest network interface. With TAP, guest IP addressing and routing must be configured separately.
+
+
+.SH NETWORKING
+.SH Networking Modes
+.SS TSI (Transparent Socket Impersonation) - Default
+TSI is the default networking mode when no special networking annotations are
+used. In this mode:
+.IP \(bu 2
+libkrun proxies guest socket operations in the VMM's network context
+.IP \(bu 2
+Network connections originate from the host's IP addresses
+.IP \(bu 2
+No additional network configuration is needed
+.IP \(bu 2
+Port publishing works as it would with regular containers
+.IP \(bu 2
+The guest uses the host's routing table
+.IP \(bu 2
+Listening on SOCK_DGRAM sockets is not supported
+
+.PP
+TSI works by intercepting socket system calls in the guest kernel and relaying
+them to the host, making the networking appear transparent.
+
+.SS passt Networking
+When the \fBkrun.use_passt\fP annotation is set, crun spawns the passt daemon to
+provide networking:
+.IP \(bu 2
+crun creates a virtio-net interface backed by a Unix socket supplied through
+\fBkrun_add_net_unixstream()\fR
+.IP \(bu 2
+passt binds to privileged ports on the host if allowed (requires CAP_NET_BIND_SERVICE
+or net.ipv4.ip_unprivileged_port_start sysctl)
+.IP \(bu 2
+passt provides NAT and port forwarding services
+.IP \(bu 2
+crun starts passt with \fB--no-dhcp-dns\fR and does not provide DNS configuration
+.IP \(bu 2
+The microVM gets its own IP address (typically in a private range)
+.IP \(bu 2
+Port publishing works via passt's port forwarding configuration
+
+.PP
+passt is invoked with \fB-t all -u all\fR to forward all TCP and UDP ports. Note
+that binding to privileged ports (< 1024) requires either the CAP_NET_BIND_SERVICE
+capability or setting the net.ipv4.ip_unprivileged_port_start sysctl.
+
+.SS TAP Networking
+When the \fBkrun.tap_name\fP annotation is set, the microVM attaches to an
+existing TAP interface through a virtio-net device:
+.IP \(bu 2
+Requires libkrun built with virtio-net support
+.IP \(bu 2
+The TAP interface must already exist in the VMM's network namespace
+.IP \(bu 2
+The TAP interface must be usable by the user running the VMM
+.IP \(bu 2
+crun does not create or configure the TAP interface
+.IP \(bu 2
+\fB/dev/net/tun\fR must be available to the VMM
+.IP \(bu 2
+The guest sees the network device as \fBeth0\fR
+.IP \(bu 2
+Guest IP addressing and routes must be configured separately
+.IP \(bu 2
+The microVM gets direct layer-2 connectivity to the attached network
+.IP \(bu 2
+Suitable for advanced networking configurations with bridges, VLANs, etc.
+.IP \(bu 2
+TSI is disabled when TAP networking is used
+.IP \(bu 2
+Mutually exclusive with \fBkrun.use_passt\fP
+
+.SH Port Publishing
+Port publishing behavior depends on the networking mode:
+.IP \(bu 2
+\fBTSI mode\fP: TCP port publishing works like regular containers since libkrun proxies
+socket operations in the VMM's network context. Podman's \fB-p\fR flag works for TCP
+ports listened to by the guest. Listening on \fBSOCK_DGRAM\fR sockets from the guest
+is not supported.
+.IP \(bu 2
+\fBpasst mode\fP: Port publishing works through passt's port forwarding. passt
+forwards all ports by default, but binding to privileged ports requires
+additional system configuration. See passt(1) for details on privileged port
+handling.
+.IP \(bu 2
+\fBTAP mode\fP: Port publishing depends on the TAP interface configuration.
+The host network stack sees traffic from the microVM's MAC address, so port
+publishing must be configured at the network layer (e.g., via iptables rules
+or bridge configuration).
+
+
+.SH TROUBLESHOOTING
+.SH Verifying krun Mode
+To verify that a container is running in krun mode, check the kernel version
+inside the container:
+
+.EX
+podman run --runtime krun alpine uname -a
+.EE
+
+.PP
+The kernel version will differ from the host kernel, indicating a microVM.
+
+.SH Network Issues
+.SS TSI Mode
+If networking appears broken in TSI mode:
+- Verify the host network is functional
+- Check that the container has the correct capabilities
+- Review crun debug output with \fB--debug\fR flag
+
+.SS passt Mode
+If passt networking fails:
+- Verify passt is installed at \fB/usr/bin/passt\fR
+- Check passt logs (currently redirected to /dev/null by crun)
+- Verify the passt socket pair was created successfully
+- For privileged port issues, check:
+  - CAP_NET_BIND_SERVICE capability
+  - sysctl net.ipv4.ip_unprivileged_port_start
+- Test passt directly with a simple configuration
+
+.SS TAP Mode
+If TAP networking fails:
+- Verify the TAP interface exists and is up in the VMM's network namespace:
+  \fBip link show tap0\fR
+- Check libkrun was built with virtio-net support
+- Verify the TAP interface is accessible to the user running the VMM
+- Check that \fB/dev/net/tun\fR is available to the VMM
+- Check for SELinux/AppArmor denials
+
+.SH Debug Output
+Increase crun's verbosity for troubleshooting:
+
+.EX
+podman run --runtime krun --log-level=debug ...
+.EE
+
+.PP
+This shows detailed information about libkrun initialization, networking setup,
+and microVM configuration.
+
+.SH Checking microVM State
+To inspect the microVM's configuration, there are two relevant configuration
+files:
+.IP "  1." 5
+\fBOCI config.json\fP: Kept in the crun state directory (typically
+/run/crun or the configured state root). This contains the OCI container
+configuration.
+.IP "  2." 5
+\fBGuest /.krun_config.json\fP: Written by crun into the container root
+file system for the guest. This contains the libkrun VM configuration.
+
+.PP
+For OCI configuration, check the state directory. For VM-specific settings,
+inspect the guest-side configuration file from within the container.
+
+.SH Inspecting Network Layout
+To understand the network configuration inside a running krun container:
+
+.EX
+podman exec -it <container> ip addr show
+podman exec -it <container> ip route show
+.EE
+
+.PP
+This shows the network interfaces and routing table from inside the microVM.
+Compare this with the host's network configuration to understand how the
+networking mode affects the container's view of the network.
+
+.PP
+For passt mode, you can also check the passt process on the host:
+
+.EX
+ps aux | grep passt
+.EE
+
+.SH Common Issues
+.SS Container fails to start with KVM errors
+.IP \(bu 2
+Verify KVM is available: \fBlsmod | grep kvm\fR
+.IP \(bu 2
+Check hardware virtualization is enabled in BIOS/UEFI
+.IP \(bu 2
+Verify nested virtualization if using \fBkrun.nested_virt\fP
+
+.SS passt fails to start
+.IP \(bu 2
+Ensure passt is installed at \fB/usr/bin/passt\fR
+.IP \(bu 2
+Check that passt can be executed by the container user
+.IP \(bu 2
+Verify no firewall rules block passt operation
+
+.SS Performance issues
+.IP \(bu 2
+Increase VM memory with krun.ram_mib
+.IP \(bu 2
+Increase vCPUs with krun.cpus
+.IP \(bu 2
+Consider using virtio-fs optimization options in a \fB\&.krun_vm.json\fP file
+
+
 .SH CONFIGURATION
 The microVM can be configured through OCI annotations or a
 \fB\&.krun_vm.json\fP file placed at the root of the container image.
@@ -66,7 +307,31 @@ must also be available.
 .TP
 \fBkrun.use_passt\fP=\fINUM\fP
 When set to a value greater than 0, enable passt-based networking
-in the microVM.
+in the microVM. Note that passt runs inside the container's confinement,
+so the same limitations apply to passt as to the container. In particular,
+forwarding to a container port below 1024 may fail unless
+net.ipv4.ip_unprivileged_port_start is set to a value lower than or equal
+to the target port. For example:
+
+.EX
+podman run --runtime krun \\
+  --annotation krun.use_passt=1 \\
+  --rm \\
+  -p 10000:100 \\
+  --sysctl net.ipv4.ip_unprivileged_port_start=100 \\
+  alpine nc -l -p 100
+.EE
+
+This is expected behavior caused by the confinement in which passt runs,
+not a crun port-forwarding implementation bug.
+
+.TP
+\fBkrun.tap_name\fP=\fINAME\fP
+Attach the microVM to an existing TAP interface \fINAME\fP through a
+virtio-net device, disabling the default TSI (Transparent Socket
+Impersonation) networking. Requires a libkrun built with
+virtio-net support. This option is mutually exclusive with
+\fBkrun.use_passt\fP\&.
 
 .TP
 \fBkrun.nested_virt\fP=\fINUM\fP
@@ -78,6 +343,12 @@ virtualization to be enabled on the host (e.g.
 \fB/sys/module/kvm_amd/parameters/nested\fP must report \fBY\fP or
 \fB1\fP). A warning is emitted if the host does not appear to
 support nested virtualization.
+
+.TP
+\fBkrun.custom_kernel\fP=\fINUM\fP
+When set to a value greater than 0, allow the VM configuration
+file to specify a custom kernel via the \fBkernel_path\fP,
+\fBkernel_format\fP, \fBinitrd_path\fP, and \fBkernel_cmdline\fP fields.
 
 .TP
 \fBkrun.variant\fP=\fIVARIANT\fP
@@ -95,21 +366,17 @@ optional fields:
 .IP \(bu 2
 \fBram_mib\fP (integer): same as the \fBkrun.ram_mib\fP annotation.
 .IP \(bu 2
-\fBgpu_flags\fP (integer): same as the \fBkrun.gpu_flags\fP annotation.
+\fBkernel_path\fP (string): path to an external kernel. Requires the
+\fBkrun.custom_kernel\fP annotation.
 .IP \(bu 2
-\fBuse_passt\fP (integer): same as the \fBkrun.use_passt\fP annotation.
+\fBkernel_format\fP (integer): kernel format identifier. Requires the
+\fBkrun.custom_kernel\fP annotation.
 .IP \(bu 2
-\fBnested_virt\fP (integer): same as the \fBkrun.nested_virt\fP annotation.
+\fBinitrd_path\fP (string): path to an initrd image. Requires the
+\fBkrun.custom_kernel\fP annotation.
 .IP \(bu 2
-\fBflavor\fP (string): same as the \fBkrun.variant\fP annotation.
-.IP \(bu 2
-\fBkernel_path\fP (string): path to an external kernel.
-.IP \(bu 2
-\fBkernel_format\fP (integer): kernel format identifier.
-.IP \(bu 2
-\fBinitrd_path\fP (string): path to an initrd image.
-.IP \(bu 2
-\fBkernel_cmdline\fP (string): kernel command line.
+\fBkernel_cmdline\fP (string): kernel command line. Requires the
+\fBkrun.custom_kernel\fP annotation.
 .IP \(bu 2
 \fBvirtiofs_tag\fP (string): VirtioFS tag (defaults to \fB/dev/root\fP).
 .IP \(bu 2
@@ -117,10 +384,15 @@ optional fields:
 bytes (defaults to 512 MiB).
 
 .PP
+The following options are only available through OCI annotations and
+are not read from the configuration file: \fBgpu_flags\fP,
+\fBuse_passt\fP, \fBtap_name\fP, \fBnested_virt\fP, and \fBflavor\fP\&.
+
+.PP
 Example:
 
 .EX
-{"nested_virt": 1, "cpus": 4, "ram_mib": 2048}
+{"cpus": 4, "ram_mib": 2048}
 .EE
 
 
