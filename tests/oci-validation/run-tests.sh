@@ -17,11 +17,9 @@ fi
     make -j "$(nproc)"
 )
 
-# Install and run runtime-tools' validation tests
+# Run runtime-tools' validation tests
 git clone --depth=1 https://github.com/opencontainers/runtime-tools
 cd runtime-tools
-make -j "$(nproc)" tool
-make -j "$(nproc)" install
 
 export GOCACHE=/var/tmp/gocache
 export TMPDIR=/var/tmp
