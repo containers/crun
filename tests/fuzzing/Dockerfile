@@ -1,7 +1,7 @@
 FROM quay.io/fedora/fedora:latest
 
 RUN dnf install -y awk golang python git automake autoconf libcap-devel \
-     systemd-devel json-c-devel libseccomp-devel go-md2man \
+     systemd-devel json-c-devel libseccomp-devel \
     glibc-static python3-libmount libtool make git libunwind-devel binutils-devel xz-devel \
     libatomic clang libzstd-devel
 

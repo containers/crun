@@ -10,7 +10,7 @@ RUN apt-get update \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
             pigz lsof make git gcc build-essential pkgconf libtool \
             libsystemd-dev libcap-dev libjson-c-dev \
-            go-md2man libtool autoconf python3 automake sudo \
+            libtool autoconf python3 automake sudo \
     && update-alternatives --install /usr/bin/go go /usr/lib/go-1.22/bin/go 0 \
     && mkdir -p /root/go/src/github.com/containerd \
     && chmod 755 /root \

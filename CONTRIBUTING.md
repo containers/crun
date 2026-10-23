@@ -51,6 +51,18 @@ make clang-format
 
 to reformat the code automatically.
 
+## Man pages
+
+The man pages are generated from `crun.1.md` and `krun.1.md` and kept in
+git. After changing either of these files, run
+
+```bash
+make generate-man
+```
+
+(which requires [go-md2man](https://github.com/cpuguy83/go-md2man)) and
+commit the updated man page together with its source.
+
 ## Submitting a patch
 
 The podman project has some [generic useful guidance](https://github.com/containers/podman/blob/main/CONTRIBUTING.md#submitting-pull-requests);
