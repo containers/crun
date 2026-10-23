@@ -401,6 +401,8 @@ int get_file_type_at (int dirfd, mode_t *mode, bool nofollow, const char *path);
 
 int get_file_type (mode_t *mode, bool nofollow, const char *path);
 
+uint64_t get_mount_id (const char *path);
+
 int get_file_type_fd (int fd, mode_t *mode);
 
 char *get_user_name (uid_t uid);
