@@ -6511,8 +6511,11 @@ receive_mounts (struct libcrun_fd_map *fds, int sync_socket_container, libcrun_e
       ret = receive_fd_from_socket_with_payload (sync_socket_container, (char *) &index, sizeof (index), err);
       if (UNLIKELY (ret < 0))
         return ret;
-      if (index >= fds->nfds)
-        return crun_make_error (err, 0, "invalid mount data received");
+      if (UNLIKELY (index >= fds->nfds))
+        {
+          TEMP_FAILURE_RETRY (close (ret));
+          return crun_make_error (err, 0, "invalid mount data received");
+        }
 
       if (fds->fds[index] >= 0)
         TEMP_FAILURE_RETRY (close (fds->fds[index]));
