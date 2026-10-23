@@ -45,6 +45,7 @@ struct libcrun_container_status_s
   int no_new_keyring;
   char *external_descriptors;
   char *owner;
+  uint64_t rootfs_mount_id;
 };
 typedef struct libcrun_container_status_s libcrun_container_status_t;
 
