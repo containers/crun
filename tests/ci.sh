@@ -39,7 +39,7 @@ dump_log() {
 
 # Configure and build, with any extra configure arguments in "$@".
 build() {
-    group configure ./configure --enable-embedded-blake3 --enable-werror "$@"
+    group configure ./configure --enable-embedded-blake3 --enable-werror --enable-criu "$@"
     group build make -j "$(nproc)"
 }
 
