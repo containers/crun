@@ -261,8 +261,12 @@ The following annotations are supported:
 **krun.gpu_flags**=*FLAGS*
 :   Enable virtio-gpu with the specified virgl flags. Requires
     **/dev/dri** to be available. When *FLAGS* includes
-    **VIRGLRENDERER_RENDER_SERVER**, **/usr/libexec/virgl_render_server**
-    must also be available.
+    **VIRGLRENDERER_RENDER_SERVER**, a virgl render server and bubblewrap
+    must also be available. Their default paths are **/usr/libexec/virgl_render_server**
+    and **/usr/bin/bwrap**. Set **CRUN_KRUN_RENDER_SERVER** or
+    **CRUN_KRUN_BWRAP** to override either path at runtime. The defaults can
+    also be changed when building crun with **--with-krun-render-server=PATH**
+    and **--with-krun-bwrap=PATH**. All paths must be absolute.
 
 **krun.use_passt**=*NUM*
 :   When set to a value greater than 0, enable passt-based networking
