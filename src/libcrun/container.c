@@ -45,6 +45,7 @@
 #include "linux.h"
 #include "terminal.h"
 #include "io_priority.h"
+#include "io_uring.h"
 #include "cgroup.h"
 #include "cgroup-utils.h"
 #include <sys/prctl.h>
@@ -1276,6 +1277,18 @@ apply_security_settings (struct container_entrypoint_s *entrypoint_args, runtime
   runtime_spec_schema_config_schema_process_capabilities *capabilities;
   int no_new_privs;
 
+  /* Like seccomp, registering a filter needs either no_new_privs or
+     CAP_SYS_ADMIN in the user namespace.  Without no_new_privileges, it
+     is done here before the capabilities are dropped, otherwise once
+     libcrun_set_caps has set no_new_privs.  In both cases it is done
+     before seccomp, which may deny io_uring_register.  */
+  if (! def->process || ! def->process->no_new_privileges)
+    {
+      ret = libcrun_apply_io_uring_restrictions (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (def->process && ! def->process->no_new_privileges)
     {
       char **seccomp_flags = NULL;
@@ -1727,6 +1740,10 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
       size_t seccomp_flags_len = 0;
       cleanup_free char *seccomp_fd_payload = NULL;
       size_t seccomp_fd_payload_len = 0;
+
+      ret = libcrun_apply_io_uring_restrictions (entrypoint_args->container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
 
       if (def->linux && def->linux->seccomp)
         {
@@ -3002,6 +3019,10 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_check_io_uring_restrictions (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = setup_seccomp (container, seccomp_bpf_data, &seccomp_gen_ctx, &seccomp_fd, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -4061,8 +4082,13 @@ exec_process_entrypoint (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* See apply_security_settings.  */
   if (! process->no_new_privileges)
     {
+      ret = libcrun_apply_io_uring_restrictions (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
                                     seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
@@ -4110,6 +4136,10 @@ exec_process_entrypoint (libcrun_context_t *context,
 
   if (process->no_new_privileges)
     {
+      ret = libcrun_apply_io_uring_restrictions (container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+
       ret = apply_seccomp_for_exec (container, own_pid, seccomp_fd, seccomp_receiver_fd,
                                     seccomp_flags, seccomp_flags_len, err);
       if (UNLIKELY (ret < 0))
@@ -4255,6 +4285,10 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
 
   if (UNLIKELY (container_paused))
     return crun_make_error (err, 0, "cannot exec in a paused container `%s`", id);
+
+  ret = libcrun_check_io_uring_restrictions (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_configure_handler (context->handler_manager,
                                    context,
@@ -5162,6 +5196,10 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   if (UNLIKELY (ret < 0))
     return ret;
 
+  ret = libcrun_check_io_uring_restrictions (container, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = libcrun_copy_config_file (context->id, context->state_root, container, err);
   if (UNLIKELY (ret < 0))
     goto fail;
@@ -5206,6 +5244,13 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   ret = setup_container_keyring (container, context, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* CRIU does not restore the io_uring restrictions, but the restored
+     processes inherit them from CRIU, as they are inherited across fork
+     and exec.  */
+  ret = libcrun_apply_io_uring_restrictions (container, err);
+  if (UNLIKELY (ret < 0))
+    goto fail;
 
   {
     cleanup_close int cgroup_dirfd = -1;
