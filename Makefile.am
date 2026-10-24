@@ -418,16 +418,6 @@ if ENABLE_KRUN
 man1_MANS += krun.1
 endif
 
-crun.1: $(abs_srcdir)/crun.1.md
-if HAVE_MD2MAN
-	$(MD2MAN) -in $(abs_srcdir)/crun.1.md -out crun.1
-endif HAVE_MD2MAN
-
-krun.1: $(abs_srcdir)/krun.1.md
-if HAVE_MD2MAN
-	$(MD2MAN) -in $(abs_srcdir)/krun.1.md -out krun.1
-endif HAVE_MD2MAN
-
 install-exec-hook:
 if ENABLE_KRUN
 	$(LN_S) -f crun$(EXEEXT) $(DESTDIR)$(bindir)/krun$(EXEEXT)
@@ -444,7 +434,11 @@ if ENABLE_WASM
 	rm -f $(DESTDIR)$(bindir)/crun-wasm$(EXEEXT)
 endif
 
-generate-man: crun.1 krun.1
+MD2MAN = go-md2man
+
+generate-man:
+	$(MD2MAN) -in $(srcdir)/crun.1.md -out $(srcdir)/crun.1
+	$(MD2MAN) -in $(srcdir)/krun.1.md -out $(srcdir)/krun.1
 
 sync:
 	(cd libocispec; git pull https://github.com/containers/libocispec main)
@@ -610,4 +604,4 @@ clean-local: coverage-clean
 # Coverage targets must not run in parallel due to race conditions in .gcda file writes
 .NOTPARALLEL: coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
 
-.PHONY: check-no-openat2 check-systemd coverity sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck validate-keyring shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env
+.PHONY: check-no-openat2 check-systemd coverity generate-man sync generate-rust-bindings generate-signals.c generate-mount_flags.c clang-format shellcheck validate-keyring shfmt cppcheck coverage-clean coverage-reset coverage-check coverage-html coverage-xml coverage-summary coverage-multi-env

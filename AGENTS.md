@@ -30,6 +30,12 @@
 - C unit tests go in `tests/tests_libcrun_*.c`, add to `UNIT_TESTS` in root `Makefile.am` with build rules
 - Test functions should return `0` (pass), `-1` (fail), or `77` (skip)
 
+## Man pages
+
+- `crun.1` and `krun.1` are generated from `crun.1.md` and `krun.1.md` and
+  kept in git. After changing a `.md` file, run `make generate-man` and
+  commit the regenerated man page in the same commit.
+
 ## Error handling
 
 - C code error handling convention is described in [design-docs/error_handling.md](design-docs/error_handling.md)
