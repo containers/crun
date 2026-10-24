@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/types.h>
@@ -646,6 +647,13 @@ static int
 libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *container, libcrun_error_t *err)
 {
   int ret;
+  const char *render_server_path = getenv ("CRUN_KRUN_RENDER_SERVER");
+  const char *bwrap_path = getenv ("CRUN_KRUN_BWRAP");
+
+  if (render_server_path == NULL || render_server_path[0] == '\0')
+    render_server_path = KRUN_RENDER_SERVER_PATH;
+  if (bwrap_path == NULL || bwrap_path[0] == '\0')
+    bwrap_path = KRUN_BWRAP_PATH;
 
   kconf->gpu_flags = libkrun_parse_resource_configuration (kconf->config_tree, container, "krun.gpu_flags", "gpu_flags", false);
   if (kconf->gpu_flags > 0)
@@ -662,11 +670,17 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
           pid_t pid;
           int null;
 
-          if (access ("/usr/libexec/virgl_render_server", X_OK) != 0)
-            return crun_make_error (err, errno, "gpu with render server requested but couldn't find /usr/libexec/virgl_render_server binary");
+          if (render_server_path[0] != '/')
+            return crun_make_error (err, EINVAL, "krun render server path %s must be absolute", render_server_path);
 
-          if (access ("/usr/bin/bwrap", X_OK) != 0)
-            return crun_make_error (err, errno, "gpu with render server requested but couldn't find /usr/bin/bwrap binary");
+          if (bwrap_path[0] != '/')
+            return crun_make_error (err, EINVAL, "krun bwrap path %s must be absolute", bwrap_path);
+
+          if (access (render_server_path, X_OK) != 0)
+            return crun_make_error (err, errno, "gpu with render server requested but couldn't find %s binary", render_server_path);
+
+          if (access (bwrap_path, X_OK) != 0)
+            return crun_make_error (err, errno, "gpu with render server requested but couldn't find %s binary", bwrap_path);
 
           ret = socketpair (AF_UNIX, SOCK_SEQPACKET, 0, gpu_fds);
           if (UNLIKELY (ret < 0))
@@ -709,7 +723,7 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
           rs_argv[rs_argc++] = (char *) "--unshare-ipc";
           rs_argv[rs_argc++] = (char *) "--unshare-net";
           rs_argv[rs_argc++] = (char *) "--";
-          rs_argv[rs_argc++] = (char *) "/usr/libexec/virgl_render_server";
+          rs_argv[rs_argc++] = (char *) render_server_path;
           rs_argv[rs_argc++] = (char *) "--socket-fd";
           rs_argv[rs_argc++] = fd_as_str;
           rs_argv[rs_argc] = NULL;
@@ -733,7 +747,7 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
               dup2 (null, STDERR_FILENO);
               close (null);
 
-              execvp ("/usr/bin/bwrap", rs_argv);
+              execvp (bwrap_path, rs_argv);
               _exit (EXIT_FAILURE);
             }
 

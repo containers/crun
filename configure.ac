@@ -191,6 +191,18 @@ dnl include support for libkrun (EXPERIMENTAL)
 AC_ARG_WITH([libkrun], AS_HELP_STRING([--with-libkrun], [build with libkrun support]))
 AS_IF([test "x$with_libkrun" = "xyes"], AC_CHECK_HEADERS([libkrun.h], AC_DEFINE([HAVE_LIBKRUN], 1, [Define if libkrun is available]), [AC_MSG_ERROR([*** Missing libkrun headers])]))
 
+AC_ARG_WITH([krun-bwrap],
+	AS_HELP_STRING([--with-krun-bwrap=PATH], [default path to bwrap used by krun]),
+	[krun_bwrap_path="$withval"], [krun_bwrap_path="/usr/bin/bwrap"])
+AS_CASE([$krun_bwrap_path], [/*], [], [AC_MSG_ERROR([krun bwrap path must be absolute])])
+AC_DEFINE_UNQUOTED([KRUN_BWRAP_PATH], ["$krun_bwrap_path"], [Default bwrap path for krun])
+
+AC_ARG_WITH([krun-render-server],
+	AS_HELP_STRING([--with-krun-render-server=PATH], [default path to virgl_render_server used by krun]),
+	[krun_render_server_path="$withval"], [krun_render_server_path="/usr/libexec/virgl_render_server"])
+AS_CASE([$krun_render_server_path], [/*], [], [AC_MSG_ERROR([krun render server path must be absolute])])
+AC_DEFINE_UNQUOTED([KRUN_RENDER_SERVER_PATH], ["$krun_render_server_path"], [Default virgl render server path for krun])
+
 AM_CONDITIONAL([ENABLE_KRUN], [test "x$with_libkrun" = xyes])
 
 AM_CONDITIONAL([ENABLE_WASM], [test "x$with_wasmer" = xyes || test "x$with_wasmedge" = xyes || test "x$with_wasmtime" = xyes])
