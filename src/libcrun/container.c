@@ -2266,6 +2266,27 @@ is_fd_pollable (int fd)
   return epoll_ctl (epollfd, EPOLL_CTL_ADD, fd, &ev) == 0 || errno != EPERM;
 }
 
+/* Copy to stdout what the container wrote to the terminal and was not
+   copied yet, and return EXIT_CODE.  */
+static int
+flush_terminal_output (struct channel_fd_pair *from_terminal, int exit_code, libcrun_error_t *err)
+{
+  int ret;
+
+  if (from_terminal == NULL)
+    return exit_code;
+
+  ret = set_blocking_fd (1, true, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = channel_fd_pair_flush (from_terminal, err);
+  if (UNLIKELY (ret < 0))
+    return crun_error_wrap (err, "copy from terminal fd");
+
+  return exit_code;
+}
+
 static int
 wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
 {
@@ -2324,12 +2345,42 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
   if (UNLIKELY (signalfd < 0))
     return signalfd;
 
+  if (args->terminal_fd >= 0)
+    {
+      /* The terminal_fd is dup()ed so that it can be registered with
+         epoll multiple times using different masks.  */
+      terminal_fd_from = dup (args->terminal_fd);
+      if (UNLIKELY (terminal_fd_from < 0))
+        return crun_make_error (err, errno, "dup terminal fd");
+      terminal_fd_to = dup (args->terminal_fd);
+      if (UNLIKELY (terminal_fd_to < 0))
+        return crun_make_error (err, errno, "dup terminal fd");
+
+      int i, non_blocking_fds[] = { terminal_fd_from, terminal_fd_to, 0, 1, -1 };
+      for (i = 0; non_blocking_fds[i] >= 0; i++)
+        {
+          ret = set_blocking_fd (non_blocking_fds[i], false, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
+
+      /* stdin and stdout can be something epoll does not support, such as
+         /dev/null or a regular file.  Such a stdin is not forwarded, and
+         such a stdout is written to without waiting for it to be ready.  */
+      stdin_pollable = is_fd_pollable (0);
+      stdout_pollable = is_fd_pollable (1);
+
+      from_terminal = channel_fd_pair_new (terminal_fd_from, 1, BUFSIZ);
+      if (stdin_pollable)
+        to_terminal = channel_fd_pair_new (0, terminal_fd_to, BUFSIZ);
+    }
+
   ret = reap_subprocesses (&args->pid, &container_exit_code, &last_process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
   if (last_process)
-    return container_exit_code;
+    return flush_terminal_output (from_terminal, container_exit_code, err);
 
   if (args->seccomp_notify_fd >= 0)
     {
@@ -2363,36 +2414,6 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
         return ret;
 
       in_fds[in_fds_len++] = args->seccomp_notify_fd;
-    }
-
-  if (args->terminal_fd >= 0)
-    {
-      /* The terminal_fd is dup()ed so that it can be registered with
-         epoll multiple times using different masks.  */
-      terminal_fd_from = dup (args->terminal_fd);
-      if (UNLIKELY (terminal_fd_from < 0))
-        return crun_make_error (err, errno, "dup terminal fd");
-      terminal_fd_to = dup (args->terminal_fd);
-      if (UNLIKELY (terminal_fd_to < 0))
-        return crun_make_error (err, errno, "dup terminal fd");
-
-      int i, non_blocking_fds[] = { terminal_fd_from, terminal_fd_to, 0, 1, -1 };
-      for (i = 0; non_blocking_fds[i] >= 0; i++)
-        {
-          ret = set_blocking_fd (non_blocking_fds[i], false, err);
-          if (UNLIKELY (ret < 0))
-            return ret;
-        }
-
-      /* stdin and stdout can be something epoll does not support, such as
-         /dev/null or a regular file.  Such a stdin is not forwarded, and
-         such a stdout is written to without waiting for it to be ready.  */
-      stdin_pollable = is_fd_pollable (0);
-      stdout_pollable = is_fd_pollable (1);
-
-      from_terminal = channel_fd_pair_new (terminal_fd_from, 1, BUFSIZ);
-      if (stdin_pollable)
-        to_terminal = channel_fd_pair_new (0, terminal_fd_to, BUFSIZ);
     }
 
   in_fds[in_fds_len++] = signalfd;
@@ -2468,7 +2489,7 @@ wait_for_process (struct wait_for_process_args *args, libcrun_error_t *err)
                   if (UNLIKELY (ret < 0))
                     return ret;
                   if (last_process)
-                    return container_exit_code;
+                    return flush_terminal_output (from_terminal, container_exit_code, err);
                 }
               else if (si.ssi_signo == SIGWINCH)
                 {
