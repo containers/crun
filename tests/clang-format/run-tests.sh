@@ -8,6 +8,5 @@ cd /crun
 # which happens if we run it via a Dockerfile with a volume mounted.
 git config --global --add safe.directory "$(pwd)"
 
-./configure --enable-embedded-blake3
-make clang-format
+build-aux/c-files.sh clang-format -style=file -i
 git diff --ignore-submodules --exit-code

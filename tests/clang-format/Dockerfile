@@ -1,6 +1,6 @@
 FROM quay.io/fedora/fedora:latest
 
-RUN dnf install -y awk git make clang-tools-extra glibc-static json-c-devel 'dnf-command(builddep)' && dnf builddep -y crun
+RUN dnf install -y git clang-tools-extra
 
 COPY run-tests.sh /usr/local/bin
 ENTRYPOINT /usr/local/bin/run-tests.sh

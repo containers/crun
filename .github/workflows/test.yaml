@@ -93,8 +93,6 @@ jobs:
           - test: bindings
           - test: checkpoint-restore
           - test: fuzzing
-          - test: codespell
-          - test: ruff
           - test: wasmedge-build
           - test: krun-build
     steps:
@@ -118,6 +116,9 @@ jobs:
 
       - name: run autogen.sh
         run: |
+          # Tests run inside a container do this themselves.
+          test -f "tests/${{ matrix.test }}/Dockerfile" && exit 0
+
           git clean -fdx .
           find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
           ./autogen.sh
@@ -211,21 +212,29 @@ jobs:
           sha256sum --strict --check - <<<"$SHA256 *$HOME/.local/bin/shellcheck"
           # make sure to remove the old version
           sudo rm -f /usr/bin/shellcheck
-      - name: install dependencies
-        run: |
-          sudo apt-get update -q -y
-          sudo apt-get install -q -y automake libtool autotools-dev libseccomp-dev git make libcap-dev cmake pkg-config gcc wget go-md2man libsystemd-dev gperf clang-format libjson-c-dev libprotobuf-c-dev mawk
       - uses: lumaxis/shellcheck-problem-matchers@bf6e0860fd06e4910738c6160dcd2889146ce824 # v2.3.1
       - name: shellcheck
-        run: |
-          find "$(pwd)" -name '.git' -exec bash -c 'git config --global --add safe.directory ${0%/.git}' {} \;
-          ./autogen.sh
-          ./configure --enable-embedded-blake3
-          make shellcheck
+        run: build-aux/sh-files.sh shellcheck
       - name: shfmt
         run: |
-          make shfmt
+          build-aux/sh-files.sh shfmt -w
           git diff --ignore-submodules --exit-code
+
+  # These need neither a build nor the build dependencies.
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [codespell, ruff]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # ruff checks the Python code in libocispec as well.
+          submodules: recursive
+          persist-credentials: false
+      - name: run test
+        run: ./tests/ci.sh "${{ matrix.test }}"
 
   zizmor:
     runs-on: ubuntu-latest
@@ -256,6 +265,7 @@ jobs:
       - keyring
       - runc-integration
       - shellcheck
+      - lint
       - zizmor
       - codeql
     permissions: {}
