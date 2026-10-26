@@ -323,6 +323,12 @@ libcrun_write_container_status (const char *state_root, const char *id, libcrun_
       GEN_STR (gen, status->external_descriptors);
     }
 
+  if (status->rootfs_mount_id)
+    {
+      GEN_KEY (gen, "rootfs-mount-id");
+      GEN_OR_FAIL (map_uint (gen, status->rootfs_mount_id));
+    }
+
   GEN_OR_FAIL (json_gen_map_close (gen));
 
   GEN_OR_FAIL (json_gen_get_buf (gen, &buf, &len));
@@ -498,6 +504,10 @@ libcrun_read_container_status (libcrun_container_status_t *status, const char *s
     tmp = json_object_object_get (doc, "external_descriptors");
     val = tmp ? json_object_get_string (tmp) : NULL;
     status->external_descriptors = val ? xstrdup (val) : NULL;
+  }
+  {
+    tmp = json_object_object_get (doc, "rootfs-mount-id");
+    status->rootfs_mount_id = tmp != NULL && json_object_is_type (tmp, json_type_int) ? json_object_get_uint64 (tmp) : 0;
   }
   ret = 0;
 

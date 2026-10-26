@@ -74,12 +74,6 @@ create.bats: runc create [shared pidns + rootless]
 kill.bats: kill detached busybox
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
 
-# runc rejects these configurations (see opencontainers/runc#5535), while crun
-# does not check them and fails later, with a different error.
-mounts_propagation.bats: runc run [rootfsPropagation, host mount ns] must fail
-no_pivot.bats: runc run --no-pivot [host mount ns] must fail
-run.bats: runc run [rootfs is /] must fail
-
 # crun reports the hook exit code, not the signal ("bad system call").
 seccomp.bats: runc run [seccomp] (startContainer hook)
 
@@ -148,7 +142,6 @@ exec.bats: runc exec --cgroup subcgroup [v2]
 exec.bats: runc exec [init changes cgroup]
 hooks.bats: runc run [hook's argv is preserved]
 hooks_so.bats: runc run (hooks library tests)
-host-mntns.bats: runc run [host mount ns + hooks]
 kill.bats: kill KILL [host pidns]
 kill.bats: kill KILL [host pidns + init gone]
 list.bats: list with non-existent root fails
