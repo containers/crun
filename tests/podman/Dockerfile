@@ -4,7 +4,7 @@ FROM quay.io/fedora/fedora:45
 # (conmon, netavark, passt, catatonit etc.), the podman binaries used
 # by the tests are built from source.
 RUN dnf install -y awk golang python git gcc automake autoconf libcap-devel \
-    systemd-devel json-c-devel libseccomp-devel go-md2man libtool make \
+    systemd-devel json-c-devel libseccomp-devel libtool make \
     podman procps-ng xz && \
     dnf builddep -y podman && \
     git clone --depth=1 https://github.com/containers/podman -b v6.1 /podman && \

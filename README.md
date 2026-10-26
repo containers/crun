@@ -71,7 +71,7 @@ These dependencies are required for the build:
 
 ```console
 $ sudo dnf install -y \
-    autoconf automake gcc git-core glibc-static go-md2man \
+    autoconf automake gcc git-core glibc-static \
     libcap-devel libseccomp-devel libtool make pkg-config \
     python python-libmount systemd-devel json-c-devel
 ```
@@ -81,7 +81,7 @@ $ sudo dnf install -y \
 ```console
 $ sudo dnf config-manager --set-enabled crb
 $ sudo dnf install -y \
-    autoconf automake gcc git-core glibc-static go-md2man \
+    autoconf automake gcc git-core glibc-static \
     libcap-devel libseccomp-devel libtool make pkg-config \
     python python-libmount systemd-devel json-c-devel
 ```
@@ -91,7 +91,7 @@ $ sudo dnf install -y \
 ```console
 $ sudo dnf config-manager --set-enabled crb
 $ sudo dnf install -y \
-    autoconf automake gcc git-core glibc-static go-md2man \
+    autoconf automake gcc git-core glibc-static \
     libcap-devel libseccomp-devel libtool make pkg-config \
     python python-libmount systemd-devel
 ```
@@ -101,21 +101,21 @@ $ sudo dnf install -y \
 ```console
 $ sudo apt-get install -y make git gcc build-essential pkgconf libtool \
    libsystemd-dev libprotobuf-c-dev libcap-dev libseccomp-dev libjson-c-dev \
-   go-md2man autoconf python3 automake
+   autoconf python3 automake
 ```
 
 ### Alpine
 
 ```console
 # apk add gcc automake autoconf libtool gettext pkgconf git make musl-dev \
-    python3 libcap-dev libseccomp-dev json-c-dev argp-standalone go-md2man
+    python3 libcap-dev libseccomp-dev json-c-dev argp-standalone
 ```
 
 ### Tumbleweed
 
 ```console
 # zypper install make automake autoconf gettext libtool gcc libcap-devel \
-systemd-devel libjson-c-devel libseccomp-devel python3 go-md2man \
+systemd-devel libjson-c-devel libseccomp-devel python3 \
 glibc-static;
 ```
 
