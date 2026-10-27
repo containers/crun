@@ -95,9 +95,9 @@ crun_run_create_internal (struct crun_global_arguments *global_args, int argc, c
         libcrun_fail_with_error (errno, "chdir `%s` failed", bundle);
     }
 
-  if (getenv ("LISTEN_FDS"))
+  int listen_fds = get_listen_fds ();
+  if (listen_fds > 0)
     {
-      int listen_fds = parse_id_or_fail (getenv ("LISTEN_FDS"), NULL, "LISTEN_FDS");
       libcrun_context_set_listen_fds (crun_context, listen_fds);
       libcrun_context_set_preserve_fds (crun_context, libcrun_context_get_preserve_fds (crun_context) + listen_fds);
     }

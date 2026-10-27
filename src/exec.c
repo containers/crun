@@ -423,9 +423,9 @@ crun_command_exec (struct crun_global_arguments *global_args, int argc, char **a
 
   libcrun_context_set_preserve_fds (crun_context, exec_options.preserve_fds);
 
-  if (getenv ("LISTEN_FDS"))
+  int listen_fds = get_listen_fds ();
+  if (listen_fds > 0)
     {
-      int listen_fds = strtoll (getenv ("LISTEN_FDS"), NULL, 10);
       libcrun_context_set_listen_fds (crun_context, listen_fds);
       libcrun_context_set_preserve_fds (crun_context, exec_options.preserve_fds + listen_fds);
     }

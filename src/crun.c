@@ -24,6 +24,7 @@
 #include <libgen.h>
 #include <errno.h>
 #include <limits.h>
+#include <unistd.h>
 
 #ifdef HAVE_DLOPEN
 #  include <dlfcn.h>
@@ -414,6 +415,27 @@ parse_id_or_fail (const char *str, char **endptr, const char *kind)
     libcrun_fail_with_error (0, "invalid %s specified", kind);
 
   return (int) l;
+}
+
+/* Return the number of fds passed via socket activation, or 0 if they are
+   not meant for this process (see sd_listen_fds(3)).  */
+int
+get_listen_fds (void)
+{
+  const char *listen_fds = getenv ("LISTEN_FDS");
+  const char *listen_pid = getenv ("LISTEN_PID");
+  char *end = NULL;
+  long long pid;
+
+  if (listen_fds == NULL || listen_pid == NULL)
+    return 0;
+
+  errno = 0;
+  pid = strtoll (listen_pid, &end, 10);
+  if (errno != 0 || end == listen_pid || *end != '\0' || pid != getpid ())
+    return 0;
+
+  return parse_id_or_fail (listen_fds, NULL, "LISTEN_FDS");
 }
 
 static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
