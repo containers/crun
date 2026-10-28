@@ -40,6 +40,7 @@ struct crun_global_arguments
 
 char *argp_mandatory_argument (char *arg, struct argp_state *state);
 int parse_id_or_fail (const char *str, char **endptr, const char *kind);
+int get_listen_fds (void);
 int init_libcrun_context (libcrun_context_t *con, const char *id, struct crun_global_arguments *glob,
                           libcrun_error_t *err);
 libcrun_context_t *new_libcrun_context (struct crun_global_arguments *glob);
