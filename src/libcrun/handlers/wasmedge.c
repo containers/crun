@@ -219,7 +219,7 @@ libwasmedge_configure_container (void *cookie arg_unused, enum handler_configure
     "rbind"
   };
 
-  ret = libcrun_container_do_bind_mount (container, "/usr/lib/wasmedge ", "/usr/lib/wasmedge", options, 5, err);
+  ret = libcrun_container_do_bind_mount (container, "/usr/lib/wasmedge", "/usr/lib/wasmedge", options, 5, err);
   if (ret < 0)
     {
       if (crun_error_get_errno (err) != ENOENT)
