@@ -57,6 +57,11 @@
 
 static struct crun_global_arguments arguments;
 
+/* --systemd-cgroup and --cgroup-manager as specified, to reject them
+   when used together with conflicting values.  */
+static bool systemd_cgroup_option;
+static const char *cgroup_manager_option;
+
 struct commands_s
 {
   int value;
@@ -295,6 +300,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
 
     case OPTION_CGROUP_MANAGER:
       tmp = argp_mandatory_argument (arg, state);
+      cgroup_manager_option = tmp;
       if (strcmp (tmp, "systemd") == 0)
         {
           arguments.option_force_no_cgroup = false;
@@ -312,11 +318,12 @@ parse_opt (int key, char *arg, struct argp_state *state)
         }
       else
         {
-          libcrun_fail_with_error (0, "unknown cgroup manager specified");
+          libcrun_fail_with_error (0, "invalid --cgroup-manager value `%s` (must be `cgroupfs`, `systemd` or `disabled`)", tmp);
         }
       break;
 
     case OPTION_SYSTEMD_CGROUP:
+      systemd_cgroup_option = true;
       arguments.option_force_no_cgroup = false;
       arguments.option_systemd_cgroup = true;
       break;
@@ -489,6 +496,9 @@ main (int argc, char **argv)
 
   fill_handler_from_argv0 (argv[0], &arguments);
   argp_parse (&argp, argc, argv, ARGP_IN_ORDER, &first_argument, &arguments);
+
+  if (systemd_cgroup_option && cgroup_manager_option && strcmp (cgroup_manager_option, "systemd") != 0)
+    libcrun_fail_with_error (0, "--systemd-cgroup conflicts with --cgroup-manager=%s", cgroup_manager_option);
 
   command = get_command (argv[first_argument]);
   if (command == NULL)
