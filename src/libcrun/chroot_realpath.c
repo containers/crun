@@ -182,6 +182,7 @@ char *chroot_realpath(const char *chroot, const char *path, char resolved_path[]
 			strcat(link_path, path);
 			strcpy(copy_path, link_path);
 			path = copy_path;
+			continue;
 		}
 #endif							/* S_IFLNK */
 		if (!last_component) {
