@@ -637,6 +637,118 @@ def test_exec_process_json():
             run_crun_command(["delete", "-f", cid])
 
 
+def exec_oom_score_adj(values, inherited=None):
+    with open("/proc/self/oom_score_adj") as f:
+        current = int(f.read())
+    baseline = current if inherited is None else inherited
+    initial = max(current, baseline, 0) + 1
+    if initial > 1000:
+        return 77
+
+    def set_inherited_oom_score_adj():
+        with open("/proc/self/oom_score_adj", "w") as f:
+            f.write(str(inherited))
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    conf['process']['oomScoreAdj'] = initial
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        state = json.loads(run_crun_command(["state", cid]))
+        with tempfile.TemporaryDirectory() as directory:
+            process_file = os.path.join(directory, "process.json")
+            for index, value in enumerate(values):
+                pid_file = os.path.join(directory, "pid-%d" % index)
+                process = base_config()['process']
+                process['args'] = ['/init', 'cat', '/proc/self/fd/0']
+                if value is not None:
+                    process['oomScoreAdj'] = value
+                with open(process_file, 'w') as f:
+                    json.dump(process, f)
+                args = [get_crun_path(), "--root", get_tests_root_status(),
+                        "exec", "--pid-file", pid_file, "--process", process_file, cid]
+                with subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.PIPE,
+                                      preexec_fn=set_inherited_oom_score_adj if inherited is not None else None) as invocation:
+                    child_pid = None
+                    try:
+                        deadline = time.monotonic() + 10
+                        while time.monotonic() < deadline:
+                            try:
+                                with open(pid_file) as f:
+                                    content = f.read().strip()
+                                if content:
+                                    child_pid = int(content)
+                                    break
+                            except FileNotFoundError:
+                                pass
+                            if invocation.poll() is not None:
+                                break
+                            time.sleep(0.01)
+
+                        if child_pid is not None:
+                            expected = baseline if value is None else value
+                            for pid, score in ((invocation.pid, baseline), (child_pid, expected),
+                                               (state['pid'], initial), (os.getpid(), current)):
+                                with open("/proc/%d/oom_score_adj" % pid) as f:
+                                    actual = int(f.read())
+                                if actual != score:
+                                    logger.info("exec oomScoreAdj=%s: PID %d expected %d, got %d",
+                                                value, pid, score, actual)
+                                    return -1
+                    finally:
+                        try:
+                            _, stderr = invocation.communicate(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            invocation.kill()
+                            invocation.wait(timeout=10)
+                            raise
+                    if invocation.returncode != 0:
+                        permission_denied = b"Permission denied" in stderr or b"Operation not permitted" in stderr
+                        if (child_pid is None and value is not None and value <= 0
+                                and b"write to `/proc/self/oom_score_adj`" in stderr and permission_denied):
+                            if value == 0:
+                                logger.info("cannot lower inherited oomScoreAdj=%d to zero: %s", baseline, stderr)
+                                return 77
+                            logger.info("negative oomScoreAdj=%d denied: %s", value, stderr)
+                            continue
+                        logger.info("exec failed: %s", stderr)
+                        return -1
+                    if child_pid is None:
+                        logger.info("exec did not report its PID: %s", stderr)
+                        return -1
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_exec_oom_score_adj():
+    with open("/proc/self/oom_score_adj") as f:
+        current = int(f.read())
+    positive = max(current, 0) + 2
+    if positive > 1000:
+        return 77
+    return exec_oom_score_adj((positive, None))
+
+
+def test_exec_oom_score_adj_zero():
+    with open("/proc/self/oom_score_adj") as f:
+        current = int(f.read())
+    return exec_oom_score_adj((0, None), inherited=max(current, 1))
+
+
+def test_exec_oom_score_adj_negative():
+    with open("/proc/self/oom_score_adj") as f:
+        current = int(f.read())
+    negative = min(current - 1, -1)
+    if negative < -1000:
+        return 77
+    return exec_oom_score_adj((negative,))
+
+
 def test_exec_detach():
     """Test exec with detach option."""
     conf = base_config()
@@ -780,6 +892,9 @@ all_tests = {
     "exec-error-propagation" : test_exec_error_propagation,
     "exec-cwd" : test_exec_cwd,
     "exec-process-json" : test_exec_process_json,
+    "exec-oom-score-adj" : test_exec_oom_score_adj,
+    "exec-oom-score-adj-zero" : test_exec_oom_score_adj_zero,
+    "exec-oom-score-adj-negative" : test_exec_oom_score_adj_negative,
     "exec-detach" : test_exec_detach,
     "exec-multiple" : test_exec_multiple,
     "exec-exit-code" : test_exec_exit_code,

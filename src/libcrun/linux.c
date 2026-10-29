@@ -5307,17 +5307,16 @@ libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 int
-libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
+libcrun_set_oom (libcrun_container_t *container, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int fd = -1;
   int ret;
   char oom_buffer[16];
-  if (def->process == NULL || ! def->process->oom_score_adj_present)
+  if (process == NULL || ! process->oom_score_adj_present)
     return 0;
-  libcrun_debug ("Write OOM score adj: `%d`", def->process->oom_score_adj);
+  libcrun_debug ("Write OOM score adj: `%d`", process->oom_score_adj);
 
-  ret = snprintf (oom_buffer, sizeof (oom_buffer), "%i", def->process->oom_score_adj);
+  ret = snprintf (oom_buffer, sizeof (oom_buffer), "%i", process->oom_score_adj);
   if (UNLIKELY (ret >= (int) sizeof (oom_buffer)))
     return crun_make_error (err, 0, "internal error: static buffer too small");
 
@@ -6822,7 +6821,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return ret;
     }
 
-  ret = libcrun_set_oom (container, err);
+  ret = libcrun_set_oom (container, def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -7125,7 +7124,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
         return ret;
     }
 
-  ret = libcrun_set_oom (container, err);
+  ret = libcrun_set_oom (container, def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -7402,6 +7401,19 @@ join_process_parent_helper (libcrun_context_t *context,
   ret = TEMP_FAILURE_RETRY (read (sync_fd, &res, 1));
   if (UNLIKELY (ret != 1))
     return crun_make_error (err, ret < 0 ? errno : 0, "read from sync socket");
+
+  if (res == '2')
+    {
+      cleanup_free char *err_str = NULL;
+      int err_code = 0;
+      bool has_error = read_error_from_sync_socket (sync_fd, &err_code, &err_str);
+
+      waitpid_ignore_stopped (child_pid, NULL, 0);
+      if (has_error && ! is_empty_string (err_str))
+        return crun_make_error (err, err_code, "%s", err_str);
+
+      return crun_make_error (err, 0, "fail startup");
+    }
 
   if (res != '0')
     return crun_make_error (err, 0, "fail startup");
@@ -7763,6 +7775,22 @@ libcrun_join_process (libcrun_context_t *context,
         }
     }
 
+  if (pid == 0)
+    {
+      ret = libcrun_set_oom (container, process, err);
+      if (UNLIKELY (ret < 0))
+        goto child_error;
+    }
+
+  ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
+  if (UNLIKELY (ret < 0))
+    {
+      ret = crun_make_error (err, errno, "prctl unset dumpable");
+      if (pid == 0)
+        goto child_error;
+      goto exit;
+    }
+
   if (pid)
     {
       close_and_reset (&sync_socket_fd[1]);
@@ -7854,11 +7882,20 @@ libcrun_join_process (libcrun_context_t *context,
 
   return 0;
 
+child_error:
+  TEMP_FAILURE_RETRY (write (sync_socket_fd[1], "2", 1));
+  send_error_to_sync_socket_and_die (sync_socket_fd[1], false, err);
+
 exit:
   if (sync_socket_fd[0] >= 0)
     TEMP_FAILURE_RETRY (close (sync_socket_fd[0]));
   if (sync_socket_fd[1] >= 0)
     TEMP_FAILURE_RETRY (close (sync_socket_fd[1]));
+  if (pid > 0)
+    {
+      kill (pid, SIGKILL);
+      waitpid_ignore_stopped (pid, NULL, 0);
+    }
   return ret;
 }
 

@@ -81,7 +81,7 @@ int libcrun_set_selinux_label (libcrun_container_t *container, runtime_spec_sche
 int libcrun_set_apparmor_profile (libcrun_container_t *container, runtime_spec_schema_config_schema_process *proc, bool now, libcrun_error_t *err);
 int libcrun_set_hostname (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err);
-int libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_set_oom (libcrun_container_t *container, runtime_spec_schema_config_schema_process *process, libcrun_error_t *err);
 int libcrun_set_sysctl (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_set_terminal (libcrun_container_t *container, libcrun_error_t *err);
 int libcrun_join_process (libcrun_context_t *context, libcrun_container_t *container, pid_t pid_to_join,
