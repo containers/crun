@@ -20,6 +20,7 @@
 
 #include <config.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
@@ -43,7 +44,6 @@
 /* From <linux/io_uring.h> and <linux/io_uring/bpf_filter.h>, Linux 7.0.  */
 #define CRUN_IORING_REGISTER_BPF_FILTER 37
 #define CRUN_IO_URING_BPF_CMD_FILTER 1
-#define CRUN_IO_URING_BPF_FILTER_DENY_REST 1
 /* Offset of the per-opcode data in struct io_uring_bpf_ctx.  For
    IORING_OP_SOCKET, the first word is the address family.  */
 #define CRUN_IO_URING_BPF_CTX_PDU_OFFSET 16
@@ -139,6 +139,8 @@ static const char *io_uring_ops[] = {
 #define IO_URING_OPS_LEN (sizeof (io_uring_ops) / sizeof (io_uring_ops[0]))
 #define IORING_OP_NOP_VALUE 0
 #define IORING_OP_SOCKET_VALUE 45
+/* The SQE opcode is 8 bits.  */
+#define IO_URING_MAX_OPCODES 256
 
 static const struct
 {
@@ -355,29 +357,18 @@ register_filter (uint32_t opcode, uint32_t flags, struct sock_filter *program, s
 }
 
 static int
-register_deny_rest (libcrun_error_t *err)
-{
-  struct sock_filter deny[] = {
-    BPF_STMT (BPF_RET | BPF_K, 0),
-  };
-  int ret;
-
-  ret = register_filter (IORING_OP_NOP_VALUE, CRUN_IO_URING_BPF_FILTER_DENY_REST, deny, 1);
-  if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "register io_uring filter for `%s`", io_uring_ops[IORING_OP_NOP_VALUE]);
-  return 0;
-}
-
-static int
 apply_policy (struct io_uring_policy_s *policy, libcrun_error_t *err)
 {
   struct sock_filter allow[] = {
     BPF_STMT (BPF_RET | BPF_K, 1),
   };
+  struct sock_filter deny[] = {
+    BPF_STMT (BPF_RET | BPF_K, 0),
+  };
   struct sock_filter socket_program[IO_URING_SOCKET_FAMILIES_LEN + 3];
   size_t socket_program_len = 0;
-  int lowest = -1;
-  int i, ret;
+  uint32_t op;
+  int ret;
 
   if (policy->has_socket_families)
     {
@@ -392,44 +383,32 @@ apply_policy (struct io_uring_policy_s *policy, libcrun_error_t *err)
       socket_program[socket_program_len++] = (struct sock_filter) BPF_STMT (BPF_RET | BPF_K, 1);
     }
 
-  for (i = 0; i < (int) IO_URING_OPS_LEN; i++)
-    if (policy->ops[i])
-      {
-        lowest = i;
-        break;
-      }
-
-  /* With no allowed opcode, a deny filter with DENY_REST denies them all.  */
-  if (lowest < 0)
-    return register_deny_rest (err);
-
-  /* Register an allow filter for every allowed opcode, the lowest one last.
-     It carries DENY_REST, which attaches a deny filter to every opcode that
-     has no filter yet, so it must come last.  */
-  for (i = IO_URING_OPS_LEN - 1; i >= lowest; i--)
+  /* Every opcode gets a filter: DENY_REST only fills the opcodes without
+     one, so an opcode that a filter inherited by crun allows would stay
+     allowed.  With these fixed programs, EINVAL only means that the kernel
+     doesn't know this opcode, nor the later ones.  IORING_OP_SOCKET with
+     socketFamilies is registered after the loop, where EINVAL is an error.  */
+  for (op = 0; op < IO_URING_MAX_OPCODES; op++)
     {
-      uint32_t flags = i == lowest ? CRUN_IO_URING_BPF_FILTER_DENY_REST : 0;
+      bool allowed = op < IO_URING_OPS_LEN && policy->ops[op];
 
-      if (! policy->ops[i])
+      if (allowed && op == IORING_OP_SOCKET_VALUE && policy->has_socket_families)
         continue;
 
-      if (i == IORING_OP_SOCKET_VALUE && policy->has_socket_families)
-        ret = register_filter (i, flags, socket_program, socket_program_len);
-      else
-        ret = register_filter (i, flags, allow, 1);
-
+      ret = register_filter (op, 0, allowed ? allow : deny, 1);
       if (UNLIKELY (ret < 0))
         {
-          /* An opcode newer than the kernel cannot be submitted anyway, but
-             DENY_REST must still be registered.  */
-          if (errno == EINVAL)
-            {
-              if (i == lowest)
-                return register_deny_rest (err);
-              continue;
-            }
-          return crun_make_error (err, errno, "register io_uring filter for `%s`", io_uring_ops[i]);
+          if (errno == EINVAL && op > 0)
+            break;
+          return crun_make_error (err, errno, "register io_uring filter for opcode %" PRIu32, op);
         }
+    }
+
+  if (policy->has_socket_families && op > IORING_OP_SOCKET_VALUE)
+    {
+      ret = register_filter (IORING_OP_SOCKET_VALUE, 0, socket_program, socket_program_len);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "register io_uring filter for `%s`", io_uring_ops[IORING_OP_SOCKET_VALUE]);
     }
 
   return 0;
