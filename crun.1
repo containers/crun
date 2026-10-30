@@ -572,6 +572,29 @@ in the OCI runtime specs:
 other operation is denied.  If \fBsocketFamilies\fR is present,
 \fBIORING_OP_SOCKET\fR can create sockets only for these address families.
 It must not be empty, and \fBops\fR must contain \fBIORING_OP_SOCKET\fR\&.
+Names that crun does not know are ignored with a warning: what they
+would allow stays denied.
+
+.PP
+\fBsocketFamilies\fR only checks the address family, not the socket type or
+protocol, and sockets created with socket(2) are subject to seccomp
+only.  An io_uring instance created before the restrictions are
+applied, for example outside of the container and passed in with
+\fB\-\-preserve\-fds\fR, is not restricted.
+
+.PP
+The container processes can add their own io_uring BPF filters and
+restrict their own rings, but they can no longer register task
+restrictions with \fBIORING_REGISTER_RESTRICTIONS\fR\&.  On restore, crun
+applies the restrictions from the annotation again: those that the
+processes added themselves are lost.
+
+.PP
+crun refuses the annotation if the kernel does not keep the
+restrictions on exec, as Linux 7.0 and 7.1 without commit bc0e8faf90e7
+do.  Older crun versions and other runtimes ignore the annotation:
+\fBcrun features\fR reports \fBrun.oci.crun.io_uring\fR as \fBtrue\fR when it is
+supported.
 
 .PP
 It is an experimental feature, and the annotation will be removed once

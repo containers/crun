@@ -4950,6 +4950,9 @@ libcrun_container_get_features (libcrun_context_t *context, struct features_info
   (*info)->annotations.run_oci_crun_checkpoint_enabled = true;
 #endif
   (*info)->annotations.run_oci_crun_commit = GIT_VERSION;
+#ifdef __NR_io_uring_register
+  (*info)->annotations.run_oci_crun_io_uring = true;
+#endif
   (*info)->annotations.run_oci_crun_version = PACKAGE_VERSION;
 
   populate_array_field (&((*info)->potentially_unsafe_annotations), potentially_unsafe_annotations, num_unsafe_annotations);
@@ -5068,6 +5071,7 @@ features_add_annotations_info (json_gen_ctx *json_gen, const struct annotations_
   features_add_bool_str (json_gen, "run.oci.crun.checkpoint.enabled", annotation->run_oci_crun_checkpoint_enabled);
 
   features_add_string (json_gen, "run.oci.crun.commit", annotation->run_oci_crun_commit);
+  features_add_bool_str (json_gen, "run.oci.crun.io_uring", annotation->run_oci_crun_io_uring);
   features_add_string (json_gen, "run.oci.crun.version", annotation->run_oci_crun_version);
 
   features_add_bool_str (json_gen, "run.oci.crun.wasm", annotation->run_oci_crun_wasm);
@@ -5351,7 +5355,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
 
   /* CRIU does not restore the io_uring restrictions, but the restored
      processes inherit them from CRIU, as they are inherited across fork
-     and exec.  */
+     and exec.  They are permanent: the calling thread stays restricted.  */
   ret = libcrun_apply_io_uring_restrictions (container, err);
   if (UNLIKELY (ret < 0))
     goto fail;
