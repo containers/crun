@@ -122,11 +122,30 @@ def test_io_uring_nested():
     return 0
 
 
+def test_io_uring_unknown_names():
+    if not io_uring_restrictions_supported():
+        return (77, "io_uring restrictions not supported by the kernel")
+
+    # Unknown names are ignored, and what they would allow stays denied.
+    checks = ['nop', 'read', 'socket-inet', 'socket-unix']
+    for policy, expected in [
+        ({"ops": ["IORING_OP_NOP", "IORING_OP_FOO", "IORING_OP_SOCKET"], "socketFamilies": ["AF_FOO", "AF_INET"]},
+         ["nop", "allowed", "read", "denied", "socket-inet", "allowed", "socket-unix", "denied"]),
+        ({"ops": ["IORING_OP_NOP", "IORING_OP_SOCKET"], "socketFamilies": ["AF_FOO"]},
+         ["nop", "allowed", "read", "denied", "socket-inet", "denied", "socket-unix", "denied"]),
+    ]:
+        conf = policy_config(policy, ['/init', 'io_uring'] + checks)
+        out, _ = run_and_get_output(conf, hide_stderr=True)
+        if out.split() != expected:
+            logger.info("unexpected io_uring results for %s: %s", policy, out)
+            return -1
+    return 0
+
+
 def test_io_uring_invalid_policy():
     for policy in [
-        {"ops": ["read"]},
+        {"ops": "IORING_OP_READ"},
         {"ops": [], "socketFamilies": []},
-        {"ops": ["IORING_OP_SOCKET"], "socketFamilies": ["AF_FOO"]},
         {"ops": ["IORING_OP_READ"], "socketFamilies": ["AF_INET"]},
         {"ops": [], "defaultAction": "deny"},
         {},
@@ -149,6 +168,7 @@ all_tests = {
     "io-uring-policy-exec": test_io_uring_policy_exec,
     "io-uring-deny-all": test_io_uring_deny_all,
     "io-uring-nested": test_io_uring_nested,
+    "io-uring-unknown-names": test_io_uring_unknown_names,
     "io-uring-invalid-policy": test_io_uring_invalid_policy,
 }
 
