@@ -106,6 +106,22 @@ def test_io_uring_deny_all():
     return 0
 
 
+def test_io_uring_nested():
+    if not io_uring_restrictions_supported():
+        return (77, "io_uring restrictions not supported by the kernel")
+
+    # crun itself runs under a policy that allows NOP, READ and WRITE: WRITE
+    # must stay denied by the container's policy, and SOCKET by the outer one.
+    conf = policy_config(POLICY, ['/init', 'io_uring', 'nop', 'read', 'write', 'socket-inet'])
+    wrapper = [get_init_path(), 'io_uring-restrict', 'nop,read,write']
+    out, _ = run_and_get_output(conf, hide_stderr=True, wrapper=wrapper)
+    expected = ["nop", "allowed", "read", "allowed", "write", "denied", "socket-inet", "denied"]
+    if out.split() != expected:
+        logger.info("unexpected io_uring results: %s", out)
+        return -1
+    return 0
+
+
 def test_io_uring_invalid_policy():
     for policy in [
         {"ops": ["read"]},
@@ -132,6 +148,7 @@ all_tests = {
     "io-uring-policy": test_io_uring_policy,
     "io-uring-policy-exec": test_io_uring_policy_exec,
     "io-uring-deny-all": test_io_uring_deny_all,
+    "io-uring-nested": test_io_uring_nested,
     "io-uring-invalid-policy": test_io_uring_invalid_policy,
 }
 

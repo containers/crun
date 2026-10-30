@@ -55,6 +55,11 @@
 #  include <sys/mman.h>
 #endif
 
+#ifdef HAVE_LINUX_IO_URING_BPF_FILTER_H
+#  include <linux/io_uring/bpf_filter.h>
+#  include <linux/filter.h>
+#endif
+
 #ifdef HAVE_SECCOMP
 #  include <linux/seccomp.h>
 #  include <linux/filter.h>
@@ -598,6 +603,36 @@ io_uring_submit_one (const char *op)
 }
 #endif
 
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register
+static void
+io_uring_allow (const char *op, unsigned int flags)
+{
+  struct sock_filter allow[] = {
+    BPF_STMT (BPF_RET | BPF_K, 1),
+  };
+  struct io_uring_bpf bpf;
+
+  memset (&bpf, 0, sizeof (bpf));
+  bpf.cmd_type = IO_URING_BPF_CMD_FILTER;
+  if (strcmp (op, "nop") == 0)
+    bpf.filter.opcode = IORING_OP_NOP;
+  else if (strcmp (op, "read") == 0)
+    bpf.filter.opcode = IORING_OP_READ;
+  else if (strcmp (op, "write") == 0)
+    bpf.filter.opcode = IORING_OP_WRITE;
+  else if (strcmp (op, "socket") == 0)
+    bpf.filter.opcode = IORING_OP_SOCKET;
+  else
+    error (EXIT_FAILURE, 0, "unknown io_uring operation `%s`", op);
+  bpf.filter.flags = flags;
+  bpf.filter.filter_len = 1;
+  bpf.filter.filter_ptr = (uint64_t) (uintptr_t) allow;
+
+  if (syscall (__NR_io_uring_register, -1, IORING_REGISTER_BPF_FILTER, &bpf, 1) < 0)
+    error (EXIT_FAILURE, errno, "register io_uring filter for `%s`", op);
+}
+#endif
+
 int
 main (int argc, char **argv)
 {
@@ -1110,6 +1145,31 @@ main (int argc, char **argv)
 #endif
     }
 
+  if (strcmp (argv[1], "io_uring-restrict") == 0)
+    {
+      /* Allow only the comma-separated operations, then exec the rest of
+         the arguments: they run under an io_uring policy, as crun does in a
+         restricted container.  */
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register
+      char *saveptr = NULL;
+      char *op;
+
+      if (argc < 4)
+        error (EXIT_FAILURE, 0, "'io_uring-restrict' requires the operations and a command");
+
+      for (op = strtok_r (argv[2], ",", &saveptr); op; op = strtok_r (NULL, ",", &saveptr))
+        io_uring_allow (op, 0);
+      /* strtok_r left the first operation in argv[2]: once more for it, now
+         denying the operations without a filter.  */
+      io_uring_allow (argv[2], IO_URING_BPF_FILTER_DENY_REST);
+
+      execvp (argv[3], argv + 3);
+      error (EXIT_FAILURE, errno, "exec `%s`", argv[3]);
+#else
+      error (EXIT_FAILURE, 0, "io_uring BPF filters not supported");
+#endif
+    }
+
   if (strcmp (argv[1], "io_uring-once-restored") == 0)
     {
       /* Like "io_uring", but only once the file "restored" shows up in the
@@ -1206,9 +1266,9 @@ main (int argc, char **argv)
         }
       if (strcmp (argv[2], "io_uring-restrictions") == 0)
         {
-#if defined __NR_io_uring_register
-          /* IORING_REGISTER_BPF_FILTER for the task with a NULL argument: EFAULT if supported.  */
-          int ret = syscall (__NR_io_uring_register, -1, 37, NULL, 1);
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register
+          /* A filter for the task with a NULL argument: EFAULT if supported.  */
+          int ret = syscall (__NR_io_uring_register, -1, IORING_REGISTER_BPF_FILTER, NULL, 1);
           return (ret < 0 && (errno == EFAULT || errno == EACCES)) ? 0 : 1;
 #else
           return 1;
