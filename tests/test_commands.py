@@ -453,6 +453,90 @@ def test_kill_all_threaded():
             run_crun_command(["delete", "-f", cid])
 
 
+def run_no_cgroup_no_pidns():
+    """Run a container with neither a cgroup nor its own PID namespace.
+
+    Return its id and its init pid."""
+    conf = base_config()
+    add_all_namespaces(conf, pidns=False)
+    # A new procfs cannot be mounted without a new PID namespace.
+    for mount in conf['mounts']:
+        if mount['type'] == 'proc':
+            mount.update(type='none', source='/proc', options=['rbind', 'nosuid', 'nodev', 'noexec'])
+    conf['process']['args'] = ['/init', 'pause']
+
+    _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True, cgroup_manager='disabled')
+    state = json.loads(run_crun_command(['state', cid]))
+    return cid, state['pid']
+
+
+def is_running(pid):
+    try:
+        with open("/proc/%d/stat" % pid) as f:
+            return f.read().rsplit(")", 1)[1].split()[0] not in ("Z", "X")
+    except (FileNotFoundError, ProcessLookupError):
+        return False
+
+
+def test_kill_all_no_cgroup():
+    """Test that kill --all signals init of a container without a cgroup."""
+    cid = None
+    pid = None
+    try:
+        cid, pid = run_no_cgroup_no_pidns()
+
+        out = run_crun_command_raw(['kill', '--all', cid, 'SIGKILL']).decode()
+        if "only its init process is signaled" not in out:
+            logger.info("no warning from kill --all: %s", out)
+            return -1
+
+        if wait_for_state(cid, 'stopped') is None:
+            logger.info("container not stopped after kill --all")
+            return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        if pid is not None and is_running(pid):
+            os.kill(pid, signal.SIGKILL)
+
+
+def test_delete_force_no_cgroup():
+    """Test that delete --force kills init of a container without a cgroup."""
+    cid = None
+    pid = None
+    try:
+        cid, pid = run_no_cgroup_no_pidns()
+
+        out = run_crun_command_raw(['delete', '-f', cid]).decode()
+        cid = None
+        if "only its init process is signaled" not in out:
+            logger.info("no warning from delete --force: %s", out)
+            return -1
+
+        for _ in range(50):
+            if not is_running(pid):
+                return 0
+            time.sleep(0.1)
+
+        logger.info("init %d still running after delete --force", pid)
+        return -1
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        if pid is not None and is_running(pid):
+            os.kill(pid, signal.SIGKILL)
+
+
 def test_list_table_format():
     """Test list command with table format."""
 
@@ -851,6 +935,8 @@ all_tests = {
     "kill-zombie-leader": test_kill_zombie_leader,
     "kill-all": test_kill_all,
     "kill-all-threaded": test_kill_all_threaded,
+    "kill-all-no-cgroup": test_kill_all_no_cgroup,
+    "delete-force-no-cgroup": test_delete_force_no_cgroup,
     "run-forward-signal": test_run_forward_signal,
     "list-containers": test_list_containers,
     "list-table-format": test_list_table_format,
