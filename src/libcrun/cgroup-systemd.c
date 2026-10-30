@@ -1591,10 +1591,45 @@ add_bpf_program (sd_bus_message *m,
   return 0;
 }
 
-/* Append CPUQuotaPeriodUSec and CPUQuotaPerSecUSec, the way runc does.  */
+/* Read the period from the cpu.max file of the cgroup at PATH.  It is
+   left unchanged if the file cannot be read.  */
+static int
+read_cpu_max_period (const char *path, uint64_t *period, libcrun_error_t *err)
+{
+  cleanup_free char *cpu_max_path = NULL;
+  cleanup_free char *content = NULL;
+  uint64_t current_period;
+  bool has_period;
+  int64_t quota;
+  int ret;
+
+  ret = append_paths (&cpu_max_path, err, CGROUP_ROOT, path, "cpu.max", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_all_file (cpu_max_path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (err);
+      return 0;
+    }
+
+  ret = parse_cpu_max (content, &quota, &current_period, &has_period, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (has_period)
+    *period = current_period;
+
+  return 0;
+}
+
+/* Append CPUQuotaPeriodUSec and CPUQuotaPerSecUSec, the way runc does.
+   CGROUP_PATH is the existing cgroup on an update, or NULL.  */
 static int
 append_cpu_quota (sd_bus_message *m, char **missing_properties,
-                  runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
+                  runtime_spec_schema_config_linux_resources *resources,
+                  const char *cgroup_path, libcrun_error_t *err)
 {
   uint64_t period = (resources->cpu && resources->cpu->period_present) ? resources->cpu->period : 0;
   int64_t quota = (resources->cpu && resources->cpu->quota_present) ? resources->cpu->quota : 0;
@@ -1613,6 +1648,13 @@ append_cpu_quota (sd_bus_message *m, char **missing_properties,
         return ret;
       if (has_period)
         period = max_period;
+      else if (period == 0 && cgroup_path)
+        {
+          /* Without a period, the kernel keeps the current one.  */
+          ret = read_cpu_max_period (cgroup_path, &period, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+        }
     }
 
   if (period && ! property_missing_p (missing_properties, "CPUQuotaPeriodUSec"))
@@ -1651,6 +1693,7 @@ append_resources (sd_bus_message *m,
                   runtime_spec_schema_config_linux_resources *resources,
                   int cgroup_mode,
                   const char *scope,
+                  const char *cgroup_path,
                   bool *devices_set,
                   libcrun_error_t *err)
 {
@@ -1707,7 +1750,7 @@ append_resources (sd_bus_message *m,
   APPEND_UINT64 ("MemorySwapMax", get_memory_swap_max);
   APPEND_UINT64 ("TasksMax", get_pids_max);
 
-  ret = append_cpu_quota (m, missing_properties, resources, err);
+  ret = append_cpu_quota (m, missing_properties, resources, cgroup_path, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -2019,7 +2062,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         }
     }
 
-  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, devices_set, err);
+  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, NULL, devices_set, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
@@ -2366,7 +2409,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       goto exit;
     }
 
-  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, &cgroup_status->bpf_dev_set, err);
+  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, cgroup_status->path, &cgroup_status->bpf_dev_set, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
