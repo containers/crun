@@ -4469,6 +4469,12 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         return ret;
     }
 
+  /* The exec process inherits it from us.  This must be done before we drop
+     the dumpable flag, which makes /proc/self/oom_score_adj owned by root.  */
+  ret = libcrun_set_oom (container, process, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "prctl unset dumpable");
