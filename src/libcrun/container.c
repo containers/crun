@@ -4423,7 +4423,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   pipefd1 = container_ret_status[1];
 
   /* If the new process block doesn't specify a SELinux label, AppArmor profile, user,
-     I/O priority or scheduler, then use the configuration from the original config file.  */
+     I/O priority, scheduler or OOM score adjustment, then use the configuration from
+     the original config file.  */
   if (container->container_def->process)
     {
       if (process->io_priority == NULL && container->container_def->process->io_priority)
@@ -4438,6 +4439,12 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
           process->scheduler = clone_runtime_spec_schema_config_schema_process_scheduler (container->container_def->process->scheduler);
           if (process->scheduler == NULL)
             OOM ();
+        }
+
+      if (! process->oom_score_adj_present && container->container_def->process->oom_score_adj_present)
+        {
+          process->oom_score_adj = container->container_def->process->oom_score_adj;
+          process->oom_score_adj_present = true;
         }
 
       if (process->selinux_label == NULL && container->container_def->process->selinux_label)
