@@ -113,7 +113,9 @@ Defines where to store the state for crun containers.
 
 **--systemd-cgroup**
 Use systemd for configuring cgroups.  If not specified, the cgroup is
-created directly using the cgroupfs backend.
+created directly using the cgroupfs backend.  Same as
+**--cgroup-manager**=**systemd**; it conflicts with any other
+**--cgroup-manager** value.
 
 **--cgroup-manager**=_MANAGER_
 Specify what cgroup manager must be used.  Permitted values are **cgroupfs**,

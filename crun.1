@@ -140,7 +140,9 @@ Defines where to store the state for crun containers.
 .PP
 \fB--systemd-cgroup\fP
 Use systemd for configuring cgroups.  If not specified, the cgroup is
-created directly using the cgroupfs backend.
+created directly using the cgroupfs backend.  Same as
+\fB--cgroup-manager\fP=\fBsystemd\fP; it conflicts with any other
+\fB--cgroup-manager\fP value.
 
 .PP
 \fB--cgroup-manager\fP=\fIMANAGER\fP
