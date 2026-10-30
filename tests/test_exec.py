@@ -760,6 +760,69 @@ def test_exec_dev_null_reopened():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_exec_oom_score_adj():
+    with open("/proc/self/oom_score_adj") as f:
+        current = int(f.read())
+    if current > 800:
+        return 77
+    container_value = current + 100
+    process_value = current + 200
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    conf['process']['oomScoreAdj'] = container_value
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+
+    def exec_and_get_oom_score_adj(cid, oom_score_adj=None):
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            process = {
+                "user": {
+                    "uid": 0,
+                    "gid": 0
+                },
+                "terminal": False,
+                "cwd" : "/",
+                "args": [
+                    "/init",
+                    "cat",
+                    "/proc/self/oom_score_adj"
+                ]
+            }
+            if oom_score_adj is not None:
+                process["oomScoreAdj"] = oom_score_adj
+            json.dump(process, f)
+
+        return run_crun_command(["exec", "--process", process_file, cid]).strip()
+
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/oom_score_adj"]).strip()
+        if out != str(container_value):
+            logger.info("oom_score_adj without process file %s != %d", out, container_value)
+            return -1
+
+        out = exec_and_get_oom_score_adj(cid)
+        if out != str(container_value):
+            logger.info("oom_score_adj from container config %s != %d", out, container_value)
+            return -1
+
+        out = exec_and_get_oom_score_adj(cid, process_value)
+        if out != str(process_value):
+            logger.info("oom_score_adj from process file %s != %d", out, process_value)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test_exec_oom_score_adj failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -784,6 +847,7 @@ all_tests = {
     "exec-multiple" : test_exec_multiple,
     "exec-exit-code" : test_exec_exit_code,
     "exec-dev-null-reopened" : test_exec_dev_null_reopened,
+    "exec-oom-score-adj" : test_exec_oom_score_adj,
 }
 
 if __name__ == "__main__":

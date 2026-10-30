@@ -5307,17 +5307,17 @@ libcrun_set_domainname (libcrun_container_t *container, libcrun_error_t *err)
 }
 
 int
-libcrun_set_oom (libcrun_container_t *container, libcrun_error_t *err)
+libcrun_set_oom (libcrun_container_t *container, runtime_spec_schema_config_schema_process *process,
+                 libcrun_error_t *err)
 {
-  runtime_spec_schema_config_schema *def = container->container_def;
   cleanup_close int fd = -1;
   int ret;
   char oom_buffer[16];
-  if (def->process == NULL || ! def->process->oom_score_adj_present)
+  if (process == NULL || ! process->oom_score_adj_present)
     return 0;
-  libcrun_debug ("Write OOM score adj: `%d`", def->process->oom_score_adj);
+  libcrun_debug ("Write OOM score adj: `%d`", process->oom_score_adj);
 
-  ret = snprintf (oom_buffer, sizeof (oom_buffer), "%i", def->process->oom_score_adj);
+  ret = snprintf (oom_buffer, sizeof (oom_buffer), "%i", process->oom_score_adj);
   if (UNLIKELY (ret >= (int) sizeof (oom_buffer)))
     return crun_make_error (err, 0, "internal error: static buffer too small");
 
@@ -6822,7 +6822,7 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
         return ret;
     }
 
-  ret = libcrun_set_oom (container, err);
+  ret = libcrun_set_oom (container, container->container_def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -7125,7 +7125,7 @@ libcrun_run_linux_container (libcrun_container_t *container, container_entrypoin
         return ret;
     }
 
-  ret = libcrun_set_oom (container, err);
+  ret = libcrun_set_oom (container, container->container_def->process, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
