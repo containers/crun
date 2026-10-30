@@ -631,6 +631,37 @@ io_uring_allow (const char *op, unsigned int flags)
   if (syscall (__NR_io_uring_register, -1, IORING_REGISTER_BPF_FILTER, &bpf, 1) < 0)
     error (EXIT_FAILURE, errno, "register io_uring filter for `%s`", op);
 }
+
+#  ifdef __NR_io_uring_setup
+/* Linux 7.0 and 7.1 without bc0e8faf90e7 drop the restrictions on exec for a
+   task that has used io_uring, and crun refuses them there.  Check it as
+   crun does: restrict a child, create a ring and re-execute it.  */
+static int
+io_uring_restrictions_kept_on_exec ()
+{
+  struct io_uring_params p;
+  int status;
+  pid_t pid;
+
+  pid = fork ();
+  if (pid < 0)
+    error (EXIT_FAILURE, errno, "fork");
+  if (pid == 0)
+    {
+      memset (&p, 0, sizeof (p));
+      if (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0)
+        error (EXIT_FAILURE, errno, "prctl");
+      io_uring_allow ("nop", IO_URING_BPF_FILTER_DENY_REST);
+      if (syscall (__NR_io_uring_setup, 1, &p) < 0)
+        error (EXIT_FAILURE, errno, "io_uring_setup");
+      execl ("/proc/self/exe", "init", "check-feature", "io_uring-restrictions-kept", NULL);
+      error (EXIT_FAILURE, errno, "exec");
+    }
+  if (waitpid (pid, &status, 0) < 0)
+    error (EXIT_FAILURE, errno, "waitpid");
+  return WIFEXITED (status) && WEXITSTATUS (status) == 0;
+}
+#  endif
 #endif
 
 int
@@ -1266,10 +1297,22 @@ main (int argc, char **argv)
         }
       if (strcmp (argv[2], "io_uring-restrictions") == 0)
         {
-#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register && defined __NR_io_uring_setup
           /* A filter for the task with a NULL argument: EFAULT if supported.  */
           int ret = syscall (__NR_io_uring_register, -1, IORING_REGISTER_BPF_FILTER, NULL, 1);
-          return (ret < 0 && (errno == EFAULT || errno == EACCES)) ? 0 : 1;
+          if (! (ret < 0 && (errno == EFAULT || errno == EACCES)))
+            return 1;
+          return io_uring_restrictions_kept_on_exec () ? 0 : 1;
+#else
+          return 1;
+#endif
+        }
+      if (strcmp (argv[2], "io_uring-restrictions-kept") == 0)
+        {
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_register
+          /* With task restrictions, registering classic ones fails with EPERM.  */
+          int ret = syscall (__NR_io_uring_register, -1, IORING_REGISTER_RESTRICTIONS, NULL, 1);
+          return (ret < 0 && errno == EPERM) ? 0 : 1;
 #else
           return 1;
 #endif
