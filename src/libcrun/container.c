@@ -2057,9 +2057,10 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
   if (killall && force)
     {
       /* If the container has a pid namespace, it is enough to kill the first
-         process (pid=1 in the namespace).
+         process (pid=1 in the namespace).  Without a cgroup, the other
+         processes cannot be found, so kill the first process only.
       */
-      if (has_new_pid_namespace (def))
+      if (has_new_pid_namespace (def) || is_empty_string (status.cgroup_path))
         {
           ret = libcrun_kill_linux (&status, SIGKILL, err);
           if (UNLIKELY (ret < 0))
@@ -2070,7 +2071,7 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
               crun_error_release (err);
             }
         }
-      else if (status.cgroup_path)
+      else
         {
           ret = libcrun_cgroup_killall (cgroup_status, SIGKILL, err);
           if (UNLIKELY (ret < 0))
@@ -2153,6 +2154,22 @@ libcrun_container_killall (libcrun_context_t *context, const char *id, const cha
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* Without a cgroup, the container processes cannot be found, so signal
+     init only.  A container which is not running is not an error, as with
+     an empty cgroup.  */
+  if (is_empty_string (status.cgroup_path))
+    {
+      ret = libcrun_kill_linux (&status, sig, err);
+      if (UNLIKELY (ret < 0))
+        {
+          if (crun_error_get_errno (err) != ESRCH)
+            return ret;
+
+          crun_error_release (err);
+        }
+      return 0;
+    }
 
   cgroup_status = libcrun_cgroup_make_status (&status);
 
