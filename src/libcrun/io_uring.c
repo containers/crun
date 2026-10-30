@@ -20,12 +20,15 @@
 
 #include <config.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #include <linux/filter.h>
 
 #include "utils.h"
@@ -41,7 +44,12 @@
    address families.  */
 #define IO_URING_ANNOTATION "run.oci.io_uring"
 
+/* Set for the process that checks the restrictions after exec, see
+   check_restrictions_kept_on_exec.  */
+#define IO_URING_EXEC_CHECK_ENV "_LIBCRUN_IO_URING_EXEC_CHECK"
+
 /* From <linux/io_uring.h> and <linux/io_uring/bpf_filter.h>, Linux 7.0.  */
+#define CRUN_IORING_REGISTER_RESTRICTIONS 11
 #define CRUN_IORING_REGISTER_BPF_FILTER 37
 #define CRUN_IO_URING_BPF_CMD_FILTER 1
 /* Offset of the per-opcode data in struct io_uring_bpf_ctx.  For
@@ -466,6 +474,82 @@ apply_policy (struct io_uring_policy_s *policy, libcrun_error_t *err)
   return 0;
 }
 
+/* In a constructor, as the process is /proc/self/exe: crun or any program
+   using libcrun.  */
+__attribute__ ((constructor)) static void
+io_uring_exec_check (void)
+{
+  int ret;
+
+  if (getenv (IO_URING_EXEC_CHECK_ENV) == NULL)
+    return;
+
+  /* With task restrictions, registering classic ones fails with EPERM.  */
+  ret = syscall_io_uring_register (-1, CRUN_IORING_REGISTER_RESTRICTIONS, NULL, 1);
+  _exit (ret < 0 && errno == EPERM ? EXIT_SUCCESS : EXIT_FAILURE);
+}
+
+/* On Linux 7.0 and 7.1 without bc0e8faf90e7, a task that has used io_uring
+   loses its restrictions on exec.  Check it on a child that restricts
+   itself, creates a ring and execs crun.  */
+static int
+check_restrictions_kept_on_exec (libcrun_error_t *err)
+{
+#ifdef __NR_io_uring_setup
+  struct sock_filter deny[] = {
+    BPF_STMT (BPF_RET | BPF_K, 0),
+  };
+  char *argv[] = { (char *) "crun", NULL };
+  char *envp[] = { (char *) IO_URING_EXEC_CHECK_ENV "=1", NULL };
+  /* Room for struct io_uring_params.  */
+  uint64_t params[16];
+  int fds[2], child_errno, status, ret;
+  pid_t pid;
+
+  ret = pipe2 (fds, O_CLOEXEC);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "pipe");
+
+  pid = fork ();
+  if (UNLIKELY (pid < 0))
+    {
+      ret = crun_make_error (err, errno, "fork");
+      close (fds[0]);
+      close (fds[1]);
+      return ret;
+    }
+  if (pid == 0)
+    {
+      memset (params, 0, sizeof (params));
+      if (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0
+          && register_filter (IORING_OP_NOP_VALUE, 0, deny, 1) == 0
+          && syscall (__NR_io_uring_setup, 1, params) >= 0)
+        execve ("/proc/self/exe", argv, envp);
+      child_errno = errno;
+      TEMP_FAILURE_RETRY (write (fds[1], &child_errno, sizeof (child_errno)));
+      _exit (EXIT_FAILURE);
+    }
+
+  close (fds[1]);
+  ret = TEMP_FAILURE_RETRY (read (fds[0], &child_errno, sizeof (child_errno)));
+  close (fds[0]);
+
+  if (UNLIKELY (waitpid_ignore_stopped (pid, &status, 0) < 0))
+    return crun_make_error (err, errno, "waitpid");
+
+  if (UNLIKELY (ret == sizeof (child_errno)))
+    return crun_make_error (err, child_errno, "%s: cannot check that the kernel keeps io_uring restrictions on exec", IO_URING_ANNOTATION);
+
+  if (UNLIKELY (! WIFEXITED (status) || WEXITSTATUS (status) != EXIT_SUCCESS))
+    return crun_make_error (err, 0, "%s: the kernel does not keep io_uring restrictions on exec (Linux 7.0 and 7.1 need commit bc0e8faf90e7)",
+                            IO_URING_ANNOTATION);
+
+  return 0;
+#else
+  return crun_make_error (err, ENOSYS, "%s: cannot check that the kernel keeps io_uring restrictions on exec", IO_URING_ANNOTATION);
+#endif
+}
+
 int
 libcrun_check_io_uring_restrictions (libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -486,7 +570,7 @@ libcrun_check_io_uring_restrictions (libcrun_container_t *container, libcrun_err
     return crun_make_error (err, ret, "%s: io_uring restrictions are not supported or not permitted (Linux 7.0 or newer is required)",
                             IO_URING_ANNOTATION);
 
-  return 0;
+  return check_restrictions_kept_on_exec (err);
 }
 
 int
