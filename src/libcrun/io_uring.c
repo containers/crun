@@ -142,20 +142,59 @@ static const char *io_uring_ops[] = {
 /* The SQE opcode is 8 bits.  */
 #define IO_URING_MAX_OPCODES 256
 
+/* From <linux/socket.h>, Linux 7.0: libc may lack the newer ones.  */
 static const struct
 {
   const char *name;
   int value;
 } io_uring_socket_families[] = {
-  { "AF_UNIX", AF_UNIX },
-  { "AF_LOCAL", AF_LOCAL },
-  { "AF_INET", AF_INET },
-  { "AF_INET6", AF_INET6 },
-  { "AF_NETLINK", AF_NETLINK },
-  { "AF_PACKET", AF_PACKET },
-  { "AF_VSOCK", AF_VSOCK },
-  { "AF_ALG", AF_ALG },
-  { "AF_XDP", AF_XDP },
+  { "AF_UNIX", 1 },
+  { "AF_LOCAL", 1 },
+  { "AF_INET", 2 },
+  { "AF_AX25", 3 },
+  { "AF_IPX", 4 },
+  { "AF_APPLETALK", 5 },
+  { "AF_NETROM", 6 },
+  { "AF_BRIDGE", 7 },
+  { "AF_ATMPVC", 8 },
+  { "AF_X25", 9 },
+  { "AF_INET6", 10 },
+  { "AF_ROSE", 11 },
+  { "AF_DECnet", 12 },
+  { "AF_NETBEUI", 13 },
+  { "AF_SECURITY", 14 },
+  { "AF_KEY", 15 },
+  { "AF_NETLINK", 16 },
+  { "AF_ROUTE", 16 },
+  { "AF_PACKET", 17 },
+  { "AF_ASH", 18 },
+  { "AF_ECONET", 19 },
+  { "AF_ATMSVC", 20 },
+  { "AF_RDS", 21 },
+  { "AF_SNA", 22 },
+  { "AF_IRDA", 23 },
+  { "AF_PPPOX", 24 },
+  { "AF_WANPIPE", 25 },
+  { "AF_LLC", 26 },
+  { "AF_IB", 27 },
+  { "AF_MPLS", 28 },
+  { "AF_CAN", 29 },
+  { "AF_TIPC", 30 },
+  { "AF_BLUETOOTH", 31 },
+  { "AF_IUCV", 32 },
+  { "AF_RXRPC", 33 },
+  { "AF_ISDN", 34 },
+  { "AF_PHONET", 35 },
+  { "AF_IEEE802154", 36 },
+  { "AF_CAIF", 37 },
+  { "AF_ALG", 38 },
+  { "AF_NFC", 39 },
+  { "AF_VSOCK", 40 },
+  { "AF_KCM", 41 },
+  { "AF_QIPCRTR", 42 },
+  { "AF_SMC", 43 },
+  { "AF_XDP", 44 },
+  { "AF_MCTP", 45 },
 };
 
 #define IO_URING_SOCKET_FAMILIES_LEN (sizeof (io_uring_socket_families) / sizeof (io_uring_socket_families[0]))
@@ -190,25 +229,30 @@ find_socket_family (const char *name)
   return -1;
 }
 
-static int
-add_socket_family (struct io_uring_policy_s *policy, const char *name, libcrun_error_t *err)
+static void
+add_socket_family (struct io_uring_policy_s *policy, const char *name, bool warn)
 {
   int family = find_socket_family (name);
   size_t i;
 
+  /* Like an unknown operation, an unknown family stays denied.  */
   if (UNLIKELY (family < 0))
-    return crun_make_error (err, 0, "%s: unknown socket address family `%s`", IO_URING_ANNOTATION, name);
+    {
+      if (warn)
+        libcrun_warning ("%s: unknown socket address family `%s` ignored", IO_URING_ANNOTATION, name);
+      return;
+    }
 
   for (i = 0; i < policy->socket_families_len; i++)
     if (policy->socket_families[i] == (uint32_t) family)
-      return 0;
+      return;
 
   policy->socket_families[policy->socket_families_len++] = family;
-  return 0;
 }
 
+/* WARN is set only once per policy, as it is parsed again when applied.  */
 static int
-parse_policy (const char *annotation, struct io_uring_policy_s *policy, libcrun_error_t *err)
+parse_policy (const char *annotation, struct io_uring_policy_s *policy, bool warn, libcrun_error_t *err)
 {
   json_object *doc = NULL;
   json_object *ops = NULL;
@@ -258,10 +302,12 @@ parse_policy (const char *annotation, struct io_uring_policy_s *policy, libcrun_
         }
       name = json_object_get_string (op);
       value = find_op (name);
+      /* Possibly an operation newer than crun: denied, like any not in `ops`.  */
       if (UNLIKELY (value < 0))
         {
-          ret = crun_make_error (err, 0, "%s: unknown io_uring operation `%s`", IO_URING_ANNOTATION, name);
-          goto exit;
+          if (warn)
+            libcrun_warning ("%s: unknown io_uring operation `%s` ignored", IO_URING_ANNOTATION, name);
+          continue;
         }
       policy->ops[value] = true;
     }
@@ -297,11 +343,14 @@ parse_policy (const char *annotation, struct io_uring_policy_s *policy, libcrun_
               ret = crun_make_error (err, 0, "%s: `socketFamilies` must contain strings", IO_URING_ANNOTATION);
               goto exit;
             }
-          ret = add_socket_family (policy, json_object_get_string (family), err);
-          if (UNLIKELY (ret < 0))
-            goto exit;
+          add_socket_family (policy, json_object_get_string (family), warn);
         }
-      policy->has_socket_families = true;
+
+      /* With no known family, deny IORING_OP_SOCKET: never allow any family.  */
+      if (policy->socket_families_len == 0)
+        policy->ops[IORING_OP_SOCKET_VALUE] = false;
+      else
+        policy->has_socket_families = true;
     }
 
   ret = 0;
@@ -329,14 +378,17 @@ syscall_io_uring_register (int fd, unsigned int opcode, void *arg, unsigned int 
 /* Register with a NULL argument: a kernel with task-level BPF filters fails
    to copy it (EFAULT), or refuses the caller before that (EACCES).  Older
    kernels reject fd -1 (EBADF) or the opcode (EINVAL), as does a kernel built
-   without CONFIG_IO_URING_BPF.  */
-static bool
-io_uring_restrictions_supported ()
+   without CONFIG_IO_URING_BPF; seccomp may deny the syscall.  Returns 0 if
+   supported, otherwise the errno.  */
+static int
+probe_io_uring_restrictions ()
 {
   int ret;
 
   ret = syscall_io_uring_register (-1, CRUN_IORING_REGISTER_BPF_FILTER, NULL, 1);
-  return ret < 0 && (errno == EFAULT || errno == EACCES);
+  if (ret < 0 && (errno == EFAULT || errno == EACCES))
+    return 0;
+  return ret < 0 ? errno : EINVAL;
 }
 
 static int
@@ -425,12 +477,13 @@ libcrun_check_io_uring_restrictions (libcrun_container_t *container, libcrun_err
   if (annotation == NULL)
     return 0;
 
-  ret = parse_policy (annotation, &policy, err);
+  ret = parse_policy (annotation, &policy, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (UNLIKELY (! io_uring_restrictions_supported ()))
-    return crun_make_error (err, 0, "%s: io_uring restrictions are not supported by the kernel (Linux 7.0 or newer is required)",
+  ret = probe_io_uring_restrictions ();
+  if (UNLIKELY (ret != 0))
+    return crun_make_error (err, ret, "%s: io_uring restrictions are not supported or not permitted (Linux 7.0 or newer is required)",
                             IO_URING_ANNOTATION);
 
   return 0;
@@ -447,7 +500,7 @@ libcrun_apply_io_uring_restrictions (libcrun_container_t *container, libcrun_err
   if (annotation == NULL)
     return 0;
 
-  ret = parse_policy (annotation, &policy, err);
+  ret = parse_policy (annotation, &policy, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
