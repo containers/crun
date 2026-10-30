@@ -66,10 +66,6 @@ run.bats: runc run [/proc/self/exe clone]
 # The test checks the runc specific output format of "list".
 list.bats: list
 
-# The test checks for a runc specific warning ("Such configuration is strongly
-# discouraged").
-create.bats: runc create [shared pidns + rootless]
-
 # crun fails as well, but words the error differently.
 kill.bats: kill detached busybox
 memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
