@@ -150,6 +150,28 @@ static const char *io_uring_ops[] = {
 /* The SQE opcode is 8 bits.  */
 #define IO_URING_MAX_OPCODES 256
 
+/* Only constants and layouts: the opcode table may be older or newer than
+   the headers.  */
+#ifdef HAVE_LINUX_IO_URING_BPF_FILTER_H
+#  include <stddef.h>
+#  include <linux/io_uring.h>
+#  include <linux/io_uring/bpf_filter.h>
+
+_Static_assert (CRUN_IORING_REGISTER_RESTRICTIONS == IORING_REGISTER_RESTRICTIONS, "IORING_REGISTER_RESTRICTIONS");
+_Static_assert (CRUN_IORING_REGISTER_BPF_FILTER == IORING_REGISTER_BPF_FILTER, "IORING_REGISTER_BPF_FILTER");
+_Static_assert (CRUN_IO_URING_BPF_CMD_FILTER == IO_URING_BPF_CMD_FILTER, "IO_URING_BPF_CMD_FILTER");
+_Static_assert (CRUN_IO_URING_BPF_CTX_PDU_OFFSET == offsetof (struct io_uring_bpf_ctx, socket.family), "struct io_uring_bpf_ctx");
+_Static_assert (sizeof (struct crun_io_uring_bpf) == sizeof (struct io_uring_bpf), "struct io_uring_bpf");
+_Static_assert (offsetof (struct crun_io_uring_bpf, filter) == offsetof (struct io_uring_bpf, filter), "struct io_uring_bpf");
+_Static_assert (sizeof (struct crun_io_uring_bpf_filter) == sizeof (struct io_uring_bpf_filter), "struct io_uring_bpf_filter");
+_Static_assert (offsetof (struct crun_io_uring_bpf_filter, filter_len) == offsetof (struct io_uring_bpf_filter, filter_len),
+                "struct io_uring_bpf_filter");
+_Static_assert (offsetof (struct crun_io_uring_bpf_filter, filter_ptr) == offsetof (struct io_uring_bpf_filter, filter_ptr),
+                "struct io_uring_bpf_filter");
+_Static_assert (IORING_OP_NOP_VALUE == IORING_OP_NOP, "IORING_OP_NOP");
+_Static_assert (IORING_OP_SOCKET_VALUE == IORING_OP_SOCKET, "IORING_OP_SOCKET");
+#endif
+
 /* From <linux/socket.h>, Linux 7.0: libc may lack the newer ones.  */
 static const struct
 {
