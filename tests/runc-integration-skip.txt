@@ -68,6 +68,7 @@ list.bats: list
 
 # The test checks for a runc specific warning ("Such configuration is strongly
 # discouraged").
+# TODO: remove once opencontainers/runc#5594 is merged.
 create.bats: runc create [shared pidns + rootless]
 
 # crun fails as well, but words the error differently.

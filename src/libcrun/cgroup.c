@@ -338,19 +338,25 @@ libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
 
 static int
 can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mode,
-                                libcrun_error_t *err)
+                                libcrun_error_t *cgroup_err)
 {
+  libcrun_error_t tmp_err = NULL;
   int manager = args->manager;
   int rootless;
 
-  rootless = is_rootless (err);
+  rootless = is_rootless (&tmp_err);
   if (UNLIKELY (rootless < 0))
-    return rootless;
+    {
+      crun_error_release (cgroup_err);
+      *cgroup_err = tmp_err;
+      return rootless;
+    }
 
   /* Ignore errors if all these conditions are met:
      - it is running as rootless.
      - there is no explicit path in the OCI configuration.
      - it is not both cgroupv2 and manager=systemd.
+     - it has a private PID namespace, so killing its init kills all its processes.
   */
 
   if (! rootless)
@@ -361,6 +367,9 @@ can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mod
 
   if (cgroup_mode == CGROUP_MODE_UNIFIED && manager == CGROUP_MANAGER_SYSTEMD)
     return 0;
+
+  if (! has_new_pid_namespace (args->container->container_def))
+    return crun_error_wrap (cgroup_err, "a container without a private PID namespace needs a cgroup to kill all its processes");
 
   return 1;
 }
@@ -444,16 +453,11 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
   ret = cgroup_manager->create_cgroup (args, status, err);
   if (UNLIKELY (ret < 0))
     {
-      libcrun_error_t tmp_err = NULL;
       int ignore_cgroup_errors;
 
-      ignore_cgroup_errors = can_ignore_cgroup_enter_errors (args, cgroup_mode, &tmp_err);
+      ignore_cgroup_errors = can_ignore_cgroup_enter_errors (args, cgroup_mode, err);
       if (UNLIKELY (ignore_cgroup_errors < 0))
-        {
-          crun_error_release (err);
-          *err = tmp_err;
-          return ignore_cgroup_errors;
-        }
+        return ignore_cgroup_errors;
 
       if (ignore_cgroup_errors)
         {
