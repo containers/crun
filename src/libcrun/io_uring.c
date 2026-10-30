@@ -522,7 +522,8 @@ io_uring_exec_check (void)
    itself, creates a ring and execs /proc/self/exe.  The result is written
    to a pipe: the errno if the child fails before exec, otherwise the result
    of io_uring_exec_check.  No result means that /proc/self/exe does not run
-   the check, e.g. when libcrun is loaded with dlopen.  */
+   the check, e.g. when libcrun is loaded with dlopen.  The environment is
+   kept, as /proc/self/exe may need it to load, e.g. LD_LIBRARY_PATH.  */
 static int
 check_restrictions_kept_on_exec (libcrun_error_t *err)
 {
@@ -531,11 +532,19 @@ check_restrictions_kept_on_exec (libcrun_error_t *err)
     BPF_STMT (BPF_RET | BPF_K, 0),
   };
   char *argv[] = { (char *) "crun", NULL };
-  char *envp[] = { (char *) IO_URING_EXEC_CHECK_ENV "=1", NULL };
+  cleanup_free char **envp = NULL;
   /* Room for struct io_uring_params.  */
   uint64_t params[16];
   int fds[2], null_fd, result, status, ret;
+  size_t env_len;
   pid_t pid;
+
+  for (env_len = 0; environ[env_len]; env_len++)
+    ;
+  envp = xmalloc ((env_len + 2) * sizeof (char *));
+  memcpy (envp, environ, env_len * sizeof (char *));
+  envp[env_len] = (char *) IO_URING_EXEC_CHECK_ENV "=1";
+  envp[env_len + 1] = NULL;
 
   ret = pipe2 (fds, O_CLOEXEC);
   if (UNLIKELY (ret < 0))
