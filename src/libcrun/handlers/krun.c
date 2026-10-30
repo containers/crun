@@ -642,6 +642,62 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   return ret;
 }
 
+struct device_node_list
+{
+  char **paths;
+  size_t len;
+};
+
+static void
+cleanup_device_node_listp (struct device_node_list *list)
+{
+  size_t i;
+
+  for (i = 0; i < list->len; i++)
+    free (list->paths[i]);
+  free (list->paths);
+}
+
+#  define cleanup_device_node_list __attribute__ ((cleanup (cleanup_device_node_listp)))
+
+/* The NVIDIA user space driver does not go through /dev/dri, it needs its
+   own device nodes (/dev/nvidiactl, /dev/nvidia0, /dev/nvidia-uvm, ...).
+   Collect the ones that exist on the host.  */
+static int
+find_nvidia_device_nodes (struct device_node_list *list, libcrun_error_t *err)
+{
+  cleanup_dir DIR *dir = NULL;
+  struct dirent *de;
+
+  dir = opendir ("/dev");
+  if (UNLIKELY (dir == NULL))
+    return crun_make_error (err, errno, "cannot opendir `/dev`");
+
+  while ((de = readdir (dir)))
+    {
+      struct stat st;
+
+      if (! has_prefix (de->d_name, "nvidia"))
+        continue;
+
+      if (fstatat (dirfd (dir), de->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0)
+        {
+          /* The node was removed after readdir.  */
+          if (errno == ENOENT)
+            continue;
+          return crun_make_error (err, errno, "stat `/dev/%s`", de->d_name);
+        }
+
+      if (! S_ISCHR (st.st_mode))
+        continue;
+
+      list->paths = xrealloc (list->paths, (list->len + 1) * sizeof (char *));
+      xasprintf (&list->paths[list->len++], "/dev/%s", de->d_name);
+    }
+
+  return 0;
+}
+
 static int
 libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -655,8 +711,10 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
 
       if ((kconf->gpu_flags & VIRGLRENDERER_RENDER_SERVER) != 0)
         {
-          char *rs_argv[40];
-          int rs_argc = 0;
+          cleanup_device_node_list struct device_node_list nvidia_nodes = {};
+          cleanup_free char **rs_argv = NULL;
+          size_t rs_argc = 0;
+          size_t i;
           char fd_as_str[16];
           int gpu_fds[2];
           pid_t pid;
@@ -667,6 +725,12 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
 
           if (access ("/usr/bin/bwrap", X_OK) != 0)
             return crun_make_error (err, errno, "gpu with render server requested but couldn't find /usr/bin/bwrap binary");
+
+          ret = find_nvidia_device_nodes (&nvidia_nodes, err);
+          if (UNLIKELY (ret < 0))
+            return ret;
+
+          rs_argv = xmalloc ((40 + 3 * nvidia_nodes.len) * sizeof (char *));
 
           ret = socketpair (AF_UNIX, SOCK_SEQPACKET, 0, gpu_fds);
           if (UNLIKELY (ret < 0))
@@ -701,6 +765,12 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
           rs_argv[rs_argc++] = (char *) "--dev-bind";
           rs_argv[rs_argc++] = (char *) "/dev/dri";
           rs_argv[rs_argc++] = (char *) "/dev/dri";
+          for (i = 0; i < nvidia_nodes.len; i++)
+            {
+              rs_argv[rs_argc++] = (char *) "--dev-bind";
+              rs_argv[rs_argc++] = nvidia_nodes.paths[i];
+              rs_argv[rs_argc++] = nvidia_nodes.paths[i];
+            }
           rs_argv[rs_argc++] = (char *) "--proc";
           rs_argv[rs_argc++] = (char *) "/proc";
           rs_argv[rs_argc++] = (char *) "--tmpfs";
