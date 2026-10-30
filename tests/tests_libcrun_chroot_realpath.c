@@ -254,10 +254,13 @@ static void cleanup_symlink_tree (const char *root);
 
      $root/file           a regular file
      $root/link           -> file            (relative, top level)
+     $root/linkdir        -> dir             (relative, top level)
      $root/dir/file       a regular file
      $root/dir/link       -> file            (relative, nested)
      $root/dir/up         -> ../file         (relative, with "..")
      $root/dir/abs        -> /file           (absolute, i.e. $root/file)
+     $root/dir/updir      -> ..              (relative, to a directory)
+     $root/dir/absdir     -> /dir            (absolute, to a directory)
 
    Return 0 on success and 77 to skip the test when the tree cannot be
    created.  */
@@ -282,6 +285,11 @@ make_symlink_tree (char *root, size_t root_size)
   if (snprintf (path, sizeof (path), "%s/link", root) >= (int) sizeof (path))
     goto fail;
   if (symlink ("file", path) < 0)
+    goto fail;
+
+  if (snprintf (path, sizeof (path), "%s/linkdir", root) >= (int) sizeof (path))
+    goto fail;
+  if (symlink ("dir", path) < 0)
     goto fail;
 
   if (snprintf (path, sizeof (path), "%s/dir", root) >= (int) sizeof (path))
@@ -311,6 +319,16 @@ make_symlink_tree (char *root, size_t root_size)
   if (symlink ("/file", path) < 0)
     goto fail;
 
+  if (snprintf (path, sizeof (path), "%s/dir/updir", root) >= (int) sizeof (path))
+    goto fail;
+  if (symlink ("..", path) < 0)
+    goto fail;
+
+  if (snprintf (path, sizeof (path), "%s/dir/absdir", root) >= (int) sizeof (path))
+    goto fail;
+  if (symlink ("/dir", path) < 0)
+    goto fail;
+
   return 0;
 
 fail:
@@ -322,7 +340,7 @@ static void
 cleanup_symlink_tree (const char *root)
 {
   char path[PATH_MAX];
-  const char *files[] = { "dir/abs", "dir/up", "dir/link", "dir/file", "dir", "link", "file", NULL };
+  const char *files[] = { "dir/absdir", "dir/updir", "dir/abs", "dir/up", "dir/link", "dir/file", "dir", "linkdir", "link", "file", NULL };
   size_t i;
 
   for (i = 0; files[i]; i++)
@@ -336,7 +354,8 @@ cleanup_symlink_tree (const char *root)
 }
 
 /* Expanding a symlink must not drop the separator between the parent
-   directory and the symlink target.  */
+   directory and the symlink target, nor add an extra one when the
+   symlink is not the last component.  */
 static int
 test_symlinks ()
 {
@@ -349,6 +368,11 @@ test_symlinks ()
     { "/dir/link", "/dir/file" },
     { "/dir/up", "/file" },
     { "/dir/abs", "/file" },
+    { "/linkdir/link", "/dir/file" },
+    { "/dir/updir/file", "/file" },
+    { "/dir/updir/dir/up", "/file" },
+    { "/dir/absdir/file", "/dir/file" },
+    { "/dir/absdir/updir/link", "/file" },
     { NULL, NULL },
   };
   char root[PATH_MAX];
