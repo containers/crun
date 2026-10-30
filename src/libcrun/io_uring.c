@@ -45,8 +45,12 @@
 #define IO_URING_ANNOTATION "run.oci.io_uring"
 
 /* Set for the process that checks the restrictions after exec, see
-   check_restrictions_kept_on_exec.  */
+   check_restrictions_kept_on_exec.  It writes the result to
+   IO_URING_EXEC_CHECK_FD.  */
 #define IO_URING_EXEC_CHECK_ENV "_LIBCRUN_IO_URING_EXEC_CHECK"
+#define IO_URING_EXEC_CHECK_FD 3
+#define IO_URING_EXEC_CHECK_KEPT -1
+#define IO_URING_EXEC_CHECK_DROPPED -2
 
 /* From <linux/io_uring.h> and <linux/io_uring/bpf_filter.h>, Linux 7.0.  */
 #define CRUN_IORING_REGISTER_RESTRICTIONS 11
@@ -497,23 +501,28 @@ apply_policy (struct io_uring_policy_s *policy, libcrun_error_t *err)
 }
 
 /* In a constructor, as the process is /proc/self/exe: crun or any program
-   using libcrun.  */
+   linked with libcrun.  */
 __attribute__ ((constructor)) static void
 io_uring_exec_check (void)
 {
-  int ret;
+  int ret, result;
 
   if (getenv (IO_URING_EXEC_CHECK_ENV) == NULL)
     return;
 
   /* With task restrictions, registering classic ones fails with EPERM.  */
   ret = syscall_io_uring_register (-1, CRUN_IORING_REGISTER_RESTRICTIONS, NULL, 1);
-  _exit (ret < 0 && errno == EPERM ? EXIT_SUCCESS : EXIT_FAILURE);
+  result = ret < 0 && errno == EPERM ? IO_URING_EXEC_CHECK_KEPT : IO_URING_EXEC_CHECK_DROPPED;
+  ret = TEMP_FAILURE_RETRY (write (IO_URING_EXEC_CHECK_FD, &result, sizeof (result)));
+  _exit (ret == sizeof (result) ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
 /* On Linux 7.0 and 7.1 without bc0e8faf90e7, a task that has used io_uring
    loses its restrictions on exec.  Check it on a child that restricts
-   itself, creates a ring and execs crun.  */
+   itself, creates a ring and execs /proc/self/exe.  The result is written
+   to a pipe: the errno if the child fails before exec, otherwise the result
+   of io_uring_exec_check.  No result means that /proc/self/exe does not run
+   the check, e.g. when libcrun is loaded with dlopen.  */
 static int
 check_restrictions_kept_on_exec (libcrun_error_t *err)
 {
@@ -525,7 +534,7 @@ check_restrictions_kept_on_exec (libcrun_error_t *err)
   char *envp[] = { (char *) IO_URING_EXEC_CHECK_ENV "=1", NULL };
   /* Room for struct io_uring_params.  */
   uint64_t params[16];
-  int fds[2], child_errno, status, ret;
+  int fds[2], null_fd, result, status, ret;
   pid_t pid;
 
   ret = pipe2 (fds, O_CLOEXEC);
@@ -543,28 +552,40 @@ check_restrictions_kept_on_exec (libcrun_error_t *err)
   if (pid == 0)
     {
       memset (params, 0, sizeof (params));
-      if (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0
+      close (fds[0]);
+      /* Whatever runs after exec must not use the caller's stdin and
+         stdout.  */
+      if (dup2 (fds[1], IO_URING_EXEC_CHECK_FD) >= 0
+          && fcntl (IO_URING_EXEC_CHECK_FD, F_SETFD, 0) == 0
+          && (null_fd = open ("/dev/null", O_RDWR | O_CLOEXEC)) >= 0
+          && dup2 (null_fd, 0) >= 0
+          && dup2 (null_fd, 1) >= 0
+          && prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0
           && register_filter (IORING_OP_NOP_VALUE, 0, deny, 1) == 0
           && syscall (__NR_io_uring_setup, 1, params) >= 0)
         execve ("/proc/self/exe", argv, envp);
-      child_errno = errno;
-      TEMP_FAILURE_RETRY (write (fds[1], &child_errno, sizeof (child_errno)));
+      result = errno;
+      TEMP_FAILURE_RETRY (write (fds[1], &result, sizeof (result)));
       _exit (EXIT_FAILURE);
     }
 
   close (fds[1]);
-  ret = TEMP_FAILURE_RETRY (read (fds[0], &child_errno, sizeof (child_errno)));
+  ret = TEMP_FAILURE_RETRY (read (fds[0], &result, sizeof (result)));
   close (fds[0]);
 
   if (UNLIKELY (waitpid_ignore_stopped (pid, &status, 0) < 0))
     return crun_make_error (err, errno, "waitpid");
 
-  if (UNLIKELY (ret == sizeof (child_errno)))
-    return crun_make_error (err, child_errno, "%s: cannot check that the kernel keeps io_uring restrictions on exec", IO_URING_ANNOTATION);
+  if (UNLIKELY (ret != sizeof (result)))
+    return crun_make_error (err, 0, "%s: cannot check that the kernel keeps io_uring restrictions on exec: /proc/self/exe is not linked with libcrun",
+                            IO_URING_ANNOTATION);
 
-  if (UNLIKELY (! WIFEXITED (status) || WEXITSTATUS (status) != EXIT_SUCCESS))
+  if (UNLIKELY (result == IO_URING_EXEC_CHECK_DROPPED))
     return crun_make_error (err, 0, "%s: the kernel does not keep io_uring restrictions on exec (Linux 7.0 and 7.1 need commit bc0e8faf90e7)",
                             IO_URING_ANNOTATION);
+
+  if (UNLIKELY (result != IO_URING_EXEC_CHECK_KEPT))
+    return crun_make_error (err, result, "%s: cannot check that the kernel keeps io_uring restrictions on exec", IO_URING_ANNOTATION);
 
   return 0;
 #else
