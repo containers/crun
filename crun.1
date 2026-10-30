@@ -580,7 +580,7 @@ would allow stays denied.
 protocol, and sockets created with socket(2) are subject to seccomp
 only.  An io_uring instance created before the restrictions are
 applied, for example outside of the container and passed in with
-\fB\-\-preserve\-fds\fR, is not restricted.
+\fB--preserve-fds\fR, is not restricted.
 
 .PP
 The container processes can add their own io_uring BPF filters and
