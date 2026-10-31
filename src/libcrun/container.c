@@ -3095,7 +3095,7 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_check_io_uring_restrictions (container, err);
+  ret = libcrun_check_io_uring_restrictions (container, context->state_root, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -4390,7 +4390,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (container_paused))
     return crun_make_error (err, 0, "cannot exec in a paused container `%s`", id);
 
-  ret = libcrun_check_io_uring_restrictions (container, err);
+  ret = libcrun_check_io_uring_restrictions (container, context->state_root, false, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -5304,7 +5304,7 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_check_io_uring_restrictions (container, err);
+  ret = libcrun_check_io_uring_restrictions (container, context->state_root, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
 

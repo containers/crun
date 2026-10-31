@@ -22,7 +22,8 @@
 #include "error.h"
 #include "container.h"
 
-int libcrun_check_io_uring_restrictions (libcrun_container_t *container, libcrun_error_t *err);
+int libcrun_check_io_uring_restrictions (libcrun_container_t *container, const char *state_root, bool check_exec,
+                                         libcrun_error_t *err);
 
 int libcrun_apply_io_uring_restrictions (libcrun_container_t *container, libcrun_error_t *err);
 

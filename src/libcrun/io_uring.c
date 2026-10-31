@@ -28,11 +28,13 @@
 #include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <linux/filter.h>
 
 #include "utils.h"
 #include "io_uring.h"
+#include "status.h"
 
 /* The policy is read from this annotation, in the shape proposed for
    `linux.ioUring` in opencontainers/runtime-spec#1328:
@@ -51,6 +53,9 @@
 #define IO_URING_EXEC_CHECK_FD 3
 #define IO_URING_EXEC_CHECK_KEPT -1
 #define IO_URING_EXEC_CHECK_DROPPED -2
+/* Under the state root, a file per kernel release that passed the exec
+   check, with the kernel version.  */
+#define IO_URING_EXEC_CHECK_CACHE_DIR ".cache/io-uring-exec-check"
 
 /* From <linux/io_uring.h> and <linux/io_uring/bpf_filter.h>, Linux 7.0.  */
 #define CRUN_IORING_REGISTER_RESTRICTIONS 11
@@ -602,8 +607,70 @@ check_restrictions_kept_on_exec (libcrun_error_t *err)
 #endif
 }
 
+/* The exec check forks and execs crun, so it is done once per kernel: its
+   result is cached under the state root.  Linux 7.2 and newer have
+   bc0e8faf90e7.  */
+static int
+check_restrictions_kept_on_exec_cached (const char *state_root, libcrun_error_t *err)
+{
+  cleanup_free char *cache_dir = NULL;
+  cleanup_free char *cache_file = NULL;
+  cleanup_free char *cached_version = NULL;
+  cleanup_free char *run_dir = NULL;
+  libcrun_error_t tmp_err = NULL;
+  struct utsname uts;
+  int major, minor, ret;
+
+  if (UNLIKELY (uname (&uts) < 0))
+    return crun_make_error (err, errno, "uname");
+
+  if (sscanf (uts.release, "%d.%d", &major, &minor) == 2 && (major > 7 || (major == 7 && minor >= 2)))
+    return 0;
+
+  if (strchr (uts.release, '/') || uts.release[0] == '.')
+    return check_restrictions_kept_on_exec (err);
+
+  ret = libcrun_get_state_directory (&run_dir, state_root, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (&cache_dir, err, run_dir, IO_URING_EXEC_CHECK_CACHE_DIR, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = append_paths (&cache_file, err, cache_dir, uts.release, NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* The version tells apart kernels built with the same release.  */
+  ret = read_all_file (cache_file, &cached_version, NULL, &tmp_err);
+  if (ret >= 0 && strcmp (cached_version, uts.version) == 0)
+    return 0;
+  if (ret < 0)
+    crun_error_release (&tmp_err);
+
+  ret = check_restrictions_kept_on_exec (err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = crun_ensure_directory (cache_dir, 0700, true, &tmp_err);
+  if (ret >= 0)
+    ret = write_file (cache_file, uts.version, strlen (uts.version), &tmp_err);
+  if (UNLIKELY (ret < 0))
+    {
+      libcrun_debug ("Cannot cache the io_uring exec check: %s", tmp_err->msg);
+      crun_error_release (&tmp_err);
+    }
+
+  return 0;
+}
+
+/* The exec check is skipped with CHECK_EXEC false, for a process exec'ed in
+   a container: the container passed it when it was created, on the same
+   kernel.  */
 int
-libcrun_check_io_uring_restrictions (libcrun_container_t *container, libcrun_error_t *err)
+libcrun_check_io_uring_restrictions (libcrun_container_t *container, const char *state_root, bool check_exec,
+                                     libcrun_error_t *err)
 {
   struct io_uring_policy_s policy;
   const char *annotation;
@@ -622,7 +689,10 @@ libcrun_check_io_uring_restrictions (libcrun_container_t *container, libcrun_err
     return crun_make_error (err, ret, "%s: io_uring restrictions are not supported or not permitted (Linux 7.0 or newer is required)",
                             IO_URING_ANNOTATION);
 
-  return check_restrictions_kept_on_exec (err);
+  if (! check_exec)
+    return 0;
+
+  return check_restrictions_kept_on_exec_cached (state_root, err);
 }
 
 int
