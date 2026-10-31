@@ -1922,6 +1922,9 @@ run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *
   return 0;
 }
 
+#define NO_CGROUP_NO_PIDNS_KILL_MSG \
+  "the container has no cgroup and no private PID namespace, so only its init process is signaled"
+
 static bool
 has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 {
@@ -2070,6 +2073,8 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
 
               crun_error_release (err);
             }
+          else if (! has_new_pid_namespace (def))
+            libcrun_error (0, NO_CGROUP_NO_PIDNS_KILL_MSG);
         }
       else
         {
@@ -2160,6 +2165,9 @@ libcrun_container_killall (libcrun_context_t *context, const char *id, const cha
      an empty cgroup.  */
   if (is_empty_string (status.cgroup_path))
     {
+      cleanup_container libcrun_container_t *container = NULL;
+      libcrun_error_t tmp_err = NULL;
+
       ret = libcrun_kill_linux (&status, sig, err);
       if (UNLIKELY (ret < 0))
         {
@@ -2167,7 +2175,14 @@ libcrun_container_killall (libcrun_context_t *context, const char *id, const cha
             return ret;
 
           crun_error_release (err);
+          return 0;
         }
+
+      ret = read_container_config_from_state (&container, state_root, id, &tmp_err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (&tmp_err);
+      else if (! has_new_pid_namespace (container->container_def))
+        libcrun_error (0, NO_CGROUP_NO_PIDNS_KILL_MSG);
       return 0;
     }
 

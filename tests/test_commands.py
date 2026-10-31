@@ -485,7 +485,10 @@ def test_kill_all_no_cgroup():
     try:
         cid, pid = run_no_cgroup_no_pidns()
 
-        run_crun_command(['kill', '--all', cid, 'SIGKILL'])
+        out = run_crun_command_raw(['kill', '--all', cid, 'SIGKILL']).decode()
+        if "only its init process is signaled" not in out:
+            logger.info("no warning from kill --all: %s", out)
+            return -1
 
         if wait_for_state(cid, 'stopped') is None:
             logger.info("container not stopped after kill --all")
@@ -510,8 +513,11 @@ def test_delete_force_no_cgroup():
     try:
         cid, pid = run_no_cgroup_no_pidns()
 
-        run_crun_command(['delete', '-f', cid])
+        out = run_crun_command_raw(['delete', '-f', cid]).decode()
         cid = None
+        if "only its init process is signaled" not in out:
+            logger.info("no warning from delete --force: %s", out)
+            return -1
 
         for _ in range(50):
             if not is_running(pid):
