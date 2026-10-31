@@ -16,6 +16,8 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import os
+import re
 import subprocess
 from tests_utils import *
 
@@ -142,6 +144,36 @@ def test_io_uring_unknown_names():
     return 0
 
 
+def test_io_uring_exec_check_cache():
+    if not io_uring_restrictions_supported():
+        return (77, "io_uring restrictions not supported by the kernel")
+
+    # The exec check is cached per kernel release under the state root, with
+    # the kernel version.  Linux 7.2 and newer don't need it.
+    uts = os.uname()
+    cache = os.path.join(get_tests_root_status(), ".cache", "io-uring-exec-check", uts.release)
+    m = re.match(r"(\d+)\.(\d+)", uts.release)
+    needs_check = m is None or (int(m.group(1)), int(m.group(2))) < (7, 2)
+
+    conf = policy_config({"ops": []}, ['/init', 'true'])
+    for stale in [False, True]:
+        if stale and needs_check:
+            with open(cache, "w") as f:
+                f.write("stale")
+        run_and_get_output(conf, hide_stderr=True)
+        if not needs_check:
+            if os.path.exists(cache):
+                logger.info("the exec check was cached on %s", uts.release)
+                return -1
+            return 0
+        with open(cache) as f:
+            cached = f.read()
+        if cached != uts.version:
+            logger.info("unexpected cached version %r, expected %r", cached, uts.version)
+            return -1
+    return 0
+
+
 def test_io_uring_invalid_policy():
     for policy in [
         {"ops": "IORING_OP_READ"},
@@ -169,6 +201,7 @@ all_tests = {
     "io-uring-deny-all": test_io_uring_deny_all,
     "io-uring-nested": test_io_uring_nested,
     "io-uring-unknown-names": test_io_uring_unknown_names,
+    "io-uring-exec-check-cache": test_io_uring_exec_check_cache,
     "io-uring-invalid-policy": test_io_uring_invalid_policy,
 }
 
