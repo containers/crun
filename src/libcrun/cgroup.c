@@ -465,6 +465,11 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
           status->manager = CGROUP_MANAGER_DISABLED;
           crun_error_release (err);
 
+          if (! has_new_pid_namespace (args->container->container_def))
+            libcrun_error (0, "creating a rootless container with no cgroup and no private PID namespace.  "
+                              "Such configuration is strongly discouraged, as it is impossible to properly kill all "
+                              "the container processes");
+
           goto success;
         }
 

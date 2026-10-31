@@ -1925,7 +1925,7 @@ run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *
 #define NO_CGROUP_NO_PIDNS_KILL_MSG \
   "the container has no cgroup and no private PID namespace, so only its init process is signaled"
 
-static bool
+bool
 has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 {
   size_t i;
