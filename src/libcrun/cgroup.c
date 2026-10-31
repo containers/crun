@@ -365,6 +365,22 @@ can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mod
   return 1;
 }
 
+static bool
+has_new_pid_namespace (runtime_spec_schema_config_schema *def)
+{
+  size_t i;
+
+  if (def->linux == NULL || def->linux->namespaces == NULL)
+    return false;
+
+  for (i = 0; i < def->linux->namespaces_len; i++)
+    {
+      if (strcmp (def->linux->namespaces[i]->type, "pid") == 0 && def->linux->namespaces[i]->path == NULL)
+        return true;
+    }
+  return false;
+}
+
 int
 libcrun_cgroup_preenter (struct libcrun_cgroup_args *args, int *dirfd, libcrun_error_t *err)
 {
@@ -464,6 +480,11 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
           status->scope = NULL;
           status->manager = CGROUP_MANAGER_DISABLED;
           crun_error_release (err);
+
+          if (! has_new_pid_namespace (args->container->container_def))
+            libcrun_error (0, "creating a rootless container with no cgroup and no private PID namespace.  "
+                              "Such configuration is strongly discouraged, as it is impossible to properly kill all "
+                              "the container processes");
 
           goto success;
         }
