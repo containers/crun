@@ -50,6 +50,16 @@
 #  include <linux/ioprio.h>
 #endif
 
+#ifdef HAVE_LINUX_IO_URING_H
+#  include <linux/io_uring.h>
+#  include <sys/mman.h>
+#endif
+
+#ifdef HAVE_LINUX_IO_URING_BPF_FILTER_H
+#  include <linux/io_uring/bpf_filter.h>
+#  include <linux/filter.h>
+#endif
+
 #ifdef HAVE_SECCOMP
 #  include <linux/seccomp.h>
 #  include <linux/filter.h>
@@ -521,6 +531,138 @@ done:
   close (sock);
   free (buffer);
 }
+
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_setup && defined __NR_io_uring_enter
+/* Submit a single SQE for OP on a new ring and return its result.  */
+static int
+io_uring_submit_one (const char *op)
+{
+  struct io_uring_params p;
+  struct io_uring_sqe *sqe;
+  struct io_uring_cqe *cqes;
+  unsigned *sq_tail, *sq_array;
+  void *sq, *cq;
+  int fd, dev_null, ret;
+
+  dev_null = open ("/dev/null", O_RDWR);
+  if (dev_null < 0)
+    error (EXIT_FAILURE, errno, "open /dev/null");
+
+  memset (&p, 0, sizeof (p));
+  fd = syscall (__NR_io_uring_setup, 1, &p);
+  if (fd < 0)
+    error (EXIT_FAILURE, errno, "io_uring_setup");
+
+  sq = mmap (NULL, p.sq_off.array + p.sq_entries * sizeof (unsigned), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, IORING_OFF_SQ_RING);
+  cq = mmap (NULL, p.cq_off.cqes + p.cq_entries * sizeof (struct io_uring_cqe), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, IORING_OFF_CQ_RING);
+  sqe = mmap (NULL, p.sq_entries * sizeof (struct io_uring_sqe), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, IORING_OFF_SQES);
+  if (sq == MAP_FAILED || cq == MAP_FAILED || sqe == MAP_FAILED)
+    error (EXIT_FAILURE, errno, "mmap io_uring");
+
+  memset (sqe, 0, sizeof (*sqe));
+  if (strcmp (op, "nop") == 0)
+    sqe->opcode = IORING_OP_NOP;
+  else if (strcmp (op, "read") == 0 || strcmp (op, "read-async") == 0)
+    {
+      sqe->opcode = IORING_OP_READ;
+      sqe->fd = dev_null;
+      if (strcmp (op, "read-async") == 0)
+        sqe->flags = IOSQE_ASYNC;
+    }
+  else if (strcmp (op, "write") == 0)
+    {
+      sqe->opcode = IORING_OP_WRITE;
+      sqe->fd = dev_null;
+    }
+  else if (strcmp (op, "socket-inet") == 0 || strcmp (op, "socket-unix") == 0)
+    {
+      sqe->opcode = IORING_OP_SOCKET;
+      sqe->fd = strcmp (op, "socket-inet") == 0 ? AF_INET : AF_UNIX;
+      sqe->off = SOCK_STREAM;
+    }
+  else
+    error (EXIT_FAILURE, 0, "unknown io_uring operation `%s`", op);
+
+  sq_array = (unsigned *) ((char *) sq + p.sq_off.array);
+  sq_tail = (unsigned *) ((char *) sq + p.sq_off.tail);
+  sq_array[0] = 0;
+  __atomic_store_n (sq_tail, *sq_tail + 1, __ATOMIC_RELEASE);
+
+  ret = syscall (__NR_io_uring_enter, fd, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+  if (ret < 0)
+    error (EXIT_FAILURE, errno, "io_uring_enter");
+
+  cqes = (struct io_uring_cqe *) ((char *) cq + p.cq_off.cqes);
+  ret = cqes[0].res;
+  if (ret >= 0 && strncmp (op, "socket", 6) == 0)
+    close (ret);
+
+  close (fd);
+  close (dev_null);
+  return ret;
+}
+#endif
+
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register
+static void
+io_uring_allow (const char *op, unsigned int flags)
+{
+  struct sock_filter allow[] = {
+    BPF_STMT (BPF_RET | BPF_K, 1),
+  };
+  struct io_uring_bpf bpf;
+
+  memset (&bpf, 0, sizeof (bpf));
+  bpf.cmd_type = IO_URING_BPF_CMD_FILTER;
+  if (strcmp (op, "nop") == 0)
+    bpf.filter.opcode = IORING_OP_NOP;
+  else if (strcmp (op, "read") == 0)
+    bpf.filter.opcode = IORING_OP_READ;
+  else if (strcmp (op, "write") == 0)
+    bpf.filter.opcode = IORING_OP_WRITE;
+  else if (strcmp (op, "socket") == 0)
+    bpf.filter.opcode = IORING_OP_SOCKET;
+  else
+    error (EXIT_FAILURE, 0, "unknown io_uring operation `%s`", op);
+  bpf.filter.flags = flags;
+  bpf.filter.filter_len = 1;
+  bpf.filter.filter_ptr = (uint64_t) (uintptr_t) allow;
+
+  if (syscall (__NR_io_uring_register, -1, IORING_REGISTER_BPF_FILTER, &bpf, 1) < 0)
+    error (EXIT_FAILURE, errno, "register io_uring filter for `%s`", op);
+}
+
+#  ifdef __NR_io_uring_setup
+/* Linux 7.0 and 7.1 without bc0e8faf90e7 drop the restrictions on exec for a
+   task that has used io_uring, and crun refuses them there.  Check it as
+   crun does: restrict a child, create a ring and re-execute it.  */
+static int
+io_uring_restrictions_kept_on_exec ()
+{
+  struct io_uring_params p;
+  int status;
+  pid_t pid;
+
+  pid = fork ();
+  if (pid < 0)
+    error (EXIT_FAILURE, errno, "fork");
+  if (pid == 0)
+    {
+      memset (&p, 0, sizeof (p));
+      if (prctl (PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0)
+        error (EXIT_FAILURE, errno, "prctl");
+      io_uring_allow ("nop", IO_URING_BPF_FILTER_DENY_REST);
+      if (syscall (__NR_io_uring_setup, 1, &p) < 0)
+        error (EXIT_FAILURE, errno, "io_uring_setup");
+      execl ("/proc/self/exe", "init", "check-feature", "io_uring-restrictions-kept", NULL);
+      error (EXIT_FAILURE, errno, "exec");
+    }
+  if (waitpid (pid, &status, 0) < 0)
+    error (EXIT_FAILURE, errno, "waitpid");
+  return WIFEXITED (status) && WEXITSTATUS (status) == 0;
+}
+#  endif
+#endif
 
 int
 main (int argc, char **argv)
@@ -1018,6 +1160,83 @@ main (int argc, char **argv)
 #endif
     }
 
+  if (strcmp (argv[1], "io_uring") == 0)
+    {
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_setup && defined __NR_io_uring_enter
+      int i;
+
+      for (i = 2; i < argc; i++)
+        {
+          int ret = io_uring_submit_one (argv[i]);
+          printf ("%s %s\n", argv[i], ret == -EACCES ? "denied" : "allowed");
+        }
+      return 0;
+#else
+      error (EXIT_FAILURE, 0, "io_uring not supported");
+#endif
+    }
+
+  if (strcmp (argv[1], "io_uring-restrict") == 0)
+    {
+      /* Allow only the comma-separated operations, then exec the rest of
+         the arguments: they run under an io_uring policy, as crun does in a
+         restricted container.  */
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register
+      char *saveptr = NULL;
+      char *op;
+
+      if (argc < 4)
+        error (EXIT_FAILURE, 0, "'io_uring-restrict' requires the operations and a command");
+
+      for (op = strtok_r (argv[2], ",", &saveptr); op; op = strtok_r (NULL, ",", &saveptr))
+        io_uring_allow (op, 0);
+      /* strtok_r left the first operation in argv[2]: once more for it, now
+         denying the operations without a filter.  */
+      io_uring_allow (argv[2], IO_URING_BPF_FILTER_DENY_REST);
+
+      execvp (argv[3], argv + 3);
+      error (EXIT_FAILURE, errno, "exec `%s`", argv[3]);
+#else
+      error (EXIT_FAILURE, 0, "io_uring BPF filters not supported");
+#endif
+    }
+
+  if (strcmp (argv[1], "io_uring-once-restored") == 0)
+    {
+      /* Like "io_uring", but only once the file "restored" shows up in the
+         specified directory, as CRIU cannot checkpoint io_uring.  The results
+         are written to the file "results" there.  */
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_setup && defined __NR_io_uring_enter
+      FILE *results;
+      int dirfd, fd, i;
+
+      if (argc < 3)
+        error (EXIT_FAILURE, 0, "'io_uring-once-restored' requires an argument");
+
+      dirfd = open (argv[2], O_RDONLY | O_DIRECTORY);
+      if (dirfd < 0)
+        error (EXIT_FAILURE, errno, "open `%s`", argv[2]);
+
+      while (faccessat (dirfd, "restored", F_OK, 0) < 0)
+        nanosleep ((const struct timespec[]) { { 0, 10000000L } }, NULL);
+
+      fd = openat (dirfd, "results.tmp", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+      results = fd < 0 ? NULL : fdopen (fd, "w");
+      if (results == NULL)
+        error (EXIT_FAILURE, errno, "create `results.tmp`");
+      for (i = 3; i < argc; i++)
+        {
+          int ret = io_uring_submit_one (argv[i]);
+          fprintf (results, "%s %s\n", argv[i], ret == -EACCES ? "denied" : "allowed");
+        }
+      if (fclose (results) != 0 || renameat (dirfd, "results.tmp", dirfd, "results") < 0)
+        error (EXIT_FAILURE, errno, "write `results`");
+      do_pause ();
+#else
+      error (EXIT_FAILURE, 0, "io_uring not supported");
+#endif
+    }
+
   if (strcmp (argv[1], "ls") == 0)
     {
       /* Fork so that ls /proc/1/fd doesn't show more fd's.  */
@@ -1075,6 +1294,28 @@ main (int argc, char **argv)
             return 0;
 #endif
           return 1;
+        }
+      if (strcmp (argv[2], "io_uring-restrictions") == 0)
+        {
+#if defined HAVE_LINUX_IO_URING_BPF_FILTER_H && defined __NR_io_uring_register && defined __NR_io_uring_setup
+          /* A filter for the task with a NULL argument: EFAULT if supported.  */
+          int ret = syscall (__NR_io_uring_register, -1, IORING_REGISTER_BPF_FILTER, NULL, 1);
+          if (! (ret < 0 && (errno == EFAULT || errno == EACCES)))
+            return 1;
+          return io_uring_restrictions_kept_on_exec () ? 0 : 1;
+#else
+          return 1;
+#endif
+        }
+      if (strcmp (argv[2], "io_uring-restrictions-kept") == 0)
+        {
+#if defined HAVE_LINUX_IO_URING_H && defined __NR_io_uring_register
+          /* With task restrictions, registering classic ones fails with EPERM.  */
+          int ret = syscall (__NR_io_uring_register, -1, IORING_REGISTER_RESTRICTIONS, NULL, 1);
+          return (ret < 0 && errno == EPERM) ? 0 : 1;
+#else
+          return 1;
+#endif
         }
       if (strcmp (argv[2], "idmapped-mounts") == 0)
         {

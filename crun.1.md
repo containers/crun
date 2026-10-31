@@ -461,6 +461,51 @@ The data must be encoded in base64.
 It is an experimental feature, and the annotation will be removed once
 it is supported in the OCI runtime specs.
 
+## `run.oci.io_uring=POLICY`
+
+If the annotation `run.oci.io_uring` is present, then crun restricts
+the io_uring operations that the container processes can submit.
+seccomp cannot filter io_uring operations, as they are not syscalls.
+It requires Linux 7.0 or newer.
+
+The value is a JSON object, in the shape proposed for `linux.ioUring`
+in the OCI runtime specs:
+
+```
+{
+  "ops": ["IORING_OP_READ", "IORING_OP_WRITE", "IORING_OP_SOCKET"],
+  "socketFamilies": ["AF_UNIX", "AF_INET", "AF_INET6"]
+}
+```
+
+`ops` lists the names of the allowed `IORING_OP_*` operations, every
+other operation is denied.  If `socketFamilies` is present,
+`IORING_OP_SOCKET` can create sockets only for these address families.
+It must not be empty, and `ops` must contain `IORING_OP_SOCKET`.
+Names that crun does not know are ignored with a warning: what they
+would allow stays denied.
+
+`socketFamilies` only checks the address family, not the socket type or
+protocol, and sockets created with socket(2) are subject to seccomp
+only.  An io_uring instance created before the restrictions are
+applied, for example outside of the container and passed in with
+`--preserve-fds`, is not restricted.
+
+The container processes can add their own io_uring BPF filters and
+restrict their own rings, but they can no longer register task
+restrictions with `IORING_REGISTER_RESTRICTIONS`.  On restore, crun
+applies the restrictions from the annotation again: those that the
+processes added themselves are lost.
+
+crun refuses the annotation if the kernel does not keep the
+restrictions on exec, as Linux 7.0 and 7.1 without commit bc0e8faf90e7
+do.  Older crun versions and other runtimes ignore the annotation:
+`crun features` reports `run.oci.crun.io_uring` as `true` when it is
+supported.
+
+It is an experimental feature, and the annotation will be removed once
+it is supported in the OCI runtime specs.
+
 ## `run.oci.keep_original_groups=1`
 
 If the annotation `run.oci.keep_original_groups` is present, then crun

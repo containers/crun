@@ -173,6 +173,10 @@ def test_crun_features():
             logger.info("wrong value for run.oci.crun.commit")
             return -1
 
+        if annotations.get("run.oci.crun.io_uring") != "true":
+            logger.info("wrong value for run.oci.crun.io_uring")
+            return -1
+
         if ('WASM' in get_crun_feature_string()
             and annotations.get("run.oci.crun.wasm") != "true"):
             logger.info("wrong value for run.oci.crun.wasm")
