@@ -53,7 +53,14 @@ delete.bats: runc delete --force in cgroupv2 with subcgroups
 # sub-cgroup of the unit cgroup, and systemd does not set the CPU period with
 # no quota on the unit cgroup, which is what the tests check.
 update.bats: set cpu period with no quota
+update.bats: update cgroup cpu limits
 update.bats: update cpu period with no previous period/quota set
+
+# With systemd, crun uses the "container" sub-cgroup.
+cgroups.bats: runc run (hugetlb limits)
+cgroups.bats: runc run (per-device multiple iops via unified)
+ps.bats: ps after the container stopped
+update.bats: update per-device iops/bps values
 
 # The tests check runc specific debug messages.
 cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
@@ -80,6 +87,9 @@ seccomp.bats: runc run [seccomp] (startContainer hook)
 # crun words the error differently ("open seccomp receiver: connect socket to ...").
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 
+# crun does not call write(2) after loading the seccomp filter.
+run.bats: runc run [seccomp SCMP_ACT_KILL kills init]
+
 # runc rejects the configuration, while crun fails to set the scheduler (EPERM).
 scheduler.bats: scheduler vs cpus
 
@@ -91,20 +101,9 @@ update.bats: update cgroup cpu.idle via systemd v252+
 # a rootless container, while runc fails.
 cgroups.bats: runc create (rootless + limits + no cgrouppath + no permission) fails with informative error
 
-# The test uses "CPU", "Cpus" and "Mems" keys, which only work with runc
-# because Go decodes JSON case-insensitively.
-# TODO: remove once opencontainers/runc#5501 is merged.
-update.bats: update cpuset parameters via resources.CPU
-
 # runc returns -ENOSYS for syscalls newer than any in the profile, using a
 # BPF stub. This is better solved in libseccomp, see seccomp/libseccomp#457.
 seccomp.bats: runc run [seccomp -ENOSYS handling]
-
-# The test uses host rootfs paths as mount destinations, which runc accepts for
-# legacy reasons, and crun does not.
-# TODO: remove once opencontainers/runc#5503 is merged.
-mounts.bats: runc run [mount order, container bind-mount source]
-mounts.bats: runc run [mount order, container bind-mount source] (userns)
 
 # An idmapped mount can only be created by the host, while a bind mount source
 # inside the container rootfs must be opened after the preceding mounts are done
@@ -134,8 +133,6 @@ capabilities.bats: runc exec --cap [ambient is set from spec]
 capabilities.bats: runc run [ambient caps not set in inheritable result in a warning]
 cgroup_delegation.bats: runc exec (cgroup v2, ro cgroupfs, new cgroupns) does not chown cgroup
 cgroups.bats: runc create (limits + cgrouppath + permission on the cgroup dir) succeeds
-cgroups.bats: runc run (per-device multiple iops via unified)
-cgroups.bats: runc run (hugetlb limits)
 cgroups.bats: runc run (pids.limit=0 means 1)
 cgroups.bats: runc run/create should error for a non-empty cgroup
 exec.bats: runc exec --cgroup subcgroup [v2]
@@ -146,10 +143,7 @@ kill.bats: kill KILL [host pidns]
 kill.bats: kill KILL [host pidns + init gone]
 list.bats: list with non-existent root fails
 mounts_propagation_unsafe.bats: runc run [rootfsPropagation slave]
-ps.bats: ps after the container stopped
 seccomp.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_*)
 seccomp-notify.bats: runc run [seccomp] (SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV)
 seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY write)
-update.bats: update cgroup cpu limits
 update.bats: update pids.limit
-update.bats: update per-device iops/bps values
