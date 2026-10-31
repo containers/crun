@@ -8,6 +8,17 @@ If you plan to contribute a large change, please get in touch *before*
 submitting a pull request by e.g. filing an issue describing your proposed
 change. This will help ensure alignment.
 
+## Note: AI-generated contributions
+
+If a pull request is clearly AI-driven, with little thought or understanding
+put into it by its author, maintainers may just close it and work on an
+alternative fix themselves.  Iterating on a fix directly with an AI model is
+easier and faster than doing it by proxy through review comments on a pull
+request.
+
+If you use AI tools, make sure you understand the change, have tested it, and
+can explain and defend the design choices in it.
+
 ## Background knowledge
 
 You will need to understand the C programming language.

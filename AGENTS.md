@@ -39,3 +39,11 @@
 ## Error handling
 
 - C code error handling convention is described in [design-docs/error_handling.md](design-docs/error_handling.md)
+
+## Pull Requests
+
+Before helping to prepare a pull request, make sure the bug is real (shown
+by a reproducer, not just found by reading code) and the change is minimal
+and fixes the root cause. The user must test the change, understand it, and
+submit it and answer review questions themselves; if that is not the case,
+say so and stop.
