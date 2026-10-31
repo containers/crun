@@ -1922,6 +1922,9 @@ run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *
   return 0;
 }
 
+#define NO_CGROUP_NO_PIDNS_KILL_MSG \
+  "the container has no cgroup and no private PID namespace, so only its init process is signaled"
+
 static bool
 has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 {
@@ -2057,9 +2060,10 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
   if (killall && force)
     {
       /* If the container has a pid namespace, it is enough to kill the first
-         process (pid=1 in the namespace).
+         process (pid=1 in the namespace).  Without a cgroup, the other
+         processes cannot be found, so kill the first process only.
       */
-      if (has_new_pid_namespace (def))
+      if (has_new_pid_namespace (def) || is_empty_string (status.cgroup_path))
         {
           ret = libcrun_kill_linux (&status, SIGKILL, err);
           if (UNLIKELY (ret < 0))
@@ -2069,8 +2073,10 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
 
               crun_error_release (err);
             }
+          else if (! has_new_pid_namespace (def))
+            libcrun_error (0, NO_CGROUP_NO_PIDNS_KILL_MSG);
         }
-      else if (status.cgroup_path)
+      else
         {
           ret = libcrun_cgroup_killall (cgroup_status, SIGKILL, err);
           if (UNLIKELY (ret < 0))
@@ -2153,6 +2159,32 @@ libcrun_container_killall (libcrun_context_t *context, const char *id, const cha
   ret = libcrun_read_container_status (&status, state_root, id, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* Without a cgroup, the container processes cannot be found, so signal
+     init only.  A container which is not running is not an error, as with
+     an empty cgroup.  */
+  if (is_empty_string (status.cgroup_path))
+    {
+      cleanup_container libcrun_container_t *container = NULL;
+      libcrun_error_t tmp_err = NULL;
+
+      ret = libcrun_kill_linux (&status, sig, err);
+      if (UNLIKELY (ret < 0))
+        {
+          if (crun_error_get_errno (err) != ESRCH)
+            return ret;
+
+          crun_error_release (err);
+          return 0;
+        }
+
+      ret = read_container_config_from_state (&container, state_root, id, &tmp_err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (&tmp_err);
+      else if (! has_new_pid_namespace (container->container_def))
+        libcrun_error (0, NO_CGROUP_NO_PIDNS_KILL_MSG);
+      return 0;
+    }
 
   cgroup_status = libcrun_cgroup_make_status (&status);
 
