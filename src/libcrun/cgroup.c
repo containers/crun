@@ -351,8 +351,7 @@ can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mod
      - it is running as rootless.
      - there is no explicit path in the OCI configuration.
      - it is not both cgroupv2 and manager=systemd.
-     - it is not in the host PID namespace, where the cgroup is needed to
-       kill all its processes.
+     - it has a private PID namespace, so killing its init kills all its processes.
   */
 
   if (! rootless)
@@ -364,7 +363,7 @@ can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mod
   if (cgroup_mode == CGROUP_MODE_UNIFIED && manager == CGROUP_MANAGER_SYSTEMD)
     return 0;
 
-  if (! has_pid_namespace (args->container->container_def))
+  if (! has_new_pid_namespace (args->container->container_def))
     return 0;
 
   return 1;
@@ -472,6 +471,9 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
 
           goto success;
         }
+
+      if (! has_new_pid_namespace (args->container->container_def))
+        return crun_error_wrap (err, "a container without a private PID namespace needs a cgroup to kill all its processes");
 
       return ret;
     }

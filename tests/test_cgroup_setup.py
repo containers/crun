@@ -1762,10 +1762,9 @@ def test_cgroup_cleanup_failed_start():
             pass
 
 
-def test_cgroup_rootless_host_pidns():
-    """Test that a rootless container in the host PID namespace is not run
-    without a cgroup, as the cgroup is then needed to kill all its
-    processes."""
+def test_cgroup_rootless_nonprivate_pidns():
+    """Test that a rootless container without its own PID namespace needs
+    a cgroup to kill all its processes."""
     if not is_rootless():
         return (77, "requires rootless")
 
@@ -1787,19 +1786,33 @@ def test_cgroup_rootless_host_pidns():
         with open('/proc/%d/cgroup' % state['pid']) as f:
             if f.read() != own_cgroup:
                 return (77, "the container cgroup can be created")
+
+        for pidns in ('/proc/%d/ns/pid' % state['pid'], None):
+            conf['linux']['namespaces'] = [ns for ns in conf['linux']['namespaces'] if ns['type'] != 'pid']
+            if pidns is not None:
+                conf['linux']['namespaces'].append({'type': 'pid', 'path': pidns})
+            conf['process']['args'] = ['/init', 'true']
+            rejected_cid = 'test-no-cgroup-nonprivate'
+            try:
+                run_and_get_output(conf, id_container=rejected_cid)
+            except subprocess.CalledProcessError as e:
+                if b'without a private PID namespace needs a cgroup' not in e.output:
+                    logger.info("container failed for an unexpected reason: %s", e.output)
+                    return -1
+            else:
+                logger.info("the container without a private PID namespace was run without a cgroup")
+                return -1
+
+            if any(c['id'] == rejected_cid for c in json.loads(run_crun_command(['list', '--format', 'json']))):
+                logger.info("the rejected container is still listed")
+                return -1
+            if json.loads(run_crun_command(['state', cid]))['status'] != 'running':
+                logger.info("the PID namespace owner stopped after the rejected join")
+                return -1
+        return 0
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
-
-    conf['linux']['namespaces'] = [ns for ns in conf['linux']['namespaces'] if ns['type'] != 'pid']
-    conf['process']['args'] = ['/init', 'true']
-    try:
-        run_and_get_output(conf, hide_stderr=True)
-    except subprocess.CalledProcessError:
-        return 0
-
-    logger.info("the container in the host PID namespace was run without a cgroup")
-    return -1
 
 
 def test_cgroup_deep_subcgroup_cleanup():
@@ -1917,7 +1930,7 @@ all_tests = {
     "cgroup-deep-subcgroup-cleanup": test_cgroup_deep_subcgroup_cleanup,
     "cgroup-exec-frozen-subcgroup": test_cgroup_exec_frozen_subcgroup,
     "cgroup-cleanup-failed-start": test_cgroup_cleanup_failed_start,
-    "cgroup-rootless-host-pidns": test_cgroup_rootless_host_pidns,
+    "cgroup-rootless-nonprivate-pidns": test_cgroup_rootless_nonprivate_pidns,
 }
 
 if __name__ == "__main__":
