@@ -1922,7 +1922,7 @@ run_poststop_hooks (arg_unused libcrun_context_t *context, libcrun_container_t *
   return 0;
 }
 
-static bool
+bool
 has_new_pid_namespace (runtime_spec_schema_config_schema *def)
 {
   size_t i;
