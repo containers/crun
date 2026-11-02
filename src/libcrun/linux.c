@@ -4531,7 +4531,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       if (UNLIKELY (ret < 0 && errno != EINVAL))
         return crun_make_error (err, errno, "make `%s` a slave mount", *rootfs);
 
-      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC, NULL, LABEL_MOUNT | MOUNT_NO_REMOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -4559,7 +4559,8 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL,
+                      LABEL_MOUNT | MOUNT_NO_REMOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
