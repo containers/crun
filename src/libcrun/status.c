@@ -534,7 +534,7 @@ libcrun_status_check_directories (const char *state_root, const char *id, libcru
     return crun_make_error (err, 0, "container `%s` already exists", id);
 
   if (UNLIKELY (mkdir (dir, 0700) < 0))
-    return crun_make_error (err, 0, "cannot create state directory for `%s`", id);
+    return crun_make_error (err, errno, "cannot create state directory for `%s`", id);
 
   return 0;
 }
