@@ -3791,7 +3791,13 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
     {
       struct remount_s *r;
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
+      struct statfs sfs;
       int fd;
+
+      ret = fstatfs (get_private_data (container)->rootfsfd, &sfs);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fstatfs `%s`", rootfs);
+      remount_flags |= mount_flags_from_statfs (sfs.f_flags);
 
       fd = dup (get_private_data (container)->rootfsfd);
       if (UNLIKELY (fd < 0))
