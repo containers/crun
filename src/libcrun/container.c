@@ -5656,7 +5656,6 @@ libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id, 
 static int
 libcrun_container_add_or_remove_mounts_from_file (libcrun_context_t *context, const char *id, const char *file, bool add, libcrun_error_t *err)
 {
-  cleanup_custom_handler_instance struct custom_handler_instance_s *custom_handler = NULL;
   cleanup_container libcrun_container_t *container = NULL;
   cleanup_free runtime_spec_schema_defs_mount **mounts = NULL;
   const char *state_root = context->state_root;
