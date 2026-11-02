@@ -736,7 +736,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
 
   /* Set up logging. */
   libcriu_wrapper->criu_set_log_level (4);
-  libcriu_wrapper->criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
+  ret = libcriu_wrapper->criu_set_log_file (CRIU_CHECKPOINT_LOG_FILE);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "error setting CRIU log file to `%s`", CRIU_CHECKPOINT_LOG_FILE);
 
   /* Set up CRIU config file */
   if (UNLIKELY (handle_criu_config_file (container, err)))
