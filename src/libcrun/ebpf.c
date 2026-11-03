@@ -293,9 +293,9 @@ read_all_progs (int dirfd, uint32_t **progs_out, size_t *n_progs_out, libcrun_er
       attr.query.prog_ids = ptr_to_u64 (progs);
 
       ret = bpf (BPF_PROG_QUERY, &attr, sizeof (attr));
+      if (ret >= 0 || errno != ENOSPC)
+        break;
     }
-  while (ret < 0 && errno == ENOSPC)
-    ;
 
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "bpf query");
