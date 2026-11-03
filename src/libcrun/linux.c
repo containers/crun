@@ -3791,7 +3791,13 @@ libcrun_set_mounts (struct container_entrypoint_s *entrypoint_args, libcrun_cont
     {
       struct remount_s *r;
       unsigned long remount_flags = MS_REMOUNT | MS_BIND | MS_RDONLY;
+      struct statfs sfs;
       int fd;
+
+      ret = fstatfs (get_private_data (container)->rootfsfd, &sfs);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, errno, "fstatfs `%s`", rootfs);
+      remount_flags |= mount_flags_from_statfs (sfs.f_flags);
 
       fd = dup (get_private_data (container)->rootfsfd);
       if (UNLIKELY (fd < 0))
@@ -4498,10 +4504,6 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       if (UNLIKELY (ret < 0))
         return crun_make_error (err, errno, "setns `CLONE_NEWNS`");
 
-      ret = mount (NULL, "/", NULL, MS_REMOUNT | MS_BIND, NULL);
-      if (UNLIKELY (ret < 0))
-        return crun_make_error (err, errno, "remount `/`");
-
       ret = do_mount (container, NULL, -1, "/", NULL, MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
@@ -4531,7 +4533,7 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       if (UNLIKELY (ret < 0 && errno != EINVAL))
         return crun_make_error (err, errno, "make `%s` a slave mount", *rootfs);
 
-      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC, NULL, LABEL_MOUNT | MOUNT_NO_REMOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
@@ -4559,7 +4561,8 @@ setup_mount_namespace (libcrun_container_t *container, bool no_pivot, char **roo
       if (UNLIKELY (ret < 0))
         return ret;
 
-      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL, LABEL_MOUNT, err);
+      ret = do_mount (container, *rootfs, -1, *rootfs, NULL, MS_BIND | MS_REC | MS_PRIVATE, NULL,
+                      LABEL_MOUNT | MOUNT_NO_REMOUNT, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
