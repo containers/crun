@@ -90,6 +90,10 @@ seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
 # crun does not call write(2) after loading the seccomp filter.
 run.bats: runc run [seccomp SCMP_ACT_KILL kills init]
 
+# The test checks that runc catches SIGTERM (SigCgt), while crun blocks the
+# signals and reads them from a signalfd.
+run.bats: runc run [SIGTTIN and SIGTTOU are not caught]
+
 # runc rejects the configuration, while crun fails to set the scheduler (EPERM).
 scheduler.bats: scheduler vs cpus
 
