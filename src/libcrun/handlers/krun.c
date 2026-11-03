@@ -978,9 +978,11 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       ret = libcrun_create_dev (container, devfd, -1, &sev_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
         {
+          crun_error_release (err);
+
           ret = dlclose (kconf->handle_sev);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (UNLIKELY (ret != 0))
+            return crun_make_error (err, 0, "could not unload handle_sev: `%s`", dlerror ());
           kconf->handle_sev = NULL;
         }
     }
@@ -990,9 +992,11 @@ libkrun_configure_container (void *cookie, enum handler_configure_phase phase,
       ret = libcrun_create_dev (container, devfd, -1, &nitro_device, is_user_ns, true, err);
       if (UNLIKELY (ret < 0))
         {
+          crun_error_release (err);
+
           ret = dlclose (kconf->handle_awsnitro);
-          if (UNLIKELY (ret < 0))
-            return ret;
+          if (UNLIKELY (ret != 0))
+            return crun_make_error (err, 0, "could not unload handle_awsnitro: `%s`", dlerror ());
           kconf->handle_awsnitro = NULL;
         }
     }
