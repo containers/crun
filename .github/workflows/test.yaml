@@ -153,6 +153,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opencontainers/runc
+          # Update along with tests/runc-integration-skip.txt.
+          ref: 642809e5e24b8ddad48ed64085cf33b226befd8f # v1.6.0-rc.1-99-g642809e5
           path: runc
           persist-credentials: false
 
