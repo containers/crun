@@ -3,7 +3,7 @@ FROM quay.io/fedora/fedora:latest
 ENV GOPATH=/root/go
 ENV PATH=/usr/bin:/usr/sbin:/root/go/bin:/usr/local/bin::/usr/local/sbin
 
-RUN dnf install -y awk python git gcc automake autoconf libcap-devel \
+RUN dnf install -y awk python git-core gcc automake autoconf libcap-devel \
     systemd-devel json-c-devel libseccomp-devel conntrack-tools which \
     glibc-static python3-libmount libtool make podman xz nmap-ncat jq bats \
     iproute openssl iputils socat criu-libs irqbalance && \

@@ -3,7 +3,7 @@ FROM quay.io/fedora/fedora:45
 # The podman package is only installed for its runtime dependencies
 # (conmon, netavark, passt, catatonit etc.), the podman binaries used
 # by the tests are built from source.
-RUN dnf install -y awk golang python git gcc automake autoconf libcap-devel \
+RUN dnf install -y awk golang python git-core gcc automake autoconf libcap-devel \
     systemd-devel json-c-devel libseccomp-devel libtool make \
     podman procps-ng xz && \
     dnf builddep -y podman && \
