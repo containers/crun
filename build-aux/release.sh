@@ -5,7 +5,7 @@ set -xeuo pipefail
 SKIP_GPG=${SKIP_GPG:-}
 SKIP_CHECKS=${SKIP_CHECKS:-}
 
-NIX_IMAGE=${NIX_IMAGE:-docker.io/nixos/nix:2.35.1}
+NIX_IMAGE=${NIX_IMAGE:-docker.io/nixos/nix:2.35.4}
 
 ARCHES=(amd64 arm64 ppc64le riscv64 s390x)
 
