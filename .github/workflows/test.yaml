@@ -87,7 +87,6 @@ jobs:
           - test: embedded-blake3
           - test: system-blake3
           - test: podman
-          #- test: cri-o
           - test: containerd
           - test: oci-validation
           - test: alpine-build

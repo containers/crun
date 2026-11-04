@@ -3,7 +3,7 @@ FROM quay.io/fedora/fedora:latest
 # Install the deps for building crun with libkrun support.  The krun handler is
 # only compiled when configured with --with-libkrun, so without a build like
 # this one it is never compiled in CI.
-RUN dnf install -y awk make python git gcc automake autoconf libcap-devel \
+RUN dnf install -y --setopt=install_weak_deps=False awk make python git-core gcc automake autoconf libcap-devel \
 		systemd-devel json-c-devel libseccomp-devel pkg-config diffutils \
 		glibc-static python3-libmount libtool which libkrun-devel
 
