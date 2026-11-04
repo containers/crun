@@ -38,7 +38,6 @@ int libcrun_get_cgroup_dirfd (struct libcrun_cgroup_status *status, const char *
 
 int maybe_make_cgroup_threaded (const char *path, libcrun_error_t *err);
 
-int libcrun_migrate_all_pids_to_cgroup (pid_t init_pid, char *from, char *to, libcrun_error_t *err);
 
 int destroy_cgroup_path (const char *path, int mode, libcrun_error_t *err);
 
