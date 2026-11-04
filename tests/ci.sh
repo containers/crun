@@ -198,13 +198,6 @@ podman | centos10-build)
     run_container "${privileged[@]}" \
         -v /var/tmp:/var/tmp:rw -v /var/lib/containers:/var/lib/containers:rw
     ;;
-#cri-o)
-#    sudo mkdir -p /var/lib/var-crio/tmp /var/lib/tmp-crio /var/lib/var-tmp-crio
-#    run_container "${privileged[@]}" --net host \
-#        -v /dev/zero:/sys/module/apparmor/parameters/enabled \
-#        -v /var/lib/tmp-crio:/tmp:rw -v /var/lib/var-tmp-crio:/var/tmp \
-#        -v /var/lib/var-crio:/var/lib/containers:rw
-#    ;;
 containerd)
     sudo mkdir -p /var/lib/var-containerd
     # Not "${privileged[@]}": this one wants all of /sys, not just the
