@@ -5141,9 +5141,13 @@ libcrun_container_unpause (libcrun_context_t *context, const char *id, libcrun_e
 
 /* Translate the public options struct into the internal representation used by
    the linux/CRIU layer.  Strings are borrowed (not copied).  */
-static void
-cr_options_from_public (libcrun_checkpoint_restore_t *dst, struct libcrun_checkpoint_restore_options_s *src)
+static int
+cr_options_from_public (libcrun_checkpoint_restore_t *dst, struct libcrun_checkpoint_restore_options_s *src,
+                        libcrun_error_t *err)
 {
+  if (sizeof (*src) != src->struct_size)
+    return crun_make_error (err, EINVAL, "invalid libcrun_checkpoint_restore_options_s struct");
+
   memset (dst, 0, sizeof (*dst));
   dst->image_path = (char *) src->image_path;
   dst->work_path = (char *) src->work_path;
@@ -5161,6 +5165,8 @@ cr_options_from_public (libcrun_checkpoint_restore_t *dst, struct libcrun_checkp
   dst->detach = src->detach;
   dst->manage_cgroups_mode = src->manage_cgroups_mode;
   dst->network_lock_method = src->network_lock_method;
+
+  return 0;
 }
 
 int
@@ -5173,7 +5179,9 @@ libcrun_container_checkpoint (libcrun_context_t *context, const char *id,
   libcrun_checkpoint_restore_t cr;
   cleanup_container libcrun_container_t *container = NULL;
 
-  cr_options_from_public (&cr, cr_options);
+  ret = cr_options_from_public (&cr, cr_options, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = read_status_require_running (context, id, &status, err);
   if (UNLIKELY (ret < 0))
@@ -5262,7 +5270,9 @@ libcrun_container_restore (libcrun_context_t *context, const char *id arg_unused
   gid_t root_gid = -1;
   int ret;
 
-  cr_options_from_public (&cr, cr_options);
+  ret = cr_options_from_public (&cr, cr_options, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   container = libcrun_container_load_from_file ("config.json", err);
   if (container == NULL)
