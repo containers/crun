@@ -1,6 +1,6 @@
 DIST_SUBDIRS = libocispec
 SUBDIRS = libocispec
-ACLOCAL_AMFLAGS = -I m4
+# ACLOCAL_AMFLAGS = -I m4
 
 # The warning flags detected by configure.  automake puts AM_CFLAGS before
 # CFLAGS, so the user can still override any of them.

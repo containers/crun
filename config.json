@@ -1,0 +1,53 @@
+{
+  "ociVersion": "1.3.0",
+  "root": {
+    "path": "rootfs"
+  },
+  "process": {
+    "terminal": false,
+    "user": {
+      "uid": 0,
+      "gid": 0
+    },
+    "args": [
+      "/busybox",
+      "sleep",
+      "300"
+    ],
+    "env": [
+      "PATH=/"
+    ],
+    "cwd": "/"
+  },
+  "linux": {
+    "namespaces": [
+      {
+        "type": "mount"
+      },
+      {
+        "type": "pid"
+      }
+    ],
+    "devices": [
+      {
+        "path": "/data/conflict",
+        "type": "c",
+        "major": 1,
+        "minor": 3,
+        "fileMode": 438,
+        "uid": 0,
+        "gid": 0
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "destination": "/dev",
+      "type": "tmpfs",
+      "source": "tmpfs",
+      "options": [
+        "mode=755"
+      ]
+    }
+  ]
+}
