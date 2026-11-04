@@ -107,4 +107,4 @@ SKIP_REGEX=$(
 ginkgo --focus='.*' --skip="$SKIP_REGEX" \
     -v --show-node-events --trace \
     -tags "seccomp ostree selinux" \
-    -timeout=50m -cover -flake-attempts 3 -no-color test/e2e/.
+    -timeout=50m -flake-attempts 3 -no-color -p test/e2e/.
