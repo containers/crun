@@ -275,7 +275,7 @@ libcrun_init_logging (crun_output_handler *new_output_handler, void **new_output
       int log_type = get_log_type (log, &arg);
 
       if (log_type < 0)
-        return crun_make_error (err, errno, "unknown log type `%s`", log);
+        return crun_make_error (err, 0, "unknown log type `%s`", log);
 
       switch (log_type)
         {
