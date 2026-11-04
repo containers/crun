@@ -4,7 +4,6 @@ ENV GOPATH=/root/go
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/bin
 
 RUN apt-get update \
-    && apt-get -y upgrade \
     && apt-get install -y bash golang-1.22 libbtrfs-dev libnl-3-dev libnet1-dev \
             protobuf-c-compiler libcap-dev libaio-dev \
             curl libprotobuf-c-dev libprotobuf-dev socat libseccomp-dev \
@@ -15,11 +14,9 @@ RUN apt-get update \
     && mkdir -p /root/go/src/github.com/containerd \
     && chmod 755 /root \
     && (cd /root/go/src/github.com/containerd \
-        && git clone https://github.com/containerd/containerd \
+        && git clone --depth 1 -b v2.1.1 https://github.com/containerd/containerd \
         && cd containerd \
-        && git reset --hard v2.1.1 \
         && make \
-        && make binaries \
         && make install \
         && script/setup/install-cni \
         && script/setup/install-critools) \
