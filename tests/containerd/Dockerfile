@@ -17,9 +17,7 @@ RUN apt-get update \
         && git clone --depth 1 -b v2.1.1 https://github.com/containerd/containerd \
         && cd containerd \
         && make \
-        && make install \
-        && script/setup/install-cni \
-        && script/setup/install-critools) \
+        && make install) \
     && rm -rf /bin/runc /sbin/runc /usr/sbin/runc /usr/bin/runc
 
 COPY run-tests.sh /usr/local/bin
