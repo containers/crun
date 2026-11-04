@@ -21,10 +21,13 @@ if [[ $(podman info | grep SYSTEMD) != *WASM:wasmedge* ]]; then
     exit 1
 fi
 
-# Build hellowasm image
+# Build hellowasm image. Buildah mounts an overlay over the build context,
+# and its upper directory, under TMPDIR, must not be on the overlay
+# filesystem the container root (and thus /var/tmp) is on.
+mkdir -p /var/lib/containers/tmp
 cd /hello_wasm &&
     chmod +x ./hello.wasm &&
-    buildah build --platform wasi/wasm -t hellowasm-image .
+    TMPDIR=/var/lib/containers/tmp buildah build --platform wasi/wasm -t hellowasm-image .
 
 # Run hello.wasm with crun
 OUTPUT=$(podman run hellowasm-image:latest)
