@@ -232,6 +232,20 @@ xstrdup (const char *str)
   return ret;
 }
 
+static inline char *
+xstrndup (const char *str, size_t n)
+{
+  char *ret;
+  if (str == NULL)
+    return NULL;
+
+  ret = strndup (str, n);
+  if (ret == NULL)
+    OOM ();
+
+  return ret;
+}
+
 void consume_trailing_slashes (char *path);
 
 #define consume_slashes(t) \

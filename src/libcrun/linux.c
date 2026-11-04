@@ -5575,13 +5575,7 @@ libcrun_save_external_descriptors (libcrun_container_t *container, libcrun_error
   if (UNLIKELY (ret != json_gen_status_ok))
     goto json_error;
 
-  if (buf)
-    {
-      char *b = xmalloc (buf_len + 1);
-      memcpy (b, buf, buf_len);
-      b[buf_len] = '\0';
-      get_private_data (container)->external_descriptors = b;
-    }
+  get_private_data (container)->external_descriptors = xstrndup (buf, buf_len);
 
   json_gen_free (gen);
 

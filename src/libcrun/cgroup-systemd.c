@@ -138,10 +138,7 @@ get_systemd_scope_and_slice (const char *id, bool user_slice, const char *cgroup
     }
   if (slice)
     {
-      *slice = xstrdup (cgroup_path);
-      p = strchr (*slice, ':');
-      if (p)
-        *p = '\0';
+      *slice = xstrndup (cgroup_path, strcspn (cgroup_path, ":"));
 
       /* Ref: https://github.com/opencontainers/runc/blob/main/docs/systemd.md#systemd-unit-name-and-placement */
       if (is_empty_string (*slice))
@@ -2218,9 +2215,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
       size_t path_len = strlen (path);
       size_t suffix_len = strlen (suffix);
 
-      scope_path = strndup (path, path_len - suffix_len - 1);
-      if (UNLIKELY (scope_path == NULL))
-        OOM ();
+      scope_path = xstrndup (path, path_len - suffix_len - 1);
     }
 
   /* The cgroup path is chosen by systemd, so it cannot be checked before
