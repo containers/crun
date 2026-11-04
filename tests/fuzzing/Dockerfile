@@ -1,8 +1,8 @@
 FROM quay.io/fedora/fedora:latest
 
-RUN dnf install -y awk golang python git automake autoconf libcap-devel \
+RUN dnf install -y awk golang python git-core automake autoconf libcap-devel \
      systemd-devel json-c-devel libseccomp-devel \
-    glibc-static python3-libmount libtool make git libunwind-devel binutils-devel xz-devel \
+    glibc-static python3-libmount libtool make libunwind-devel binutils-devel xz-devel \
     libatomic clang libzstd-devel
 
 RUN git clone https://github.com/giuseppe/containers-fuzzing-corpus /testcases

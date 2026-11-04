@@ -3,7 +3,7 @@ FROM quay.io/fedora/fedora:latest
 ARG WASM_EDGE_VERSION="0.14.0"
 
 # Install the deps for building crun
-RUN dnf update -y && dnf install -y awk make python git gcc automake autoconf libcap-devel \
+RUN dnf update -y && dnf install -y awk make python git-core gcc automake autoconf libcap-devel \
 		systemd-devel json-c-devel libseccomp-devel pkg-config diffutils \
 		glibc-static python3-libmount libtool buildah podman which
 
