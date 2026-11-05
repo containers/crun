@@ -52,7 +52,6 @@ with pkgs; stdenv.mkDerivation {
     export LIBS='${lib.concatStringsSep " " staticLibs}'
   '';
   buildPhase = ''
-    patchShebangs .
     if [ -f .tarball-git-version.h ]; then
       cp .tarball-git-version.h git-version.h
     elif [ -f .git ]; then
