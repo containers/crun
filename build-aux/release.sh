@@ -4,10 +4,14 @@ set -xeuo pipefail
 
 SKIP_GPG=${SKIP_GPG:-}
 SKIP_CHECKS=${SKIP_CHECKS:-}
+# Set to skip building the source tarballs.
+SKIP_DIST=${SKIP_DIST:-}
 
 NIX_IMAGE=${NIX_IMAGE:-docker.io/nixos/nix:2.35.4}
 
-ARCHES=(amd64 arm64 ppc64le riscv64 s390x)
+# Space-separated list of architectures to build static binaries for
+# (can be empty to only build the source tarballs).
+read -r -a ARCHES <<<"${ARCHES-amd64 arm64 ppc64le riscv64 s390x}"
 
 # Fail fast if a required tool is missing, before the long build starts.
 REQUIRED_TOOLS=("${RUNTIME:-podman}" git make)
@@ -50,13 +54,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-test -e Makefile && make distclean
+if test "$SKIP_DIST" = ""; then
+    test -e Makefile && make distclean
 
-./autogen.sh
+    ./autogen.sh
 
-./configure --enable-embedded-blake3
+    ./configure --enable-embedded-blake3
 
-make -j "$(nproc)"
+    make -j "$(nproc)"
+fi
 
 VERSION="$("$(dirname "$0")/git-version-gen" --prefix "" .)"
 if test "$SKIP_CHECKS" = ""; then
@@ -75,15 +81,17 @@ fi
 
 mkdir -p "$OUTDIR"
 
-rm -f crun-*.tar*
+if test "$SKIP_DIST" = ""; then
+    rm -f crun-*.tar*
 
-make dist-gzip
-make ZSTD_OPT="--ultra -c22" dist-zstd
+    make dist-gzip
+    make ZSTD_OPT="--ultra -c22" dist-zstd
 
-mv crun-*.tar.gz "$OUTDIR"
-mv crun-*.tar.zst "$OUTDIR"
+    mv crun-*.tar.gz "$OUTDIR"
+    mv crun-*.tar.zst "$OUTDIR"
+fi
 
-make distclean
+test -e Makefile && make distclean
 
 read -r -a RUNTIME_EXTRA_ARGS <<<"${RUNTIME_EXTRA_ARGS:-}"
 
@@ -103,10 +111,16 @@ BUILD_CMD=(
     --max-jobs auto
 )
 
-mkdir -p /nix
-if [ ! -d /nix/store ] || ! "${RUNTIME:-podman}" run --init --rm -v /nix:/nix "${NIX_IMAGE}" nix --version >/dev/null 2>&1; then
-    "${RUNTIME:-podman}" run --init --rm -v /nix:/host-nix "${NIX_IMAGE}" \
-        sh -c 'rm -rf /host-nix/*; cp -a /nix/. /host-nix/'
+if test ${#ARCHES[@]} -gt 0; then
+    # The nix build needs the submodules (normally done by autogen.sh,
+    # which is not run with SKIP_DIST).
+    git submodule update --init --recursive
+
+    mkdir -p /nix
+    if [ ! -d /nix/store ] || ! "${RUNTIME:-podman}" run --init --rm -v /nix:/nix "${NIX_IMAGE}" nix --version >/dev/null 2>&1; then
+        "${RUNTIME:-podman}" run --init --rm -v /nix:/host-nix "${NIX_IMAGE}" \
+            sh -c 'rm -rf /host-nix/*; cp -a /nix/. /host-nix/'
+    fi
 fi
 
 git_commit=$(git rev-parse HEAD)
