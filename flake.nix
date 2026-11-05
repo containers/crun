@@ -63,12 +63,16 @@
           static = import ./nix/static.nix;
 
           # Build static variants locally — these don't pollute the global package set
-          staticLibcap = (static pkgs.libcap).overrideAttrs (x: {
+          # crun only needs libcap.a: skip the Go bindings and the PAM
+          # module, which would otherwise pull in go, linux-pam and their
+          # dependencies (built from source when cross-compiling).
+          staticLibcap = (static (pkgs.libcap.override {
+            withGo = false;
+            usePam = false;
+          })).overrideAttrs (x: {
             postInstall = ''
               mkdir -p "$doc/share/doc/${x.pname}-${x.version}"
               cp License "$doc/share/doc/${x.pname}-${x.version}/"
-              mkdir -p "$pam/lib/security"
-              mv "$lib"/lib/security "$pam/lib"
             '';
           });
           staticLibseccomp = static pkgs.libseccomp;
