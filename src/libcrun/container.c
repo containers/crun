@@ -951,9 +951,7 @@ get_json_gen_result (json_gen_ctx *gen, char **out, size_t *out_len)
 
   *out_len = buf_len;
 
-  *out = xmalloc (buf_len + 1);
-  memcpy (*out, buf, buf_len);
-  (*out)[buf_len] = '\0';
+  *out = xstrndup (buf, buf_len);
 
   return json_gen_status_ok;
 }
