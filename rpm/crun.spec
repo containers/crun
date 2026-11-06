@@ -66,7 +66,6 @@ BuildRequires: json-c-devel
 BuildRequires: libseccomp-devel
 BuildRequires: python3-libmount
 BuildRequires: libtool
-BuildRequires: protobuf-c-devel
 BuildRequires: criu-devel >= 3.17.1-2
 Recommends: criu >= 3.17.1
 Recommends: criu-libs
