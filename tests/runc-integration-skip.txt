@@ -38,10 +38,6 @@ exec.bats: runc exec --additional-gids
 ps.bats: ps
 ps.bats: ps -e -x
 
-# --lazy-pages is not implemented.
-# TODO: remove once containers/crun#2259 is merged.
-checkpoint.bats: checkpoint --lazy-pages and restore
-
 # With the systemd cgroup driver, crun puts the container processes into the
 # "container" sub-cgroup of the unit cgroup, while these tests look at the unit
 # cgroup itself (its cgroup.procs, or a sub-cgroup created from the container).
