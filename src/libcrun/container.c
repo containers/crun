@@ -2010,7 +2010,7 @@ container_delete_internal (libcrun_context_t *context, libcrun_container_t *cont
 
               ret = run_poststop_hooks (context, container, def, &partial_status, state_root, id, err);
               if (UNLIKELY (ret < 0))
-                crun_error_write_warning_and_release (context->output_handler_arg, &err);
+                libcrun_error_report_and_release (err);
             }
 
           libcrun_container_delete_status (state_root, id, &tmp_err);
