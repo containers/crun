@@ -93,8 +93,8 @@ scheduler.bats: scheduler vs cpus
 # runc warns ("unable to apply both") and ignores the shares.
 update.bats: update cgroup cpu.idle via systemd v252+
 
-# Without the permission to use cgroups, crun ignores the resource limits of
-# a rootless container, while runc fails.
+# crun fails as well, but words the error differently ("cannot set limits
+# without cgroups").
 cgroups.bats: runc create (rootless + limits + no cgrouppath + no permission) fails with informative error
 
 # runc returns -ENOSYS for syscalls newer than any in the profile, using a
