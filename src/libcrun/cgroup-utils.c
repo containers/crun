@@ -1525,7 +1525,7 @@ parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_pe
 }
 
 /* Read and parse the cpu.max file of the cgroup at PATH.  Return 1 if it
-   was read, or 0 if it cannot be read, e.g. when the cpu controller is not
+   was read, or 0 if it does not exist, e.g. when the cpu controller is not
    enabled.  */
 int
 read_cpu_max (const char *path, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
@@ -1541,6 +1541,8 @@ read_cpu_max (const char *path, int64_t *quota, uint64_t *period, bool *has_peri
   ret = read_all_file (cpu_max_path, &content, NULL, err);
   if (UNLIKELY (ret < 0))
     {
+      if (crun_error_get_errno (err) != ENOENT)
+        return ret;
       crun_error_release (err);
       return 0;
     }

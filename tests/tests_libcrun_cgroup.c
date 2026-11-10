@@ -20,6 +20,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <libcrun/cgroup-internal.h>
 #include <libcrun/cgroup-utils.h>
 
@@ -373,6 +376,68 @@ test_parse_cpu_max_invalid ()
   return 0;
 }
 
+/* Test read_cpu_max on a cgroup that does not exist */
+static int
+test_read_cpu_max_missing ()
+{
+  libcrun_error_t err = NULL;
+  int64_t quota;
+  uint64_t period;
+  bool has_period;
+  int ret;
+
+  ret = read_cpu_max ("crun-test-does-not-exist", &quota, &period, &has_period, &err);
+  if (ret != 0)
+    {
+      if (ret < 0)
+        crun_error_release (&err);
+      return -1;
+    }
+
+  return 0;
+}
+
+/* Test read_cpu_max reports an error other than a missing cpu.max */
+static int
+test_read_cpu_max_unreadable ()
+{
+  char tmpdir[] = "/tmp/crun-test-cpu-max-XXXXXX";
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *cpu_max_path = NULL;
+  libcrun_error_t err = NULL;
+  int64_t quota;
+  uint64_t period;
+  bool has_period;
+  int ret;
+
+  if (mkdtemp (tmpdir) == NULL)
+    return -1;
+
+  ret = asprintf (&cgroup_path, "../../..%s", tmpdir);
+  if (ret < 0)
+    return -1;
+  ret = asprintf (&cpu_max_path, "%s/cpu.max", tmpdir);
+  if (ret < 0)
+    return -1;
+
+  ret = -1;
+  if (mkdir (cpu_max_path, 0700) == 0)
+    {
+      ret = read_cpu_max (cgroup_path, &quota, &period, &has_period, &err);
+      if (ret < 0)
+        {
+          ret = crun_error_get_errno (&err) == EISDIR ? 0 : -1;
+          crun_error_release (&err);
+        }
+      else
+        ret = -1;
+      rmdir (cpu_max_path);
+    }
+  rmdir (tmpdir);
+
+  return ret;
+}
+
 int
 main ()
 {
@@ -386,6 +451,8 @@ main ()
   RUN_TEST (test_read_proc_cgroup_selective);
   RUN_TEST (test_parse_cpu_max);
   RUN_TEST (test_parse_cpu_max_invalid);
+  RUN_TEST (test_read_cpu_max_missing);
+  RUN_TEST (test_read_cpu_max_unreadable);
   print_tap_plan ();
   return 0;
 }
