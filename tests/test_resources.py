@@ -62,6 +62,35 @@ def test_resources_pid_limit():
         return -1
     return 0
 
+def test_resources_pid_limit_rootless_no_cgroup():
+    """A rootless container with limits must not run without a cgroup."""
+    if not is_rootless():
+        return (77, "requires rootless")
+    conf = base_config()
+    conf['linux']['resources'] = {"pids" : {"limit" : 1024}}
+    add_all_namespaces(conf)
+
+    fn = "/sys/fs/cgroup/pids/pids.max"
+    if is_cgroup_v2_unified():
+        fn = "/sys/fs/cgroup/pids.max"
+        conf['linux']['namespaces'].append({"type" : "cgroup"})
+
+    conf['process']['args'] = ['/init', 'cat', fn]
+
+    proc, _ = run_and_get_output(conf, use_popen=True, cgroup_manager='cgroupfs')
+    out, _ = proc.communicate()
+    out = out.decode()
+
+    if proc.returncode == 0:
+        if "1024" in out:
+            return (77, "the cgroup was created")
+        logger.info("the container ran without the pids limit: %s", out)
+        return -1
+    if "cannot set limits without cgroups" not in out:
+        logger.info("unexpected error message: %s", out)
+        return -1
+    return 0
+
 def test_resources_pid_limit_userns():
     if is_rootless():
         return (77, "requires root privileges")
@@ -475,6 +504,7 @@ def test_resources_exec_cgroup_reject_dotdot():
 all_tests = {
     "resources-v2-swap-disabled": test_resources_cgroupv2_swap_0,
     "resources-pid-limit" : test_resources_pid_limit,
+    "resources-pid-limit-rootless-no-cgroup" : test_resources_pid_limit_rootless_no_cgroup,
     "resources-pid-limit-userns" : test_resources_pid_limit_userns,
     "resources-unified" : test_resources_unified,
     "resources-unified-invalid-controller" : test_resources_unified_invalid_controller,
