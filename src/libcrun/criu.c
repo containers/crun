@@ -925,6 +925,15 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return ret;
 
+  /* Let CRIU detect the other bind mounts, e.g. the devices that are bind
+     mounted from the host when the container has a user namespace.  */
+  if (container->host_uid || has_user_namespace (container->container_def))
+    {
+      ret = libcriu_wrapper->criu_add_external ("mnt[]");
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "CRIU: failed enabling external mounts autodetection");
+    }
+
   /* CRIU tries to checkpoint and restore all namespaces. However,
    * namespaces could be shared between containers in a pod.
    * To address this, CRIU provides support for external namespaces.
@@ -1479,6 +1488,15 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = register_masked_paths_mounts (def, container, libcriu_wrapper, true, err);
   if (UNLIKELY (ret < 0))
     return ret;
+
+  /* Let CRIU detect the other bind mounts, e.g. the devices that are bind
+     mounted from the host when the container has a user namespace.  */
+  if (container->host_uid || has_user_namespace (container->container_def))
+    {
+      ret = libcriu_wrapper->criu_add_external ("mnt[]");
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "CRIU: failed enabling external mounts autodetection");
+    }
 
   /* Mount the container rootfs for CRIU. */
   ret = append_paths (&root, err, bundle_cleanup, "criu-root", NULL);

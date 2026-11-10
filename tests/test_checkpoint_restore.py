@@ -571,6 +571,18 @@ def test_cr():
     return run_cr_test(conf)
 
 
+def test_cr_userns():
+    if r := _check_cr_requirements():
+        return r
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, userns=True, cgroupns=True)
+    conf['linux']['uidMappings'] = [{"containerID": 0, "hostID": 0, "size": 65536}]
+    conf['linux']['gidMappings'] = [{"containerID": 0, "hostID": 0, "size": 65536}]
+    return run_cr_test(conf)
+
+
 def test_cr_masked_paths():
     if r := _check_cr_requirements():
         return r
@@ -952,6 +964,7 @@ def test_cr_with_annotation_config():
 
 all_tests = {
     "checkpoint-restore": test_cr,
+    "checkpoint-restore-userns": test_cr_userns,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
     "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,
