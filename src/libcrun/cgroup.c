@@ -455,6 +455,17 @@ libcrun_cgroup_enter (struct libcrun_cgroup_args *args, struct libcrun_cgroup_st
           return ignore_cgroup_errors;
         }
 
+      if (ignore_cgroup_errors && args->resources)
+        {
+          /* The limits cannot be set without a cgroup.  */
+          ret = update_cgroup_resources (NULL, args->state_root, args->resources, false, &tmp_err);
+          if (UNLIKELY (ret < 0))
+            {
+              crun_error_release (&tmp_err);
+              return crun_error_wrap (err, "cannot set limits without cgroups");
+            }
+        }
+
       if (ignore_cgroup_errors)
         {
           /* Ignore cgroups errors and set there is no cgroup path to use.  */
