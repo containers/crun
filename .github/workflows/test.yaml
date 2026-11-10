@@ -160,7 +160,7 @@ jobs:
         with:
           repository: opencontainers/runc
           # Update along with tests/runc-integration-skip.txt.
-          ref: 642809e5e24b8ddad48ed64085cf33b226befd8f # v1.6.0-rc.1-99-g642809e5
+          ref: 817ee95c66f78831b8f57c7bc3185c230240f648 # v1.6.0-rc.1-116-g817ee95c
           path: runc
           persist-credentials: false
 

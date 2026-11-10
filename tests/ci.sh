@@ -255,13 +255,15 @@ runc-integration | runc-integration-rootless)
     # A test which hangs should fail on its own, rather than eat up the
     # whole job time.
     export RUNC="$PWD/crun" RUNC_ALLOW_UNSAFE_TESTS=yes BATS_TEST_TIMEOUT=120
+    # The tests checking runc specific behavior are not run.
+    filter="--filter-tags '!runc-specific'"
     if [ "$test_name" = runc-integration-rootless ]; then
         group "add rootless user" runc/script/setup_rootless.sh
         # Let the rootless user get to the crun binary.
         sudo chmod a+X "$HOME"
-        tests=runc/tests/rootless.sh
+        tests="runc/tests/rootless.sh $filter"
     else
-        tests="bats -t runc/tests/integration"
+        tests="bats -t $filter runc/tests/integration"
     fi
 
     # Delegate all cgroup v2 controllers to the rootless user's systemd
