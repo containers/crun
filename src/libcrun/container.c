@@ -4469,8 +4469,8 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   pipefd1 = container_ret_status[1];
 
   /* If the new process block doesn't specify a SELinux label, AppArmor profile, user,
-     I/O priority, scheduler or OOM score adjustment, then use the configuration from
-     the original config file.  */
+     I/O priority, scheduler, OOM score adjustment or noNewPrivileges, then use the
+     configuration from the original config file.  */
   if (container->container_def->process)
     {
       if (process->io_priority == NULL && container->container_def->process->io_priority)
@@ -4504,6 +4504,12 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
           process->user = clone_runtime_spec_schema_config_schema_process_user (container->container_def->process->user);
           if (process->user == NULL)
             OOM ();
+        }
+
+      if (! process->no_new_privileges_present && container->container_def->process->no_new_privileges)
+        {
+          process->no_new_privileges = true;
+          process->no_new_privileges_present = true;
         }
     }
 
