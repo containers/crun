@@ -617,6 +617,72 @@ def test_update_without_cgroup_device_no_access():
     finally:
         os.unlink(resources_file)
 
+
+def test_update_unified_cpu_max_invalid_systemd():
+    """Test that a rejected unified cpu.max leaves the systemd scope unchanged."""
+    if not is_cgroup_v2_unified() or is_rootless():
+        return (77, "requires cgroup v2 and root privileges")
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return (77, "systemd support not compiled in")
+    if not running_on_systemd():
+        return (77, "not running on systemd")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True,
+                                    cgroup_manager='systemd')
+        scope = json.loads(run_crun_command(['state', cid]))['systemd-scope']
+
+        run_crun_command(['update', '--cpu-quota', '50000', '--cpu-period', '100000', cid])
+
+        expected = {'CPUQuotaPeriodUSec': '100ms', 'CPUQuotaPerSecUSec': '500ms'}
+        for prop, want in expected.items():
+            out = systemctl_show(scope, prop)
+            if out != want:
+                logger.info("wrong %s for the systemd scope before the update: expected %s, got %s", prop, want, out)
+                return -1
+
+        for value in [" \nmax 200000", " \n50000 200000", "50000 200000\n "]:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump({'unified': {'cpu.max': value}}, f)
+                resources_file = f.name
+
+            try:
+                code, out = run_crun_expect_failure(['update', '--resources', resources_file, cid])
+            finally:
+                os.unlink(resources_file)
+
+            if code == 0:
+                logger.info("crun update unexpectedly succeeded with cpu.max %r", value)
+                return -1
+            if "invalid value for `cpu.max`" not in out:
+                logger.info("unexpected error message for cpu.max %r: %s", value, out)
+                return -1
+
+            out = run_crun_command(['exec', cid, '/init', 'cat', '/sys/fs/cgroup/cpu.max']).strip()
+            if out != '50000 100000':
+                logger.info("cpu.max %r changed the container cgroup: %s", value, out)
+                return -1
+
+            for prop in expected:
+                out = systemctl_show(scope, prop)
+                if out != expected[prop]:
+                    logger.info("cpu.max %r changed %s: expected %s, got %s", value, prop, expected[prop], out)
+                    return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
 all_tests = {
     "update-memory-limit": test_update_memory_limit,
     "update-cpu-shares": test_update_cpu_shares,
@@ -633,6 +699,7 @@ all_tests = {
     "update-unified-resources": test_update_unified_resources,
     "update-without-cgroup-memory": test_update_without_cgroup_memory,
     "update-without-cgroup-device-no-access": test_update_without_cgroup_device_no_access,
+    "update-unified-cpu-max-invalid-systemd": test_update_unified_cpu_max_invalid_systemd,
 }
 
 if __name__ == "__main__":
