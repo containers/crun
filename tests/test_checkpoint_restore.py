@@ -571,6 +571,49 @@ def test_cr():
     return run_cr_test(conf)
 
 
+def test_cr_userns():
+    if r := _check_cr_requirements():
+        return r
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, userns=True, cgroupns=True)
+    conf['linux']['uidMappings'] = [{"containerID": 0, "hostID": 0, "size": 65536}]
+    conf['linux']['gidMappings'] = [{"containerID": 0, "hostID": 0, "size": 65536}]
+    return run_cr_test(conf)
+
+
+
+def test_cr_userns_devices():
+    if r := _check_cr_requirements():
+        return r
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, userns=True, cgroupns=True)
+    conf['linux']['uidMappings'] = [{"containerID": 0, "hostID": 0, "size": 65536}]
+    conf['linux']['gidMappings'] = [{"containerID": 0, "hostID": 0, "size": 65536}]
+    devices = ['/dev/foo', '/dev/null']
+    conf['linux']['devices'] = [
+        {"path": path, "type": "c", "major": 1, "minor": 3, "uid": 10, "gid": 11, "fileMode": 0o600}
+        for path in devices
+    ]
+
+    def check_devices(cid):
+        s = wait_for_state(cid)
+        if s is None:
+            logger.info("test_cr_userns_devices: container %s is not running", cid)
+            return -1
+        for path in devices:
+            st = os.stat("/proc/%s/root%s" % (s['pid'], path))
+            if (st.st_uid, st.st_gid, st.st_mode & 0o7777) != (10, 11, 0o600):
+                logger.info("test_cr_userns_devices: %s is %d:%d %o after restore",
+                            path, st.st_uid, st.st_gid, st.st_mode & 0o7777)
+                return -1
+        return 0
+
+    return run_cr_test(conf, after_restore_cb=check_devices)
+
 def test_cr_masked_paths():
     if r := _check_cr_requirements():
         return r
@@ -952,6 +995,8 @@ def test_cr_with_annotation_config():
 
 all_tests = {
     "checkpoint-restore": test_cr,
+    "checkpoint-restore-userns": test_cr_userns,
+    "checkpoint-restore-userns-devices": test_cr_userns_devices,
     "checkpoint-restore-masked-paths": test_cr_masked_paths,
     "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
     "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,

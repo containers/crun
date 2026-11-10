@@ -453,6 +453,8 @@ void get_root_in_the_userns (runtime_spec_schema_config_schema *def, uid_t host_
 
 bool has_new_pid_namespace (runtime_spec_schema_config_schema *def);
 
+bool has_user_namespace (runtime_spec_schema_config_schema *def);
+
 static inline void
 cleanup_containerp (libcrun_container_t **c)
 {

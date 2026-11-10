@@ -39,6 +39,8 @@ struct device_s
   gid_t gid;
 };
 
+extern struct device_s needed_devs[];
+
 static inline int
 syscall_clone (unsigned long flags, void *child_stack)
 {
@@ -155,6 +157,8 @@ struct libcrun_mount_flags_s
   char *target;
   unsigned long flags;
 };
+
+int libcrun_create_devices_tmpfs (libcrun_container_t *container, const char *path, libcrun_error_t *err);
 
 bool libcrun_is_configured_device (runtime_spec_schema_config_schema *def, const char *path);
 

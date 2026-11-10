@@ -6210,19 +6210,19 @@ exit:
 }
 
 static int
-precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libcrun_error_t *err)
+create_device_node (libcrun_container_t *container, int devs_dirfd, size_t i, char *name, size_t name_len,
+                    libcrun_error_t *err)
 {
   runtime_spec_schema_config_schema *def = container->container_def;
   runtime_spec_schema_defs_linux_device *device;
   uid_t uid;
   gid_t gid;
-  char name[64];
   mode_t type;
   dev_t dev;
   int ret;
 
-  ret = snprintf (name, sizeof (name), "%zu", i);
-  if (UNLIKELY (ret >= (int) sizeof (name)))
+  ret = snprintf (name, name_len, "%zu", i);
+  if (UNLIKELY (ret >= (int) name_len))
     return crun_make_error (err, 0, "internal error: static buffer too small");
 
   device = def->linux->devices[i];
@@ -6241,7 +6241,76 @@ precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libc
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "chown `%s`", device->path);
 
+  return 0;
+}
+
+static int
+precreate_device (libcrun_container_t *container, int devs_dirfd, size_t i, libcrun_error_t *err)
+{
+  char name[64];
+  int ret;
+
+  ret = create_device_node (container, devs_dirfd, i, name, sizeof (name), err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
   return get_bind_mount (devs_dirfd, name, false, false, false, MS_PRIVATE, err);
+}
+
+/* Mount a tmpfs on PATH and create there the nodes of the devices in the
+   configuration, named after their index in it, like they are created for
+   a new container with a user namespace.  Return 1 if the tmpfs was mounted,
+   0 if it is not supported.  The devices that could not be created are
+   missing from it.  */
+int
+libcrun_create_devices_tmpfs (libcrun_container_t *container, const char *path, libcrun_error_t *err)
+{
+  runtime_spec_schema_config_schema *def = container->container_def;
+  const char *context_type = NULL;
+  const char *label = NULL;
+  cleanup_close int mountfd = -1;
+  cleanup_close int targetfd = -1;
+  cleanup_close int dirfd = -1;
+  mode_t old_umask;
+  size_t i;
+  int ret;
+
+  if (def->linux && def->linux->mount_label)
+    {
+      label = def->linux->mount_label;
+      context_type = get_selinux_context_type (container, err);
+      if (UNLIKELY (context_type == NULL))
+        return -1;
+    }
+
+  mountfd = fsopen_mount ("tmpfs", NULL, context_type, label, NULL);
+  if (mountfd < 0)
+    return 0;
+
+  targetfd = open (path, O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (targetfd < 0))
+    return crun_make_error (err, errno, "open `%s`", path);
+
+  ret = fs_move_mount_to (mountfd, targetfd, NULL);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "fs_move_mount_to `%s`", path);
+
+  dirfd = openat (mountfd, ".", O_DIRECTORY | O_PATH | O_CLOEXEC);
+  if (UNLIKELY (dirfd < 0))
+    return crun_make_error (err, errno, "open `%s`", path);
+
+  old_umask = umask (0);
+  for (i = 0; def->linux && i < def->linux->devices_len; i++)
+    {
+      char name[64];
+
+      ret = create_device_node (container, dirfd, i, name, sizeof (name), err);
+      if (UNLIKELY (ret < 0))
+        crun_error_release (err);
+    }
+  umask (old_umask);
+
+  return 1;
 }
 
 static int
