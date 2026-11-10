@@ -255,8 +255,6 @@ static int
 complete_cpu_max (const char *path, runtime_spec_schema_config_linux_resources *resources, libcrun_error_t *err)
 {
   runtime_spec_schema_config_linux_resources_cpu *cpu;
-  cleanup_free char *cpu_max_path = NULL;
-  cleanup_free char *content = NULL;
   bool has_period;
   uint64_t period;
   int64_t quota;
@@ -276,20 +274,8 @@ complete_cpu_max (const char *path, runtime_spec_schema_config_linux_resources *
   if (cgroup_mode != CGROUP_MODE_UNIFIED)
     return 0;
 
-  ret = append_paths (&cpu_max_path, err, CGROUP_ROOT, path, "cpu.max", NULL);
-  if (UNLIKELY (ret < 0))
-    return ret;
-
-  ret = read_all_file (cpu_max_path, &content, NULL, err);
-  if (UNLIKELY (ret < 0))
-    {
-      /* The cpu controller might not be enabled; nothing to keep then.  */
-      crun_error_release (err);
-      return 0;
-    }
-
-  ret = parse_cpu_max (content, &quota, &period, &has_period, err);
-  if (UNLIKELY (ret < 0))
+  ret = read_cpu_max (path, &quota, &period, &has_period, err);
+  if (ret <= 0)
     return ret;
 
   if (! cpu->quota_present)
