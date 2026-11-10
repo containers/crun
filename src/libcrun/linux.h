@@ -156,6 +156,8 @@ struct libcrun_mount_flags_s
   unsigned long flags;
 };
 
+bool libcrun_is_configured_device (runtime_spec_schema_config_schema *def, const char *path);
+
 int libcrun_restrict_mounts_in_container (pid_t pid, struct libcrun_mount_flags_s *mounts, size_t len, libcrun_error_t *err);
 
 #endif

@@ -91,6 +91,38 @@ def test_owner_device():
             return -1
     return 0
 
+def test_configured_default_device():
+    if is_rootless():
+        return (77, "requires root privileges")
+
+    for have_userns in [True, False]:
+        conf = base_config()
+        add_all_namespaces(conf, userns=have_userns)
+        if have_userns:
+            fullMapping = [
+                {
+                    "containerID": 0,
+                    "hostID": 0,
+                    "size": 4294967295
+                }
+            ]
+            conf['linux']['uidMappings'] = fullMapping
+            conf['linux']['gidMappings'] = fullMapping
+
+        conf['linux']['devices'] = [{"path": "/dev/null", "type": "c", "major": 1, "minor": 3, "uid": 10, "gid": 11, "fileMode": 0o600},]
+        for what, expected in [("owner", "10:11"), ("mode", "600")]:
+            conf['process']['args'] = ['/init', what, '/dev/null']
+            try:
+                out = run_and_get_output(conf, hide_stderr=True)
+                if expected not in out[0]:
+                    logger.info("configured /dev/null %s test failed with userns=%s: expected '%s' in output", what, have_userns, expected)
+                    logger.info("actual output: %s", out[0])
+                    return -1
+            except Exception as e:
+                logger.info("configured /dev/null %s test failed with userns=%s: %s", what, have_userns, e)
+                return -1
+    return 0
+
 def test_deny_devices():
     if is_rootless():
         return (77, "requires root privileges")
@@ -724,6 +756,7 @@ all_tests = {
     "allow-device-read-only": test_allow_device_read_only,
     "deny-device-write": test_deny_device_write,
     "owner-device" : test_owner_device,
+    "configured-default-device" : test_configured_default_device,
     "deny-devices" : test_deny_devices,
     "allow-device" : test_allow_device,
     "allow-access" : test_allow_access,

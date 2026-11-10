@@ -2549,6 +2549,17 @@ static struct symlink_s symlinks[] = { { "/proc/self/fd", "fd", false },
                                        { "pts/ptmx", "ptmx", true },
                                        { NULL, NULL, false } };
 
+bool
+libcrun_is_configured_device (runtime_spec_schema_config_schema *def, const char *path)
+{
+  size_t i;
+
+  for (i = 0; def->linux && i < def->linux->devices_len; i++)
+    if (strcmp (def->linux->devices[i]->path, path) == 0)
+      return true;
+  return false;
+}
+
 static int
 create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t *err)
 {
@@ -2596,6 +2607,9 @@ create_missing_devs (libcrun_container_t *container, bool binds, libcrun_error_t
   for (it = needed_devs, i = 0; it->path; it++, i++)
     {
       cleanup_close int srcfd = (needed_fds && i < needed_fds->nfds) ? needed_fds->fds[i] : -1;
+
+      if (binds && libcrun_is_configured_device (def, it->path))
+        continue;
 
       /* make sure the parent directory exists only on the first iteration.  */
       ret = libcrun_create_dev (container, devfd, srcfd, it, binds, it == needed_devs, err);
