@@ -1,5 +1,6 @@
 # The runc integration tests (see runc/tests/integration) which currently
 # fail with crun, and so are skipped by tests/ci.sh (runc-integration).
+# The tests tagged as runc-specific are not run at all, and so are not listed.
 #
 # Format: <file>.bats: <test name>
 #     or: <file>.bats
@@ -15,17 +16,11 @@
 # "crun events" is not implemented.
 events.bats
 
-# Checks the output of runc --debug, which is runc specific.
-debug.bats
-
 # "-h" is not implemented, only "--help".
 help.bats
 
 # --pidfd-socket is not implemented.
 pidfd-socket.bats
-
-# Checks the output format of "runc --version", which is runc specific.
-version.bats
 
 # --ignore-paused is not implemented.
 cgroups.bats: runc exec --ignore-paused
@@ -58,29 +53,11 @@ cgroups.bats: runc run (per-device multiple iops via unified)
 ps.bats: ps after the container stopped
 update.bats: update per-device iops/bps values
 
-# The tests check runc specific debug messages.
-cpu_affinity.bats: runc exec [CPU affinity, only initial set from process.json]
-cpu_affinity.bats: runc exec [CPU affinity, initial and final set from process.json]
-cpu_affinity.bats: runc exec [CPU affinity, initial and final set from config.json]
-exec.bats: runc --debug exec
-exec.bats: runc --debug --log exec
-run.bats: runc run [/proc/self/exe clone]
-
-# The test checks the runc specific output format of "list".
-list.bats: list
-
 # crun fails as well, but words the error differently.
-kill.bats: kill detached busybox
-memorypolicy.bats: runc run memory policy calls syscall with invalid arguments
+seccomp.bats: runc run [seccomp] (errnoRet with unsupported action)
 
 # crun reports the hook exit code, not the signal ("bad system call").
 seccomp.bats: runc run [seccomp] (startContainer hook)
-
-# crun words the error differently ("open seccomp receiver: connect socket to ...").
-seccomp-notify.bats: runc run [seccomp] (SCMP_ACT_NOTIFY no seccompagent)
-
-# crun does not call write(2) after loading the seccomp filter.
-run.bats: runc run [seccomp SCMP_ACT_KILL kills init]
 
 # The test checks that runc catches SIGTERM (SigCgt), while crun blocks the
 # signals and reads them from a signalfd.
