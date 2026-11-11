@@ -20,7 +20,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <libcrun/cgroup-internal.h>
+#include <libcrun/cgroup-utils.h>
 
 #include "tap.h"
 
@@ -270,6 +274,170 @@ test_read_proc_cgroup_selective ()
   return 0;
 }
 
+/* Test parse_cpu_max with valid values */
+static int
+test_parse_cpu_max ()
+{
+  struct
+  {
+    const char *value;
+    int64_t quota;
+    bool has_period;
+    uint64_t period;
+  } cases[] = {
+    { "max", -1, false, 0 },
+    { "max 100000", -1, true, 100000 },
+    { "max 100000\n", -1, true, 100000 },
+    { "50000 100000", 50000, true, 100000 },
+    { "  50000  200000\n", 50000, true, 200000 },
+    { "20000", 20000, false, 0 },
+    { "20000\n", 20000, false, 0 },
+    { "50000\t100000", 50000, true, 100000 },
+    { "50000 100000 ", 50000, true, 100000 },
+    { "50000 100000\n\n", 50000, true, 100000 },
+    { "max\n\n", -1, false, 0 },
+    { "50000 \n", 50000, false, 0 },
+    { "\tmax", -1, false, 0 },
+    { "\nmax 100000", -1, true, 100000 },
+    { "\n\tmax 100000\n", -1, true, 100000 },
+    { "1000 1000", 1000, true, 1000 },
+    { "17592186044415 1000000", 17592186044415, true, 1000000 },
+    { "00000000000000050000 100000", 50000, true, 100000 },
+  };
+  size_t i;
+
+  for (i = 0; i < sizeof (cases) / sizeof (cases[0]); i++)
+    {
+      libcrun_error_t err = NULL;
+      int64_t quota = 0;
+      uint64_t period = 0;
+      bool has_period = false;
+
+      if (parse_cpu_max (cases[i].value, &quota, &period, &has_period, &err) < 0)
+        {
+          crun_error_release (&err);
+          return -1;
+        }
+      if (quota != cases[i].quota || has_period != cases[i].has_period)
+        return -1;
+      if (has_period && period != cases[i].period)
+        return -1;
+    }
+
+  return 0;
+}
+
+/* Test parse_cpu_max rejects malformed values */
+static int
+test_parse_cpu_max_invalid ()
+{
+  const char *values[] = {
+    "",
+    "0",
+    "-1",
+    "max5",
+    "maxx",
+    "50000+200000",
+    "50000-1",
+    "50000 -1",
+    "50000 +100000",
+    "50000 100000 1",
+    "50000 100000x",
+    "50000 100000\n1",
+    "50000\n100000",
+    "max\n100000",
+    " \nmax",
+    "50000 100000\n \n",
+    "+50000 100000",
+    "-50000",
+    "50000 0",
+    "max 0",
+    "50000 999",
+    "50000 1000001",
+    "50000 18446744073709551615",
+    "999 100000",
+    "17592186044416 100000",
+    "000000000000000500001000",
+  };
+  size_t i;
+
+  for (i = 0; i < sizeof (values) / sizeof (values[0]); i++)
+    {
+      libcrun_error_t err = NULL;
+      int64_t quota;
+      uint64_t period;
+      bool has_period;
+
+      if (parse_cpu_max (values[i], &quota, &period, &has_period, &err) == 0)
+        return -1;
+      crun_error_release (&err);
+    }
+
+  return 0;
+}
+
+/* Test read_cpu_max on a cgroup that does not exist */
+static int
+test_read_cpu_max_missing ()
+{
+  libcrun_error_t err = NULL;
+  int64_t quota;
+  uint64_t period;
+  bool has_period;
+  int ret;
+
+  ret = read_cpu_max ("crun-test-does-not-exist", &quota, &period, &has_period, &err);
+  if (ret != 0)
+    {
+      if (ret < 0)
+        crun_error_release (&err);
+      return -1;
+    }
+
+  return 0;
+}
+
+/* Test read_cpu_max reports an error other than a missing cpu.max */
+static int
+test_read_cpu_max_unreadable ()
+{
+  char tmpdir[] = "/tmp/crun-test-cpu-max-XXXXXX";
+  cleanup_free char *cgroup_path = NULL;
+  cleanup_free char *cpu_max_path = NULL;
+  libcrun_error_t err = NULL;
+  int64_t quota;
+  uint64_t period;
+  bool has_period;
+  int ret;
+
+  if (mkdtemp (tmpdir) == NULL)
+    return -1;
+
+  ret = asprintf (&cgroup_path, "../../..%s", tmpdir);
+  if (ret < 0)
+    return -1;
+  ret = asprintf (&cpu_max_path, "%s/cpu.max", tmpdir);
+  if (ret < 0)
+    return -1;
+
+  ret = -1;
+  if (mkdir (cpu_max_path, 0700) == 0)
+    {
+      ret = read_cpu_max (cgroup_path, &quota, &period, &has_period, &err);
+      if (ret < 0)
+        {
+          ret = crun_error_get_errno (&err) == EISDIR ? 0 : -1;
+          crun_error_release (&err);
+        }
+      else
+        ret = -1;
+      rmdir (cpu_max_path);
+    }
+  rmdir (tmpdir);
+
+  return ret;
+}
+
 int
 main ()
 {
@@ -281,6 +449,10 @@ main ()
   RUN_TEST (test_convert_shares_boundary);
   RUN_TEST (test_read_proc_cgroup_null_params);
   RUN_TEST (test_read_proc_cgroup_selective);
+  RUN_TEST (test_parse_cpu_max);
+  RUN_TEST (test_parse_cpu_max_invalid);
+  RUN_TEST (test_read_cpu_max_missing);
+  RUN_TEST (test_read_cpu_max_unreadable);
   print_tap_plan ();
   return 0;
 }

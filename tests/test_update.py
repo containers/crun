@@ -556,6 +556,57 @@ def test_update_unified_resources():
             run_crun_command(["delete", "-f", cid])
 
 
+def test_update_unified_cpu_max_keeps_period_systemd():
+    """Test that a unified cpu.max without a period keeps the period in systemd."""
+    if not is_cgroup_v2_unified() or is_rootless():
+        return (77, "requires cgroup v2 and root privileges")
+    if 'SYSTEMD' not in get_crun_feature_string():
+        return (77, "systemd support not compiled in")
+    if not running_on_systemd():
+        return (77, "not running on systemd")
+
+    conf = base_config()
+    add_all_namespaces(conf, cgroupns=True)
+    conf['process']['args'] = ['/init', 'pause']
+
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True,
+                                    cgroup_manager='systemd')
+        scope = json.loads(run_crun_command(['state', cid]))['systemd-scope']
+
+        run_crun_command(['update', '--cpu-quota', '100000', '--cpu-period', '200000', cid])
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump({'unified': {'cpu.max': '50000'}}, f)
+            resources_file = f.name
+
+        try:
+            run_crun_command(['update', '--resources', resources_file, cid])
+        finally:
+            os.unlink(resources_file)
+
+        out = run_crun_command(['exec', cid, '/init', 'cat', '/sys/fs/cgroup/cpu.max']).strip()
+        if out != '50000 200000':
+            logger.info("wrong cpu.max for the container cgroup: %s", out)
+            return -1
+
+        for prop, expected in [('CPUQuotaPeriodUSec', '200ms'), ('CPUQuotaPerSecUSec', '250ms')]:
+            out = systemctl_show(scope, prop)
+            if out != expected:
+                logger.info("wrong %s for the systemd scope: expected %s, got %s", prop, expected, out)
+                return -1
+
+        return 0
+
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
 def run_crun_expect_failure(args):
     """Run a crun command that must fail, returning (returncode, output).
 
@@ -631,6 +682,7 @@ all_tests = {
     "update-cpuset-mems": test_update_cpuset_mems,
     "update-multiple-resources": test_update_multiple_resources,
     "update-unified-resources": test_update_unified_resources,
+    "update-unified-cpu-max-keeps-period-systemd": test_update_unified_cpu_max_keeps_period_systemd,
     "update-without-cgroup-memory": test_update_without_cgroup_memory,
     "update-without-cgroup-device-no-access": test_update_without_cgroup_device_no_access,
 }

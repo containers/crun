@@ -46,4 +46,6 @@ int libcrun_cgroup_ensure_not_frozen (const char *cgroup_path, libcrun_error_t *
 
 int parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err);
 
+int read_cpu_max (const char *path, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err);
+
 #endif

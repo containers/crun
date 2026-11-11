@@ -27,6 +27,7 @@
 #include "ebpf.h"
 #include "utils.h"
 #include "status.h"
+#include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -1448,16 +1449,36 @@ get_cgroup_dirfd_path (int dirfd, char **path, libcrun_error_t *err)
   return crun_make_error (err, 0, "invalid cgroup path `%s`", cgroup_path);
 }
 
+/* Limits that the kernel enforces on cpu.max, in microseconds.  */
+#define CPU_MAX_MIN_USEC 1000
+#define CPU_MAX_MAX_PERIOD_USEC 1000000
+#define CPU_MAX_MAX_QUOTA_USEC ((1LL << 44) - 1)
+/* The kernel reads at most this many characters for QUOTA.  */
+#define CPU_MAX_QUOTA_MAX_LEN 20
+
+/* Skip whitespace other than newlines.  */
+static const char *
+skip_blanks (const char *it)
+{
+  while (*it != '\n' && isspace ((unsigned char) *it))
+    it++;
+  return it;
+}
+
 /* Parse a cpu.max value: "QUOTA [PERIOD]", where QUOTA is either a
-   number or "max" (returned as -1).  */
+   number or "max" (returned as -1), and PERIOD is a number.  QUOTA and
+   PERIOD must be on the same line, as each line of a unified value is
+   written separately, but empty lines may come before and after it.
+   Values that the kernel would reject are rejected too.  */
 int
 parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
 {
   const char *it = value;
   char *endptr = NULL;
 
-  while (*it == ' ')
+  while (*it == '\n')
     it++;
+  it = skip_blanks (it);
 
   errno = 0;
   if (has_prefix (it, "max"))
@@ -1467,24 +1488,68 @@ parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_pe
     }
   else
     {
+      if (UNLIKELY (! isdigit ((unsigned char) *it)))
+        return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+
       *quota = strtoll (it, &endptr, 10);
-      if (UNLIKELY (errno != 0 || endptr == it || *quota <= 0))
+      if (UNLIKELY (errno != 0 || endptr - it > CPU_MAX_QUOTA_MAX_LEN))
+        return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+      if (UNLIKELY (*quota < CPU_MAX_MIN_USEC || *quota > CPU_MAX_MAX_QUOTA_USEC))
         return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
     }
 
-  it = endptr;
-  while (*it == ' ')
-    it++;
+  it = skip_blanks (endptr);
 
   *has_period = false;
   if (*it && *it != '\n')
     {
+      /* strtoull() would also accept a sign, and wrap a negative value.  */
+      if (UNLIKELY (it == endptr || ! isdigit ((unsigned char) *it)))
+        return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+
       errno = 0;
       *period = strtoull (it, &endptr, 10);
-      if (UNLIKELY (errno != 0 || endptr == it || (*endptr && *endptr != '\n')))
+      if (UNLIKELY (errno != 0 || *period < CPU_MAX_MIN_USEC || *period > CPU_MAX_MAX_PERIOD_USEC))
         return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
       *has_period = true;
+      it = endptr;
     }
 
+  it = skip_blanks (it);
+  while (*it == '\n')
+    it++;
+  if (UNLIKELY (*it != '\0'))
+    return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+
   return 0;
+}
+
+/* Read and parse the cpu.max file of the cgroup at PATH.  Return 1 if it
+   was read, or 0 if it does not exist, e.g. when the cpu controller is not
+   enabled.  */
+int
+read_cpu_max (const char *path, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
+{
+  cleanup_free char *cpu_max_path = NULL;
+  cleanup_free char *content = NULL;
+  int ret;
+
+  ret = append_paths (&cpu_max_path, err, CGROUP_ROOT, path, "cpu.max", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_all_file (cpu_max_path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    {
+      if (crun_error_get_errno (err) != ENOENT)
+        return ret;
+      crun_error_release (err);
+      return 0;
+    }
+
+  ret = parse_cpu_max (content, quota, period, has_period, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 1;
 }
