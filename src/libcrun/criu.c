@@ -409,6 +409,72 @@ setup_lazy_pages (libcrun_error_t *err)
   return 0;
 }
 
+static bool
+devices_are_bind_mounted (runtime_spec_schema_config_schema *def, libcrun_container_t *container)
+{
+  size_t i;
+
+  if (! container->host_uid && ! has_user_namespace (def))
+    return false;
+
+  for (i = 0; i < def->mounts_len; i++)
+    if (path_is_slash_dev (def->mounts[i]->destination) && is_bind_mount (def->mounts[i], NULL, NULL))
+      return false;
+
+  return true;
+}
+
+/* With a user namespace the devices cannot be created with mknod, so they
+   are bind mounted: the devices in the configuration from a tmpfs where
+   they are created outside of the user namespace, the other ones from the
+   host.  Tell CRIU about these bind mounts.  On restore, DEVS_PATH is the
+   tmpfs with the devices in the configuration, or NULL to take them from
+   the host.  */
+static int
+register_devices_mounts (runtime_spec_schema_config_schema *def, struct libcriu_wrapper_s *libcriu_wrapper,
+                         bool is_restore, const char *devs_path, libcrun_error_t *err)
+{
+  struct device_s *it;
+  size_t i;
+  int ret;
+
+  for (i = 0; def->linux && i < def->linux->devices_len; i++)
+    {
+      const char *path = def->linux->devices[i]->path;
+      cleanup_free char *source = NULL;
+
+      if (devs_path)
+        {
+          xasprintf (&source, "%s/%zu", devs_path, i);
+          if (access (source, F_OK) < 0)
+            {
+              free (source);
+              source = NULL;
+            }
+        }
+
+      ret = libcriu_wrapper->criu_add_ext_mount (path, source ? source : path);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "CRIU: failed adding external mount for device `%s`", path);
+      if (is_restore)
+        add_restored_ext_mount (path, MS_NOSUID | MS_NOEXEC);
+    }
+
+  for (it = needed_devs; it->path; it++)
+    {
+      if (libcrun_is_configured_device (def, it->path))
+        continue;
+
+      ret = libcriu_wrapper->criu_add_ext_mount (it->path, it->path);
+      if (UNLIKELY (ret < 0))
+        return crun_make_error (err, -ret, "CRIU: failed adding external mount for device `%s`", it->path);
+      if (is_restore)
+        add_restored_ext_mount (it->path, MS_NOSUID | MS_NOEXEC);
+    }
+
+  return 0;
+}
+
 static int
 register_masked_paths_mounts (runtime_spec_schema_config_schema *def, libcrun_container_t *container,
                               struct libcriu_wrapper_s *libcriu_wrapper, bool is_restore, libcrun_error_t *err)
@@ -925,6 +991,13 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   if (UNLIKELY (ret < 0))
     return ret;
 
+  if (devices_are_bind_mounted (def, container))
+    {
+      ret = register_devices_mounts (def, libcriu_wrapper, false, NULL, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   /* CRIU tries to checkpoint and restore all namespaces. However,
    * namespaces could be shared between containers in a pod.
    * To address this, CRIU provides support for external namespaces.
@@ -1316,6 +1389,8 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   cleanup_close int inherit_new_pid_fd = -1;
   cleanup_close int image_fd = -1;
   cleanup_free char *root = NULL;
+  cleanup_free char *devs = NULL;
+  bool devs_mounted = false;
   cleanup_free char *bundle_cleanup = NULL;
   cleanup_free char *own_cgroups = NULL;
   cleanup_close int work_fd = -1;
@@ -1506,6 +1581,34 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = prepare_restore_mounts (def, root, err);
   if (UNLIKELY (ret < 0))
     goto out_umount;
+
+  if (devices_are_bind_mounted (def, container))
+    {
+      if (def->linux && def->linux->devices_len > 0 && geteuid () == 0)
+        {
+          ret = append_paths (&devs, err, bundle_cleanup, "criu-devs", NULL);
+          if (UNLIKELY (ret < 0))
+            goto out_umount;
+
+          ret = mkdir (devs, 0700);
+          if (UNLIKELY (ret < 0))
+            {
+              ret = crun_make_error (err, errno, "mkdir `%s`", devs);
+              free (devs);
+              devs = NULL;
+              goto out_umount;
+            }
+
+          ret = libcrun_create_devices_tmpfs (container, devs, err);
+          if (UNLIKELY (ret < 0))
+            goto out_umount;
+          devs_mounted = ret > 0;
+        }
+
+      ret = register_devices_mounts (def, libcriu_wrapper, true, devs_mounted ? devs : NULL, err);
+      if (UNLIKELY (ret < 0))
+        goto out_umount;
+    }
 
   ret = libcriu_wrapper->criu_set_root (root);
   if (UNLIKELY (ret != 0))
@@ -1754,6 +1857,13 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
   ret = 0;
 
 out_umount:
+  if (devs)
+    {
+      if (devs_mounted)
+        umount2 (devs, MNT_DETACH);
+      rmdir (devs);
+    }
+
   ret_out = umount (root);
   if (UNLIKELY (ret_out == -1))
     {
