@@ -1,3 +1,93 @@
+* crun-1.31
+
+- CVE-2026-115520: refuse CRIU external mount keys that CRIU cannot
+  read back.  An image could put "]:" in the resolved destination of a
+  bind mount and make crun restore bind mount a host path that
+  config.json never named into the container.
+- CVE-2026-115521: resolve the target of the deferred read-only
+  remounts through the procfs opened before pivot_root.  An image
+  controlling /proc/self/fd in the container could redirect the
+  read-only remount of the rootfs (and, on kernels without
+  mount_setattr, of any read-only mount) to another mount, leaving the
+  rootfs writable.
+- linux: do not defer the read-only remount of bind and cgroup mounts,
+  so crun does not create mount points in the source of a read-only
+  bind mount.  A mount point missing inside a read-only bind mount is
+  no longer created and the container fails to start.
+- criu: do not bind mount read-only sources while preparing the
+  restore.
+- Hardening against malicious images and containers: do not follow
+  symlinks from the host root for mount targets, tmpfs mount points,
+  `mounts add` and `mounts remove`; close the host root fd before
+  pivot_root; join an existing PID namespace only after pivot_root; set
+  the init non-dumpable before joining any namespace; make the notify
+  socket mount private; make the host /sys submounts read-only in the
+  user namespace fallback; verify device inodes before using them;
+  do not block on a FIFO in the rootfs; bound the openat2 EAGAIN
+  retries; remove the state directory and cgroup trees without
+  recursion; do not trust cgroup.kill alone to kill all the processes.
+- exec: reopen /dev/null from the container, do not share the session
+  keyring of the caller (also on restore), validate the container pid
+  before joining its namespaces, and do not treat an EOF on the sync
+  socket as a go-ahead.
+- exec: inherit rlimits, I/O priority, scheduler, memory policy and
+  oomScoreAdj from the container configuration, and apply the
+  oomScoreAdj of the exec process.
+- linux: keep the mount flags (e.g. nosuid, nodev) of the rootfs and
+  of bind mounts without mount flag options, also with a read-only
+  rootfs and with OPEN_TREE_NAMESPACE.
+- linux: keep the locked flags of bind mount sources with a user
+  namespace.
+- linux: do the container mounts also without a mount namespace,
+  unmount them on delete, and reject configurations that would change
+  the host mounts (rootfsPropagation, --no-pivot, "/" as rootfs).
+- linux: create mount targets with mode 0755, skip duplicate masked
+  paths, ignore the iversion, noiversion, silent and loud mount options.
+- linux: refuse uid/gid -1, duplicate rlimit entries and absolute
+  sysctl paths; fail if additionalGids cannot be set.
+- linux: do not hide the configured devices with a user namespace.
+- seccomp: do not cache a truncated BPF filter, regenerate the
+  seccomp.bpf file on restore, and do not run exec without a configured
+  filter.
+- ebpf: a device deny rule must match any of the requested accesses.
+- checkpoint, restore: add lazy pages support (--lazy-pages,
+  --page-server, --status-fd), compatible with runc.
+- restore: configure the cgroup before CRIU resumes the container,
+  restore the configured flags of the external mounts, handle the
+  devices of a container with a user namespace, and do not leave a
+  restored container behind on errors.
+- cgroup: set hugetlb reservation limits.
+- cgroup-systemd: support resources.cpu.idle, honor cpu.max, cpuset and
+  cpu.weight from the unified map, convert the swap limit for
+  MemorySwapMax, and set the CPU quota and period separately.
+- cgroup: do not ignore the limits of a rootless container without a
+  cgroup, and signal init on kill --all without a cgroup.
+- cgroup: handle threaded cgroups when reading pids.
+- update: add --cpu-burst and --cpu-idle, parse memory sizes (e.g.
+  50M), allow options after the container ID, and remove the swap
+  limit along with the memory one.
+- hooks: run poststop hooks when the creation fails, use the "created"
+  status for startContainer hooks, and pass the correct pid and bundle
+  to the in-container hooks.
+- terminal: do not translate NL to CR-NL, do not lose the output when
+  the container exits, handle a non-tty or non-pollable stdin and
+  stdout, and stop busy looping when the pty is hung up.
+- Close the inherited fds early in run, create and exec, and ignore
+  LISTEN_FDS meant for another process.
+- run, create: resolve a relative --pid-file against the current
+  directory.
+- Set HOME from passwd if it is empty.
+- container: treat an empty namespace path as unset.
+- container: fail delete if the cgroup cannot be destroyed.
+- crun: make --cgroup-manager errors compatible with runc.
+- libcrun: add a public API (libcrun.h) with an explicit export map;
+  crun, the Python and the Lua bindings use it.
+- krun: do not open the files the image ships at the krun paths, and
+  remount /proc before starting passt if the PID namespace was
+  detached.
+- wasmedge: fix the plugin mount path.
+- configure: --enable-criu fails without libcriu.
+
 * crun-1.30.1
 
 - CVE-2026-84042: add a proper fix for it.  The old version didn't
