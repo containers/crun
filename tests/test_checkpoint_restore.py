@@ -779,6 +779,153 @@ def test_cr_mount_flags():
     return 0
 
 
+# The mountpoints are recreated on restore in a rootfs that is under the
+# control of the container.  Nothing must be created in the source of a
+# read-only bind mount, as the container could not do it either.
+def test_cr_ro_bind_source_not_modified():
+    if r := _check_cr_requirements():
+        return r
+
+    cid = None
+    cr_dir = os.path.join(get_tests_root(), 'checkpoint-ro-bind-source')
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
+    ro_dir = os.path.join(get_tests_root(), 'ro-bind-source-ro')
+    rw_file = os.path.join(get_tests_root(), 'ro-bind-source-rw')
+    os.makedirs(ro_dir)
+    open(rw_file, 'w').close()
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf, netns=False)
+    conf['mounts'] += [
+        {"destination": "/ro", "type": "bind", "source": ro_dir, "options": ["bind", "ro"]},
+        {"destination": "/a/data", "type": "bind", "source": rw_file, "options": ["bind", "rw"]},
+    ]
+
+    def prepare_rootfs(rootfs):
+        # The symlinks in the destination of a mount are resolved to tell CRIU
+        # about it only if the path to the rootfs is absolute.
+        conf['root']['path'] = rootfs
+        with open(os.path.join(os.path.dirname(rootfs), 'config.json'), 'w') as f:
+            json.dump(conf, f)
+        # Hidden by the read-only mount.
+        os.makedirs(os.path.join(rootfs, 'ro', 'dir'))
+        os.symlink('/b/data', os.path.join(rootfs, 'ro', 'dir', 'data'))
+
+    try:
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True,
+            callback_prepare_rootfs=prepare_rootfs
+        )
+
+        if wait_for_state(cid) is None:
+            logger.info("test_cr_ro_bind_source_not_modified: the container did not start")
+            return -1
+
+        # A mountpoint cannot be renamed, its parent directory can, also from
+        # the container: move the second mount away, and make its destination
+        # a symlink to a path that does not exist in the read-only mount.
+        bundle = os.path.join(get_tests_root(), cid.split('-')[1])
+        rootfs = os.path.join(bundle, 'rootfs')
+        os.rename(os.path.join(rootfs, 'a'), os.path.join(rootfs, 'b'))
+        os.mkdir(os.path.join(rootfs, 'a'))
+        os.symlink('/ro/dir/data', os.path.join(rootfs, 'a', 'data'))
+
+        run_crun_command([
+            "checkpoint",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            cid
+        ])
+
+        run_crun_command([
+            "restore",
+            "-d",
+            "--image-path=%s" % cr_dir,
+            "--work-path=%s" % work_dir,
+            "--bundle=%s" % bundle,
+            cid
+        ])
+
+        content = os.listdir(ro_dir)
+        if content:
+            logger.info("test_cr_ro_bind_source_not_modified: created %s in the bind mount source", content)
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
+# The key of an external mount is its destination as resolved in the rootfs,
+# so the container chooses it.  CRIU stores it as "mnt[KEY]:VAL": a key that
+# has a meaning for CRIU must be refused.
+def test_cr_mount_invalid_key():
+    if r := _check_cr_requirements():
+        return r
+
+    cid = None
+    cr_dir = os.path.join(get_tests_root(), 'checkpoint-mount-invalid-key')
+    work_dir = os.path.join(get_tests_root(), 'work-dir')
+    source = os.path.join(get_tests_root(), 'mount-invalid-key')
+    os.makedirs(source, exist_ok=True)
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    conf['mounts'].append({"destination": "/a/data", "type": "bind", "source": source, "options": ["bind"]})
+
+    # The destination is resolved under the rootfs path recorded in the
+    # container state, use an absolute one as the container engines do.
+    def prepare_rootfs(rootfs):
+        conf['root']['path'] = rootfs
+        with open(os.path.join(os.path.dirname(rootfs), "config.json"), "w") as f:
+            json.dump(conf, f)
+
+    try:
+        _, cid = run_and_get_output(
+            conf,
+            all_dev_null=True,
+            use_popen=True,
+            detach=True,
+            callback_prepare_rootfs=prepare_rootfs
+        )
+
+        if wait_for_state(cid) is None:
+            logger.info("test_cr_mount_invalid_key: the container did not start")
+            return -1
+
+        # A mount point cannot be replaced, but its parent directory can,
+        # also from inside the container.
+        rootfs = os.path.join(get_tests_root(), cid.split('-')[1], 'rootfs')
+        os.rename(os.path.join(rootfs, 'a'), os.path.join(rootfs, 'b'))
+        os.mkdir(os.path.join(rootfs, 'a'))
+
+        for target in ("/b/data]:/name", "/"):
+            os.symlink(target, os.path.join(rootfs, 'a', 'data'))
+            try:
+                run_crun_command_raw([
+                    "checkpoint",
+                    "--image-path=%s" % cr_dir,
+                    "--work-path=%s" % work_dir,
+                    cid
+                ])
+                logger.info("test_cr_mount_invalid_key: checkpoint succeeded with `%s`", target)
+                return -1
+            except subprocess.CalledProcessError as e:
+                if b"invalid external mount destination" not in e.output:
+                    logger.info("test_cr_mount_invalid_key: unexpected error with `%s`: %s", target, e.output)
+                    return -1
+            os.unlink(os.path.join(rootfs, 'a', 'data'))
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+    return 0
+
+
 def test_cr_with_ext_ns():
     if r := _check_cr_requirements(min_criu_version=31601):
         return r
@@ -1001,6 +1148,8 @@ all_tests = {
     "checkpoint-restore-long-stdin-path": test_cr_long_stdin_path,
     "checkpoint-restore-exec-seccomp": test_cr_exec_seccomp,
     "checkpoint-restore-mount-flags": test_cr_mount_flags,
+    "checkpoint-restore-ro-bind-source-not-modified": test_cr_ro_bind_source_not_modified,
+    "checkpoint-restore-mount-invalid-key": test_cr_mount_invalid_key,
     "checkpoint-restore-ext-ns": test_cr_with_ext_ns,
     "checkpoint-restore-failed-cgroup-cleanup": test_cr_failed_restore_cgroup_cleanup,
     "checkpoint-restore-named-cgroup-hierarchy": test_cr_named_cgroup_hierarchy,

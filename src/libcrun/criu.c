@@ -383,6 +383,25 @@ criu_check_mem_track (libcrun_error_t *err)
 
 #  endif
 
+/* CRIU stores an external mount as the string "mnt[KEY]:VAL", looks it up
+   by prefix and reads "mnt[]" as a request to autodetect external mounts.
+   KEY comes from the container rootfs, refuse anything CRIU would not read
+   back as KEY.  */
+static int
+add_ext_bind_mount (const char *key, const char *val, libcrun_error_t *err)
+{
+  int ret;
+
+  if (UNLIKELY (key[0] == '\0' || strstr (key, "]:") != NULL))
+    return crun_make_error (err, 0, "CRIU: invalid external mount destination `%s`", key);
+
+  ret = libcriu_wrapper->criu_add_ext_mount (key, val);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", val);
+
+  return 0;
+}
+
 static int
 setup_lazy_pages (libcrun_error_t *err)
 {
@@ -981,9 +1000,9 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
           if (has_prefix (dest_in_root, status->rootfs))
             dest_in_root += safe_strlen (status->rootfs);
 
-          ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, dest_in_root);
+          ret = add_ext_bind_mount (dest_in_root, dest_in_root, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", def->mounts[i]->destination);
+            return ret;
         }
     }
 
@@ -1132,6 +1151,28 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status, lib
   return 0;
 }
 
+/* Whether the options of MNT ask for a read-only mount.  */
+static bool
+is_read_only_mount (runtime_spec_schema_defs_mount *mnt)
+{
+  bool read_only = false;
+  size_t i;
+
+  for (i = 0; i < mnt->options_len; i++)
+    {
+      const struct propagation_flags_s *prop;
+
+      if (mnt->options[i] == NULL)
+        continue;
+
+      prop = libcrun_str2mount_flags (mnt->options[i]);
+      if (prop && (prop->flags & MS_RDONLY))
+        read_only = ! prop->clear;
+    }
+
+  return read_only;
+}
+
 static int
 prepare_restore_mounts_internal (runtime_spec_schema_config_schema *def, char *root, const char **mounted,
                                  size_t *n_mounted, libcrun_error_t *err)
@@ -1207,8 +1248,16 @@ prepare_restore_mounts_internal (runtime_spec_schema_config_schema *def, char *r
       /* Mount a bind mount source now, so that the mountpoints of the
        * mounts inside it (e.g. a nested bind mount) are created in the
        * source, where CRIU expects them.  This also happens during the
-       * initial container creation, as the mounts are done in order.  */
-      if (is_bind_mount (def->mounts[i], NULL, &nofollow))
+       * initial container creation, as the mounts are done in order.
+       *
+       * Skip read-only bind mounts: the mount here is writable, and the
+       * rootfs is controlled by the container, which can turn the
+       * destination of a later mount into a symlink pointing inside the
+       * read-only mount, so that the missing mountpoint is created in its
+       * source.  Any mountpoint inside it must already exist in the
+       * source, as crun cannot create it there when the container is
+       * created either.  */
+      if (is_bind_mount (def->mounts[i], NULL, &nofollow) && ! is_read_only_mount (def->mounts[i]))
         {
           cleanup_close int dst_fd = -1;
           proc_fd_path_t fd_path;
@@ -1534,9 +1583,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status, libcru
               source = abs_source;
             }
 
-          ret = libcriu_wrapper->criu_add_ext_mount (dest_in_root, source);
+          ret = add_ext_bind_mount (dest_in_root, source, err);
           if (UNLIKELY (ret < 0))
-            return crun_make_error (err, -ret, "CRIU: failed adding external mount to `%s`", source);
+            return ret;
 
           for (j = 0; j < def->mounts[i]->options_len; j++)
             {
