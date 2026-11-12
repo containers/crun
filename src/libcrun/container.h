@@ -188,6 +188,7 @@ struct annotations_info_s
   char *io_github_seccomp_libseccomp_version;
   bool run_oci_crun_checkpoint_enabled;
   char *run_oci_crun_commit;
+  bool run_oci_crun_io_uring;
   char *run_oci_crun_version;
   bool run_oci_crun_wasm;
 };
