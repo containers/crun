@@ -7192,13 +7192,16 @@ libcrun_handle_pidfd_receiver (pid_t pid, libcrun_container_t *container, libcru
   return send_fd_to_socket (client_fd, pidfd, err);
 }
 
-static bool
-has_exec_cpu_affinity (runtime_spec_schema_config_schema_process *process)
+static const char *
+get_exec_cpu_affinity (runtime_spec_schema_config_schema_process *process, bool initial)
 {
-  if (process == NULL || process->exec_cpu_affinity == NULL)
-    return false;
-  return (! is_empty_string (process->exec_cpu_affinity->initial))
-         || (! is_empty_string (process->exec_cpu_affinity->final));
+  if (process == NULL)
+    return NULL;
+  if (process->cpu_affinity)
+    return initial ? process->cpu_affinity->exec_runtime : process->cpu_affinity->exec_container;
+  if (process->exec_cpu_affinity)
+    return initial ? process->exec_cpu_affinity->initial : process->exec_cpu_affinity->final;
+  return NULL;
 }
 
 pid_t
@@ -7547,19 +7550,9 @@ join_process_parent_helper (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, errno, "waitpid for exec child pid");
 
-  if (process && process->exec_cpu_affinity)
-    {
-      ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->initial, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
-
-  if (! has_exec_cpu_affinity (process))
-    {
-      ret = libcrun_reset_cpu_affinity_mask (pid, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  ret = libcrun_set_cpu_affinity_or_reset (pid, get_exec_cpu_affinity (process, true), err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   if (need_move_to_cgroup)
     {
@@ -7585,12 +7578,9 @@ join_process_parent_helper (libcrun_context_t *context,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (process && process->exec_cpu_affinity)
-    {
-      ret = libcrun_set_cpu_affinity_from_string (pid, process->exec_cpu_affinity->final, err);
-      if (UNLIKELY (ret < 0))
-        return ret;
-    }
+  ret = libcrun_set_cpu_affinity_from_string (pid, get_exec_cpu_affinity (process, false), err);
+  if (UNLIKELY (ret < 0))
+    return ret;
 
   ret = libcrun_apply_intelrdt (context->id, container, pid, LIBCRUN_INTELRDT_MOVE, err);
   if (UNLIKELY (ret < 0))
@@ -7860,7 +7850,7 @@ libcrun_join_process (libcrun_context_t *context,
 
   /* Do not join the cgroup immediately if an initial CPU affinity mask is specified, so that
      the process can set the cpu affinity before joining the target cgroup.  */
-  if (cgroup_dirfd < 0 || (process->exec_cpu_affinity && process->exec_cpu_affinity->initial))
+  if (cgroup_dirfd < 0 || ! is_empty_string (get_exec_cpu_affinity (process, true)))
     need_move_to_cgroup = true;
   else
     {
