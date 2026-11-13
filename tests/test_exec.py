@@ -823,6 +823,56 @@ def test_exec_oom_score_adj():
             run_crun_command(["delete", "-f", cid])
         shutil.rmtree(tempdir)
 
+def test_exec_oom_score_adj_below_min():
+    """exec must not fail when the process asks for a value below the
+    minimum set by a privileged writer, e.g. systemd OOMScoreAdjust=."""
+    if is_rootless() or shutil.which("setpriv") is None:
+        return 77
+    with open("/proc/self/oom_score_adj") as f:
+        current = int(f.read())
+    if current > 800:
+        return 77
+    floor = current + 100
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    add_all_namespaces(conf)
+    cid = None
+    tempdir = tempfile.mkdtemp()
+
+    def set_floor():
+        # A write with CAP_SYS_RESOURCE also sets the minimum for this process.
+        with open("/proc/self/oom_score_adj", "w") as f:
+            f.write(str(floor))
+
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            json.dump({
+                "user": {"uid": 0, "gid": 0},
+                "terminal": False,
+                "cwd": "/",
+                "args": ["/init", "cat", "/proc/self/oom_score_adj"],
+                "oomScoreAdj": current,
+            }, f)
+
+        args = ["setpriv", "--bounding-set", "-sys_resource", get_crun_path(),
+                "--root", get_tests_root_status(), "exec", "--process", process_file, cid]
+        out = subprocess.check_output(args, close_fds=False, preexec_fn=set_floor).decode().strip()
+        if out != str(floor):
+            logger.info("oom_score_adj below the minimum %s != %d", out, floor)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test_exec_oom_score_adj_below_min failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
+
 all_tests = {
     "exec" : test_exec,
     "exec-not-exists" : test_exec_not_exists,
@@ -848,6 +898,7 @@ all_tests = {
     "exec-exit-code" : test_exec_exit_code,
     "exec-dev-null-reopened" : test_exec_dev_null_reopened,
     "exec-oom-score-adj" : test_exec_oom_score_adj,
+    "exec-oom-score-adj-below-min" : test_exec_oom_score_adj_below_min,
 }
 
 if __name__ == "__main__":

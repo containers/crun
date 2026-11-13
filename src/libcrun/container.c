@@ -4523,10 +4523,17 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
     }
 
   /* The exec process inherits it from us.  This must be done before we drop
-     the dumpable flag, which makes /proc/self/oom_score_adj owned by root.  */
+     the dumpable flag, which makes /proc/self/oom_score_adj owned by root.
+     Without CAP_SYS_RESOURCE, the kernel refuses with EACCES a value below the
+     minimum set by a privileged writer, e.g. systemd OOMScoreAdjust=.  */
   ret = libcrun_set_oom (container, process, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    {
+      if (crun_error_get_errno (err) != EACCES)
+        return ret;
+      libcrun_debug ("Cannot lower the OOM score adj to `%d`, keep the inherited value", process->oom_score_adj);
+      crun_error_release (err);
+    }
 
   ret = prctl (PR_SET_DUMPABLE, 0, 0, 0, 0);
   if (UNLIKELY (ret < 0))
