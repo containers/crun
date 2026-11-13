@@ -1476,6 +1476,24 @@ bpfprog_path_from_scope (char **path, const char *scope, libcrun_error_t *err)
   return append_paths (path, err, CRUN_BPF_DIR, flat_scope, NULL);
 }
 
+/* Best effort.  */
+static void
+remove_bpf_program (const char *scope)
+{
+  cleanup_free char *path = NULL;
+  libcrun_error_t tmp_err = NULL;
+  int ret;
+
+  ret = bpfprog_path_from_scope (&path, scope, &tmp_err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (&tmp_err);
+      return;
+    }
+
+  unlink (path);
+}
+
 static int
 add_bpf_program (sd_bus_message *m,
                  bool is_update,
@@ -2198,14 +2216,14 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
           continue;
         }
 
-      return ret;
+      goto fail;
     }
 
   suffix = find_systemd_subgroup (args->annotations);
 
   ret = systemd_finalize (args, &path, cgroup_mode, suffix, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    goto fail;
 
   /* Remove the suffix that was added by systemd_finalize.  */
   if (is_empty_string (suffix))
@@ -2224,7 +2242,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
      the scope is.  */
   ret = libcrun_cgroup_ensure_not_frozen (scope_path, err);
   if (UNLIKELY (ret < 0))
-    return ret;
+    goto fail;
 
   /* Verify that systemd has actually installed the eBPF device filter if one was requested.
      eBPF programs are attached to the systemd scope, not the subgroup.  */
@@ -2232,7 +2250,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
     {
       ret = verify_ebpf_device_filter_installed (scope_path, err);
       if (UNLIKELY (ret < 0))
-        return ret;
+        goto fail;
     }
 
   out->path = path;
@@ -2241,6 +2259,11 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   out->scope = scope;
   scope = NULL;
   return 0;
+
+fail:
+  if (out->bpf_dev_set)
+    remove_bpf_program (scope);
+  return ret;
 }
 
 char *
@@ -2279,7 +2302,6 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
                                 libcrun_error_t *err)
 {
   cleanup_free char *path_to_scope = NULL;
-  cleanup_free char *bpfprog = NULL;
   int mode;
   int ret;
 
@@ -2295,11 +2317,7 @@ libcrun_destroy_cgroup_systemd (struct libcrun_cgroup_status *cgroup_status,
   if (UNLIKELY (ret < 0))
     crun_error_release (err);
 
-  ret = bpfprog_path_from_scope (&bpfprog, cgroup_status->scope, err);
-  if (UNLIKELY (ret < 0))
-    crun_error_release (err);
-  else
-    unlink (bpfprog); // Best effort.
+  remove_bpf_program (cgroup_status->scope);
 
   path_to_scope = get_cgroup_scope_path (cgroup_status->path, cgroup_status->scope);
 
