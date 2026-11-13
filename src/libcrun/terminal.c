@@ -90,6 +90,7 @@ libcrun_set_raw (int fd, void **current_status, libcrun_error_t *err)
 
   cfmakeraw (&termios);
   termios.c_iflag = 0;
+  termios.c_oflag |= OPOST;
 
   ret = tcsetattr (fd, TCSANOW, &termios);
   if (UNLIKELY (ret < 0))
