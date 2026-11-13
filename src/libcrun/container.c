@@ -1755,6 +1755,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
   if (UNLIKELY (exec_path == NULL))
     return crun_make_error (err, 0, "executable path not specified");
 
+  if (def->process->cpu_affinity)
+    {
+      ret = libcrun_set_cpu_affinity_from_string (0, def->process->cpu_affinity->start_container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (def->hooks && def->hooks->start_container_len)
     {
       libcrun_container_t *container = entrypoint_args->container;
@@ -2980,7 +2987,7 @@ set_scheduler (pid_t pid, runtime_spec_schema_config_schema *def, libcrun_error_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_reset_cpu_affinity_mask (pid, err);
+  ret = libcrun_set_cpu_affinity_or_reset (pid, def->process && def->process->cpu_affinity ? def->process->cpu_affinity->create_container : NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3090,6 +3097,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
       if (cgroup_mode != CGROUP_MODE_UNIFIED)
         libcrun_warning ("cgroup v1 is deprecated and will be removed in a future release.  Use cgroup v2");
+    }
+
+  if (def->process && def->process->cpu_affinity)
+    {
+      ret = libcrun_set_cpu_affinity_from_string (0, def->process->cpu_affinity->create_runtime, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = setup_container_hooks_output (container, def, &container_args, &hooks_out_fd, &hooks_err_fd, err);

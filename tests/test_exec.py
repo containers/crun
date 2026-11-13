@@ -430,7 +430,7 @@ def test_exec_cpu_affinity():
                 return parts[1].strip()
         return ""
 
-    def exec_and_get_affinity_mask(cid, exec_cpu_affinity=None):
+    def exec_and_get_affinity_mask(cid, exec_cpu_affinity=None, cpu_affinity=None):
         process_file = os.path.join(tempdir, "process.json")
         with open(process_file, "w") as f:
             process = {
@@ -448,6 +448,8 @@ def test_exec_cpu_affinity():
             }
             if exec_cpu_affinity is not None:
                 process["execCPUAffinity"] = exec_cpu_affinity
+            if cpu_affinity is not None:
+                process["cpuAffinity"] = cpu_affinity
             json.dump(process, f)
 
         out = run_crun_command(["exec", "--process", process_file, cid])
@@ -476,6 +478,11 @@ def test_exec_cpu_affinity():
         mask = exec_and_get_affinity_mask(cid, {"initial" : "1", "final" : "0-3"})
         if mask != "0-3":
             logger.info("cpu mask %s != 0-3", mask)
+            return -1
+
+        mask = exec_and_get_affinity_mask(cid, {"final" : "0"}, {"execRuntime" : "1", "execContainer" : "0-2"})
+        if mask != "0-2":
+            logger.info("cpu mask %s != 0-2", mask)
             return -1
         return 0
     finally:
