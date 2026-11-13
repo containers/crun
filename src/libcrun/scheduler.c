@@ -250,6 +250,9 @@ libcrun_set_cpu_affinity_from_string (pid_t pid, const char *str, libcrun_error_
   if (is_empty_string (str))
     return 0;
 
+  if (strcmp (str, "all") == 0)
+    return libcrun_reset_cpu_affinity_mask (pid, err);
+
   ret = cpuset_string_to_bitmask (str, &bitmask, &bitmask_size, err);
   if (UNLIKELY (ret < 0))
     return ret;
@@ -274,4 +277,12 @@ libcrun_set_cpu_affinity_from_string (pid_t pid, const char *str, libcrun_error_
   if (UNLIKELY (ret < 0))
     return crun_make_error (err, saved_errno, "sched_setaffinity");
   return 0;
+}
+
+int
+libcrun_set_cpu_affinity_or_reset (pid_t pid, const char *str, libcrun_error_t *err)
+{
+  if (is_empty_string (str))
+    return libcrun_reset_cpu_affinity_mask (pid, err);
+  return libcrun_set_cpu_affinity_from_string (pid, str, err);
 }
