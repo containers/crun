@@ -332,7 +332,7 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
                        command='run', env=None, use_popen=False, hide_stderr=False, cgroup_manager=None,
                        all_dev_null=False, stdin_dev_null=False, id_container=None, relative_config_path=None,
                        chown_rootfs_to=None, callback_prepare_rootfs=None, debug=False,
-                       bundle_via_symlink=False, console_socket=None):
+                       bundle_via_symlink=False, console_socket=None, stdin=None, stdout=None):
 
     # Some tests require that the container user, which might not be the
     # same user as the person running the tests, is able to resolve the full path
@@ -416,8 +416,6 @@ def run_and_get_output(config, detach=False, preserve_fds=None, pid_file=None,
     stderr = subprocess.STDOUT
     if hide_stderr:
         stderr = None
-    stdin = None
-    stdout = None
     # For the initial limited checkpoint/restore support everything
     # has to be redirect to /dev/null
     if all_dev_null:
