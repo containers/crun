@@ -364,6 +364,7 @@ def test_exec_no_new_privs():
     """Set the no new privileges value for the process"""
     conf = base_config()
     conf['process']['args'] = ['/init', 'pause']
+    conf['process']['noNewPrivileges'] = False
     add_all_namespaces(conf)
     conf['process']['capabilities'] = {}
     cid = None
@@ -382,6 +383,42 @@ def test_exec_no_new_privs():
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
+    return 0
+
+def test_exec_inherit_no_new_privs():
+    """The exec process inherits noNewPrivileges from the container config"""
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    conf['process']['noNewPrivileges'] = True
+    add_all_namespaces(conf)
+    conf['process']['capabilities'] = {}
+    cid = None
+    tempdir = tempfile.mkdtemp()
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/status"])
+        proc_status = parse_proc_status(out)
+        if proc_status["NoNewPrivs"] != "1":
+            logger.info("NoNewPrivs is not inherited: %s", proc_status["NoNewPrivs"])
+            return -1
+
+        # An explicit value in the process file is used as is.
+        process_file = os.path.join(tempdir, "process.json")
+        with open(process_file, "w") as f:
+            json.dump({
+                "args": ["/init", "cat", "/proc/self/status"],
+                "cwd": "/",
+                "noNewPrivileges": False
+            }, f)
+        out = run_crun_command(["exec", "--process", process_file, cid])
+        proc_status = parse_proc_status(out)
+        if proc_status["NoNewPrivs"] != "0":
+            logger.info("explicit noNewPrivileges=false is ignored: %s", proc_status["NoNewPrivs"])
+            return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        shutil.rmtree(tempdir)
     return 0
 
 def test_exec_write_pid_file():
@@ -833,6 +870,7 @@ all_tests = {
     "exec-add-environment_variable" : test_exec_add_env,
     "exec-set-user-with-uid-gid" : test_exec_set_user,
     "exec_add_no_new_privileges" : test_exec_no_new_privs,
+    "exec_inherit_no_new_privileges" : test_exec_inherit_no_new_privs,
     "exec_write_pid_file" : test_exec_write_pid_file,
     "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
     "exec-test-uid-tty": test_uid_tty,
