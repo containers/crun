@@ -1688,6 +1688,10 @@ set_home_env (uid_t id)
   cleanup_free char *buf = NULL;
   long buf_size;
   cleanup_file FILE *stream = NULL;
+  cleanup_close int rootfd = -1;
+  cleanup_close int fd = -1;
+  libcrun_error_t err = NULL;
+  struct stat st;
 
   buf_size = sysconf (_SC_GETPW_R_SIZE_MAX);
   if (buf_size < 0)
@@ -1695,9 +1699,31 @@ set_home_env (uid_t id)
 
   buf = xmalloc (buf_size);
 
-  stream = fopen ("/etc/passwd", "re");
+  rootfd = open ("/", O_PATH | O_DIRECTORY | O_CLOEXEC);
+  if (UNLIKELY (rootfd < 0))
+    return -1;
+
+  fd = safe_openat (rootfd, "/", "etc/passwd", O_RDONLY | O_CLOEXEC, 0, &err);
+  if (UNLIKELY (fd < 0))
+    {
+      errno = crun_error_get_errno (&err);
+      crun_error_release (&err);
+      return -1;
+    }
+
+  if (UNLIKELY (fstat (fd, &st) < 0))
+    return -1;
+
+  if (UNLIKELY (! S_ISREG (st.st_mode)))
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  stream = fdopen (fd, "re");
   if (stream == NULL)
     return -1;
+  fd = -1;
 
   for (;;)
     {
