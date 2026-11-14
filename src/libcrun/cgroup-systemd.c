@@ -1065,7 +1065,7 @@ append_io_weight (sd_bus_message *m, char **missing_properties, runtime_spec_sch
       char name[64];
       int len;
 
-      len = snprintf (name, sizeof (name), "%" PRIu64 ":%" PRIu64,
+      len = snprintf (name, sizeof (name), "/dev/block/%" PRIu64 ":%" PRIu64,
                       resources->block_io->weight_device[i]->major,
                       resources->block_io->weight_device[i]->minor);
       if (UNLIKELY (len >= (int) sizeof (name)))

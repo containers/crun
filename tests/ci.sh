@@ -247,6 +247,9 @@ runc-integration | runc-integration-rootless)
     # the cgroupfs and the systemd cgroup manager.
     build
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    # Make the BFQ I/O scheduler available, if possible, for the
+    # "per-device io weight for bfq" test, which is skipped otherwise.
+    sudo modprobe bfq || true
     # The test helpers do not need libpathrs, which is not packaged.
     group "build runc test binaries" \
         make -C runc RUNC_BUILDTAGS=-libpathrs test-binaries
