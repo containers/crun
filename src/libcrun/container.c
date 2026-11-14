@@ -1720,6 +1720,13 @@ container_init (void *args, char *notify_socket, int sync_socket, libcrun_error_
 
   crun_set_output_handler (log_write_to_stderr, NULL);
 
+  if (def->process && def->process->cpu_affinity)
+    {
+      ret = libcrun_set_cpu_affinity_from_string (0, def->process->cpu_affinity->start_container, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
   if (def->process && def->process->no_new_privileges)
     {
       char **seccomp_flags = NULL;
@@ -2980,7 +2987,7 @@ set_scheduler (pid_t pid, runtime_spec_schema_config_schema *def, libcrun_error_
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = libcrun_reset_cpu_affinity_mask (pid, err);
+  ret = libcrun_set_cpu_affinity_or_reset (pid, def->process && def->process->cpu_affinity ? def->process->cpu_affinity->create_container : NULL, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
@@ -3090,6 +3097,13 @@ libcrun_container_run_internal (libcrun_container_t *container, libcrun_context_
 
       if (cgroup_mode != CGROUP_MODE_UNIFIED)
         libcrun_warning ("cgroup v1 is deprecated and will be removed in a future release.  Use cgroup v2");
+    }
+
+  if (def->process && def->process->cpu_affinity)
+    {
+      ret = libcrun_set_cpu_affinity_from_string (0, def->process->cpu_affinity->create_runtime, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   ret = setup_container_hooks_output (container, def, &container_args, &hooks_out_fd, &hooks_err_fd, err);
@@ -4469,7 +4483,7 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   pipefd1 = container_ret_status[1];
 
   /* If the new process block doesn't specify a SELinux label, AppArmor profile, user,
-     I/O priority, scheduler or OOM score adjustment, then use the configuration from
+     I/O priority, scheduler, CPU affinity or OOM score adjustment, then use the configuration from
      the original config file.  */
   if (container->container_def->process)
     {
@@ -4477,6 +4491,13 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         {
           process->io_priority = clone_runtime_spec_schema_config_schema_process_io_priority (container->container_def->process->io_priority);
           if (process->io_priority == NULL)
+            OOM ();
+        }
+
+      if (process->cpu_affinity == NULL && process->exec_cpu_affinity == NULL && container->container_def->process->cpu_affinity)
+        {
+          process->cpu_affinity = clone_runtime_spec_schema_config_schema_process_cpu_affinity (container->container_def->process->cpu_affinity);
+          if (process->cpu_affinity == NULL)
             OOM ();
         }
 

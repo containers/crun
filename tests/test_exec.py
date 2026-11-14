@@ -430,7 +430,7 @@ def test_exec_cpu_affinity():
                 return parts[1].strip()
         return ""
 
-    def exec_and_get_affinity_mask(cid, exec_cpu_affinity=None):
+    def exec_and_get_affinity_mask(cid, exec_cpu_affinity=None, cpu_affinity=None):
         process_file = os.path.join(tempdir, "process.json")
         with open(process_file, "w") as f:
             process = {
@@ -448,6 +448,8 @@ def test_exec_cpu_affinity():
             }
             if exec_cpu_affinity is not None:
                 process["execCPUAffinity"] = exec_cpu_affinity
+            if cpu_affinity is not None:
+                process["cpuAffinity"] = cpu_affinity
             json.dump(process, f)
 
         out = run_crun_command(["exec", "--process", process_file, cid])
@@ -477,12 +479,42 @@ def test_exec_cpu_affinity():
         if mask != "0-3":
             logger.info("cpu mask %s != 0-3", mask)
             return -1
+
+        mask = exec_and_get_affinity_mask(cid, {"final" : "0"}, {"execRuntime" : "1", "execContainer" : "0-2"})
+        if mask != "0-2":
+            logger.info("cpu mask %s != 0-2", mask)
+            return -1
         return 0
     finally:
         if cid is not None:
             run_crun_command(["delete", "-f", cid])
         shutil.rmtree(tempdir)
     return 0
+
+def test_exec_cpu_affinity_from_config():
+    if len(os.sched_getaffinity(0)) < 4:
+        return 77
+
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'pause']
+    conf['process']['cpuAffinity'] = {"execRuntime" : "1", "execContainer" : "0-2"}
+    add_all_namespaces(conf)
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        out = run_crun_command(["exec", cid, "/init", "cat", "/proc/self/status"])
+        mask = ""
+        for l in out.split("\n"):
+            parts = l.split(":")
+            if parts[0] == "Cpus_allowed_list":
+                mask = parts[1].strip()
+        if mask != "0-2":
+            logger.info("cpu mask %s != 0-2", mask)
+            return -1
+        return 0
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
 
 def test_exec_getpgrp():
     conf = base_config()
@@ -837,6 +869,7 @@ all_tests = {
     "exec_populate_home_env_from_process_uid" : test_exec_populate_home_env_from_process_uid,
     "exec-test-uid-tty": test_uid_tty,
     "exec-cpu-affinity": test_exec_cpu_affinity,
+    "exec-cpu-affinity-from-config": test_exec_cpu_affinity_from_config,
     "exec-getpgrp": test_exec_getpgrp,
     "exec-session-keyring": test_exec_session_keyring,
     "exec-help" : test_exec_help,
