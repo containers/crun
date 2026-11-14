@@ -17,6 +17,7 @@
 
 import json
 import os
+import pty
 import socket
 import subprocess
 import tempfile
@@ -403,6 +404,70 @@ def test_terminal_readonly_rootfs_no_dev_tmpfs():
         return -1
 
 
+def read_all(fd):
+    out = b''
+    while True:
+        try:
+            data = os.read(fd, 4096)
+        except OSError:
+            break
+        if not data:
+            break
+        out += data
+    return out
+
+
+def run_on_tty(command, stdout_to_tty):
+    """Run the container (COMMAND is None), or COMMAND in a running one,
+    with stdin on a new pty, and return what reaches stdout."""
+    master, slave = pty.openpty()
+    stdout = slave if stdout_to_tty else subprocess.PIPE
+    cid = None
+    try:
+        conf = base_config()
+        add_all_namespaces(conf)
+        if command is None:
+            conf['process']['terminal'] = True
+            conf['process']['args'] = ['/init', 'echo', 'a\nb\n']
+            p, _ = run_and_get_output(conf, hide_stderr=True, use_popen=True,
+                                      stdin=slave, stdout=stdout)
+        else:
+            conf['process']['args'] = ['/init', 'pause']
+            _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+            args = [get_crun_path(), "--root", get_tests_root_status()] + command + [cid, '/init', 'echo', 'a\nb\n']
+            p = subprocess.Popen(args, stdin=slave, stdout=stdout, close_fds=False)
+        os.close(slave)
+        slave = -1
+        if stdout_to_tty:
+            out = read_all(master)
+        else:
+            out = p.stdout.read()
+        p.wait()
+        return out
+    finally:
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_terminal_newlines():
+    """Test that terminal output has \\r\\n on a terminal and \\n on a pipe."""
+    for command in [None, ['exec', '-t']]:
+        for stdout_to_tty, expected in [(True, b'a\r\nb\r\n'), (False, b'a\nb\n')]:
+            try:
+                out = run_on_tty(command, stdout_to_tty)
+            except Exception as e:
+                logger.info("test failed: %s", e)
+                return -1
+            if out != expected:
+                logger.info("command %s, stdout on tty %s: got %r, want %r",
+                            command or 'run', stdout_to_tty, out, expected)
+                return -1
+    return 0
+
+
 all_tests = {
     "terminal-allocation": test_terminal_allocation,
     "terminal-size": test_terminal_size,
@@ -417,6 +482,7 @@ all_tests = {
     "terminal-exec-no-tty": test_terminal_exec_no_tty,
     "terminal-env-term": test_terminal_env_term,
     "terminal-readonly-rootfs-no-dev-tmpfs": test_terminal_readonly_rootfs_no_dev_tmpfs,
+    "terminal-newlines": test_terminal_newlines,
 }
 
 if __name__ == "__main__":
