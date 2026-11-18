@@ -2331,10 +2331,12 @@ get_cgroup_scope_path (const char *cgroup_path, const char *scope)
 
   path_to_scope = xstrdup (cgroup_path);
 
-  cur = strchr (path_to_scope, '/');
-  while (cur)
+  cur = path_to_scope;
+  while (*cur == '/')
+    cur++;
+  while (*cur)
     {
-      char *next = strchr (cur + 1, '/');
+      char *next = strchr (cur, '/');
       if (next == NULL)
         break;
 
