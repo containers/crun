@@ -710,6 +710,11 @@ write_devices_resources_v2 (int dirfd, runtime_spec_schema_defs_linux_device_cgr
   size_t i;
   bool can_skip = true;
 
+  /* An error from the filter that reads its rules from a map is never ignored.  */
+  ret = libcrun_ebpf_devices_set (devs, devs_len, dirfd, err);
+  if (ret <= 0)
+    return ret;
+
   ret = write_devices_resources_v2_internal (dirfd, devs, devs_len, err);
   if (LIKELY (ret == 0))
     return 0;
@@ -1183,7 +1188,7 @@ write_cpuset_resources (int dirfd_cpuset, int cgroup2, runtime_spec_schema_confi
   return 0;
 }
 
-static int
+int
 open_cgroup_subsystem (const char *subsystem, const char *path, libcrun_error_t *err)
 {
   cleanup_free char *full_path = NULL;

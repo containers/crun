@@ -40,6 +40,8 @@ int update_cgroup_resources (const char *path,
                              bool need_devices,
                              libcrun_error_t *err);
 
+int open_cgroup_subsystem (const char *subsystem, const char *path, libcrun_error_t *err);
+
 struct bpf_program *create_dev_bpf (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
                                     libcrun_error_t *err);
 
