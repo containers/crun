@@ -211,7 +211,7 @@ EXTRA_DIST += src/libcrun/blake3/blake3.c \
 		src/libcrun/blake3/blake3_portable.c
 endif
 
-UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify tests/tests_libcrun_cgroup
+UNIT_TESTS = tests/tests_libcrun_utils tests/tests_libcrun_ring_buffer tests/tests_libcrun_errors tests/tests_libcrun_intelrdt tests/tests_libcrun_terminal tests/tests_libcrun_custom_handler tests/tests_libcrun_linux tests/tests_libcrun_signals tests/tests_libcrun_mount_flags tests/tests_libcrun_chroot_realpath tests/tests_libcrun_seccomp_notify tests/tests_libcrun_cgroup tests/tests_libcrun_ebpf_devices
 
 if ENABLE_CRUN
 bin_PROGRAMS = crun
@@ -303,6 +303,11 @@ tests_tests_libcrun_cgroup_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/liboci
 tests_tests_libcrun_cgroup_SOURCES = tests/tests_libcrun_cgroup.c
 tests_tests_libcrun_cgroup_LDADD = $(TESTS_LDADD)
 tests_tests_libcrun_cgroup_LDFLAGS = $(crun_LDFLAGS)
+
+tests_tests_libcrun_ebpf_devices_CFLAGS = $(WARN_CFLAGS) -I $(abs_top_builddir)/libocispec/src -I $(abs_top_srcdir)/libocispec/src $(JSON_C_CFLAGS) -I $(abs_top_builddir)/src -I $(abs_top_srcdir)/src
+tests_tests_libcrun_ebpf_devices_SOURCES = tests/tests_libcrun_ebpf_devices.c
+tests_tests_libcrun_ebpf_devices_LDADD = $(TESTS_LDADD)
+tests_tests_libcrun_ebpf_devices_LDFLAGS = $(crun_LDFLAGS)
 
 TEST_EXTENSIONS = .py
 PY_LOG_COMPILER = $(PYTHON)
