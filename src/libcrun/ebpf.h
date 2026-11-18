@@ -60,6 +60,13 @@ int libcrun_ebpf_devices_set (runtime_spec_schema_defs_linux_device_cgroup **dev
 int libcrun_ebpf_devices_update (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, int cgroup_fd,
                                  libcrun_error_t *err);
 
+/* Insert each rule of DEVS in front of the rules of the user of the filter that is already attached to the cgroup, so
+   that the last one has the highest priority.  The current rules are read back from the map, and the default devices
+   are kept first.  A rule that is already present is moved instead of being added again.  Return 1 if there is no such
+   filter.  The caller must prevent concurrent changes to the rules of the cgroup.  */
+int libcrun_ebpf_devices_add (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, int cgroup_fd,
+                              libcrun_error_t *err);
+
 /* Pin the filter, if it is not already, and return its path in PATH.  The program is the same for every container, and
    it must not be removed.  */
 int libcrun_ebpf_devices_pin (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, char **path,

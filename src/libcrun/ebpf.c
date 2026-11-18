@@ -1234,6 +1234,87 @@ dev_write_table (int map_fd, int cgroup_fd, const struct dev_rules *table, libcr
   return 0;
 }
 
+static int
+dev_read_table (int map_fd, int cgroup_fd, struct dev_rules *table, libcrun_error_t *err)
+{
+  struct bpf_cgroup_storage_key key;
+  union bpf_attr attr;
+  int ret;
+
+  ret = dev_storage_key (cgroup_fd, &key, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  memset (&attr, 0, sizeof (attr));
+  attr.map_fd = map_fd;
+  attr.key = ptr_to_u64 (&key);
+  attr.value = ptr_to_u64 (table);
+  ret = bpf (BPF_MAP_LOOKUP_ELEM, &attr, sizeof (attr));
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, errno, "bpf read device rules");
+  return 0;
+}
+
+static size_t
+dev_rules_count (const struct dev_rules *table)
+{
+  size_t n;
+
+  for (n = 0; n < CRUN_DEV_MAX_RULES; n++)
+    if (! (table->rules[n].flags & DEV_RULE_VALID))
+      break;
+  return n;
+}
+
+/* Insert the rule DEV in front of the rules of the user in TABLE, the first match wins.  The rules of the user follow
+   the default devices.  An identical rule is moved instead of being added again.  */
+static int
+dev_rules_insert (struct dev_rules *table, runtime_spec_schema_defs_linux_device_cgroup *dev, libcrun_error_t *err)
+{
+  cleanup_free struct dev_rules *built = NULL;
+  cleanup_free struct dev_rules *out = NULL;
+  struct dev_rules_builder b;
+  size_t i, n_default, n;
+  const struct dev_rule *rule;
+  int ret;
+
+  /* The default devices followed by DEV.  */
+  built = xmalloc0 (sizeof (*built));
+  ret = dev_rules_build (built, &dev, 1, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  n_default = dev_rules_count (built) - 1;
+  rule = &built->rules[n_default];
+
+  n = dev_rules_count (table);
+  if (n < n_default || memcmp (table->rules, built->rules, n_default * sizeof (struct dev_rule)) != 0)
+    return crun_make_error (err, 0, "the device rules of the cgroup do not start with the default devices");
+
+  out = xmalloc0 (sizeof (*out));
+  memcpy (out->rules, built->rules, n_default * sizeof (struct dev_rule));
+  b.table = out;
+  b.n = n_default;
+  b.wildcard = false;
+
+  ret = dev_rules_append_record (&b, rule, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  for (i = n_default; i < n; i++)
+    {
+      if (memcmp (&table->rules[i], rule, sizeof (*rule)) == 0)
+        continue;
+
+      ret = dev_rules_append_record (&b, &table->rules[i], err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  memcpy (table, out, sizeof (*table));
+  return 0;
+}
+
 /* Create the map for the rules in MAP_FD, that is owned by the caller, and load the program that reads them from it.  */
 static int
 dev_load_program (int *map_fd, libcrun_error_t *err)
@@ -1506,6 +1587,54 @@ libcrun_ebpf_devices_update (runtime_spec_schema_defs_linux_device_cgroup **devs
     return ret;
 
   return dev_update_cgroup (table, cgroup_fd, progs, n_progs, err);
+#endif
+}
+
+int
+libcrun_ebpf_devices_add (runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len, int cgroup_fd,
+                          libcrun_error_t *err)
+{
+#ifndef HAVE_EBPF
+  (void) devs;
+  (void) devs_len;
+  (void) cgroup_fd;
+  (void) err;
+  return 1;
+#else
+  cleanup_free struct dev_rules *current = NULL;
+  cleanup_free struct dev_rules *table = NULL;
+  cleanup_free uint32_t *progs = NULL;
+  cleanup_close int map_fd = -1;
+  size_t i, n_progs = 0;
+  int ret;
+
+  ret = read_all_progs (cgroup_fd, &progs, &n_progs, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = dev_find_cgroup_map (progs, n_progs, &map_fd, err);
+  if (ret != 0)
+    return ret;
+
+  current = xmalloc0 (sizeof (*current));
+  ret = dev_read_table (map_fd, cgroup_fd, current, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  table = xmalloc (sizeof (*table));
+  memcpy (table, current, sizeof (*table));
+
+  for (i = 0; i < devs_len; i++)
+    {
+      ret = dev_rules_insert (table, devs[i], err);
+      if (UNLIKELY (ret < 0))
+        return ret;
+    }
+
+  if (memcmp (table, current, sizeof (*table)) == 0)
+    return 0;
+
+  return dev_write_table (map_fd, cgroup_fd, table, err);
 #endif
 }
 

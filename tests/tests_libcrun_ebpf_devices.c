@@ -790,6 +790,212 @@ exit:
   return result;
 }
 
+static int
+add_rule (int dir, bool allow, int major, int minor, const char *access, libcrun_error_t *err)
+{
+  struct rule r = { allow, "c", major, minor, access };
+  runtime_spec_schema_defs_linux_device_cgroup **devs = build_devs (&r, 1);
+  int ret;
+
+  ret = libcrun_ebpf_devices_add (devs, 1, dir, err);
+  free_devs (devs);
+  return ret;
+}
+
+/* Adding a rule requires that the program reads its rules from a map, otherwise 1 is returned.  */
+static int
+test_add_without_map ()
+{
+  runtime_spec_schema_defs_linux_device_cgroup **devs;
+  struct bpf_program *program;
+  libcrun_error_t err = NULL;
+  char path[256];
+  int dir, ret, result = -1;
+
+  if (! can_run ())
+    return 77;
+
+  dir = make_cgroup ("tests-ebpf-devices-add-nomap", path, sizeof (path));
+  if (dir < 0)
+    return -1;
+
+  devs = build_devs (scenarios[1].rules, scenarios[1].n);
+
+  /* No program at all.  */
+  ret = add_rule (dir, true, 63, 7, "rwm", &err);
+  if (ret != 1)
+    goto exit;
+
+  /* A program generated from the rules.  */
+  program = create_dev_bpf (devs, scenarios[1].n, &err);
+  if (program == NULL)
+    goto exit;
+  ret = libcrun_ebpf_load (program, dir, NULL, &err);
+  free (program);
+  if (ret < 0)
+    goto exit;
+
+  ret = add_rule (dir, true, 63, 7, "rwm", &err);
+  if (ret != 1)
+    goto exit;
+
+  /* The generated program is still in place.  */
+  if (probe (dir, 'c', 63, 7, 0) != 1)
+    goto exit;
+
+  result = 0;
+
+exit:
+  if (result < 0 && err)
+    fprintf (stderr, "# test_add_without_map: %s\n", err->msg);
+  crun_error_release (&err);
+  free_devs (devs);
+  close (dir);
+  if (remove_cgroup (path) < 0)
+    result = -1;
+  return result;
+}
+
+/* A rule that is added has a higher priority than the rules already there, and adding it again changes nothing.  */
+static int
+test_add_rules ()
+{
+  static struct rule rules_deny[] = { { false, "a", -1, -1, "rwm" }, { false, "c", 63, 7, "rwm" } };
+  static struct rule rules_last_wins[] = { { false, "c", 63, 8, "r" }, { true, "c", 63, 8, "r" } };
+  runtime_spec_schema_defs_linux_device_cgroup **devs, **devs_last_wins;
+  libcrun_error_t err = NULL;
+  uint32_t *progs = NULL;
+  size_t n_progs = 0;
+  char path[256];
+  int dir, ret, result = -1;
+
+  if (! can_run ())
+    return 77;
+
+  dir = make_cgroup ("tests-ebpf-devices-add", path, sizeof (path));
+  if (dir < 0)
+    return -1;
+
+  devs = build_devs (rules_deny, 2);
+  devs_last_wins = build_devs (rules_last_wins, 2);
+
+  ret = libcrun_ebpf_devices_set (devs, 2, dir, &err);
+  if (ret != 0)
+    {
+      /* The kernel does not support the program.  */
+      result = ret > 0 && ! kernel_supports_loops () ? 77 : -1;
+      goto exit;
+    }
+
+  if (probe (dir, 'c', 63, 7, 0) != 1)
+    goto exit;
+
+  /* The rule is not shadowed by the deny rules that are already in the list.  */
+  ret = add_rule (dir, true, 63, 7, "r", &err);
+  if (ret != 0)
+    goto exit;
+
+  if (probe (dir, 'c', 63, 7, 0) != 0 || probe (dir, 'c', 63, 7, 1) != 1 || probe (dir, 'c', 63, 8, 0) != 1
+      || probe (dir, 'c', 60, 3, 0) != 1 || probe (dir, 'b', 63, 7, 0) != 1)
+    goto exit;
+
+  /* The same rule again.  */
+  ret = add_rule (dir, true, 63, 7, "r", &err);
+  if (ret != 0 || probe (dir, 'c', 63, 7, 0) != 0)
+    goto exit;
+
+  /* A deny rule has a higher priority than the allow rule, and the allow rule added again is moved in front.  */
+  ret = add_rule (dir, false, 63, 7, "rwm", &err);
+  if (ret != 0 || probe (dir, 'c', 63, 7, 0) != 1)
+    goto exit;
+
+  ret = add_rule (dir, true, 63, 7, "r", &err);
+  if (ret != 0 || probe (dir, 'c', 63, 7, 0) != 0)
+    goto exit;
+
+  /* The last rule of a single call has the highest priority.  */
+  ret = libcrun_ebpf_devices_add (devs_last_wins, 2, dir, &err);
+  if (ret != 0 || probe (dir, 'c', 63, 8, 0) != 0 || probe (dir, 'c', 63, 7, 0) != 0)
+    goto exit;
+
+  /* The rules are replaced in the map and no other program is attached.  */
+  ret = libcrun_ebpf_query_cgroup_progs (path, &progs, &n_progs, &err);
+  if (ret < 0 || n_progs != 1)
+    goto exit;
+
+  result = 0;
+
+exit:
+  if (result < 0 && err)
+    fprintf (stderr, "# test_add_rules: %s\n", err->msg);
+  crun_error_release (&err);
+  free (progs);
+  free_devs (devs);
+  free_devs (devs_last_wins);
+  close (dir);
+  if (remove_cgroup (path) < 0)
+    result = -1;
+  return result;
+}
+
+/* The table holds at most CRUN_DEV_MAX_RULES rules, a rule that is already there does not use another one.  */
+static int
+test_add_too_many_rules ()
+{
+  size_t n = CRUN_DEV_MAX_RULES - count_default_devices () - 1;
+  runtime_spec_schema_defs_linux_device_cgroup **devs;
+  libcrun_error_t err = NULL;
+  char path[256];
+  int dir, ret, result = -1;
+
+  if (! can_run ())
+    return 77;
+
+  dir = make_cgroup ("tests-ebpf-devices-add-max", path, sizeof (path));
+  if (dir < 0)
+    return -1;
+
+  /* One rule less than the maximum, none of them matches the devices that are probed.  */
+  devs = build_many_devs (n);
+
+  ret = libcrun_ebpf_devices_set (devs, n, dir, &err);
+  if (ret != 0)
+    {
+      /* The kernel does not support the program.  */
+      result = ret > 0 && ! kernel_supports_loops () ? 77 : -1;
+      goto exit;
+    }
+
+  ret = add_rule (dir, true, 63, 7, "rwm", &err);
+  if (ret != 0)
+    goto exit;
+
+  ret = add_rule (dir, true, 63, 7, "rwm", &err);
+  if (ret != 0)
+    goto exit;
+
+  ret = add_rule (dir, true, 63, 8, "rwm", &err);
+  if (ret >= 0 || crun_error_get_errno (&err) != E2BIG)
+    goto exit;
+  crun_error_release (&err);
+
+  /* The previous rules are still in place.  */
+  if (probe (dir, 'c', 63, 7, 0) != 0 || probe (dir, 'c', 63, 8, 0) != 1)
+    goto exit;
+
+  result = 0;
+
+exit:
+  if (result < 0 && err)
+    fprintf (stderr, "# test_add_too_many_rules: %s\n", err->msg);
+  crun_error_release (&err);
+  free_devs (devs);
+  close (dir);
+  if (remove_cgroup (path) < 0)
+    result = -1;
+  return result;
+}
+
 #else
 
 static int
@@ -804,6 +1010,9 @@ skip_test ()
 #  define test_update_without_map skip_test
 #  define test_write_failure skip_test
 #  define test_shared_program skip_test
+#  define test_add_without_map skip_test
+#  define test_add_rules skip_test
+#  define test_add_too_many_rules skip_test
 
 #endif
 
@@ -816,6 +1025,9 @@ main ()
   RUN_TEST (test_update_without_map);
   RUN_TEST (test_write_failure);
   RUN_TEST (test_shared_program);
+  RUN_TEST (test_add_without_map);
+  RUN_TEST (test_add_rules);
+  RUN_TEST (test_add_too_many_rules);
   print_tap_plan ();
   return 0;
 }
