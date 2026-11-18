@@ -528,6 +528,212 @@ def test_bpf_devices_update_cgroupfs():
     return run_bpf_devices_update("cgroupfs")
 
 
+# A second device that is not one of the default devices, its major is reserved for local use so it has no driver.
+LOCAL_DEVICE = {'path': '/dev/crun-test-local', 'type': 'c', 'major': 60, 'minor': 7, 'fileMode': 0o666}
+
+# The error when the cgroup has no filter that reads its rules from a map.
+NO_MAP_FILTER_ERROR = "no eBPF device filter that can be updated"
+
+
+def can_open_device(cid, path):
+    # The open of a device without a driver that is allowed fails with ENXIO or ENODEV.
+    try:
+        run_crun_command_raw(['exec', cid, '/init', 'open', path])
+        return True
+    except subprocess.CalledProcessError as e:
+        if b'Operation not permitted' in (e.output or b''):
+            return False
+        if b'No such device' in (e.output or b''):
+            return True
+        raise
+
+
+def run_with_local_device(cgroup_manager):
+    conf = make_fuse_config([DENY_ALL])
+    conf['linux']['devices'].append(LOCAL_DEVICE)
+    _, cid = run_and_get_output(conf, hide_stderr=False, command='run', detach=True, cgroup_manager=cgroup_manager)
+    return cid
+
+
+def check_access(cid, fuse, local):
+    ok = True
+    for path, expected in (('/dev/fuse', fuse), (LOCAL_DEVICE['path'], local)):
+        allowed = can_open_device(cid, path)
+        if allowed != expected:
+            logger.info("%s is %s", path, "accessible" if allowed else "not accessible")
+            ok = False
+    return ok
+
+
+def add_device_error(e, cgroup_manager):
+    output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+    if NO_MAP_FILTER_ERROR in output and not kernel_supports_map_filter():
+        return (77, "the kernel does not support the device filter that reads its rules from a map")
+    logger.info("Test failed with exception: %s: %s", e, output)
+    return -1
+
+
+def run_bpf_devices_add_device(cgroup_manager):
+    """Add a device to the device list of a running container with --add-device, and remove it with --remove-device"""
+    ret = check_prerequisites(cgroup_manager)
+    if ret != 0:
+        return ret
+
+    cid = None
+    try:
+        cid = run_with_local_device(cgroup_manager)
+        if not check_access(cid, fuse=False, local=False):
+            return -1
+
+        # The rule is not shadowed by the rule that denies every device.
+        run_crun_command_raw(['update', '--add-device=c 10:229 rwm', cid])
+        if not check_access(cid, fuse=True, local=False):
+            return -1
+
+        # The same rule again.
+        run_crun_command_raw(['update', '--add-device', 'c 10:229 rwm', cid])
+        if not check_access(cid, fuse=True, local=False):
+            return -1
+
+        run_crun_command_raw(['update', '--remove-device=c 10:229', cid])
+        if not check_access(cid, fuse=False, local=False):
+            return -1
+
+        # The last rule has the highest priority.
+        run_crun_command_raw(['update', '--remove-device=c *:* rw', '--add-device=c 10:229 rw', cid])
+        if not check_access(cid, fuse=True, local=False):
+            return -1
+
+        # The rule is added after the resources of the file are set.
+        with tempfile.NamedTemporaryFile('w', suffix='.json') as f:
+            json.dump({'devices': [DENY_ALL]}, f)
+            f.flush()
+            run_crun_command_raw(['update', '--resources', f.name, '--add-device=c 60:7 rw', cid])
+        if not check_access(cid, fuse=False, local=True):
+            return -1
+
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        return add_device_error(e, cgroup_manager)
+    except Exception as e:
+        logger.info("Test failed with exception: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def run_bpf_devices_add_device_concurrent(cgroup_manager):
+    """Two concurrent --add-device updates of the same container both survive"""
+    ret = check_prerequisites(cgroup_manager)
+    if ret != 0:
+        return ret
+
+    cid = None
+    try:
+        cid = run_with_local_device(cgroup_manager)
+
+        for _ in range(20):
+            update_devices(cid, [DENY_ALL])
+            if not check_access(cid, fuse=False, local=False):
+                return -1
+
+            procs = []
+            for rule in ('c 10:229 rwm', 'c 60:7 rwm'):
+                args = [get_crun_path(), "--root", get_tests_root_status(), 'update', '--add-device', rule, cid]
+                procs.append(subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT))
+            for p in procs:
+                out, _ = p.communicate()
+                if p.returncode != 0:
+                    raise subprocess.CalledProcessError(p.returncode, p.args, out)
+
+            if not check_access(cid, fuse=True, local=True):
+                return -1
+
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        return add_device_error(e, cgroup_manager)
+    except Exception as e:
+        logger.info("Test failed with exception: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def run_bpf_devices_add_device_bad_syntax(cgroup_manager):
+    """An invalid rule for --add-device or --remove-device is an error and changes nothing"""
+    ret = check_prerequisites(cgroup_manager)
+    if ret != 0:
+        return ret
+
+    bad_rules = ["", "c", "c 10", "c 10:", "c :229", "x 10:229", "cc 10:229", "c 10:229 rwx", "c 10:229 rr",
+                 "c 10:229 rwm x", "c -1:229", "c 10:0x1", "c 4294967296:1", "a 10:229", "a *:1 rwm"]
+
+    cid = None
+    try:
+        cid = run_with_local_device(cgroup_manager)
+
+        for option in ('--add-device', '--remove-device'):
+            for rule in bad_rules:
+                # A valid rule given with the invalid one is not added either.
+                try:
+                    run_crun_command_raw(['update', '--add-device=c 60:7 rwm', '%s=%s' % (option, rule), cid])
+                    logger.info("the rule `%s` for %s is accepted", rule, option)
+                    return -1
+                except subprocess.CalledProcessError as e:
+                    output = e.output.decode('utf-8', errors='ignore') if e.output else ''
+                    if "invalid device rule" not in output:
+                        logger.info("unexpected error for `%s`: %s", rule, output)
+                        return -1
+
+        if not check_access(cid, fuse=False, local=False):
+            return -1
+
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        return add_device_error(e, cgroup_manager)
+    except Exception as e:
+        logger.info("Test failed with exception: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+
+
+def test_bpf_devices_add_device_systemd():
+    """Test --add-device with the systemd cgroup manager"""
+    return run_bpf_devices_add_device("systemd")
+
+
+def test_bpf_devices_add_device_cgroupfs():
+    """Test --add-device with the cgroupfs cgroup manager"""
+    return run_bpf_devices_add_device("cgroupfs")
+
+
+def test_bpf_devices_add_device_concurrent_systemd():
+    """Test concurrent --add-device updates with the systemd cgroup manager"""
+    return run_bpf_devices_add_device_concurrent("systemd")
+
+
+def test_bpf_devices_add_device_concurrent_cgroupfs():
+    """Test concurrent --add-device updates with the cgroupfs cgroup manager"""
+    return run_bpf_devices_add_device_concurrent("cgroupfs")
+
+
+def test_bpf_devices_add_device_bad_syntax_systemd():
+    """Test an invalid --add-device rule with the systemd cgroup manager"""
+    return run_bpf_devices_add_device_bad_syntax("systemd")
+
+
+def test_bpf_devices_add_device_bad_syntax_cgroupfs():
+    """Test an invalid --add-device rule with the cgroupfs cgroup manager"""
+    return run_bpf_devices_add_device_bad_syntax("cgroupfs")
+
+
 all_tests = {
     "bpf-devices-systemd": test_bpf_devices_systemd,
     "bpf-devices-deny-all-allow-null": test_bpf_devices_deny_all_allow_null,
@@ -539,6 +745,12 @@ all_tests = {
     "bpf-devices-update-cgroupfs": test_bpf_devices_update_cgroupfs,
     "bpf-devices-too-many-rules-systemd": test_bpf_devices_too_many_rules_systemd,
     "bpf-devices-too-many-rules-cgroupfs": test_bpf_devices_too_many_rules_cgroupfs,
+    "bpf-devices-add-device-systemd": test_bpf_devices_add_device_systemd,
+    "bpf-devices-add-device-cgroupfs": test_bpf_devices_add_device_cgroupfs,
+    "bpf-devices-add-device-concurrent-systemd": test_bpf_devices_add_device_concurrent_systemd,
+    "bpf-devices-add-device-concurrent-cgroupfs": test_bpf_devices_add_device_concurrent_cgroupfs,
+    "bpf-devices-add-device-bad-syntax-systemd": test_bpf_devices_add_device_bad_syntax_systemd,
+    "bpf-devices-add-device-bad-syntax-cgroupfs": test_bpf_devices_add_device_bad_syntax_cgroupfs,
 }
 
 if __name__ == "__main__":

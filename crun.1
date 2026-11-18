@@ -344,6 +344,21 @@ Generate a config.json file that is usable by an unprivileged user.
 crun [global options] update [options] CONTAINER
 
 .PP
+\fB--add-device\fP=\fIRULE\fP
+Allow access to a device.  \fIRULE\fP is "\fITYPE\fP \fIMAJOR\fP:\fIMINOR\fP [\fIACCESS\fP]", where
+\fITYPE\fP is \fBc\fP (character device), \fBb\fP (block device) or \fBa\fP (all
+devices), \fIMAJOR\fP and \fIMINOR\fP are numbers or \fB*\fP, and \fIACCESS\fP is a
+combination of \fBr\fP (read), \fBw\fP (write) and \fBm\fP (mknod), \fBrwm\fP by
+default.  The type \fBa\fP must be used with \fB*:*\fP\&.  The rule is added in
+front of the current device access list of the container, so it has a higher
+priority than the rules already there.  The option can be repeated and mixed
+with \fB--remove-device\fP, the last rule has the highest priority.  The rules are applied after the resources
+specified with \fB--resources\fP\&.  It is supported only with cgroup v2, when the
+container is not rootless and its eBPF device filter was installed by this
+version of crun.  The change is not stored in the container configuration, and
+it is lost if the container is restarted.
+
+.PP
 \fB--blkio-weight\fP=\fIVALUE\fP
 Specifies per cgroup weight.
 
@@ -398,6 +413,12 @@ Total memory usage.
 .PP
 \fB--pids-limit\fP=\fIVALUE\fP
 Maximum number of pids allowed in the container.
+
+.PP
+\fB--remove-device\fP=\fIRULE\fP
+Deny access to a device.  \fIRULE\fP has the same format as for
+\fB--add-device\fP, and the same conditions apply.  The default devices,
+e.g. \fI/dev/null\fP, are always accessible.
 
 .PP
 \fB-r\fP, \fB--resources\fP=\fIFILE\fP

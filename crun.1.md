@@ -284,6 +284,20 @@ Generate a config.json file that is usable by an unprivileged user.
 
 crun [global options] update [options] CONTAINER
 
+**--add-device**=_RULE_
+Allow access to a device.  _RULE_ is "_TYPE_ _MAJOR_:_MINOR_ [_ACCESS_]", where
+_TYPE_ is **c** (character device), **b** (block device) or **a** (all
+devices), _MAJOR_ and _MINOR_ are numbers or **\***, and _ACCESS_ is a
+combination of **r** (read), **w** (write) and **m** (mknod), **rwm** by
+default.  The type **a** must be used with **\*:\***.  The rule is added in
+front of the current device access list of the container, so it has a higher
+priority than the rules already there.  The option can be repeated and mixed
+with **--remove-device**, the last rule has the highest priority.  The rules are applied after the resources
+specified with **--resources**.  It is supported only with cgroup v2, when the
+container is not rootless and its eBPF device filter was installed by this
+version of crun.  The change is not stored in the container configuration, and
+it is lost if the container is restarted.
+
 **--blkio-weight**=_VALUE_
 Specifies per cgroup weight.
 
@@ -325,6 +339,11 @@ Total memory usage.
 
 **--pids-limit**=_VALUE_
 Maximum number of pids allowed in the container.
+
+**--remove-device**=_RULE_
+Deny access to a device.  _RULE_ has the same format as for
+**--add-device**, and the same conditions apply.  The default devices,
+e.g. _/dev/null_, are always accessible.
 
 **-r**, **--resources**=_FILE_
 Path to the file containing the resources to update.
