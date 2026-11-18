@@ -336,6 +336,64 @@ libcrun_update_cgroup_resources (struct libcrun_cgroup_status *cgroup_status,
   return update_cgroup_resources (cgroup_status->path, state_root, resources, ! cgroup_status->bpf_dev_set, err);
 }
 
+int
+libcrun_cgroup_add_device_rules (struct libcrun_cgroup_status *cgroup_status,
+                                 runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                                 libcrun_error_t *err)
+{
+  cleanup_free char *scope_path = NULL;
+  const char *paths[2];
+  size_t n_paths = 0, i;
+  int cgroup_mode;
+  int rootless;
+  int ret;
+
+  if (cgroup_status->manager == CGROUP_MANAGER_DISABLED || is_empty_string (cgroup_status->path))
+    return crun_make_error (err, 0, "cannot add a device: the container has no cgroup");
+
+  cgroup_mode = libcrun_get_cgroup_mode (err);
+  if (UNLIKELY (cgroup_mode < 0))
+    return cgroup_mode;
+
+  if (cgroup_mode != CGROUP_MODE_UNIFIED)
+    return crun_make_error (err, 0, "adding a device is not supported on cgroup v1");
+
+  rootless = is_rootless (err);
+  if (UNLIKELY (rootless < 0))
+    return rootless;
+
+  if (rootless)
+    return crun_make_error (err, 0, "adding a device is not supported for rootless containers");
+
+  /* With systemd the device filter is attached to the scope, unless systemd could not install it.  */
+#ifdef HAVE_SYSTEMD
+  if (cgroup_status->manager == CGROUP_MANAGER_SYSTEMD && ! is_empty_string (cgroup_status->scope))
+    {
+      scope_path = get_cgroup_scope_path (cgroup_status->path, cgroup_status->scope);
+      if (scope_path)
+        paths[n_paths++] = scope_path;
+    }
+#endif
+  if (scope_path == NULL || strcmp (scope_path, cgroup_status->path) != 0)
+    paths[n_paths++] = cgroup_status->path;
+
+  for (i = 0; i < n_paths; i++)
+    {
+      cleanup_close int dirfd = -1;
+
+      dirfd = open_cgroup_subsystem ("", paths[i], err);
+      if (UNLIKELY (dirfd < 0))
+        return dirfd;
+
+      ret = libcrun_ebpf_devices_add (devs, devs_len, dirfd, err);
+      if (ret <= 0)
+        return ret;
+    }
+
+  return crun_make_error (err, 0, "adding a device is not supported: no eBPF device filter that can be updated is attached to the cgroup `%s`",
+                          paths[0]);
+}
+
 static int
 can_ignore_cgroup_enter_errors (struct libcrun_cgroup_args *args, int cgroup_mode,
                                 libcrun_error_t *err)
