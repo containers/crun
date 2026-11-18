@@ -301,14 +301,6 @@ static struct linux_namespace_s namespaces[] = { { "mount", "mnt", CLONE_NEWNS }
                                                  { "time", "time", CLONE_NEWTIME },
                                                  { NULL, NULL, 0 } };
 
-static int
-get_and_reset (int *old)
-{
-  int tmp = *old;
-  *old = -1;
-  return tmp;
-}
-
 int
 libcrun_find_namespace (const char *name)
 {

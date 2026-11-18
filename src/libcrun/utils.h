@@ -218,6 +218,14 @@ close_and_reset (int *fd)
   return ret;
 }
 
+static inline int
+get_and_reset (int *old)
+{
+  int tmp = *old;
+  *old = -1;
+  return tmp;
+}
+
 static inline char *
 xstrdup (const char *str)
 {

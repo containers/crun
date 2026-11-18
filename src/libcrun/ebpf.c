@@ -474,26 +474,20 @@ bump_memlock ()
   (void) setrlimit (RLIMIT_MEMLOCK, &limit);
 }
 
-int
-libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err)
+#ifdef HAVE_EBPF
+static int
+ebpf_prog_load (const void *insns, size_t n_insns, const char *name, libcrun_error_t *err)
 {
-#ifndef HAVE_EBPF
-  (void) dirfd;
-  (void) program;
-  (void) pin;
-  (void) ebpf_attach_program;
-
-  return crun_make_error (err, 0, "eBPF not supported");
-#else
   cleanup_close int fd = -1;
   union bpf_attr attr;
-  int ret;
 
   memset (&attr, 0, sizeof (attr));
   attr.prog_type = BPF_PROG_TYPE_CGROUP_DEVICE;
-  attr.insns = ptr_to_u64 (program->program);
-  attr.insn_cnt = bpf_program_instructions (program);
+  attr.insns = ptr_to_u64 (insns);
+  attr.insn_cnt = n_insns;
   attr.license = ptr_to_u64 ("GPL");
+  if (name)
+    stpncpy (attr.prog_name, name, sizeof (attr.prog_name) - 1);
 
   /* First try without log.  */
   fd = bpf (BPF_PROG_LOAD, &attr, sizeof (attr));
@@ -530,6 +524,43 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
         }
     }
 
+  return get_and_reset (&fd);
+}
+
+static int
+ebpf_pin (int fd, const char *pin, libcrun_error_t *err)
+{
+  union bpf_attr attr;
+  int ret;
+
+  memset (&attr, 0, sizeof (attr));
+  attr.pathname = ptr_to_u64 (pin);
+  attr.bpf_fd = fd;
+  ret = bpf (BPF_OBJ_PIN, &attr, sizeof (attr));
+  if (ret < 0)
+    return crun_make_error (err, errno, "bpf pin to `%s`", pin);
+  return 0;
+}
+#endif
+
+int
+libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libcrun_error_t *err)
+{
+#ifndef HAVE_EBPF
+  (void) dirfd;
+  (void) program;
+  (void) pin;
+  (void) ebpf_attach_program;
+
+  return crun_make_error (err, 0, "eBPF not supported");
+#else
+  cleanup_close int fd = -1;
+  int ret;
+
+  fd = ebpf_prog_load (program->program, bpf_program_instructions (program), NULL, err);
+  if (UNLIKELY (fd < 0))
+    return fd;
+
   if (dirfd >= 0)
     {
       ret = ebpf_attach_program (fd, dirfd, err);
@@ -542,12 +573,9 @@ libcrun_ebpf_load (struct bpf_program *program, int dirfd, const char *pin, libc
     {
       unlink (pin);
 
-      memset (&attr, 0, sizeof (attr));
-      attr.pathname = ptr_to_u64 (pin);
-      attr.bpf_fd = fd;
-      ret = bpf (BPF_OBJ_PIN, &attr, sizeof (attr));
-      if (ret < 0)
-        return crun_make_error (err, errno, "bpf pin to `%s`", pin);
+      ret = ebpf_pin (fd, pin, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
 
   return 0;
