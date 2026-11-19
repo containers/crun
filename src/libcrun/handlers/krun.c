@@ -642,6 +642,16 @@ libkrun_exec (void *cookie, libcrun_container_t *container, const char *pathname
   return ret;
 }
 
+/* Only binaries in these well-known locations are considered trusted
+ * and executed: /usr/libexec/virgl_render_server (Fedora, Debian,
+ * Ubuntu, Alpine) and /usr/lib/virgl_render_server (Arch Linux).
+ */
+static const char *const virgl_render_server_paths[] = {
+  "/usr/libexec/virgl_render_server",
+  "/usr/lib/virgl_render_server",
+  NULL
+};
+
 static int
 libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *container, libcrun_error_t *err)
 {
@@ -661,9 +671,20 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
           int gpu_fds[2];
           pid_t pid;
           int null;
+          const char *render_server = NULL;
+          size_t i;
 
-          if (access ("/usr/libexec/virgl_render_server", X_OK) != 0)
-            return crun_make_error (err, errno, "gpu with render server requested but couldn't find /usr/libexec/virgl_render_server binary");
+          for (i = 0; virgl_render_server_paths[i] != NULL; i++)
+            {
+              if (access (virgl_render_server_paths[i], X_OK) == 0)
+                {
+                  render_server = virgl_render_server_paths[i];
+                  break;
+                }
+            }
+
+          if (render_server == NULL)
+            return crun_make_error (err, errno, "gpu with render server requested but couldn't find virgl_render_server binary in any known location");
 
           if (access ("/usr/bin/bwrap", X_OK) != 0)
             return crun_make_error (err, errno, "gpu with render server requested but couldn't find /usr/bin/bwrap binary");
@@ -709,7 +730,7 @@ libkrun_start_render_server (struct krun_config *kconf, libcrun_container_t *con
           rs_argv[rs_argc++] = (char *) "--unshare-ipc";
           rs_argv[rs_argc++] = (char *) "--unshare-net";
           rs_argv[rs_argc++] = (char *) "--";
-          rs_argv[rs_argc++] = (char *) "/usr/libexec/virgl_render_server";
+          rs_argv[rs_argc++] = (char *) render_server;
           rs_argv[rs_argc++] = (char *) "--socket-fd";
           rs_argv[rs_argc++] = fd_as_str;
           rs_argv[rs_argc] = NULL;
