@@ -3181,7 +3181,15 @@ process_single_mount (libcrun_container_t *container, const char *rootfs,
           source_mountfd = get_bind_mount (get_private_data (container)->rootfsfd, rel_source, (flags & MS_REC) != 0,
                                            false, (extra_flags & OPTION_SRC_NOFOLLOW) != 0, propagation, err);
           if (UNLIKELY (source_mountfd < 0))
-            return crun_error_wrap (err, "open mount source `%s`", mount->source);
+            {
+              int errno_ = crun_error_get_errno (err);
+
+              if (errno_ != ENOSYS && errno_ != EPERM)
+                return crun_error_wrap (err, "open mount source `%s`", mount->source);
+
+              // Fall back to regular mount.
+              crun_error_release (err);
+            }
         }
     }
 
