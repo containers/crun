@@ -6,6 +6,12 @@
 %define copr_build 1
 %endif
 
+# openpgpverify (Sequoia sqv) is in Fedora and RHEL 11+ (ELN); older RHEL
+# releases verify the sources with GnuPG.
+%if %{defined fedora} || 0%{?rhel} > 10
+%global use_openpgpverify 1
+%endif
+
 # krun and wasm support only on aarch64 and x86_64
 %ifarch aarch64 || x86_64
 
@@ -53,7 +59,11 @@ BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
 %if !%{defined copr_build}
+%if %{defined use_openpgpverify}
+BuildRequires: openpgpverify
+%else
 BuildRequires: gnupg2
+%endif
 %endif
 BuildRequires: git-core
 BuildRequires: gperf
@@ -107,7 +117,11 @@ Recommends: wasmedge
 
 %prep
 %if !%{defined copr_build}
+%if %{defined use_openpgpverify}
+%{openpgpverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
+%else
 %{gpgverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
+%endif
 %endif
 %autosetup -Sgit -n %{name}-%{version}
 
