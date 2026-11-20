@@ -57,6 +57,8 @@ enum
   /* not in the resources block.  */
   L3_CACHE_SCHEMA,
   MEM_BW_SCHEMA,
+  ADD_DEVICE,
+  REMOVE_DEVICE,
 
   LAST_VALUE,
 };
@@ -182,6 +184,18 @@ check_integer (const char *opt, const char *value)
 static char *l3_cache_schema;
 static char *mem_bw_schema;
 
+static struct libcrun_device_rule_s *device_rules;
+static size_t device_rules_len;
+
+static void
+add_device_rule (const char *rule, bool allow)
+{
+  device_rules = xrealloc (device_rules, (device_rules_len + 1) * sizeof (*device_rules));
+  device_rules[device_rules_len].rule = rule;
+  device_rules[device_rules_len].allow = allow;
+  device_rules_len++;
+}
+
 static struct argp_option options[]
     = { { "resources", 'r', "FILE", 0, "path to the file containing the resources to update", 0 },
         { "blkio-weight", BLKIO_WEIGHT, "VALUE", 0, "Specifies per cgroup weight", 0 },
@@ -202,6 +216,8 @@ static struct argp_option options[]
         { "pids-limit", PIDS_LIMIT, "VALUE", 0, "Maximum number of pids allowed in the container", 0 },
         { "l3-cache-schema", L3_CACHE_SCHEMA, "VALUE", 0, "The string of Intel RDT/CAT L3 cache schema", 0 },
         { "mem-bw-schema", MEM_BW_SCHEMA, "VALUE", 0, "The string of Intel RDT/MBA memory bandwidth schema", 0 },
+        { "add-device", ADD_DEVICE, "RULE", 0, "Allow access to a device, RULE is \"TYPE MAJOR:MINOR [ACCESS]\"", 0 },
+        { "remove-device", REMOVE_DEVICE, "RULE", 0, "Deny access to a device, RULE is \"TYPE MAJOR:MINOR [ACCESS]\"", 0 },
         {
             0,
         } };
@@ -264,6 +280,14 @@ parse_opt (int key, char *arg, struct argp_state *state)
       mem_bw_schema = argp_mandatory_argument (arg, state);
       break;
 
+    case ADD_DEVICE:
+      add_device_rule (argp_mandatory_argument (arg, state), true);
+      break;
+
+    case REMOVE_DEVICE:
+      add_device_rule (argp_mandatory_argument (arg, state), false);
+      break;
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -314,16 +338,24 @@ crun_command_update (struct crun_global_arguments *global_args, int argc, char *
   if (UNLIKELY (ret < 0))
     return ret;
 
-  if (resources == NULL)
+  if (resources == NULL && (values_len > 0 || device_rules_len == 0))
     {
       ret = libcrun_container_update_from_values (crun_context, argv[first_arg], values, values_len, err);
       free (values);
       if (ret < 0)
         return ret;
     }
-  else
+  else if (resources)
     {
       ret = libcrun_container_update_from_file (crun_context, argv[first_arg], resources, err);
+      if (ret < 0)
+        return ret;
+    }
+
+  if (device_rules_len > 0)
+    {
+      ret = libcrun_container_add_device_rules (crun_context, argv[first_arg], device_rules, device_rules_len, err);
+      free (device_rules);
       if (ret < 0)
         return ret;
     }

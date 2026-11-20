@@ -267,6 +267,19 @@ struct libcrun_intel_rdt_update
 int libcrun_container_update_intel_rdt (libcrun_context_t *ctx, const char *id,
                                         struct libcrun_intel_rdt_update *update, libcrun_error_t *err);
 
+/* Insert device rules in front of the device access list of a running container, the last one has the highest
+   priority.  RULE is in the format "TYPE MAJOR:MINOR [ACCESS]".  The change is not stored in the container
+   configuration.  */
+struct libcrun_device_rule_s
+{
+  const char *rule;
+  bool allow;
+};
+
+int libcrun_container_add_device_rules (libcrun_context_t *ctx, const char *id,
+                                        const struct libcrun_device_rule_s *rules, size_t len,
+                                        libcrun_error_t *err);
+
 /* Add or remove mounts described by an OCI mounts JSON file.  */
 int libcrun_container_add_mounts_from_file (libcrun_context_t *ctx, const char *id, const char *file,
                                             libcrun_error_t *err);

@@ -99,6 +99,7 @@ LIBCRUN_1.0 {
         libcrun_container_update_from_file;
         libcrun_container_update_from_values;
         libcrun_container_update_intel_rdt;
+        libcrun_container_add_device_rules;
         libcrun_container_add_mounts_from_file;
         libcrun_container_remove_mounts_from_file;
 

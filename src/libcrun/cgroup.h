@@ -106,6 +106,12 @@ int libcrun_update_cgroup_resources (struct libcrun_cgroup_status *status,
                                      runtime_spec_schema_config_linux_resources *resources,
                                      libcrun_error_t *err);
 
+/* Add the device rules DEVS in front of the rules of the eBPF device filter of the container, the last one has the
+   highest priority.  The caller must prevent concurrent changes to the rules.  */
+int libcrun_cgroup_add_device_rules (struct libcrun_cgroup_status *status,
+                                     runtime_spec_schema_defs_linux_device_cgroup **devs, size_t devs_len,
+                                     libcrun_error_t *err);
+
 int libcrun_cgroup_is_container_paused (struct libcrun_cgroup_status *status, bool *paused, libcrun_error_t *err);
 
 /* Move PID to the cgroup PATH, which is the container cgroup described by STATUS

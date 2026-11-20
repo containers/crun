@@ -1501,6 +1501,7 @@ add_bpf_program (sd_bus_message *m,
                  char **missing_properties,
                  const char *scope,
                  bool *devices_set,
+                 bool *devices_map,
                  libcrun_error_t *err)
 {
   int ret = 0;
@@ -1510,6 +1511,7 @@ add_bpf_program (sd_bus_message *m,
   cleanup_free char *path = NULL;
 
   *devices_set = false;
+  *devices_map = false;
 
   /* Only root in the initial user namespace can pin a bpf program. */
   if (getuid () != 0 || ! has_bpf_fs () || property_missing_p (missing_properties, property_name))
@@ -1522,80 +1524,41 @@ add_bpf_program (sd_bus_message *m,
   if (in_userns)
     return 0;
 
-  program = create_dev_bpf (resources->devices, resources->devices_len, err);
-  if (UNLIKELY (program == NULL))
+  /* The rules are replaced in the map by the caller once the scope is updated, the program is not changed.  */
+  if (is_update)
     {
-      crun_error_release (err);
+      *devices_set = true;
       return 0;
     }
 
-  ret = bpfprog_path_from_scope (&path, scope, err);
+  /* The program is shared by all the containers, the rules are set on the scope after it is created.  */
+  ret = libcrun_ebpf_devices_pin (resources->devices, resources->devices_len, &path, err);
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = mkdir (CRUN_BPF_DIR, 0700);
-  if (UNLIKELY (ret < 0 && errno != EEXIST))
-    return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
+  *devices_map = ret == 0;
 
-  if (is_update)
+  if (ret > 0)
     {
-      cleanup_free struct bpf_program *program_loaded = NULL;
-
-      if (resources->devices == NULL || resources->devices_len == 0)
+      program = create_dev_bpf (resources->devices, resources->devices_len, err);
+      if (UNLIKELY (program == NULL))
         {
-          *devices_set = true;
+          crun_error_release (err);
           return 0;
         }
 
-      ret = libcrun_ebpf_read_program (&program_loaded, path, err);
+      ret = bpfprog_path_from_scope (&path, scope, err);
       if (UNLIKELY (ret < 0))
         return ret;
 
-      /* it is the same as the loaded program.  */
-      if (libcrun_ebpf_cmp_programs (program, program_loaded))
-        {
-          *devices_set = true;
-          return 0;
-        }
+      ret = mkdir (CRUN_BPF_DIR, 0700);
+      if (UNLIKELY (ret < 0 && errno != EEXIST))
+        return crun_make_error (err, errno, "mkdir " CRUN_BPF_DIR);
 
-      /* Some platforms (e.g. ppc64) modify an EBPF program as it is
-       * loaded into the kernel, so in order to compare we actually
-       * have to load the new program and read it back. Seems ugly,
-       * but all this comes from the inability of systemd to modify
-       * the BPFProgram property.
-       */
-      {
-        cleanup_free struct bpf_program *program_new = NULL;
-        char tmp[64];
-        int len;
-
-        /* A unique name, as container name can't start with a digit. */
-        len = snprintf (tmp, sizeof (tmp), "%s/%d", CRUN_BPF_DIR, getpid ());
-        if (UNLIKELY (len >= (int) sizeof (tmp)))
-          return crun_make_error (err, 0, "internal error: static buffer too small");
-
-        ret = libcrun_ebpf_load (program, -1, tmp, err);
-        if (UNLIKELY (ret < 0))
-          return ret;
-
-        ret = libcrun_ebpf_read_program (&program_new, tmp, err);
-        unlink (tmp);
-        if (UNLIKELY (ret < 0))
-          return ret;
-
-        if (libcrun_ebpf_cmp_programs (program_new, program_loaded))
-          {
-            *devices_set = true;
-            return 0;
-          }
-      }
-
-      return crun_make_error (err, 0, "updating device access list not supported when using BPFProgram");
+      ret = libcrun_ebpf_load (program, -1, path, err);
+      if (UNLIKELY (ret < 0))
+        return ret;
     }
-
-  ret = libcrun_ebpf_load (program, -1, path, err);
-  if (UNLIKELY (ret < 0))
-    return ret;
 
   sd_err = sd_bus_message_append (m, "(sv)", property_name, "a(ss)", 1, "device", path);
   if (UNLIKELY (sd_err < 0))
@@ -1667,6 +1630,7 @@ append_resources (sd_bus_message *m,
                   int cgroup_mode,
                   const char *scope,
                   bool *devices_set,
+                  bool *devices_map,
                   libcrun_error_t *err)
 {
   uint64_t value;
@@ -1676,6 +1640,7 @@ append_resources (sd_bus_message *m,
   cleanup_free char **missing_properties = NULL;
 
   *devices_set = false;
+  *devices_map = false;
 
   ret = append_paths (&dir, err, state_dir, SYSTEMD_MISSING_PROPERTIES_DIR, NULL);
   if (UNLIKELY (ret < 0))
@@ -1790,7 +1755,7 @@ append_resources (sd_bus_message *m,
               }
           }
 
-        ret = add_bpf_program (m, is_update, resources, missing_properties, scope, devices_set, err);
+        ret = add_bpf_program (m, is_update, resources, missing_properties, scope, devices_set, devices_map, err);
         if (UNLIKELY (ret < 0))
           return ret;
       }
@@ -1872,6 +1837,80 @@ verify_ebpf_device_filter_installed (const char *cgroup_path, libcrun_error_t *e
   return 0;
 }
 
+/* Return 1 if the device filter of the scope does not read its rules from a map.  */
+static int
+set_device_rules (runtime_spec_schema_config_linux_resources *resources, const char *cgroup_path,
+                  libcrun_error_t *err)
+{
+  cleanup_close int dirfd = -1;
+
+  if (cgroup_path == NULL)
+    return crun_make_error (err, 0, "cannot find the cgroup of the scope");
+
+  dirfd = open_cgroup_subsystem ("", cgroup_path, err);
+  if (UNLIKELY (dirfd < 0))
+    return dirfd;
+
+  return libcrun_ebpf_devices_update (resources->devices, resources->devices_len, dirfd, err);
+}
+
+/* The device filter of the scope was generated from its rules, and systemd does not allow to change BPFProgram= on a
+   running unit.  Accept only an update that generates the same program.  */
+static int
+check_device_program_unchanged (runtime_spec_schema_config_linux_resources *resources, const char *scope,
+                                libcrun_error_t *err)
+{
+  cleanup_free struct bpf_program *program_loaded = NULL;
+  cleanup_free struct bpf_program *program = NULL;
+  cleanup_free char *path = NULL;
+  int ret;
+
+  program = create_dev_bpf (resources->devices, resources->devices_len, err);
+  if (UNLIKELY (program == NULL))
+    return -1;
+
+  ret = bpfprog_path_from_scope (&path, scope, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = libcrun_ebpf_read_program (&program_loaded, path, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  /* it is the same as the loaded program.  */
+  if (libcrun_ebpf_cmp_programs (program, program_loaded))
+    return 0;
+
+  /* Some platforms (e.g. ppc64) modify an EBPF program as it is
+   * loaded into the kernel, so in order to compare we actually
+   * have to load the new program and read it back.
+   */
+  {
+    cleanup_free struct bpf_program *program_new = NULL;
+    char tmp[64];
+    int len;
+
+    /* A unique name, as container name can't start with a digit. */
+    len = snprintf (tmp, sizeof (tmp), "%s/%d", CRUN_BPF_DIR, getpid ());
+    if (UNLIKELY (len >= (int) sizeof (tmp)))
+      return crun_make_error (err, 0, "internal error: static buffer too small");
+
+    ret = libcrun_ebpf_load (program, -1, tmp, err);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    ret = libcrun_ebpf_read_program (&program_new, tmp, err);
+    unlink (tmp);
+    if (UNLIKELY (ret < 0))
+      return ret;
+
+    if (libcrun_ebpf_cmp_programs (program_new, program_loaded))
+      return 0;
+  }
+
+  return crun_make_error (err, 0, "updating device access list not supported when using BPFProgram");
+}
+
 /* Release the sd-bus objects used by a D-Bus call and return RET.  */
 static int
 cleanup_sd_bus_and_return (sd_bus *bus, sd_bus_message *m, sd_bus_message *reply,
@@ -1896,6 +1935,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
                             pid_t pid,
                             bool *can_retry,
                             bool *devices_set,
+                            bool *devices_map,
                             libcrun_error_t *err)
 {
   sd_bus *bus = NULL;
@@ -1911,6 +1951,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
 
   *can_retry = false;
   *devices_set = false;
+  *devices_map = false;
 
   ret = libcrun_get_state_directory (&state_dir, state_root, NULL, err);
   if (UNLIKELY (ret < 0))
@@ -2034,7 +2075,7 @@ enter_systemd_cgroup_scope (runtime_spec_schema_config_linux_resources *resource
         }
     }
 
-  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, devices_set, err);
+  ret = append_resources (m, false, state_dir, resources, cgroup_mode, scope, devices_set, devices_map, err);
   if (UNLIKELY (ret < 0))
     goto exit;
 
@@ -2184,6 +2225,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   const char *suffix;
   const char *id = args->id;
   pid_t pid = args->pid;
+  bool devices_map = false;
   int cgroup_mode;
   int rootless = 0;
   int ret;
@@ -2206,7 +2248,7 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
       bool can_retry = false;
 
       ret = enter_systemd_cgroup_scope (resources, cgroup_mode, args->annotations, args->state_root,
-                                        scope, slice, pid, &can_retry, &out->bpf_dev_set, err);
+                                        scope, slice, pid, &can_retry, &out->bpf_dev_set, &devices_map, err);
       if (LIKELY (ret >= 0))
         break;
 
@@ -2244,9 +2286,21 @@ libcrun_cgroup_enter_systemd (struct libcrun_cgroup_args *args,
   if (UNLIKELY (ret < 0))
     goto fail;
 
-  /* Verify that systemd has actually installed the eBPF device filter if one was requested.
-     eBPF programs are attached to the systemd scope, not the subgroup.  */
-  if (out->bpf_dev_set)
+  /* The eBPF device filter is attached to the systemd scope, not to the subgroup.  Set its rules, or if it does not
+     read them from a map verify that systemd has actually installed it.  */
+  if (out->bpf_dev_set && devices_map)
+    {
+      ret = set_device_rules (resources, scope_path, err);
+      if (UNLIKELY (ret < 0))
+        goto fail;
+
+      if (ret > 0)
+        {
+          ret = crun_make_error (err, 0, "systemd failed to install eBPF device filter on cgroup `%s`", scope_path);
+          goto fail;
+        }
+    }
+  else if (out->bpf_dev_set)
     {
       ret = verify_ebpf_device_filter_installed (scope_path, err);
       if (UNLIKELY (ret < 0))
@@ -2277,10 +2331,12 @@ get_cgroup_scope_path (const char *cgroup_path, const char *scope)
 
   path_to_scope = xstrdup (cgroup_path);
 
-  cur = strchr (path_to_scope, '/');
-  while (cur)
+  cur = path_to_scope;
+  while (*cur == '/')
+    cur++;
+  while (*cur)
     {
-      char *next = strchr (cur + 1, '/');
+      char *next = strchr (cur, '/');
       if (next == NULL)
         break;
 
@@ -2336,6 +2392,7 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
   sd_bus_message *reply = NULL;
   sd_bus_message *m = NULL;
   sd_bus *bus = NULL;
+  bool devices_map = false;
   int sd_err, ret;
   int cgroup_mode;
 
@@ -2379,9 +2436,28 @@ libcrun_update_resources_systemd (struct libcrun_cgroup_status *cgroup_status,
       goto exit;
     }
 
-  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, &cgroup_status->bpf_dev_set, err);
+  ret = append_resources (m, true, state_dir, resources, cgroup_mode, cgroup_status->scope, &cgroup_status->bpf_dev_set,
+                          &devices_map, err);
   if (UNLIKELY (ret < 0))
     goto exit;
+
+  /* The device filter is attached to the scope, and not to the cgroup where the container runs.  It is updated before the
+     other resources, so that an update that is not possible changes nothing.  */
+  if (cgroup_status->bpf_dev_set && resources->devices_len)
+    {
+      cleanup_free char *scope_path = get_cgroup_scope_path (cgroup_status->path, cgroup_status->scope);
+
+      ret = set_device_rules (resources, scope_path, err);
+      if (UNLIKELY (ret < 0))
+        goto exit;
+
+      if (ret > 0)
+        {
+          ret = check_device_program_unchanged (resources, cgroup_status->scope, err);
+          if (UNLIKELY (ret < 0))
+            goto exit;
+        }
+    }
 
   sd_err = sd_bus_message_close_container (m);
   if (UNLIKELY (sd_err < 0))

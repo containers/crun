@@ -418,6 +418,19 @@ struct libcrun_intel_rdt_update
 LIBCRUN_PUBLIC int libcrun_container_update_intel_rdt (libcrun_context_t *context, const char *id,
                                                        struct libcrun_intel_rdt_update *update, libcrun_error_t *err);
 
+/* Insert device rules in front of the device access list of a running container, the last one has the highest
+   priority.  RULE is in the format "TYPE MAJOR:MINOR [ACCESS]".  The change is not stored in the container
+   configuration.  */
+struct libcrun_device_rule_s
+{
+  const char *rule;
+  bool allow;
+};
+
+LIBCRUN_PUBLIC int libcrun_container_add_device_rules (libcrun_context_t *context, const char *id,
+                                                       const struct libcrun_device_rule_s *rules, size_t len,
+                                                       libcrun_error_t *err);
+
 LIBCRUN_PUBLIC int libcrun_container_get_features (libcrun_context_t *context, struct features_info_s **info,
                                                    libcrun_error_t *err);
 

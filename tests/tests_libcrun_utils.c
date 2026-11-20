@@ -557,6 +557,9 @@ test_get_scope_path ()
   CHECK (get_cgroup_scope_path ("/foo/bar-foo.scope/user.slice/foo.scope/a/b/c", "foo.scope"), "/foo/bar-foo.scope/user.slice/foo.scope");
   CHECK (get_cgroup_scope_path ("/foo/foo.scope-bar/user.slice/foo.scope/a/b/c", "foo.scope"), "/foo/foo.scope-bar/user.slice/foo.scope");
   CHECK (get_cgroup_scope_path ("////foo.scope", "foo.scope"), "////foo.scope");
+  CHECK (get_cgroup_scope_path ("/foo.scope/a", "foo.scope"), "/foo.scope");
+  CHECK (get_cgroup_scope_path ("////foo.scope/a/b", "foo.scope"), "////foo.scope");
+  CHECK (get_cgroup_scope_path ("foo.scope/a", "foo.scope"), "foo.scope");
 
 #  undef CHECK
   return 0;

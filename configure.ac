@@ -237,6 +237,9 @@ AS_IF([test "x$enable_bpf" != "xno"], [
 					attr.insns = val;
 				}
 				int program = BPF_PROG_TYPE_CGROUP_DEVICE;
+				int map_type = BPF_MAP_TYPE_CGROUP_STORAGE;
+				int func = BPF_FUNC_get_local_storage;
+				struct bpf_cgroup_storage_key key;
 			]])],
 			[AC_MSG_RESULT(yes)
 			 AC_DEFINE([HAVE_EBPF], 1, [Define if eBPF is available])],
