@@ -27,6 +27,7 @@
 #include "ebpf.h"
 #include "utils.h"
 #include "status.h"
+#include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -1449,14 +1450,16 @@ get_cgroup_dirfd_path (int dirfd, char **path, libcrun_error_t *err)
 }
 
 /* Parse a cpu.max value: "QUOTA [PERIOD]", where QUOTA is either a
-   number or "max" (returned as -1).  */
+   number or "max" (returned as -1), and PERIOD is a number.  QUOTA and
+   PERIOD must be on the same line, as each line of a unified value is
+   written separately.  */
 int
 parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
 {
   const char *it = value;
   char *endptr = NULL;
 
-  while (*it == ' ')
+  while (isspace ((unsigned char) *it))
     it++;
 
   errno = 0;
@@ -1472,19 +1475,58 @@ parse_cpu_max (const char *value, int64_t *quota, uint64_t *period, bool *has_pe
         return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
     }
 
+  if (UNLIKELY (*endptr && ! isspace ((unsigned char) *endptr)))
+    return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+
   it = endptr;
-  while (*it == ' ')
+  while (*it == ' ' || *it == '\t')
     it++;
 
   *has_period = false;
-  if (*it && *it != '\n')
+  /* strtoull() would also accept a sign, and wrap a negative value.  */
+  if (isdigit ((unsigned char) *it))
     {
       errno = 0;
       *period = strtoull (it, &endptr, 10);
-      if (UNLIKELY (errno != 0 || endptr == it || (*endptr && *endptr != '\n')))
+      /* systemd reads a period of 0 as not set.  */
+      if (UNLIKELY (errno != 0 || *period == 0))
         return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
       *has_period = true;
+      it = endptr;
     }
 
+  while (isspace ((unsigned char) *it))
+    it++;
+  if (UNLIKELY (*it != '\0'))
+    return crun_make_error (err, 0, "invalid value for `cpu.max`: `%s`", value);
+
   return 0;
+}
+
+/* Read and parse the cpu.max file of the cgroup at PATH.  Return 1 if it
+   was read, or 0 if it cannot be read, e.g. when the cpu controller is not
+   enabled.  */
+int
+read_cpu_max (const char *path, int64_t *quota, uint64_t *period, bool *has_period, libcrun_error_t *err)
+{
+  cleanup_free char *cpu_max_path = NULL;
+  cleanup_free char *content = NULL;
+  int ret;
+
+  ret = append_paths (&cpu_max_path, err, CGROUP_ROOT, path, "cpu.max", NULL);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  ret = read_all_file (cpu_max_path, &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    {
+      crun_error_release (err);
+      return 0;
+    }
+
+  ret = parse_cpu_max (content, quota, period, has_period, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  return 1;
 }
