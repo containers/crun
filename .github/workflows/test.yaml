@@ -56,7 +56,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config
           ./autogen.sh
 
-      - uses: uraimo/run-on-arch-action@fa1f3e7de95534497266c7265950b5188355fbfb # v3.2.1
+      - uses: uraimo/run-on-arch-action@9893a0f995e5148dcc313ba661820f3992cffcc1 # v3.3
         name: Build
         id: build
         with:
