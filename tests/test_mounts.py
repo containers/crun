@@ -16,6 +16,7 @@
 # along with crun.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+import errno
 import copy
 import functools
 import importlib.util
@@ -1310,6 +1311,48 @@ def test_idmapped_mounts_without_userns():
     return 0
 
 
+def test_mount_mqueue_selinux_label():
+    """Verify that the mqueue mount root receives the requested SELinux label."""
+    if is_rootless():
+        return (77, "requires root privileges")
+    if '+SELINUX' not in get_crun_feature_string():
+        return (77, "requires SELinux support")
+    if not os.path.exists('/sys/fs/selinux/enforce'):
+        return (77, "SELinux not enabled")
+
+    label = b'system_u:object_r:container_file_t:s0'
+    with tempfile.TemporaryDirectory(dir=get_tests_root()) as directory:
+        try:
+            os.setxattr(directory, 'security.selinux', label)
+        except OSError as e:
+            if e.errno in (errno.EACCES, errno.EPERM, errno.EINVAL, errno.EOPNOTSUPP):
+                return (77, "cannot apply the container SELinux label: %s" % e)
+            raise
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['process']['args'] = ['/init', 'pause']
+    conf['linux']['mountLabel'] = label.decode()
+    conf['mounts'].append({
+        'destination': '/dev/mqueue',
+        'type': 'mqueue',
+        'source': 'mqueue',
+        'options': ['nosuid', 'noexec', 'nodev']
+    })
+
+    _, cid = run_and_get_output(conf, detach=True, hide_stderr=True)
+    try:
+        state = json.loads(run_crun_command(['state', cid]))
+        path = '/proc/%d/root/dev/mqueue' % state['pid']
+        actual = os.getxattr(path, 'security.selinux').rstrip(b'\0')
+        if actual != label:
+            logger.info("mqueue mount label: expected %s, got %s", label, actual)
+            return -1
+        return 0
+    finally:
+        run_crun_command(['delete', '-f', cid])
+
+
 def test_annotation_mount_context_type():
     """Test run.oci.mount_context_type annotation for SELinux mount contexts."""
     # Check if SELinux is available and enabled
@@ -1980,6 +2023,7 @@ all_tests = {
     "mount-add-mounts-nested-userns-mountns": test_add_mounts_nested_userns_mountns,
     "mount-add-mounts-nested-userns": test_add_mounts_nested_userns,
     "mount-help": test_mount_help,
+    "mount-mqueue-selinux-label": test_mount_mqueue_selinux_label,
     "annotation-mount-context-type": test_annotation_mount_context_type,
     "mount-propagation-private": test_mount_propagation_private,
     "mount-no-leak-to-host": test_mount_no_leak_to_host,
