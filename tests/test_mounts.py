@@ -359,6 +359,7 @@ def test_mount_symlink_not_existing():
         return 0
     return -1
 
+@requires_libmount
 def test_mount_readonly_should_inherit_options_from_parent():
     conf = base_config()
     conf['process']['args'] = ['/init', 'cat', '/proc/self/mountinfo']
@@ -374,7 +375,16 @@ def test_mount_readonly_should_inherit_options_from_parent():
 
     # final mount info must contain /test/world which is converted to readonly
     # but also inherits the flags from its parent
-    if "/test/world ro,nosuid,nodev,noexec,relatime" in out:
+    import libmount
+    fd = os.memfd_create("mountinfo")
+    try:
+        os.write(fd, out.encode())
+        m = libmount.Table("/proc/self/fd/%d" % fd).find_target("/test/world")
+    finally:
+        os.close(fd)
+    if m is None:
+        return -1
+    if {"ro", "nosuid", "nodev", "noexec"}.issubset(m.vfs_options.split(",")):
         return 0
     return -1
 
