@@ -7968,6 +7968,13 @@ libcrun_join_process (libcrun_context_t *context,
           if (UNLIKELY (ptmx_fd < 0))
             send_error_to_sync_socket_and_die (sync_fd, true, err);
 
+          if (context->console_socket == NULL)
+            {
+              ret = libcrun_clear_onlcr (ptmx_fd, err);
+              if (UNLIKELY (ret < 0))
+                send_error_to_sync_socket_and_die (sync_fd, true, err);
+            }
+
           ret = send_fd_to_socket (sync_fd, ptmx_fd, err);
           if (UNLIKELY (ret < 0))
             send_error_to_sync_socket_and_die (sync_fd, true, err);
