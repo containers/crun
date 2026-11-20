@@ -4138,7 +4138,9 @@ exec_process_entrypoint (libcrun_context_t *context,
   container_uid = process->user ? process->user->uid : 0;
   container_gid = process->user ? process->user->gid : 0;
 
-  TEMP_FAILURE_RETRY (read (*pipefd1, &own_pid, sizeof (own_pid)));
+  ret = TEMP_FAILURE_RETRY (read (*pipefd1, &own_pid, sizeof (own_pid)));
+  if (UNLIKELY (ret != sizeof (own_pid)))
+    return crun_make_error (err, ret < 0 ? errno : 0, "read own pid");
 
   cwd = process->cwd ? process->cwd : "/";
   if (LIKELY (libcrun_safe_chdir (cwd, err) == 0))
@@ -4476,9 +4478,9 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
   if (UNLIKELY (ret < 0))
     return ret;
 
-  ret = pipe2 (container_ret_status, O_CLOEXEC);
+  ret = socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, container_ret_status);
   if (UNLIKELY (ret < 0))
-    return crun_make_error (err, errno, "pipe");
+    return crun_make_error (err, errno, "socketpair");
   pipefd0 = container_ret_status[0];
   pipefd1 = container_ret_status[1];
 
