@@ -110,6 +110,62 @@ def test_seccomp_listener():
         except Exception as cleanup_e:
             logger.info("warning: failed to cleanup listener socket %s: %s", listener_path, cleanup_e)
 
+def receive_listener_pid(sock):
+    conn, _ = sock.accept()
+    try:
+        msg, fds = recv_fds(conn, 4096, 1)
+    finally:
+        conn.close()
+    for fd in fds:
+        os.close(fd)
+    m = json.loads(msg)
+    return m.get('pid'), m.get('state', {}).get('status')
+
+def test_seccomp_listener_exec():
+    """Test that the listener gets the pid of the process, both for run and exec."""
+    if not is_seccomp_listener_supported():
+        return (77, "seccomp listener not supported")
+
+    listener_path = "%s/seccomp-listener" % get_tests_root()
+    pid_file = "%s/exec.pid" % get_tests_root()
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(listener_path)
+    sock.listen(2)
+
+    conf = base_config()
+    add_all_namespaces(conf)
+    conf['linux']['seccomp'] = {
+        'defaultAction': 'SCMP_ACT_ALLOW',
+        'listenerPath': listener_path,
+    }
+    conf['process']['args'] = ['/init', 'pause']
+    cid = None
+    try:
+        _, cid = run_and_get_output(conf, hide_stderr=True, command='run', detach=True)
+        pid, status = receive_listener_pid(sock)
+        state = json.loads(run_crun_command(["state", cid]))
+        if pid != state['pid'] or status != 'creating':
+            logger.info("run: got pid %s status %s, want pid %d status creating", pid, status, state['pid'])
+            return -1
+
+        run_crun_command(["exec", "-d", "--pid-file", pid_file, cid, "/init", "pause"])
+        pid, status = receive_listener_pid(sock)
+        with open(pid_file) as f:
+            exec_pid = int(f.read())
+        if pid != exec_pid or status != 'running':
+            logger.info("exec: got pid %s status %s, want pid %d status running", pid, status, exec_pid)
+            return -1
+        return 0
+    except Exception as e:
+        logger.info("test failed: %s", e)
+        return -1
+    finally:
+        if cid is not None:
+            run_crun_command(["delete", "-f", cid])
+        sock.close()
+        os.unlink(listener_path)
+
 def test_seccomp_block_syscall():
     """Test seccomp blocking a specific syscall."""
     conf = base_config()
@@ -864,6 +920,7 @@ def test_seccomp_start_cpu_affinity():
 
 all_tests = {
     "seccomp-listener": test_seccomp_listener,
+    "seccomp-listener-exec": test_seccomp_listener_exec,
     "seccomp-block-syscall": test_seccomp_block_syscall,
     "seccomp-allow-default": test_seccomp_allow_default,
     "seccomp-architectures": test_seccomp_architectures,
