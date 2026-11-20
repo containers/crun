@@ -22,6 +22,14 @@
 
 %endif
 
+# openpgpverify (Sequoia sqv) is in Fedora and RHEL 11+ (ELN); older RHEL
+# releases verify the sources with GnuPG.
+%if %{defined fedora} || 0%{?rhel} > 10
+%global openpgpverify_support 1
+%else
+%global openpgpverify %{gpgverify}
+%endif
+
 Summary: OCI runtime written in C
 Name: crun
 %if %{defined copr_build}
@@ -53,7 +61,11 @@ BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: gcc
 %if !%{defined copr_build}
+%if %{defined openpgpverify_support}
+BuildRequires: openpgpverify
+%else
 BuildRequires: gnupg2
+%endif
 %endif
 BuildRequires: git-core
 BuildRequires: gperf
@@ -107,7 +119,7 @@ Recommends: wasmedge
 
 %prep
 %if !%{defined copr_build}
-%{gpgverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
+%{openpgpverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
 %endif
 %autosetup -Sgit -n %{name}-%{version}
 
