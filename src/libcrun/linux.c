@@ -4079,6 +4079,7 @@ open_mount_of_type (libcrun_container_t *container,
   const char *label_type = NULL;
   const char *label_val = NULL;
   const char *fstype;
+  int label_how = LABEL_NONE;
   int mnt_fd;
   size_t j;
 
@@ -4096,8 +4097,8 @@ open_mount_of_type (libcrun_container_t *container,
     {
       bool is_sysfs_or_proc = strcmp (fstype, "sysfs") == 0
                               || strcmp (fstype, "proc") == 0;
-      int extra_flags = get_mount_label_how (fstype, is_sysfs_or_proc);
-      if (extra_flags == LABEL_MOUNT)
+      label_how = get_mount_label_how (fstype, is_sysfs_or_proc);
+      if (label_how == LABEL_MOUNT)
         {
           label_type = get_selinux_context_type (container, err);
           if (label_type == NULL)
@@ -4118,6 +4119,11 @@ open_mount_of_type (libcrun_container_t *container,
   mnt_fd = fsopen_mount (fstype, mount->source, label_type, label_val, mnt_data);
   if (mnt_fd < 0 && label_type)
     mnt_fd = fsopen_mount (fstype, mount->source, NULL, NULL, mnt_data);
+
+#ifdef HAVE_FGETXATTR
+  if (mnt_fd >= 0 && label_how == LABEL_XATTR)
+    apply_selinux_xattr (container, mnt_fd, label_how, def->linux->mount_label);
+#endif
 
   return mnt_fd;
 }
@@ -6981,7 +6987,13 @@ init_container (libcrun_container_t *container, int sync_socket_container, struc
           if (init_status->join_pidns && ! delayed_pidns_fork && strcmp (def->mounts[i]->type, "proc") == 0)
             fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
           if (init_status->join_ipcns && strcmp (def->mounts[i]->type, "mqueue") == 0)
-            fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
+            {
+              fd = fsopen_mount (def->mounts[i]->type, def->mounts[i]->source, NULL, NULL, NULL);
+#ifdef HAVE_FGETXATTR
+              if (fd >= 0 && def->linux && def->linux->mount_label)
+                apply_selinux_xattr (container, fd, LABEL_XATTR, def->linux->mount_label);
+#endif
+            }
 
           if (fd >= 0)
             {
