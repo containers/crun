@@ -1703,7 +1703,7 @@ set_home_env (uid_t id)
   if (UNLIKELY (rootfd < 0))
     return -1;
 
-  fd = safe_openat (rootfd, "/", "etc/passwd", O_RDONLY | O_CLOEXEC, 0, &err);
+  fd = safe_openat (rootfd, "/", "etc/passwd", O_RDONLY | O_NONBLOCK | O_CLOEXEC, 0, &err);
   if (UNLIKELY (fd < 0))
     {
       errno = crun_error_get_errno (&err);

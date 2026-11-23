@@ -396,6 +396,23 @@ def test_empty_home():
         return -1
     return 0
 
+def test_home_passwd_fifo():
+    conf = base_config()
+    conf['process']['args'] = ['/init', 'printenv', 'HOME']
+    add_all_namespaces(conf)
+
+    def prepare(rootfs):
+        passwd = os.path.join(rootfs, "etc/passwd")
+        if os.path.lexists(passwd):
+            os.unlink(passwd)
+        os.mkfifo(passwd)
+
+    out, _ = run_and_get_output(conf, hide_stderr=True, callback_prepare_rootfs=prepare)
+    if out != "/":
+        logger.info("expected: `/`, got output: `%s`", out)
+        return -1
+    return 0
+
 def test_run_rootless_netns_with_userns():
     if not is_rootless():
         return (77, "requires rootless mode")
@@ -662,6 +679,7 @@ def test_systemd_cgroups_path_def_slice():
     return 0
 
 all_tests = {
+    "home-passwd-fifo" : test_home_passwd_fifo,
     "start" : test_start,
     "start-override-config" : test_start_override_config,
     "run-twice" : test_run_twice,
