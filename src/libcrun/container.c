@@ -4625,13 +4625,6 @@ libcrun_container_exec_with_options (libcrun_context_t *context, const char *id,
         }
       else
         {
-          ret = libcrun_clear_onlcr (terminal_fd, err);
-          if (UNLIKELY (ret < 0))
-            {
-              flush_fd_to_err (context, terminal_fd);
-              return ret;
-            }
-
           ret = libcrun_set_raw (0, &orig_terminal, err);
           if (UNLIKELY (ret < 0))
             {
